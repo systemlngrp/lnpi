@@ -1,0 +1,6 @@
+{
+  "name": "LNPI Production Management",
+  "description": "An application to manage material in, consumption, production, item masters, and a multi-level invoice approval workflow.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

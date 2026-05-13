@@ -1,0 +1,175 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+
+export function useData<T extends { id: string }>(entity: string, initialValue: T[]) {
+  const [data, setDataState] = useState<T[]>(initialValue);
+  const dataRef = useRef<T[]>(initialValue);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const endpoint = `/api/${entity.replace(/_/g, "-")}`;
+  const syncEvent = `sync-data-${entity}`;
+
+  // Keep ref in sync
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to fetch data");
+      }
+      const result = await response.json();
+      setDataState(result);
+      dataRef.current = result;
+      setError(null);
+      window.localStorage.setItem(entity, JSON.stringify(result));
+    } catch (err) {
+      console.error(`Error fetching ${entity}:`, err);
+      setError((err as Error).message);
+      const saved = window.localStorage.getItem(entity);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setDataState(parsed);
+        dataRef.current = parsed;
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [endpoint, entity]);
+
+  useEffect(() => {
+    fetchData();
+
+    // Listen for sync events from other hook instances
+    const handleSync = () => {
+      fetchData();
+    };
+    
+    window.addEventListener(syncEvent, handleSync);
+    return () => window.removeEventListener(syncEvent, handleSync);
+  }, [fetchData, syncEvent]);
+
+  const updateData = useCallback(async (newData: T[] | ((prev: T[]) => T[])) => {
+    const currentData = dataRef.current;
+    const resolvedData = typeof newData === "function" ? newData(currentData) : newData;
+    
+    // Find what changed compared to the absolute LATEST data
+    const added = resolvedData.filter(n => !currentData.find(o => o.id === n.id));
+    const modified = resolvedData.filter(n => {
+      const old = currentData.find(o => o.id === n.id);
+      return old && JSON.stringify(old) !== JSON.stringify(n);
+    });
+    const deleted = currentData.filter(o => !resolvedData.find(n => n.id === o.id));
+
+    console.log(`[useData:${entity}] Syncing: ${added.length} added, ${modified.length} modified, ${deleted.length} deleted`);
+
+    // Optimistic update
+    setDataState(resolvedData);
+    dataRef.current = resolvedData;
+    window.localStorage.setItem(entity, JSON.stringify(resolvedData));
+
+    // Emit sync event immediately for other local components
+    window.dispatchEvent(new CustomEvent(syncEvent));
+
+    // Send to server
+    let hasError = false;
+    let lastErrorMessage = "";
+
+    try {
+      for (const item of [...added, ...modified]) {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item),
+        });
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const msg = errData.error || response.statusText;
+          hasError = true;
+          lastErrorMessage = msg;
+          console.error(`[useData:${entity}] Save failed for ${item.id}:`, msg);
+        }
+      }
+      for (const item of deleted) {
+        const response = await fetch(`${endpoint}/${item.id}`, { method: "DELETE" });
+        if (!response.ok) {
+          hasError = true;
+          lastErrorMessage = response.statusText;
+        }
+      }
+
+      if (hasError) {
+        throw new Error(lastErrorMessage || "Failed to sync some items with server");
+      }
+      
+      // Re-fetch to ensure perfect sync with DB state
+      await fetchData();
+      // Emit sync event again after server confirmation
+      window.dispatchEvent(new CustomEvent(syncEvent));
+    } catch (err) {
+      console.error(`[useData:${entity}] Sync error:`, err);
+      fetchData(); // Re-sync with server on error
+      window.dispatchEvent(new CustomEvent(syncEvent));
+      throw err;
+    }
+  }, [endpoint, entity, fetchData, syncEvent]);
+
+  // Providing a more robust interface
+  const addItem = async (item: T) => {
+    try {
+      setDataState(prev => [...prev, item]);
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to add item");
+      }
+    } catch (err) {
+      console.error("Error adding item:", err);
+      fetchData();
+      throw err;
+    }
+  };
+
+  const removeItem = async (id: string) => {
+    try {
+      setDataState(prev => prev.filter(i => i.id !== id));
+      const response = await fetch(`${endpoint}/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error("Failed to delete item");
+      }
+    } catch (err) {
+      console.error("Error deleting item:", err);
+      fetchData();
+      throw err;
+    }
+  };
+
+  const saveItem = async (item: T) => {
+    try {
+      setDataState(prev => prev.map(i => i.id === item.id ? item : i));
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save item");
+      }
+    } catch (err) {
+      console.error("Error saving item:", err);
+      fetchData();
+      throw err;
+    }
+  };
+
+  return [data, updateData, loading] as const;
+}
