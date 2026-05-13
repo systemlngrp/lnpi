@@ -1,0 +1,46 @@
+name: Inject DB env and CI
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  inject-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create .env from GitHub Secrets
+        run: |
+          cat > .env <<'EOF'
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_PORT=${{ secrets.DB_PORT }}
+          EOF
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          NODE_ENV: production
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+
+      # Optional: run seeds (uncomment if you add a seed script)
+      #- name: Run DB seed
+      #  run: npm run seed
+      #  env:
+      #    DB_HOST: ${{ secrets.DB_HOST }}
+      #    DB_USER: ${{ secrets.DB_USER }}
+      #    DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      #    DB_NAME: ${{ secrets.DB_NAME }}
+      #    DB_PORT: ${{ secrets.DB_PORT }}
