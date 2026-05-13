@@ -1,0 +1,46 @@
+name: Build and Deploy to Hostinger (FTP)
+
+on:
+        with:
+          server: ${{ secrets.HOSTINGER_FTP_HOST }}
+          username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
+          password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+          # Fall back to /public_html/ if HOSTINGER_FTP_REMOTE_PATH is not set
+          server-dir: ${{ secrets.HOSTINGER_FTP_REMOTE_PATH || '/public_html/' }}
+          # Ensure we upload the built `dist` folder
+          local-dir: dist/
+          protocol: ${{ secrets.HOSTINGER_FTP_PROTOCOL }} # optional: ftp or ftps
+          port: ${{ secrets.HOSTINGER_FTP_PORT }} # optional
+          debug: true
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Show build output (for debugging)
+        run: ls -la dist || echo "dist not found"
+
+      - name: Deploy `dist` to Hostinger via FTP
+        uses: SamKirkland/FTP-Deploy-Action@4.4.0
+        with:
+          server: ${{ secrets.HOSTINGER_FTP_HOST }}
+          username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
+          password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+          server-dir: ${{ secrets.HOSTINGER_FTP_REMOTE_PATH }}
+          local-dir: dist
+          protocol: ${{ secrets.HOSTINGER_FTP_PROTOCOL }} # optional: ftp or ftps
+          port: ${{ secrets.HOSTINGER_FTP_PORT }} # optional
+          debug: true
+
+      - name: Confirm remote files (optional)
+        run: echo "Deployed to ${{ secrets.HOSTINGER_FTP_HOST }}:${{ secrets.HOSTINGER_FTP_REMOTE_PATH }}"
