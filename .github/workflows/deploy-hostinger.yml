@@ -30,6 +30,25 @@ jobs:
       - name: Show build output
         run: ls -la dist
 
+      - name: Validate FTP settings
+        env:
+          FTP_HOST: ${{ secrets.HOSTINGER_FTP_HOST }}
+          FTP_USERNAME: ${{ secrets.HOSTINGER_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ secrets.HOSTINGER_FTP_PROTOCOL }}
+          FTP_PORT: ${{ secrets.HOSTINGER_FTP_PORT }}
+        run: |
+          test -n "$FTP_HOST" || (echo "HOSTINGER_FTP_HOST is empty" && exit 1)
+          test -n "$FTP_USERNAME" || (echo "HOSTINGER_FTP_USERNAME is empty" && exit 1)
+          test -n "$FTP_PASSWORD" || (echo "HOSTINGER_FTP_PASSWORD is empty" && exit 1)
+          case "$FTP_HOST" in
+            ftp://*|ftps://*|sftp://*|http://*|https://*)
+              echo "HOSTINGER_FTP_HOST must be hostname only, without protocol"
+              exit 1
+              ;;
+          esac
+          echo "FTP settings look present. Protocol=${FTP_PROTOCOL:-unset} Port=${FTP_PORT:-unset}"
+
       - name: Deploy dist to Hostinger via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
@@ -40,7 +59,6 @@ jobs:
           local-dir: dist/
           protocol: ${{ secrets.HOSTINGER_FTP_PROTOCOL }}
           port: ${{ secrets.HOSTINGER_FTP_PORT }}
-          debug: true
 
       - name: Confirm deploy target
         run: echo "Deployed dist/ to /public_html/ on ${{ secrets.HOSTINGER_FTP_HOST }}"
