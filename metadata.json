@@ -1,5 +1,5 @@
 {
-  "name": "LNPI Production Management",
+  "name": "LNPI ERP",
   "description": "An application to manage material in, consumption, production, item masters, and a multi-level invoice approval workflow.",
   "requestFramePermissions": [],
   "majorCapabilities": []
