@@ -30,7 +30,8 @@ jobs:
       - name: Show build output
         run: ls -la dist
 
-      - name: Validate FTP settings
+      - name: Normalize FTP settings
+        id: ftp
         env:
           FTP_HOST: ${{ secrets.HOSTINGER_FTP_HOST }}
           FTP_USERNAME: ${{ secrets.HOSTINGER_FTP_USERNAME }}
@@ -41,24 +42,29 @@ jobs:
           test -n "$FTP_HOST" || (echo "HOSTINGER_FTP_HOST is empty" && exit 1)
           test -n "$FTP_USERNAME" || (echo "HOSTINGER_FTP_USERNAME is empty" && exit 1)
           test -n "$FTP_PASSWORD" || (echo "HOSTINGER_FTP_PASSWORD is empty" && exit 1)
-          case "$FTP_HOST" in
-            ftp://*|ftps://*|sftp://*|http://*|https://*)
-              echo "HOSTINGER_FTP_HOST must be hostname only, without protocol"
-              exit 1
-              ;;
-          esac
-          echo "FTP settings look present. Protocol=${FTP_PROTOCOL:-unset} Port=${FTP_PORT:-unset}"
+          SANITIZED_HOST="$FTP_HOST"
+          SANITIZED_HOST="${SANITIZED_HOST#ftp://}"
+          SANITIZED_HOST="${SANITIZED_HOST#ftps://}"
+          SANITIZED_HOST="${SANITIZED_HOST#sftp://}"
+          SANITIZED_HOST="${SANITIZED_HOST#http://}"
+          SANITIZED_HOST="${SANITIZED_HOST#https://}"
+          SANITIZED_HOST="${SANITIZED_HOST%/}"
+          test -n "$SANITIZED_HOST" || (echo "HOSTINGER_FTP_HOST is invalid after normalization" && exit 1)
+          echo "server=$SANITIZED_HOST" >> "$GITHUB_OUTPUT"
+          echo "protocol=${FTP_PROTOCOL:-ftp}" >> "$GITHUB_OUTPUT"
+          echo "port=${FTP_PORT:-21}" >> "$GITHUB_OUTPUT"
+          echo "Normalized FTP settings prepared. Protocol=${FTP_PROTOCOL:-ftp} Port=${FTP_PORT:-21}"
 
       - name: Deploy dist to Hostinger via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
-          server: ${{ secrets.HOSTINGER_FTP_HOST }}
+          server: ${{ steps.ftp.outputs.server }}
           username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
           password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
           server-dir: /public_html/
           local-dir: dist/
-          protocol: ${{ secrets.HOSTINGER_FTP_PROTOCOL }}
-          port: ${{ secrets.HOSTINGER_FTP_PORT }}
+          protocol: ${{ steps.ftp.outputs.protocol }}
+          port: ${{ steps.ftp.outputs.port }}
 
       - name: Confirm deploy target
-        run: echo "Deployed dist/ to /public_html/ on ${{ secrets.HOSTINGER_FTP_HOST }}"
+        run: echo "Deployed dist/ to /public_html/ on ${{ steps.ftp.outputs.server }}"
