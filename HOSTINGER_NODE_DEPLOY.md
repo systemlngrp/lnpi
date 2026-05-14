@@ -31,7 +31,7 @@ Hostinger settings:
 - Build command: `npm run build`
 - Start command: `npm start`
 - Output directory: `dist`
-- Entry file: `server.ts`
+- Entry file: `server.js`
 
 ## Required environment variables
 
@@ -45,5 +45,8 @@ Add these in Hostinger Node.js app environment variables:
 
 ## Notes
 
+- `npm run build` now creates both:
+  - `dist/` for the frontend
+  - `server.js` for the Express backend runtime
 - `server.ts` reads `process.env.PORT`, so Hostinger can assign the runtime port.
 - The old FTP workflow is intentionally blocked because it deploys only the frontend and breaks live data.
