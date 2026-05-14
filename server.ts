@@ -18,6 +18,33 @@ app.use(express.json());
 // Database connection pool
 let pool: mysql.Pool | null = null;
 
+function normalizeWorkflowStatus(tableName: string, row: any) {
+  const normalized = { ...row };
+  const currentStatus = typeof normalized.status === "string" ? normalized.status.trim() : normalized.status;
+
+  if (currentStatus) {
+    normalized.status = currentStatus;
+    return normalized;
+  }
+
+  if (tableName === "material_in") {
+    if (normalized.tallyTimestamp) normalized.status = "Completed";
+    else if (normalized.mdTimestamp) normalized.status = "Pending Tally";
+    else if (normalized.accTimestamp) normalized.status = "Pending MD";
+    else if (normalized.phTimestamp) normalized.status = "Pending Accounts";
+    else normalized.status = "Pending PH";
+    return normalized;
+  }
+
+  if (tableName === "productions" || tableName === "consumptions") {
+    if (normalized.tallyTimestamp) normalized.status = "Completed";
+    else if (normalized.phTimestamp) normalized.status = "Pending Tally";
+    else normalized.status = "Pending PH";
+  }
+
+  return normalized;
+}
+
 async function getPool() {
   if (pool) return pool;
   
@@ -335,7 +362,7 @@ const createHandlers = (tableName: string) => {
         
         // Post-process rows to parse JSON columns
         const processedRows = (rows as any[]).map(row => {
-          const newRow = { ...row };
+          const newRow = normalizeWorkflowStatus(tableName, row);
           Object.keys(newRow).forEach(key => {
             if (key === 'lines' && typeof newRow[key] === 'string') {
               try {
@@ -357,7 +384,7 @@ const createHandlers = (tableName: string) => {
     upsert: async (req: express.Request, res: express.Response) => {
       const db = await getPool();
       if (!db) return res.status(500).json({ error: "DB connection not available" });
-      const data = req.body;
+      const data = normalizeWorkflowStatus(tableName, req.body);
       try {
         console.log(`[DB] Upserting to ${tableName}`, { 
           id: data.id, 
