@@ -14,22 +14,26 @@ export function PendingTallyEntry() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const handleComplete = (id: string) => {
+  const handleComplete = async (id: string) => {
     if (confirmId !== id) {
       setConfirmId(id);
       setTimeout(() => setConfirmId(null), 3000);
       return;
     }
     setSubmittingId(id);
-    setTimeout(() => {
-      setMaterialIn(
-        materialIn.map((m) =>
-          m.id === id ? { ...m, status: "Completed", tallyTimestamp: new Date().toISOString() } : m
+    try {
+      const timestamp = new Date().toISOString();
+      await setMaterialIn(prev =>
+        prev.map((m) =>
+          m.id === id ? { ...m, status: "Completed", tallyTimestamp: timestamp, updateTimestamp: timestamp } : m
         )
       );
+    } catch (err) {
+      console.error("Failed to complete Material In tally entry:", err);
+    } finally {
       setSubmittingId(null);
       setConfirmId(null);
-    }, 500);
+    }
   };
 
   const getLineItemsElement = (lines: MaterialIn['lines'] = []) => {

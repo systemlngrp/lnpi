@@ -45,7 +45,7 @@ export function PendingMDApproval() {
 
     try {
       await setMaterialIn(prev => prev.map(m => 
-        selectedIds.has(m.id) ? { ...m, status: "Pending Tally", mdTimestamp: timestamp, mdEmailId: email } : m
+        selectedIds.has(m.id) ? { ...m, status: "Pending Tally", mdTimestamp: timestamp, mdEmailId: email, updateTimestamp: timestamp } : m
       ));
       setSelectedIds(new Set());
     } catch (err) {
@@ -55,22 +55,26 @@ export function PendingMDApproval() {
     }
   };
 
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     if (confirmId !== id) {
       setConfirmId(id);
       setTimeout(() => setConfirmId(null), 3000);
       return;
     }
     setSubmittingId(id);
-    setTimeout(() => {
-      setMaterialIn(
-        materialIn.map((m) =>
-          m.id === id ? { ...m, status: "Pending Tally", mdTimestamp: new Date().toISOString(), mdEmailId: "md@lngrp.in" } : m
+    try {
+      const timestamp = new Date().toISOString();
+      await setMaterialIn(prev =>
+        prev.map((m) =>
+          m.id === id ? { ...m, status: "Pending Tally", mdTimestamp: timestamp, mdEmailId: "md@lngrp.in", updateTimestamp: timestamp } : m
         )
       );
+    } catch (err) {
+      console.error("Failed to approve Material In at MD stage:", err);
+    } finally {
       setSubmittingId(null);
       setConfirmId(null);
-    }, 500);
+    }
   };
 
   const getLineItemsElement = (lines: MaterialIn['lines'] = []) => {

@@ -44,7 +44,7 @@ export function ProductionPendingPH() {
 
     try {
       await setProductions(prev => prev.map(p => 
-        selectedIds.has(p.id) ? { ...p, status: "Pending Tally", phTimestamp: timestamp, phEmailId: email } : p
+        selectedIds.has(p.id) ? { ...p, status: "Pending Tally", phTimestamp: timestamp, phEmailId: email, updateTimestamp: timestamp } : p
       ));
       setSelectedIds(new Set());
     } catch (err) {
@@ -62,13 +62,15 @@ export function ProductionPendingPH() {
     }
     setSubmittingId(id);
     try {
+      const timestamp = new Date().toISOString();
       await setProductions(prev =>
         prev.map((p) =>
           p.id === id ? { 
             ...p, 
             status: "Pending Tally", 
-            phTimestamp: new Date().toISOString(), 
-            phEmailId: "ph@lngrp.in" 
+            phTimestamp: timestamp, 
+            phEmailId: "ph@lngrp.in",
+            updateTimestamp: timestamp,
           } : p
         )
       );

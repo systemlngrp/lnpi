@@ -44,7 +44,7 @@ export function ConsumptionPendingPH() {
 
     try {
       await setConsumptions(prev => prev.map(c => 
-        selectedIds.has(c.id) ? { ...c, status: "Pending Tally", phTimestamp: timestamp, phEmailId: email } : c
+        selectedIds.has(c.id) ? { ...c, status: "Pending Tally", phTimestamp: timestamp, phEmailId: email, updateTimestamp: timestamp } : c
       ));
       setSelectedIds(new Set());
     } catch (err) {
@@ -62,13 +62,15 @@ export function ConsumptionPendingPH() {
     }
     setSubmittingId(id);
     try {
+      const timestamp = new Date().toISOString();
       await setConsumptions(prev => 
         prev.map((c) =>
           c.id === id ? { 
             ...c, 
             status: "Pending Tally", 
-            phTimestamp: new Date().toISOString(), 
-            phEmailId: "ph@lngrp.in" 
+            phTimestamp: timestamp, 
+            phEmailId: "ph@lngrp.in",
+            updateTimestamp: timestamp,
           } : c
         )
       );

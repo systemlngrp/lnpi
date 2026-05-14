@@ -47,7 +47,7 @@ export function PendingPHApproval() {
 
     try {
       await setMaterialIn(prev => prev.map(m => 
-        selectedIds.has(m.id) ? { ...m, status: "Pending Accounts", phTimestamp: timestamp, phEmailId: email } : m
+        selectedIds.has(m.id) ? { ...m, status: "Pending Accounts", phTimestamp: timestamp, phEmailId: email, updateTimestamp: timestamp } : m
       ));
       setSelectedIds(new Set());
     } catch (err) {
@@ -65,13 +65,15 @@ export function PendingPHApproval() {
     }
     setSubmittingId(id);
     try {
+      const timestamp = new Date().toISOString();
       await setMaterialIn(prev => 
         prev.map((m) =>
           m.id === id ? { 
             ...m, 
             status: "Pending Accounts", 
-            phTimestamp: new Date().toISOString(), 
-            phEmailId: "ph@lngrp.in" 
+            phTimestamp: timestamp, 
+            phEmailId: "ph@lngrp.in",
+            updateTimestamp: timestamp,
           } : m
         )
       );

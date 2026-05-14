@@ -44,7 +44,7 @@ export function PendingAccountsApproval() {
 
     try {
       await setMaterialIn(prev => prev.map(m => 
-        selectedIds.has(m.id) ? { ...m, status: "Pending MD", accTimestamp: timestamp, accEmailId: email } : m
+        selectedIds.has(m.id) ? { ...m, status: "Pending MD", accTimestamp: timestamp, accEmailId: email, updateTimestamp: timestamp } : m
       ));
       setSelectedIds(new Set());
     } catch (err) {
@@ -54,22 +54,26 @@ export function PendingAccountsApproval() {
     }
   };
 
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     if (confirmId !== id) {
       setConfirmId(id);
       setTimeout(() => setConfirmId(null), 3000);
       return;
     }
     setSubmittingId(id);
-    setTimeout(() => {
-      setMaterialIn(
-        materialIn.map((m) =>
-          m.id === id ? { ...m, status: "Pending MD", accTimestamp: new Date().toISOString(), accEmailId: "accounts@lngrp.in" } : m
+    try {
+      const timestamp = new Date().toISOString();
+      await setMaterialIn(prev =>
+        prev.map((m) =>
+          m.id === id ? { ...m, status: "Pending MD", accTimestamp: timestamp, accEmailId: "accounts@lngrp.in", updateTimestamp: timestamp } : m
         )
       );
+    } catch (err) {
+      console.error("Failed to approve Material In at Accounts stage:", err);
+    } finally {
       setSubmittingId(null);
       setConfirmId(null);
-    }, 500);
+    }
   };
 
   const getLineItemsElement = (lines: MaterialIn['lines']) => {
