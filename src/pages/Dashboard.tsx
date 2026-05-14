@@ -5,11 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   LabelList
 } from 'recharts';
-import { 
-  Package, ShoppingCart, 
-  Activity, UserCheck,
-  TrendingDown, ChevronRight, Info
-} from 'lucide-react';
+import { Activity, ChevronRight, Info } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from "../lib/utils";
 import { useState } from "react";
 
@@ -25,15 +21,47 @@ export function Dashboard() {
   });
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
-
-  // Calculate KPIs for Today
   const today = new Date();
-  const matchToday = (dateStr: string) => {
-    if (!dateStr) return false;
-    // Extract YYYY-MM-DD part and split
-    const isoDate = dateStr.split('T')[0];
-    const [y, m, d] = isoDate.split("-").map(Number);
-    return y === today.getFullYear() && (m - 1) === today.getMonth() && d === today.getDate();
+
+  const parseAppDate = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+
+    const trimmed = dateStr.trim();
+    if (!trimmed) return null;
+
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+      const [day, month, year] = trimmed.split("/").map(Number);
+      return new Date(year, month - 1, day);
+    }
+
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const isSameDay = (left: Date, right: Date) => (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+
+  const matchToday = (dateStr?: string) => {
+    const parsed = parseAppDate(dateStr);
+    return parsed ? isSameDay(parsed, today) : false;
+  };
+
+  const isWithinSelectedRange = (dateStr?: string) => {
+    const parsed = parseAppDate(dateStr);
+    if (!parsed) return false;
+
+    const from = parseAppDate(dateRange.from);
+    const to = parseAppDate(dateRange.to);
+    if (!from || !to) return true;
+
+    const target = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
+    const fromTime = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime();
+    const toTime = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime();
+
+    return target >= fromTime && target <= toTime;
   };
 
   const matInToday = materialIn.filter(m => matchToday(m.date)).reduce((acc, m) => acc + Number(m.totalAmount || 0), 0);
@@ -52,21 +80,27 @@ export function Dashboard() {
   const tallyProd = productions.filter(p => p.status === "Pending Tally").length;
   const tallyCons = consumptions.filter(c => c.status === "Pending Tally").length;
 
-  // Hourly data for visualization
-  const hourlyData = [
-    { hour: '8:00', units: 38 },
-    { hour: '9:00', units: 48 },
-    { hour: '10:00', units: 62 },
-    { hour: '11:00', units: 48 },
-    { hour: '12:00', units: 72 },
-    { hour: '13:00', units: 48 },
-    { hour: '14:00', units: 90 },
-    { hour: '15:00', units: 156 },
-    { hour: '16:00', units: 120 },
-    { hour: '17:00', units: 185 },
-    { hour: '18:00', units: 128 },
-    { hour: '19:00', units: 158 },
-  ];
+  const filteredMaterialIn = materialIn.filter(m => isWithinSelectedRange(m.date));
+  const filteredProductions = productions.filter(p => isWithinSelectedRange(p.date));
+  const filteredConsumptions = consumptions.filter(c => isWithinSelectedRange(c.date));
+
+  const hourlyTotals = filteredProductions.reduce<Record<string, number>>((acc, production) => {
+    const timestamp = parseAppDate(production.updateTimestamp || production.date);
+    if (!timestamp) return acc;
+
+    const hourLabel = `${String(timestamp.getHours()).padStart(2, '0')}:00`;
+    acc[hourLabel] = (acc[hourLabel] || 0) + Number(production.qty || 0);
+    return acc;
+  }, {});
+
+  const hourlyLabels = Object.keys(hourlyTotals).length > 0
+    ? Object.keys(hourlyTotals).sort((a, b) => Number(a.slice(0, 2)) - Number(b.slice(0, 2)))
+    : Array.from({ length: 12 }, (_, idx) => `${String(idx + 8).padStart(2, '0')}:00`);
+
+  const hourlyData = hourlyLabels.map(hour => ({
+    hour,
+    units: hourlyTotals[hour] || 0,
+  }));
 
   // Top Lists
   const getTopItems = (data: any[], type: "prod" | "cons" | "pur") => {
@@ -82,9 +116,9 @@ export function Dashboard() {
     return entries.map(([name, val]) => ({ name, percentage: Math.round((val / max) * 100) }));
   };
 
-  const topProduced = getTopItems(productions, "prod");
-  const topConsumed = getTopItems(consumptions, "cons");
-  const topPurchased = getTopItems(materialIn, "pur");
+  const topProduced = getTopItems(filteredProductions, "prod");
+  const topConsumed = getTopItems(filteredConsumptions, "cons");
+  const topPurchased = getTopItems(filteredMaterialIn, "pur");
 
   return (
     <div className="min-h-screen bg-white text-black font-sans p-4 md:p-8 space-y-10">
@@ -106,7 +140,7 @@ export function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <KpiBarCard 
           title="MATERIAL IN TODAY" 
-          value={matInToday >= 100000 ? `₹${(matInToday / 100000).toFixed(2)}L` : formatCurrency(matInToday)} 
+          value={matInToday >= 100000 ? `Rs. ${(matInToday / 100000).toFixed(2)}L` : formatCurrency(matInToday)} 
         />
         <KpiBarCard 
           title="PRODUCTION TODAY" 
@@ -134,9 +168,9 @@ export function Dashboard() {
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <WorkflowCard label="PH Approval" count={pendingPH} total={pendingPH + 10} />
-          <WorkflowCard label="Accounts Approval" count={pendingAccounts} total={pendingAccounts + 5} />
-          <WorkflowCard label="MD Approval" count={pendingMD} total={pendingMD + 3} />
+          <WorkflowCard label="PH Approval" count={pendingPH} />
+          <WorkflowCard label="Accounts Approval" count={pendingAccounts} />
+          <WorkflowCard label="MD Approval" count={pendingMD} />
         </div>
       </section>
 
@@ -163,7 +197,7 @@ export function Dashboard() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-3xl font-black tracking-tighter text-black uppercase leading-none italic">Hourly Output</h2>
-            <p className="text-[11px] font-black text-black uppercase tracking-widest opacity-60">Current day production performance metrics</p>
+            <p className="text-[11px] font-black text-black uppercase tracking-widest opacity-60">Production records within selected date range</p>
           </div>
           <div className="flex items-center gap-4">
              <div className="flex items-center gap-2">
@@ -292,8 +326,8 @@ function KpiBarCard({ title, value, icon, progress, growth }: {
   );
 }
 
-function WorkflowCard({ label, count, total }: { label: string; count: number; total: number }) {
-  const percentage = total > 0 ? Math.min((count / total) * 100, 100) : 0;
+function WorkflowCard({ label, count }: { label: string; count: number }) {
+  const percentage = count > 0 ? 100 : 0;
 
   return (
     <div className="bg-white p-8 rounded-none border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between transition-all hover:bg-slate-50 hover:-translate-y-1">
@@ -329,7 +363,7 @@ function WorkflowCard({ label, count, total }: { label: string; count: number; t
 }
 
 function TallyCard({ label, count }: { label: string; count: number }) {
-  const progress = Math.min(count * 8.33, 100);
+  const progress = count > 0 ? 100 : 0;
 
   return (
     <div className="bg-white p-8 rounded-none border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between transition-all hover:bg-slate-50 hover:-translate-y-1">
@@ -388,7 +422,7 @@ function RankList({ title, items }: { title: string; items: { name: string; perc
       </div>
       <div className="pt-6 border-t-2 border-black">
         <button className="text-[11px] font-black text-black uppercase tracking-[0.25em] underline decoration-4 underline-offset-4 decoration-black/10 hover:decoration-black transition-all">
-          Explore Metrics →
+          Explore Metrics {'->'}
         </button>
       </div>
     </div>
