@@ -11,7 +11,7 @@ export function OrdersPendingScheduling() {
 
   const rowsFor = (orderId: string) => schedules.filter(s => s.orderId === orderId);
 
-  const totalScheduled = (orderId: string) => rowsFor(orderId).reduce((sum, r) => sum + (r.qty || 0), 0);
+  const totalScheduled = (orderId: string) => rowsFor(orderId).reduce((sum, r) => sum + (Number((r as any).qty) || 0), 0);
 
   const pending = orders.filter(o => (o.qty || 0) > totalScheduled(o.id));
 
@@ -26,7 +26,7 @@ export function OrdersPendingScheduling() {
   };
 
   const handleChangeRow = (id: string, field: keyof OrderSchedule, value: any) => {
-    setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: field === 'qty' ? (value === '' ? undefined : parseFloat(value)) : value } : r));
+    setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: field === 'qty' ? value : value } : r));
   };
 
   const handleDeleteRow = (id: string) => {
@@ -36,6 +36,12 @@ export function OrdersPendingScheduling() {
   const handleSave = (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
+    const rows = rowsFor(orderId);
+    if (rows.some(r => (r as any).qty === '' || (r as any).qty === undefined)) {
+      alert('Please fill or delete any empty scheduled quantities before saving');
+      return;
+    }
+
     const total = totalScheduled(orderId);
     if (total > order.qty) {
       alert('Total scheduled quantity exceeds order quantity');
@@ -95,6 +101,21 @@ export function OrdersPendingScheduling() {
 
               <div className="text-sm mb-3">Company: {(companies as any[]).find(c=>c.id===orders.find(o=>o.id===modalOrderId)?.companyId)?.name} • Item: {(items as any[]).find(i=>i.id===orders.find(o=>o.id===modalOrderId)?.itemId)?.name}</div>
 
+              <div className="grid grid-cols-3 gap-4 mb-3">
+                <div className="bg-slate-50 p-2 border border-black rounded">
+                  <div className="text-xs text-slate-600">Total Order Qty</div>
+                  <div className="font-bold text-lg">{orders.find(o=>o.id===modalOrderId)?.qty ?? 0}</div>
+                </div>
+                <div className="bg-slate-50 p-2 border border-black rounded">
+                  <div className="text-xs text-slate-600">Total Scheduled Qty</div>
+                  <div className="font-bold text-lg">{totalScheduled(modalOrderId)}</div>
+                </div>
+                <div className="bg-slate-50 p-2 border border-black rounded">
+                  <div className="text-xs text-slate-600">Yet To Schedule</div>
+                  <div className="font-bold text-lg">{(orders.find(o=>o.id===modalOrderId)?.qty ?? 0) - totalScheduled(modalOrderId)}</div>
+                </div>
+              </div>
+
               <table className="min-w-full divide-y divide-black border-collapse border border-black mb-3">
                 <thead className="bg-slate-100">
                   <tr>
@@ -107,7 +128,7 @@ export function OrdersPendingScheduling() {
                   {rowsFor(modalOrderId).map(r => (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <td className="px-3 py-2 border border-black"><input type="date" value={r.scheduledDate} onChange={(e)=>handleChangeRow(r.id, 'scheduledDate', e.target.value)} className="border-2 border-black rounded p-1" /></td>
-                      <td className="px-3 py-2 border border-black"><input type="number" min={0} step={1} value={r.qty ?? ''} onChange={(e)=>handleChangeRow(r.id, 'qty', e.target.value)} className="border-2 border-black rounded p-1 w-40" /></td>
+                      <td className="px-3 py-2 border border-black"><input type="number" min={0} step="any" value={(r as any).qty ?? ''} onChange={(e)=>handleChangeRow(r.id, 'qty', e.target.value)} className="border-2 border-black rounded p-1 w-40" /></td>
                       <td className="px-3 py-2 border border-black text-center"><button onClick={()=>handleDeleteRow(r.id)} className="text-red-600">Delete</button></td>
                     </tr>
                   ))}

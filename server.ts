@@ -455,6 +455,35 @@ const createHandlers = (tableName: string) => {
       if (!db) return res.status(500).json({ error: "DB connection not available" });
       const data = normalizeWorkflowStatus(tableName, req.body);
       try {
+        // Auto-generate orderNo for orders when not provided
+        if (tableName === 'orders') {
+          try {
+            if (!data.orderNo) {
+              const dateStr = data.orderDate || new Date().toISOString().slice(0,10);
+              const d = new Date(dateStr);
+              let fyStart = d.getFullYear();
+              const month = d.getMonth() + 1;
+              if (month < 4) fyStart = fyStart - 1;
+              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
+
+              const likePattern = `${fyLabel}/%`;
+              const [rows] = await db.query(`SELECT orderNo FROM \`orders\` WHERE orderNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(orderNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`, [likePattern]);
+              let lastNum = 0;
+              if ((rows as any[]).length > 0) {
+                const lastOrderNo = (rows as any[])[0].orderNo as string;
+                const parts = lastOrderNo.split('/');
+                const suffix = parts[1];
+                lastNum = parseInt(suffix || '0', 10) || 0;
+              }
+              const nextNum = lastNum + 1;
+              const padded = String(nextNum).padStart(5, '0');
+              data.orderNo = `${fyLabel}/${padded}`;
+            }
+          } catch (err) {
+            console.warn('[DB] Could not auto-generate orderNo:', (err as Error).message);
+          }
+        }
+
         console.log(`[DB] Upserting to ${tableName}`, { 
           id: data.id, 
           status: data.status,
