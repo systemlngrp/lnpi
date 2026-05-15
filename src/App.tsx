@@ -31,6 +31,9 @@ import { PlantHeadUnified } from "./pages/PlantHeadUnified";
 import { OrderForm } from "./pages/OrderForm";
 import { OrdersPendingPH } from "./pages/OrdersPendingPH";
 import { OrdersPendingScheduling } from "./pages/OrdersPendingScheduling";
+import { OrdersMaster } from "./pages/OrdersMaster";
+import { ScheduledOrdersMaster } from "./pages/ScheduledOrdersMaster";
+import { CanceledOrders } from "./pages/CanceledOrders";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -60,6 +63,9 @@ export default function App() {
           <Route path="orders/form" element={<OrderForm />} />
           <Route path="orders/pending-ph" element={<OrdersPendingPH />} />
           <Route path="orders/pending-scheduling" element={<OrdersPendingScheduling />} />
+          <Route path="orders/master" element={<OrdersMaster />} />
+          <Route path="orders/scheduled" element={<ScheduledOrdersMaster />} />
+          <Route path="orders/canceled" element={<CanceledOrders />} />
           
           {/* Material In */}
           <Route path="material-in/form" element={<MaterialInForm />} />

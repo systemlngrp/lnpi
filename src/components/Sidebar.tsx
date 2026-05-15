@@ -91,6 +91,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Order Form", href: "/orders/form", icon: ClipboardList },
         { name: "Pending PH Approval", href: "/orders/pending-ph", icon: UserCheck },
         { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity },
+        { name: "Orders Master", href: "/orders/master", icon: FileText },
+        { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
+        { name: "Canceled Orders", href: "/orders/canceled", icon: X },
       ],
     },
     {

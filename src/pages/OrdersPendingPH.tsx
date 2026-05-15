@@ -1,11 +1,13 @@
 import React from "react";
 import { useData } from "../hooks/useData";
 import { Order } from "../types";
+import { useNavigate } from "react-router-dom";
 
 export function OrdersPendingPH() {
   const [orders, setOrders] = useData<Order>("orders", []);
   const [companies] = useData("companies", []);
   const [items] = useData("items", []);
+  const navigate = useNavigate();
 
   const pending = orders.filter(o => !o.status || o.status === 'Pending PH');
 
@@ -42,7 +44,8 @@ export function OrdersPendingPH() {
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">
                   <button onClick={() => handleApprove(o.id)} className="bg-emerald-600 text-white px-3 py-1 rounded font-bold mr-2">Approve</button>
-                  <button onClick={() => handleCancel(o.id)} className="bg-red-600 text-white px-3 py-1 rounded font-bold">Cancel</button>
+                  <button onClick={() => handleCancel(o.id)} className="bg-red-600 text-white px-3 py-1 rounded font-bold mr-2">Cancel</button>
+                  <button onClick={() => navigate(`/orders/form?edit=${o.id}`)} className="bg-slate-200 text-black px-3 py-1 rounded font-bold">Edit</button>
                 </td>
               </tr>
             ))}

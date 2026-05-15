@@ -1,14 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { Order, Company, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
+import { useLocation } from "react-router-dom";
+import { User } from "../types";
 
 export function OrderForm() {
   const [orders, setOrders, isLoading] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [items] = useData<Item>("items", []);
+  const [users] = useData<User>("users", []);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -41,6 +44,9 @@ export function OrderForm() {
     .map(i => ({ value: i.id, label: i.name }));
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const location = useLocation();
+
+  const userOptions = users.slice().sort((a,b)=> (a.name||"").localeCompare(b.name||"")).map(u=>({ value: u.id, label: u.name }));
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -130,6 +136,30 @@ export function OrderForm() {
     else setErpCode("");
   };
 
+  // Auto-open edit when ?edit=<id> in URL (used by Plant Head edit link)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const editId = params.get("edit");
+    if (editId) {
+      const o = orders.find(x => x.id === editId);
+      if (o) {
+        // populate form
+        setIsFormOpen(true);
+        setEditingId(o.id);
+        setOrderDate(o.orderDate || "");
+        setCompanyId(o.companyId);
+        setPoType(o.poType || "Verbal");
+        setPoNumber(o.poNumber || "");
+        setItemId(o.itemId);
+        setErpCode((o.erpCode || "").toString());
+        setQty(o.qty?.toString() || "");
+        setRate(o.rate?.toString() || "");
+        setOrderBy(o.orderBy || "");
+        setRemarks(o.remarks || "");
+      }
+    }
+  }, [location.search, orders]);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -161,7 +191,7 @@ export function OrderForm() {
 
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">PO Number</label>
-              <input value={poNumber} onChange={(e)=>setPoNumber(e.target.value)} className="border-2 border-black rounded p-2" />
+              <input value={poNumber} onChange={(e)=>setPoNumber(e.target.value)} className={`border-2 rounded p-2 ${poType === 'Verbal' ? 'bg-slate-200 border-gray-300 text-slate-600' : 'border-black text-black'}`} disabled={poType === 'Verbal'} />
             </div>
 
             <div className="flex flex-col space-y-1">
@@ -171,7 +201,7 @@ export function OrderForm() {
 
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">ERP Code</label>
-              <input value={erpCode} onChange={(e)=>setErpCode(e.target.value)} className="border-2 border-black rounded p-2" readOnly />
+              <input value={erpCode} onChange={(e)=>setErpCode(e.target.value)} className="border-2 border-black rounded p-2 bg-slate-100 text-slate-700" readOnly />
             </div>
 
             <div className="flex flex-col space-y-1">
@@ -186,7 +216,7 @@ export function OrderForm() {
 
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Order By</label>
-              <input value={orderBy} onChange={(e)=>setOrderBy(e.target.value)} className="border-2 border-black rounded p-2" />
+              <Select value={orderBy} onChange={setOrderBy} options={userOptions} placeholder="Select user..." />
             </div>
 
             <div className="flex flex-col space-y-1 md:col-span-3">
@@ -214,6 +244,7 @@ export function OrderForm() {
               <th className="px-4 py-2 text-left font-bold text-black uppercase border border-black">Item</th>
               <th className="px-4 py-2 text-right font-bold text-black uppercase border border-black">Qty</th>
               <th className="px-4 py-2 text-right font-bold text-black uppercase border border-black">Rate</th>
+              <th className="px-4 py-2 text-right font-bold text-black uppercase border border-black">Order By</th>
               <th className="px-4 py-2 text-right font-bold text-black uppercase border border-black">Actions</th>
             </tr>
           </thead>
@@ -228,6 +259,7 @@ export function OrderForm() {
                 <td className="px-4 py-2 border border-black">{items.find(i => i.id === o.itemId)?.name}</td>
                 <td className="px-4 py-2 text-right border border-black">{o.qty}</td>
                 <td className="px-4 py-2 text-right border border-black">{o.rate}</td>
+                <td className="px-4 py-2 text-right border border-black">{users.find(u => u.id === o.orderBy)?.name}</td>
                 <td className="px-4 py-2 text-right border border-black">
                   <button title="Edit" aria-label="Edit" onClick={() => handleEdit(o)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={16} /></button>
                   <button title={deletingId === o.id ? 'Confirm cancel' : 'Cancel'} aria-label={deletingId === o.id ? 'Confirm cancel' : 'Cancel'} onClick={() => handleDelete(o.id)} className={`${deletingId === o.id ? 'text-amber-600 animate-pulse' : 'text-red-600'} hover:text-red-900`}><Trash2 size={16} /></button>

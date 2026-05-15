@@ -9,14 +9,16 @@ export function OrdersPendingScheduling() {
   const [companies] = useData("companies", []);
   const [items] = useData("items", []);
 
-  const pending = orders.filter(o => o.status === 'Pending Scheduling');
+  const rowsFor = (orderId: string) => schedules.filter(s => s.orderId === orderId);
+
+  const totalScheduled = (orderId: string) => rowsFor(orderId).reduce((sum, r) => sum + (r.qty || 0), 0);
+
+  const pending = orders.filter(o => (o.qty || 0) > totalScheduled(o.id));
   const [selectedOrderId, setSelectedOrderId] = useState<string>(pending[0]?.id || "");
 
   const orderOptions = pending.map(o => ({ value: o.id, label: o.orderNo || o.id }));
 
-  const rowsFor = (orderId: string) => schedules.filter(s => s.orderId === orderId);
-
-  const totalScheduled = (orderId: string) => rowsFor(orderId).reduce((sum, r) => sum + (r.qty || 0), 0);
+  
 
   const handleAddRow = (orderId: string) => {
     const newRow: OrderSchedule = { id: crypto.randomUUID(), orderId, scheduledDate: new Date().toISOString().slice(0,10), qty: 0 };
@@ -47,6 +49,33 @@ export function OrdersPendingScheduling() {
       <h2 className="text-xl font-bold text-black uppercase">Pending Scheduling</h2>
 
       <div className="bg-white p-4 rounded border border-black">
+        <div className="mb-4">
+          <h3 className="font-bold mb-2">Pending Orders</h3>
+          <table className="min-w-full divide-y divide-black border-collapse border border-black mb-3">
+            <thead className="bg-slate-100">
+              <tr>
+                <th className="px-3 py-2 border border-black">Order No</th>
+                <th className="px-3 py-2 border border-black">Company</th>
+                <th className="px-3 py-2 border border-black">Item</th>
+                <th className="px-3 py-2 border border-black">Qty</th>
+                <th className="px-3 py-2 border border-black">Scheduled</th>
+                <th className="px-3 py-2 border border-black">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map(o => (
+                <tr key={o.id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 border border-black">{o.orderNo}</td>
+                  <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
+                  <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.name}</td>
+                  <td className="px-3 py-2 border border-black">{o.qty}</td>
+                  <td className="px-3 py-2 border border-black">{totalScheduled(o.id)}</td>
+                  <td className="px-3 py-2 border border-black"><button onClick={() => setSelectedOrderId(o.id)} className="bg-indigo-600 text-white px-3 py-1 rounded">Schedule</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="max-w-md">
           <Select value={selectedOrderId} onChange={setSelectedOrderId} options={orderOptions} placeholder="Select Order to schedule..." />
         </div>
