@@ -60,7 +60,7 @@ export interface Order {
   orderBy?: string;
   poType?: POType;
   remarks?: string;
-  status?: "Pending PH" | "Approved" | "Pending Scheduling" | "Cancelled";
+  status?: "Pending PH" | "Approved" | "Pending Scheduling" | "Scheduled" | "Cancelled";
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -70,6 +70,8 @@ export interface OrderSchedule {
   orderId: string;
   scheduledDate: string;
   qty?: number;
+  producedQty?: number;
+  canceledQty?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -112,6 +114,7 @@ export interface Production {
   id: string;
   transactionNo: string;
   date: string;
+  scheduleId?: string;
   itemId: string;
   qty: number;
   uom: string;
@@ -139,4 +142,3 @@ export interface Consumption {
   updatedBy?: string;
   updateTimestamp?: string;
 }
-

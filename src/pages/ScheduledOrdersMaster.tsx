@@ -3,6 +3,10 @@ import { useData } from "../hooks/useData";
 import { OrderSchedule, Order } from "../types";
 import { formatDate } from "../lib/utils";
 
+function sumField(rows: OrderSchedule[], field: "qty" | "producedQty" | "canceledQty") {
+  return rows.reduce((sum, row) => sum + (Number(row[field]) || 0), 0);
+}
+
 export function ScheduledOrdersMaster() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
@@ -10,7 +14,10 @@ export function ScheduledOrdersMaster() {
   const [items] = useData("items", []);
   // Build aggregated view per order
   const schedulesByOrder = (orderId: string) => schedules.filter(s => s.orderId === orderId);
-  const scheduledTotalFor = (orderId: string) => schedulesByOrder(orderId).reduce((sum, s) => sum + (Number(s.qty) || 0), 0);
+  const scheduledTotalFor = (orderId: string) => sumField(schedulesByOrder(orderId), "qty");
+  const producedTotalFor = (orderId: string) => sumField(schedulesByOrder(orderId), "producedQty");
+  const canceledTotalFor = (orderId: string) => sumField(schedulesByOrder(orderId), "canceledQty");
+  const pendingProductionFor = (orderId: string) => Math.max(scheduledTotalFor(orderId) - producedTotalFor(orderId) - canceledTotalFor(orderId), 0);
 
   return (
     <div className="space-y-6">
@@ -26,6 +33,9 @@ export function ScheduledOrdersMaster() {
               <th className="px-3 py-2 border border-black">Item</th>
               <th className="px-3 py-2 border border-black">Order Qty</th>
               <th className="px-3 py-2 border border-black">Scheduled Qty</th>
+              <th className="px-3 py-2 border border-black">Produced Qty</th>
+              <th className="px-3 py-2 border border-black">Canceled Qty</th>
+              <th className="px-3 py-2 border border-black">Pending Production Qty</th>
               <th className="px-3 py-2 border border-black">Yet To Schedule</th>
             </tr>
           </thead>
@@ -39,6 +49,9 @@ export function ScheduledOrdersMaster() {
                 <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.name}</td>
                 <td className="px-3 py-2 border border-black">{o.qty}</td>
                 <td className="px-3 py-2 border border-black">{scheduledTotalFor(o.id)}</td>
+                <td className="px-3 py-2 border border-black">{producedTotalFor(o.id)}</td>
+                <td className="px-3 py-2 border border-black">{canceledTotalFor(o.id)}</td>
+                <td className="px-3 py-2 border border-black">{pendingProductionFor(o.id)}</td>
                 <td className="px-3 py-2 border border-black">{Number(o.qty || 0) - scheduledTotalFor(o.id)}</td>
               </tr>
             ))}

@@ -20,7 +20,7 @@ import {
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption } from "../types";
+import { MaterialIn, Production, Consumption, OrderSchedule } from "../types";
 import { cn } from "../lib/utils";
 
 interface SidebarProps {
@@ -33,6 +33,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
   const [consumptions] = useData<Consumption>("consumptions", []);
+  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
@@ -42,6 +43,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     "/material-in/pending-md": materialIn.filter(m => m.status === "Pending MD").length,
     "/material-in/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
     "/production/pending-ph": productions.filter(p => isPendingPH(p.status)).length,
+    "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
     "/production/pending-tally": productions.filter(p => p.status === "Pending Tally").length,
     "/consumption/pending-ph": consumptions.filter(c => isPendingPH(c.status)).length,
     "/consumption/pending-tally": consumptions.filter(c => c.status === "Pending Tally").length,
@@ -101,6 +103,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       color: "bg-emerald-700",
       items: [
         { name: "Production Form", href: "/production/form", icon: Hammer },
+        { name: "Pending Production", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
         { name: "Pending PH Approval", href: "/production/pending-ph", icon: UserCheck, countKey: "/production/pending-ph" },
         { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
         { name: "Production Master", href: "/production/master", icon: Database },

@@ -213,6 +213,8 @@ async function initDb(retries = 5) {
           \`orderId\` VARCHAR(36) NOT NULL,
           \`scheduledDate\` VARCHAR(50) NOT NULL,
           \`qty\` DECIMAL(15,2) NOT NULL,
+          \`producedQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`canceledQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -275,6 +277,7 @@ async function initDb(retries = 5) {
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
+          \`scheduleId\` VARCHAR(36),
           \`itemId\` VARCHAR(36) NOT NULL,
           \`qty\` DECIMAL(15, 2) NOT NULL,
           \`uom\` VARCHAR(50) NOT NULL,
@@ -383,6 +386,9 @@ async function initDb(retries = 5) {
         { table: "orders_schedule", column: "orderId", type: "VARCHAR(36) NOT NULL" },
         { table: "orders_schedule", column: "scheduledDate", type: "VARCHAR(50) NOT NULL" },
         { table: "orders_schedule", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "orders_schedule", column: "producedQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "orders_schedule", column: "canceledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "productions", column: "scheduleId", type: "VARCHAR(36)" },
         { table: "productions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "productions", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "consumptions", column: "updatedBy", type: "VARCHAR(255)" },

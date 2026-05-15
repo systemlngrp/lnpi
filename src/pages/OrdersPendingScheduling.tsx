@@ -41,7 +41,15 @@ export function OrdersPendingScheduling() {
   
 
   const handleAddRow = (orderId: string) => {
-    const newRow: any = { id: crypto.randomUUID(), orderId, scheduledDate: new Date().toISOString().slice(0,10), _isNew: true, qty: '' };
+    const newRow: any = {
+      id: crypto.randomUUID(),
+      orderId,
+      scheduledDate: new Date().toISOString().slice(0,10),
+      _isNew: true,
+      qty: '',
+      producedQty: 0,
+      canceledQty: 0
+    };
     setModalRows(prev => [...prev, newRow]);
   };
 
@@ -98,7 +106,12 @@ export function OrdersPendingScheduling() {
         // Prepare rows to persist (convert qty to number and remove internal fields)
         const rowsToSave = rows.map(r => {
           const { _isNew, ...rest } = r as any;
-          return { ...rest, qty: Number(rest.qty) };
+          return {
+            ...rest,
+            qty: Number(rest.qty),
+            producedQty: Number(rest.producedQty || 0),
+            canceledQty: Number(rest.canceledQty || 0),
+          };
         });
 
         // Persist: Replace existing rows for this order with rowsToSave
