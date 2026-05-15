@@ -21,6 +21,7 @@ export function OrdersPendingScheduling() {
   const [modalOrderId, setModalOrderId] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalRows, setModalRows] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
 
   // Initialize modalRows when opening modal for an order
   React.useEffect(() => {
