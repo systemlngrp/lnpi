@@ -95,8 +95,11 @@ export function OrdersPendingScheduling() {
 
       setSaving(true);
       try {
-        // Prepare rows to persist (convert qty to number)
-        const rowsToSave = rows.map(r => ({ ...r, qty: Number(r.qty) }));
+        // Prepare rows to persist (convert qty to number and remove internal fields)
+        const rowsToSave = rows.map(r => {
+          const { _isNew, ...rest } = r as any;
+          return { ...rest, qty: Number(rest.qty) };
+        });
 
         // Persist: Replace existing rows for this order with rowsToSave
         await setSchedules(prev => {
