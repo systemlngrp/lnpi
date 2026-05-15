@@ -3,6 +3,7 @@ import { useData } from "../hooks/useData";
 import { Order, OrderSchedule } from "../types";
 import { Select } from "../components/Select";
 import { Trash2 } from "lucide-react";
+import { Spinner } from "../components/Spinner";
 
 export function OrdersPendingScheduling() {
   const [orders, setOrders] = useData<Order>("orders", []);
@@ -76,34 +77,47 @@ export function OrdersPendingScheduling() {
   };
 
   const handleSave = (orderId: string) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-    const rows = modalRows;
-    if (rows.some(r => (r as any).qty === '' || (r as any).qty === undefined)) {
-      alert('Please fill or delete any empty scheduled quantities before saving');
-      return;
-    }
+    return (async () => {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+      const rows = modalRows;
+      if (rows.some(r => (r as any).qty === '' || (r as any).qty === undefined)) {
+        setModalError('Please fill or delete any empty scheduled quantities before saving');
+        return;
+      }
 
-    const total = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
-    if (total > Number(order.qty || 0)) {
-      alert('Total scheduled quantity exceeds order quantity');
-      return;
-    }
-    // Prepare rows to persist (convert qty to number)
-    const rowsToSave = rows.map(r => ({ ...r, qty: Number(r.qty) }));
+      const total = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+      if (total > Number(order.qty || 0)) {
+        setModalError('Total scheduled quantity exceeds order quantity');
+        return;
+      }
 
-    // Persist: Replace existing rows for this order with rowsToSave
-    setSchedules(prev => {
-      const others = prev.filter(p => p.orderId !== orderId);
-      return [...others, ...rowsToSave];
-    });
+      setSaving(true);
+      try {
+        // Prepare rows to persist (convert qty to number)
+        const rowsToSave = rows.map(r => ({ ...r, qty: Number(r.qty) }));
 
-    // If fully scheduled, mark as Scheduled
-    if (total === Number(order.qty || 0)) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Scheduled', updatedBy: 'System User', updateTimestamp: new Date().toISOString() } : o));
-    }
+        // Persist: Replace existing rows for this order with rowsToSave
+        await setSchedules(prev => {
+          const others = prev.filter(p => p.orderId !== orderId);
+          return [...others, ...rowsToSave];
+        });
 
-    alert('Schedule saved');
+        // If fully scheduled, mark as Scheduled
+        if (total === Number(order.qty || 0)) {
+          await setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Scheduled', updatedBy: 'System User', updateTimestamp: new Date().toISOString() } : o));
+        }
+
+        setModalError(null);
+        setModalRows([]);
+        // close modal is handled by caller after promise resolves
+      } catch (err) {
+        console.error('Error saving schedule:', err);
+        setModalError('Failed to save schedule. Try again.');
+      } finally {
+        setSaving(false);
+      }
+    })();
   };
 
   return (
@@ -192,8 +206,18 @@ export function OrdersPendingScheduling() {
               </table>
 
               <div className="flex gap-2">
-                <button onClick={() => handleAddRow(modalOrderId)} className="bg-indigo-600 text-white px-3 py-1 rounded">Add Row</button>
-                <button onClick={() => { handleSave(modalOrderId); setModalOpen(false); setModalOrderId(null); }} className="bg-emerald-600 text-white px-3 py-1 rounded">Save Schedule</button>
+                {(() => {
+                  const order = orders.find(o => o.id === modalOrderId);
+                  const yetTo = (order ? Number(order.qty || 0) - displayedTotalScheduled(modalOrderId) : 0);
+                  return (
+                    <button onClick={() => modalOrderId && handleAddRow(modalOrderId)} disabled={yetTo <= 0} className={`bg-indigo-600 text-white px-3 py-1 rounded ${yetTo <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>Add Row</button>
+                  );
+                })()}
+
+                <button onClick={async () => { await handleSave(modalOrderId!); if (!modalError) { setModalOpen(false); setModalOrderId(null); } }} disabled={saving} className="bg-emerald-600 text-white px-3 py-1 rounded flex items-center gap-2">
+                  {saving ? <Spinner size={16} /> : null}
+                  <span>Save Schedule</span>
+                </button>
               </div>
 
               {modalError && <div className="text-sm text-red-600 mt-2">{modalError}</div>}
