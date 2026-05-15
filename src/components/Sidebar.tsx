@@ -47,6 +47,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     "/production/pending-tally": productions.filter(p => p.status === "Pending Tally").length,
     "/consumption/pending-ph": consumptions.filter(c => isPendingPH(c.status)).length,
     "/consumption/pending-tally": consumptions.filter(c => c.status === "Pending Tally").length,
+    "/dispatch/pending-planning": schedules.filter(s => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(23, 59, 59, 999);
+      const schedDate = new Date(s.scheduledDate);
+      return !isNaN(schedDate.getTime()) && schedDate <= tomorrow && (Number(s.qty || 0) > (Number(s.producedQty || 0) + Number(s.canceledQty || 0)));
+    }).length,
     "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
                   productions.filter(p => isPendingPH(p.status)).length + 
                   consumptions.filter(c => isPendingPH(c.status)).length

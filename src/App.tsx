@@ -35,6 +35,7 @@ import { OrdersPendingPH } from "./pages/OrdersPendingPH";
 import { OrdersPendingScheduling } from "./pages/OrdersPendingScheduling";
 import { OrdersMaster } from "./pages/OrdersMaster";
 import { ScheduledOrdersMaster } from "./pages/ScheduledOrdersMaster";
+import { PendingDispatchPlanning } from "./pages/PendingDispatchPlanning";
 import { CanceledOrders } from "./pages/CanceledOrders";
 
 function BlankPage({ title }: { title: string }) {
@@ -91,6 +92,9 @@ export default function App() {
           <Route path="consumption/pending-ph" element={<ConsumptionPendingPH />} />
           <Route path="consumption/pending-tally" element={<ConsumptionPendingTally />} />
           <Route path="consumption/master" element={<ConsumptionMaster />} />
+          
+          {/* Dispatch */}
+          <Route path="dispatch/pending-planning" element={<PendingDispatchPlanning />} />
         </Route>
       </Routes>
     </HashRouter>
