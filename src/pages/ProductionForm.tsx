@@ -222,7 +222,7 @@ export function ProductionForm() {
         <table className="min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-50 divide-x divide-black">
             <tr className="divide-x divide-black">
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Trn No</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Order No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item</th>

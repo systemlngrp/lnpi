@@ -123,7 +123,7 @@ export function ProductionPendingPH() {
                       onChange={() => toggleSelect(p.id)}
                     />
                     <div className="text-right">
-                        <div className="text-xs font-black text-slate-500 uppercase">Trx No</div>
+                        <div className="text-xs font-black text-slate-500 uppercase">Job No.</div>
                         <div className="text-sm font-bold">{p.transactionNo}</div>
                     </div>
                   </div>
@@ -175,7 +175,7 @@ export function ProductionPendingPH() {
                   onChange={() => toggleSelectAll(productions.filter(p => isPendingPH(p.status)).map(p => p.id))}
                 />
               </th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Transaction No</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Qty</th>

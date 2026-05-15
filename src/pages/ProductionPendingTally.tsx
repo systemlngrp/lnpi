@@ -76,7 +76,7 @@ export function ProductionPendingTally() {
             {pendingList.sort((a, b) => new Date(b.updateTimestamp).getTime() - new Date(a.updateTimestamp).getTime()).map((p) => (
                 <div key={p.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
                     <div className="flex justify-between items-center">
-                        <div className="font-bold text-sm">{p.transactionNo}</div>
+                        <div className="font-bold text-sm">Job: {p.transactionNo}</div>
                         <div className="text-xs text-slate-500">{formatDate(p.date)}</div>
                     </div>
                     <div className="text-sm font-bold">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
@@ -99,7 +99,7 @@ export function ProductionPendingTally() {
         <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Trn No</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Produced Qty</th>
