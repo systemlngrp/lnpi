@@ -10,6 +10,7 @@ export interface Item {
   groupId: string;
   name: string;
   uom: string;
+  erp?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -40,6 +41,35 @@ export interface Company {
   district?: string;
   state?: string;
   gstNo?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export type POType = "Verbal" | "Ref No.";
+
+export interface Order {
+  id: string;
+  orderNo?: string;
+  orderDate: string;
+  companyId: string;
+  poNumber?: string;
+  erpCode?: string | number;
+  itemId: string;
+  qty: number;
+  rate?: number;
+  orderBy?: string;
+  poType?: POType;
+  remarks?: string;
+  status?: "Pending PH" | "Approved" | "Pending Scheduling" | "Cancelled";
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface OrderSchedule {
+  id: string;
+  orderId: string;
+  scheduledDate: string;
+  qty: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

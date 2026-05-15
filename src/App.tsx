@@ -28,6 +28,9 @@ import { Users } from "./pages/Users";
 import { Dashboard } from "./pages/Dashboard";
 import { BulkEntry } from "./pages/BulkEntry";
 import { PlantHeadUnified } from "./pages/PlantHeadUnified";
+import { OrderForm } from "./pages/OrderForm";
+import { OrdersPendingPH } from "./pages/OrdersPendingPH";
+import { OrdersPendingScheduling } from "./pages/OrdersPendingScheduling";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -53,6 +56,10 @@ export default function App() {
           <Route path="masters/suppliers" element={<Suppliers />} />
           <Route path="masters/companies" element={<Companies />} />
           <Route path="masters/users" element={<Users />} />
+          {/* Orders */}
+          <Route path="orders/form" element={<OrderForm />} />
+          <Route path="orders/pending-ph" element={<OrdersPendingPH />} />
+          <Route path="orders/pending-scheduling" element={<OrdersPendingScheduling />} />
           
           {/* Material In */}
           <Route path="material-in/form" element={<MaterialInForm />} />

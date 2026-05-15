@@ -17,6 +17,7 @@ export function Items() {
   const [name, setName] = useState("");
   const [groupId, setGroupId] = useState("");
   const [uom, setUom] = useState("");
+  const [erp, setErp] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
 
   const uomOptions = [
@@ -71,6 +72,12 @@ export function Items() {
     e.preventDefault();
     if (!name.trim() || !groupId || !uom) return;
 
+    // ERP must be integer if provided
+    if (erp && !/^[0-9]+$/.test(erp)) {
+      alert("ERP must be a whole number without decimals.");
+      return;
+    }
+
     const isDuplicate = items.some(i => 
       i.name.toLowerCase() === name.trim().toLowerCase() && i.id !== editingId
     );
@@ -82,16 +89,18 @@ export function Items() {
 
     setIsSubmitting(true);
     setTimeout(() => {
-      const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
+      const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as any;
+      const erpValue = erp ? parseInt(erp, 10) : undefined;
       if (editingId) {
-        setItems(items.map(img => img.id === editingId ? { ...img, name: name.trim(), groupId, uom, ...audit } : img));
+        setItems(items.map(img => img.id === editingId ? { ...img, name: name.trim(), groupId, uom, erp: erpValue, ...audit } : img));
       } else {
-        setItems([...items, { id: crypto.randomUUID(), name: name.trim(), groupId, uom, ...audit }]);
+        setItems([...items, { id: crypto.randomUUID(), name: name.trim(), groupId, uom, erp: erpValue, ...audit } as Item]);
       }
       
       setName("");
       setGroupId("");
       setUom("");
+      setErp("");
       setEditingId(null);
       setIsFormOpen(false);
       setIsSubmitting(false);
@@ -162,6 +171,22 @@ export function Items() {
               <label className="font-bold text-black">UOM *</label>
               <Select value={uom} onChange={setUom} options={uomOptions} placeholder="Select UOM..." required />
             </div>
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">ERP (whole number)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={erp}
+                onChange={(e) => {
+                  // allow only digits
+                  const v = e.target.value.replace(/[^0-9]/g, "");
+                  setErp(v);
+                }}
+                placeholder="Enter ERP (no decimals)"
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+              />
+            </div>
             <div className="flex space-x-3 pt-2">
               <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border border-black min-w-[100px]">
                 {isSubmitting ? <Spinner size={20} className="text-white" /> : "Submit"}
@@ -186,7 +211,7 @@ export function Items() {
                                 <div className="text-sm font-bold">{item.name}</div>
                              </div>
                              <div className="flex items-center gap-2">
-                                 <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
+                                 <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setErp(item.erp?.toString() || ""); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
                                  <button 
                                       onClick={() => handleDelete(item.id)} 
                                       className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold`}
@@ -200,9 +225,13 @@ export function Items() {
                                 <div className="text-xs font-black text-slate-500 uppercase">Group</div>
                                 <div className="text-sm">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</div>
                             </div>
-                             <div>
-                                <div className="text-xs font-black text-slate-500 uppercase">UOM</div>
-                                <div className="text-sm">{item.uom}</div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">UOM</div>
+                              <div className="text-sm">{item.uom}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">ERP</div>
+                              <div className="text-sm">{item.erp ?? ""}</div>
                             </div>
                         </div>
                     </div>
@@ -212,23 +241,25 @@ export function Items() {
             <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Group</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
-                  <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
-                </tr>
+                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
+                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Group</th>
+                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
+                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
+                      <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
+                    </tr>
               </thead>
               <tbody className="divide-y divide-black bg-white">
-                {filteredItems.length === 0 ? (
-                  <tr><td colSpan={4} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
-                ) : (
+                    {filteredItems.length === 0 ? (
+                      <tr><td colSpan={5} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
+                    ) : (
                   filteredItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
                       <td className="px-6 py-4 text-sm font-medium text-black border border-black">{item.name}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{item.uom}</td>
+                          <td className="px-6 py-4 text-sm text-black border border-black">{item.erp ?? ""}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
-                        <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
+                            <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setErp(item.erp?.toString() || ""); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
                         <button 
                           onClick={() => handleDelete(item.id)} 
                           className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}

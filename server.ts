@@ -172,6 +172,7 @@ async function initDb(retries = 5) {
           \`groupId\` VARCHAR(36) NOT NULL,
           \`name\` VARCHAR(255) NOT NULL,
           \`uom\` VARCHAR(50) NOT NULL,
+          \`erp\` INT DEFAULT NULL,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -181,6 +182,37 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`suppliers\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`orders\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`orderNo\` VARCHAR(100),
+          \`orderDate\` VARCHAR(50) NOT NULL,
+          \`companyId\` VARCHAR(36) NOT NULL,
+          \`poNumber\` VARCHAR(100),
+          \`erpCode\` VARCHAR(100),
+          \`itemId\` VARCHAR(36) NOT NULL,
+          \`qty\` DECIMAL(15,2) NOT NULL,
+          \`rate\` DECIMAL(15,2),
+          \`orderBy\` VARCHAR(255),
+          \`poType\` VARCHAR(50),
+          \`remarks\` TEXT,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending PH',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`orders_schedule\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`orderId\` VARCHAR(36) NOT NULL,
+          \`scheduledDate\` VARCHAR(50) NOT NULL,
+          \`qty\` DECIMAL(15,2) NOT NULL,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -276,6 +308,7 @@ async function initDb(retries = 5) {
       const migrations = [
         { table: "items", column: "groupId", type: "VARCHAR(36) NOT NULL" },
         { table: "items", column: "uom", type: "VARCHAR(50) NOT NULL" },
+        { table: "items", column: "erp", type: "INT" },
         { table: "item_groups", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
@@ -338,6 +371,18 @@ async function initDb(retries = 5) {
         { table: "material_in", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "users", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "users", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "orders", column: "orderDate", type: "VARCHAR(50) NOT NULL" },
+        { table: "orders", column: "companyId", type: "VARCHAR(36) NOT NULL" },
+        { table: "orders", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "orders", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "orders", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
+        { table: "orders", column: "erpCode", type: "VARCHAR(100)" },
+        { table: "orders", column: "poNumber", type: "VARCHAR(100)" },
+        { table: "orders", column: "rate", type: "DECIMAL(15,2)" },
+        { table: "orders", column: "poType", type: "VARCHAR(50)" },
+        { table: "orders_schedule", column: "orderId", type: "VARCHAR(36) NOT NULL" },
+        { table: "orders_schedule", column: "scheduledDate", type: "VARCHAR(50) NOT NULL" },
+        { table: "orders_schedule", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "productions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "productions", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "consumptions", column: "updatedBy", type: "VARCHAR(255)" },
@@ -453,7 +498,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "items", "suppliers", "companies", "material_in", "users", "productions", "consumptions"];
+const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

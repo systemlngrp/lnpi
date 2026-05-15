@@ -85,6 +85,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
     {
+      section: "Orders",
+      color: "bg-rose-700",
+      items: [
+        { name: "Order Form", href: "/orders/form", icon: ClipboardList },
+        { name: "Pending PH Approval", href: "/orders/pending-ph", icon: UserCheck },
+        { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity },
+      ],
+    },
+    {
       section: "Production",
       color: "bg-emerald-700",
       items: [
