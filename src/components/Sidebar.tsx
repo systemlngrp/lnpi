@@ -75,22 +75,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
     {
-      section: "Dispatch",
-      color: "bg-blue-700",
-      items: [
-        { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
-      ],
-    },
-    {
       section: "Masters",
       color: "bg-indigo-700",
       items: [
         { name: "Item Groups", href: "/masters/item-groups", icon: Layers },
         { name: "Items", href: "/masters/items", icon: Boxes },
-            { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
-            { name: "Companies", href: "/masters/companies", icon: Database },
-            { name: "Trucks", href: "/masters/trucks", icon: Truck },
-            { name: "Users", href: "/masters/users", icon: Users },
+        { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
+        { name: "Companies", href: "/masters/companies", icon: Database },
+        { name: "Trucks", href: "/masters/trucks", icon: Truck },
+        { name: "Users", href: "/masters/users", icon: Users },
       ],
     },
     {
@@ -130,6 +123,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
     {
+      section: "Dispatch",
+      color: "bg-blue-700",
+      items: [
+        { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
+      ],
+    },
+    {
       section: "Consumption",
       color: "bg-amber-700",
       items: [
@@ -140,6 +140,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
   ];
+
 
 
   return (
