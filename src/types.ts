@@ -30,6 +30,20 @@ export interface Supplier {
   updateTimestamp?: string;
 }
 
+export interface Company {
+  id: string;
+  name: string;
+  contactPerson?: string;
+  contactNumber?: string;
+  email?: string;
+  address?: string;
+  district?: string;
+  state?: string;
+  gstNo?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface MaterialIn {
   id: string;
   transactionNo: string;

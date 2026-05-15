@@ -66,8 +66,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       items: [
         { name: "Item Groups", href: "/masters/item-groups", icon: Layers },
         { name: "Items", href: "/masters/items", icon: Boxes },
-        { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
-        { name: "Users", href: "/masters/users", icon: Users },
+            { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
+            { name: "Companies", href: "/masters/companies", icon: Database },
+            { name: "Users", href: "/masters/users", icon: Users },
       ],
     },
     {

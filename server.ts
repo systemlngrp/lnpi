@@ -187,6 +187,22 @@ async function initDb(retries = 5) {
       `);
 
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`companies\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`contactPerson\` VARCHAR(255),
+          \`contactNumber\` VARCHAR(50),
+          \`email\` VARCHAR(255),
+          \`address\` TEXT,
+          \`district\` VARCHAR(255),
+          \`state\` VARCHAR(255),
+          \`gstNo\` VARCHAR(100),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`material_in\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
@@ -310,6 +326,14 @@ async function initDb(retries = 5) {
         { table: "items", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "suppliers", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "suppliers", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "companies", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "companies", column: "contactPerson", type: "VARCHAR(255)" },
+        { table: "companies", column: "contactNumber", type: "VARCHAR(50)" },
+        { table: "companies", column: "email", type: "VARCHAR(255)" },
+        { table: "companies", column: "address", type: "TEXT" },
+        { table: "companies", column: "district", type: "VARCHAR(255)" },
+        { table: "companies", column: "state", type: "VARCHAR(255)" },
+        { table: "companies", column: "gstNo", type: "VARCHAR(100)" },
         { table: "material_in", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_in", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "users", column: "updatedBy", type: "VARCHAR(255)" },
@@ -429,7 +453,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "items", "suppliers", "material_in", "users", "productions", "consumptions"];
+const entities = ["item_groups", "items", "suppliers", "companies", "material_in", "users", "productions", "consumptions"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

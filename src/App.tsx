@@ -8,6 +8,7 @@ import { Layout } from "./components/Layout";
 import { ItemGroups } from "./pages/ItemGroups";
 import { Items } from "./pages/Items";
 import { Suppliers } from "./pages/Suppliers";
+import { Companies } from "./pages/Companies";
 import { MaterialInForm } from "./pages/MaterialInForm";
 import { PendingPHApproval } from "./pages/PendingPHApproval";
 import { PendingAccountsApproval } from "./pages/PendingAccountsApproval";
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="masters/item-groups" element={<ItemGroups />} />
           <Route path="masters/items" element={<Items />} />
           <Route path="masters/suppliers" element={<Suppliers />} />
+          <Route path="masters/companies" element={<Companies />} />
           <Route path="masters/users" element={<Users />} />
           
           {/* Material In */}
