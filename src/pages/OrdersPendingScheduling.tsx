@@ -19,76 +19,90 @@ export function OrdersPendingScheduling() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalOrderId, setModalOrderId] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [modalRows, setModalRows] = useState<any[]>([]);
+
+  // Initialize modalRows when opening modal for an order
+  React.useEffect(() => {
+    if (modalOpen && modalOrderId) {
+      const existing = rowsFor(modalOrderId).map(r => ({ ...r, qty: (r as any).qty != null ? String((r as any).qty) : '' }));
+      setModalRows(existing);
+      setModalError(null);
+    }
+  }, [modalOpen, modalOrderId]);
+
+  const displayedTotalScheduled = (orderId: string | null) => {
+    if (!orderId) return 0;
+    if (modalOpen && modalOrderId === orderId) return modalRows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+    return totalScheduled(orderId);
+  };
 
   
 
   const handleAddRow = (orderId: string) => {
-    const newRow: any = { id: crypto.randomUUID(), orderId, scheduledDate: new Date().toISOString().slice(0,10), _isNew: true };
-    setSchedules(prev => [...prev, newRow]);
+    const newRow: any = { id: crypto.randomUUID(), orderId, scheduledDate: new Date().toISOString().slice(0,10), _isNew: true, qty: '' };
+    setModalRows(prev => [...prev, newRow]);
   };
 
   const handleChangeRow = (id: string, field: keyof OrderSchedule, value: any) => {
-    if (field === 'qty' && modalOrderId) {
-      const order = orders.find(o => o.id === modalOrderId);
-      if (!order) return;
+    if (!modalOrderId) return;
+    const order = orders.find(o => o.id === modalOrderId);
+    if (!order) return;
 
-      // compute prospective total: replace this row's qty with the new value
-      const rows = rowsFor(modalOrderId);
-      const prospectiveTotal = rows.reduce((sum, r) => {
-        if (r.id === id) return sum + (Number(value) || 0);
-        return sum + (Number((r as any).qty) || 0);
-      }, 0);
-
-      if (!value || value === '') {
-        // allow clearing the field
-        setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
-        setModalError(null);
-        return;
-      }
-
-      const numeric = Number(value);
-      if (isNaN(numeric) || numeric < 0) {
-        // ignore invalid
-        return;
-      }
-
+    if (field === 'qty') {
+      // compute prospective total from modalRows
+      const rows = modalRows.map(r => r.id === id ? { ...r, qty: value } : r);
+      const prospectiveTotal = rows.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+      if (value !== '' && (isNaN(Number(value)) || Number(value) < 0)) return;
       if (prospectiveTotal > Number(order.qty || 0)) {
         setModalError('Total scheduled would exceed order quantity. Reduce the value.');
-        return; // do not accept this change
+        return;
       }
-
-      // otherwise accept
       setModalError(null);
-      setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+      setModalRows(rows);
       return;
     }
 
-    setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+    setModalRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
 
   const handleDeleteRow = (id: string) => {
+    // delete from modalRows when modal open
+    if (modalOpen) {
+      setModalRows(prev => prev.filter(r => r.id !== id));
+      setModalError(null);
+      return;
+    }
     setSchedules(prev => prev.filter(r => r.id !== id));
-    setModalError(null);
   };
 
   const handleSave = (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
-    const rows = rowsFor(orderId);
+    const rows = modalRows;
     if (rows.some(r => (r as any).qty === '' || (r as any).qty === undefined)) {
       alert('Please fill or delete any empty scheduled quantities before saving');
       return;
     }
 
-    const total = totalScheduled(orderId);
-    if (total > order.qty) {
+    const total = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+    if (total > Number(order.qty || 0)) {
       alert('Total scheduled quantity exceeds order quantity');
       return;
     }
-    // If fully scheduled, mark as Scheduled else leave Pending Scheduling
-    if (total === order.qty) {
+    // Prepare rows to persist (convert qty to number)
+    const rowsToSave = rows.map(r => ({ ...r, qty: Number(r.qty) }));
+
+    // Persist: Replace existing rows for this order with rowsToSave
+    setSchedules(prev => {
+      const others = prev.filter(p => p.orderId !== orderId);
+      return [...others, ...rowsToSave];
+    });
+
+    // If fully scheduled, mark as Scheduled
+    if (total === Number(order.qty || 0)) {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Scheduled', updatedBy: 'System User', updateTimestamp: new Date().toISOString() } : o));
     }
+
     alert('Schedule saved');
   };
 
@@ -102,6 +116,7 @@ export function OrdersPendingScheduling() {
           <table className="min-w-full divide-y divide-black border-collapse border border-black mb-3">
             <thead className="bg-slate-100">
               <tr>
+                <th className="px-3 py-2 border border-black">S.No</th>
                 <th className="px-3 py-2 border border-black">Order No</th>
                 <th className="px-3 py-2 border border-black">Company</th>
                 <th className="px-3 py-2 border border-black">Item</th>
@@ -112,8 +127,9 @@ export function OrdersPendingScheduling() {
               </tr>
             </thead>
             <tbody>
-              {pending.map(o => (
+              {pending.map((o, idx) => (
                 <tr key={o.id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 border border-black">{idx + 1}</td>
                   <td className="px-3 py-2 border border-black">{o.orderNo}</td>
                   <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
                   <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.name}</td>
@@ -146,27 +162,29 @@ export function OrdersPendingScheduling() {
                 </div>
                 <div className="bg-slate-50 p-2 border border-black rounded">
                   <div className="text-xs text-slate-600">Total Scheduled Qty</div>
-                  <div className="font-bold text-lg">{totalScheduled(modalOrderId)}</div>
+                  <div className="font-bold text-lg">{displayedTotalScheduled(modalOrderId)}</div>
                 </div>
                 <div className="bg-slate-50 p-2 border border-black rounded">
                   <div className="text-xs text-slate-600">Yet To Schedule</div>
-                  <div className="font-bold text-lg">{(orders.find(o=>o.id===modalOrderId)?.qty ?? 0) - totalScheduled(modalOrderId)}</div>
+                  <div className="font-bold text-lg">{(orders.find(o=>o.id===modalOrderId)?.qty ?? 0) - displayedTotalScheduled(modalOrderId)}</div>
                 </div>
               </div>
 
               <table className="min-w-full divide-y divide-black border-collapse border border-black mb-3">
                 <thead className="bg-slate-100">
                   <tr>
+                    <th className="px-3 py-2 border border-black">S.No</th>
                     <th className="px-3 py-2 border border-black">Scheduled Date</th>
                     <th className="px-3 py-2 border border-black">Scheduled Quantity</th>
                     <th className="px-3 py-2 border border-black">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rowsFor(modalOrderId).map(r => (
+                  {modalRows.map((r, idx) => (
                     <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 border border-black">{idx + 1}</td>
                       <td className="px-3 py-2 border border-black"><input type="date" value={r.scheduledDate} onChange={(e)=>handleChangeRow(r.id, 'scheduledDate', e.target.value)} className="border-2 border-black rounded p-1" /></td>
-                      <td className="px-3 py-2 border border-black"><input type="number" min={0} step="any" value={(r as any)._isNew ? ((r as any).qty ?? '') : ((r as any).qty ?? '')} onChange={(e)=>handleChangeRow(r.id, 'qty', e.target.value)} className="border-2 border-black rounded p-1 w-40" /></td>
+                      <td className="px-3 py-2 border border-black"><input type="number" min={0} step="any" value={(r as any).qty ?? ''} onChange={(e)=>handleChangeRow(r.id, 'qty', e.target.value)} className="border-2 border-black rounded p-1 w-40" /></td>
                       <td className="px-3 py-2 border border-black text-center"><button onClick={()=>handleDeleteRow(r.id)} aria-label="Delete schedule" className="text-red-600"><Trash2 size={18} /></button></td>
                     </tr>
                   ))}
@@ -180,7 +198,7 @@ export function OrdersPendingScheduling() {
 
               {modalError && <div className="text-sm text-red-600 mt-2">{modalError}</div>}
 
-              <div className="mt-3 text-sm">Total Scheduled: {totalScheduled(modalOrderId)} / {orders.find(o=>o.id===modalOrderId)?.qty}</div>
+              <div className="mt-3 text-sm">Total Scheduled: {displayedTotalScheduled(modalOrderId)} / {orders.find(o=>o.id===modalOrderId)?.qty}</div>
             </div>
           </div>
         )}
