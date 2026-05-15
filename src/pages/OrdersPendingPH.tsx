@@ -1,6 +1,7 @@
 import React from "react";
 import { useData } from "../hooks/useData";
 import { Order } from "../types";
+import { formatDate } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 
 export function OrdersPendingPH() {
@@ -23,7 +24,7 @@ export function OrdersPendingPH() {
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-black uppercase">Pending Plant Head Approval</h2>
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <table className="min-w-full divide-y divide-black border-collapse border border-black">
+        <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">
             <tr>
               <th className="px-4 py-2 border border-black">Order No</th>
@@ -38,7 +39,7 @@ export function OrdersPendingPH() {
             {pending.map(o => (
               <tr key={o.id} className="hover:bg-slate-50">
                 <td className="px-4 py-2 border border-black">{o.orderNo}</td>
-                <td className="px-4 py-2 border border-black">{o.orderDate}</td>
+                <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-4 py-2 border border-black">{(companies as any[]).find((c:any)=>c.id===o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{(items as any[]).find((it:any)=>it.id===o.itemId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>

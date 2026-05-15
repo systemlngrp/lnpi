@@ -131,7 +131,7 @@ export function OrdersPendingScheduling() {
       <div className="bg-white p-4 rounded border border-black">
         <div className="mb-4">
           <h3 className="font-bold mb-2">Pending Orders</h3>
-          <table className="min-w-full divide-y divide-black border-collapse border border-black mb-3">
+          <table className="min-w-full divide-y divide-black border-collapse border border-black mb-3 text-sm">
             <thead className="bg-slate-100">
               <tr>
                 <th className="px-3 py-2 border border-black">S.No</th>

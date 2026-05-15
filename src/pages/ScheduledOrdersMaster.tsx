@@ -1,6 +1,7 @@
 import React from "react";
 import { useData } from "../hooks/useData";
 import { OrderSchedule, Order } from "../types";
+import { formatDate } from "../lib/utils";
 
 export function ScheduledOrdersMaster() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -15,7 +16,7 @@ export function ScheduledOrdersMaster() {
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-black uppercase">Scheduled Orders Master</h2>
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <table className="min-w-full divide-y divide-black border-collapse border border-black">
+        <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">
             <tr>
               <th className="px-3 py-2 border border-black">S.No</th>
@@ -33,7 +34,7 @@ export function ScheduledOrdersMaster() {
               <tr key={o.id} className="hover:bg-slate-50">
                 <td className="px-3 py-2 border border-black">{idx + 1}</td>
                 <td className="px-3 py-2 border border-black">{o.orderNo}</td>
-                <td className="px-3 py-2 border border-black">{o.orderDate}</td>
+                <td className="px-3 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
                 <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.name}</td>
                 <td className="px-3 py-2 border border-black">{o.qty}</td>

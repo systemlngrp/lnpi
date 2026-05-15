@@ -3,6 +3,7 @@ import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { Order, Company, Item } from "../types";
 import { Spinner } from "../components/Spinner";
+import { formatDate } from "../lib/utils";
 import { Select } from "../components/Select";
 import { useLocation } from "react-router-dom";
 import { User } from "../types";
@@ -101,7 +102,7 @@ export function OrderForm() {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as any;
       const payload: Order = {
         id: editingId || crypto.randomUUID(),
-        orderNo: editingId ? orders.find(o=>o.id===editingId)?.orderNo : `ORD-${Date.now()}`,
+        ...(editingId ? { orderNo: orders.find(o=>o.id===editingId)?.orderNo } : {}),
         orderDate,
         companyId,
         poNumber,
@@ -233,7 +234,7 @@ export function OrderForm() {
       )}
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <table className="min-w-full divide-y divide-black border-collapse border border-black">
+        <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
               <th className="px-4 py-2 text-left font-bold text-black uppercase border border-black">Order No.</th>
@@ -252,7 +253,7 @@ export function OrderForm() {
             {orders.map(o => (
               <tr key={o.id} className="divide-x divide-black hover:bg-slate-50">
                 <td className="px-4 py-2 border border-black">{o.orderNo}</td>
-                <td className="px-4 py-2 border border-black">{o.orderDate}</td>
+                <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-4 py-2 border border-black">{companies.find(c => c.id === o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{o.poNumber}</td>
                 <td className="px-4 py-2 border border-black">{o.erpCode}</td>

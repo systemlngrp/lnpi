@@ -28,3 +28,13 @@ export function formatNumber(value: number, abbreviate = true): string {
     maximumFractionDigits: 2
   }).format(val);
 }
+
+export function formatDate(value?: string | Date | null): string {
+  if (!value) return "";
+  const d = new Date(value as any);
+  if (isNaN(d.getTime())) return String(value);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
