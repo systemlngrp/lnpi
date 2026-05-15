@@ -48,13 +48,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     "/consumption/pending-ph": consumptions.filter(c => isPendingPH(c.status)).length,
     "/consumption/pending-tally": consumptions.filter(c => c.status === "Pending Tally").length,
     "/dispatch/pending-planning": schedules.filter(s => {
+      if (!s?.scheduledDate) return false;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(23, 59, 59, 999);
       const schedDate = new Date(s.scheduledDate);
-      return !isNaN(schedDate.getTime()) && schedDate <= tomorrow && (Number(s.qty || 0) > (Number(s.producedQty || 0) + Number(s.canceledQty || 0)));
+      return !isNaN(schedDate.getTime()) && 
+             schedDate <= tomorrow && 
+             (Number(s.qty || 0) > (Number(s.producedQty || 0) + Number(s.canceledQty || 0)));
     }).length,
     "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
                   productions.filter(p => isPendingPH(p.status)).length + 
@@ -69,6 +72,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Dashboard", href: "/", icon: LayoutDashboard },
         { name: "Bulk Entry Form", href: "/bulk-entry", icon: Plus },
         { name: "Unified PH Approval", href: "/plant-head", icon: UserCheck, countKey: "/plant-head" },
+      ],
+    },
+    {
+      section: "Dispatch",
+      color: "bg-blue-700",
+      items: [
+        { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
       ],
     },
     {
@@ -130,6 +140,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
   ];
+
 
   return (
     <div className={cn(
