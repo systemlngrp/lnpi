@@ -70,6 +70,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Items", href: "/masters/items", icon: Boxes },
             { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
             { name: "Companies", href: "/masters/companies", icon: Database },
+            { name: "Trucks", href: "/masters/trucks", icon: Truck },
             { name: "Users", href: "/masters/users", icon: Users },
       ],
     },

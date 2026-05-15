@@ -142,3 +142,12 @@ export interface Consumption {
   updatedBy?: string;
   updateTimestamp?: string;
 }
+
+export interface Truck {
+  id: string;
+  truckNo: string;
+  driverName: string;
+  mobileNo: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}

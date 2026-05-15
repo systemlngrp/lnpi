@@ -9,6 +9,7 @@ import { ItemGroups } from "./pages/ItemGroups";
 import { Items } from "./pages/Items";
 import { Suppliers } from "./pages/Suppliers";
 import { Companies } from "./pages/Companies";
+import { Trucks } from "./pages/Trucks";
 import { MaterialInForm } from "./pages/MaterialInForm";
 import { PendingPHApproval } from "./pages/PendingPHApproval";
 import { PendingAccountsApproval } from "./pages/PendingAccountsApproval";
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="masters/items" element={<Items />} />
           <Route path="masters/suppliers" element={<Suppliers />} />
           <Route path="masters/companies" element={<Companies />} />
+          <Route path="masters/trucks" element={<Trucks />} />
           <Route path="masters/users" element={<Users />} />
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />
