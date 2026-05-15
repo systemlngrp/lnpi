@@ -151,3 +151,15 @@ export interface Truck {
   updatedBy?: string;
   updateTimestamp?: string;
 }
+
+export interface DispatchPlan {
+  id: string;
+  scheduleId: string;
+  orderId: string;
+  truckId: string;
+  plannedQty: number;
+  status: "Planned" | "Dispatched";
+  date: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
