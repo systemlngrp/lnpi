@@ -38,11 +38,7 @@ export function ProductionMaster() {
       (order?.orderNo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (company?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
     })
-    .sort((a, b) => {
-      const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
-      const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
-      return timeB - timeA;
-    });
+    .sort((a, b) => b.transactionNo.localeCompare(a.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
 
   const exportData = filteredList.map(p => {
     const item = items.find(i => i.id === p.itemId);
