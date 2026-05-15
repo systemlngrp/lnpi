@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useData } from "../hooks/useData";
 import { Order, OrderSchedule } from "../types";
 import { Select } from "../components/Select";
+import { Trash2 } from "lucide-react";
 
 export function OrdersPendingScheduling() {
   const [orders, setOrders] = useData<Order>("orders", []);
@@ -17,20 +18,57 @@ export function OrdersPendingScheduling() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalOrderId, setModalOrderId] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   
 
   const handleAddRow = (orderId: string) => {
-    const newRow: OrderSchedule = { id: crypto.randomUUID(), orderId, scheduledDate: new Date().toISOString().slice(0,10) };
+    const newRow: any = { id: crypto.randomUUID(), orderId, scheduledDate: new Date().toISOString().slice(0,10), _isNew: true };
     setSchedules(prev => [...prev, newRow]);
   };
 
   const handleChangeRow = (id: string, field: keyof OrderSchedule, value: any) => {
-    setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: field === 'qty' ? value : value } : r));
+    if (field === 'qty' && modalOrderId) {
+      const order = orders.find(o => o.id === modalOrderId);
+      if (!order) return;
+
+      // compute prospective total: replace this row's qty with the new value
+      const rows = rowsFor(modalOrderId);
+      const prospectiveTotal = rows.reduce((sum, r) => {
+        if (r.id === id) return sum + (Number(value) || 0);
+        return sum + (Number((r as any).qty) || 0);
+      }, 0);
+
+      if (!value || value === '') {
+        // allow clearing the field
+        setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+        setModalError(null);
+        return;
+      }
+
+      const numeric = Number(value);
+      if (isNaN(numeric) || numeric < 0) {
+        // ignore invalid
+        return;
+      }
+
+      if (prospectiveTotal > Number(order.qty || 0)) {
+        setModalError('Total scheduled would exceed order quantity. Reduce the value.');
+        return; // do not accept this change
+      }
+
+      // otherwise accept
+      setModalError(null);
+      setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+      return;
+    }
+
+    setSchedules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
 
   const handleDeleteRow = (id: string) => {
     setSchedules(prev => prev.filter(r => r.id !== id));
+    setModalError(null);
   };
 
   const handleSave = (orderId: string) => {
@@ -99,7 +137,7 @@ export function OrdersPendingScheduling() {
                 </div>
               </div>
 
-              <div className="text-sm mb-3">Company: {(companies as any[]).find(c=>c.id===orders.find(o=>o.id===modalOrderId)?.companyId)?.name} • Item: {(items as any[]).find(i=>i.id===orders.find(o=>o.id===modalOrderId)?.itemId)?.name}</div>
+              <div className="text-sm mb-3"><strong>Company:</strong> {(companies as any[]).find(c=>c.id===orders.find(o=>o.id===modalOrderId)?.companyId)?.name} • <strong>Item:</strong> {(items as any[]).find(i=>i.id===orders.find(o=>o.id===modalOrderId)?.itemId)?.name}</div>
 
               <div className="grid grid-cols-3 gap-4 mb-3">
                 <div className="bg-slate-50 p-2 border border-black rounded">
@@ -121,15 +159,15 @@ export function OrdersPendingScheduling() {
                   <tr>
                     <th className="px-3 py-2 border border-black">Scheduled Date</th>
                     <th className="px-3 py-2 border border-black">Scheduled Quantity</th>
-                    <th className="px-3 py-2 border border-black">&nbsp;</th>
+                    <th className="px-3 py-2 border border-black">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rowsFor(modalOrderId).map(r => (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <td className="px-3 py-2 border border-black"><input type="date" value={r.scheduledDate} onChange={(e)=>handleChangeRow(r.id, 'scheduledDate', e.target.value)} className="border-2 border-black rounded p-1" /></td>
-                      <td className="px-3 py-2 border border-black"><input type="number" min={0} step="any" value={(r as any).qty ?? ''} onChange={(e)=>handleChangeRow(r.id, 'qty', e.target.value)} className="border-2 border-black rounded p-1 w-40" /></td>
-                      <td className="px-3 py-2 border border-black text-center"><button onClick={()=>handleDeleteRow(r.id)} className="text-red-600">Delete</button></td>
+                      <td className="px-3 py-2 border border-black"><input type="number" min={0} step="any" value={(r as any)._isNew ? ((r as any).qty ?? '') : ((r as any).qty ?? '')} onChange={(e)=>handleChangeRow(r.id, 'qty', e.target.value)} className="border-2 border-black rounded p-1 w-40" /></td>
+                      <td className="px-3 py-2 border border-black text-center"><button onClick={()=>handleDeleteRow(r.id)} aria-label="Delete schedule" className="text-red-600"><Trash2 size={18} /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -139,6 +177,8 @@ export function OrdersPendingScheduling() {
                 <button onClick={() => handleAddRow(modalOrderId)} className="bg-indigo-600 text-white px-3 py-1 rounded">Add Row</button>
                 <button onClick={() => { handleSave(modalOrderId); setModalOpen(false); setModalOrderId(null); }} className="bg-emerald-600 text-white px-3 py-1 rounded">Save Schedule</button>
               </div>
+
+              {modalError && <div className="text-sm text-red-600 mt-2">{modalError}</div>}
 
               <div className="mt-3 text-sm">Total Scheduled: {totalScheduled(modalOrderId)} / {orders.find(o=>o.id===modalOrderId)?.qty}</div>
             </div>
