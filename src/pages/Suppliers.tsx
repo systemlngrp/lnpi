@@ -174,17 +174,21 @@ export function Suppliers() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{supplier.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium border border-black">
                     <button
+                      title="Edit"
+                      aria-label="Edit"
                       onClick={() => handleEdit(supplier)}
                       disabled={isSubmitting}
-                      className="text-indigo-600 hover:text-indigo-900 inline-flex items-center mr-4 disabled:opacity-50 font-bold"
+                      className="text-indigo-600 hover:text-indigo-900 mr-4 disabled:opacity-50"
                     >
-                      <Edit size={16} className="mr-1" /> Edit
+                      <Edit size={16} />
                     </button>
                     <button
+                      title={deletingId === supplier.id ? "Confirm delete" : "Delete"}
+                      aria-label={deletingId === supplier.id ? "Confirm delete" : "Delete"}
                       onClick={() => handleDelete(supplier.id)}
-                      className={`${deletingId === supplier.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
+                      className={`${deletingId === supplier.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 inline-flex items-center justify-end`}
                     >
-                      <Trash2 size={16} className="mr-1" /> {deletingId === supplier.id ? "Confirm?" : "Delete"}
+                      <Trash2 size={16} />
                     </button>
                   </td>
                 </tr>

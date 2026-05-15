@@ -227,8 +227,23 @@ export function Companies() {
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.state}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.gstNo}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium border border-black">
-                    <button onClick={() => handleEdit(c)} disabled={isSubmitting} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center mr-4 disabled:opacity-50 font-bold"><Edit size={16} className="mr-1" /> Edit</button>
-                    <button onClick={() => handleDelete(c.id)} className={`${deletingId === c.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}><Trash2 size={16} className="mr-1" /> {deletingId === c.id ? "Confirm?" : "Delete"}</button>
+                    <button
+                      title="Edit"
+                      aria-label="Edit"
+                      onClick={() => handleEdit(c)}
+                      disabled={isSubmitting}
+                      className="text-indigo-600 hover:text-indigo-900 mr-4 disabled:opacity-50"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    <button
+                      title={deletingId === c.id ? "Confirm delete" : "Delete"}
+                      aria-label={deletingId === c.id ? "Confirm delete" : "Delete"}
+                      onClick={() => handleDelete(c.id)}
+                      className={`${deletingId === c.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 inline-flex items-center justify-end`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </td>
                 </tr>
               ))
