@@ -36,6 +36,7 @@ import { OrdersPendingScheduling } from "./pages/OrdersPendingScheduling";
 import { OrdersMaster } from "./pages/OrdersMaster";
 import { ScheduledOrdersMaster } from "./pages/ScheduledOrdersMaster";
 import { PendingDispatchPlanning } from "./pages/PendingDispatchPlanning";
+import { DispatchPlansMaster } from "./pages/DispatchPlansMaster";
 import { CanceledOrders } from "./pages/CanceledOrders";
 
 function BlankPage({ title }: { title: string }) {
@@ -95,6 +96,7 @@ export default function App() {
           
           {/* Dispatch */}
           <Route path="dispatch/pending-planning" element={<PendingDispatchPlanning />} />
+          <Route path="dispatch/master" element={<DispatchPlansMaster />} />
         </Route>
       </Routes>
     </HashRouter>

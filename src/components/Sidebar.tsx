@@ -20,7 +20,7 @@ import {
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, OrderSchedule } from "../types";
+import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan } from "../types";
 import { cn } from "../lib/utils";
 
 interface SidebarProps {
@@ -34,6 +34,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [productions] = useData<Production>("productions", []);
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
@@ -55,9 +56,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(23, 59, 59, 999);
       const schedDate = new Date(s.scheduledDate);
-      return !isNaN(schedDate.getTime()) && 
-             schedDate <= tomorrow && 
-             (Number(s.qty || 0) > (Number(s.producedQty || 0) + Number(s.canceledQty || 0)));
+      
+      const alreadyPlanned = dispatchPlans
+        .filter(plan => plan.scheduleId === s.id)
+        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
+      
+      const balance = Number(s.qty || 0) - alreadyPlanned;
+
+      return !isNaN(schedDate.getTime()) && schedDate <= tomorrow && balance > 0;
     }).length,
     "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
                   productions.filter(p => isPendingPH(p.status)).length + 
@@ -127,6 +133,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       color: "bg-blue-700",
       items: [
         { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
+        { name: "Dispatch Plans Master", href: "/dispatch/master", icon: Database },
       ],
     },
     {

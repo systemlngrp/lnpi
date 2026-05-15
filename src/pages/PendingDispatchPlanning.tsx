@@ -217,14 +217,12 @@ export function PendingDispatchPlanning() {
                     <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black w-32">Planned Qty</th>
                   </>
                 )}
-                
-                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {filteredSchedules.length === 0 ? (
                 <tr>
-                  <td colSpan={selectedCompanyId ? 9 : 7} className="px-6 py-8 text-center text-black font-medium">No pending dispatch plans found.</td>
+                  <td colSpan={selectedCompanyId ? 8 : 5} className="px-6 py-8 text-center text-black font-medium">No pending dispatch plans found.</td>
                 </tr>
               ) : (
                 filteredSchedules.map((s) => {
@@ -290,16 +288,6 @@ export function PendingDispatchPlanning() {
                           </td>
                         </>
                       )}
-
-                      <td className="px-4 py-4 text-center text-xs border border-black">
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
-                           (s.producedQty || 0) >= (s.qty || 0) ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
-                           (s.producedQty || 0) > 0 ? 'bg-amber-100 text-amber-900 border-amber-900' :
-                           'bg-slate-100 text-slate-900 border-slate-900'
-                        }`}>
-                          {(s.producedQty || 0) >= (s.qty || 0) ? 'Ready' : (s.producedQty || 0) > 0 ? 'Partial' : 'Pending'}
-                        </span>
-                      </td>
                     </tr>
                   );
                 })
@@ -312,7 +300,6 @@ export function PendingDispatchPlanning() {
                   <td className="px-4 py-3 text-right text-sm text-indigo-700 bg-indigo-50 border border-black">
                     {totalSessionPlannedQty.toLocaleString()}
                   </td>
-                  <td className="border border-black"></td>
                 </tr>
               </tfoot>
             )}
