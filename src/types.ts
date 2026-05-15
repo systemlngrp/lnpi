@@ -69,7 +69,7 @@ export interface OrderSchedule {
   id: string;
   orderId: string;
   scheduledDate: string;
-  qty: number;
+  qty?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }
