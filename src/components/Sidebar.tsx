@@ -17,10 +17,11 @@ import {
   TrendingDown,
   Activity,
   Plus,
+  Receipt,
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan } from "../types";
+import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip } from "../types";
 import { cn } from "../lib/utils";
 
 interface SidebarProps {
@@ -35,6 +36,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
