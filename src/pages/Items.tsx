@@ -19,6 +19,23 @@ export function Items() {
   const [uom, setUom] = useState("");
   const [erp, setErp] = useState<string>("");
   const [gstRate, setGstRate] = useState<string>("18");
+  
+  // Technical Specifications State
+  const [noOfParts, setNoOfParts] = useState<string>("");
+  const [ups, setUps] = useState<string>("");
+  const [length, setLength] = useState<string>("");
+  const [breadth, setBreadth] = useState<string>("");
+  const [height, setHeight] = useState<string>("");
+  const [ply, setPly] = useState<string>("");
+  const [flute, setFlute] = useState<string>("");
+  const [plateWeight, setPlateWeight] = useState<string>("");
+  const [gsmLeastCost, setGsmLeastCost] = useState<string>("");
+  const [l1, setL1] = useState<string>("");
+  const [f1, setF1] = useState<string>("");
+  const [l2, setL2] = useState<string>("");
+  const [f2, setF2] = useState<string>("");
+  const [l3, setL3] = useState<string>("");
+
   const [searchTerm, setSearchTerm] = useState("");
 
   const uomOptions = [
@@ -26,6 +43,20 @@ export function Items() {
     { value: "PCs", label: "PCs" },
     { value: "Metre", label: "Metre" },
     { value: "Liter", label: "Liter" },
+  ];
+
+  const fluteOptions = [
+    { value: "A", label: "A" },
+    { value: "B", label: "B" },
+    { value: "C", label: "C" },
+    { value: "E", label: "E" },
+    { value: "B+C", label: "B+C" },
+    { value: "B+E", label: "B+E" },
+  ];
+
+  const plyOptions = [
+    { value: "3", label: "3 PLY" },
+    { value: "5", label: "5 PLY" },
   ];
 
   const groupOptions = groups.map(g => ({ value: g.id, label: g.name }));
@@ -69,6 +100,29 @@ export function Items() {
     setShowQuickGroup(false);
   };
 
+  const resetForm = () => {
+    setName("");
+    setGroupId("");
+    setUom("");
+    setErp("");
+    setGstRate("18");
+    setNoOfParts("");
+    setUps("");
+    setLength("");
+    setBreadth("");
+    setHeight("");
+    setPly("");
+    setFlute("");
+    setPlateWeight("");
+    setGsmLeastCost("");
+    setL1("");
+    setF1("");
+    setL2("");
+    setF2("");
+    setL3("");
+    setEditingId(null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !groupId || !uom) return;
@@ -92,18 +146,37 @@ export function Items() {
     setTimeout(() => {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as any;
       const erpValue = erp ? parseInt(erp, 10) : undefined;
+      
+      const itemData: Partial<Item> = {
+        name: name.trim(),
+        groupId,
+        uom,
+        erp: erpValue,
+        gstRate: parseFloat(gstRate) || 0,
+        noOfParts: parseInt(noOfParts) || undefined,
+        ups: parseInt(ups) || undefined,
+        length: parseFloat(length) || undefined,
+        breadth: parseFloat(breadth) || undefined,
+        height: parseFloat(height) || undefined,
+        ply: parseInt(ply) || undefined,
+        flute,
+        plateWeight: parseFloat(plateWeight) || undefined,
+        gsmLeastCost: parseFloat(gsmLeastCost) || undefined,
+        l1: parseFloat(l1) || undefined,
+        f1: parseFloat(f1) || undefined,
+        l2: parseFloat(l2) || undefined,
+        f2: parseFloat(f2) || undefined,
+        l3: parseFloat(l3) || undefined,
+        ...audit
+      };
+
       if (editingId) {
-        setItems(items.map(img => img.id === editingId ? { ...img, name: name.trim(), groupId, uom, erp: erpValue, gstRate: parseFloat(gstRate) || 0, ...audit } : img));
+        setItems(items.map(img => img.id === editingId ? { ...img, ...itemData } as Item : img));
       } else {
-        setItems([...items, { id: crypto.randomUUID(), name: name.trim(), groupId, uom, erp: erpValue, gstRate: parseFloat(gstRate) || 0, ...audit } as Item]);
+        setItems([...items, { id: crypto.randomUUID(), ...itemData } as Item]);
       }
       
-      setName("");
-      setGroupId("");
-      setUom("");
-      setErp("");
-      setGstRate("18");
-      setEditingId(null);
+      resetForm();
       setIsFormOpen(false);
       setIsSubmitting(false);
     }, 500);
@@ -158,57 +231,102 @@ export function Items() {
       )}
 
       {isFormOpen ? (
-        <div className="bg-white p-6 rounded shadow-sm border border-black max-w-xl">
+        <div className="bg-white p-6 rounded shadow-sm border border-black max-w-4xl">
           <h3 className="text-lg font-bold text-black mb-6 uppercase">{editingId ? "Edit Item" : "Create Item"}</h3>
-          <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Item Name *</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Basic Info</h4>
+                <div className="flex flex-col space-y-1">
+                  <label className="font-bold text-black text-sm">Item Name *</label>
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <label className="font-bold text-black text-sm">Item Group *</label>
+                  <Select value={groupId} onChange={setGroupId} onAdd={handleCreateNewGroup} options={groupOptions} placeholder="Select Item Group..." required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm">UOM *</label>
+                    <Select value={uom} onChange={setUom} options={uomOptions} placeholder="Select UOM..." required />
+                  </div>
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm">GST Rate (%) *</label>
+                    <select 
+                      value={gstRate}
+                      onChange={(e) => setGstRate(e.target.value)}
+                      className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                      required
+                    >
+                      <option value="0">0%</option>
+                      <option value="5">5%</option>
+                      <option value="12">12%</option>
+                      <option value="18">18%</option>
+                      <option value="28">28%</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <label className="font-bold text-black text-sm">ERP (whole number)</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={erp}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setErp(v);
+                    }}
+                    placeholder="Enter ERP"
+                    className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Dimensions & Parts</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormItem label="No. of Parts" value={noOfParts} onChange={setNoOfParts} type="number" />
+                  <FormItem label="UPS" value={ups} onChange={setUps} type="number" />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <FormItem label="Length" value={length} onChange={setLength} type="number" />
+                  <FormItem label="Breadth" value={breadth} onChange={setBreadth} type="number" />
+                  <FormItem label="Height" value={height} onChange={setHeight} type="number" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm uppercase text-[10px]">PLY</label>
+                    <Select value={ply} onChange={setPly} options={plyOptions} placeholder="PLY..." />
+                  </div>
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm uppercase text-[10px]">Flute</label>
+                    <Select value={flute} onChange={setFlute} options={fluteOptions} placeholder="Flute..." />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormItem label="Plate Wt" value={plateWeight} onChange={setPlateWeight} type="number" step="0.00001" />
+                  <FormItem label="GSM (Least Cost)" value={gsmLeastCost} onChange={setGsmLeastCost} type="number" />
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Item Group *</label>
-              <Select value={groupId} onChange={setGroupId} onAdd={handleCreateNewGroup} options={groupOptions} placeholder="Select Item Group..." required />
+
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Default Paper Layers</h4>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <FormItem label="L1 (Top)" value={l1} onChange={setL1} type="number" />
+                    <FormItem label="F1 (Flute)" value={f1} onChange={setF1} type="number" />
+                    <FormItem label="L2 (Middle)" value={l2} onChange={setL2} type="number" />
+                    <FormItem label="F2 (Flute)" value={f2} onChange={setF2} type="number" />
+                    <FormItem label="L3 (Bottom)" value={l3} onChange={setL3} type="number" />
+                </div>
             </div>
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">UOM *</label>
-              <Select value={uom} onChange={setUom} options={uomOptions} placeholder="Select UOM..." required />
-            </div>
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">ERP (whole number)</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={erp}
-                onChange={(e) => {
-                  // allow only digits
-                  const v = e.target.value.replace(/[^0-9]/g, "");
-                  setErp(v);
-                }}
-                placeholder="Enter ERP (no decimals)"
-                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-              />
-            </div>
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">GST Rate (%) *</label>
-              <select 
-                value={gstRate}
-                onChange={(e) => setGstRate(e.target.value)}
-                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                required
-              >
-                <option value="0">0%</option>
-                <option value="5">5%</option>
-                <option value="12">12%</option>
-                <option value="18">18%</option>
-                <option value="28">28%</option>
-              </select>
-            </div>
-            <div className="flex space-x-3 pt-2">
-              <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border border-black min-w-[100px]">
-                {isSubmitting ? <Spinner size={20} className="text-white" /> : "Submit"}
+
+            <div className="flex space-x-3 pt-4 border-t border-black">
+              <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-8 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all min-w-[120px]">
+                {isSubmitting ? <Spinner size={20} className="text-white" /> : "Save Item"}
               </button>
-              <button type="button" onClick={() => setIsFormOpen(false)} className="bg-white text-black border-2 border-black px-6 py-2 rounded font-bold hover:bg-slate-50 transition">
+              <button type="button" onClick={() => { resetForm(); setIsFormOpen(false); }} className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none">
                 Cancel
               </button>
             </div>
@@ -228,7 +346,31 @@ export function Items() {
                                 <div className="text-sm font-bold">{item.name}</div>
                              </div>
                              <div className="flex items-center gap-2">
-                                 <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setErp(item.erp?.toString() || ""); setGstRate((item.gstRate ?? 18).toString()); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
+                                 <button onClick={() => { 
+                                     setName(item.name); 
+                                     setGroupId(item.groupId); 
+                                     setUom(item.uom); 
+                                     setErp(item.erp?.toString() || ""); 
+                                     setGstRate((item.gstRate ?? 18).toString()); 
+                                     
+                                     setNoOfParts(item.noOfParts?.toString() || "");
+                                     setUps(item.ups?.toString() || "");
+                                     setLength(item.length?.toString() || "");
+                                     setBreadth(item.breadth?.toString() || "");
+                                     setHeight(item.height?.toString() || "");
+                                     setPly(item.ply?.toString() || "");
+                                     setFlute(item.flute || "");
+                                     setPlateWeight(item.plateWeight?.toString() || "");
+                                     setGsmLeastCost(item.gsmLeastCost?.toString() || "");
+                                     setL1(item.l1?.toString() || "");
+                                     setF1(item.f1?.toString() || "");
+                                     setL2(item.l2?.toString() || "");
+                                     setF2(item.f2?.toString() || "");
+                                     setL3(item.l3?.toString() || "");
+                                     
+                                     setEditingId(item.id); 
+                                     setIsFormOpen(true); 
+                                 }} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
                                  <button 
                                       onClick={() => handleDelete(item.id)} 
                                       className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold`}
@@ -282,7 +424,31 @@ export function Items() {
                       <td className="px-6 py-4 text-sm text-black border border-black">{item.gstRate ?? 18}%</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{item.erp ?? ""}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
-                            <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setErp(item.erp?.toString() || ""); setGstRate((item.gstRate ?? 18).toString()); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
+                            <button onClick={() => { 
+                                setName(item.name); 
+                                setGroupId(item.groupId); 
+                                setUom(item.uom); 
+                                setErp(item.erp?.toString() || ""); 
+                                setGstRate((item.gstRate ?? 18).toString()); 
+                                
+                                setNoOfParts(item.noOfParts?.toString() || "");
+                                setUps(item.ups?.toString() || "");
+                                setLength(item.length?.toString() || "");
+                                setBreadth(item.breadth?.toString() || "");
+                                setHeight(item.height?.toString() || "");
+                                setPly(item.ply?.toString() || "");
+                                setFlute(item.flute || "");
+                                setPlateWeight(item.plateWeight?.toString() || "");
+                                setGsmLeastCost(item.gsmLeastCost?.toString() || "");
+                                setL1(item.l1?.toString() || "");
+                                setF1(item.f1?.toString() || "");
+                                setL2(item.l2?.toString() || "");
+                                setF2(item.f2?.toString() || "");
+                                setL3(item.l3?.toString() || "");
+
+                                setEditingId(item.id); 
+                                setIsFormOpen(true); 
+                            }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
                         <button 
                           onClick={() => handleDelete(item.id)} 
                           className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
@@ -298,6 +464,21 @@ export function Items() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function FormItem({ label, value, onChange, type = "text", step = "any" }: { label: string; value: string; onChange: (v: string) => void; type?: string; step?: string }) {
+  return (
+    <div className="flex flex-col space-y-1">
+      <label className="font-bold text-black text-sm uppercase text-[10px]">{label}</label>
+      <input 
+        type={type} 
+        step={type === "number" ? step : undefined}
+        value={value} 
+        onChange={(e) => onChange(e.target.value)} 
+        className="border border-black rounded p-1.5 text-sm text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" 
+      />
     </div>
   );
 }

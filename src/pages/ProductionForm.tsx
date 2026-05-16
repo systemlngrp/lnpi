@@ -39,7 +39,8 @@ export function ProductionForm() {
     reelActualWithTrimming: "" as number | "",
     cuttingWithTrimming: "" as number | "",
     ply: "" as number | "",
-    idToOd: "",
+    idToOd: "" as number | "",
+    idToOd17: "" as number | "",
     flute: "",
     takeUpFactor: "" as number | "",
     l1: "" as number | "",
@@ -81,18 +82,109 @@ export function ProductionForm() {
     [schedules]
   );
 
+  const selectedSchedule = pendingSchedules.find((schedule) => schedule.id === selectedScheduleId);
+  const selectedOrder = orders.find((order) => order.id === selectedSchedule?.orderId);
+  const selectedItem = items.find((item) => item.id === selectedOrder?.itemId);
+  const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
+  const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
+
+  // Auto-lookup from Item Master
+  useEffect(() => {
+    if (selectedItem) {
+      setFormData(prev => ({
+        ...prev,
+        companyName: selectedCompany?.name || "",
+        rate: selectedOrder?.rate || 0,
+        planQty: pendingQty,
+        noOfParts: selectedItem.noOfParts || "",
+        ups: selectedItem.ups || "",
+        length: selectedItem.length || "",
+        breadth: selectedItem.breadth || "",
+        height: selectedItem.height || "",
+        ply: selectedItem.ply || "",
+        flute: selectedItem.flute || "",
+        plateWeight: selectedItem.plateWeight || "",
+        gsmLeastCost: selectedItem.gsmLeastCost || "",
+        l1: selectedItem.l1 || "",
+        f1: selectedItem.f1 || "",
+        l2: selectedItem.l2 || "",
+        f2: selectedItem.f2 || "",
+        l3: selectedItem.l3 || "",
+      }));
+    }
+  }, [selectedItem, selectedCompany, selectedOrder, pendingQty]);
+
+  // Real-time Calculations
+  useEffect(() => {
+    const ply = Number(formData.ply);
+    const length = Number(formData.length);
+    const breadth = Number(formData.breadth);
+    const height = Number(formData.height);
+    const ups = Number(formData.ups);
+    const noOfParts = Number(formData.noOfParts);
+    const qty = Number(formData.qty);
+    const rate = Number(formData.rate);
+    const plateWeight = Number(formData.plateWeight);
+
+    // 1. ID to OD
+    const idToOd = ply === 3 ? 6 : (ply === 5 ? 10 : 0);
+    const idToOd17 = ply === 3 ? 40 : (ply === 5 ? 50 : 0);
+
+    // 2. Take up Factor
+    const factorMap: Record<string, number> = { "A": 1.5, "B": 1.35, "C": 1.42, "E": 1.26, "B+C": 1.38, "B+E": 1.3 };
+    const takeUpFactor = factorMap[formData.flute] || 0;
+
+    // 3. GSM
+    const gsm = Number(formData.l1) + (Number(formData.f1) * takeUpFactor) + Number(formData.l2) + (Number(formData.f2) * takeUpFactor) + Number(formData.l3);
+
+    // 4. Reel As Per Calc
+    const reelAsPerCalc = (!breadth) ? (height * ups) : (((breadth + height) * ups) + ((idToOd * ups) + 16));
+
+    // 5. Cutting with Trimming
+    let cutting = 0;
+    if (!breadth) {
+        cutting = length;
+    } else if (noOfParts === 1) {
+        cutting = ((length + breadth) * 2) + (idToOd17 * noOfParts);
+    } else if (noOfParts === 2) {
+        cutting = (length + breadth) + idToOd17;
+    }
+
+    // 6. Reel Actual (default to Calc if not set)
+    const reelActual = Number(formData.reelActualWithTrimming) || reelAsPerCalc;
+
+    // 7. Sheet Weight
+    const sheetWeight = (ups > 0) ? ((reelActual * cutting * gsm) / 1000000000) / ups : 0;
+
+    // 8. Totals
+    const totalPaperWeight = sheetWeight * qty;
+    const totalWeightOfSet = sheetWeight + plateWeight;
+    const realizationPerKg = (totalWeightOfSet !== 0) ? (rate / totalWeightOfSet) * noOfParts : 0;
+    const productionInMeter = (ups > 0) ? ((cutting * qty) / 1000) / ups : 0;
+
+    setFormData(prev => ({
+        ...prev,
+        idToOd,
+        idToOd17,
+        takeUpFactor,
+        gsm: parseFloat(gsm.toFixed(2)),
+        reelAsPerCalc: parseFloat(reelAsPerCalc.toFixed(2)),
+        cuttingWithTrimming: parseFloat(cutting.toFixed(2)),
+        sheetWeight: parseFloat(sheetWeight.toFixed(5)),
+        totalPaperWeight: parseFloat(totalPaperWeight.toFixed(5)),
+        totalWeightOfSet: parseFloat(totalWeightOfSet.toFixed(5)),
+        realizationPerKg: parseFloat(realizationPerKg.toFixed(2)),
+        productionInMeter: parseFloat(productionInMeter.toFixed(2))
+    }));
+
+  }, [formData.ply, formData.flute, formData.length, formData.breadth, formData.height, formData.ups, formData.noOfParts, formData.l1, formData.f1, formData.l2, formData.f2, formData.l3, formData.qty, formData.rate, formData.plateWeight, formData.reelActualWithTrimming]);
+
   useEffect(() => {
     const queryScheduleId = searchParams.get("scheduleId") || "";
     if (queryScheduleId && queryScheduleId !== selectedScheduleId) {
       setSelectedScheduleId(queryScheduleId);
     }
   }, [searchParams, selectedScheduleId]);
-
-  const selectedSchedule = pendingSchedules.find((schedule) => schedule.id === selectedScheduleId);
-  const selectedOrder = orders.find((order) => order.id === selectedSchedule?.orderId);
-  const selectedItem = items.find((item) => item.id === selectedOrder?.itemId);
-  const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
-  const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
 
   const scheduleOptions = pendingSchedules.map((schedule) => {
     const order = orders.find((row) => row.id === schedule.orderId);
@@ -296,12 +388,30 @@ export function ProductionForm() {
               <FormInput label="Breadth" value={formData.breadth} onChange={(v) => setFormData({...formData, breadth: v})} type="number" />
               <FormInput label="Height" value={formData.height} onChange={(v) => setFormData({...formData, height: v})} type="number" />
               
-              <FormInput label="PLY" value={formData.ply} onChange={(v) => setFormData({...formData, ply: v})} type="number" />
-              <FormInput label="Flute" value={formData.flute} onChange={(v) => setFormData({...formData, flute: v})} />
-              <FormInput label="ID to OD" value={formData.idToOd} onChange={(v) => setFormData({...formData, idToOd: v})} />
+              <div className="flex flex-col space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase">PLY</label>
+                <select value={formData.ply} onChange={(e) => setFormData({...formData, ply: e.target.value})} className="border border-black rounded px-2 py-1 text-sm bg-slate-50">
+                    <option value="">-</option>
+                    <option value="3">3 PLY</option>
+                    <option value="5">5 PLY</option>
+                </select>
+              </div>
+              <div className="flex flex-col space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase">Flute</label>
+                <select value={formData.flute} onChange={(e) => setFormData({...formData, flute: e.target.value})} className="border border-black rounded px-2 py-1 text-sm bg-slate-50">
+                    <option value="">-</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="E">E</option>
+                    <option value="B+C">B+C</option>
+                    <option value="B+E">B+E</option>
+                </select>
+              </div>
+              <FormInput label="ID to OD" value={formData.idToOd} readOnly />
 
-              <FormInput label="Take up Factor" value={formData.takeUpFactor} onChange={(v) => setFormData({...formData, takeUpFactor: v})} type="number" step="0.00001" />
-              <FormInput label="GSM" value={formData.gsm} onChange={(v) => setFormData({...formData, gsm: v})} type="number" />
+              <FormInput label="Take up Factor" value={formData.takeUpFactor} readOnly />
+              <FormInput label="GSM" value={formData.gsm} readOnly />
               <FormInput label="ERP Code Reel" value={formData.erpCodeReel} onChange={(v) => setFormData({...formData, erpCodeReel: v})} />
             </div>
 
@@ -314,20 +424,20 @@ export function ProductionForm() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} onChange={(v) => setFormData({...formData, reelAsPerCalc: v})} type="number" />
+              <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} readOnly />
               <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({...formData, reelActualWithTrimming: v})} type="number" />
-              <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} onChange={(v) => setFormData({...formData, cuttingWithTrimming: v})} type="number" />
+              <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly />
               
-              <FormInput label="Sheet Weight" value={formData.sheetWeight} onChange={(v) => setFormData({...formData, sheetWeight: v})} type="number" step="0.00001" />
+              <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly />
               <FormInput label="Plate/PHP Weight" value={formData.plateWeight} onChange={(v) => setFormData({...formData, plateWeight: v})} type="number" step="0.00001" />
-              <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} onChange={(v) => setFormData({...formData, totalPaperWeight: v})} type="number" step="0.00001" />
+              <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly />
               
-              <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} onChange={(v) => setFormData({...formData, totalWeightOfSet: v})} type="number" step="0.00001" />
+              <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly />
               <FormInput label="Avg Weight" value={formData.avgWeight} onChange={(v) => setFormData({...formData, avgWeight: v})} type="number" step="0.00001" />
               <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} onChange={(v) => setFormData({...formData, actualPaperUsed: v})} type="number" step="0.00001" />
               
               <FormInput label="Rate" value={formData.rate} onChange={(v) => setFormData({...formData, rate: v})} type="number" />
-              <FormInput label="Realization/KG" value={formData.realizationPerKg} onChange={(v) => setFormData({...formData, realizationPerKg: v})} type="number" />
+              <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly />
               <FormInput label="Realization Status" value={formData.realizationApprovalStatus} onChange={(v) => setFormData({...formData, realizationApprovalStatus: v})} />
             </div>
 
@@ -337,7 +447,7 @@ export function ProductionForm() {
               <FormInput label="Wastage" value={formData.wastage} onChange={(v) => setFormData({...formData, wastage: v})} type="number" />
               
               <FormInput label="Wastage Approval" value={formData.wastageApproval} onChange={(v) => setFormData({...formData, wastageApproval: v})} />
-              <FormInput label="Prod (Meter)" value={formData.productionInMeter} onChange={(v) => setFormData({...formData, productionInMeter: v})} type="number" />
+              <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly />
               <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} onChange={(v) => setFormData({...formData, plannedProductionInMeter: v})} type="number" />
               
               <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} onChange={(v) => setFormData({...formData, leastSheetWeight: v})} type="number" step="0.00001" />
@@ -433,22 +543,27 @@ function InfoTile({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function FormInput({ label, value, onChange, type = "text", step = "any" }: { 
+function FormInput({ label, value, onChange, type = "text", step = "any", readOnly = false }: { 
   label: string; 
   value: string | number; 
-  onChange: (v: any) => void;
+  onChange?: (v: any) => void;
   type?: string;
   step?: string;
+  readOnly?: boolean;
 }) {
   return (
     <div className="flex flex-col space-y-1">
       <label className="text-[10px] font-black text-slate-500 uppercase">{label}</label>
       <input
+        readOnly={readOnly}
         type={type}
         step={type === "number" ? step : undefined}
         value={value}
-        onChange={(e) => onChange(type === "number" ? (e.target.value === "" ? "" : parseFloat(e.target.value)) : e.target.value)}
-        className="border border-black rounded px-2 py-1 text-sm text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+        onChange={(e) => onChange?.(type === "number" ? (e.target.value === "" ? "" : parseFloat(e.target.value)) : e.target.value)}
+        className={cn(
+            "border border-black rounded px-2 py-1 text-sm text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600",
+            readOnly && "bg-slate-100 cursor-not-allowed opacity-70"
+        )}
       />
     </div>
   );

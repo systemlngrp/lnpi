@@ -12,6 +12,23 @@ export interface Item {
   uom: string;
   erp?: number;
   gstRate?: number;
+  
+  // Technical Specifications
+  noOfParts?: number;
+  ups?: number;
+  length?: number;
+  breadth?: number;
+  height?: number;
+  ply?: number;
+  flute?: string;
+  plateWeight?: number;
+  gsmLeastCost?: number;
+  l1?: number;
+  f1?: number;
+  l2?: number;
+  f2?: number;
+  l3?: number;
+
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -123,6 +140,8 @@ export interface Production {
   status: "Pending PH" | "Pending Tally" | "Completed";
   
   // New production fields
+  jobCardNo?: string | number;
+  erpCode?: string | number;
   noOfParts?: number;
   ups?: number;
   planQty?: number;
@@ -161,6 +180,9 @@ export interface Production {
   leastSheetWeight?: number;
   fluteBatches?: string;
   erpCodeReel?: string;
+  year?: number;
+  month?: string;
+  idToOd17?: number;
 
   phTimestamp?: string;
   phEmailId?: string;
