@@ -305,6 +305,31 @@ async function initDb(retries = 5) {
         )
       `);
 
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`trucks\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`truckNo\` VARCHAR(50) NOT NULL,
+          \`driverName\` VARCHAR(255),
+          \`mobileNo\` VARCHAR(20),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`dispatch_plans\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`scheduleId\` VARCHAR(36) NOT NULL,
+          \`orderId\` VARCHAR(36) NOT NULL,
+          \`truckId\` VARCHAR(36) NOT NULL,
+          \`plannedQty\` DECIMAL(15,2) NOT NULL,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Planned',
+          \`date\` VARCHAR(50) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
       console.log("[DB] Database tables initialized successfully.");
       
       // Ensure all tables have required columns if they were created with an older schema
@@ -393,7 +418,21 @@ async function initDb(retries = 5) {
         { table: "productions", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "consumptions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "consumptions", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "trucks", column: "truckNo", type: "VARCHAR(50) NOT NULL" },
+        { table: "trucks", column: "driverName", type: "VARCHAR(255)" },
+        { table: "trucks", column: "mobileNo", type: "VARCHAR(20)" },
+        { table: "trucks", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "trucks", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "dispatch_plans", column: "scheduleId", type: "VARCHAR(36) NOT NULL" },
+        { table: "dispatch_plans", column: "orderId", type: "VARCHAR(36) NOT NULL" },
+        { table: "dispatch_plans", column: "truckId", type: "VARCHAR(36) NOT NULL" },
+        { table: "dispatch_plans", column: "plannedQty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "dispatch_plans", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Planned'" },
+        { table: "dispatch_plans", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "dispatch_plans", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "dispatch_plans", column: "updateTimestamp", type: "VARCHAR(255)" },
       ];
+
 
       for (const m of migrations) {
         try {
@@ -533,7 +572,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions"];
+const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "trucks", "dispatch_plans"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;
