@@ -58,6 +58,7 @@ export function PendingLoading() {
   } | null>(null);
   const [loadedQuantities, setLoadedQuantities] = useState<Record<string, number>>({});
   const [cancelingPlanId, setCancelingPlanId] = useState<string | null>(null);
+  const [cancelQty, setCancelQty] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleTruck = (id: string) => {
@@ -69,7 +70,7 @@ export function PendingLoading() {
 
   const groupedData = useMemo(() => {
     const filtered = plans.filter(p => {
-      const pending = p.plannedQty - (p.loadedQty || 0) - (p.canceledQty || 0);
+      const pending = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
       if (pending <= 0) return false;
 
       const truck = trucks.find(t => t.id === p.truckId);
@@ -111,11 +112,13 @@ export function PendingLoading() {
         truckGroup.items.push(itemGroup);
       }
 
+      const pendingQty = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
+
       itemGroup.plans.push({
         ...p,
         companyName: company?.name || "Unknown",
         orderNo: order?.orderNo || "N/A",
-        pendingQty: p.plannedQty - (p.loadedQty || 0) - (p.canceledQty || 0)
+        pendingQty: pendingQty
       });
     });
 
@@ -140,10 +143,10 @@ export function PendingLoading() {
     if (!loadingModal) return;
 
     const lines: LoadingSlipLine[] = Object.entries(loadedQuantities)
-      .filter(([, qty]) => qty > 0)
+      .filter(([, qty]) => Number(qty) > 0)
       .map(([id, qty]) => ({
         dispatchPlanId: id,
-        loadedQty: qty
+        loadedQty: Number(qty)
       }));
 
     if (lines.length === 0) return;
@@ -166,7 +169,7 @@ export function PendingLoading() {
         if (line) {
           return {
             ...p,
-            loadedQty: (p.loadedQty || 0) + line.loadedQty
+            loadedQty: Number(p.loadedQty || 0) + line.loadedQty
           };
         }
         return p;
@@ -180,19 +183,27 @@ export function PendingLoading() {
     }
   };
 
-  const handleCancelPlan = async (plan: any) => {
+  const handleCancelClick = (plan: any) => {
+    setCancelingPlanId(plan.id);
+    setCancelQty(plan.pendingQty);
+  };
+
+  const handleCancelPlan = async (planId: string) => {
+    if (cancelQty === "" || Number(cancelQty) <= 0) return;
+
     setIsSubmitting(true);
     try {
       await updatePlans(prev => prev.map(p => {
-        if (p.id === plan.id) {
+        if (p.id === planId) {
           return {
             ...p,
-            canceledQty: (p.canceledQty || 0) + plan.pendingQty
+            canceledQty: Number(p.canceledQty || 0) + Number(cancelQty)
           };
         }
         return p;
       }));
       setCancelingPlanId(null);
+      setCancelQty("");
     } catch (err) {
       console.error("Failed to cancel plan:", err);
     } finally {
@@ -260,14 +271,15 @@ export function PendingLoading() {
                       <div className="divide-y divide-slate-100">
                         {item.plans.map((p) => (
                           <div key={p.id} className="px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-sm">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 flex-1">
                               <div>
-                                <div className="text-[10px] text-slate-500 uppercase font-bold">Company</div>
-                                <div className="font-medium">{p.companyName}</div>
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">Plan ID</div>
+                                <div className="font-mono text-[10px] bg-slate-100 px-1 rounded truncate w-24" title={p.id}>{p.id.slice(0,8)}...</div>
                               </div>
                               <div>
-                                <div className="text-[10px] text-slate-500 uppercase font-bold">Order No</div>
-                                <div className="font-medium">{p.orderNo}</div>
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">Company / Order</div>
+                                <div className="font-medium truncate max-w-[150px]" title={p.companyName}>{p.companyName}</div>
+                                <div className="text-[10px] text-slate-600">{p.orderNo}</div>
                               </div>
                               <div>
                                 <div className="text-[10px] text-slate-500 uppercase font-bold">Planned</div>
@@ -277,29 +289,44 @@ export function PendingLoading() {
                                 <div className="text-[10px] text-slate-500 uppercase font-bold text-indigo-600">Pending</div>
                                 <div className="font-bold text-indigo-600">{p.pendingQty}</div>
                               </div>
+                              <div>
+                                {cancelingPlanId === p.id && (
+                                  <div>
+                                    <div className="text-[10px] text-red-600 uppercase font-bold">Cancel Qty</div>
+                                    <input 
+                                      type="number"
+                                      value={cancelQty}
+                                      onChange={(e) => setCancelQty(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                                      className="w-20 px-1 py-0.5 border border-red-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-red-500"
+                                      autoFocus
+                                    />
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
                               {cancelingPlanId === p.id ? (
-                                <div className="flex items-center gap-2 bg-red-50 p-1 rounded border border-red-200">
-                                  <span className="text-[10px] text-red-700 font-bold uppercase">Confirm Cancel?</span>
+                                <div className="flex items-center gap-2">
                                   <button 
-                                    onClick={() => handleCancelPlan(p)}
-                                    disabled={isSubmitting}
-                                    className="p-1 bg-red-600 text-white rounded hover:bg-red-700"
+                                    onClick={() => handleCancelPlan(p.id)}
+                                    disabled={isSubmitting || cancelQty === "" || Number(cancelQty) <= 0}
+                                    className="p-1.5 bg-red-600 text-white rounded hover:bg-red-700 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[2px]"
+                                    title="Confirm Cancellation"
                                   >
-                                    <Check size={14} />
+                                    {isSubmitting ? <Spinner size={14} color="white" /> : <Check size={14} />}
                                   </button>
                                   <button 
                                     onClick={() => setCancelingPlanId(null)}
-                                    className="p-1 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                                    className="p-1.5 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition border border-slate-300"
+                                    title="Discard"
                                   >
                                     <X size={14} />
                                   </button>
                                 </div>
                               ) : (
                                 <button 
-                                  onClick={() => setCancelingPlanId(p.id)}
-                                  className="text-red-600 hover:text-red-800 text-xs font-bold uppercase flex items-center gap-1"
+                                  onClick={() => handleCancelClick(p)}
+                                  className="text-red-600 hover:text-red-800 text-xs font-bold uppercase flex items-center gap-1 border border-red-200 px-2 py-1 rounded bg-red-50"
                                 >
                                   <X size={14} /> Cancel
                                 </button>
@@ -359,6 +386,7 @@ export function PendingLoading() {
                         <td className="px-4 py-3">
                           <div className="text-sm font-medium">{p.companyName}</div>
                           <div className="text-[10px] text-slate-500">{p.orderNo}</div>
+                          <div className="text-[9px] text-slate-400 font-mono">ID: {p.id}</div>
                         </td>
                         <td className="px-4 py-3 text-right text-sm">{p.plannedQty}</td>
                         <td className="px-4 py-3 text-right text-sm font-bold text-indigo-600">{p.pendingQty}</td>

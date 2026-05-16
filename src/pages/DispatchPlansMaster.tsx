@@ -39,10 +39,10 @@ export function DispatchPlansMaster() {
       "Company": company?.name || "-",
       "Order No": order?.orderNo || "-",
       "Item": item?.name || "-",
-      "Planned Qty": p.plannedQty,
-      "Loaded Qty": p.loadedQty || 0,
-      "Canceled Qty": p.canceledQty || 0,
-      "Pending Loading": p.plannedQty - (p.loadedQty || 0) - (p.canceledQty || 0),
+      "Planned Qty": Number(p.plannedQty || 0),
+      "Loaded Qty": Number(p.loadedQty || 0),
+      "Canceled Qty": Number(p.canceledQty || 0),
+      "Pending Loading": Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0),
       "Status": p.status
     };
   });
@@ -82,7 +82,7 @@ export function DispatchPlansMaster() {
                   const order = orders.find(o => o.id === p.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = items.find(i => i.id === order?.itemId);
-                  const pending = p.plannedQty - (p.loadedQty || 0) - (p.canceledQty || 0);
+                  const pending = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
 
                   return (
                     <tr key={p.id} className="hover:bg-slate-50 divide-x divide-black">
@@ -97,13 +97,13 @@ export function DispatchPlansMaster() {
                         <div className="text-[10px] text-slate-500 uppercase">{item?.name || "-"}</div>
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-black border border-black whitespace-nowrap">
-                        {p.plannedQty.toLocaleString()}
+                        {Number(p.plannedQty || 0).toLocaleString()}
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap">
-                        {(p.loadedQty || 0).toLocaleString()}
+                        {Number(p.loadedQty || 0).toLocaleString()}
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-red-600 border border-black whitespace-nowrap">
-                        {(p.canceledQty || 0).toLocaleString()}
+                        {Number(p.canceledQty || 0).toLocaleString()}
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">
                         {pending.toLocaleString()}
