@@ -13,6 +13,7 @@ import {
   Calendar, 
   Building2,
   ChevronRight,
+  ChevronDown,
   X,
   Download,
   FileText
@@ -32,21 +33,42 @@ export function InvoicesMaster() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRow = (id: string) => {
+    const next = new Set(expandedRows);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExpandedRows(next);
+  };
 
   const processedInvoices = useMemo(() => {
     return invoices.map(inv => {
       const company = companies.find(c => c.id === inv.companyId);
+      const invLines = lineItems.filter(li => li.invoiceId === inv.id);
+      const invItems = invLines.map(li => {
+        const item = items.find(i => i.id === li.itemId);
+        return item?.name || "Unknown";
+      });
+      
       return {
         ...inv,
         companyName: company?.name || "Unknown",
         address: company?.address || "",
-        gstNo: company?.gstNo || "N/A"
+        gstNo: company?.gstNo || "N/A",
+        itemSummary: Array.from(new Set(invItems)).join(", "),
+        details: invLines.map(li => ({
+          ...li,
+          itemName: items.find(i => i.id === li.itemId)?.name || "Unknown",
+          slipNo: slips.find(s => s.id === li.loadingSlipId)?.slipNo || "N/A"
+        }))
       };
     }).filter(inv => {
       return inv.invoiceNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             inv.companyName.toLowerCase().includes(searchTerm.toLowerCase());
+             inv.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+             inv.itemSummary.toLowerCase().includes(searchTerm.toLowerCase());
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [invoices, companies, searchTerm]);
+  }, [invoices, companies, lineItems, items, slips, searchTerm]);
 
   const invoiceDetails = useMemo(() => {
     if (!selectedInvoice) return [];
@@ -133,9 +155,9 @@ export function InvoicesMaster() {
         <table className="min-w-full divide-y divide-black border-collapse">
           <thead className="bg-slate-100">
             <tr className="divide-x divide-black">
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Invoice No</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Company</th>
+              <th className="w-10 px-4 py-3"></th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Invoice / Company</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Items Summary</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Total Amount</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
             </tr>
@@ -146,47 +168,92 @@ export function InvoicesMaster() {
                 <td colSpan={5} className="px-6 py-12 text-center text-slate-500 italic">No invoices found.</td>
               </tr>
             ) : processedInvoices.map((inv) => (
-              <tr key={inv.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <Receipt size={16} className="text-indigo-600 mr-2" />
-                    <span className="font-bold text-sm">{inv.invoiceNo}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {formatDate(inv.date)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center text-sm font-medium">
-                    <Building2 size={14} className="text-slate-400 mr-2" />
-                    {inv.companyName}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-700">
-                  {inv.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                  <div className="flex justify-end gap-2">
+              <React.Fragment key={inv.id}>
+                <tr className="hover:bg-slate-50 transition-colors divide-x divide-black">
+                  <td className="px-4 py-4 text-center">
                     <button 
-                      onClick={() => downloadPDF(inv, lineItems.filter(li => li.invoiceId === inv.id).map(li => ({
-                        ...li,
-                        itemName: items.find(i => i.id === li.itemId)?.name || "Unknown",
-                        slipNo: slips.find(s => s.id === li.loadingSlipId)?.slipNo || "N/A"
-                      })))}
-                      className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
-                      title="Download PDF"
+                      onClick={() => toggleRow(inv.id)}
+                      className="p-1 hover:bg-slate-200 rounded transition"
                     >
-                      <Download size={18} />
+                      {expandedRows.has(inv.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                     </button>
-                    <button 
-                      onClick={() => setSelectedInvoice(inv)}
-                      className="text-indigo-600 hover:text-indigo-900 font-bold uppercase flex items-center gap-1"
-                    >
-                      Details <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex flex-col">
+                      <div className="flex items-center">
+                        <Receipt size={14} className="text-indigo-600 mr-2" />
+                        <span className="font-bold text-sm">{inv.invoiceNo}</span>
+                      </div>
+                      <div className="flex items-center text-xs text-slate-500 mt-1">
+                        <Building2 size={12} className="mr-1" />
+                        {inv.companyName}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{formatDate(inv.date)}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-xs text-slate-600 line-clamp-2 max-w-xs uppercase font-medium">
+                      {inv.itemSummary}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-700">
+                    {inv.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => downloadPDF(inv, inv.details)}
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
+                        title="Download PDF"
+                      >
+                        <Download size={18} />
+                      </button>
+                      <button 
+                        onClick={() => setSelectedInvoice(inv)}
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
+                        title="View Full Details"
+                      >
+                        <FileText size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {expandedRows.has(inv.id) && (
+                  <tr className="bg-slate-50">
+                    <td colSpan={5} className="px-12 py-4">
+                      <div className="border-2 border-black rounded overflow-hidden shadow-sm">
+                        <table className="min-w-full divide-y divide-black">
+                          <thead className="bg-slate-200">
+                            <tr className="divide-x divide-black">
+                              <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
+                              <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Slip No</th>
+                              <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-24">Qty</th>
+                              <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-24">Rate</th>
+                              <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-20">GST %</th>
+                              <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-32">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-black">
+                            {inv.details.map((line: any, idx: number) => {
+                              const tax = (Number(line.cgst) || 0) + (Number(line.sgst) || 0) + (Number(line.igst) || 0);
+                              return (
+                                <tr key={idx} className="divide-x divide-black">
+                                  <td className="px-3 py-2 text-xs font-bold uppercase">{line.itemName}</td>
+                                  <td className="px-3 py-2 text-xs">{line.slipNo}</td>
+                                  <td className="px-3 py-2 text-xs text-right">{line.qty.toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-xs text-right">{Number(line.rate || 0).toFixed(2)}</td>
+                                  <td className="px-3 py-2 text-xs text-right">{line.gstRate}%</td>
+                                  <td className="px-3 py-2 text-xs text-right font-bold">{(line.amount + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
