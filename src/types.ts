@@ -158,8 +158,25 @@ export interface DispatchPlan {
   orderId: string;
   truckId: string;
   plannedQty: number;
+  loadedQty?: number;
+  canceledQty?: number;
   status: "Planned" | "Dispatched";
   date: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface LoadingSlipLine {
+  dispatchPlanId: string;
+  loadedQty: number;
+}
+
+export interface LoadingSlip {
+  id: string;
+  slipNo: string;
+  date: string;
+  truckId: string;
+  lines: LoadingSlipLine[];
   updatedBy?: string;
   updateTimestamp?: string;
 }

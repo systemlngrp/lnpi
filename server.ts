@@ -330,6 +330,18 @@ async function initDb(retries = 5) {
         )
       `);
 
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`loading_slips\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`slipNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`truckId\` VARCHAR(36) NOT NULL,
+          \`lines\` JSON NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
       console.log("[DB] Database tables initialized successfully.");
       
       // Ensure all tables have required columns if they were created with an older schema
@@ -431,6 +443,14 @@ async function initDb(retries = 5) {
         { table: "dispatch_plans", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "dispatch_plans", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "dispatch_plans", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "dispatch_plans", column: "loadedQty", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "dispatch_plans", column: "canceledQty", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "loading_slips", column: "slipNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "loading_slips", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "loading_slips", column: "truckId", type: "VARCHAR(36) NOT NULL" },
+        { table: "loading_slips", column: "lines", type: "JSON NOT NULL" },
+        { table: "loading_slips", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "loading_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
       ];
 
 
@@ -529,6 +549,35 @@ const createHandlers = (tableName: string) => {
           }
         }
 
+        // Auto-generate slipNo for loading_slips when not provided
+        if (tableName === 'loading_slips') {
+          try {
+            if (!data.slipNo) {
+              const dateStr = data.date || new Date().toISOString().slice(0,10);
+              const d = new Date(dateStr);
+              let fyStart = d.getFullYear();
+              const month = d.getMonth() + 1;
+              if (month < 4) fyStart = fyStart - 1;
+              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
+
+              const likePattern = `LS/${fyLabel}/%`;
+              const [rows] = await db.query(`SELECT slipNo FROM \`loading_slips\` WHERE slipNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(slipNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`, [likePattern]);
+              let lastNum = 0;
+              if ((rows as any[]).length > 0) {
+                const lastSlipNo = (rows as any[])[0].slipNo as string;
+                const parts = lastSlipNo.split('/');
+                const suffix = parts[parts.length - 1];
+                lastNum = parseInt(suffix || '0', 10) || 0;
+              }
+              const nextNum = lastNum + 1;
+              const padded = String(nextNum).padStart(5, '0');
+              data.slipNo = `LS/${fyLabel}/${padded}`;
+            }
+          } catch (err) {
+            console.warn('[DB] Could not auto-generate slipNo:', (err as Error).message);
+          }
+        }
+
         console.log(`[DB] Upserting to ${tableName}`, { 
           id: data.id, 
           status: data.status,
@@ -572,7 +621,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "trucks", "dispatch_plans"];
+const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "trucks", "dispatch_plans", "loading_slips"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

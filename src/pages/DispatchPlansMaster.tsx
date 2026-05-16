@@ -40,6 +40,9 @@ export function DispatchPlansMaster() {
       "Order No": order?.orderNo || "-",
       "Item": item?.name || "-",
       "Planned Qty": p.plannedQty,
+      "Loaded Qty": p.loadedQty || 0,
+      "Canceled Qty": p.canceledQty || 0,
+      "Pending Loading": p.plannedQty - (p.loadedQty || 0) - (p.canceledQty || 0),
       "Status": p.status
     };
   });
@@ -60,7 +63,10 @@ export function DispatchPlansMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Truck / Driver</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Company</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Order / Item</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Planned Qty</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Planned</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black text-emerald-700">Loaded</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black text-red-700">Cancl</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black text-indigo-700">Pending</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black">Status</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black">Actions</th>
               </tr>
@@ -68,7 +74,7 @@ export function DispatchPlansMaster() {
             <tbody className="divide-y divide-black bg-white">
               {plans.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No dispatch plans found.</td>
+                  <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">No dispatch plans found.</td>
                 </tr>
               ) : (
                 plans.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((p) => {
@@ -76,6 +82,7 @@ export function DispatchPlansMaster() {
                   const order = orders.find(o => o.id === p.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = items.find(i => i.id === order?.itemId);
+                  const pending = p.plannedQty - (p.loadedQty || 0) - (p.canceledQty || 0);
 
                   return (
                     <tr key={p.id} className="hover:bg-slate-50 divide-x divide-black">
@@ -89,8 +96,17 @@ export function DispatchPlansMaster() {
                         <div className="font-bold">{order?.orderNo || "-"}</div>
                         <div className="text-[10px] text-slate-500 uppercase">{item?.name || "-"}</div>
                       </td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">
+                      <td className="px-4 py-4 text-right text-xs font-medium text-black border border-black whitespace-nowrap">
                         {p.plannedQty.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap">
+                        {(p.loadedQty || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 text-right text-xs font-medium text-red-600 border border-black whitespace-nowrap">
+                        {(p.canceledQty || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">
+                        {pending.toLocaleString()}
                       </td>
                       <td className="px-4 py-4 text-center text-xs border border-black">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${

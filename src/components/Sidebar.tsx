@@ -65,6 +65,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       return !isNaN(schedDate.getTime()) && schedDate <= tomorrow && balance > 0;
     }).length,
+    "/loading/pending": dispatchPlans.filter(p => {
+      const pending = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
+      return pending > 0;
+    }).length,
     "/orders/upcoming": schedules.filter(s => {
       if (!s?.scheduledDate) return false;
       const today = new Date();
@@ -152,6 +156,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       items: [
         { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
         { name: "Dispatch Plans Master", href: "/dispatch/master", icon: Database },
+      ],
+    },
+    {
+      section: "Loading",
+      color: "bg-indigo-600",
+      items: [
+        { name: "Pending Loading", href: "/loading/pending", icon: Truck, countKey: "/loading/pending" },
+        { name: "Loading Master", href: "/loading/master", icon: FileText },
       ],
     },
     {
