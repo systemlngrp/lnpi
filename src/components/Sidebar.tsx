@@ -69,6 +69,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       const pending = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
       return pending > 0;
     }).length,
+    "/billing/pending": loadingSlips.filter(s => !s.invoiceId).length,
     "/orders/upcoming": schedules.filter(s => {
       if (!s?.scheduledDate) return false;
       const today = new Date();
@@ -164,6 +165,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       items: [
         { name: "Pending Loading", href: "/loading/pending", icon: Truck, countKey: "/loading/pending" },
         { name: "Loading Master", href: "/loading/master", icon: FileText },
+      ],
+    },
+    {
+      section: "Billing",
+      color: "bg-emerald-600",
+      items: [
+        { name: "Pending Invoicing", href: "/billing/pending", icon: Receipt, countKey: "/billing/pending" },
+        { name: "Billing Master", href: "/billing/master", icon: FileText },
       ],
     },
     {

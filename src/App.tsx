@@ -40,6 +40,8 @@ import { PendingDispatchPlanning } from "./pages/PendingDispatchPlanning";
 import { DispatchPlansMaster } from "./pages/DispatchPlansMaster";
 import { PendingLoading } from "./pages/PendingLoading";
 import { LoadingMaster } from "./pages/LoadingMaster";
+import { PendingInvoicing } from "./pages/PendingInvoicing";
+import { InvoicesMaster } from "./pages/InvoicesMaster";
 import { CanceledOrders } from "./pages/CanceledOrders";
 
 function BlankPage({ title }: { title: string }) {
@@ -105,6 +107,10 @@ export default function App() {
           {/* Loading */}
           <Route path="loading/pending" element={<PendingLoading />} />
           <Route path="loading/master" element={<LoadingMaster />} />
+
+          {/* Billing */}
+          <Route path="billing/pending" element={<PendingInvoicing />} />
+          <Route path="billing/master" element={<InvoicesMaster />} />
         </Route>
       </Routes>
     </HashRouter>

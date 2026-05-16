@@ -337,8 +337,38 @@ async function initDb(retries = 5) {
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36) NOT NULL,
           \`lines\` JSON NOT NULL,
+          \`invoiceId\` VARCHAR(36),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`invoices\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`invoiceNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`companyId\` VARCHAR(36) NOT NULL,
+          \`gstRate\` DECIMAL(5,2) NOT NULL,
+          \`totalBeforeGst\` DECIMAL(15,2) NOT NULL,
+          \`cgst\` DECIMAL(15,2) NOT NULL,
+          \`sgst\` DECIMAL(15,2) NOT NULL,
+          \`igst\` DECIMAL(15,2) NOT NULL,
+          \`totalAfterGst\` DECIMAL(15,2) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`invoice_line_items\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`invoiceId\` VARCHAR(36) NOT NULL,
+          \`loadingSlipId\` VARCHAR(36) NOT NULL,
+          \`itemId\` VARCHAR(36) NOT NULL,
+          \`qty\` DECIMAL(15,2) NOT NULL,
+          \`rate\` DECIMAL(15,2) NOT NULL,
+          \`amount\` DECIMAL(15,2) NOT NULL
         )
       `);
 
@@ -451,6 +481,24 @@ async function initDb(retries = 5) {
         { table: "loading_slips", column: "lines", type: "JSON NOT NULL" },
         { table: "loading_slips", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "loading_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "loading_slips", column: "invoiceId", type: "VARCHAR(36)" },
+        { table: "invoices", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "invoices", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "invoices", column: "companyId", type: "VARCHAR(36) NOT NULL" },
+        { table: "invoices", column: "gstRate", type: "DECIMAL(5,2) NOT NULL" },
+        { table: "invoices", column: "totalBeforeGst", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoices", column: "cgst", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoices", column: "sgst", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoices", column: "igst", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoices", column: "totalAfterGst", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoices", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "invoices", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "invoice_line_items", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
+        { table: "invoice_line_items", column: "loadingSlipId", type: "VARCHAR(36) NOT NULL" },
+        { table: "invoice_line_items", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "invoice_line_items", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoice_line_items", column: "rate", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoice_line_items", column: "amount", type: "DECIMAL(15,2) NOT NULL" },
       ];
 
 
@@ -578,6 +626,35 @@ const createHandlers = (tableName: string) => {
           }
         }
 
+        // Auto-generate invoiceNo for invoices when not provided
+        if (tableName === 'invoices') {
+          try {
+            if (!data.invoiceNo) {
+              const dateStr = data.date || new Date().toISOString().slice(0,10);
+              const d = new Date(dateStr);
+              let fyStart = d.getFullYear();
+              const month = d.getMonth() + 1;
+              if (month < 4) fyStart = fyStart - 1;
+              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
+
+              const likePattern = `INV/${fyLabel}/%`;
+              const [rows] = await db.query(`SELECT invoiceNo FROM \`invoices\` WHERE invoiceNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(invoiceNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`, [likePattern]);
+              let lastNum = 0;
+              if ((rows as any[]).length > 0) {
+                const lastInvoiceNo = (rows as any[])[0].invoiceNo as string;
+                const parts = lastInvoiceNo.split('/');
+                const suffix = parts[parts.length - 1];
+                lastNum = parseInt(suffix || '0', 10) || 0;
+              }
+              const nextNum = lastNum + 1;
+              const padded = String(nextNum).padStart(5, '0');
+              data.invoiceNo = `INV/${fyLabel}/${padded}`;
+            }
+          } catch (err) {
+            console.warn('[DB] Could not auto-generate invoiceNo:', (err as Error).message);
+          }
+        }
+
         console.log(`[DB] Upserting to ${tableName}`, { 
           id: data.id, 
           status: data.status,
@@ -621,7 +698,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "trucks", "dispatch_plans", "loading_slips"];
+const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

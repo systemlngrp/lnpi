@@ -177,6 +177,32 @@ export interface LoadingSlip {
   date: string;
   truckId: string;
   lines: LoadingSlipLine[];
+  invoiceId?: string;
   updatedBy?: string;
   updateTimestamp?: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNo: string;
+  date: string;
+  companyId: string;
+  gstRate: number;
+  totalBeforeGst: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  totalAfterGst: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface InvoiceLineItem {
+  id: string;
+  invoiceId: string;
+  loadingSlipId: string;
+  itemId: string;
+  qty: number;
+  rate: number;
+  amount: number;
 }
