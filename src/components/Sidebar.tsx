@@ -65,6 +65,23 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       return !isNaN(schedDate.getTime()) && schedDate <= tomorrow && balance > 0;
     }).length,
+    "/orders/upcoming": schedules.filter(s => {
+      if (!s?.scheduledDate) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(23, 59, 59, 999);
+      const schedDate = new Date(s.scheduledDate);
+      
+      const alreadyPlanned = dispatchPlans
+        .filter(plan => plan.scheduleId === s.id)
+        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
+      
+      const balance = Number(s.qty || 0) - alreadyPlanned;
+
+      return !isNaN(schedDate.getTime()) && schedDate > tomorrow && balance > 0;
+    }).length,
     "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
                   productions.filter(p => isPendingPH(p.status)).length + 
                   consumptions.filter(c => isPendingPH(c.status)).length
@@ -114,6 +131,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity },
         { name: "Orders Master", href: "/orders/master", icon: FileText },
         { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
+        { name: "Upcoming Scheduled Orders", href: "/orders/upcoming", icon: Activity, countKey: "/orders/upcoming" },
         { name: "Canceled Orders", href: "/orders/canceled", icon: X },
       ],
     },
