@@ -11,6 +11,7 @@ export interface Item {
   name: string;
   uom: string;
   erp?: number;
+  gstRate?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -205,4 +206,8 @@ export interface InvoiceLineItem {
   qty: number;
   rate: number;
   amount: number;
+  gstRate: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
 }

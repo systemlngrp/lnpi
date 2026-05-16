@@ -173,6 +173,7 @@ async function initDb(retries = 5) {
           \`name\` VARCHAR(255) NOT NULL,
           \`uom\` VARCHAR(50) NOT NULL,
           \`erp\` INT DEFAULT NULL,
+          \`gstRate\` DECIMAL(5,2) DEFAULT 18.00,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -368,7 +369,11 @@ async function initDb(retries = 5) {
           \`itemId\` VARCHAR(36) NOT NULL,
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2) NOT NULL,
-          \`amount\` DECIMAL(15,2) NOT NULL
+          \`amount\` DECIMAL(15,2) NOT NULL,
+          \`gstRate\` DECIMAL(5,2) NOT NULL DEFAULT 18.00,
+          \`cgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`sgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`igst\` DECIMAL(15,2) NOT NULL DEFAULT 0
         )
       `);
 
@@ -499,6 +504,11 @@ async function initDb(retries = 5) {
         { table: "invoice_line_items", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoice_line_items", column: "rate", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoice_line_items", column: "amount", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "items", column: "gstRate", type: "DECIMAL(5,2) DEFAULT 18.00" },
+        { table: "invoice_line_items", column: "gstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 18.00" },
+        { table: "invoice_line_items", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "invoice_line_items", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "invoice_line_items", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
       ];
 
 

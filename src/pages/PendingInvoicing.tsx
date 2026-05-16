@@ -58,7 +58,7 @@ export function PendingInvoicing() {
   } | null>(null);
   
   const [itemRates, setInvoiceRates] = useState<Record<string, number>>({});
-  const [gstRate, setGstRate] = useState<number>(18);
+  const [itemGstRates, setItemGstRates] = useState<Record<string, number>>({});
   const [isInterState, setIsInterState] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -134,18 +134,22 @@ export function PendingInvoicing() {
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
     
-    // Initialize rates
+    // Initialize rates and gst rates
     const initialRates: Record<string, number> = {};
+    const initialGstRates: Record<string, number> = {};
     selected.forEach(s => {
       s.lines.forEach((l: any) => {
         const p = plans.find(pl => pl.id === l.dispatchPlanId);
         const o = orders.find(ord => ord.id === p?.orderId);
-        if (o?.itemId && !initialRates[o.itemId]) {
-          initialRates[o.itemId] = 0;
+        const item = items.find(i => i.id === o?.itemId);
+        if (item && !initialRates[item.id]) {
+          initialRates[item.id] = 0;
+          initialGstRates[item.id] = item.gstRate ?? 18;
         }
       });
     });
     setInvoiceRates(initialRates);
+    setItemGstRates(initialGstRates);
   };
 
   const invoiceItems = useMemo(() => {
@@ -181,19 +185,29 @@ export function PendingInvoicing() {
 
   const calculations = useMemo(() => {
     let totalBeforeGst = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+
     invoiceItems.forEach(item => {
       const rate = itemRates[item.itemId] || 0;
-      totalBeforeGst += item.qty * rate;
+      const gRate = itemGstRates[item.itemId] || 0;
+      const amount = item.qty * rate;
+      totalBeforeGst += amount;
+
+      const taxAmount = (amount * gRate) / 100;
+      if (isInterState) {
+        totalIgst += taxAmount;
+      } else {
+        totalCgst += taxAmount / 2;
+        totalSgst += taxAmount / 2;
+      }
     });
 
-    const taxAmount = (totalBeforeGst * gstRate) / 100;
-    const cgst = isInterState ? 0 : taxAmount / 2;
-    const sgst = isInterState ? 0 : taxAmount / 2;
-    const igst = isInterState ? taxAmount : 0;
-    const totalAfterGst = totalBeforeGst + taxAmount;
+    const totalAfterGst = totalBeforeGst + totalCgst + totalSgst + totalIgst;
 
-    return { totalBeforeGst, cgst, sgst, igst, totalAfterGst };
-  }, [invoiceItems, itemRates, gstRate, isInterState]);
+    return { totalBeforeGst, cgst: totalCgst, sgst: totalSgst, igst: totalIgst, totalAfterGst };
+  }, [invoiceItems, itemRates, itemGstRates, isInterState]);
 
   const generatePDF = (invoice: Invoice, company: Company, lines: any[]) => {
     const doc = new jsPDF();
@@ -218,13 +232,13 @@ export function PendingInvoicing() {
     autoTable(doc, {
       startY: 95,
       head: [["Item", "Quantity", "Rate", "Amount"]],
-      body: lines.map(l => [l.itemName, l.qty, l.rate.toFixed(2), l.amount.toFixed(2)]),
+      body: lines.map(l => [l.itemName, l.qty, Number(l.rate || 0).toFixed(2), Number(l.amount || 0).toFixed(2)]),
       foot: [
-        ["Total Before GST", "", "", calculations.totalBeforeGst.toFixed(2)],
-        ["CGST", "", "", calculations.cgst.toFixed(2)],
-        ["SGST", "", "", calculations.sgst.toFixed(2)],
-        ["IGST", "", "", calculations.igst.toFixed(2)],
-        ["Grand Total", "", "", calculations.totalAfterGst.toFixed(2)]
+        ["Total Before GST", "", "", Number(calculations.totalBeforeGst || 0).toFixed(2)],
+        ["CGST", "", "", Number(calculations.cgst || 0).toFixed(2)],
+        ["SGST", "", "", Number(calculations.sgst || 0).toFixed(2)],
+        ["IGST", "", "", Number(calculations.igst || 0).toFixed(2)],
+        ["Grand Total", "", "", Number(calculations.totalAfterGst || 0).toFixed(2)]
       ],
       theme: "striped",
       headStyles: { fillColor: [79, 70, 229] }
@@ -246,7 +260,7 @@ export function PendingInvoicing() {
         invoiceNo: "", // Server generated
         date: new Date().toISOString().slice(0, 10),
         companyId: company.id,
-        gstRate,
+        gstRate: 0, // No longer used as a single value
         ...calculations
       };
 
@@ -257,9 +271,8 @@ export function PendingInvoicing() {
       const lineItems: InvoiceLineItem[] = [];
       invoiceItems.forEach(item => {
         const rate = itemRates[item.itemId] || 0;
-        // We link multiple slips to this invoice through line items
-        // For simplicity in this UI, we map item-wise totals
-        // but the prompt implies mapping to actual slips
+        const gRate = itemGstRates[item.itemId] || 0;
+        
         invoiceModal.slips.forEach(s => {
            const sItemQty = s.lines.reduce((sum: number, l: any) => {
              const p = plans.find(pl => pl.id === l.dispatchPlanId);
@@ -268,6 +281,8 @@ export function PendingInvoicing() {
            }, 0);
            
            if (sItemQty > 0) {
+             const amount = sItemQty * rate;
+             const taxAmount = (amount * gRate) / 100;
              lineItems.push({
                id: crypto.randomUUID(),
                invoiceId,
@@ -275,7 +290,11 @@ export function PendingInvoicing() {
                itemId: item.itemId,
                qty: sItemQty,
                rate,
-               amount: sItemQty * rate
+               amount,
+               gstRate: gRate,
+               cgst: isInterState ? 0 : taxAmount / 2,
+               sgst: isInterState ? 0 : taxAmount / 2,
+               igst: isInterState ? taxAmount : 0
              });
            }
         });
@@ -425,37 +444,21 @@ export function PendingInvoicing() {
             </div>
             
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="col-span-2">
-                  <label className="text-[10px] font-bold uppercase text-slate-500">GST Rate (%)</label>
-                  <select 
-                    value={gstRate}
-                    onChange={(e) => setGstRate(Number(e.target.value))}
-                    className="w-full px-3 py-2 border-2 border-black rounded focus:outline-none"
+              <div className="flex justify-between items-center bg-slate-50 p-4 border border-black rounded">
+                <div className="font-bold uppercase text-xs">Billing Type</div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setIsInterState(false)}
+                    className={`px-4 py-1.5 text-xs font-bold rounded border-2 border-black transition-all ${!isInterState ? 'bg-indigo-600 text-white translate-x-1 translate-y-1 shadow-none' : 'bg-white text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'}`}
                   >
-                    <option value={0}>0% (Exempt)</option>
-                    <option value={5}>5%</option>
-                    <option value={12}>12%</option>
-                    <option value={18}>18%</option>
-                    <option value={28}>28%</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase text-slate-500">Type</label>
-                  <div className="flex gap-2 mt-2">
-                    <button 
-                      onClick={() => setIsInterState(false)}
-                      className={`flex-1 py-1 text-[10px] font-bold rounded border ${!isInterState ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}
-                    >
-                      INTRA (CGST+SGST)
-                    </button>
-                    <button 
-                      onClick={() => setIsInterState(true)}
-                      className={`flex-1 py-1 text-[10px] font-bold rounded border ${isInterState ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300'}`}
-                    >
-                      INTER (IGST)
-                    </button>
-                  </div>
+                    INTRA (CGST+SGST)
+                  </button>
+                  <button 
+                    onClick={() => setIsInterState(true)}
+                    className={`px-4 py-1.5 text-xs font-bold rounded border-2 border-black transition-all ${isInterState ? 'bg-indigo-600 text-white translate-x-1 translate-y-1 shadow-none' : 'bg-white text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'}`}
+                  >
+                    INTER (IGST)
+                  </button>
                 </div>
               </div>
 
@@ -464,8 +467,9 @@ export function PendingInvoicing() {
                   <thead className="bg-slate-100">
                     <tr className="divide-x divide-black">
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Item</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-24">Quantity</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-32">Rate</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-20">Quantity</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-28">Rate</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-24">GST %</th>
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-32">Amount</th>
                     </tr>
                   </thead>
@@ -493,6 +497,22 @@ export function PendingInvoicing() {
                             className="w-24 px-2 py-1 border-2 border-indigo-600 rounded text-right focus:outline-none focus:ring-1 focus:ring-indigo-600 font-bold"
                           />
                         </td>
+                        <td className="px-3 py-3 text-right">
+                          <select 
+                            value={itemGstRates[item.itemId] ?? 18}
+                            onChange={(e) => setItemGstRates({
+                              ...itemGstRates,
+                              [item.itemId]: Number(e.target.value)
+                            })}
+                            className="w-20 px-1 py-1 border border-black rounded text-right text-xs"
+                          >
+                            <option value={0}>0%</option>
+                            <option value={5}>5%</option>
+                            <option value={12}>12%</option>
+                            <option value={18}>18%</option>
+                            <option value={28}>28%</option>
+                          </select>
+                        </td>
                         <td className="px-3 py-3 text-right text-sm font-medium">
                           {((itemRates[item.itemId] || 0) * item.qty).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
@@ -501,28 +521,28 @@ export function PendingInvoicing() {
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-black divide-y divide-black">
                     <tr className="divide-x divide-black">
-                      <td colSpan={3} className="px-3 py-2 text-right text-xs uppercase">Total Before GST</td>
+                      <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase">Total Before GST</td>
                       <td className="px-3 py-2 text-right text-xs">{calculations.totalBeforeGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     {!isInterState ? (
                       <>
                         <tr className="divide-x divide-black">
-                          <td colSpan={3} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">CGST ({gstRate/2}%)</td>
+                          <td colSpan={4} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">Total CGST</td>
                           <td className="px-3 py-2 text-right text-[10px] text-slate-500">{calculations.cgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                         <tr className="divide-x divide-black">
-                          <td colSpan={3} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">SGST ({gstRate/2}%)</td>
+                          <td colSpan={4} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">Total SGST</td>
                           <td className="px-3 py-2 text-right text-[10px] text-slate-500">{calculations.sgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                       </>
                     ) : (
                       <tr className="divide-x divide-black">
-                        <td colSpan={3} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">IGST ({gstRate}%)</td>
+                        <td colSpan={4} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">Total IGST</td>
                         <td className="px-3 py-2 text-right text-[10px] text-slate-500">{calculations.igst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       </tr>
                     )}
                     <tr className="divide-x divide-black bg-indigo-600 text-white border-t-2 border-black">
-                      <td colSpan={3} className="px-3 py-3 text-right text-sm uppercase">Total Amount After GST</td>
+                      <td colSpan={4} className="px-3 py-3 text-right text-sm uppercase">Total Amount After GST</td>
                       <td className="px-3 py-3 text-right text-lg">{calculations.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                   </tfoot>

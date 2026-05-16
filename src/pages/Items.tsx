@@ -18,6 +18,7 @@ export function Items() {
   const [groupId, setGroupId] = useState("");
   const [uom, setUom] = useState("");
   const [erp, setErp] = useState<string>("");
+  const [gstRate, setGstRate] = useState<string>("18");
   const [searchTerm, setSearchTerm] = useState("");
 
   const uomOptions = [
@@ -92,15 +93,16 @@ export function Items() {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as any;
       const erpValue = erp ? parseInt(erp, 10) : undefined;
       if (editingId) {
-        setItems(items.map(img => img.id === editingId ? { ...img, name: name.trim(), groupId, uom, erp: erpValue, ...audit } : img));
+        setItems(items.map(img => img.id === editingId ? { ...img, name: name.trim(), groupId, uom, erp: erpValue, gstRate: parseFloat(gstRate) || 0, ...audit } : img));
       } else {
-        setItems([...items, { id: crypto.randomUUID(), name: name.trim(), groupId, uom, erp: erpValue, ...audit } as Item]);
+        setItems([...items, { id: crypto.randomUUID(), name: name.trim(), groupId, uom, erp: erpValue, gstRate: parseFloat(gstRate) || 0, ...audit } as Item]);
       }
       
       setName("");
       setGroupId("");
       setUom("");
       setErp("");
+      setGstRate("18");
       setEditingId(null);
       setIsFormOpen(false);
       setIsSubmitting(false);
@@ -187,6 +189,21 @@ export function Items() {
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
               />
             </div>
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">GST Rate (%) *</label>
+              <select 
+                value={gstRate}
+                onChange={(e) => setGstRate(e.target.value)}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                required
+              >
+                <option value="0">0%</option>
+                <option value="5">5%</option>
+                <option value="12">12%</option>
+                <option value="18">18%</option>
+                <option value="28">28%</option>
+              </select>
+            </div>
             <div className="flex space-x-3 pt-2">
               <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border border-black min-w-[100px]">
                 {isSubmitting ? <Spinner size={20} className="text-white" /> : "Submit"}
@@ -211,7 +228,7 @@ export function Items() {
                                 <div className="text-sm font-bold">{item.name}</div>
                              </div>
                              <div className="flex items-center gap-2">
-                                 <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setErp(item.erp?.toString() || ""); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
+                                 <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setErp(item.erp?.toString() || ""); setGstRate((item.gstRate ?? 18).toString()); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
                                  <button 
                                       onClick={() => handleDelete(item.id)} 
                                       className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold`}
@@ -230,6 +247,10 @@ export function Items() {
                               <div className="text-sm">{item.uom}</div>
                             </div>
                             <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">GST</div>
+                              <div className="text-sm">{item.gstRate ?? 18}%</div>
+                            </div>
+                            <div>
                               <div className="text-xs font-black text-slate-500 uppercase">ERP</div>
                               <div className="text-sm">{item.erp ?? ""}</div>
                             </div>
@@ -244,6 +265,7 @@ export function Items() {
                       <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
                       <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Group</th>
                       <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
+                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">GST</th>
                       <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
                       <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
                     </tr>
@@ -257,9 +279,10 @@ export function Items() {
                       <td className="px-6 py-4 text-sm font-medium text-black border border-black">{item.name}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{item.uom}</td>
-                          <td className="px-6 py-4 text-sm text-black border border-black">{item.erp ?? ""}</td>
+                      <td className="px-6 py-4 text-sm text-black border border-black">{item.gstRate ?? 18}%</td>
+                      <td className="px-6 py-4 text-sm text-black border border-black">{item.erp ?? ""}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
-                            <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setErp(item.erp?.toString() || ""); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
+                            <button onClick={() => { setName(item.name); setGroupId(item.groupId); setUom(item.uom); setErp(item.erp?.toString() || ""); setGstRate((item.gstRate ?? 18).toString()); setEditingId(item.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
                         <button 
                           onClick={() => handleDelete(item.id)} 
                           className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}

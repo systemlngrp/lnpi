@@ -83,14 +83,25 @@ export function InvoicesMaster() {
 
     autoTable(doc, {
       startY: 95,
-      head: [["Item", "Slip No", "Quantity", "Rate", "Amount"]],
-      body: lines.map(l => [l.itemName, l.slipNo, l.qty, l.rate.toFixed(2), l.amount.toFixed(2)]),
+      head: [["Item", "Slip No", "Qty", "Rate", "GST %", "Tax", "Amount"]],
+      body: lines.map(l => {
+        const tax = (Number(l.cgst) || 0) + (Number(l.sgst) || 0) + (Number(l.igst) || 0);
+        return [
+          l.itemName, 
+          l.slipNo, 
+          l.qty, 
+          Number(l.rate || 0).toFixed(2), 
+          `${l.gstRate || 0}%`,
+          tax.toFixed(2),
+          (Number(l.amount) + tax).toFixed(2)
+        ];
+      }),
       foot: [
-        ["Total Before GST", "", "", "", invoice.totalBeforeGst.toFixed(2)],
-        ["CGST", "", "", "", invoice.cgst.toFixed(2)],
-        ["SGST", "", "", "", invoice.sgst.toFixed(2)],
-        ["IGST", "", "", "", invoice.igst.toFixed(2)],
-        ["Grand Total", "", "", "", invoice.totalAfterGst.toFixed(2)]
+        ["Total Before GST", "", "", "", "", "", Number(invoice.totalBeforeGst || 0).toFixed(2)],
+        ["CGST", "", "", "", "", "", Number(invoice.cgst || 0).toFixed(2)],
+        ["SGST", "", "", "", "", "", Number(invoice.sgst || 0).toFixed(2)],
+        ["IGST", "", "", "", "", "", Number(invoice.igst || 0).toFixed(2)],
+        ["Grand Total", "", "", "", "", "", Number(invoice.totalAfterGst || 0).toFixed(2)]
       ],
       theme: "striped",
       headStyles: { fillColor: [79, 70, 229] }
@@ -206,8 +217,8 @@ export function InvoicesMaster() {
                   <div className="font-bold">{formatDate(selectedInvoice.date)}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">GST Rate</div>
-                  <div className="font-bold">{selectedInvoice.gstRate}%</div>
+                  <div className="text-[10px] text-slate-500 uppercase font-bold">Status</div>
+                  <div className="font-bold text-emerald-600 uppercase text-xs">Generated</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-500 uppercase font-bold">Grand Total</div>
@@ -222,37 +233,50 @@ export function InvoicesMaster() {
                   <thead className="bg-slate-100">
                     <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-xs font-bold uppercase">Item / Slip</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold uppercase">Quantity</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold uppercase">Qty</th>
                       <th className="px-4 py-3 text-right text-xs font-bold uppercase">Rate</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold uppercase">Amount</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold uppercase">GST %</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold uppercase">Tax</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black bg-white">
-                    {invoiceDetails.map((line, idx) => (
-                      <tr key={idx} className="divide-x divide-black">
-                        <td className="px-4 py-3">
-                          <div className="font-bold text-sm uppercase">{line.itemName}</div>
-                          <div className="text-[10px] text-slate-500">Slip: {line.slipNo}</div>
-                        </td>
-                        <td className="px-4 py-3 text-right text-sm">{line.qty.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right text-sm">{line.rate.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-sm font-medium">{line.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
+                    {invoiceDetails.map((line, idx) => {
+                      const tax = (line.cgst || 0) + (line.sgst || 0) + (line.igst || 0);
+                      return (
+                        <tr key={idx} className="divide-x divide-black">
+                          <td className="px-4 py-3">
+                            <div className="font-bold text-sm uppercase">{line.itemName}</div>
+                            <div className="text-[10px] text-slate-500">Slip: {line.slipNo}</div>
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm">{line.qty.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-sm">{Number(line.rate || 0).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right text-sm">{line.gstRate}%</td>
+                          <td className="px-4 py-3 text-right text-sm">{tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-right text-sm font-medium">{(line.amount + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-black divide-y divide-black">
                     <tr className="divide-x divide-black">
-                      <td colSpan={3} className="px-4 py-2 text-right text-xs uppercase">Before GST</td>
+                      <td colSpan={5} className="px-4 py-2 text-right text-xs uppercase">Before GST</td>
                       <td className="px-4 py-2 text-right text-xs">{selectedInvoice.totalBeforeGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     <tr className="divide-x divide-black">
-                      <td colSpan={3} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Total GST</td>
-                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">
-                        {(selectedInvoice.cgst + selectedInvoice.sgst + selectedInvoice.igst).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
+                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">CGST</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{selectedInvoice.cgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    <tr className="divide-x divide-black">
+                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">SGST</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{selectedInvoice.sgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    <tr className="divide-x divide-black">
+                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">IGST</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{selectedInvoice.igst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                     <tr className="divide-x divide-black bg-indigo-600 text-white">
-                      <td colSpan={3} className="px-4 py-3 text-right text-sm uppercase tracking-wider">Total Amount After GST</td>
+                      <td colSpan={5} className="px-4 py-3 text-right text-sm uppercase tracking-wider">Total Amount After GST</td>
                       <td className="px-4 py-3 text-right text-lg font-bold">
                         {selectedInvoice.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
