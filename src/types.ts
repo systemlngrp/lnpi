@@ -121,6 +121,47 @@ export interface Production {
   uom: string;
   remarks: string;
   status: "Pending PH" | "Pending Tally" | "Completed";
+  
+  // New production fields
+  noOfParts?: number;
+  ups?: number;
+  planQty?: number;
+  length?: number;
+  breadth?: number;
+  height?: number;
+  reelAsPerCalc?: number;
+  reelActualWithTrimming?: number;
+  cuttingWithTrimming?: number;
+  ply?: number;
+  idToOd?: string;
+  flute?: string;
+  takeUpFactor?: number;
+  l1?: number;
+  f1?: number;
+  l2?: number;
+  f2?: number;
+  l3?: number;
+  gsm?: number;
+  sheetWeight?: number;
+  plateWeight?: number;
+  totalPaperWeight?: number;
+  rate?: number;
+  totalWeightOfSet?: number;
+  realizationPerKg?: number;
+  companyName?: string;
+  actualPaperUsed?: number;
+  avgWeight?: number;
+  prodFromSheetPlant?: number;
+  prodFromFFG?: number;
+  wastage?: number;
+  realizationApprovalStatus?: string;
+  wastageApproval?: string;
+  productionInMeter?: number;
+  plannedProductionInMeter?: number;
+  leastSheetWeight?: number;
+  fluteBatches?: string;
+  erpCodeReel?: string;
+
   phTimestamp?: string;
   phEmailId?: string;
   tallyTimestamp?: string;

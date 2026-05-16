@@ -56,6 +56,39 @@ export function ProductionMaster() {
       "Produced Qty": p.qty,
       "UOM": p.uom,
       "Status": p.status,
+      "No of Parts": p.noOfParts,
+      "UPS": p.ups,
+      "Plan Qty": p.planQty,
+      "Length": p.length,
+      "Breadth": p.breadth,
+      "Height": p.height,
+      "Reel Per Calc": p.reelAsPerCalc,
+      "Reel Actual Trim": p.reelActualWithTrimming,
+      "Cutting Trim": p.cuttingWithTrimming,
+      "PLY": p.ply,
+      "ID to OD": p.idToOd,
+      "Flute": p.flute,
+      "Take up Factor": p.takeUpFactor,
+      "L1": p.l1,
+      "F1": p.f1,
+      "L2": p.l2,
+      "F2": p.f2,
+      "L3": p.l3,
+      "GSM": p.gsm,
+      "Sheet Wt": p.sheetWeight,
+      "Plate Wt": p.plateWeight,
+      "Total Paper Wt": p.totalPaperWeight,
+      "Rate": p.rate,
+      "Total Wt of Set": p.totalWeightOfSet,
+      "Realization/KG": p.realizationPerKg,
+      "Actual Paper Used": p.actualPaperUsed,
+      "Avg Wt": p.avgWeight,
+      "Prod (Sheet)": p.prodFromSheetPlant,
+      "Prod (FFG)": p.prodFromFFG,
+      "Wastage": p.wastage,
+      "Prod (Meter)": p.productionInMeter,
+      "Planned Prod (Meter)": p.plannedProductionInMeter,
+      "ERP Code Reel": p.erpCodeReel,
       "Remarks": p.remarks
     };
   });
@@ -118,11 +151,20 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Order No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Company</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Order Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prod Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Item Name</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Produced Qty</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">UOM</th>
+                
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">L</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">B</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">H</th>
+                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Ply</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Flute</th>
+                
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Total Wt</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Avg Wt</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Wastage</th>
+                
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
               </tr>
@@ -130,7 +172,7 @@ export function ProductionMaster() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                  <td colSpan={16} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
                 </tr>
               ) : (
                 filteredList.map((p) => {
@@ -143,11 +185,20 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order ? formatDate(order.orderDate) : "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
-                      <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.uom}</td>
+                      <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
+                      
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.length || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.breadth || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.height || "-"}</td>
+                      <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{p.ply || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.flute || "-"}</td>
+                      
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.totalPaperWeight || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.avgWeight || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.wastage || "-"}</td>
+
                       <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
                           p.status === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
