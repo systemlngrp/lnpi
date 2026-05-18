@@ -137,7 +137,7 @@ export interface Production {
   qty: number;
   uom: string;
   remarks: string;
-  status: "Pending PH" | "Pending Tally" | "Completed";
+  status: "Pending PH" | "Pending Tally" | "Completed" | "Cancelled";
   
   // New production fields
   jobCardNo?: string | number;
@@ -201,7 +201,7 @@ export interface Consumption {
   qty: number;
   uom: string;
   remarks: string;
-  status: "Pending PH" | "Pending Tally" | "Completed";
+  status: "Pending PH" | "Pending Tally" | "Completed" | "Cancelled";
   phTimestamp?: string;
   phEmailId?: string;
   tallyTimestamp?: string;
