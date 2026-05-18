@@ -22,6 +22,8 @@ import { PendingProduction } from "./pages/PendingProduction";
 import { ProductionPendingPH } from "./pages/ProductionPendingPH";
 import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
+import { ItemwiseLeastCost } from "./pages/ItemwiseLeastCost";
+import { CanceledProductions } from "./pages/CanceledProductions";
 import { ConsumptionForm } from "./pages/ConsumptionForm";
 import { ConsumptionPendingPH } from "./pages/ConsumptionPendingPH";
 import { ConsumptionPendingTally } from "./pages/ConsumptionPendingTally";
@@ -93,6 +95,8 @@ export default function App() {
           <Route path="production/pending-ph" element={<ProductionPendingPH />} />
           <Route path="production/pending-tally" element={<ProductionPendingTally />} />
           <Route path="production/master" element={<ProductionMaster />} />
+          <Route path="production/least-cost" element={<ItemwiseLeastCost />} />
+          <Route path="production/canceled" element={<CanceledProductions />} />
           
           {/* Consumption */}
           <Route path="consumption/form" element={<ConsumptionForm />} />

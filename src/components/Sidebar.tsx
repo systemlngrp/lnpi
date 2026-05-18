@@ -151,6 +151,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Pending PH Approval", href: "/production/pending-ph", icon: UserCheck, countKey: "/production/pending-ph" },
         { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
         { name: "Production Master", href: "/production/master", icon: Database },
+        { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
+        { name: "Canceled Jobs", href: "/production/canceled", icon: X },
       ],
     },
     {

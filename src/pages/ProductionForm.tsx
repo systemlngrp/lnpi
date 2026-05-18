@@ -26,8 +26,13 @@ export function ProductionForm() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState(searchParams.get("scheduleId") || "");
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split("T")[0],
+    date: todayStr,
     qty: "" as number | "",
     remarks: "",
     noOfParts: "" as number | "",
@@ -202,7 +207,7 @@ export function ProductionForm() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.qty) return;
+    if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.qty || !formData.date || formData.date < todayStr) return;
 
     const qty = Number(formData.qty);
     if (qty <= 0 || qty > pendingQty) return;
@@ -247,7 +252,7 @@ export function ProductionForm() {
       );
 
       setFormData({
-        date: new Date().toISOString().split("T")[0],
+        date: todayStr,
         qty: "",
         remarks: "",
         noOfParts: "",
@@ -344,10 +349,17 @@ export function ProductionForm() {
               <input
                 type="date"
                 value={formData.date}
+                min={todayStr}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 required
-                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm"
+                className={cn(
+                  "border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm",
+                  formData.date && formData.date < todayStr && "border-red-500"
+                )}
               />
+              {formData.date && formData.date < todayStr && (
+                <span className="text-red-600 text-xs font-bold">Date must be today or future.</span>
+              )}
             </div>
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Quantity <span className="text-red-500">*</span></label>
@@ -461,7 +473,7 @@ export function ProductionForm() {
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isSubmitting || !selectedSchedule || Number(formData.qty || 0) <= 0 || Number(formData.qty || 0) > pendingQty}
+              disabled={isSubmitting || !selectedSchedule || !formData.date || formData.date < todayStr || Number(formData.qty || 0) <= 0 || Number(formData.qty || 0) > pendingQty}
               className="flex items-center justify-center min-w-[120px] bg-emerald-600 text-white px-6 py-2 rounded font-bold hover:bg-emerald-700 transition disabled:opacity-50 border border-black shadow"
             >
               {isSubmitting ? <Spinner size={20} className="text-white" /> : "Submit Entry"}
