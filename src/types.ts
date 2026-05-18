@@ -186,6 +186,9 @@ export interface Production {
   phTimestamp?: string;
   phEmailId?: string;
   tallyTimestamp?: string;
+  cancelTimestamp?: string;
+  cancelEmailId?: string;
+  cancelRemarks?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

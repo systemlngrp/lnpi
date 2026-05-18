@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, Item, Supplier } from "../types";
+import { MaterialIn, Production, Consumption, Item, Supplier, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, Package, Truck, Activity, TrendingDown } from "lucide-react";
+import { CheckCircle, Package, Truck, Activity, TrendingDown, XCircle } from "lucide-react";
 import { ExcelExport } from "../components/ExcelExport";
 
 type Tab = "material-in" | "production" | "consumption";
@@ -13,12 +13,15 @@ export function PlantHeadUnified() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [productions, setProductions] = useData<Production>("productions", []);
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
+  const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [items] = useData<Item>("items", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
 
   const [activeTab, setActiveTab] = useState<Tab>("material-in");
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [cancelRemarks, setCancelRemarks] = useState("");
   
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -113,6 +116,59 @@ export function PlantHeadUnified() {
     } finally {
       setSubmittingId(null);
       setConfirmId(null);
+    }
+  };
+
+  const handleCancelProduction = async (id: string) => {
+    const prod = productions.find(p => p.id === id);
+    if (!prod) return;
+
+    if (cancelingId !== id) {
+      setCancelingId(id);
+      setCancelRemarks("");
+      return;
+    }
+
+    if (!cancelRemarks.trim()) {
+      alert("Please provide cancellation remarks.");
+      return;
+    }
+
+    setSubmittingId(id);
+    try {
+      const timestamp = new Date().toISOString();
+      const email = "ph@lngrp.in";
+
+      // 1. Update production entry
+      await setProductions(prev => prev.map(p => 
+        p.id === id ? { 
+          ...p, 
+          status: "Cancelled", 
+          cancelTimestamp: timestamp, 
+          cancelEmailId: email, 
+          cancelRemarks: cancelRemarks.trim(),
+          updateTimestamp: timestamp 
+        } : p
+      ));
+
+      // 2. Revert produced quantity in schedule if scheduleId exists
+      if (prod.scheduleId) {
+        await setSchedules(prev => prev.map(s => 
+          s.id === prod.scheduleId ? {
+            ...s,
+            producedQty: Math.max(0, Number(s.producedQty || 0) - Number(prod.qty || 0)),
+            updateTimestamp: timestamp,
+            updatedBy: "System User (Cancel)"
+          } : s
+        ));
+      }
+
+      setCancelingId(null);
+      setCancelRemarks("");
+    } catch (err) {
+      console.error("Cancellation error:", err);
+    } finally {
+      setSubmittingId(null);
     }
   };
 
@@ -304,11 +360,39 @@ export function PlantHeadUnified() {
                         </div>
                         <div className="text-sm font-bold">{items.find(it => it.id === p.itemId)?.name}</div>
                         <div className="text-sm">{p.qty} {p.uom}</div>
-                        <ApproveButton 
-                            confirming={confirmId === p.id} 
-                            submitting={submittingId === p.id} 
-                            onClick={() => handleApproveProduction(p.id)} 
-                        />
+                        
+                        {cancelingId === p.id && (
+                          <div className="flex flex-col gap-1 w-full py-2">
+                            <input 
+                              type="text"
+                              autoFocus
+                              placeholder="Cancellation remarks..."
+                              value={cancelRemarks}
+                              onChange={(e) => setCancelRemarks(e.target.value)}
+                              className="text-xs p-2 border border-black rounded focus:outline-none focus:border-red-600"
+                            />
+                          </div>
+                        )}
+                        
+                        <div className="flex gap-2 justify-end">
+                            {!cancelingId && (
+                              <ApproveButton 
+                                  confirming={confirmId === p.id} 
+                                  submitting={submittingId === p.id} 
+                                  onClick={() => handleApproveProduction(p.id)} 
+                              />
+                            )}
+                            {(cancelingId === p.id || !confirmId) && (
+                              <CancelButton 
+                                  canceling={cancelingId === p.id}
+                                  submitting={submittingId === p.id}
+                                  onClick={() => handleCancelProduction(p.id)}
+                              />
+                            )}
+                            {cancelingId === p.id && (
+                              <button onClick={() => { setCancelingId(null); setCancelRemarks(""); }} className="text-[10px] uppercase font-bold text-slate-500 hover:text-black transition-colors">Back</button>
+                            )}
+                        </div>
                     </div>
                 ))}
             </div>
@@ -354,11 +438,39 @@ export function PlantHeadUnified() {
                     <td className="px-4 py-2 text-sm text-right font-bold">{p.qty}</td>
                     <td className="px-4 py-2 text-sm">{p.uom}</td>
                     <td className="px-4 py-2 text-right">
-                      <ApproveButton 
-                        confirming={confirmId === p.id} 
-                        submitting={submittingId === p.id} 
-                        onClick={() => handleApproveProduction(p.id)} 
-                      />
+                      <div className="flex flex-col gap-2 items-end">
+                        {cancelingId === p.id && (
+                          <div className="flex flex-col gap-1 w-full max-w-[200px]">
+                            <input 
+                              type="text"
+                              autoFocus
+                              placeholder="Reason..."
+                              value={cancelRemarks}
+                              onChange={(e) => setCancelRemarks(e.target.value)}
+                              className="text-[10px] p-2 border border-black rounded focus:outline-none focus:border-red-600"
+                            />
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          {!cancelingId && (
+                            <ApproveButton 
+                              confirming={confirmId === p.id} 
+                              submitting={submittingId === p.id} 
+                              onClick={() => handleApproveProduction(p.id)} 
+                            />
+                          )}
+                          {(cancelingId === p.id || !confirmId) && (
+                            <CancelButton 
+                                canceling={cancelingId === p.id}
+                                submitting={submittingId === p.id}
+                                onClick={() => handleCancelProduction(p.id)}
+                            />
+                          )}
+                          {cancelingId === p.id && (
+                            <button onClick={() => { setCancelingId(null); setCancelRemarks(""); }} className="text-[10px] uppercase font-bold text-slate-500 hover:text-black transition-colors">Back</button>
+                          )}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -503,6 +615,28 @@ function ApproveButton({ confirming, submitting, onClick }: { confirming: boolea
         <>
           <CheckCircle size={12} />
           {confirming ? "Confirm?" : "Approve"}
+        </>
+      )}
+    </button>
+  );
+}
+
+function CancelButton({ canceling, submitting, onClick }: { canceling: boolean; submitting: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={submitting}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest border transition-all disabled:opacity-50",
+        canceling 
+          ? "bg-red-600 text-white border-black shadow-none" 
+          : "bg-red-50 text-red-800 border-red-800 hover:bg-red-100"
+      )}
+    >
+      {submitting && canceling ? <Spinner size={12} /> : (
+        <>
+          <XCircle size={12} />
+          {canceling ? "Confirm Cancel" : "Cancel"}
         </>
       )}
     </button>

@@ -1,18 +1,21 @@
 import { useData } from "../hooks/useData";
-import { Production, Item } from "../types";
+import { Production, Item, OrderSchedule } from "../types";
 import { useState } from "react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, XCircle } from "lucide-react";
 
 export function ProductionPendingPH() {
   const [productions, setProductions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
+  const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [cancelRemarks, setCancelRemarks] = useState("");
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -82,6 +85,59 @@ export function ProductionPendingPH() {
     }
   };
 
+  const handleCancel = async (id: string) => {
+    const prod = productions.find(p => p.id === id);
+    if (!prod) return;
+
+    if (cancelingId !== id) {
+      setCancelingId(id);
+      setCancelRemarks("");
+      return;
+    }
+
+    if (!cancelRemarks.trim()) {
+      alert("Please provide cancellation remarks.");
+      return;
+    }
+
+    setSubmittingId(id);
+    try {
+      const timestamp = new Date().toISOString();
+      const email = "ph@lngrp.in";
+
+      // 1. Update production entry
+      await setProductions(prev => prev.map(p => 
+        p.id === id ? { 
+          ...p, 
+          status: "Cancelled", 
+          cancelTimestamp: timestamp, 
+          cancelEmailId: email, 
+          cancelRemarks: cancelRemarks.trim(),
+          updateTimestamp: timestamp 
+        } : p
+      ));
+
+      // 2. Revert produced quantity in schedule if scheduleId exists
+      if (prod.scheduleId) {
+        await setSchedules(prev => prev.map(s => 
+          s.id === prod.scheduleId ? {
+            ...s,
+            producedQty: Math.max(0, Number(s.producedQty || 0) - Number(prod.qty || 0)),
+            updateTimestamp: timestamp,
+            updatedBy: "System User (Cancel)"
+          } : s
+        ));
+      }
+
+      setCancelingId(null);
+      setCancelRemarks("");
+    } catch (err) {
+      console.error("Failed to cancel production:", err);
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className={cn("text-xl font-bold text-black border-b border-black pb-4 uppercase transition-opacity", (isBulkApproving || submittingId) && "opacity-50 pointer-events-none")}>Production: Pending PH Approval</h2>
@@ -141,25 +197,75 @@ export function ProductionPendingPH() {
                         <div className="text-sm font-bold">{p.qty} {p.uom}</div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleApprove(p.id)}
-                    disabled={submittingId === p.id}
-                    className={cn(
-                      "w-full flex items-center justify-center py-3 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
-                      confirmId === p.id 
-                        ? "bg-amber-600 text-white border-black animate-pulse" 
-                        : "bg-black text-white border-black hover:bg-slate-800"
+
+                  {cancelingId === p.id && (
+                    <div className="flex flex-col gap-1 w-full">
+                      <label className="text-[10px] font-black uppercase text-red-600">Cancellation Remarks</label>
+                      <input 
+                        type="text"
+                        autoFocus
+                        placeholder="Reason for cancellation..."
+                        value={cancelRemarks}
+                        onChange={(e) => setCancelRemarks(e.target.value)}
+                        className="text-sm p-3 border-2 border-black rounded focus:outline-none focus:border-red-600 shadow-sm"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    {!cancelingId && (
+                      <button
+                        onClick={() => handleApprove(p.id)}
+                        disabled={submittingId === p.id}
+                        className={cn(
+                          "w-full flex items-center justify-center py-3 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
+                          confirmId === p.id 
+                            ? "bg-amber-600 text-white border-black animate-pulse shadow-none" 
+                            : "bg-emerald-600 text-white border-black hover:bg-emerald-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                        )}
+                      >
+                        {submittingId === p.id && !cancelingId ? (
+                          <Spinner size={16} />
+                        ) : (
+                          <>
+                            <CheckCircle size={16} />
+                            {confirmId === p.id ? "Confirm Approval?" : "Approve"}
+                          </>
+                        )}
+                      </button>
                     )}
-                  >
-                    {submittingId === p.id ? (
-                      <Spinner size={16} />
-                    ) : (
-                      <>
-                        <CheckCircle size={16} />
-                        {confirmId === p.id ? "Confirm?" : "Approve"}
-                      </>
+
+                    {(cancelingId === p.id || !confirmId) && (
+                      <button
+                        onClick={() => handleCancel(p.id)}
+                        disabled={submittingId === p.id}
+                        className={cn(
+                          "w-full flex items-center justify-center py-3 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
+                          cancelingId === p.id 
+                            ? "bg-red-600 text-white border-black shadow-none" 
+                            : "bg-white text-red-600 border-red-600 hover:bg-red-50"
+                        )}
+                      >
+                        {submittingId === p.id && cancelingId === p.id ? (
+                          <Spinner size={16} />
+                        ) : (
+                          <>
+                            <XCircle size={16} />
+                            {cancelingId === p.id ? "Confirm Cancel" : "Cancel"}
+                          </>
+                        )}
+                      </button>
                     )}
-                  </button>
+
+                    {cancelingId === p.id && (
+                      <button 
+                        onClick={() => { setCancelingId(null); setCancelRemarks(""); }}
+                        className="w-full bg-slate-200 text-black border-2 border-black py-2 rounded font-bold text-xs uppercase"
+                      >
+                        Go Back
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
         </div>
@@ -211,25 +317,74 @@ export function ProductionPendingPH() {
                   <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">{p.qty}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{p.uom}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black">
-                    <button
-                      onClick={() => handleApprove(p.id)}
-                      disabled={submittingId === p.id}
-                      className={cn(
-                        "inline-flex items-center justify-center min-w-[120px] px-4 py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
-                        confirmId === p.id 
-                          ? "bg-amber-600 text-white border-black animate-pulse" 
-                          : "bg-emerald-100 text-emerald-800 border-emerald-800 hover:bg-emerald-200"
+                    <div className="flex flex-col gap-2 items-end">
+                      {cancelingId === p.id && (
+                        <div className="flex flex-col gap-1 w-full max-w-[250px]">
+                          <input 
+                            type="text"
+                            autoFocus
+                            placeholder="Reason for cancellation..."
+                            value={cancelRemarks}
+                            onChange={(e) => setCancelRemarks(e.target.value)}
+                            className="text-xs p-2 border-2 border-black rounded focus:outline-none focus:border-red-600"
+                          />
+                        </div>
                       )}
-                    >
-                      {submittingId === p.id ? (
-                        <Spinner size={16} />
-                      ) : (
-                        <>
-                          <CheckCircle size={16} />
-                          {confirmId === p.id ? "Confirm?" : "Approve"}
-                        </>
-                      )}
-                    </button>
+                      <div className="flex gap-2">
+                        {!cancelingId && (
+                          <button
+                            onClick={() => handleApprove(p.id)}
+                            disabled={submittingId === p.id}
+                            className={cn(
+                              "inline-flex items-center justify-center min-w-[120px] px-4 py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
+                              confirmId === p.id 
+                                ? "bg-amber-600 text-white border-black animate-pulse" 
+                                : "bg-emerald-100 text-emerald-800 border-emerald-800 hover:bg-emerald-200"
+                            )}
+                          >
+                            {submittingId === p.id ? (
+                              <Spinner size={16} />
+                            ) : (
+                              <>
+                                <CheckCircle size={16} />
+                                {confirmId === p.id ? "Confirm?" : "Approve"}
+                              </>
+                            )}
+                          </button>
+                        )}
+                        
+                        {(cancelingId === p.id || !confirmId) && (
+                          <button
+                            onClick={() => handleCancel(p.id)}
+                            disabled={submittingId === p.id}
+                            className={cn(
+                              "inline-flex items-center justify-center min-w-[120px] px-4 py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
+                              cancelingId === p.id 
+                                ? "bg-red-600 text-white border-black" 
+                                : "bg-red-50 text-red-800 border-red-800 hover:bg-red-100"
+                            )}
+                          >
+                            {submittingId === p.id && cancelingId === p.id ? (
+                              <Spinner size={16} />
+                            ) : (
+                              <>
+                                <XCircle size={16} />
+                                {cancelingId === p.id ? "Confirm Cancel" : "Cancel"}
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {cancelingId === p.id && (
+                          <button 
+                            onClick={() => { setCancelingId(null); setCancelRemarks(""); }}
+                            className="bg-slate-200 text-black border border-black px-4 py-2 rounded font-bold text-xs uppercase"
+                          >
+                            Back
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ))}

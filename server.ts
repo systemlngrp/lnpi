@@ -338,6 +338,9 @@ async function initDb(retries = 5) {
           \`phTimestamp\` VARCHAR(255),
           \`phEmailId\` VARCHAR(255),
           \`tallyTimestamp\` VARCHAR(255),
+          \`cancelTimestamp\` VARCHAR(255),
+          \`cancelEmailId\` VARCHAR(255),
+          \`cancelRemarks\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -462,6 +465,9 @@ async function initDb(retries = 5) {
         { table: "productions", column: "remarks", type: "TEXT" },
         { table: "productions", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
         { table: "productions", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "productions", column: "cancelTimestamp", type: "VARCHAR(255)" },
+        { table: "productions", column: "cancelEmailId", type: "VARCHAR(255)" },
+        { table: "productions", column: "cancelRemarks", type: "TEXT" },
         { table: "consumptions", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "consumptions", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "consumptions", column: "itemId", type: "VARCHAR(36) NOT NULL" },

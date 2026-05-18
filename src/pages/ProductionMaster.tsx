@@ -89,7 +89,9 @@ export function ProductionMaster() {
       "Prod (Meter)": p.productionInMeter,
       "Planned Prod (Meter)": p.plannedProductionInMeter,
       "ERP Code Reel": p.erpCodeReel,
-      "Remarks": p.remarks
+      "Remarks": p.remarks,
+      "Cancel Date": p.cancelTimestamp ? formatDate(p.cancelTimestamp) : "-",
+      "Cancel Remarks": p.cancelRemarks || "-"
     };
   });
 
