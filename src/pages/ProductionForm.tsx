@@ -97,6 +97,7 @@ export function ProductionForm() {
         companyName: selectedCompany?.name || "",
         rate: selectedOrder?.rate || 0,
         planQty: pendingQty,
+        qty: pendingQty,
         noOfParts: selectedItem.noOfParts || "",
         ups: selectedItem.ups || "",
         length: selectedItem.length || "",
