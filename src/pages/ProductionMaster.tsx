@@ -51,6 +51,7 @@ export function ProductionMaster() {
       "Prod Date": formatDate(p.date),
       "Order No.": order?.orderNo || "-",
       "Order Date": order ? formatDate(order.orderDate) : "-",
+      "ERP Code": p.erpCode || "-",
       "Company": company?.name || "-",
       "Item Name": item?.name || "Unknown",
       "Produced Qty": p.qty,
@@ -128,6 +129,7 @@ export function ProductionMaster() {
                       {order && (
                         <>
                           <div className="text-xs font-bold text-slate-700">Order: {order.orderNo} ({formatDate(order.orderDate)})</div>
+                          <div className="text-xs font-bold text-slate-700">ERP Code: {p.erpCode || "-"}</div>
                           <div className="text-xs font-bold text-slate-700">Company: {company?.name || "Unknown"}</div>
                         </>
                       )}
@@ -149,6 +151,7 @@ export function ProductionMaster() {
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Order No.</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">ERP Code</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Company</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prod Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Item Name</th>
@@ -183,6 +186,7 @@ export function ProductionMaster() {
                     <tr key={p.id} className="hover:bg-slate-50 divide-x divide-black">
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.erpCode || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</td>

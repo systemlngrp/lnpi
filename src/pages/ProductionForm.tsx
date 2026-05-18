@@ -67,7 +67,8 @@ export function ProductionForm() {
     plannedProductionInMeter: "" as number | "",
     leastSheetWeight: "" as number | "",
     fluteBatches: "",
-    erpCodeReel: ""
+    erpCodeReel: "",
+    erpCode: ""
   });
 
   const pendingSchedules = useMemo(
@@ -95,6 +96,7 @@ export function ProductionForm() {
         ...prev,
         companyName: selectedCompany?.name || "",
         rate: selectedOrder?.rate || 0,
+        erpCode: selectedOrder?.erpCode || "",
         qty: pendingQty,
         noOfParts: selectedItem.noOfParts || "",
         ups: selectedItem.ups || "",
@@ -284,7 +286,8 @@ export function ProductionForm() {
         plannedProductionInMeter: "",
         leastSheetWeight: "",
         fluteBatches: "",
-        erpCodeReel: ""
+        erpCodeReel: "",
+        erpCode: ""
       });
 
       if (nextPendingQty <= 0) {
@@ -326,6 +329,7 @@ export function ProductionForm() {
               <InfoTile label="Order No" value={selectedOrder.orderNo || "-"} />
               <InfoTile label="Company" value={selectedCompany?.name || "-"} />
               <InfoTile label="Item" value={selectedItem?.name || "-"} />
+              <InfoTile label="ERP Code" value={selectedOrder.erpCode || "-"} />
               <InfoTile label="Schedule Date" value={formatDate(selectedSchedule.scheduledDate)} />
               <InfoTile label="Scheduled Qty" value={`${selectedSchedule.qty || 0} ${selectedItem?.uom || ""}`} />
               <InfoTile label="Produced Qty" value={`${selectedSchedule.producedQty || 0} ${selectedItem?.uom || ""}`} />
