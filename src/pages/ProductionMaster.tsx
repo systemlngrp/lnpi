@@ -122,6 +122,7 @@ export function ProductionMaster() {
                           <div className="font-bold text-sm">Job: {p.transactionNo}</div>
                            <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
                               p.status === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
+                              p.status === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
                               'bg-amber-100 text-amber-900 border-amber-900'
                           }`}>
                               {p.status}
@@ -137,6 +138,11 @@ export function ProductionMaster() {
                       )}
                       <div className="text-sm font-bold">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
                       <div className="text-sm">{p.qty} {p.uom}</div>
+                      {p.status === 'Cancelled' && p.cancelRemarks && (
+                        <div className="text-xs bg-red-50 text-red-700 p-2 border border-red-200 rounded font-medium mt-1">
+                          Cancel Reason: {p.cancelRemarks}
+                        </div>
+                      )}
                        <button 
                         onClick={() => handleDelete(p.id)} 
                         className={`${deletingId === p.id ? "text-amber-600 animate-pulse bg-amber-50" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center w-full justify-center p-2 mt-2 border border-black`}
@@ -207,10 +213,16 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
                           p.status === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
+                          p.status === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
                           'bg-amber-100 text-amber-900 border-amber-900'
                         }`}>
                           {p.status}
                         </span>
+                        {p.status === 'Cancelled' && p.cancelRemarks && (
+                          <div className="text-[9px] text-red-600 font-bold mt-1 max-w-[120px] truncate" title={p.cancelRemarks}>
+                            {p.cancelRemarks}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
                         <button 
