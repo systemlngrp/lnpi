@@ -433,7 +433,8 @@ export function Items() {
                 ))}
             </div>
 
-            <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
+            <div className="overflow-x-auto">
+              <table className="hidden md:table min-w-max divide-y divide-black border-collapse border border-black">
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
@@ -520,7 +521,8 @@ export function Items() {
                   ))
                 )}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </>
       )}
