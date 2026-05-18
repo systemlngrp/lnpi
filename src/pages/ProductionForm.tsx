@@ -250,7 +250,6 @@ export function ProductionForm() {
         remarks: "",
         noOfParts: "",
         ups: "",
-        planQty: "",
         length: "",
         breadth: "",
         height: "",
@@ -379,10 +378,9 @@ export function ProductionForm() {
           <div className="border-t border-black pt-4 mt-6">
             <h3 className="font-black uppercase text-xs text-slate-500 mb-4">Detailed Specifications</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormInput label="No. of Parts" value={formData.noOfParts} readOnly type="number" />
               <FormInput label="UPS" value={formData.ups} onChange={(v) => setFormData({...formData, ups: v})} type="number" />
-              <FormInput label="Plan QTY" value={formData.planQty} onChange={(v) => setFormData({...formData, planQty: v})} type="number" />
 
               <FormInput label="Length" value={formData.length} readOnly type="number" />
               <FormInput label="Breadth" value={formData.breadth} readOnly type="number" />

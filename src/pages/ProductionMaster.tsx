@@ -58,7 +58,6 @@ export function ProductionMaster() {
       "Status": p.status,
       "No of Parts": p.noOfParts,
       "UPS": p.ups,
-      "Plan Qty": p.planQty,
       "Length": p.length,
       "Breadth": p.breadth,
       "Height": p.height,
