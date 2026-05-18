@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Production, Item, OrderSchedule, Order, Company } from "../types";
 import { formatDate } from "../lib/serial";
@@ -15,6 +15,23 @@ export function ProductionMaster() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const erpLeastGsmMap = useMemo(() => {
+    const map = new Map<string, number>();
+    productions.forEach(p => {
+      // Skip canceled jobs for least cost calculation
+      if (p.status === "Cancelled" || p.cancelTimestamp) return;
+      
+      const erp = String(p.erpCode || "").trim();
+      const gsm = Number(p.gsm || 0);
+      if (erp && gsm > 0) {
+        if (!map.has(erp) || gsm < map.get(erp)!) {
+          map.set(erp, gsm);
+        }
+      }
+    });
+    return map;
+  }, [productions]);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -75,6 +92,7 @@ export function ProductionMaster() {
       "F2": p.f2,
       "L3": p.l3,
       "GSM": p.gsm,
+      "Least GSM": erpLeastGsmMap.get(String(p.erpCode || "").trim()) || "-",
       "Sheet Wt": p.sheetWeight,
       "Plate Wt": p.plateWeight,
       "Total Paper Wt": p.totalPaperWeight,
@@ -115,9 +133,12 @@ export function ProductionMaster() {
                 const schedule = schedules.find(s => s.id === p.scheduleId);
                 const order = orders.find(o => o.id === schedule?.orderId);
                 const company = companies.find(c => c.id === order?.companyId);
+                const erp = String(p.erpCode || "").trim();
+                const leastGsm = erpLeastGsmMap.get(erp);
+                const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                 
                 return (
-                  <div key={p.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
+                  <div key={p.id} className={`${isHighGsm ? "bg-amber-50" : "bg-white"} border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative`}>
                        <div className="flex justify-between items-center">
                           <div className="font-bold text-sm">Job: {p.transactionNo}</div>
                            <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
@@ -139,7 +160,10 @@ export function ProductionMaster() {
                       <div className="text-sm font-bold">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
                       <div className="flex justify-between items-center text-sm">
                         <span>{p.qty} {p.uom}</span>
-                        {p.gsm && <span className="font-bold text-indigo-700">GSM: {p.gsm}</span>}
+                        <div className="flex flex-col items-end">
+                            {p.gsm && <span className="font-bold text-indigo-700">GSM: {p.gsm}</span>}
+                            {leastGsm && <span className="text-[10px] font-black text-emerald-700">Least: {leastGsm}</span>}
+                        </div>
                       </div>
                       {p.status === 'Cancelled' && p.cancelRemarks && (
                         <div className="text-xs bg-red-50 text-red-700 p-2 border border-red-200 rounded font-medium mt-1">
@@ -174,6 +198,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Ply</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Flute</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">GSM</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Least GSM</th>
                 
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Total Wt</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Avg Wt</th>
@@ -186,16 +211,19 @@ export function ProductionMaster() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                  <td colSpan={17} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
                 </tr>
               ) : (
                 filteredList.map((p) => {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
+                  const erp = String(p.erpCode || "").trim();
+                  const leastGsm = erpLeastGsmMap.get(erp);
+                  const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                   
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50 divide-x divide-black">
+                    <tr key={p.id} className={`${isHighGsm ? "bg-amber-50" : "hover:bg-slate-50"} divide-x divide-black transition-colors`}>
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.erpCode || "-"}</td>
@@ -210,6 +238,7 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{p.ply || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.flute || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-700">{p.gsm || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-black text-emerald-700">{erpLeastGsmMap.get(erp) || "-"}</td>
                       
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.totalPaperWeight || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.avgWeight || "-"}</td>
