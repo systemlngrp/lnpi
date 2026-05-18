@@ -336,8 +336,8 @@ export function ProductionForm() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex flex-col space-y-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Production Date <span className="text-red-500">*</span></label>
               <input
                 type="date"
@@ -351,13 +351,13 @@ export function ProductionForm() {
               <label className="font-bold text-black">Quantity <span className="text-red-500">*</span></label>
               <div className="relative">
                 <input
-                  type="number"
+                    type="number"
                   step="any"
                   min={0}
                   max={pendingQty || undefined}
-                  value={formData.qty}
-                  onChange={(e) => setFormData({ ...formData, qty: e.target.value === "" ? "" : parseFloat(e.target.value) })}
-                  required
+                    value={formData.qty}
+                    onChange={(e) => setFormData({ ...formData, qty: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+                    required
                   placeholder="Enter produced quantity"
                   className="w-full border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm"
                 />
@@ -381,14 +381,14 @@ export function ProductionForm() {
             <h3 className="font-black uppercase text-xs text-slate-500 mb-4">Detailed Specifications</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <FormInput label="No. of Parts" value={formData.noOfParts} onChange={(v) => setFormData({...formData, noOfParts: v})} type="number" />
+              <FormInput label="No. of Parts" value={formData.noOfParts} readOnly type="number" />
               <FormInput label="UPS" value={formData.ups} onChange={(v) => setFormData({...formData, ups: v})} type="number" />
               <FormInput label="Plan QTY" value={formData.planQty} onChange={(v) => setFormData({...formData, planQty: v})} type="number" />
-              
-              <FormInput label="Length" value={formData.length} onChange={(v) => setFormData({...formData, length: v})} type="number" />
-              <FormInput label="Breadth" value={formData.breadth} onChange={(v) => setFormData({...formData, breadth: v})} type="number" />
-              <FormInput label="Height" value={formData.height} onChange={(v) => setFormData({...formData, height: v})} type="number" />
-              
+
+              <FormInput label="Length" value={formData.length} readOnly type="number" />
+              <FormInput label="Breadth" value={formData.breadth} readOnly type="number" />
+              <FormInput label="Height" value={formData.height} readOnly type="number" />
+
               <div className="flex flex-col space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase">PLY</label>
                 <select value={formData.ply} onChange={(e) => setFormData({...formData, ply: e.target.value})} className="border border-black rounded px-2 py-1 text-sm bg-slate-50">
@@ -413,7 +413,7 @@ export function ProductionForm() {
 
               <FormInput label="Take up Factor" value={formData.takeUpFactor} readOnly />
               <FormInput label="GSM" value={formData.gsm} readOnly />
-              <FormInput label="ERP Code Reel" value={formData.erpCodeReel} onChange={(v) => setFormData({...formData, erpCodeReel: v})} />
+              <FormInput label="ERP Code Reel" value={formData.erpCodeReel} readOnly />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
@@ -430,30 +430,30 @@ export function ProductionForm() {
               <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly />
               
               <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly />
-              <FormInput label="Plate/PHP Weight" value={formData.plateWeight} onChange={(v) => setFormData({...formData, plateWeight: v})} type="number" step="0.00001" />
+              <FormInput label="Plate/PHP Weight" value={formData.plateWeight} readOnly type="number" step="0.00001" />
               <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly />
               
               <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly />
-              <FormInput label="Avg Weight" value={formData.avgWeight} onChange={(v) => setFormData({...formData, avgWeight: v})} type="number" step="0.00001" />
-              <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} onChange={(v) => setFormData({...formData, actualPaperUsed: v})} type="number" step="0.00001" />
+              <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" />
+              <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" />
               
-              <FormInput label="Rate" value={formData.rate} onChange={(v) => setFormData({...formData, rate: v})} type="number" />
+              <FormInput label="Rate" value={formData.rate} readOnly type="number" />
               <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly />
-              <FormInput label="Realization Status" value={formData.realizationApprovalStatus} onChange={(v) => setFormData({...formData, realizationApprovalStatus: v})} />
+              <FormInput label="Realization Status" value={formData.realizationApprovalStatus} readOnly />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <FormInput label="Prod (Sheet Plant)" value={formData.prodFromSheetPlant} onChange={(v) => setFormData({...formData, prodFromSheetPlant: v})} type="number" />
-              <FormInput label="Prod (FFG)" value={formData.prodFromFFG} onChange={(v) => setFormData({...formData, prodFromFFG: v})} type="number" />
-              <FormInput label="Wastage" value={formData.wastage} onChange={(v) => setFormData({...formData, wastage: v})} type="number" />
+              <FormInput label="Prod (Sheet Plant)" value={formData.prodFromSheetPlant} readOnly type="number" />
+              <FormInput label="Prod (FFG)" value={formData.prodFromFFG} readOnly type="number" />
+              <FormInput label="Wastage" value={formData.wastage} readOnly type="number" />
               
-              <FormInput label="Wastage Approval" value={formData.wastageApproval} onChange={(v) => setFormData({...formData, wastageApproval: v})} />
+              <FormInput label="Wastage Approval" value={formData.wastageApproval} readOnly />
               <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly />
-              <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} onChange={(v) => setFormData({...formData, plannedProductionInMeter: v})} type="number" />
+              <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" />
               
-              <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} onChange={(v) => setFormData({...formData, leastSheetWeight: v})} type="number" step="0.00001" />
-              <FormInput label="Flute Batches" value={formData.fluteBatches} onChange={(v) => setFormData({...formData, fluteBatches: v})} />
-              <FormInput label="Company Name" value={formData.companyName} onChange={(v) => setFormData({...formData, companyName: v})} />
+              <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} readOnly type="number" step="0.00001" />
+              <FormInput label="Flute Batches" value={formData.fluteBatches} readOnly />
+              <FormInput label="Company Name" value={formData.companyName} readOnly />
             </div>
           </div>
 
