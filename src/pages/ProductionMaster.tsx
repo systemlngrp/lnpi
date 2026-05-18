@@ -137,7 +137,10 @@ export function ProductionMaster() {
                         </>
                       )}
                       <div className="text-sm font-bold">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
-                      <div className="text-sm">{p.qty} {p.uom}</div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span>{p.qty} {p.uom}</span>
+                        {p.gsm && <span className="font-bold text-indigo-700">GSM: {p.gsm}</span>}
+                      </div>
                       {p.status === 'Cancelled' && p.cancelRemarks && (
                         <div className="text-xs bg-red-50 text-red-700 p-2 border border-red-200 rounded font-medium mt-1">
                           Cancel Reason: {p.cancelRemarks}
@@ -170,6 +173,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">H</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Ply</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Flute</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">GSM</th>
                 
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Total Wt</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Avg Wt</th>
@@ -242,10 +246,6 @@ export function ProductionMaster() {
           </table>
         </div>
       </div>
-    </div>
-  );
-}
-     </div>
     </div>
   );
 }
