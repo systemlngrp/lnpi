@@ -379,7 +379,7 @@ export function Items() {
                                     </button>
                              </div>
                         </div>
-                        <div className="flex gap-4">
+                        <div className="flex gap-4 flex-wrap">
                             <div>
                                 <div className="text-xs font-black text-slate-500 uppercase">Group</div>
                                 <div className="text-sm">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</div>
@@ -396,6 +396,38 @@ export function Items() {
                               <div className="text-xs font-black text-slate-500 uppercase">ERP</div>
                               <div className="text-sm">{item.erp ?? ""}</div>
                             </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Parts</div>
+                              <div className="text-sm">{item.noOfParts ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">UPS</div>
+                              <div className="text-sm">{item.ups ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">L×B×H</div>
+                              <div className="text-sm">{(item.length ?? "")}{item.length ? " × " : ""}{(item.breadth ?? "")}{item.breadth ? " × " : ""}{(item.height ?? "")}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">PLY</div>
+                              <div className="text-sm">{item.ply ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Flute</div>
+                              <div className="text-sm">{item.flute ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Plate Wt</div>
+                              <div className="text-sm">{item.plateWeight ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">GSM</div>
+                              <div className="text-sm">{item.gsmLeastCost ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">L1/F1/L2/F2/L3</div>
+                              <div className="text-sm">{item.l1 ?? ""}{item.l1 ? "/" : ""}{item.f1 ?? ""}{item.f1 ? "/" : ""}{item.l2 ?? ""}{item.l2 ? "/" : ""}{item.f2 ?? ""}{item.f2 ? "/" : ""}{item.l3 ?? ""}</div>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -404,25 +436,53 @@ export function Items() {
             <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
-                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
-                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Group</th>
-                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
-                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">GST</th>
-                      <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
-                      <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Group</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">GST</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Parts</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">UPS</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Length</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Breadth</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Height</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">PLY</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Flute</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Plate Wt</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">GSM</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">L1</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">F1</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">L2</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">F2</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">L3</th>
+                      <th className="px-4 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
                     </tr>
               </thead>
               <tbody className="divide-y divide-black bg-white">
                     {filteredItems.length === 0 ? (
-                      <tr><td colSpan={5} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
+                      <tr><td colSpan={20} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
                     ) : (
                   filteredItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
-                      <td className="px-6 py-4 text-sm font-medium text-black border border-black">{item.name}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{item.uom}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{item.gstRate ?? 18}%</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{item.erp ?? ""}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-black border border-black">{item.name}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.uom}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.gstRate ?? 18}%</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.erp ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.noOfParts ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.ups ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.length ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.breadth ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.height ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.ply ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.flute ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.plateWeight ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.gsmLeastCost ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.l1 ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.f1 ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.l2 ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.f2 ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.l3 ?? ""}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
                             <button onClick={() => { 
                                 setName(item.name); 
