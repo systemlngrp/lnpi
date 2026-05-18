@@ -40,6 +40,9 @@ export function ItemwiseLeastCost() {
     const erpMap = new Map<string, LeastCostRecord>();
 
     productions.forEach((prod) => {
+      // Skip canceled jobs
+      if (prod.status === "Canceled") return;
+
       const erp = String(prod.erpCode || "").trim();
       const gsm = Number(prod.gsm || 0);
       
