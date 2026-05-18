@@ -27,7 +27,6 @@ interface LeastCostRecord {
   l3: number;
   gsm: number;
   sheetWeight: number;
-  status: string;
 }
 
 export function ItemwiseLeastCost() {
@@ -41,6 +40,9 @@ export function ItemwiseLeastCost() {
     const erpMap = new Map<string, LeastCostRecord>();
 
     productions.forEach((prod) => {
+      // Skip canceled jobs
+      if (prod.status === "Cancelled" || prod.cancelTimestamp) return;
+
       const erp = String(prod.erpCode || "").trim();
       const gsm = Number(prod.gsm || 0);
       
@@ -68,8 +70,7 @@ export function ItemwiseLeastCost() {
           f2: Number(prod.f2 || 0),
           l3: Number(prod.l3 || 0),
           gsm,
-          sheetWeight: Number(prod.sheetWeight || 0),
-          status: prod.status
+          sheetWeight: Number(prod.sheetWeight || 0)
         });
       }
     });
@@ -94,13 +95,13 @@ export function ItemwiseLeastCost() {
     const tableColumn = [
       "Date", "Job No", "Item Name", "ERP", "Company", 
       "L", "B", "H", "Reel Calc", "Reel Act", "Cut", 
-      "L1", "F1", "L2", "F2", "L3", "GSM", "Sheet Wt", "Status"
+      "L1", "F1", "L2", "F2", "L3", "GSM", "Sheet Wt"
     ];
 
     const tableRows = filteredData.map(row => [
       formatDate(row.date), row.jobCardNo, row.itemName, row.erp, row.company,
       row.length, row.breadth, row.height, row.reelAsPerCalc, row.reelActual, row.cutting,
-      row.l1, row.f1, row.l2, row.f2, row.l3, row.gsm, row.sheetWeight, row.status
+      row.l1, row.f1, row.l2, row.f2, row.l3, row.gsm, row.sheetWeight
     ]);
 
     (doc as any).autoTable({
@@ -150,8 +151,7 @@ export function ItemwiseLeastCost() {
                 F2: row.f2,
                 L3: row.l3,
                 GSM: row.gsm,
-                "Sheet Weight": row.sheetWeight,
-                Status: row.status
+                "Sheet Weight": row.sheetWeight
             }))} 
             fileName="Itemwise_Least_Cost_Detailed" 
             sheetName="LeastCost"
@@ -201,19 +201,18 @@ export function ItemwiseLeastCost() {
                 <th className="px-3 py-3 text-right text-[10px] font-black text-black uppercase tracking-wider border-b border-black">L3</th>
                 <th className="px-3 py-3 text-right text-[10px] font-black text-black uppercase tracking-wider border-b border-black">GSM</th>
                 <th className="px-3 py-3 text-right text-[10px] font-black text-black uppercase tracking-wider border-b border-black">Sheet Wt</th>
-                <th className="px-3 py-3 text-center text-[10px] font-black text-black uppercase tracking-wider border-b border-black">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={19} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
+                  <td colSpan={18} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
                     No data found matching your criteria
                   </td>
                 </tr>
               ) : (
                 filteredData.map((row, idx) => (
-                  <tr key={idx} className={`hover:bg-slate-50 transition-colors divide-x divide-black text-[11px] whitespace-nowrap ${row.status === 'Cancelled' ? 'bg-red-50/50' : ''}`}>
+                  <tr key={idx} className="hover:bg-slate-50 transition-colors divide-x divide-black text-[11px] whitespace-nowrap">
                     <td className="px-3 py-2 text-black">{formatDate(row.date)}</td>
                     <td className="px-3 py-2 font-bold text-black">{row.jobCardNo}</td>
                     <td className="px-3 py-2 text-black max-w-[150px] truncate" title={row.itemName}>{row.itemName}</td>
@@ -232,14 +231,6 @@ export function ItemwiseLeastCost() {
                     <td className="px-3 py-2 text-right text-slate-500">{row.l3}</td>
                     <td className="px-3 py-2 text-right font-black text-emerald-700">{row.gsm}</td>
                     <td className="px-3 py-2 text-right text-black font-medium">{row.sheetWeight}</td>
-                    <td className="px-3 py-2 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wider ${
-                            row.status === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' : 
-                            'bg-emerald-100 text-emerald-900 border-emerald-900'
-                        }`}>
-                            {row.status}
-                        </span>
-                    </td>
                   </tr>
                 ))
               )}
@@ -247,7 +238,7 @@ export function ItemwiseLeastCost() {
             {filteredData.length > 0 && (
                 <tfoot className="bg-slate-100 border-t border-black">
                     <tr>
-                        <td colSpan={19} className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase">
+                        <td colSpan={18} className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase">
                             Total Unique ERPs: {filteredData.length}
                         </td>
                     </tr>
