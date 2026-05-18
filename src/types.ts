@@ -144,7 +144,6 @@ export interface Production {
   erpCode?: string | number;
   noOfParts?: number;
   ups?: number;
-  planQty?: number;
   length?: number;
   breadth?: number;
   height?: number;
