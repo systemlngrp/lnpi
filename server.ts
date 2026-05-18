@@ -39,7 +39,9 @@ function normalizeWorkflowStatus(tableName: string, row: any) {
   if (tableName === "productions" || tableName === "consumptions") {
     if (normalized.tallyTimestamp) normalized.status = "Completed";
     else if (normalized.phTimestamp) normalized.status = "Pending Tally";
+    else if (normalized.cancelTimestamp) normalized.status = "Cancelled";
     else normalized.status = "Pending PH";
+    return normalized;
   }
 
   return normalized;
