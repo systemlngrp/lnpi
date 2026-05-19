@@ -594,15 +594,15 @@ export function ProductionForm() {
               
               <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly helpText="Formula: Sheet Weight + Plate/PHP Weight." />
               <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" helpText="Formula: Actual Paper Used / Production from FFG." />
-              <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" helpText="Read-only field reserved for actual paper consumption data when available." />
+              <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} onChange={(v) => setFormData({...formData, actualPaperUsed: v})} type="number" step="0.00001" helpText="Temporarily editable for formula testing. Used in Avg Weight and Wastage calculations." />
               
               <FormInput label="Rate" value={formData.rate} readOnly type="number" helpText="Auto-fetched from the selected order." />
               <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: (Rate / Total Weight of Set) x Number of Parts." />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <FormInput label="Prod (Sheet Plant)" value={formData.prodFromSheetPlant} readOnly type="number" helpText="Read-only field for output recorded from Sheet Plant stage when available." />
-              <FormInput label="Prod (FFG)" value={formData.prodFromFFG} readOnly type="number" helpText="Read-only field for finished goods production recorded later in the workflow." />
+              <FormInput label="Prod (Sheet Plant)" value={formData.prodFromSheetPlant} onChange={(v) => setFormData({...formData, prodFromSheetPlant: v})} type="number" helpText="Temporarily editable for formula testing." />
+              <FormInput label="Prod (FFG)" value={formData.prodFromFFG} onChange={(v) => setFormData({...formData, prodFromFFG: v})} type="number" helpText="Temporarily editable for formula testing. Used in Avg Weight and Wastage calculations." />
               <FormInput label="Wastage" value={formData.wastage} readOnly type="number" helpText="Formula: 100 - (((Production from FFG x Sheet Weight) / Actual Paper Used) x 100)." />
               
               <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly helpText="Formula: ((Cutting Trim x Quantity) / 1000) / UPS." />
