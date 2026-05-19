@@ -185,8 +185,8 @@ export function ScheduledOrdersMaster() {
                 <th className="px-3 py-2 border border-black text-left">Company</th>
                 <th className="px-3 py-2 border border-black text-left">Item Name</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-indigo-50">Sch. Qty</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-emerald-50">Planned</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-cyan-50 text-cyan-800">Pending Planning</th>
+                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-emerald-50">Production Planned</th>
+                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-cyan-50 text-cyan-800">Pending Production Planning</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-amber-50">Loaded</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-purple-50">Invoiced</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-red-50 text-red-700">Canceled</th>
