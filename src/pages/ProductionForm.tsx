@@ -93,6 +93,17 @@ export function ProductionForm() {
   const selectedItem = items.find((item) => item.id === selectedOrder?.itemId);
   const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
   const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
+  const productionInProgress = useMemo(() => {
+    if (!selectedItem?.id) return 0;
+
+    return productions
+      .filter((production) =>
+        production.itemId === selectedItem.id &&
+        !production.cancelTimestamp &&
+        (production.prodFromFFG === "" || production.prodFromFFG === null || production.prodFromFFG === undefined)
+      )
+      .reduce((sum, production) => sum + (Number(production.qty) || 0), 0);
+  }, [productions, selectedItem?.id]);
 
   // Auto-lookup from Item Master
   useEffect(() => {
@@ -343,7 +354,7 @@ export function ProductionForm() {
             </div>
           )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Production Date <span className="text-red-500">*</span></label>
               <input
@@ -360,6 +371,18 @@ export function ProductionForm() {
               {formData.date && formData.date < todayStr && (
                 <span className="text-red-600 text-xs font-bold">Date must be today or future.</span>
               )}
+            </div>
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Production In Progress</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={productionInProgress}
+                  readOnly
+                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-50 focus:outline-none shadow-sm"
+                />
+                {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
+              </div>
             </div>
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Quantity <span className="text-red-500">*</span></label>
