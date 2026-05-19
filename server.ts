@@ -335,7 +335,7 @@ async function initDb(retries = 5) {
           \`wastage\` DECIMAL(15,2),
           \`productionInMeter\` DECIMAL(15,2),
           \`plannedProductionInMeter\` DECIMAL(15,2),
-          \`leastSheetWeight\` DECIMAL(15,5),
+          \`leastGsm\` DECIMAL(15,5),
           \`fluteBatches\` TEXT,
           \`erpCodeReel\` VARCHAR(255),
           \`jobCardNo\` VARCHAR(255),
@@ -527,7 +527,7 @@ async function initDb(retries = 5) {
         { table: "productions", column: "wastage", type: "DECIMAL(15,2)" },
         { table: "productions", column: "productionInMeter", type: "DECIMAL(15,2)" },
         { table: "productions", column: "plannedProductionInMeter", type: "DECIMAL(15,2)" },
-        { table: "productions", column: "leastSheetWeight", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "leastGsm", type: "DECIMAL(15,5)" },
         { table: "productions", column: "fluteBatches", type: "TEXT" },
         { table: "productions", column: "erpCodeReel", type: "VARCHAR(255)" },
         { table: "productions", column: "jobCardNo", type: "VARCHAR(255)" },
@@ -650,6 +650,24 @@ async function initDb(retries = 5) {
         } catch (err) {
           console.warn(`[DB] Could not ensure column ${m.column} in ${m.table}:`, (err as Error).message);
         }
+      }
+
+      try {
+        const [oldLeastSheetWeight] = await db.query(
+          "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+          [database, "productions", "leastSheetWeight"]
+        );
+        const [newLeastGsm] = await db.query(
+          "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+          [database, "productions", "leastGsm"]
+        );
+
+        if ((oldLeastSheetWeight as any[]).length > 0 && (newLeastGsm as any[]).length === 0) {
+          console.log("[DB] Renaming productions.leastSheetWeight to leastGsm...");
+          await db.query("ALTER TABLE `productions` CHANGE COLUMN `leastSheetWeight` `leastGsm` DECIMAL(15,5)");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not rename leastSheetWeight to leastGsm:", (err as Error).message);
       }
 
       const dropMigrations = [

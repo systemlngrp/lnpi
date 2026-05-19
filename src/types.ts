@@ -180,7 +180,7 @@ export interface Production {
   wastage?: number;
   productionInMeter?: number;
   plannedProductionInMeter?: number;
-  leastSheetWeight?: number;
+  leastGsm?: number;
   fluteBatches?: string;
   erpCodeReel?: string;
   year?: number;

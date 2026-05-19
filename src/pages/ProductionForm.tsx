@@ -87,7 +87,7 @@ export function ProductionForm() {
     wastage: "" as number | "",
     productionInMeter: "" as number | "",
     plannedProductionInMeter: "" as number | "",
-    leastSheetWeight: "" as number | "",
+    leastGsm: "" as number | "",
     fluteBatches: "",
     erpCodeReel: "",
     erpCode: ""
@@ -105,10 +105,27 @@ export function ProductionForm() {
     [schedules]
   );
 
+  const erpLeastGsmMap = useMemo(() => {
+    const map = new Map<string, number>();
+    productions.forEach((production) => {
+      if (production.status === "Cancelled" || production.cancelTimestamp) return;
+
+      const erp = String(production.erpCode || "").trim();
+      const gsm = Number(production.gsm || 0);
+      if (erp && gsm > 0) {
+        if (!map.has(erp) || gsm < map.get(erp)!) {
+          map.set(erp, gsm);
+        }
+      }
+    });
+    return map;
+  }, [productions]);
+
   const selectedSchedule = pendingSchedules.find((schedule) => schedule.id === selectedScheduleId);
   const selectedOrder = orders.find((order) => order.id === selectedSchedule?.orderId);
   const selectedItem = items.find((item) => item.id === selectedOrder?.itemId);
   const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
+  const selectedErp = String(selectedOrder?.erpCode || "").trim();
   const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
   const pendingOrderQtyForItem = useMemo(() => {
     if (!selectedItem?.id) return 0;
@@ -236,6 +253,7 @@ export function ProductionForm() {
       "E": "5",
     };
     const fluteBatches = fluteBatchMap[normalizedFlute] || "";
+    const leastGsm = erpLeastGsmMap.get(selectedErp) ?? "";
 
     setFormData(prev => ({
         ...prev,
@@ -253,10 +271,11 @@ export function ProductionForm() {
         plannedProductionInMeter,
         avgWeight,
         wastage,
-        fluteBatches
+        fluteBatches,
+        leastGsm
     }));
 
-  }, [formData.ply, formData.flute, formData.length, formData.breadth, formData.height, formData.ups, formData.noOfParts, formData.l1, formData.f1, formData.l2, formData.f2, formData.l3, formData.qty, formData.rate, formData.plateWeight, formData.reelActualWithTrimming]);
+  }, [formData.ply, formData.flute, formData.length, formData.breadth, formData.height, formData.ups, formData.noOfParts, formData.l1, formData.f1, formData.l2, formData.f2, formData.l3, formData.qty, formData.rate, formData.plateWeight, formData.reelActualWithTrimming, formData.actualPaperUsed, formData.prodFromFFG, erpLeastGsmMap, selectedErp]);
 
   useEffect(() => {
     const queryScheduleId = searchParams.get("scheduleId") || "";
@@ -359,7 +378,7 @@ export function ProductionForm() {
         wastage: "",
         productionInMeter: "",
         plannedProductionInMeter: "",
-        leastSheetWeight: "",
+        leastGsm: "",
         fluteBatches: "",
         erpCodeReel: "",
         erpCode: ""
@@ -589,7 +608,7 @@ export function ProductionForm() {
               <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly helpText="Formula: ((Cutting Trim x Quantity) / 1000) / UPS." />
               <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" helpText="Formula: ((Cutting Trim x Plan Qty) / 1000) / UPS. If Cutting Trim or Plan Qty is blank, this stays blank/zero." />
               
-              <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} readOnly type="number" step="0.00001" helpText="Read-only field reserved for least sheet weight reference when available." />
+              <FormInput label="Least GSM" value={formData.leastGsm} readOnly type="number" step="0.00001" helpText="Read-only field for least GSM reference when available." />
               <FormInput label="Flute Batches" value={formData.fluteBatches} readOnly helpText="Derived from Flute using this mapping: A=1, B=2, B+C=3, C=4, E=5. Any other value stays blank." />
               <FormInput label="Company Name" value={formData.companyName} readOnly helpText="Auto-fetched from the selected order's company." />
             </div>
