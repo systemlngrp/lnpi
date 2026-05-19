@@ -68,6 +68,7 @@ export function ScheduledOrdersMaster() {
         itemId: item?.id || "",
         itemName: item?.name || "-",
         produced,
+        pendingPlanning: Math.max((Number(s.qty) || 0) - produced, 0),
         loaded,
         invoiced,
         pendingInvoice: Math.max(produced - invoiced, 0)
@@ -184,7 +185,8 @@ export function ScheduledOrdersMaster() {
                 <th className="px-3 py-2 border border-black text-left">Company</th>
                 <th className="px-3 py-2 border border-black text-left">Item Name</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-indigo-50">Sch. Qty</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-emerald-50">Produced</th>
+                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-emerald-50">Planned</th>
+                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-cyan-50 text-cyan-800">Pending Planning</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-amber-50">Loaded</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-purple-50">Invoiced</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-red-50 text-red-700">Canceled</th>
@@ -201,6 +203,9 @@ export function ScheduledOrdersMaster() {
                   <td className="px-3 py-2 border border-black min-w-[150px]">{s.itemName}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium bg-indigo-50/30">{(Number(s.qty) || 0).toLocaleString()}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-emerald-700 bg-emerald-50/30">{s.produced.toLocaleString()}</td>
+                  <td className={`px-3 py-2 border border-black text-right font-medium ${s.pendingPlanning > 0 ? 'text-cyan-800 bg-cyan-50/40' : 'text-slate-400 bg-cyan-50/20'}`}>
+                    {s.pendingPlanning.toLocaleString()}
+                  </td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-amber-700 bg-amber-50/30">{s.loaded.toLocaleString()}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-purple-700 bg-purple-50/30">{s.invoiced.toLocaleString()}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-red-600 bg-red-50/30">{(Number(s.canceledQty) || 0).toLocaleString()}</td>
@@ -211,7 +216,7 @@ export function ScheduledOrdersMaster() {
               ))}
               {detailedSchedules.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
+                  <td colSpan={12} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
                     No schedules found matching your criteria
                   </td>
                 </tr>
@@ -226,6 +231,9 @@ export function ScheduledOrdersMaster() {
                   </td>
                   <td className="px-3 py-2 text-right bg-emerald-50 text-emerald-700">
                     {detailedSchedules.reduce((sum, s) => sum + s.produced, 0).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-right bg-cyan-50 text-cyan-800">
+                    {detailedSchedules.reduce((sum, s) => sum + s.pendingPlanning, 0).toLocaleString()}
                   </td>
                   <td className="px-3 py-2 text-right bg-amber-50 text-amber-700">
                     {detailedSchedules.reduce((sum, s) => sum + s.loaded, 0).toLocaleString()}
