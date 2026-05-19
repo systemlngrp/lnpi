@@ -6,12 +6,29 @@ import { Company, Item, Order, OrderSchedule, Production } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { generateTransactionNo, formatDate } from "../lib/serial";
+import { CircleHelp } from "lucide-react";
 
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
     Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
     0
   );
+}
+
+function getScheduleInvoicedQty(scheduleId: string, schedules: OrderSchedule[], plans: any[], loadingSlips: any[]) {
+  const schedulePlans = plans.filter((plan) => plan.scheduleId === scheduleId);
+  const planIds = new Set(schedulePlans.map((plan) => plan.id));
+
+  let invoiced = 0;
+  loadingSlips.forEach((slip) => {
+    slip.lines.forEach((line: any) => {
+      if (planIds.has(line.dispatchPlanId) && slip.invoiceId) {
+        invoiced += Number(line.loadedQty) || 0;
+      }
+    });
+  });
+
+  return invoiced;
 }
 
 export function ProductionForm() {
@@ -23,6 +40,8 @@ export function ProductionForm() {
   const [orders] = useData<Order>("orders", []);
   const [items] = useData<Item>("items", []);
   const [companies] = useData<Company>("companies", []);
+  const [plans] = useData<any>("dispatch_plans", []);
+  const [loadingSlips] = useData<any>("loading_slips", []);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState(searchParams.get("scheduleId") || "");
@@ -93,6 +112,22 @@ export function ProductionForm() {
   const selectedItem = items.find((item) => item.id === selectedOrder?.itemId);
   const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
   const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
+  const pendingOrderQtyForItem = useMemo(() => {
+    if (!selectedItem?.id) return 0;
+
+    return schedules.reduce((sum, schedule) => {
+      const order = orders.find((row) => row.id === schedule.orderId);
+      if (!order || order.itemId !== selectedItem.id) return sum;
+
+      const invoiced = getScheduleInvoicedQty(schedule.id, schedules, plans, loadingSlips);
+      const pendingOrderQty = Math.max(
+        (Number(schedule.qty) || 0) - (Number(schedule.canceledQty) || 0) - invoiced,
+        0
+      );
+
+      return pendingOrderQty > 0 ? sum + pendingOrderQty : sum;
+    }, 0);
+  }, [selectedItem?.id, schedules, orders, plans, loadingSlips]);
   const productionInProgress = useMemo(() => {
     if (!selectedItem?.id) return 0;
 
@@ -104,6 +139,10 @@ export function ProductionForm() {
       )
       .reduce((sum, production) => sum + (Number(production.qty) || 0), 0);
   }, [productions, selectedItem?.id]);
+  const maximumAllowedProduction = Math.max(
+    pendingOrderQtyForItem - Number(selectedItem?.balance || 0) - productionInProgress,
+    0
+  );
 
   // Auto-lookup from Item Master
   useEffect(() => {
@@ -326,7 +365,11 @@ export function ProductionForm() {
       <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="flex flex-col space-y-1">
-            <label className="font-bold text-black">Scheduled Order <span className="text-red-500">*</span></label>
+            <LabelWithHelp
+              label="Scheduled Order"
+              required
+              helpText="Choose the pending scheduled order you want to plan production for. Item, ERP code, company, quantity, and default specs are auto-filled from this selection."
+            />
             <Select
               id="schedule"
               value={selectedScheduleId}
@@ -356,7 +399,11 @@ export function ProductionForm() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Production Date <span className="text-red-500">*</span></label>
+              <LabelWithHelp
+                label="Production Date"
+                required
+                helpText="This date cannot be earlier than today. Only today or future dates are allowed."
+              />
               <input
                 type="date"
                 value={formData.date}
@@ -373,7 +420,40 @@ export function ProductionForm() {
               )}
             </div>
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Production In Progress</label>
+              <LabelWithHelp
+                label="Pending Order Quantity"
+                helpText="For the selected item, this is the total of all positive pending schedule quantities. Formula per schedule: Scheduled Qty - Cancelled Qty - Invoiced Qty."
+              />
+              <div className="relative">
+                <input
+                  type="number"
+                  value={pendingOrderQtyForItem}
+                  readOnly
+                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-50 focus:outline-none shadow-sm"
+                />
+                {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
+              </div>
+            </div>
+            <div className="flex flex-col space-y-1">
+              <LabelWithHelp
+                label="Current Balance"
+                helpText="This comes from the item balance logic used in Item Master. Formula: Opening + Receipt + Production - Invoiced."
+              />
+              <div className="relative">
+                <input
+                  type="number"
+                  value={Number(selectedItem?.balance || 0)}
+                  readOnly
+                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-50 focus:outline-none shadow-sm"
+                />
+                {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
+              </div>
+            </div>
+            <div className="flex flex-col space-y-1">
+              <LabelWithHelp
+                label="Production In Progress"
+                helpText="For the selected item, this sums production rows where Production from FFG is blank and Cancel Timestamp is blank."
+              />
               <div className="relative">
                 <input
                   type="number"
@@ -385,7 +465,26 @@ export function ProductionForm() {
               </div>
             </div>
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Quantity <span className="text-red-500">*</span></label>
+              <LabelWithHelp
+                label="Maximum Allowed Production"
+                helpText="Formula: Pending Order Quantity - Current Balance - Production In Progress. It is never shown below zero."
+              />
+              <div className="relative">
+                <input
+                  type="number"
+                  value={maximumAllowedProduction}
+                  readOnly
+                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-50 focus:outline-none shadow-sm"
+                />
+                {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
+              </div>
+            </div>
+            <div className="flex flex-col space-y-1">
+              <LabelWithHelp
+                label="Quantity"
+                required
+                helpText="Enter the quantity to plan now. It must be greater than 0 and cannot exceed the pending schedule quantity shown as Max allowed."
+              />
               <div className="relative">
                 <input
                     type="number"
@@ -405,7 +504,10 @@ export function ProductionForm() {
           </div>
 
           <div className="flex flex-col space-y-1">
-            <label className="font-bold text-black">Remarks</label>
+            <LabelWithHelp
+              label="Remarks"
+              helpText="Optional notes for this production entry."
+            />
             <input
               type="text"
               value={formData.remarks}
@@ -577,6 +679,23 @@ function InfoTile({ label, value }: { label: string; value: string | number }) {
       <div className="text-xs font-black text-slate-500 uppercase">{label}</div>
       <div className="text-sm font-bold text-black">{value}</div>
     </div>
+  );
+}
+
+function LabelWithHelp({ label, helpText, required = false }: { label: string; helpText: string; required?: boolean }) {
+  return (
+    <label className="font-bold text-black inline-flex items-center gap-1">
+      <span>
+        {label} {required && <span className="text-red-500">*</span>}
+      </span>
+      <span
+        title={helpText}
+        aria-label={helpText}
+        className="inline-flex items-center text-slate-500 cursor-help"
+      >
+        <CircleHelp size={14} />
+      </span>
+    </label>
   );
 }
 
