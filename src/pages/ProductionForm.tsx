@@ -85,8 +85,6 @@ export function ProductionForm() {
     prodFromSheetPlant: "" as number | "",
     prodFromFFG: "" as number | "",
     wastage: "" as number | "",
-    realizationApprovalStatus: "",
-    wastageApproval: "",
     productionInMeter: "" as number | "",
     plannedProductionInMeter: "" as number | "",
     leastSheetWeight: "" as number | "",
@@ -226,6 +224,9 @@ export function ProductionForm() {
     const avgWeight = (actualPaperUsed > 0 && prodFromFFG > 0)
       ? parseFloat((actualPaperUsed / prodFromFFG).toFixed(3))
       : "";
+    const wastage = (prodFromFFG > 0 && sheetWeight > 0 && actualPaperUsed > 0)
+      ? parseFloat((100 - (((prodFromFFG * sheetWeight) / actualPaperUsed) * 100)).toFixed(2))
+      : "";
 
     setFormData(prev => ({
         ...prev,
@@ -241,7 +242,8 @@ export function ProductionForm() {
         realizationPerKg: parseFloat(realizationPerKg.toFixed(2)),
         productionInMeter: parseFloat(productionInMeter.toFixed(2)),
         plannedProductionInMeter,
-        avgWeight
+        avgWeight,
+        wastage
     }));
 
   }, [formData.ply, formData.flute, formData.length, formData.breadth, formData.height, formData.ups, formData.noOfParts, formData.l1, formData.f1, formData.l2, formData.f2, formData.l3, formData.qty, formData.rate, formData.plateWeight, formData.reelActualWithTrimming]);
@@ -345,8 +347,6 @@ export function ProductionForm() {
         prodFromSheetPlant: "",
         prodFromFFG: "",
         wastage: "",
-        realizationApprovalStatus: "",
-        wastageApproval: "",
         productionInMeter: "",
         plannedProductionInMeter: "",
         leastSheetWeight: "",
@@ -569,15 +569,13 @@ export function ProductionForm() {
               
               <FormInput label="Rate" value={formData.rate} readOnly type="number" helpText="Auto-fetched from the selected order." />
               <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: (Rate / Total Weight of Set) x Number of Parts." />
-              <FormInput label="Realization Status" value={formData.realizationApprovalStatus} readOnly helpText="Read-only approval/status field shown from production workflow data when available." />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <FormInput label="Prod (Sheet Plant)" value={formData.prodFromSheetPlant} readOnly type="number" helpText="Read-only field for output recorded from Sheet Plant stage when available." />
               <FormInput label="Prod (FFG)" value={formData.prodFromFFG} readOnly type="number" helpText="Read-only field for finished goods production recorded later in the workflow." />
-              <FormInput label="Wastage" value={formData.wastage} readOnly type="number" helpText="Read-only field for wastage quantity recorded later in the workflow." />
+              <FormInput label="Wastage" value={formData.wastage} readOnly type="number" helpText="Formula: 100 - (((Production from FFG x Sheet Weight) / Actual Paper Used) x 100)." />
               
-              <FormInput label="Wastage Approval" value={formData.wastageApproval} readOnly helpText="Read-only approval/status field for wastage when available." />
               <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly helpText="Formula: ((Cutting Trim x Quantity) / 1000) / UPS." />
               <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" helpText="Formula: ((Cutting Trim x Plan Qty) / 1000) / UPS. If Cutting Trim or Plan Qty is blank, this stays blank/zero." />
               

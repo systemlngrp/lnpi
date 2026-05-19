@@ -333,8 +333,6 @@ async function initDb(retries = 5) {
           \`prodFromSheetPlant\` DECIMAL(15,2),
           \`prodFromFFG\` DECIMAL(15,2),
           \`wastage\` DECIMAL(15,2),
-          \`realizationApprovalStatus\` VARCHAR(255),
-          \`wastageApproval\` VARCHAR(255),
           \`productionInMeter\` DECIMAL(15,2),
           \`plannedProductionInMeter\` DECIMAL(15,2),
           \`leastSheetWeight\` DECIMAL(15,5),
@@ -527,8 +525,6 @@ async function initDb(retries = 5) {
         { table: "productions", column: "prodFromSheetPlant", type: "DECIMAL(15,2)" },
         { table: "productions", column: "prodFromFFG", type: "DECIMAL(15,2)" },
         { table: "productions", column: "wastage", type: "DECIMAL(15,2)" },
-        { table: "productions", column: "realizationApprovalStatus", type: "VARCHAR(255)" },
-        { table: "productions", column: "wastageApproval", type: "VARCHAR(255)" },
         { table: "productions", column: "productionInMeter", type: "DECIMAL(15,2)" },
         { table: "productions", column: "plannedProductionInMeter", type: "DECIMAL(15,2)" },
         { table: "productions", column: "leastSheetWeight", type: "DECIMAL(15,5)" },
@@ -653,6 +649,27 @@ async function initDb(retries = 5) {
           }
         } catch (err) {
           console.warn(`[DB] Could not ensure column ${m.column} in ${m.table}:`, (err as Error).message);
+        }
+      }
+
+      const dropMigrations = [
+        { table: "productions", column: "realizationApprovalStatus" },
+        { table: "productions", column: "wastageApproval" },
+      ];
+
+      for (const m of dropMigrations) {
+        try {
+          const [columns] = await db.query(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+            [database, m.table, m.column]
+          );
+
+          if ((columns as any[]).length > 0) {
+            console.log(`[DB] Dropping deprecated column ${m.column} from table ${m.table}...`);
+            await db.query(`ALTER TABLE \`${m.table}\` DROP COLUMN \`${m.column}\``);
+          }
+        } catch (err) {
+          console.warn(`[DB] Could not drop column ${m.column} from ${m.table}:`, (err as Error).message);
         }
       }
       

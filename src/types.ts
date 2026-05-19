@@ -178,8 +178,6 @@ export interface Production {
   prodFromSheetPlant?: number;
   prodFromFFG?: number;
   wastage?: number;
-  realizationApprovalStatus?: string;
-  wastageApproval?: string;
   productionInMeter?: number;
   plannedProductionInMeter?: number;
   leastSheetWeight?: number;
