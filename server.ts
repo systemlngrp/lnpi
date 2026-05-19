@@ -371,6 +371,23 @@ async function initDb(retries = 5) {
       `);
 
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`sample_requests\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`timestamp\` VARCHAR(255) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`itemId\` VARCHAR(36) NOT NULL,
+          \`itemName\` VARCHAR(255) NOT NULL,
+          \`erp\` VARCHAR(100),
+          \`plannedQuantity\` DECIMAL(15,2) NOT NULL,
+          \`jobCardNo\` VARCHAR(255),
+          \`cancelTimestamp\` VARCHAR(255),
+          \`cancelBy\` VARCHAR(255),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`trucks\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`truckNo\` VARCHAR(50) NOT NULL,
@@ -486,6 +503,17 @@ async function initDb(retries = 5) {
         { table: "consumptions", column: "remarks", type: "TEXT" },
         { table: "consumptions", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
         { table: "consumptions", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "sample_requests", column: "timestamp", type: "VARCHAR(255) NOT NULL" },
+        { table: "sample_requests", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "sample_requests", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "sample_requests", column: "itemName", type: "VARCHAR(255) NOT NULL" },
+        { table: "sample_requests", column: "erp", type: "VARCHAR(100)" },
+        { table: "sample_requests", column: "plannedQuantity", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "sample_requests", column: "jobCardNo", type: "VARCHAR(255)" },
+        { table: "sample_requests", column: "cancelTimestamp", type: "VARCHAR(255)" },
+        { table: "sample_requests", column: "cancelBy", type: "VARCHAR(255)" },
+        { table: "sample_requests", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "sample_requests", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "users", column: "userId", type: "VARCHAR(100) NOT NULL" },
         { table: "users", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "users", column: "mobile", type: "VARCHAR(20)" },
@@ -926,7 +954,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items"];
+const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

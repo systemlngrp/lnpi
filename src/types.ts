@@ -213,6 +213,21 @@ export interface Consumption {
   updateTimestamp?: string;
 }
 
+export interface SampleRequest {
+  id: string;
+  timestamp: string;
+  date: string;
+  itemId: string;
+  itemName: string;
+  erp?: string | number;
+  plannedQuantity: number;
+  jobCardNo?: string | number;
+  cancelTimestamp?: string;
+  cancelBy?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Truck {
   id: string;
   truckNo: string;

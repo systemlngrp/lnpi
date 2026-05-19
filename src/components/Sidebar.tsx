@@ -18,10 +18,11 @@ import {
   Activity,
   Plus,
   Receipt,
+  FlaskConical,
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip } from "../types";
+import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest } from "../types";
 import { cn } from "../lib/utils";
 
 interface SidebarProps {
@@ -34,6 +35,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
   const [consumptions] = useData<Consumption>("consumptions", []);
+  const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -48,6 +50,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     "/production/pending-ph": productions.filter(p => isPendingPH(p.status)).length,
     "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
     "/production/pending-tally": productions.filter(p => p.status === "Pending Tally").length,
+    "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
     "/consumption/pending-ph": consumptions.filter(c => isPendingPH(c.status)).length,
     "/consumption/pending-tally": consumptions.filter(c => c.status === "Pending Tally").length,
     "/dispatch/pending-planning": schedules.filter(s => {
@@ -153,6 +156,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Production Master", href: "/production/master", icon: Database },
         { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
         { name: "Canceled Jobs", href: "/production/canceled", icon: X },
+      ],
+    },
+    {
+      section: "Samples",
+      color: "bg-teal-700",
+      items: [
+        { name: "Sample Form", href: "/samples/form", icon: FlaskConical },
+        { name: "Pending Samples", href: "/samples/pending", icon: Activity, countKey: "/samples/pending" },
+        { name: "Samples Produced", href: "/samples/produced", icon: CheckCircle },
+        { name: "Sample Master", href: "/samples/master", icon: Database },
       ],
     },
     {
