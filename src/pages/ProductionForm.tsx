@@ -227,6 +227,15 @@ export function ProductionForm() {
     const wastage = (prodFromFFG > 0 && sheetWeight > 0 && actualPaperUsed > 0)
       ? parseFloat((100 - (((prodFromFFG * sheetWeight) / actualPaperUsed) * 100)).toFixed(2))
       : "";
+    const normalizedFlute = formData.flute.toUpperCase().trim().replace(/\s+/g, "");
+    const fluteBatchMap: Record<string, string> = {
+      "A": "1",
+      "B": "2",
+      "B+C": "3",
+      "C": "4",
+      "E": "5",
+    };
+    const fluteBatches = fluteBatchMap[normalizedFlute] || "";
 
     setFormData(prev => ({
         ...prev,
@@ -243,7 +252,8 @@ export function ProductionForm() {
         productionInMeter: parseFloat(productionInMeter.toFixed(2)),
         plannedProductionInMeter,
         avgWeight,
-        wastage
+        wastage,
+        fluteBatches
     }));
 
   }, [formData.ply, formData.flute, formData.length, formData.breadth, formData.height, formData.ups, formData.noOfParts, formData.l1, formData.f1, formData.l2, formData.f2, formData.l3, formData.qty, formData.rate, formData.plateWeight, formData.reelActualWithTrimming]);
@@ -580,7 +590,7 @@ export function ProductionForm() {
               <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" helpText="Formula: ((Cutting Trim x Plan Qty) / 1000) / UPS. If Cutting Trim or Plan Qty is blank, this stays blank/zero." />
               
               <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} readOnly type="number" step="0.00001" helpText="Read-only field reserved for least sheet weight reference when available." />
-              <FormInput label="Flute Batches" value={formData.fluteBatches} readOnly helpText="Read-only reference field for flute batch information when available." />
+              <FormInput label="Flute Batches" value={formData.fluteBatches} readOnly helpText="Derived from Flute using this mapping: A=1, B=2, B+C=3, C=4, E=5. Any other value stays blank." />
               <FormInput label="Company Name" value={formData.companyName} readOnly helpText="Auto-fetched from the selected order's company." />
             </div>
           </div>
