@@ -68,7 +68,7 @@ export function ScheduledOrdersMaster() {
         itemId: item?.id || "",
         itemName: item?.name || "-",
         produced,
-        pendingPlanning: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0), 0),
+        pendingPlanning: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0) - produced, 0),
         loaded,
         invoiced,
         pendingInvoice: Math.max(loaded - invoiced, 0),
