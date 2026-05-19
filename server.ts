@@ -175,6 +175,8 @@ async function initDb(retries = 5) {
           \`name\` VARCHAR(255) NOT NULL,
           \`uom\` VARCHAR(50) NOT NULL,
           \`erp\` INT DEFAULT NULL,
+          \`itemType\` VARCHAR(20) DEFAULT 'Others',
+          \`opening\` DECIMAL(15,2) DEFAULT 0,
           \`gstRate\` DECIMAL(5,2) DEFAULT 18.00,
           \`noOfParts\` INT,
           \`ups\` INT,
@@ -448,6 +450,8 @@ async function initDb(retries = 5) {
         { table: "items", column: "groupId", type: "VARCHAR(36) NOT NULL" },
         { table: "items", column: "uom", type: "VARCHAR(50) NOT NULL" },
         { table: "items", column: "erp", type: "INT" },
+        { table: "items", column: "itemType", type: "VARCHAR(20) DEFAULT 'Others'" },
+        { table: "items", column: "opening", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "item_groups", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
@@ -673,7 +677,56 @@ const createHandlers = (tableName: string) => {
       if (!db) return res.status(500).json({ error: "DB connection not available" });
       try {
         console.log(`[DB] Fetching all from ${tableName}`);
-        const [rows] = await db.query(`SELECT * FROM \`${tableName}\``);
+        let rows;
+
+        if (tableName === "items") {
+          [rows] = await db.query(`
+            SELECT
+              i.*,
+              CAST(COALESCE(i.opening, 0) AS DECIMAL(15,2)) AS opening,
+              CAST(CASE WHEN i.itemType = 'FG' THEN COALESCE(r.receipt, 0) ELSE 0 END AS DECIMAL(15,2)) AS receipt,
+              CAST(COALESCE(p.production, 0) AS DECIMAL(15,2)) AS production,
+              CAST(COALESCE(inv.invoiced, 0) AS DECIMAL(15,2)) AS invoiced,
+              CAST(
+                COALESCE(i.opening, 0)
+                + (CASE WHEN i.itemType = 'FG' THEN COALESCE(r.receipt, 0) ELSE 0 END)
+                + COALESCE(p.production, 0)
+                - COALESCE(inv.invoiced, 0)
+              AS DECIMAL(15,2)) AS balance
+            FROM \`items\` i
+            LEFT JOIN (
+              SELECT
+                jt.itemId,
+                SUM(COALESCE(jt.qty, 0)) AS receipt
+              FROM \`material_in\` mi
+              JOIN JSON_TABLE(
+                mi.lines,
+                '$[*]' COLUMNS (
+                  itemId VARCHAR(36) PATH '$.itemId',
+                  qty DECIMAL(15,2) PATH '$.qty'
+                )
+              ) jt
+              GROUP BY jt.itemId
+            ) r ON r.itemId = i.id
+            LEFT JOIN (
+              SELECT
+                itemId,
+                SUM(COALESCE(prodFromFFG, 0)) AS production
+              FROM \`productions\`
+              WHERE status <> 'Cancelled' OR status IS NULL
+              GROUP BY itemId
+            ) p ON p.itemId = i.id
+            LEFT JOIN (
+              SELECT
+                itemId,
+                SUM(COALESCE(qty, 0)) AS invoiced
+              FROM \`invoice_line_items\`
+              GROUP BY itemId
+            ) inv ON inv.itemId = i.id
+          `);
+        } else {
+          [rows] = await db.query(`SELECT * FROM \`${tableName}\``);
+        }
         
         // Post-process rows to parse JSON columns
         const processedRows = (rows as any[]).map(row => {

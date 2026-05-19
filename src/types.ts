@@ -11,6 +11,12 @@ export interface Item {
   name: string;
   uom: string;
   erp?: number;
+  itemType?: "FG" | "Reel" | "Others";
+  opening?: number;
+  receipt?: number;
+  production?: number;
+  invoiced?: number;
+  balance?: number;
   gstRate?: number;
   
   // Technical Specifications

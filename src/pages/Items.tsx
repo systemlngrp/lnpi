@@ -18,6 +18,8 @@ export function Items() {
   const [groupId, setGroupId] = useState("");
   const [uom, setUom] = useState("");
   const [erp, setErp] = useState<string>("");
+  const [itemType, setItemType] = useState<"FG" | "Reel" | "Others">("Others");
+  const [opening, setOpening] = useState<string>("0");
   const [gstRate, setGstRate] = useState<string>("18");
   
   // Technical Specifications State
@@ -57,6 +59,12 @@ export function Items() {
   const plyOptions = [
     { value: "3", label: "3 PLY" },
     { value: "5", label: "5 PLY" },
+  ];
+
+  const itemTypeOptions = [
+    { value: "FG", label: "FG" },
+    { value: "Reel", label: "Reel" },
+    { value: "Others", label: "Others" },
   ];
 
   const groupOptions = groups.map(g => ({ value: g.id, label: g.name }));
@@ -105,6 +113,8 @@ export function Items() {
     setGroupId("");
     setUom("");
     setErp("");
+    setItemType("Others");
+    setOpening("0");
     setGstRate("18");
     setNoOfParts("");
     setUps("");
@@ -152,6 +162,8 @@ export function Items() {
         groupId,
         uom,
         erp: erpValue,
+        itemType,
+        opening: parseFloat(opening) || 0,
         gstRate: parseFloat(gstRate) || 0,
         noOfParts: parseInt(noOfParts) || undefined,
         ups: parseInt(ups) || undefined,
@@ -281,6 +293,21 @@ export function Items() {
                     className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                   />
                 </div>
+                <div className="flex flex-col space-y-1">
+                  <label className="font-bold text-black text-sm">Item Type *</label>
+                  <Select value={itemType} onChange={(value) => setItemType(value as "FG" | "Reel" | "Others")} options={itemTypeOptions} placeholder="Select Item Type..." required />
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <label className="font-bold text-black text-sm">Opening</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={opening}
+                    onChange={(e) => setOpening(e.target.value)}
+                    placeholder="Enter opening balance"
+                    className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -351,6 +378,8 @@ export function Items() {
                                      setGroupId(item.groupId); 
                                      setUom(item.uom); 
                                      setErp(item.erp?.toString() || ""); 
+                                     setItemType(item.itemType || "Others");
+                                     setOpening((item.opening ?? 0).toString());
                                      setGstRate((item.gstRate ?? 18).toString()); 
                                      
                                      setNoOfParts(item.noOfParts?.toString() || "");
@@ -395,6 +424,30 @@ export function Items() {
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">ERP</div>
                               <div className="text-sm">{item.erp ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Type</div>
+                              <div className="text-sm">{item.itemType || "Others"}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Opening</div>
+                              <div className="text-sm">{item.opening.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Receipt</div>
+                              <div className="text-sm">{item.receipt.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Production</div>
+                              <div className="text-sm">{item.production.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Invoiced</div>
+                              <div className="text-sm">{item.invoiced.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Balance</div>
+                              <div className="text-sm">{item.balance.toLocaleString()}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Parts</div>
@@ -442,6 +495,12 @@ export function Items() {
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">GST</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Type</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Opening</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Receipt</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Production</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Invoiced</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Balance</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Parts</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">UPS</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Length</th>
@@ -461,7 +520,7 @@ export function Items() {
               </thead>
               <tbody className="divide-y divide-black bg-white">
                     {filteredItems.length === 0 ? (
-                      <tr><td colSpan={20} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
+                      <tr><td colSpan={26} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
                     ) : (
                   filteredItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
@@ -470,6 +529,12 @@ export function Items() {
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.uom}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.gstRate ?? 18}%</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.erp ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.itemType || "Others"}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{item.opening.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{item.receipt.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{item.production.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{item.invoiced.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right font-medium">{item.balance.toLocaleString()}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.noOfParts ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.ups ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.length ?? ""}</td>
@@ -490,6 +555,8 @@ export function Items() {
                                 setGroupId(item.groupId); 
                                 setUom(item.uom); 
                                 setErp(item.erp?.toString() || ""); 
+                                setItemType(item.itemType || "Others");
+                                setOpening((item.opening ?? 0).toString());
                                 setGstRate((item.gstRate ?? 18).toString()); 
                                 
                                 setNoOfParts(item.noOfParts?.toString() || "");
