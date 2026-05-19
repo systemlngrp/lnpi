@@ -13,7 +13,6 @@ export function UpcomingScheduledOrders() {
   const [trucks] = useData<Truck>("trucks", []);
   const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
 
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [rowTrucks, setRowTrucks] = useState<Record<string, string>>({});
   const [rowPlannedQty, setRowPlannedQty] = useState<Record<string, number>>({});
@@ -27,7 +26,7 @@ export function UpcomingScheduledOrders() {
   tomorrow.setHours(23, 59, 59, 999);
 
   // Filter schedules that are pending and beyond tomorrow
-  const basePendingSchedules = useMemo(() => {
+  const filteredSchedules = useMemo(() => {
     return schedules.filter(s => {
       const scheduledDate = new Date(s.scheduledDate);
       if (isNaN(scheduledDate.getTime())) return false;
@@ -42,25 +41,6 @@ export function UpcomingScheduledOrders() {
       return scheduledDate > tomorrow && balance > 0;
     }).sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
   }, [schedules, tomorrow, dispatchPlans]);
-
-  // Companies that actually have pending schedules
-  const availableCompanies = useMemo(() => {
-    const compIds = new Set(basePendingSchedules.map(s => {
-      const order = orders.find(o => o.id === s.orderId);
-      return order?.companyId;
-    }).filter(Boolean));
-    
-    return companies.filter(c => compIds.has(c.id)).sort((a, b) => a.name.localeCompare(b.name));
-  }, [basePendingSchedules, orders, companies]);
-
-  // Final filtered list based on company selection
-  const filteredSchedules = useMemo(() => {
-    if (!selectedCompanyId) return basePendingSchedules;
-    return basePendingSchedules.filter(s => {
-      const order = orders.find(o => o.id === s.orderId);
-      return order?.companyId === selectedCompanyId;
-    });
-  }, [basePendingSchedules, selectedCompanyId, orders]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -161,28 +141,11 @@ export function UpcomingScheduledOrders() {
             </div>
           )}
 
-          <div className="flex flex-col">
-            <label className="text-[10px] font-bold uppercase text-slate-500 mb-1">Filter by Company</label>
-            <select 
-              value={selectedCompanyId}
-              onChange={(e) => {
-                setSelectedCompanyId(e.target.value);
-                setSelectedIds(new Set()); // Reset selection when filter changes
-              }}
-              className="border-2 border-black rounded p-2 text-sm focus:outline-none focus:border-indigo-600 font-bold min-w-[200px]"
-            >
-              <option value="">All Companies</option>
-              {availableCompanies.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          
-          {selectedCompanyId && selectedIds.size > 0 && (
+          {selectedIds.size > 0 && (
             <button
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="bg-emerald-600 text-white px-6 py-2 rounded font-bold hover:bg-emerald-700 transition flex items-center mt-4 self-end h-[42px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[2px]"
+              className="bg-emerald-600 text-white px-6 py-2 rounded font-bold hover:bg-emerald-700 transition flex items-center h-[42px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[2px]"
             >
               <Save size={18} className="mr-2" />
               {isSubmitting ? "Saving..." : `Submit Plan (${selectedIds.size})`}
@@ -196,34 +159,27 @@ export function UpcomingScheduledOrders() {
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
-                {selectedCompanyId && (
-                  <th className="px-4 py-3 text-center border border-black w-10">
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600"
-                      onChange={handleSelectAll}
-                      checked={filteredSchedules.length > 0 && selectedIds.size === filteredSchedules.length}
-                    />
-                  </th>
-                )}
+                <th className="px-4 py-3 text-center border border-black w-10">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600"
+                    onChange={handleSelectAll}
+                    checked={filteredSchedules.length > 0 && selectedIds.size === filteredSchedules.length}
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Scheduled Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Order No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Company</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Item Name</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Pending Qty</th>
-                
-                {selectedCompanyId && (
-                  <>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black min-w-[150px]">Truck No</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black w-32">Planned Qty</th>
-                  </>
-                )}
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black min-w-[150px]">Truck No</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black w-32">Planned Qty</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {filteredSchedules.length === 0 ? (
                 <tr>
-                  <td colSpan={selectedCompanyId ? 8 : 5} className="px-6 py-8 text-center text-black font-medium">No upcoming scheduled orders found.</td>
+                  <td colSpan={8} className="px-6 py-8 text-center text-black font-medium">No upcoming scheduled orders found.</td>
                 </tr>
               ) : (
                 filteredSchedules.map((s) => {
@@ -242,16 +198,14 @@ export function UpcomingScheduledOrders() {
                       "hover:bg-slate-50 divide-x divide-black", 
                       selectedIds.has(s.id) && "bg-indigo-50/50"
                     )}>
-                      {selectedCompanyId && (
-                        <td className="px-4 py-4 text-center border border-black">
-                           <input 
-                            type="checkbox" 
-                            className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600 cursor-pointer"
-                            checked={selectedIds.has(s.id)}
-                            onChange={() => toggleSelect(s.id)}
-                          />
-                        </td>
-                      )}
+                      <td className="px-4 py-4 text-center border border-black">
+                         <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600 cursor-pointer"
+                          checked={selectedIds.has(s.id)}
+                          onChange={() => toggleSelect(s.id)}
+                        />
+                      </td>
                       <td className="px-4 py-4 text-xs font-bold border border-black whitespace-nowrap text-black">
                         {formatDate(s.scheduledDate)}
                       </td>
@@ -259,31 +213,26 @@ export function UpcomingScheduledOrders() {
                       <td className="px-4 py-4 text-xs text-black border border-black">{company?.name || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black">{item?.name || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">{balance}</td>
-                      
-                      {selectedCompanyId && (
-                        <>
-                          <td className="px-2 py-2 border border-black">
-                            <select
-                              value={rowTrucks[s.id] || ""}
-                              onChange={(e) => setRowTrucks({...rowTrucks, [s.id]: e.target.value})}
-                              className="w-full border border-slate-300 rounded p-1 text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
-                            >
-                              <option value="">Select Truck</option>
-                              {sortedTrucks.map(t => (
-                                <option key={t.id} value={t.id}>{t.truckNo} ({t.driverName})</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-2 py-2 border border-black">
-                            <input
-                              type="number"
-                              value={rowPlannedQty[s.id] !== undefined ? rowPlannedQty[s.id] : balance}
-                              onChange={(e) => setRowPlannedQty({...rowPlannedQty, [s.id]: Number(e.target.value)})}
-                              className="w-full border border-slate-300 rounded p-1 text-right text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
-                            />
-                          </td>
-                        </>
-                      )}
+                      <td className="px-2 py-2 border border-black">
+                        <select
+                          value={rowTrucks[s.id] || ""}
+                          onChange={(e) => setRowTrucks({...rowTrucks, [s.id]: e.target.value})}
+                          className="w-full border border-slate-300 rounded p-1 text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
+                        >
+                          <option value="">Select Truck</option>
+                          {sortedTrucks.map(t => (
+                            <option key={t.id} value={t.id}>{t.truckNo} ({t.driverName})</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-2 py-2 border border-black">
+                        <input
+                          type="number"
+                          value={rowPlannedQty[s.id] !== undefined ? rowPlannedQty[s.id] : balance}
+                          onChange={(e) => setRowPlannedQty({...rowPlannedQty, [s.id]: Number(e.target.value)})}
+                          className="w-full border border-slate-300 rounded p-1 text-right text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
+                        />
+                      </td>
                     </tr>
                   );
                 })
@@ -292,7 +241,7 @@ export function UpcomingScheduledOrders() {
             {selectedIds.size > 0 && (
               <tfoot className="bg-slate-100 border-t-2 border-black">
                 <tr className="divide-x divide-black font-black">
-                  <td colSpan={selectedCompanyId ? 7 : 5} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
+                  <td colSpan={7} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
                   <td className="px-4 py-3 text-right text-sm text-indigo-700 bg-indigo-50 border border-black">
                     {totalSessionPlannedQty.toLocaleString()}
                   </td>

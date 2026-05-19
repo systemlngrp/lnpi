@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { 
   OrderSchedule, 
@@ -10,6 +10,7 @@ import {
   Item
 } from "../types";
 import { formatDate } from "../lib/serial";
+import { Search, Calendar, Building2, Package, X, Filter } from "lucide-react";
 
 export function ScheduledOrdersMaster() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -19,6 +20,13 @@ export function ScheduledOrdersMaster() {
   const [productions] = useData<Production>("productions", []);
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const detailedSchedules = useMemo(() => {
     return schedules.map(s => {
@@ -55,19 +63,116 @@ export function ScheduledOrdersMaster() {
       return {
         ...s,
         orderNo: order?.orderNo || "-",
+        companyId: company?.id || "",
         companyName: company?.name || "-",
+        itemId: item?.id || "",
         itemName: item?.name || "-",
         produced,
         loaded,
         invoiced,
         pendingInvoice: Math.max(produced - invoiced, 0)
       };
-    }).sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
-  }, [schedules, orders, companies, items, productions, plans, loadingSlips]);
+    })
+    .filter(s => {
+      const matchSearch = s.orderNo.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          s.companyName.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCompany = !companyFilter || s.companyId === companyFilter;
+      const matchItem = !itemFilter || s.itemId === itemFilter;
+      const matchFromDate = !fromDate || s.scheduledDate >= fromDate;
+      const matchToDate = !toDate || s.scheduledDate <= toDate;
+
+      return matchSearch && matchCompany && matchItem && matchFromDate && matchToDate;
+    })
+    .sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
+  }, [schedules, orders, companies, items, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setCompanyFilter("");
+    setItemFilter("");
+    setFromDate("");
+    setToDate("");
+  };
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-black uppercase tracking-tight">Scheduled Orders Master (Detailed View)</h2>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Scheduled Orders Master</h2>
+        <button 
+          onClick={clearFilters}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
+        >
+          <X size={14} /> Clear Filters
+        </button>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 bg-white p-4 border border-black rounded shadow-sm">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input 
+            type="text"
+            placeholder="Search Order No..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none"
+          />
+        </div>
+
+        {/* Company Filter */}
+        <div className="relative">
+          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <select 
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none appearance-none bg-white"
+          >
+            <option value="">All Companies</option>
+            {companies.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Item Filter */}
+        <div className="relative">
+          <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <select 
+            value={itemFilter}
+            onChange={(e) => setItemFilter(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none appearance-none bg-white"
+          >
+            <option value="">All Items</option>
+            {items.map(i => (
+              <option key={i.id} value={i.id}>{i.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* From Date */}
+        <div className="relative">
+          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input 
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none"
+          />
+        </div>
+
+        {/* To Date */}
+        <div className="relative">
+          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input 
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none"
+          />
+        </div>
+      </div>
+
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse border border-black text-xs">
@@ -106,14 +211,16 @@ export function ScheduledOrdersMaster() {
               ))}
               {detailedSchedules.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase">No schedules found.</td>
+                  <td colSpan={11} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
+                    No schedules found matching your criteria
+                  </td>
                 </tr>
               )}
             </tbody>
             {detailedSchedules.length > 0 && (
               <tfoot className="bg-slate-100 font-bold border-t border-black">
                 <tr className="divide-x divide-black">
-                  <td colSpan={5} className="px-3 py-2 text-right uppercase">Totals</td>
+                  <td colSpan={5} className="px-3 py-2 text-right uppercase">Filtered Totals</td>
                   <td className="px-3 py-2 text-right bg-indigo-50">
                     {detailedSchedules.reduce((sum, s) => sum + (Number(s.qty) || 0), 0).toLocaleString()}
                   </td>
