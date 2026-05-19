@@ -218,6 +218,14 @@ export function ProductionForm() {
     const totalWeightOfSet = sheetWeight + plateWeight;
     const realizationPerKg = (totalWeightOfSet !== 0) ? (rate / totalWeightOfSet) * noOfParts : 0;
     const productionInMeter = (ups > 0) ? ((cutting * qty) / 1000) / ups : 0;
+    const plannedProductionInMeter = (cutting > 0 && qty > 0 && ups > 0)
+      ? parseFloat((((cutting * qty) / 1000) / ups).toFixed(2))
+      : "";
+    const actualPaperUsed = Number(formData.actualPaperUsed);
+    const prodFromFFG = Number(formData.prodFromFFG);
+    const avgWeight = (actualPaperUsed > 0 && prodFromFFG > 0)
+      ? parseFloat((actualPaperUsed / prodFromFFG).toFixed(3))
+      : "";
 
     setFormData(prev => ({
         ...prev,
@@ -231,7 +239,9 @@ export function ProductionForm() {
         totalPaperWeight: parseFloat(totalPaperWeight.toFixed(5)),
         totalWeightOfSet: parseFloat(totalWeightOfSet.toFixed(5)),
         realizationPerKg: parseFloat(realizationPerKg.toFixed(2)),
-        productionInMeter: parseFloat(productionInMeter.toFixed(2))
+        productionInMeter: parseFloat(productionInMeter.toFixed(2)),
+        plannedProductionInMeter,
+        avgWeight
     }));
 
   }, [formData.ply, formData.flute, formData.length, formData.breadth, formData.height, formData.ups, formData.noOfParts, formData.l1, formData.f1, formData.l2, formData.f2, formData.l3, formData.qty, formData.rate, formData.plateWeight, formData.reelActualWithTrimming]);
@@ -554,7 +564,7 @@ export function ProductionForm() {
               <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly helpText="Formula: Sheet Weight x Quantity." />
               
               <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly helpText="Formula: Sheet Weight + Plate/PHP Weight." />
-              <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" helpText="Read-only field reserved for production/approval flow data when available." />
+              <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" helpText="Formula: Actual Paper Used / Production from FFG." />
               <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" helpText="Read-only field reserved for actual paper consumption data when available." />
               
               <FormInput label="Rate" value={formData.rate} readOnly type="number" helpText="Auto-fetched from the selected order." />
@@ -569,7 +579,7 @@ export function ProductionForm() {
               
               <FormInput label="Wastage Approval" value={formData.wastageApproval} readOnly helpText="Read-only approval/status field for wastage when available." />
               <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly helpText="Formula: ((Cutting Trim x Quantity) / 1000) / UPS." />
-              <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" helpText="Read-only field reserved for planned production in meter when available." />
+              <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" helpText="Formula: ((Cutting Trim x Plan Qty) / 1000) / UPS. If Cutting Trim or Plan Qty is blank, this stays blank/zero." />
               
               <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} readOnly type="number" step="0.00001" helpText="Read-only field reserved for least sheet weight reference when available." />
               <FormInput label="Flute Batches" value={formData.fluteBatches} readOnly helpText="Read-only reference field for flute batch information when available." />
