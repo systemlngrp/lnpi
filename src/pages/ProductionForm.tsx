@@ -429,7 +429,7 @@ export function ProductionForm() {
                   type="number"
                   value={pendingOrderQtyForItem}
                   readOnly
-                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-50 focus:outline-none shadow-sm"
+                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-100 focus:outline-none shadow-sm"
                 />
                 {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
               </div>
@@ -444,7 +444,7 @@ export function ProductionForm() {
                   type="number"
                   value={Number(selectedItem?.balance || 0)}
                   readOnly
-                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-50 focus:outline-none shadow-sm"
+                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-100 focus:outline-none shadow-sm"
                 />
                 {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
               </div>
@@ -459,7 +459,7 @@ export function ProductionForm() {
                   type="number"
                   value={productionInProgress}
                   readOnly
-                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-50 focus:outline-none shadow-sm"
+                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-100 focus:outline-none shadow-sm"
                 />
                 {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
               </div>
@@ -474,7 +474,7 @@ export function ProductionForm() {
                   type="number"
                   value={maximumAllowedProduction}
                   readOnly
-                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-50 focus:outline-none shadow-sm"
+                  className="w-full border-2 border-black rounded p-2 text-black bg-slate-100 focus:outline-none shadow-sm"
                 />
                 {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
               </div>
@@ -547,10 +547,10 @@ export function ProductionForm() {
                     <option value="B+E">B+E</option>
                 </select>
               </div>
-              <FormInput label="ID to OD" value={formData.idToOd} readOnly />
+              <FormInput label="ID to OD" value={formData.idToOd} readOnly helpText="Auto-calculated from PLY. Current logic: 3 PLY = 6, 5 PLY = 10." />
 
-              <FormInput label="Take up Factor" value={formData.takeUpFactor} readOnly />
-              <FormInput label="GSM" value={formData.gsm} readOnly />
+              <FormInput label="Take up Factor" value={formData.takeUpFactor} readOnly helpText="Auto-calculated from flute type using fixed factors: A=1.5, B=1.35, C=1.42, E=1.26, B+C=1.38, B+E=1.3." />
+              <FormInput label="GSM" value={formData.gsm} readOnly helpText="Formula: L1 + (F1 x Take up Factor) + L2 + (F2 x Take up Factor) + L3." />
               <FormInput label="ERP Code Reel" value={formData.erpCodeReel} readOnly />
             </div>
 
@@ -563,20 +563,20 @@ export function ProductionForm() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} readOnly />
+              <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} readOnly helpText="Calculated from dimensions, UPS, and ID to OD. The formula changes slightly depending on whether breadth is available." />
               <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({...formData, reelActualWithTrimming: v})} type="number" />
-              <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly />
+              <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText="Auto-calculated from length, breadth, number of parts, and ID to OD 17 logic." />
               
-              <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly />
+              <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly helpText="Formula: ((Reel Actual x Cutting Trim x GSM) / 1,000,000,000) / UPS." />
               <FormInput label="Plate/PHP Weight" value={formData.plateWeight} readOnly type="number" step="0.00001" />
-              <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly />
+              <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly helpText="Formula: Sheet Weight x Quantity." />
               
-              <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly />
+              <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly helpText="Formula: Sheet Weight + Plate/PHP Weight." />
               <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" />
               <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" />
               
               <FormInput label="Rate" value={formData.rate} readOnly type="number" />
-              <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly />
+              <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: (Rate / Total Weight of Set) x Number of Parts." />
               <FormInput label="Realization Status" value={formData.realizationApprovalStatus} readOnly />
             </div>
 
@@ -586,7 +586,7 @@ export function ProductionForm() {
               <FormInput label="Wastage" value={formData.wastage} readOnly type="number" />
               
               <FormInput label="Wastage Approval" value={formData.wastageApproval} readOnly />
-              <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly />
+              <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly helpText="Formula: ((Cutting Trim x Quantity) / 1000) / UPS." />
               <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" />
               
               <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} readOnly type="number" step="0.00001" />
@@ -684,32 +684,30 @@ function InfoTile({ label, value }: { label: string; value: string | number }) {
 
 function LabelWithHelp({ label, helpText, required = false }: { label: string; helpText: string; required?: boolean }) {
   return (
-    <label className="font-bold text-black inline-flex items-center gap-1">
+    <div className="inline-flex items-center gap-1">
       <span>
         {label} {required && <span className="text-red-500">*</span>}
       </span>
-      <span
-        title={helpText}
-        aria-label={helpText}
-        className="inline-flex items-center text-slate-500 cursor-help"
-      >
-        <CircleHelp size={14} />
-      </span>
-    </label>
+      <TooltipIcon helpText={helpText} />
+    </div>
   );
 }
 
-function FormInput({ label, value, onChange, type = "text", step = "any", readOnly = false }: { 
+function FormInput({ label, value, onChange, type = "text", step = "any", readOnly = false, helpText }: { 
   label: string; 
   value: string | number; 
   onChange?: (v: any) => void;
   type?: string;
   step?: string;
   readOnly?: boolean;
+  helpText?: string;
 }) {
   return (
     <div className="flex flex-col space-y-1">
-      <label className="text-[10px] font-black text-slate-500 uppercase">{label}</label>
+      <div className="text-[10px] font-black text-slate-500 uppercase inline-flex items-center gap-1">
+        <span>{label}</span>
+        {helpText ? <TooltipIcon helpText={helpText} size={12} /> : null}
+      </div>
       <input
         readOnly={readOnly}
         type={type}
@@ -718,9 +716,22 @@ function FormInput({ label, value, onChange, type = "text", step = "any", readOn
         onChange={(e) => onChange?.(type === "number" ? (e.target.value === "" ? "" : parseFloat(e.target.value)) : e.target.value)}
         className={cn(
             "border border-black rounded px-2 py-1 text-sm text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600",
-            readOnly && "bg-slate-100 cursor-not-allowed opacity-70"
+            readOnly && "bg-slate-100 cursor-not-allowed"
         )}
       />
     </div>
+  );
+}
+
+function TooltipIcon({ helpText, size = 14 }: { helpText: string; size?: number }) {
+  return (
+    <span className="relative inline-flex items-center group">
+      <span className="inline-flex items-center text-slate-500 cursor-help">
+        <CircleHelp size={size} />
+      </span>
+      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded border border-black bg-white px-3 py-2 text-[11px] normal-case font-medium text-slate-700 shadow-lg group-hover:block">
+        {helpText}
+      </span>
+    </span>
   );
 }
