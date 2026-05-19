@@ -68,7 +68,7 @@ export function ScheduledOrdersMaster() {
         itemId: item?.id || "",
         itemName: item?.name || "-",
         produced,
-        pendingPlanning: Math.max((Number(s.qty) || 0) - produced, 0),
+        pendingPlanning: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0), 0),
         loaded,
         invoiced,
         pendingInvoice: Math.max(loaded - invoiced, 0),
@@ -186,13 +186,13 @@ export function ScheduledOrdersMaster() {
                 <th className="px-3 py-2 border border-black text-left">Company</th>
                 <th className="px-3 py-2 border border-black text-left">Item Name</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-indigo-50">Sch. Qty</th>
+                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-red-50 text-red-700">Canceled</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-emerald-50">Production Planned</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-cyan-50 text-cyan-800">Pending Production Planning</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-amber-50">Loaded</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-purple-50">Invoiced</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-red-50 text-red-700">Canceled</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-sky-50 text-sky-800">Pend. Order Qty</th>
                 <th className="px-3 py-2 border border-black text-right whitespace-nowrap font-bold text-orange-700">Pend. Inv</th>
+                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-sky-50 text-sky-800">Pend. Order Qty</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
@@ -204,18 +204,18 @@ export function ScheduledOrdersMaster() {
                   <td className="px-3 py-2 border border-black truncate max-w-[150px]" title={s.companyName}>{s.companyName}</td>
                   <td className="px-3 py-2 border border-black min-w-[150px]">{s.itemName}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium bg-indigo-50/30">{(Number(s.qty) || 0).toLocaleString()}</td>
+                  <td className="px-3 py-2 border border-black text-right font-medium text-red-600 bg-red-50/30">{(Number(s.canceledQty) || 0).toLocaleString()}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-emerald-700 bg-emerald-50/30">{s.produced.toLocaleString()}</td>
                   <td className={`px-3 py-2 border border-black text-right font-medium ${s.pendingPlanning > 0 ? 'text-cyan-800 bg-cyan-50/40' : 'text-slate-400 bg-cyan-50/20'}`}>
                     {s.pendingPlanning.toLocaleString()}
                   </td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-amber-700 bg-amber-50/30">{s.loaded.toLocaleString()}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-purple-700 bg-purple-50/30">{s.invoiced.toLocaleString()}</td>
-                  <td className="px-3 py-2 border border-black text-right font-medium text-red-600 bg-red-50/30">{(Number(s.canceledQty) || 0).toLocaleString()}</td>
-                  <td className={`px-3 py-2 border border-black text-right font-medium ${s.pendingOrderQty > 0 ? 'text-sky-800 bg-sky-50/40' : 'text-slate-400 bg-sky-50/20'}`}>
-                    {s.pendingOrderQty.toLocaleString()}
-                  </td>
                   <td className={`px-3 py-2 border border-black text-right font-black ${s.pendingInvoice > 0 ? 'text-orange-600 bg-orange-50/50' : 'text-slate-400'}`}>
                     {s.pendingInvoice.toLocaleString()}
+                  </td>
+                  <td className={`px-3 py-2 border border-black text-right font-medium ${s.pendingOrderQty > 0 ? 'text-sky-800 bg-sky-50/40' : 'text-slate-400 bg-sky-50/20'}`}>
+                    {s.pendingOrderQty.toLocaleString()}
                   </td>
                 </tr>
               ))}
@@ -234,6 +234,9 @@ export function ScheduledOrdersMaster() {
                   <td className="px-3 py-2 text-right bg-indigo-50">
                     {detailedSchedules.reduce((sum, s) => sum + (Number(s.qty) || 0), 0).toLocaleString()}
                   </td>
+                  <td className="px-3 py-2 text-right bg-red-50 text-red-700">
+                    {detailedSchedules.reduce((sum, s) => sum + (Number(s.canceledQty) || 0), 0).toLocaleString()}
+                  </td>
                   <td className="px-3 py-2 text-right bg-emerald-50 text-emerald-700">
                     {detailedSchedules.reduce((sum, s) => sum + s.produced, 0).toLocaleString()}
                   </td>
@@ -246,14 +249,11 @@ export function ScheduledOrdersMaster() {
                   <td className="px-3 py-2 text-right bg-purple-50 text-purple-700">
                     {detailedSchedules.reduce((sum, s) => sum + s.invoiced, 0).toLocaleString()}
                   </td>
-                  <td className="px-3 py-2 text-right bg-red-50 text-red-700">
-                    {detailedSchedules.reduce((sum, s) => sum + (Number(s.canceledQty) || 0), 0).toLocaleString()}
+                  <td className="px-3 py-2 text-right bg-orange-50 text-orange-700">
+                    {detailedSchedules.reduce((sum, s) => sum + s.pendingInvoice, 0).toLocaleString()}
                   </td>
                   <td className="px-3 py-2 text-right bg-sky-50 text-sky-800">
                     {detailedSchedules.reduce((sum, s) => sum + s.pendingOrderQty, 0).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right bg-orange-50 text-orange-700">
-                    {detailedSchedules.reduce((sum, s) => sum + s.pendingInvoice, 0).toLocaleString()}
                   </td>
                 </tr>
               </tfoot>
