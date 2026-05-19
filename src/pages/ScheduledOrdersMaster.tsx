@@ -180,19 +180,51 @@ export function ScheduledOrdersMaster() {
           <table className="min-w-full divide-y divide-black border-collapse border border-black text-xs">
             <thead className="bg-slate-100">
               <tr className="divide-x divide-black">
-                <th className="px-3 py-2 border border-black text-left whitespace-nowrap">S.No</th>
-                <th className="px-3 py-2 border border-black text-left whitespace-nowrap">Sch. Date</th>
-                <th className="px-3 py-2 border border-black text-left whitespace-nowrap">Order No</th>
-                <th className="px-3 py-2 border border-black text-left">Company</th>
-                <th className="px-3 py-2 border border-black text-left">Item Name</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-indigo-50">Sch. Qty</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-red-50 text-red-700">Canceled</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-emerald-50">Production Planned</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-cyan-50 text-cyan-800">Pending Production Planning</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-amber-50">Loaded</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-purple-50">Invoiced</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap font-bold text-orange-700">Pend. Inv</th>
-                <th className="px-3 py-2 border border-black text-right whitespace-nowrap bg-sky-50 text-sky-800">Pend. Order Qty</th>
+                <th className="px-2 py-2 border border-black text-left leading-tight">S.No</th>
+                <th className="px-2 py-2 border border-black text-left leading-tight">
+                  <span className="block">Sch.</span>
+                  <span className="block">Date</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-left leading-tight">
+                  <span className="block">Order</span>
+                  <span className="block">No</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-left leading-tight">Company</th>
+                <th className="px-2 py-2 border border-black text-left leading-tight">
+                  <span className="block">Item</span>
+                  <span className="block">Name</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right bg-indigo-50 leading-tight">
+                  <span className="block">Sch.</span>
+                  <span className="block">Qty</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right bg-red-50 text-red-700 leading-tight">
+                  <span className="block">Canceled</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right bg-emerald-50 leading-tight">
+                  <span className="block">Production</span>
+                  <span className="block">Planned</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right bg-cyan-50 text-cyan-800 leading-tight">
+                  <span className="block">Pending</span>
+                  <span className="block">Production</span>
+                  <span className="block">Planning</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right bg-amber-50 leading-tight">
+                  <span className="block">Loaded</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right bg-purple-50 leading-tight">
+                  <span className="block">Invoiced</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right font-bold text-orange-700 leading-tight">
+                  <span className="block">Pend.</span>
+                  <span className="block">Inv</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right bg-sky-50 text-sky-800 leading-tight">
+                  <span className="block">Pend.</span>
+                  <span className="block">Order</span>
+                  <span className="block">Qty</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
