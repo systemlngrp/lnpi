@@ -527,32 +527,8 @@ export function ProductionForm() {
               <FormInput label="Breadth" value={formData.breadth} readOnly type="number" helpText="Auto-fetched from Item Master for the selected item." />
               <FormInput label="Height" value={formData.height} readOnly type="number" helpText="Auto-fetched from Item Master for the selected item." />
 
-              <div className="flex flex-col space-y-1">
-                <div className="text-[10px] font-black text-slate-500 uppercase inline-flex items-center gap-1">
-                  <span>PLY</span>
-                  <TooltipIcon helpText="Default selection comes from Item Master for the selected item. It also drives ID to OD and ID to OD 17 calculations." size={12} />
-                </div>
-                <select value={formData.ply} onChange={(e) => setFormData({...formData, ply: e.target.value})} className="border border-black rounded px-2 py-1 text-sm bg-slate-50">
-                    <option value="">-</option>
-                    <option value="3">3 PLY</option>
-                    <option value="5">5 PLY</option>
-                </select>
-              </div>
-              <div className="flex flex-col space-y-1">
-                <div className="text-[10px] font-black text-slate-500 uppercase inline-flex items-center gap-1">
-                  <span>Flute</span>
-                  <TooltipIcon helpText="Default selection comes from Item Master for the selected item. It also determines the Take up Factor used in GSM calculation." size={12} />
-                </div>
-                <select value={formData.flute} onChange={(e) => setFormData({...formData, flute: e.target.value})} className="border border-black rounded px-2 py-1 text-sm bg-slate-50">
-                    <option value="">-</option>
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                    <option value="C">C</option>
-                    <option value="E">E</option>
-                    <option value="B+C">B+C</option>
-                    <option value="B+E">B+E</option>
-                </select>
-              </div>
+              <FormInput label="PLY" value={formData.ply} readOnly helpText="Auto-fetched from Item Master for the selected item. It also drives ID to OD and ID to OD 17 calculations." />
+              <FormInput label="Flute" value={formData.flute} readOnly helpText="Auto-fetched from Item Master for the selected item. It also determines the Take up Factor used in GSM calculation." />
               <FormInput label="ID to OD" value={formData.idToOd} readOnly helpText="Auto-calculated from PLY. Current logic: 3 PLY = 6, 5 PLY = 10." />
 
               <FormInput label="Take up Factor" value={formData.takeUpFactor} readOnly helpText="Auto-calculated from flute type using fixed factors: A=1.5, B=1.35, C=1.42, E=1.26, B+C=1.38, B+E=1.3." />
