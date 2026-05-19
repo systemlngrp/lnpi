@@ -754,6 +754,13 @@ const createHandlers = (tableName: string) => {
       if (!db) return res.status(500).json({ error: "DB connection not available" });
       const data = normalizeWorkflowStatus(tableName, req.body);
       try {
+        if (tableName === "items") {
+          delete data.receipt;
+          delete data.production;
+          delete data.invoiced;
+          delete data.balance;
+        }
+
         // Auto-generate orderNo for orders when not provided
         if (tableName === 'orders') {
           try {
