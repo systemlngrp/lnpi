@@ -520,15 +520,18 @@ export function ProductionForm() {
             <h3 className="font-black uppercase text-xs text-slate-500 mb-4">Detailed Specifications</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormInput label="No. of Parts" value={formData.noOfParts} readOnly type="number" />
-              <FormInput label="UPS" value={formData.ups} onChange={(v) => setFormData({...formData, ups: v})} type="number" />
+              <FormInput label="No. of Parts" value={formData.noOfParts} readOnly type="number" helpText="Auto-fetched from Item Master for the selected item." />
+              <FormInput label="UPS" value={formData.ups} onChange={(v) => setFormData({...formData, ups: v})} type="number" helpText="Default value comes from Item Master for the selected item. You can adjust it here if needed." />
 
-              <FormInput label="Length" value={formData.length} readOnly type="number" />
-              <FormInput label="Breadth" value={formData.breadth} readOnly type="number" />
-              <FormInput label="Height" value={formData.height} readOnly type="number" />
+              <FormInput label="Length" value={formData.length} readOnly type="number" helpText="Auto-fetched from Item Master for the selected item." />
+              <FormInput label="Breadth" value={formData.breadth} readOnly type="number" helpText="Auto-fetched from Item Master for the selected item." />
+              <FormInput label="Height" value={formData.height} readOnly type="number" helpText="Auto-fetched from Item Master for the selected item." />
 
               <div className="flex flex-col space-y-1">
-                <label className="text-[10px] font-black text-slate-500 uppercase">PLY</label>
+                <div className="text-[10px] font-black text-slate-500 uppercase inline-flex items-center gap-1">
+                  <span>PLY</span>
+                  <TooltipIcon helpText="Default selection comes from Item Master for the selected item. It also drives ID to OD and ID to OD 17 calculations." size={12} />
+                </div>
                 <select value={formData.ply} onChange={(e) => setFormData({...formData, ply: e.target.value})} className="border border-black rounded px-2 py-1 text-sm bg-slate-50">
                     <option value="">-</option>
                     <option value="3">3 PLY</option>
@@ -536,7 +539,10 @@ export function ProductionForm() {
                 </select>
               </div>
               <div className="flex flex-col space-y-1">
-                <label className="text-[10px] font-black text-slate-500 uppercase">Flute</label>
+                <div className="text-[10px] font-black text-slate-500 uppercase inline-flex items-center gap-1">
+                  <span>Flute</span>
+                  <TooltipIcon helpText="Default selection comes from Item Master for the selected item. It also determines the Take up Factor used in GSM calculation." size={12} />
+                </div>
                 <select value={formData.flute} onChange={(e) => setFormData({...formData, flute: e.target.value})} className="border border-black rounded px-2 py-1 text-sm bg-slate-50">
                     <option value="">-</option>
                     <option value="A">A</option>
@@ -551,15 +557,15 @@ export function ProductionForm() {
 
               <FormInput label="Take up Factor" value={formData.takeUpFactor} readOnly helpText="Auto-calculated from flute type using fixed factors: A=1.5, B=1.35, C=1.42, E=1.26, B+C=1.38, B+E=1.3." />
               <FormInput label="GSM" value={formData.gsm} readOnly helpText="Formula: L1 + (F1 x Take up Factor) + L2 + (F2 x Take up Factor) + L3." />
-              <FormInput label="ERP Code Reel" value={formData.erpCodeReel} readOnly />
+              <FormInput label="ERP Code Reel" value={formData.erpCodeReel} readOnly helpText="Read-only reference field. It is shown from the production record/defaults when available." />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
-               <FormInput label="L1" value={formData.l1} onChange={(v) => setFormData({...formData, l1: v})} type="number" />
-               <FormInput label="F1" value={formData.f1} onChange={(v) => setFormData({...formData, f1: v})} type="number" />
-               <FormInput label="L2" value={formData.l2} onChange={(v) => setFormData({...formData, l2: v})} type="number" />
-               <FormInput label="F2" value={formData.f2} onChange={(v) => setFormData({...formData, f2: v})} type="number" />
-               <FormInput label="L3" value={formData.l3} onChange={(v) => setFormData({...formData, l3: v})} type="number" />
+               <FormInput label="L1" value={formData.l1} onChange={(v) => setFormData({...formData, l1: v})} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." />
+               <FormInput label="F1" value={formData.f1} onChange={(v) => setFormData({...formData, f1: v})} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." />
+               <FormInput label="L2" value={formData.l2} onChange={(v) => setFormData({...formData, l2: v})} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." />
+               <FormInput label="F2" value={formData.f2} onChange={(v) => setFormData({...formData, f2: v})} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." />
+               <FormInput label="L3" value={formData.l3} onChange={(v) => setFormData({...formData, l3: v})} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
@@ -568,30 +574,30 @@ export function ProductionForm() {
               <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText="Auto-calculated from length, breadth, number of parts, and ID to OD 17 logic." />
               
               <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly helpText="Formula: ((Reel Actual x Cutting Trim x GSM) / 1,000,000,000) / UPS." />
-              <FormInput label="Plate/PHP Weight" value={formData.plateWeight} readOnly type="number" step="0.00001" />
+              <FormInput label="Plate/PHP Weight" value={formData.plateWeight} readOnly type="number" step="0.00001" helpText="Auto-fetched from Item Master for the selected item." />
               <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly helpText="Formula: Sheet Weight x Quantity." />
               
               <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly helpText="Formula: Sheet Weight + Plate/PHP Weight." />
-              <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" />
-              <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" />
+              <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" helpText="Read-only field reserved for production/approval flow data when available." />
+              <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" helpText="Read-only field reserved for actual paper consumption data when available." />
               
-              <FormInput label="Rate" value={formData.rate} readOnly type="number" />
+              <FormInput label="Rate" value={formData.rate} readOnly type="number" helpText="Auto-fetched from the selected order." />
               <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: (Rate / Total Weight of Set) x Number of Parts." />
-              <FormInput label="Realization Status" value={formData.realizationApprovalStatus} readOnly />
+              <FormInput label="Realization Status" value={formData.realizationApprovalStatus} readOnly helpText="Read-only approval/status field shown from production workflow data when available." />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <FormInput label="Prod (Sheet Plant)" value={formData.prodFromSheetPlant} readOnly type="number" />
-              <FormInput label="Prod (FFG)" value={formData.prodFromFFG} readOnly type="number" />
-              <FormInput label="Wastage" value={formData.wastage} readOnly type="number" />
+              <FormInput label="Prod (Sheet Plant)" value={formData.prodFromSheetPlant} readOnly type="number" helpText="Read-only field for output recorded from Sheet Plant stage when available." />
+              <FormInput label="Prod (FFG)" value={formData.prodFromFFG} readOnly type="number" helpText="Read-only field for finished goods production recorded later in the workflow." />
+              <FormInput label="Wastage" value={formData.wastage} readOnly type="number" helpText="Read-only field for wastage quantity recorded later in the workflow." />
               
-              <FormInput label="Wastage Approval" value={formData.wastageApproval} readOnly />
+              <FormInput label="Wastage Approval" value={formData.wastageApproval} readOnly helpText="Read-only approval/status field for wastage when available." />
               <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly helpText="Formula: ((Cutting Trim x Quantity) / 1000) / UPS." />
-              <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" />
+              <FormInput label="Planned Prod (Mtr)" value={formData.plannedProductionInMeter} readOnly type="number" helpText="Read-only field reserved for planned production in meter when available." />
               
-              <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} readOnly type="number" step="0.00001" />
-              <FormInput label="Flute Batches" value={formData.fluteBatches} readOnly />
-              <FormInput label="Company Name" value={formData.companyName} readOnly />
+              <FormInput label="Least Sheet Wt" value={formData.leastSheetWeight} readOnly type="number" step="0.00001" helpText="Read-only field reserved for least sheet weight reference when available." />
+              <FormInput label="Flute Batches" value={formData.fluteBatches} readOnly helpText="Read-only reference field for flute batch information when available." />
+              <FormInput label="Company Name" value={formData.companyName} readOnly helpText="Auto-fetched from the selected order's company." />
             </div>
           </div>
 
