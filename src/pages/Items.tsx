@@ -431,23 +431,23 @@ export function Items() {
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Opening</div>
-                              <div className="text-sm">{item.opening.toLocaleString()}</div>
+                              <div className="text-sm">{Number(item.opening || 0).toLocaleString()}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Receipt</div>
-                              <div className="text-sm">{item.receipt.toLocaleString()}</div>
+                              <div className="text-sm">{Number(item.receipt || 0).toLocaleString()}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Production</div>
-                              <div className="text-sm">{item.production.toLocaleString()}</div>
+                              <div className="text-sm">{Number(item.production || 0).toLocaleString()}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Invoiced</div>
-                              <div className="text-sm">{item.invoiced.toLocaleString()}</div>
+                              <div className="text-sm">{Number(item.invoiced || 0).toLocaleString()}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Balance</div>
-                              <div className="text-sm">{item.balance.toLocaleString()}</div>
+                              <div className="text-sm">{Number(item.balance || 0).toLocaleString()}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Parts</div>
@@ -530,11 +530,11 @@ export function Items() {
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.gstRate ?? 18}%</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.erp ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.itemType || "Others"}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{item.opening.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{item.receipt.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{item.production.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{item.invoiced.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right font-medium">{item.balance.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.opening || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.receipt || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.production || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.invoiced || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right font-medium">{Number(item.balance || 0).toLocaleString()}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.noOfParts ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.ups ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.length ?? ""}</td>

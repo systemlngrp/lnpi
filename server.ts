@@ -707,7 +707,7 @@ const createHandlers = (tableName: string) => {
                 )
               ) jt
               GROUP BY jt.itemId
-            ) r ON r.itemId = i.id
+            ) r ON r.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
             LEFT JOIN (
               SELECT
                 itemId,
@@ -715,14 +715,14 @@ const createHandlers = (tableName: string) => {
               FROM \`productions\`
               WHERE status <> 'Cancelled' OR status IS NULL
               GROUP BY itemId
-            ) p ON p.itemId = i.id
+            ) p ON p.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
             LEFT JOIN (
               SELECT
                 itemId,
                 SUM(COALESCE(qty, 0)) AS invoiced
               FROM \`invoice_line_items\`
               GROUP BY itemId
-            ) inv ON inv.itemId = i.id
+            ) inv ON inv.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
           `);
         } else {
           [rows] = await db.query(`SELECT * FROM \`${tableName}\``);
