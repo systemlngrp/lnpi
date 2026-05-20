@@ -411,16 +411,124 @@ export function Items() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Basic Info</h4>
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Primary Details</h4>
+                <div className="flex flex-col space-y-1">
+                  <label className="font-bold text-black text-sm">ERP CODE (whole number)</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={erp}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setErp(v);
+                    }}
+                    placeholder="Enter ERP"
+                    className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <label className="font-bold text-black text-sm">CUSTOMER</label>
+                  <input type="text" value={customer} onChange={(e) => setCustomer(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
+                </div>
                 <div className="flex flex-col space-y-1">
                   <label className="font-bold text-black text-sm">Item Name *</label>
                   <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
                 </div>
                 <div className="flex flex-col space-y-1">
-                  <label className="font-bold text-black text-sm">Item Group *</label>
-                  <Select value={groupId} onChange={setGroupId} onAdd={handleCreateNewGroup} options={groupOptions} placeholder="Select Item Group..." required />
+                  <label className="font-bold text-black text-sm">TYPE</label>
+                  <CreatableDropdown value={typeName} onChange={setTypeName} options={businessTypeOptions} placeholder="Select or add type..." />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
+                  <FormItem label="Open Length" value={openLength} onChange={setOpenLength} type="number" />
+                  <FormItem label="Open Width" value={openWidth} onChange={setOpenWidth} type="number" />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Physical Specs</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <FormItem label="Length" value={length} onChange={setLength} type="number" />
+                  <FormItem label="Bredth" value={breadth} onChange={setBreadth} type="number" />
+                  <FormItem label="Height" value={height} onChange={setHeight} type="number" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormItem label="Ups" value={ups} onChange={setUps} type="number" />
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm uppercase text-[10px]">PLY</label>
+                    <CreatableDropdown value={ply} onChange={setPly} options={plyDropdownOptions} placeholder="Select or add ply..." numericOnly />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm uppercase text-[10px]">Flute</label>
+                    <CreatableDropdown value={flute} onChange={setFlute} options={fluteDropdownOptions} placeholder="Select or add flute..." />
+                  </div>
+                  <FormItem label="PART" value={calculatedItemFields.noOfPartsCalculated} onChange={() => {}} type="number" readOnly />
+                </div>
+                <FormItem label="Die Cut Ups" value={dieCutUps} onChange={setDieCutUps} type="number" />
+              </div>
+            </div>
+
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Paper & Shade Details</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <FormItem label="TOP" value={l1} onChange={setL1} type="number" />
+                    <div className="flex flex-col space-y-1">
+                      <label className="font-bold text-black text-sm uppercase text-[10px]">Top Paper Shade</label>
+                      <CreatableDropdown value={topPaperShade} onChange={setTopPaperShade} options={colorOptions} placeholder="Select or add shade..." onCreateOption={ensureColorMasterValue} />
+                    </div>
+                    <FormItem label="A-Flute" value={f1} onChange={setF1} type="number" />
+                    <FormItem label="A-Backing" value={l2} onChange={setL2} type="number" />
+                    <FormItem label="B-Flute" value={f2} onChange={setF2} type="number" />
+                    <FormItem label="B-Backing" value={l3} onChange={setL3} type="number" />
+                    <FormItem label="F3" value={f3} onChange={setF3} type="number" />
+                    <FormItem label="B3" value={b3} onChange={setB3} type="number" />
+                    <div className="flex flex-col space-y-1">
+                      <label className="font-bold text-black text-sm uppercase text-[10px]">Backing Paper Shade</label>
+                      <CreatableDropdown value={backingPaperShade} onChange={setBackingPaperShade} options={colorOptions} placeholder="Select or add shade..." onCreateOption={ensureColorMasterValue} />
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Printing & Finishing</h4>
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col space-y-1">
+                      <label className="font-bold text-black text-sm uppercase text-[10px]">Printing Colour 1</label>
+                      <CreatableDropdown value={printingColour1} onChange={setPrintingColour1} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} />
+                    </div>
+                    <div className="flex flex-col space-y-1">
+                      <label className="font-bold text-black text-sm uppercase text-[10px]">Printing Colour 2</label>
+                      <CreatableDropdown value={printingColour2} onChange={setPrintingColour2} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} />
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Calculations & Rates</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <FormItem label="L (OD)" value={String(calculatedItemFields.lOdCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="W (OD)" value={String(calculatedItemFields.wOdCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="H (OD)" value={String(calculatedItemFields.hOdCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="Flap" value={String(calculatedItemFields.flapCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="Deckle Size" value={String(calculatedItemFields.deckleCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="Cutting Size" value={String(calculatedItemFields.cuttingCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="Rate" value={itemRate} onChange={setItemRate} type="number" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormItem label="Artwork" value={artwork} onChange={setArtwork} />
+                    <FormItem label="Spec" value={spec} onChange={setSpec} />
+                </div>
+            </div>
+
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Other Info</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm">Item Group *</label>
+                    <Select value={groupId} onChange={setGroupId} onAdd={handleCreateNewGroup} options={groupOptions} placeholder="Select Item Group..." required />
+                  </div>
                   <div className="flex flex-col space-y-1">
                     <label className="font-bold text-black text-sm">UOM *</label>
                     <Select value={uom} onChange={setUom} options={uomOptions} placeholder="Select UOM..." required />
@@ -440,125 +548,23 @@ export function Items() {
                       <option value="28">28%</option>
                     </select>
                   </div>
-                </div>
-                <div className="flex flex-col space-y-1">
-                  <label className="font-bold text-black text-sm">ERP (whole number)</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={erp}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/[^0-9]/g, "");
-                      setErp(v);
-                    }}
-                    placeholder="Enter ERP"
-                    className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                  />
-                </div>
-                <div className="flex flex-col space-y-1">
-                  <label className="font-bold text-black text-sm">Item Type *</label>
-                  <Select value={itemType} onChange={(value) => setItemType(value as "FG" | "Reel" | "Others")} options={itemTypeOptions} placeholder="Select Item Type..." required />
-                </div>
-                <div className="flex flex-col space-y-1">
-                  <label className="font-bold text-black text-sm">Type</label>
-                  <CreatableDropdown value={typeName} onChange={setTypeName} options={businessTypeOptions} placeholder="Select or add type..." />
-                </div>
-                <div className="flex flex-col space-y-1">
-                  <label className="font-bold text-black text-sm">Customer</label>
-                  <input type="text" value={customer} onChange={(e) => setCustomer(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormItem label="Open Length" value={openLength} onChange={setOpenLength} type="number" />
-                  <FormItem label="Open Width" value={openWidth} onChange={setOpenWidth} type="number" />
-                </div>
-                <div className="flex flex-col space-y-1">
-                  <label className="font-bold text-black text-sm">Opening</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={opening}
-                    onChange={(e) => setOpening(e.target.value)}
-                    placeholder="Enter opening balance"
-                    className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Dimensions & Parts</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormItem label="No. of Parts" value={calculatedItemFields.noOfPartsCalculated} onChange={() => {}} type="number" readOnly />
-                  <FormItem label="UPS" value={ups} onChange={setUps} type="number" />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <FormItem label="Length" value={length} onChange={setLength} type="number" />
-                  <FormItem label="Breadth" value={breadth} onChange={setBreadth} type="number" />
-                  <FormItem label="Height" value={height} onChange={setHeight} type="number" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col space-y-1">
-                    <label className="font-bold text-black text-sm uppercase text-[10px]">PLY</label>
-                    <CreatableDropdown value={ply} onChange={setPly} options={plyDropdownOptions} placeholder="Select or add ply..." numericOnly />
+                    <label className="font-bold text-black text-sm">Item Type *</label>
+                    <Select value={itemType} onChange={(value) => setItemType(value as "FG" | "Reel" | "Others")} options={itemTypeOptions} placeholder="Select Item Type..." required />
                   </div>
                   <div className="flex flex-col space-y-1">
-                    <label className="font-bold text-black text-sm uppercase text-[10px]">Flute</label>
-                    <CreatableDropdown value={flute} onChange={setFlute} options={fluteDropdownOptions} placeholder="Select or add flute..." />
+                    <label className="font-bold text-black text-sm">Opening</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={opening}
+                      onChange={(e) => setOpening(e.target.value)}
+                      placeholder="Enter opening balance"
+                      className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                    />
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormItem label="Die Cut Ups" value={dieCutUps} onChange={setDieCutUps} type="number" />
-                  <div className="flex flex-col space-y-1">
-                    <label className="font-bold text-black text-sm uppercase text-[10px]">Top Paper Shade</label>
-                    <CreatableDropdown value={topPaperShade} onChange={setTopPaperShade} options={colorOptions} placeholder="Select or add shade..." onCreateOption={ensureColorMasterValue} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <FormItem label="Plate Wt" value={plateWeight} onChange={setPlateWeight} type="number" step="0.00001" />
                   <FormItem label="GSM (Least Cost)" value={gsmLeastCost} onChange={setGsmLeastCost} type="number" />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 border-t border-slate-100 pt-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Default Paper Layers</h4>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <FormItem label="L1 (Top)" value={l1} onChange={setL1} type="number" />
-                    <FormItem label="F1 (Flute)" value={f1} onChange={setF1} type="number" />
-                    <FormItem label="L2 (Middle)" value={l2} onChange={setL2} type="number" />
-                    <FormItem label="F2 (Flute)" value={f2} onChange={setF2} type="number" />
-                    <FormItem label="L3 (Bottom)" value={l3} onChange={setL3} type="number" />
-                </div>
-            </div>
-
-            <div className="space-y-4 border-t border-slate-100 pt-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Extended Specs</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <FormItem label="F3" value={f3} onChange={setF3} type="number" />
-                    <FormItem label="B3" value={b3} onChange={setB3} type="number" />
-                    <div className="flex flex-col space-y-1">
-                      <label className="font-bold text-black text-sm uppercase text-[10px]">Backing Paper Shade</label>
-                      <CreatableDropdown value={backingPaperShade} onChange={setBackingPaperShade} options={colorOptions} placeholder="Select or add shade..." onCreateOption={ensureColorMasterValue} />
-                    </div>
-                    <div className="flex flex-col space-y-1">
-                      <label className="font-bold text-black text-sm uppercase text-[10px]">Printing Colour 1</label>
-                      <CreatableDropdown value={printingColour1} onChange={setPrintingColour1} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} />
-                    </div>
-                    <div className="flex flex-col space-y-1">
-                      <label className="font-bold text-black text-sm uppercase text-[10px]">Printing Colour 2</label>
-                      <CreatableDropdown value={printingColour2} onChange={setPrintingColour2} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} />
-                    </div>
-                    <FormItem label="L (OD)" value={String(calculatedItemFields.lOdCalculated)} onChange={() => {}} type="number" readOnly />
-                    <FormItem label="W (OD)" value={String(calculatedItemFields.wOdCalculated)} onChange={() => {}} type="number" readOnly />
-                    <FormItem label="H (OD)" value={String(calculatedItemFields.hOdCalculated)} onChange={() => {}} type="number" readOnly />
-                    <FormItem label="Flap" value={String(calculatedItemFields.flapCalculated)} onChange={() => {}} type="number" readOnly />
-                    <FormItem label="Deckle Size" value={String(calculatedItemFields.deckleCalculated)} onChange={() => {}} type="number" readOnly />
-                    <FormItem label="Cutting Size" value={String(calculatedItemFields.cuttingCalculated)} onChange={() => {}} type="number" readOnly />
-                    <FormItem label="Rate" value={itemRate} onChange={setItemRate} type="number" />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormItem label="Artwork" value={artwork} onChange={setArtwork} />
-                    <FormItem label="Spec" value={spec} onChange={setSpec} />
                 </div>
             </div>
 
@@ -643,68 +649,28 @@ export function Items() {
                         </div>
                         <div className="flex gap-4 flex-wrap">
                             <div>
-                                <div className="text-xs font-black text-slate-500 uppercase">Group</div>
-                                <div className="text-sm">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">UOM</div>
-                              <div className="text-sm">{item.uom}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">GST</div>
-                              <div className="text-sm">{item.gstRate ?? 18}%</div>
-                            </div>
-                            <div>
                               <div className="text-xs font-black text-slate-500 uppercase">ERP</div>
                               <div className="text-sm">{item.erp ?? ""}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">Item Type</div>
-                              <div className="text-sm">{item.itemType || "Others"}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">Type</div>
-                              <div className="text-sm">{item.typeName ?? ""}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Customer</div>
                               <div className="text-sm">{item.customer ?? ""}</div>
                             </div>
                             <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Type</div>
+                              <div className="text-sm">{item.typeName ?? ""}</div>
+                            </div>
+                            <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Open L/W</div>
                               <div className="text-sm">{item.openLength ?? ""}{item.openLength ? "/" : ""}{item.openWidth ?? ""}</div>
                             </div>
                             <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">Opening</div>
-                              <div className="text-sm">{Number(item.opening || 0).toLocaleString()}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">Receipt</div>
-                              <div className="text-sm">{Number(item.receipt || 0).toLocaleString()}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">Production</div>
-                              <div className="text-sm">{Number(item.production || 0).toLocaleString()}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">Invoiced</div>
-                              <div className="text-sm">{Number(item.invoiced || 0).toLocaleString()}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">Balance</div>
-                              <div className="text-sm">{Number(item.balance || 0).toLocaleString()}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">No. of Parts</div>
-                              <div className="text-sm">{item.noOfParts ?? ""}</div>
+                              <div className="text-xs font-black text-slate-500 uppercase">L×B×H</div>
+                              <div className="text-sm">{(item.length ?? "")}{item.length ? " × " : ""}{(item.breadth ?? "")}{item.breadth ? " × " : ""}{(item.height ?? "")}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">UPS</div>
                               <div className="text-sm">{item.ups ?? ""}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">L×B×H</div>
-                              <div className="text-sm">{(item.length ?? "")}{item.length ? " × " : ""}{(item.breadth ?? "")}{item.breadth ? " × " : ""}{(item.height ?? "")}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">PLY</div>
@@ -715,24 +681,36 @@ export function Items() {
                               <div className="text-sm">{item.flute ?? ""}</div>
                             </div>
                             <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">PART</div>
+                              <div className="text-sm">{item.noOfParts ?? ""}</div>
+                            </div>
+                            <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Die Cut Ups</div>
                               <div className="text-sm">{item.dieCutUps ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">TOP</div>
+                              <div className="text-sm">{item.l1 ?? ""}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Top Shade</div>
                               <div className="text-sm">{item.topPaperShade ?? ""}</div>
                             </div>
                             <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">Plate Wt</div>
-                              <div className="text-sm">{item.plateWeight ?? ""}</div>
+                              <div className="text-xs font-black text-slate-500 uppercase">A-Flute</div>
+                              <div className="text-sm">{item.f1 ?? ""}</div>
                             </div>
                             <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">GSM</div>
-                              <div className="text-sm">{item.gsmLeastCost ?? ""}</div>
+                              <div className="text-xs font-black text-slate-500 uppercase">A-Backing</div>
+                              <div className="text-sm">{item.l2 ?? ""}</div>
                             </div>
                             <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">L1/F1/L2/F2/L3</div>
-                              <div className="text-sm">{item.l1 ?? ""}{item.l1 ? "/" : ""}{item.f1 ?? ""}{item.f1 ? "/" : ""}{item.l2 ?? ""}{item.l2 ? "/" : ""}{item.f2 ?? ""}{item.f2 ? "/" : ""}{item.l3 ?? ""}</div>
+                              <div className="text-xs font-black text-slate-500 uppercase">B-Flute</div>
+                              <div className="text-sm">{item.f2 ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">B-Backing</div>
+                              <div className="text-sm">{item.l3 ?? ""}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">F3/B3</div>
@@ -770,6 +748,50 @@ export function Items() {
                               <div className="text-xs font-black text-slate-500 uppercase">Spec</div>
                               <div className="text-sm">{item.spec ?? ""}</div>
                             </div>
+                            <div>
+                                <div className="text-xs font-black text-slate-500 uppercase">Opening</div>
+                                <div className="text-sm">{Number(item.opening || 0).toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs font-black text-slate-500 uppercase">Receipt</div>
+                                <div className="text-sm">{Number(item.receipt || 0).toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs font-black text-slate-500 uppercase">Production</div>
+                                <div className="text-sm">{Number(item.production || 0).toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs font-black text-slate-500 uppercase">Invoiced</div>
+                                <div className="text-sm">{Number(item.invoiced || 0).toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs font-black text-slate-500 uppercase">Balance</div>
+                                <div className="text-sm">{Number(item.balance || 0).toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs font-black text-slate-500 uppercase">Group</div>
+                                <div className="text-sm">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">UOM</div>
+                              <div className="text-sm">{item.uom}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">GST</div>
+                              <div className="text-sm">{item.gstRate ?? 18}%</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Item Type</div>
+                              <div className="text-sm">{item.itemType || "Others"}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Plate Wt</div>
+                              <div className="text-sm">{item.plateWeight ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">GSM</div>
+                              <div className="text-sm">{item.gsmLeastCost ?? ""}</div>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -779,37 +801,26 @@ export function Items() {
               <table className="hidden md:table min-w-max divide-y divide-black border-collapse border border-black">
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP CODE</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">CUSTOMER</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Group</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">GST</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Type</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Type</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Customer</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">TYPE</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Open Length</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Open Width</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Opening</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Receipt</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Production</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Invoiced</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Balance</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">No. of Parts</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">UPS</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Length</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Breadth</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Bredth</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Height</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Ups</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">PLY</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Flute</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">FLUTE</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">PART</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Die Cut Ups</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">TOP</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Top Paper Shade</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Plate Wt</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">GSM</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">L1</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">F1</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">L2</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">F2</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">L3</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">A-Flute</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">A-Backing</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">B-Flute</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">B-Backing</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">F3</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">B3</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Backing Paper Shade</th>
@@ -824,42 +835,43 @@ export function Items() {
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Rate</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Artwork</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Spec</th>
+                      {/* Remaining fields */}
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Opening</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Receipt</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Production</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Invoiced</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Balance</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Group</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">GST</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Type</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Plate Wt</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">GSM</th>
                       <th className="px-4 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
                     </tr>
               </thead>
               <tbody className="divide-y divide-black bg-white">
                     {filteredItems.length === 0 ? (
-                      <tr><td colSpan={45} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
+                      <tr><td colSpan={46} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
                     ) : (
                   filteredItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
-                      <td className="px-4 py-3 text-sm font-medium text-black border border-black">{item.name}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.uom}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.gstRate ?? 18}%</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.erp ?? ""}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.itemType || "Others"}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.typeName ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.customer ?? ""}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-black border border-black">{item.name}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.typeName ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.openLength ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.openWidth ?? ""}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.opening || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.receipt || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.production || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.invoiced || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right font-medium">{Number(item.balance || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.noOfParts ?? ""}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.ups ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.length ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.breadth ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.height ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.ups ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.ply ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.flute ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.noOfParts ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.dieCutUps ?? ""}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.topPaperShade ?? ""}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.plateWeight ?? ""}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.gsmLeastCost ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.l1 ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.topPaperShade ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.f1 ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.l2 ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.f2 ?? ""}</td>
@@ -878,6 +890,18 @@ export function Items() {
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.rate ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.artwork ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.spec ?? ""}</td>
+                      {/* Remaining fields */}
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.opening || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.receipt || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.production || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.invoiced || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right font-medium">{Number(item.balance || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{groups.find(g => g.id === item.groupId)?.name || "Unknown"}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.uom}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.gstRate ?? 18}%</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.itemType || "Others"}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.plateWeight ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.gsmLeastCost ?? ""}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
                             <button onClick={() => { 
                                 setName(item.name); 
