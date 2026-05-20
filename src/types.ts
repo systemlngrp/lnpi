@@ -83,6 +83,27 @@ export interface ColorMaster {
   updateTimestamp?: string;
 }
 
+export interface Machine {
+  id: string;
+  name: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface ProductionProcessing {
+  id: string;
+  productionId: string;
+  jobNo: string | number;
+  machineId: string;
+  machineName: string;
+  qty: number;
+  operatorId: string;
+  operatorName: string;
+  date: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -240,6 +261,8 @@ export interface Consumption {
   tallyTimestamp?: string;
   updatedBy?: string;
   updateTimestamp?: string;
+  productionId?: string;
+  jobCardNo?: string | number;
 }
 
 export interface SampleRequest {

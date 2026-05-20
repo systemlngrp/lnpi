@@ -1,17 +1,20 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company } from "../types";
+import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
-import { Trash2 } from "lucide-react";
+import { Trash2, ClipboardList } from "lucide-react";
 import { ExcelExport } from "../components/ExcelExport";
+import { useNavigate } from "react-router-dom";
 
 export function ProductionMaster() {
+  const navigate = useNavigate();
   const [productions, setProductions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [processing] = useData<ProductionProcessing>("production_processing", []);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -56,6 +59,14 @@ export function ProductionMaster() {
       (company?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
     })
     .sort((a, b) => b.transactionNo.localeCompare(a.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
+
+  const getProcessingSummary = (pId: string) => {
+    const records = processing.filter(p => p.productionId === pId);
+    if (records.length === 0) return "Pending";
+    const machines = Array.from(new Set(records.map(r => r.machineName))).join(", ");
+    const totalQty = records.reduce((sum, r) => sum + r.qty, 0);
+    return `${machines} (${totalQty})`;
+  };
 
   const exportData = filteredList.map(p => {
     const item = items.find(i => i.id === p.itemId);
@@ -107,6 +118,7 @@ export function ProductionMaster() {
       "Prod (Meter)": p.productionInMeter,
       "Planned Prod (Meter)": p.plannedProductionInMeter,
       "ERP Code Reel": p.erpCodeReel,
+      "Processing Info": getProcessingSummary(p.id),
       "Remarks": p.remarks,
       "Cancel Date": p.cancelTimestamp ? formatDate(p.cancelTimestamp) : "-",
       "Cancel Remarks": p.cancelRemarks || "-"
@@ -165,17 +177,28 @@ export function ProductionMaster() {
                             {leastGsm && <span className="text-[10px] font-black text-emerald-700">Least: {leastGsm}</span>}
                         </div>
                       </div>
+                      <div className="text-[10px] font-bold text-indigo-600 bg-indigo-50 p-1.5 rounded border border-indigo-100">
+                        Processing: {getProcessingSummary(p.id)}
+                      </div>
                       {p.status === 'Cancelled' && p.cancelRemarks && (
                         <div className="text-xs bg-red-50 text-red-700 p-2 border border-red-200 rounded font-medium mt-1">
                           Cancel Reason: {p.cancelRemarks}
                         </div>
                       )}
-                       <button 
-                        onClick={() => handleDelete(p.id)} 
-                        className={`${deletingId === p.id ? "text-amber-600 animate-pulse bg-amber-50" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center w-full justify-center p-2 mt-2 border border-black`}
-                      >
-                        <Trash2 size={16} className="mr-1" /> {deletingId === p.id ? "Confirm Delete?" : "Delete"}
-                      </button>
+                       <div className="flex gap-2 mt-2">
+                        <button 
+                          onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
+                          className="flex-1 bg-indigo-600 text-white font-bold inline-flex items-center justify-center p-2 border border-black text-xs hover:bg-indigo-700"
+                        >
+                          <ClipboardList size={14} className="mr-1" /> Report Proc.
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(p.id)} 
+                          className={`${deletingId === p.id ? "text-amber-600 animate-pulse bg-amber-50" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-center p-2 border border-black text-xs min-w-[80px]`}
+                        >
+                          <Trash2 size={14} className="mr-1" /> {deletingId === p.id ? "Confirm?" : "Delete"}
+                        </button>
+                      </div>
                   </div>
                 );
             })}
@@ -204,6 +227,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Avg Wt</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Wastage</th>
                 
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Processing Status</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
               </tr>
@@ -244,6 +268,10 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.avgWeight || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.wastage || "-"}</td>
 
+                      <td className="px-4 py-4 text-xs text-indigo-600 font-bold border border-black max-w-[200px] truncate" title={getProcessingSummary(p.id)}>
+                        {getProcessingSummary(p.id)}
+                      </td>
+
                       <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
                           p.status === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
@@ -259,13 +287,22 @@ export function ProductionMaster() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
-                        <button 
-                          onClick={() => handleDelete(p.id)} 
-                          title={deletingId === p.id ? "Click to confirm delete" : "Delete production entry"}
-                          className={`${deletingId === p.id ? "text-amber-600 animate-pulse scale-110" : "text-red-600"} hover:text-red-900 transition-all p-1`}
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center justify-center gap-3">
+                          <button 
+                            onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
+                            title="Report Processing"
+                            className="text-indigo-600 hover:text-indigo-900 transition-all p-1"
+                          >
+                            <ClipboardList size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(p.id)} 
+                            title={deletingId === p.id ? "Click to confirm delete" : "Delete production entry"}
+                            className={`${deletingId === p.id ? "text-amber-600 animate-pulse scale-110" : "text-red-600"} hover:text-red-900 transition-all p-1`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

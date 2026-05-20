@@ -11,6 +11,7 @@ import { Suppliers } from "./pages/Suppliers";
 import { ColorMasters } from "./pages/ColorMasters";
 import { Companies } from "./pages/Companies";
 import { Trucks } from "./pages/Trucks";
+import { Machines } from "./pages/Machines";
 import { MaterialInForm } from "./pages/MaterialInForm";
 import { PendingPHApproval } from "./pages/PendingPHApproval";
 import { PendingAccountsApproval } from "./pages/PendingAccountsApproval";
@@ -23,6 +24,8 @@ import { PendingProduction } from "./pages/PendingProduction";
 import { ProductionPendingPH } from "./pages/ProductionPendingPH";
 import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
+import { ProductionProcessingForm } from "./pages/ProductionProcessingForm";
+import { ProductionProcessingMaster } from "./pages/ProductionProcessingMaster";
 import { ItemwiseLeastCost } from "./pages/ItemwiseLeastCost";
 import { CanceledProductions } from "./pages/CanceledProductions";
 import { SampleForm } from "./pages/SampleForm";
@@ -78,6 +81,7 @@ export default function App() {
           <Route path="masters/colors" element={<ColorMasters />} />
           <Route path="masters/companies" element={<Companies />} />
           <Route path="masters/trucks" element={<Trucks />} />
+          <Route path="masters/machines" element={<Machines />} />
           <Route path="masters/users" element={<Users />} />
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />
@@ -103,6 +107,8 @@ export default function App() {
           <Route path="production/pending-ph" element={<ProductionPendingPH />} />
           <Route path="production/pending-tally" element={<ProductionPendingTally />} />
           <Route path="production/master" element={<ProductionMaster />} />
+          <Route path="production-processing/form" element={<ProductionProcessingForm />} />
+          <Route path="production-processing/master" element={<ProductionProcessingMaster />} />
           <Route path="production/least-cost" element={<ItemwiseLeastCost />} />
           <Route path="production/canceled" element={<CanceledProductions />} />
 

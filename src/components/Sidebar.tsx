@@ -118,6 +118,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Colors", href: "/masters/colors", icon: Plus },
         { name: "Companies", href: "/masters/companies", icon: Database },
         { name: "Trucks", href: "/masters/trucks", icon: Truck },
+        { name: "Machines", href: "/masters/machines", icon: Hammer },
         { name: "Users", href: "/masters/users", icon: Users },
       ],
     },
@@ -158,6 +159,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Production Master", href: "/production/master", icon: Database },
         { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
         { name: "Canceled Jobs", href: "/production/canceled", icon: X },
+      ],
+    },
+    {
+      section: "Production Processing",
+      color: "bg-teal-800",
+      items: [
+        { name: "Reporting Form", href: "/production-processing/form", icon: ClipboardList },
+        { name: "Reporting Master", href: "/production-processing/master", icon: Database },
       ],
     },
     {
