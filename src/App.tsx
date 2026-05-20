@@ -8,6 +8,7 @@ import { Layout } from "./components/Layout";
 import { ItemGroups } from "./pages/ItemGroups";
 import { Items } from "./pages/Items";
 import { Suppliers } from "./pages/Suppliers";
+import { ColorMasters } from "./pages/ColorMasters";
 import { Companies } from "./pages/Companies";
 import { Trucks } from "./pages/Trucks";
 import { MaterialInForm } from "./pages/MaterialInForm";
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="masters/item-groups" element={<ItemGroups />} />
           <Route path="masters/items" element={<Items />} />
           <Route path="masters/suppliers" element={<Suppliers />} />
+          <Route path="masters/colors" element={<ColorMasters />} />
           <Route path="masters/companies" element={<Companies />} />
           <Route path="masters/trucks" element={<Trucks />} />
           <Route path="masters/users" element={<Users />} />

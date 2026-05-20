@@ -176,6 +176,10 @@ async function initDb(retries = 5) {
           \`uom\` VARCHAR(50) NOT NULL,
           \`erp\` INT DEFAULT NULL,
           \`itemType\` VARCHAR(20) DEFAULT 'Others',
+          \`typeName\` VARCHAR(255),
+          \`customer\` VARCHAR(255),
+          \`openLength\` DECIMAL(15,2),
+          \`openWidth\` DECIMAL(15,2),
           \`opening\` DECIMAL(15,2) DEFAULT 0,
           \`gstRate\` DECIMAL(5,2) DEFAULT 18.00,
           \`noOfParts\` INT,
@@ -185,6 +189,9 @@ async function initDb(retries = 5) {
           \`height\` DECIMAL(15,2),
           \`ply\` INT,
           \`flute\` VARCHAR(50),
+          \`part\` VARCHAR(255),
+          \`dieCutUps\` INT,
+          \`topPaperShade\` VARCHAR(255),
           \`plateWeight\` DECIMAL(15,5),
           \`gsmLeastCost\` DECIMAL(15,2),
           \`l1\` DECIMAL(15,2),
@@ -192,6 +199,20 @@ async function initDb(retries = 5) {
           \`l2\` DECIMAL(15,2),
           \`f2\` DECIMAL(15,2),
           \`l3\` DECIMAL(15,2),
+          \`f3\` DECIMAL(15,2),
+          \`b3\` DECIMAL(15,2),
+          \`backingPaperShade\` VARCHAR(255),
+          \`printingColour1\` VARCHAR(255),
+          \`printingColour2\` VARCHAR(255),
+          \`lOd\` DECIMAL(15,2),
+          \`wOd\` DECIMAL(15,2),
+          \`hOd\` DECIMAL(15,2),
+          \`flap\` DECIMAL(15,2),
+          \`deckleSize\` DECIMAL(15,2),
+          \`cuttingSize\` DECIMAL(15,2),
+          \`rate\` DECIMAL(15,2),
+          \`artwork\` TEXT,
+          \`spec\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -199,6 +220,15 @@ async function initDb(retries = 5) {
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`suppliers\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`color_masters\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
           \`updatedBy\` VARCHAR(255),
@@ -467,9 +497,14 @@ async function initDb(retries = 5) {
         { table: "items", column: "uom", type: "VARCHAR(50) NOT NULL" },
         { table: "items", column: "erp", type: "INT" },
         { table: "items", column: "itemType", type: "VARCHAR(20) DEFAULT 'Others'" },
+        { table: "items", column: "typeName", type: "VARCHAR(255)" },
+        { table: "items", column: "customer", type: "VARCHAR(255)" },
+        { table: "items", column: "openLength", type: "DECIMAL(15,2)" },
+        { table: "items", column: "openWidth", type: "DECIMAL(15,2)" },
         { table: "items", column: "opening", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "item_groups", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "color_masters", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "material_in", column: "timestamp", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "entryEmailId", type: "VARCHAR(255) NOT NULL" },
@@ -573,6 +608,8 @@ async function initDb(retries = 5) {
         { table: "items", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "suppliers", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "suppliers", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "color_masters", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "color_masters", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "companies", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "companies", column: "contactPerson", type: "VARCHAR(255)" },
         { table: "companies", column: "contactNumber", type: "VARCHAR(50)" },
@@ -651,6 +688,9 @@ async function initDb(retries = 5) {
         { table: "items", column: "height", type: "DECIMAL(15,2)" },
         { table: "items", column: "ply", type: "INT" },
         { table: "items", column: "flute", type: "VARCHAR(50)" },
+        { table: "items", column: "part", type: "VARCHAR(255)" },
+        { table: "items", column: "dieCutUps", type: "INT" },
+        { table: "items", column: "topPaperShade", type: "VARCHAR(255)" },
         { table: "items", column: "plateWeight", type: "DECIMAL(15,5)" },
         { table: "items", column: "gsmLeastCost", type: "DECIMAL(15,2)" },
         { table: "items", column: "l1", type: "DECIMAL(15,2)" },
@@ -658,6 +698,20 @@ async function initDb(retries = 5) {
         { table: "items", column: "l2", type: "DECIMAL(15,2)" },
         { table: "items", column: "f2", type: "DECIMAL(15,2)" },
         { table: "items", column: "l3", type: "DECIMAL(15,2)" },
+        { table: "items", column: "f3", type: "DECIMAL(15,2)" },
+        { table: "items", column: "b3", type: "DECIMAL(15,2)" },
+        { table: "items", column: "backingPaperShade", type: "VARCHAR(255)" },
+        { table: "items", column: "printingColour1", type: "VARCHAR(255)" },
+        { table: "items", column: "printingColour2", type: "VARCHAR(255)" },
+        { table: "items", column: "lOd", type: "DECIMAL(15,2)" },
+        { table: "items", column: "wOd", type: "DECIMAL(15,2)" },
+        { table: "items", column: "hOd", type: "DECIMAL(15,2)" },
+        { table: "items", column: "flap", type: "DECIMAL(15,2)" },
+        { table: "items", column: "deckleSize", type: "DECIMAL(15,2)" },
+        { table: "items", column: "cuttingSize", type: "DECIMAL(15,2)" },
+        { table: "items", column: "rate", type: "DECIMAL(15,2)" },
+        { table: "items", column: "artwork", type: "TEXT" },
+        { table: "items", column: "spec", type: "TEXT" },
         { table: "invoice_line_items", column: "gstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 18.00" },
         { table: "invoice_line_items", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoice_line_items", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
@@ -956,7 +1010,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "items", "suppliers", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items"];
+const entities = ["item_groups", "items", "suppliers", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

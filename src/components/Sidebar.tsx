@@ -115,6 +115,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Item Groups", href: "/masters/item-groups", icon: Layers },
         { name: "Items", href: "/masters/items", icon: Boxes },
         { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
+        { name: "Colors", href: "/masters/colors", icon: Plus },
         { name: "Companies", href: "/masters/companies", icon: Database },
         { name: "Trucks", href: "/masters/trucks", icon: Truck },
         { name: "Users", href: "/masters/users", icon: Users },

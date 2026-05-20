@@ -12,6 +12,10 @@ export interface Item {
   uom: string;
   erp?: number;
   itemType?: "FG" | "Reel" | "Others";
+  typeName?: string;
+  customer?: string;
+  openLength?: number;
+  openWidth?: number;
   opening?: number;
   receipt?: number;
   production?: number;
@@ -27,6 +31,9 @@ export interface Item {
   height?: number;
   ply?: number;
   flute?: string;
+  part?: string;
+  dieCutUps?: number;
+  topPaperShade?: string;
   plateWeight?: number;
   gsmLeastCost?: number;
   l1?: number;
@@ -34,6 +41,20 @@ export interface Item {
   l2?: number;
   f2?: number;
   l3?: number;
+  f3?: number;
+  b3?: number;
+  backingPaperShade?: string;
+  printingColour1?: string;
+  printingColour2?: string;
+  lOd?: number;
+  wOd?: number;
+  hOd?: number;
+  flap?: number;
+  deckleSize?: number;
+  cuttingSize?: number;
+  rate?: number;
+  artwork?: string;
+  spec?: string;
 
   updatedBy?: string;
   updateTimestamp?: string;
@@ -49,6 +70,13 @@ export interface MaterialLine {
 }
 
 export interface Supplier {
+  id: string;
+  name: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface ColorMaster {
   id: string;
   name: string;
   updatedBy?: string;
