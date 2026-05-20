@@ -478,15 +478,10 @@ export function Items() {
                   <label className="font-bold text-black text-sm">ERP CODE (auto-calculated)</label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
+                    readOnly
                     value={erp}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/[^0-9]/g, "");
-                      setErp(v);
-                    }}
-                    placeholder="Auto-calculated if left blank"
-                    className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-slate-50"
+                    placeholder="Auto-calculated on save"
+                    className="border-2 border-black rounded p-2 text-black bg-slate-100 cursor-not-allowed focus:outline-none"
                   />
                 </div>
                 <div className="flex flex-col space-y-1">
