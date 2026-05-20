@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
-import { ColorMaster, Item, ItemGroup } from "../types";
+import { ColorMaster, Company, Item, ItemGroup } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { TableControls } from "../components/TableControls";
@@ -11,6 +11,7 @@ export function Items() {
   const [items, setItems] = useData<Item>("items", []);
   const [groups, setGroups] = useData<ItemGroup>("item-groups", []);
   const [colors, setColors] = useData<ColorMaster>("color_masters", []);
+  const [companies, setCompanies] = useData<Company>("companies", []);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -112,6 +113,7 @@ export function Items() {
       .map((value) => ({ value, label: value }));
 
   const groupOptions = groups.map(g => ({ value: g.id, label: g.name }));
+  const companyOptions = companies.map(c => ({ value: c.name, label: c.name }));
 
   const businessTypeOptions = buildStringOptions(
     items.map((item) => item.typeName),
@@ -140,6 +142,8 @@ export function Items() {
 
   const [showQuickGroup, setShowQuickGroup] = useState(false);
   const [quickGroupName, setQuickGroupName] = useState("");
+  const [showQuickCompany, setShowQuickCompany] = useState(false);
+  const [quickCompanyName, setQuickCompanyName] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const typeNameNormalized = typeName.trim().toUpperCase();
@@ -210,6 +214,10 @@ export function Items() {
     setShowQuickGroup(true);
   };
 
+  const handleCreateNewCompany = () => {
+    setShowQuickCompany(true);
+  };
+
   const handleQuickGroupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickGroupName.trim()) return;
@@ -229,6 +237,27 @@ export function Items() {
     setGroupId(newGroup.id);
     setQuickGroupName("");
     setShowQuickGroup(false);
+  };
+
+  const handleQuickCompanySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickCompanyName.trim()) return;
+
+    if (companies.some(c => c.name.toLowerCase() === quickCompanyName.trim().toLowerCase())) {
+      alert("Company already exists.");
+      return;
+    }
+
+    const newCompany: Company = { 
+      id: crypto.randomUUID(), 
+      name: quickCompanyName.trim(),
+      updatedBy: "System User",
+      updateTimestamp: new Date().toISOString()
+    };
+    setCompanies([...companies, newCompany]);
+    setCustomer(newCompany.name);
+    setQuickCompanyName("");
+    setShowQuickCompany(false);
   };
 
   const resetForm = () => {
@@ -298,7 +327,15 @@ export function Items() {
     setIsSubmitting(true);
     setTimeout(() => {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as any;
-      const erpValue = erp ? parseInt(erp, 10) : undefined;
+      
+      let erpValue: number | undefined;
+      if (erp) {
+        erpValue = parseInt(erp, 10);
+      } else if (!editingId) {
+        // Auto-calculate ERP: max existing + 1 (only for new items)
+        const maxErp = items.reduce((max, item) => (item.erp && item.erp > max ? item.erp : max), 0);
+        erpValue = maxErp + 1;
+      }
       
       const itemData: Partial<Item> = {
         name: name.trim(),
@@ -405,14 +442,40 @@ export function Items() {
         </div>
       )}
 
+      {showQuickCompany && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded border-2 border-black max-w-sm w-full shadow-2xl">
+            <h3 className="font-bold text-black uppercase mb-4">Quick Add Company</h3>
+            <form onSubmit={handleQuickCompanySubmit} className="space-y-4">
+              <div className="flex flex-col space-y-1">
+                <label className="font-bold text-xs uppercase">Company Name</label>
+                <input 
+                  autoFocus
+                  type="text" 
+                  value={quickCompanyName}
+                  onChange={(e) => setQuickCompanyName(e.target.value)}
+                  className="border-2 border-black p-2 rounded focus:outline-none focus:border-indigo-600"
+                  placeholder="Enter name..."
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="bg-emerald-600 text-white px-4 py-2 rounded font-bold border border-black flex-1">Add</button>
+                <button type="button" onClick={() => setShowQuickCompany(false)} className="bg-slate-200 text-black px-4 py-2 rounded font-bold border border-black flex-1">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isFormOpen ? (
         <div className="bg-white p-6 rounded shadow-sm border border-black max-w-4xl">
           <h3 className="text-lg font-bold text-black mb-6 uppercase">{editingId ? "Edit Item" : "Create Item"}</h3>
           <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Primary Details</h4>
+                <h4 className="font-black text-xs uppercase text-indigo-600 border-b border-indigo-100 pb-1">Primary Details</h4>
                 <div className="flex flex-col space-y-1">
-                  <label className="font-bold text-black text-sm">ERP CODE (whole number)</label>
+                  <label className="font-bold text-black text-sm">ERP CODE (auto-calculated)</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -422,13 +485,13 @@ export function Items() {
                       const v = e.target.value.replace(/[^0-9]/g, "");
                       setErp(v);
                     }}
-                    placeholder="Enter ERP"
-                    className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                    placeholder="Auto-calculated if left blank"
+                    className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-slate-50"
                   />
                 </div>
                 <div className="flex flex-col space-y-1">
                   <label className="font-bold text-black text-sm">CUSTOMER</label>
-                  <input type="text" value={customer} onChange={(e) => setCustomer(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
+                  <Select value={customer} onChange={setCustomer} onAdd={handleCreateNewCompany} options={companyOptions} placeholder="Select Customer (Company)..." />
                 </div>
                 <div className="flex flex-col space-y-1">
                   <label className="font-bold text-black text-sm">Item Name *</label>
@@ -445,7 +508,7 @@ export function Items() {
               </div>
 
               <div className="space-y-4 border-t border-slate-100 pt-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Physical Specs</h4>
+                <h4 className="font-black text-xs uppercase text-indigo-600 border-b border-indigo-100 pb-1">Physical Specs</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <FormItem label="Length" value={length} onChange={setLength} type="number" />
                   <FormItem label="Bredth" value={breadth} onChange={setBreadth} type="number" />
@@ -469,7 +532,7 @@ export function Items() {
               </div>
 
             <div className="space-y-4 border-t border-slate-100 pt-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Paper & Shade Details</h4>
+                <h4 className="font-black text-xs uppercase text-indigo-600 border-b border-indigo-100 pb-1">Paper & Shade Details</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <FormItem label="TOP" value={l1} onChange={setL1} type="number" />
                     <div className="flex flex-col space-y-1">
@@ -490,7 +553,7 @@ export function Items() {
             </div>
 
             <div className="space-y-4 border-t border-slate-100 pt-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Printing & Finishing</h4>
+                <h4 className="font-black text-xs uppercase text-indigo-600 border-b border-indigo-100 pb-1">Printing & Finishing</h4>
                 <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                     <div className="flex flex-col space-y-1">
                       <label className="font-bold text-black text-sm uppercase text-[10px]">Printing Colour 1</label>
@@ -504,7 +567,7 @@ export function Items() {
             </div>
 
             <div className="space-y-4 border-t border-slate-100 pt-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Calculations & Rates</h4>
+                <h4 className="font-black text-xs uppercase text-indigo-600 border-b border-indigo-100 pb-1">Calculations & Rates</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <FormItem label="L (OD)" value={String(calculatedItemFields.lOdCalculated)} onChange={() => {}} type="number" readOnly />
                     <FormItem label="W (OD)" value={String(calculatedItemFields.wOdCalculated)} onChange={() => {}} type="number" readOnly />
@@ -521,7 +584,7 @@ export function Items() {
             </div>
 
             <div className="space-y-4 border-t border-slate-100 pt-4">
-                <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Other Info</h4>
+                <h4 className="font-black text-xs uppercase text-indigo-600 border-b border-indigo-100 pb-1">Other Info</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex flex-col space-y-1">
                     <label className="font-bold text-black text-sm">Item Group *</label>
