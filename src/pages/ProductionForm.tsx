@@ -96,7 +96,7 @@ export function ProductionForm() {
   const [companies] = useData<Company>("companies", []);
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
+  const [sampleRequests, setSampleRequests] = useData<SampleRequest>("sample_requests", []);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState(searchParams.get("scheduleId") || "");
@@ -178,6 +178,7 @@ export function ProductionForm() {
   const sampleItemQty = pendingSampleRows.length > 0 ? Number(pendingSampleRows[0].plannedQuantity || 0) : 0;
   const isSampleItem = pendingSampleRows.length > 0;
   const sampleItemLabel = isSampleItem ? "YES" : "NO";
+  const matchedSampleRequest = pendingSampleRows[0];
   const deviationAllowed = Number(selectedCompany?.deviationAllowed ?? 25);
 
   const pendingOrderQtyForItem = useMemo(() => {
@@ -399,9 +400,9 @@ export function ProductionForm() {
     try {
       const timestamp = new Date().toISOString();
       const nextPendingQty = pendingQty - qty;
+      const txnNo = generateTransactionNo("PR", productions, formData.date);
 
       await setProductions((prev) => {
-        const txnNo = generateTransactionNo("PR", prev, formData.date);
         const newEntry: Production = {
           id: crypto.randomUUID(),
           transactionNo: txnNo,
@@ -420,6 +421,21 @@ export function ProductionForm() {
         } as Production;
         return [newEntry, ...prev];
       });
+
+      if (isSampleItem && matchedSampleRequest?.id) {
+        await setSampleRequests((prev) =>
+          prev.map((row) =>
+            row.id === matchedSampleRequest.id
+              ? {
+                  ...row,
+                  jobCardNo: txnNo,
+                  updatedBy: "System User",
+                  updateTimestamp: timestamp,
+                }
+              : row
+          )
+        );
+      }
 
       await setSchedules((prev) =>
         prev.map((schedule) =>
