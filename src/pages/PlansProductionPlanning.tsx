@@ -11,7 +11,7 @@ export function PlansProductionPlanning() {
   return (
     <div className="space-y-6">
       <div className="border-b border-black pb-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Production Planning Logic</h2>
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Documentation - Production Planning Logic</h2>
         <p className="mt-2 text-sm text-slate-700 font-medium">
           This page explains the current production planning rules in simple app language so users can refer to them later.
         </p>

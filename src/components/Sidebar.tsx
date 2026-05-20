@@ -205,10 +205,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
     {
-      section: "Plans",
+      section: "Documentation",
       color: "bg-slate-700",
       items: [
         { name: "Production Planning Logic", href: "/plans/production-planning", icon: BookOpenText },
+        { name: "Items", href: "/plans/items", icon: BookOpenText },
       ],
     },
   ];

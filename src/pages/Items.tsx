@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { ColorMaster, Item, ItemGroup } from "../types";
@@ -142,6 +142,60 @@ export function Items() {
   const [quickGroupName, setQuickGroupName] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const typeNameNormalized = typeName.trim().toUpperCase();
+  const plyNumber = Number(ply);
+  const lengthNumber = Number(length);
+  const breadthNumber = Number(breadth);
+  const heightNumber = Number(height);
+  const upsNumber = Number(ups);
+  const openWidthNumber = Number(openWidth);
+
+  const calculatedItemFields = useMemo(() => {
+    const round2 = (value: number) => Math.round(value * 100) / 100;
+
+    const lOdCalculated = lengthNumber > 0 && plyNumber > 0 ? round2(lengthNumber + plyNumber) : "";
+    const wOdCalculated = breadthNumber > 0 && plyNumber > 0 ? round2(breadthNumber + plyNumber) : "";
+    const hOdCalculated = heightNumber > 0 && plyNumber > 0 ? round2(heightNumber + plyNumber) : "";
+
+    const flapCalculated =
+      wOdCalculated !== ""
+        ? round2(plyNumber === 3 ? Number(wOdCalculated) / 2 : Number(wOdCalculated) / 2 + 1)
+        : "";
+
+    let deckleCalculated: number | "" = "";
+    if (typeNameNormalized && upsNumber > 0) {
+      if (typeNameNormalized === "RSC" && flapCalculated !== "" && hOdCalculated !== "") {
+        deckleCalculated = round2((((Number(flapCalculated) + Number(hOdCalculated) + Number(flapCalculated)) * upsNumber) + 20) / 25.4);
+      } else if (typeNameNormalized === "TRAY" && openWidthNumber > 0) {
+        deckleCalculated = round2(((openWidthNumber * upsNumber) + 20) / 25.4);
+      } else if (hOdCalculated !== "") {
+        deckleCalculated = round2(((Number(hOdCalculated) * upsNumber) + 20) / 25.4);
+      }
+    }
+
+    const cuttingCalculated =
+      flapCalculated !== "" && Number(flapCalculated) > 1 && lOdCalculated !== "" && wOdCalculated !== ""
+        ? round2((((Number(lOdCalculated) + Number(wOdCalculated)) * 2) + 50) / 25.4)
+        : "";
+
+    const noOfPartsCalculated =
+      cuttingCalculated === ""
+        ? ""
+        : Number(cuttingCalculated) * 25.4 < 1905
+          ? "1"
+          : "2";
+
+    return {
+      lOdCalculated,
+      wOdCalculated,
+      hOdCalculated,
+      flapCalculated,
+      deckleCalculated,
+      cuttingCalculated,
+      noOfPartsCalculated,
+    };
+  }, [typeNameNormalized, plyNumber, lengthNumber, breadthNumber, heightNumber, upsNumber, openWidthNumber]);
+
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
       setDeletingId(id);
@@ -258,7 +312,7 @@ export function Items() {
         openWidth: parseFloat(openWidth) || undefined,
         opening: parseFloat(opening) || 0,
         gstRate: parseFloat(gstRate) || 0,
-        noOfParts: parseInt(noOfParts) || undefined,
+        noOfParts: calculatedItemFields.noOfPartsCalculated ? parseInt(calculatedItemFields.noOfPartsCalculated, 10) : undefined,
         ups: parseInt(ups) || undefined,
         length: parseFloat(length) || undefined,
         breadth: parseFloat(breadth) || undefined,
@@ -279,12 +333,12 @@ export function Items() {
         backingPaperShade: backingPaperShade.trim() || undefined,
         printingColour1: printingColour1.trim() || undefined,
         printingColour2: printingColour2.trim() || undefined,
-        lOd: parseFloat(lOd) || undefined,
-        wOd: parseFloat(wOd) || undefined,
-        hOd: parseFloat(hOd) || undefined,
-        flap: parseFloat(flap) || undefined,
-        deckleSize: parseFloat(deckleSize) || undefined,
-        cuttingSize: parseFloat(cuttingSize) || undefined,
+        lOd: calculatedItemFields.lOdCalculated === "" ? undefined : Number(calculatedItemFields.lOdCalculated),
+        wOd: calculatedItemFields.wOdCalculated === "" ? undefined : Number(calculatedItemFields.wOdCalculated),
+        hOd: calculatedItemFields.hOdCalculated === "" ? undefined : Number(calculatedItemFields.hOdCalculated),
+        flap: calculatedItemFields.flapCalculated === "" ? undefined : Number(calculatedItemFields.flapCalculated),
+        deckleSize: calculatedItemFields.deckleCalculated === "" ? undefined : Number(calculatedItemFields.deckleCalculated),
+        cuttingSize: calculatedItemFields.cuttingCalculated === "" ? undefined : Number(calculatedItemFields.cuttingCalculated),
         rate: parseFloat(itemRate) || undefined,
         artwork: artwork.trim() || undefined,
         spec: spec.trim() || undefined,
@@ -434,7 +488,7 @@ export function Items() {
               <div className="space-y-4">
                 <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Dimensions & Parts</h4>
                 <div className="grid grid-cols-2 gap-4">
-                  <FormItem label="No. of Parts" value={noOfParts} onChange={setNoOfParts} type="number" numericOnly />
+                  <FormItem label="No. of Parts" value={calculatedItemFields.noOfPartsCalculated} onChange={() => {}} type="number" readOnly />
                   <FormItem label="UPS" value={ups} onChange={setUps} type="number" />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
@@ -494,12 +548,12 @@ export function Items() {
                       <label className="font-bold text-black text-sm uppercase text-[10px]">Printing Colour 2</label>
                       <CreatableDropdown value={printingColour2} onChange={setPrintingColour2} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} />
                     </div>
-                    <FormItem label="L (OD)" value={lOd} onChange={setLOd} type="number" />
-                    <FormItem label="W (OD)" value={wOd} onChange={setWOd} type="number" />
-                    <FormItem label="H (OD)" value={hOd} onChange={setHOd} type="number" />
-                    <FormItem label="Flap" value={flap} onChange={setFlap} type="number" />
-                    <FormItem label="Deckle Size" value={deckleSize} onChange={setDeckleSize} type="number" />
-                    <FormItem label="Cutting Size" value={cuttingSize} onChange={setCuttingSize} type="number" />
+                    <FormItem label="L (OD)" value={String(calculatedItemFields.lOdCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="W (OD)" value={String(calculatedItemFields.wOdCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="H (OD)" value={String(calculatedItemFields.hOdCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="Flap" value={String(calculatedItemFields.flapCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="Deckle Size" value={String(calculatedItemFields.deckleCalculated)} onChange={() => {}} type="number" readOnly />
+                    <FormItem label="Cutting Size" value={String(calculatedItemFields.cuttingCalculated)} onChange={() => {}} type="number" readOnly />
                     <FormItem label="Rate" value={itemRate} onChange={setItemRate} type="number" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -892,7 +946,7 @@ export function Items() {
   );
 }
 
-function FormItem({ label, value, onChange, type = "text", step = "any", numericOnly = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; step?: string; numericOnly?: boolean }) {
+function FormItem({ label, value, onChange, type = "text", step = "any", numericOnly = false, readOnly = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; step?: string; numericOnly?: boolean; readOnly?: boolean }) {
   return (
     <div className="flex flex-col space-y-1">
       <label className="font-bold text-black text-sm uppercase text-[10px]">{label}</label>
@@ -900,11 +954,12 @@ function FormItem({ label, value, onChange, type = "text", step = "any", numeric
         type={type} 
         step={type === "number" ? step : undefined}
         value={value} 
+        readOnly={readOnly}
         onChange={(e) => {
           const nextValue = numericOnly ? e.target.value.replace(/[^0-9]/g, "") : e.target.value;
           onChange(nextValue);
         }} 
-        className="border border-black rounded p-1.5 text-sm text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" 
+        className={`border border-black rounded p-1.5 text-sm text-black ${readOnly ? "bg-slate-100 cursor-not-allowed" : "focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"}`} 
       />
     </div>
   );
