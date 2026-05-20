@@ -49,6 +49,7 @@ import { LoadingMaster } from "./pages/LoadingMaster";
 import { PendingInvoicing } from "./pages/PendingInvoicing";
 import { InvoicesMaster } from "./pages/InvoicesMaster";
 import { CanceledOrders } from "./pages/CanceledOrders";
+import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -125,6 +126,9 @@ export default function App() {
           {/* Billing */}
           <Route path="billing/pending" element={<PendingInvoicing />} />
           <Route path="billing/master" element={<InvoicesMaster />} />
+
+          {/* Plans */}
+          <Route path="plans/production-planning" element={<PlansProductionPlanning />} />
         </Route>
       </Routes>
     </HashRouter>

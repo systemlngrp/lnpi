@@ -250,6 +250,7 @@ async function initDb(retries = 5) {
           \`district\` VARCHAR(255),
           \`state\` VARCHAR(255),
           \`gstNo\` VARCHAR(100),
+          \`deviationAllowed\` DECIMAL(10,2),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -519,6 +520,7 @@ async function initDb(retries = 5) {
         { table: "users", column: "mobile", type: "VARCHAR(20)" },
         { table: "users", column: "email", type: "VARCHAR(255)" },
         { table: "users", column: "password", type: "VARCHAR(255)" },
+        { table: "companies", column: "deviationAllowed", type: "DECIMAL(10,2)" },
         { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },
         { table: "productions", column: "phTimestamp", type: "VARCHAR(255)" },

@@ -65,6 +65,7 @@ export interface Company {
   district?: string;
   state?: string;
   gstNo?: string;
+  deviationAllowed?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

@@ -19,6 +19,7 @@ import {
   Plus,
   Receipt,
   FlaskConical,
+  BookOpenText,
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
@@ -200,6 +201,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Pending PH Approval", href: "/consumption/pending-ph", icon: UserCheck, countKey: "/consumption/pending-ph" },
         { name: "Pending Tally Entry", href: "/consumption/pending-tally", icon: FileText, countKey: "/consumption/pending-tally" },
         { name: "Consumption Master", href: "/consumption/master", icon: Database },
+      ],
+    },
+    {
+      section: "Plans",
+      color: "bg-slate-700",
+      items: [
+        { name: "Production Planning Logic", href: "/plans/production-planning", icon: BookOpenText },
       ],
     },
   ];
