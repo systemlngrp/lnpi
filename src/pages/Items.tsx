@@ -409,7 +409,6 @@ export function Items() {
         <div className="bg-white p-6 rounded shadow-sm border border-black max-w-4xl">
           <h3 className="text-lg font-bold text-black mb-6 uppercase">{editingId ? "Edit Item" : "Create Item"}</h3>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Primary Details</h4>
                 <div className="flex flex-col space-y-1">
@@ -445,7 +444,7 @@ export function Items() {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 border-t border-slate-100 pt-4">
                 <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Physical Specs</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <FormItem label="Length" value={length} onChange={setLength} type="number" />
@@ -468,7 +467,6 @@ export function Items() {
                 </div>
                 <FormItem label="Die Cut Ups" value={dieCutUps} onChange={setDieCutUps} type="number" />
               </div>
-            </div>
 
             <div className="space-y-4 border-t border-slate-100 pt-4">
                 <h4 className="font-black text-xs uppercase text-slate-500 border-b border-slate-200 pb-1">Paper & Shade Details</h4>
