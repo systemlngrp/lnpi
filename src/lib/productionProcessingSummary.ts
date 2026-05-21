@@ -45,7 +45,7 @@ export function buildProcessingTotalsMap(processing: ProductionProcessing[]) {
     if (!entry.productionId) return;
     const current = totalsMap.get(entry.productionId) || getEmptyProcessingTotals();
     const machineColumn = PROCESSING_MACHINE_COLUMNS.find((column) =>
-      column.machineNames.includes(entry.machineName)
+      (column.machineNames as readonly string[]).includes(entry.machineName)
     );
 
     if (machineColumn) {
@@ -74,7 +74,7 @@ export function groupProcessingByProduction(processing: ProductionProcessing[]) 
     };
 
     const machineColumn = PROCESSING_MACHINE_COLUMNS.find((column) =>
-      column.machineNames.includes(entry.machineName)
+      (column.machineNames as readonly string[]).includes(entry.machineName)
     );
 
     if (machineColumn) {

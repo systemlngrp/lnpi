@@ -68,8 +68,6 @@ export function ProductionPlan() {
     return map;
   }, [productions]);
 
-  const processingTotalsMap = useMemo(() => buildProcessingTotalsMap(processing), [processing]);
-
   const getExportData = (data: Production[]) => {
     return data.map(p => {
       const schedule = schedules.find(s => s.id === p.scheduleId);

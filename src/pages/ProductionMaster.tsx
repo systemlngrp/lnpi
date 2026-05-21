@@ -24,7 +24,7 @@ export function ProductionMaster() {
     const map = new Map<string, Record<string, number>>();
     processing.forEach((p) => {
       const totals = map.get(p.productionId) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0 };
-      const machineColumn = PROCESSING_MACHINE_COLUMNS.find(col => col.machineNames.includes(p.machineName));
+      const machineColumn = PROCESSING_MACHINE_COLUMNS.find(col => (col.machineNames as readonly string[]).includes(p.machineName));
       if (machineColumn) {
         totals[machineColumn.key] += Number(p.qty || 0);
       }

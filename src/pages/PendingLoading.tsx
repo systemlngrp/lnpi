@@ -440,7 +440,7 @@ export function PendingLoading() {
                   disabled={isSubmitting || Object.values(loadedQuantities).reduce((sum, q) => sum + q, 0) <= 0}
                   className="px-6 py-2 bg-indigo-600 text-white border-2 border-black font-bold uppercase text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-indigo-700 transition disabled:opacity-50 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 active:shadow-none active:translate-x-1 active:translate-y-1"
                 >
-                  {isSubmitting ? <Spinner size={16} color="white" /> : "Confirm & Save"}
+                  {isSubmitting ? <Spinner size={16} className="text-white" /> : "Confirm & Save"}
                 </button>
               </div>
             </div>
