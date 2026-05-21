@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Edit, Trash2, ExternalLink, FileUp, XCircle } from "lucide-react";
 import { ColorMaster, Company, Item, ItemGroup } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
@@ -16,6 +16,7 @@ export function Items() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
   const [name, setName] = useState("");
   const [groupId, setGroupId] = useState("");
@@ -62,6 +63,40 @@ export function Items() {
   const [spec, setSpec] = useState<string>("");
 
   const [searchTerm, setSearchTerm] = useState("");
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 20 * 1024 * 1024) {
+      alert("File size exceeds 20MB. Please upload a smaller file.");
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const response = await fetch("/api/upload-artwork", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ base64, filename: file.name }),
+        });
+        
+        if (!response.ok) throw new Error("Upload failed");
+        
+        const result = await response.json();
+        setArtwork(result.filename);
+      } catch (err) {
+        console.error("Upload error:", err);
+        alert("Failed to upload artwork.");
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const uomOptions = [
     { value: "KG", label: "KG" },
@@ -573,7 +608,28 @@ export function Items() {
                     <FormItem label="Rate" value={itemRate} onChange={setItemRate} type="number" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormItem label="Artwork" value={artwork} onChange={setArtwork} />
+                    <div className="flex flex-col space-y-1">
+                      <label className="font-bold text-black text-sm uppercase text-[10px]">Artwork</label>
+                      <div className="flex items-center gap-2">
+                        {artwork ? (
+                          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded border border-black flex-1 overflow-hidden">
+                            <span className="text-xs truncate flex-1">{artwork}</span>
+                            <button type="button" onClick={() => setArtwork("")} className="text-red-600 hover:text-red-800">
+                              <XCircle size={16} />
+                            </button>
+                            <a href={`/uploads/${artwork}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800">
+                              <ExternalLink size={16} />
+                            </a>
+                          </div>
+                        ) : (
+                          <label className="flex items-center justify-center gap-2 bg-white border-2 border-dashed border-black rounded p-2 cursor-pointer hover:bg-slate-50 transition-colors flex-1">
+                            {isUploading ? <Spinner size={16} /> : <FileUp size={16} />}
+                            <span className="text-xs font-bold uppercase">{isUploading ? "Uploading..." : "Upload Artwork"}</span>
+                            <input type="file" className="hidden" onChange={handleFileChange} accept="image/*,application/pdf" />
+                          </label>
+                        )}
+                      </div>
+                    </div>
                     <FormItem label="Spec" value={spec} onChange={setSpec} />
                 </div>
             </div>
@@ -798,7 +854,18 @@ export function Items() {
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Artwork</div>
-                              <div className="text-sm">{item.artwork ?? ""}</div>
+                              <div className="text-sm">
+                                {item.artwork ? (
+                                  <a 
+                                    href={`/uploads/${item.artwork}`} 
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                    className="text-indigo-600 hover:text-indigo-900 font-bold inline-flex items-center gap-1"
+                                  >
+                                    <ExternalLink size={14} /> View
+                                  </a>
+                                ) : "-"}
+                              </div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Spec</div>
@@ -944,7 +1011,18 @@ export function Items() {
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.deckleSize ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.cuttingSize ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.rate ?? ""}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black">{item.artwork ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">
+                        {item.artwork ? (
+                          <a 
+                            href={`/uploads/${item.artwork}`} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="text-indigo-600 hover:text-indigo-900 font-bold inline-flex items-center gap-1"
+                          >
+                            <ExternalLink size={14} /> View
+                          </a>
+                        ) : "-"}
+                      </td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.spec ?? ""}</td>
                       {/* Remaining fields */}
                       <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.opening || 0).toLocaleString()}</td>

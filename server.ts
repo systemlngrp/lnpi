@@ -4,6 +4,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import mysql from "mysql2/promise";
 import dotenv from "dotenv";
+import fs from "fs";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -13,7 +15,33 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+// Ensure uploads directory exists
+if (!fs.existsSync(path.join(process.cwd(), "uploads"))) {
+  fs.mkdirSync(path.join(process.cwd(), "uploads"));
+}
+
+app.post("/api/upload-artwork", async (req, res) => {
+  const { base64, filename } = req.body;
+  if (!base64 || !filename) {
+    return res.status(400).json({ error: "Missing file data" });
+  }
+
+  try {
+    const base64Data = base64.split(";base64,").pop();
+    const extension = path.extname(filename);
+    const newFilename = `${crypto.randomUUID()}${extension}`;
+    const filePath = path.join(process.cwd(), "uploads", newFilename);
+
+    fs.writeFileSync(filePath, base64Data, { encoding: "base64" });
+    res.json({ filename: newFilename });
+  } catch (error) {
+    console.error("Upload failed:", error);
+    res.status(500).json({ error: "Failed to save file" });
+  }
+});
 
 // Database connection pool
 let pool: mysql.Pool | null = null;
@@ -211,7 +239,7 @@ async function initDb(retries = 5) {
           \`deckleSize\` DECIMAL(15,2),
           \`cuttingSize\` DECIMAL(15,2),
           \`rate\` DECIMAL(15,2),
-          \`artwork\` TEXT,
+          \`artwork\` LONGTEXT,
           \`spec\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
@@ -710,7 +738,7 @@ async function initDb(retries = 5) {
         { table: "items", column: "deckleSize", type: "DECIMAL(15,2)" },
         { table: "items", column: "cuttingSize", type: "DECIMAL(15,2)" },
         { table: "items", column: "rate", type: "DECIMAL(15,2)" },
-        { table: "items", column: "artwork", type: "TEXT" },
+        { table: "items", column: "artwork", type: "LONGTEXT" },
         { table: "items", column: "spec", type: "TEXT" },
         { table: "invoice_line_items", column: "gstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 18.00" },
         { table: "invoice_line_items", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
