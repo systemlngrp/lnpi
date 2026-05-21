@@ -25,6 +25,10 @@ export function ProductionPlan() {
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const processingTotalsMap = useMemo(() => {
+    return buildProcessingTotalsMap(processing);
+  }, [processing]);
+
   const normalizeDate = (dStr: string) => {
     if (!dStr) return "";
     const d = new Date(dStr);
