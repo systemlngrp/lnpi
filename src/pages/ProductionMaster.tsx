@@ -98,7 +98,7 @@ export function ProductionMaster() {
       "Company": company?.name || "-",
       "Item Name": item?.name || "Unknown",
       "Type": item?.typeName || "-",
-      "Qty": p.qty,
+      "Planned Qty": p.qty,
       "UOM": p.uom,
       "Paper": procTotals.paper,
       "Liner": procTotals.liner,
@@ -252,7 +252,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prod Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Item Name</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Produced Qty</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Planned Qty</th>
 
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Paper</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Liner</th>

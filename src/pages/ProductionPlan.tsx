@@ -84,7 +84,7 @@ export function ProductionPlan() {
         "Type": item?.typeName || "-",
         "ERP Code": p.erpCode || "-",
         "Prod Date": formatDate(p.date),
-        "Qty": p.qty,
+        "Planned Qty": p.qty,
         "UOM": p.uom,
         "Remarks": p.remarks,
         "No of Parts": p.noOfParts,
@@ -203,7 +203,7 @@ export function ProductionPlan() {
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Item</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">ERP Code</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Qty</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Planned Qty</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Paper</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Liner</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Printing</th>
