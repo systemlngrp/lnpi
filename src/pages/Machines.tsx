@@ -22,6 +22,7 @@ export function Machines() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [name, setName] = useState("");
+  const [maxOutputPerHour, setMaxOutputPerHour] = useState<number | "">("");
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -31,6 +32,7 @@ export function Machines() {
       const initial = DEFAULT_MACHINES.map(m => ({
         id: crypto.randomUUID(),
         name: m,
+        maxOutputPerHour: 0,
         updatedBy: "System",
         updateTimestamp: new Date().toISOString()
       }));
@@ -50,12 +52,19 @@ export function Machines() {
     setIsSubmitting(true);
     setTimeout(() => {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
+      const machineData = { 
+        name: name.trim(), 
+        maxOutputPerHour: maxOutputPerHour === "" ? 0 : Number(maxOutputPerHour),
+        ...audit 
+      };
+
       if (editingId) {
-        setMachines(machines.map(m => m.id === editingId ? { ...m, name: name.trim(), ...audit } : m));
+        setMachines(machines.map(m => m.id === editingId ? { ...m, ...machineData } : m));
       } else {
-        setMachines([...machines, { id: crypto.randomUUID(), name: name.trim(), ...audit }]);
+        setMachines([...machines, { id: crypto.randomUUID(), ...machineData }]);
       }
       setName("");
+      setMaxOutputPerHour("");
       setEditingId(null);
       setIsFormOpen(false);
       setIsSubmitting(false);
@@ -100,11 +109,20 @@ export function Machines() {
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600" 
               />
             </div>
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black text-sm">Maximum Output Per Hour</label>
+              <input 
+                type="number" 
+                value={maxOutputPerHour} 
+                onChange={(e) => setMaxOutputPerHour(e.target.value === "" ? "" : Number(e.target.value))} 
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600" 
+              />
+            </div>
             <div className="flex space-x-3 pt-4 border-t border-black">
               <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-8 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all">
                 {isSubmitting ? <Spinner size={20} className="text-white" /> : "Save"}
               </button>
-              <button type="button" onClick={() => { setIsFormOpen(false); setName(""); setEditingId(null); }} className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none">
+              <button type="button" onClick={() => { setIsFormOpen(false); setName(""); setMaxOutputPerHour(""); setEditingId(null); }} className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none">
                 Cancel
               </button>
             </div>
@@ -119,6 +137,7 @@ export function Machines() {
           <thead className="bg-slate-100">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine Name</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Max Output/Hr</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider md:block hidden">Updated</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
             </tr>
@@ -127,11 +146,12 @@ export function Machines() {
             {filtered.map((machine) => (
               <tr key={machine.id} className="hover:bg-slate-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{machine.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{machine.maxOutputPerHour || 0}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 md:block hidden">
                   {machine.updatedBy}<br />{new Date(machine.updateTimestamp || "").toLocaleString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => { setName(machine.name); setEditingId(machine.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center">
+                  <button onClick={() => { setName(machine.name); setMaxOutputPerHour(machine.maxOutputPerHour || ""); setEditingId(machine.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center">
                     <Edit size={16} className="mr-1" /> Edit
                   </button>
                   <button 

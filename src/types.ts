@@ -86,6 +86,7 @@ export interface ColorMaster {
 export interface Machine {
   id: string;
   name: string;
+  maxOutputPerHour?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

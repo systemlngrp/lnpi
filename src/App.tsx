@@ -24,6 +24,7 @@ import { PendingProduction } from "./pages/PendingProduction";
 import { ProductionPendingPH } from "./pages/ProductionPendingPH";
 import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
+import { ProductionPlan } from "./pages/ProductionPlan";
 import { ProductionProcessingForm } from "./pages/ProductionProcessingForm";
 import { ProductionProcessingMaster } from "./pages/ProductionProcessingMaster";
 import { ItemwiseLeastCost } from "./pages/ItemwiseLeastCost";
@@ -107,6 +108,7 @@ export default function App() {
           <Route path="production/pending-ph" element={<ProductionPendingPH />} />
           <Route path="production/pending-tally" element={<ProductionPendingTally />} />
           <Route path="production/master" element={<ProductionMaster />} />
+          <Route path="production/plan" element={<ProductionPlan />} />
           <Route path="production-processing/form" element={<ProductionProcessingForm />} />
           <Route path="production-processing/master" element={<ProductionProcessingMaster />} />
           <Route path="production/least-cost" element={<ItemwiseLeastCost />} />
