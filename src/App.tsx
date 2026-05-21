@@ -39,6 +39,7 @@ import { ConsumptionPendingTally } from "./pages/ConsumptionPendingTally";
 import { ConsumptionMaster } from "./pages/ConsumptionMaster";
 import { Users } from "./pages/Users";
 import { Dashboard } from "./pages/Dashboard";
+import { DeliveryBook } from "./pages/DeliveryBook";
 import { BulkEntry } from "./pages/BulkEntry";
 import { PlantHeadUnified } from "./pages/PlantHeadUnified";
 import { OrderForm } from "./pages/OrderForm";
@@ -72,6 +73,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="delivery-book" element={<DeliveryBook />} />
           <Route path="bulk-entry" element={<BulkEntry />} />
           <Route path="plant-head" element={<PlantHeadUnified />} />
           

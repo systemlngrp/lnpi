@@ -23,9 +23,16 @@ export function ProductionPlan() {
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const normalizeDate = (dStr: string) => {
+    if (!dStr) return "";
+    const d = new Date(dStr);
+    if (isNaN(d.getTime())) return dStr;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
   const filteredList = useMemo(() => {
     return productions
-      .filter(p => p.date === selectedDate)
+      .filter(p => normalizeDate(p.date) === selectedDate)
       .filter(p => {
         const item = items.find(i => i.id === p.itemId);
         const schedule = schedules.find(s => s.id === p.scheduleId);

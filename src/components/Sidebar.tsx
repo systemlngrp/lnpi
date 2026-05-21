@@ -104,6 +104,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       color: "bg-indigo-900",
       items: [
         { name: "Dashboard", href: "/", icon: LayoutDashboard },
+        { name: "Delivery Book", href: "/delivery-book", icon: BookOpenText },
+        { name: "Production Plan", href: "/production/plan", icon: ClipboardList },
         { name: "Bulk Entry Form", href: "/bulk-entry", icon: Plus },
         { name: "Unified PH Approval", href: "/plant-head", icon: UserCheck, countKey: "/plant-head" },
       ],
@@ -156,7 +158,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Pending Production", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
         { name: "Pending PH Approval", href: "/production/pending-ph", icon: UserCheck, countKey: "/production/pending-ph" },
         { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
-        { name: "Production Plan", href: "/production/plan", icon: ClipboardList },
         { name: "Production Master", href: "/production/master", icon: Database },
         { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
         { name: "Canceled Jobs", href: "/production/canceled", icon: X },
