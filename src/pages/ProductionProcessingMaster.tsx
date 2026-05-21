@@ -4,7 +4,7 @@ import { ProductionProcessing } from "../types";
 import { Trash2, Plus } from "lucide-react";
 import { TableControls } from "../components/TableControls";
 import { useNavigate } from "react-router-dom";
-import { PROCESSING_MACHINE_COLUMNS, groupProcessingByProduction } from "../lib/productionProcessingSummary";
+import { formatDate } from "../lib/serial";
 
 export function ProductionProcessingMaster() {
   const navigate = useNavigate();
@@ -12,26 +12,28 @@ export function ProductionProcessingMaster() {
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleDelete = (ids: string[]) => {
-    const deletionKey = ids.join("|");
-    if (deletingId !== deletionKey) {
-      setDeletingId(deletionKey);
+  const handleDelete = (id: string) => {
+    if (deletingId !== id) {
+      setDeletingId(id);
       setTimeout(() => setDeletingId(null), 3000);
       return;
     }
-    setProcessing(processing.filter(p => !ids.includes(p.id)));
+    setProcessing(processing.filter(p => p.id !== id));
     setDeletingId(null);
   };
 
-  const groupedRows = useMemo(() => groupProcessingByProduction(processing), [processing]);
-
-  const filtered = groupedRows.filter((row) => {
-    const query = searchTerm.toLowerCase();
-    return (
-      row.jobNo.toLowerCase().includes(query) ||
-      row.operatorNames.some((operator) => operator.toLowerCase().includes(query))
-    );
-  });
+  const filtered = useMemo(() => {
+    return processing
+      .filter((p) => {
+        const query = searchTerm.toLowerCase();
+        return (
+          String(p.jobNo || "").toLowerCase().includes(query) ||
+          (p.machineName || "").toLowerCase().includes(query) ||
+          (p.operatorName || "").toLowerCase().includes(query)
+        );
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [processing, searchTerm]);
 
   return (
     <div className="space-y-6">
@@ -54,43 +56,33 @@ export function ProductionProcessingMaster() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Job No</th>
-                {PROCESSING_MACHINE_COLUMNS.map((column) => (
-                  <th
-                    key={column.key}
-                    className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider"
-                  >
-                    {column.label}
-                  </th>
-                ))}
-                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Operator</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Quantity</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Operator Name</th>
                 <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-black">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-slate-500 font-medium">No reporting records found.</td>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500 font-medium">No reporting records found.</td>
                 </tr>
               ) : (
                 filtered.map((item) => (
-                  <tr key={item.productionId} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{item.date}</td>
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{formatDate(item.date)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{item.jobNo}</td>
-                    {PROCESSING_MACHINE_COLUMNS.map((column) => (
-                      <td
-                        key={column.key}
-                        className="px-6 py-4 whitespace-nowrap text-sm font-bold text-right text-black"
-                      >
-                        {item[column.key] ? item[column.key].toLocaleString() : ""}
-                      </td>
-                    ))}
-                    <td className="px-6 py-4 text-sm text-black min-w-[150px]">{item.operatorNames.join(", ") || "-"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{item.machineName}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-right text-emerald-700">
+                      {Number(item.qty || 0).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-black">{item.operatorName || "-"}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button 
-                        onClick={() => handleDelete(item.recordIds)} 
-                        className={`${deletingId === item.recordIds.join("|") ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
+                        onClick={() => handleDelete(item.id)} 
+                        className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
                       >
-                        <Trash2 size={16} className="mr-1" /> {deletingId === item.recordIds.join("|") ? "Confirm?" : "Delete"}
+                        <Trash2 size={16} className="mr-1" /> {deletingId === item.id ? "Confirm?" : "Delete"}
                       </button>
                     </td>
                   </tr>
@@ -103,3 +95,4 @@ export function ProductionProcessingMaster() {
     </div>
   );
 }
+
