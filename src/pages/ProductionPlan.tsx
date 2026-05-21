@@ -74,6 +74,7 @@ export function ProductionPlan() {
         "Order No.": order?.orderNo || "-",
         "Company": company?.name || "-",
         "Item": item?.name || "-",
+        "Type": item?.typeName || "-",
         "ERP Code": p.erpCode || "-",
         "Prod Date": formatDate(p.date),
         "Qty": p.qty,
@@ -84,11 +85,19 @@ export function ProductionPlan() {
         "Length": p.length,
         "Breadth": p.breadth,
         "Height": p.height,
+        "L (OD)": item?.lOd || "-",
+        "W (OD)": item?.wOd || "-",
+        "H (OD)": item?.hOd || "-",
+        "Flap": item?.flap || "-",
+        "Deckle Size": item?.deckleSize || "-",
+        "Cutting Size": item?.cuttingSize || "-",
         "PLY": p.ply,
         "Flute": p.flute,
         "ID to OD": p.idToOd,
         "Take up Factor": p.takeUpFactor,
         "GSM": p.gsm,
+        "Print Color 1": item?.printingColour1 || "-",
+        "Print Color 2": item?.printingColour2 || "-",
         "ERP Code Reel": p.erpCodeReel,
         "L1": p.l1,
         "F1": p.f1,
@@ -180,14 +189,23 @@ export function ProductionPlan() {
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Order No.</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Company</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Item</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">ERP Code</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Qty</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">B</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">H</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L (OD)</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">W (OD)</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">H (OD)</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Flap</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Deckle</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Cutting</th>
                 <th className="px-4 py-3 text-center text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Ply</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Flute</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">GSM</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Color 1</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Color 2</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Sheet Wt</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Remarks</th>
               </tr>
@@ -195,7 +213,7 @@ export function ProductionPlan() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
+                  <td colSpan={23} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
                 </tr>
               ) : (
                 filteredList.map((p) => {
@@ -210,14 +228,23 @@ export function ProductionPlan() {
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap max-w-[150px] truncate" title={company?.name}>{company?.name || "-"}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black max-w-[200px] truncate" title={item?.name}>{item?.name || "-"}</td>
+                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{item?.typeName || "-"}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{p.erpCode || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.length || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.breadth || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.height || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.lOd || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.wOd || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.hOd || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{item?.flap || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{item?.deckleSize || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{item?.cuttingSize || "-"}</td>
                       <td className="px-4 py-3 text-center text-[11px] text-black border border-black whitespace-nowrap">{p.ply || "-"}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{p.flute || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] font-medium text-indigo-700 border border-black whitespace-nowrap">{p.gsm || "-"}</td>
+                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{item?.printingColour1 || "-"}</td>
+                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{item?.printingColour2 || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.sheetWeight || "-"}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black max-w-[150px] truncate" title={p.remarks}>{p.remarks || "-"}</td>
                     </tr>
