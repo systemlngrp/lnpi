@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company } from "../types";
+import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
 import { FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import { buildProcessingTotalsMap } from "../lib/productionProcessingSummary";
 
 export function ProductionPlan() {
   const [productions] = useData<Production>("productions", []);
@@ -14,6 +15,7 @@ export function ProductionPlan() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [processing] = useData<ProductionProcessing>("production_processing", []);
 
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -62,12 +64,15 @@ export function ProductionPlan() {
     return map;
   }, [productions]);
 
+  const processingTotalsMap = useMemo(() => buildProcessingTotalsMap(processing), [processing]);
+
   const getExportData = (data: Production[]) => {
     return data.map(p => {
       const schedule = schedules.find(s => s.id === p.scheduleId);
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
       const item = items.find(i => i.id === p.itemId);
+      const processingTotals = processingTotalsMap.get(p.id);
 
       return {
         "Job No.": p.transactionNo,
@@ -121,7 +126,12 @@ export function ProductionPlan() {
         "Prod (Meter)": p.productionInMeter,
         "Planned Prod (Mtr)": p.plannedProductionInMeter,
         "Least GSM": erpLeastGsmMap.get(String(p.erpCode || "").trim()) || "-",
-        "Flute Batches": p.fluteBatches
+        "Flute Batches": p.fluteBatches,
+        "Paper": processingTotals?.paper || "",
+        "Liner": processingTotals?.liner || "",
+        "Printing": processingTotals?.printing || "",
+        "Pasting": processingTotals?.pasting || "",
+        "Stitching": processingTotals?.stitching || ""
       };
     });
   };
@@ -192,6 +202,11 @@ export function ProductionPlan() {
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">ERP Code</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Qty</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Paper</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Liner</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Printing</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Pasting</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Stitching</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">B</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">H</th>
@@ -213,7 +228,7 @@ export function ProductionPlan() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={23} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
+                  <td colSpan={28} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
                 </tr>
               ) : (
                 filteredList.map((p) => {
@@ -221,6 +236,7 @@ export function ProductionPlan() {
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = items.find(i => i.id === p.itemId);
+                  const processingTotals = processingTotalsMap.get(p.id);
 
                   return (
                     <tr key={p.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
@@ -231,6 +247,11 @@ export function ProductionPlan() {
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{item?.typeName || "-"}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{p.erpCode || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.paper || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.liner || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.printing || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.pasting || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.stitching || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.length || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.breadth || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.height || "-"}</td>
