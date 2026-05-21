@@ -85,7 +85,11 @@ export function ScheduledOrdersMaster() {
 
       return matchSearch && matchCompany && matchItem && matchFromDate && matchToDate;
     })
-    .sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
+    .sort((a, b) => {
+      const dateCompare = a.scheduledDate.localeCompare(b.scheduledDate);
+      if (dateCompare !== 0) return dateCompare;
+      return a.orderNo.localeCompare(b.orderNo, undefined, { numeric: true, sensitivity: 'base' });
+    });
   }, [schedules, orders, companies, items, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
 
   const clearFilters = () => {
