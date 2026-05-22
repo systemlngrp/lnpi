@@ -291,6 +291,99 @@ const fieldRules = [
   },
 ];
 
+const virtualColumns = [
+  {
+    column: "Order No.",
+    source: "Looked up through Scheduled Order -> Order",
+    logic: "Shows the order number from the order linked to the production schedule.",
+  },
+  {
+    column: "Company",
+    source: "Looked up through Scheduled Order -> Order -> Company",
+    logic: "Shows the company name linked to the order for this production row.",
+  },
+  {
+    column: "Type",
+    source: "Item Master",
+    logic: "Shows the selected item's type name.",
+  },
+  {
+    column: "Paper",
+    source: "Production Processing records",
+    logic: "Total of processing quantity for the current production where machine mapping falls under Paper.",
+  },
+  {
+    column: "Liner",
+    source: "Production Processing records",
+    logic: "Total of processing quantity for the current production where machine mapping falls under Liner.",
+  },
+  {
+    column: "Print",
+    source: "Production Processing records",
+    logic: "Total of processing quantity for the current production where machine mapping falls under Printing.",
+  },
+  {
+    column: "Paste",
+    source: "Production Processing records",
+    logic: "Total of processing quantity for the current production where machine mapping falls under Pasting.",
+  },
+  {
+    column: "Stitch",
+    source: "Production Processing records",
+    logic: "Total of processing quantity for the current production where machine mapping falls under Stitching.",
+  },
+  {
+    column: "L (OD)",
+    source: "Item Master",
+    logic: "Shows the item's outer length value stored in Item Master.",
+  },
+  {
+    column: "W (OD)",
+    source: "Item Master",
+    logic: "Shows the item's outer width value stored in Item Master.",
+  },
+  {
+    column: "H (OD)",
+    source: "Item Master",
+    logic: "Shows the item's outer height value stored in Item Master.",
+  },
+  {
+    column: "Flap",
+    source: "Item Master",
+    logic: "Shows the item's flap value stored in Item Master.",
+  },
+  {
+    column: "Deckle",
+    source: "Item Master",
+    logic: "Shows the item's deckle size stored in Item Master.",
+  },
+  {
+    column: "Cutting",
+    source: "Item Master",
+    logic: "Shows the item's cutting size stored in Item Master.",
+  },
+  {
+    column: "Least GSM",
+    source: "Production history",
+    logic: "Shows the lowest GSM found among non-cancelled production rows for the same ERP Code.",
+  },
+  {
+    column: "Color 1",
+    source: "Item Master",
+    logic: "Shows Printing Colour 1 from the selected item.",
+  },
+  {
+    column: "Color 2",
+    source: "Item Master",
+    logic: "Shows Printing Colour 2 from the selected item.",
+  },
+  {
+    column: "Processing Status",
+    source: "Production Processing records",
+    logic: "If no processing rows exist, show Pending. Otherwise show unique machine names used for that production plus total processed quantity in brackets.",
+  },
+];
+
 export function PlansProduction() {
   return (
     <div className="space-y-6">
@@ -372,6 +465,37 @@ export function PlansProduction() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="bg-white border border-black rounded shadow-sm overflow-hidden">
+        <div className="bg-slate-100 border-b border-black px-5 py-3">
+          <h3 className="text-sm font-black uppercase tracking-wide text-black">Virtual Columns In Production Master</h3>
+        </div>
+        <div className="p-5">
+          <p className="text-sm text-black leading-6 mb-4">
+            These columns are currently shown in Production Master View, but their values are looked up or derived from related records instead of being typed directly into the production entry.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-black border border-black">Virtual Column</th>
+                  <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-black border border-black">Source</th>
+                  <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-black border border-black">How It Is Shown</th>
+                </tr>
+              </thead>
+              <tbody>
+                {virtualColumns.map((row) => (
+                  <tr key={row.column} className="align-top">
+                    <td className="px-4 py-3 text-sm font-bold text-black border border-black bg-white">{row.column}</td>
+                    <td className="px-4 py-3 text-sm text-black border border-black bg-white">{row.source}</td>
+                    <td className="px-4 py-3 text-sm text-black border border-black bg-white leading-6">{row.logic}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
