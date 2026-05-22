@@ -220,6 +220,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       color: "bg-slate-700",
       items: [
         { name: "Production Planning Logic", href: "/plans/production-planning", icon: BookOpenText },
+        { name: "Production", href: "/plans/production", icon: BookOpenText },
         { name: "Items", href: "/plans/items", icon: BookOpenText },
       ],
     },

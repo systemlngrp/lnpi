@@ -57,6 +57,7 @@ import { InvoicesMaster } from "./pages/InvoicesMaster";
 import { CanceledOrders } from "./pages/CanceledOrders";
 import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
 import { PlansItems } from "./pages/PlansItems";
+import { PlansProduction } from "./pages/PlansProduction";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -142,6 +143,7 @@ export default function App() {
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />
+          <Route path="plans/production" element={<PlansProduction />} />
           <Route path="plans/items" element={<PlansItems />} />
         </Route>
       </Routes>
