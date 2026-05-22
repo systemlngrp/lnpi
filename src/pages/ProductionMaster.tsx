@@ -130,8 +130,10 @@ export function ProductionMaster() {
       "L3": p.l3,
       "GSM": p.gsm,
       "Least GSM": erpLeastGsmMap.get(String(p.erpCode || "").trim()) || "-",
-      "Print Color 1": item?.printingColour1 || "-",
-      "Print Color 2": item?.printingColour2 || "-",
+      "Color 1": p.color1 || "-",
+      "Color 2": p.color2 || "-",
+      "Printing Color": p.printingColor || "-",
+      "Line Required (Nos)": p.lineRequiredNos || "-",
       "Sheet Wt": p.sheetWeight,
       "Plate Wt": p.plateWeight,
       "Total Paper Wt": p.totalPaperWeight,
@@ -201,7 +203,7 @@ export function ProductionMaster() {
                       )}
                       <div className="text-sm font-bold">{item?.name || "Unknown"}</div>
                       <div className="text-[10px] text-slate-600 uppercase font-black">
-                        Type: {item?.typeName || "-"} | Print: {item?.printingColour1 || "-"}{item?.printingColour2 ? ` / ${item?.printingColour2}` : ""}
+                        Type: {item?.typeName || "-"} | Print: {p.printingColor || "-"}
                       </div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">
                         OD: {item?.lOd || "-"}×{item?.wOd || "-"}×{item?.hOd || "-"} | Flap: {item?.flap || "-"} | Deckle: {item?.deckleSize || "-"} | Cutting: {item?.cuttingSize || "-"}
@@ -281,6 +283,8 @@ export function ProductionMaster() {
 
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Color 1</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Color 2</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Printing Color</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Line Req.</th>
                 
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Total Wt</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Avg Wt</th>
@@ -294,7 +298,7 @@ export function ProductionMaster() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={33} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                  <td colSpan={35} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
                 </tr>
               ) : (
                 filteredList.map((p) => {
@@ -341,8 +345,10 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-700">{p.gsm || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-black text-emerald-700">{erpLeastGsmMap.get(erp) || "-"}</td>
 
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{item?.printingColour1 || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{item?.printingColour2 || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.color1 || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.color2 || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.printingColor || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.lineRequiredNos || "-"}</td>
                       
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.totalPaperWeight || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.avgWeight || "-"}</td>

@@ -31,6 +31,10 @@ function getReelAsPerCalculationHelpText(formulaMode: string) {
   return "Current setting: Breadth/Height Based Formula. If Breadth is blank or 0, use Height x UPS. Otherwise use ((Breadth + Height) x UPS) + ((ID to OD x UPS) + 16).";
 }
 
+function joinPrintingColors(color1?: string, color2?: string) {
+  return [color1?.trim(), color2?.trim()].filter(Boolean).join(" / ");
+}
+
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
     Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
@@ -79,6 +83,9 @@ function createInitialFormData(todayStr: string) {
     f2: "" as number | "",
     l3: "" as number | "",
     gsm: "" as number | "",
+    color1: "",
+    color2: "",
+    printingColor: "",
     sheetWeight: "" as number | "",
     plateWeight: "" as number | "",
     totalPaperWeight: "" as number | "",
@@ -96,6 +103,7 @@ function createInitialFormData(todayStr: string) {
     leastGsm: "" as number | "",
     fluteBatches: "",
     erpCodeReel: "",
+    lineRequiredNos: "" as number | "",
     erpCode: "",
   };
 }
@@ -272,6 +280,9 @@ export function ProductionForm() {
         l2: selectedItem.l2 ?? "",
         f2: selectedItem.f2 ?? "",
         l3: selectedItem.l3 ?? "",
+        color1: selectedItem.printingColour1 || "",
+        color2: selectedItem.printingColour2 || "",
+        printingColor: joinPrintingColors(selectedItem.printingColour1, selectedItem.printingColour2),
       }));
     }
   }, [selectedItem, selectedCompany, selectedOrder]);
@@ -293,12 +304,15 @@ export function ProductionForm() {
     const qty = Number(formData.qty);
     const rate = Number(formData.rate);
     const plateWeight = Number(formData.plateWeight);
+    const noOfUpsInCuttingForPlates = Number(formData.noOfUpsInCuttingForPlates);
     const lOd = Number(selectedItem?.lOd || 0);
     const wOd = Number(selectedItem?.wOd || 0);
     const hOd = Number(selectedItem?.hOd || 0);
     const flap = Number(selectedItem?.flap || 0);
     const openWidth = Number(selectedItem?.openWidth || 0);
     const normalizedType = String(selectedItem?.typeName || "").trim().toUpperCase();
+    const normalizedPart = String(selectedItem?.part || "").trim().toUpperCase();
+    const dieCutUps = Number(selectedItem?.dieCutUps || 0);
 
     const idToOd = ply === 3 ? 6 : ply === 5 ? 10 : 0;
     const idToOd17 = ply === 3 ? 40 : ply === 5 ? 50 : 0;
@@ -369,6 +383,44 @@ export function ProductionForm() {
     };
     const fluteBatches = fluteBatchMap[normalizedFlute] || "";
     const leastGsmValue = erpLeastGsmMap.get(selectedErp) ?? "";
+    const printingColor = joinPrintingColors(formData.color1, formData.color2);
+
+    let paperRequiredNos: number | "" = "";
+    if (String(formData.erpCode || "").trim()) {
+      if (
+        ["VERTICAL PLATE", "HORIZONTAL PLATE", "U/C PLATE", "ROTARY TRAY"].includes(normalizedType) &&
+        ups > 0 &&
+        noOfUpsInCuttingForPlates > 0
+      ) {
+        paperRequiredNos = qty / (ups * noOfUpsInCuttingForPlates);
+      } else if (normalizedType === "2 PLY LINER") {
+        paperRequiredNos = "";
+      } else if (
+        normalizedType === "DIE CUT SHEET" &&
+        ups > 0 &&
+        noOfUpsInCuttingForPlates > 0 &&
+        dieCutUps > 0
+      ) {
+        paperRequiredNos = qty / (ups * noOfUpsInCuttingForPlates) / dieCutUps;
+      } else if (normalizedType === "RSC" && ups > 0) {
+        if (normalizedPart === "SINGLE") {
+          paperRequiredNos = qty / ups;
+        } else if (normalizedPart === "2 PART BOX") {
+          paperRequiredNos = (qty / ups) * 2;
+        }
+      }
+    }
+
+    let lineRequiredNos: number | "" = "";
+    if (!String(formData.erpCode || "").trim()) {
+      lineRequiredNos = "";
+    } else if (ply === 3 && paperRequiredNos !== "") {
+      lineRequiredNos = paperRequiredNos;
+    } else if (ply === 5 && paperRequiredNos !== "") {
+      lineRequiredNos = paperRequiredNos * 2;
+    } else if (ply === 2 && normalizedType === "2 PLY LINER" && ups > 0 && noOfUpsInCuttingForPlates > 0) {
+      lineRequiredNos = qty / (ups * noOfUpsInCuttingForPlates);
+    }
 
     setFormData((prev) => ({
       ...prev,
@@ -388,8 +440,13 @@ export function ProductionForm() {
       wastage,
       fluteBatches,
       leastGsm: leastGsmValue,
+      printingColor,
+      lineRequiredNos: lineRequiredNos === "" ? "" : parseFloat(lineRequiredNos.toFixed(2)),
     }));
   }, [
+    formData.color1,
+    formData.color2,
+    formData.erpCode,
     formData.ply,
     formData.flute,
     formData.length,
@@ -405,6 +462,7 @@ export function ProductionForm() {
     formData.qty,
     formData.rate,
     formData.plateWeight,
+    formData.noOfUpsInCuttingForPlates,
     formData.reelActualWithTrimming,
     formData.actualPaperUsed,
     formData.prodFromFFG,
@@ -415,6 +473,8 @@ export function ProductionForm() {
     selectedItem?.hOd,
     selectedItem?.lOd,
     selectedItem?.openWidth,
+    selectedItem?.part,
+    selectedItem?.dieCutUps,
     selectedItem?.typeName,
     selectedItem?.wOd,
   ]);
@@ -709,6 +769,9 @@ export function ProductionForm() {
                 readOnly
                 helpText="Formula: L1 + (F1 x Take up Factor) + L2 + (F2 x Take up Factor) + L3. When this item is different from the last produced item, GSM must not exceed Least GSM."
               />
+              <FormInput label="Color 1" value={formData.color1} readOnly helpText="Auto-filled from Item Master for the selected item." />
+              <FormInput label="Color 2" value={formData.color2} readOnly helpText="Auto-filled from Item Master for the selected item." />
+              <FormInput label="Printing Color" value={formData.printingColor} readOnly helpText="Auto-calculated by combining Color 1 and Color 2 for the selected item." />
               <FormInput label="ERP Code Reel" value={formData.erpCodeReel} readOnly helpText="Read-only reference field. It is shown from the production record/defaults when available." />
             </div>
             {gsmValidationError && (
@@ -736,6 +799,13 @@ export function ProductionForm() {
               />
               <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" />
               <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText="Auto-calculated from length, breadth, number of parts, and ID to OD 17 logic." />
+              <FormInput
+                label="Line Required (Nos)"
+                value={formData.lineRequiredNos}
+                readOnly
+                type="number"
+                helpText="If ERP Code is blank, keep blank. If PLY is 3, use the same value as Paper Required (Nos). If PLY is 5, use Paper Required (Nos) x 2. If PLY is 2 and TYPE is 2 PLY LINER, use Planned Quantity divided by (UPS x No. of ups in Cutting (For Plates))."
+              />
 
               <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly helpText="Formula: ((Reel Actual x Cutting Trim x GSM) / 1,000,000,000) / UPS." />
               <FormInput label="Plate/PHP Weight" value={formData.plateWeight} readOnly type="number" step="0.00001" helpText="Auto-fetched from Item Master for the selected item." />

@@ -41,6 +41,11 @@ const formulaCards = [
     description: "This is the main paper GSM calculation used for production planning.",
   },
   {
+    title: "Printing Color",
+    formula: "Combine Color 1 and Color 2 into one display value.",
+    description: "This gives a single production field for printing color information based on the selected item.",
+  },
+  {
     title: "Reel Per Calc",
     formula: "If Breadth is blank or 0, use Height x UPS. Otherwise use ((Breadth + Height) x UPS) + ((ID to OD x UPS) + 16).",
     description: "This is the Breadth/Height Based Formula option available in Settings.",
@@ -54,6 +59,11 @@ const formulaCards = [
     title: "Cutting Trim",
     formula: "If Breadth is blank or 0, use Length. If Number of Parts = 1, use ((Length + Breadth) x 2) + (ID to OD 17 x Number of Parts). If Number of Parts = 2, use Length + Breadth + ID to OD 17.",
     description: "Cutting Trim is derived from the item dimensions and number of parts.",
+  },
+  {
+    title: "Line Required (Nos)",
+    formula: "If ERP Code is blank, keep blank. If PLY is 3, use the same value as Paper Required (Nos). If PLY is 5, use Paper Required (Nos) x 2. If PLY is 2 and TYPE is 2 PLY LINER, use Planned Quantity divided by (UPS x No. of ups in Cutting (For Plates)).",
+    description: "This field is auto-calculated in Production Form from the selected item type, ply, planned quantity, UPS, and No. of ups in Cutting (For Plates).",
   },
   {
     title: "Sheet Weight",
@@ -176,6 +186,18 @@ const fieldRules = [
     validation: "These values feed the GSM formula.",
   },
   {
+    field: "Color 1 / Color 2",
+    source: "Auto-filled from Item Master",
+    formula: "Direct copy of Printing Colour 1 and Printing Colour 2 from the selected item.",
+    validation: "Read-only in Production Form.",
+  },
+  {
+    field: "Printing Color",
+    source: "Auto-calculated",
+    formula: "Combine Color 1 and Color 2 into one display value.",
+    validation: "Read-only in Production Form.",
+  },
+  {
     field: "GSM",
     source: "Auto-calculated",
     formula: "L1 + (F1 x Take up Factor) + L2 + (F2 x Take up Factor) + L3",
@@ -203,6 +225,12 @@ const fieldRules = [
     field: "Cutting Trim",
     source: "Auto-calculated",
     formula: "If Breadth is blank or 0, use Length. If No. of Parts = 1, use ((Length + Breadth) x 2) + (ID to OD 17 x No. of Parts). If No. of Parts = 2, use Length + Breadth + ID to OD 17.",
+    validation: "Read-only in Production Form.",
+  },
+  {
+    field: "Line Required (Nos)",
+    source: "Auto-calculated",
+    formula: "If ERP Code is blank, keep blank. If PLY is 3, use the same value as Paper Required (Nos). If PLY is 5, use Paper Required (Nos) x 2. If PLY is 2 and TYPE is 2 PLY LINER, use Planned Quantity divided by (UPS x No. of ups in Cutting (For Plates)).",
     validation: "Read-only in Production Form.",
   },
   {
@@ -372,16 +400,6 @@ const virtualColumns = [
     column: "Least GSM",
     source: "Production history",
     logic: "Shows the lowest GSM found among non-cancelled production rows for the same ERP Code.",
-  },
-  {
-    column: "Color 1",
-    source: "Item Master",
-    logic: "Shows Printing Colour 1 from the selected item.",
-  },
-  {
-    column: "Color 2",
-    source: "Item Master",
-    logic: "Shows Printing Colour 2 from the selected item.",
   },
   {
     column: "Processing Status",

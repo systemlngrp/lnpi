@@ -218,6 +218,9 @@ export interface Production {
   f2?: number;
   l3?: number;
   gsm?: number;
+  color1?: string;
+  color2?: string;
+  printingColor?: string;
   sheetWeight?: number;
   plateWeight?: number;
   totalPaperWeight?: number;
@@ -235,6 +238,7 @@ export interface Production {
   leastGsm?: number;
   fluteBatches?: string;
   erpCodeReel?: string;
+  lineRequiredNos?: number;
   year?: number;
   month?: string;
   idToOd17?: number;
