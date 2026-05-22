@@ -6,6 +6,7 @@ const overviewRules = [
   "If the selected item has a pending sample request, Planned Quantity is auto-filled from Sample Item Qty and becomes read-only.",
   "If the selected item is same as the latest relevant produced item, Planned Quantity cannot exceed Last Plan Qty x Deviation Allowed%.",
   "If the selected item is different from the latest relevant produced item, GSM cannot exceed Least GSM.",
+  "Reel As per Calculation now follows the formula selected in Settings.",
 ];
 
 const formulaCards = [
@@ -42,7 +43,12 @@ const formulaCards = [
   {
     title: "Reel Per Calc",
     formula: "If Breadth is blank or 0, use Height x UPS. Otherwise use ((Breadth + Height) x UPS) + ((ID to OD x UPS) + 16).",
-    description: "The reel size calculation changes depending on whether Breadth is available.",
+    description: "This is the Breadth/Height Based Formula option available in Settings.",
+  },
+  {
+    title: "Reel Per Calc - TYPE Based Formula",
+    formula: "ROTARY TRAY = ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. 2 PLY LINER, U/C PLATE, Horizontal plate, and Tray = ((Width (OD) x UPS) + 20) / 25.4. die cut sheet = ((Open Width x UPS) + 20) / 25.4. RSC = ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. Otherwise = ((Height (OD) x UPS) + 20) / 25.4.",
+    description: "This is the TYPE Based Formula option available in Settings. In this logic, UPS is used in place of No. of Outs.",
   },
   {
     title: "Cutting Trim",
@@ -184,8 +190,8 @@ const fieldRules = [
   {
     field: "Reel Per Calc",
     source: "Auto-calculated",
-    formula: "If Breadth is blank or 0, Height x UPS. Otherwise ((Breadth + Height) x UPS) + ((ID to OD x UPS) + 16).",
-    validation: "Read-only in Production Form.",
+    formula: "This field follows the formula selected in Settings. Option 1 is Breadth/Height Based Formula. Option 2 is TYPE Based Formula.",
+    validation: "Read-only in Production Form. A tooltip on the field shows the active formula logic.",
   },
   {
     field: "Reel Actual Trim",
@@ -384,6 +390,17 @@ const virtualColumns = [
   },
 ];
 
+const settingsDrivenRules = [
+  {
+    setting: "Breadth/Height Based Formula",
+    logic: "If Breadth is blank or 0, use Height x UPS. Otherwise use ((Breadth + Height) x UPS) + ((ID to OD x UPS) + 16).",
+  },
+  {
+    setting: "TYPE Based Formula",
+    logic: "ROTARY TRAY = ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. 2 PLY LINER, U/C PLATE, Horizontal plate, and Tray = ((Width (OD) x UPS) + 20) / 25.4. die cut sheet = ((Open Width x UPS) + 20) / 25.4. RSC = ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. Otherwise = ((Height (OD) x UPS) + 20) / 25.4.",
+  },
+];
+
 export function PlansProduction() {
   return (
     <div className="space-y-6">
@@ -435,6 +452,25 @@ export function PlansProduction() {
                 {card.formula}
               </div>
               <p className="text-sm text-black leading-6">{card.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white border border-black rounded shadow-sm overflow-hidden">
+        <div className="bg-slate-100 border-b border-black px-5 py-3">
+          <h3 className="text-sm font-black uppercase tracking-wide text-black">Settings Driven Reel Formula</h3>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-black leading-6">
+            The <span className="font-bold">Reel As per Calculation</span> field in Production Form is now controlled by the Settings page. Users can choose one of the short dropdown values below.
+          </p>
+          {settingsDrivenRules.map((row) => (
+            <div key={row.setting} className="border border-black rounded bg-slate-50 p-4 space-y-2">
+              <h4 className="text-sm font-black uppercase tracking-wide text-black">{row.setting}</h4>
+              <div className="rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-slate-800">
+                {row.logic}
+              </div>
             </div>
           ))}
         </div>

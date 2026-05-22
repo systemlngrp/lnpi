@@ -10,12 +10,26 @@ import {
   Order,
   OrderSchedule,
   Production,
+  Setting,
   SampleRequest,
 } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { generateTransactionNo, formatDate } from "../lib/serial";
 import { CircleHelp } from "lucide-react";
+
+const REEL_FORMULA_MODE = {
+  breadthHeightBased: "breadth-height-based",
+  typeBased: "type-based",
+} as const;
+
+function getReelAsPerCalculationHelpText(formulaMode: string) {
+  if (formulaMode === REEL_FORMULA_MODE.typeBased) {
+    return "Current setting: TYPE Based Formula. TYPE based logic uses UPS in place of No. of Outs. ROTARY TRAY = ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. 2 PLY LINER, U/C PLATE, Horizontal plate, and Tray = ((Width (OD) x UPS) + 20) / 25.4. die cut sheet = ((Open Width x UPS) + 20) / 25.4. RSC = ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. Other filled types = ((Height (OD) x UPS) + 20) / 25.4.";
+  }
+
+  return "Current setting: Breadth/Height Based Formula. If Breadth is blank or 0, use Height x UPS. Otherwise use ((Breadth + Height) x UPS) + ((ID to OD x UPS) + 16).";
+}
 
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
@@ -97,6 +111,7 @@ export function ProductionForm() {
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [sampleRequests, setSampleRequests] = useData<SampleRequest>("sample_requests", []);
+  const [settings] = useData<Setting>("settings", []);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState(searchParams.get("scheduleId") || "");
@@ -141,6 +156,7 @@ export function ProductionForm() {
   const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
   const selectedErp = String(selectedOrder?.erpCode || "").trim();
   const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
+  const reelFormulaMode = settings[0]?.reelAsPerCalculation || REEL_FORMULA_MODE.breadthHeightBased;
 
   const latestRelevantProduction = useMemo(
     () =>
@@ -276,6 +292,12 @@ export function ProductionForm() {
     const qty = Number(formData.qty);
     const rate = Number(formData.rate);
     const plateWeight = Number(formData.plateWeight);
+    const lOd = Number(selectedItem?.lOd || 0);
+    const wOd = Number(selectedItem?.wOd || 0);
+    const hOd = Number(selectedItem?.hOd || 0);
+    const flap = Number(selectedItem?.flap || 0);
+    const openWidth = Number(selectedItem?.openWidth || 0);
+    const normalizedType = String(selectedItem?.typeName || "").trim().toUpperCase();
 
     const idToOd = ply === 3 ? 6 : ply === 5 ? 10 : 0;
     const idToOd17 = ply === 3 ? 40 : ply === 5 ? 50 : 0;
@@ -290,7 +312,26 @@ export function ProductionForm() {
       Number(formData.f2) * takeUpFactor +
       Number(formData.l3);
 
-    const reelAsPerCalc = !breadth ? height * ups : (breadth + height) * ups + (idToOd * ups + 16);
+    let reelAsPerCalc = !breadth ? height * ups : (breadth + height) * ups + (idToOd * ups + 16);
+
+    if (reelFormulaMode === REEL_FORMULA_MODE.typeBased) {
+      if (normalizedType === "ROTARY TRAY") {
+        reelAsPerCalc = (((lOd + hOd) * ups) + 20) / 25.4;
+      } else if (
+        normalizedType === "2 PLY LINER" ||
+        normalizedType === "U/C PLATE" ||
+        normalizedType === "HORIZONTAL PLATE" ||
+        normalizedType === "TRAY"
+      ) {
+        reelAsPerCalc = ((wOd * ups) + 20) / 25.4;
+      } else if (normalizedType === "DIE CUT SHEET") {
+        reelAsPerCalc = ((openWidth * ups) + 20) / 25.4;
+      } else if (normalizedType === "RSC") {
+        reelAsPerCalc = (((flap + hOd + flap) * ups) + 20) / 25.4;
+      } else if (normalizedType) {
+        reelAsPerCalc = ((hOd * ups) + 20) / 25.4;
+      }
+    }
 
     let cutting = 0;
     if (!breadth) {
@@ -367,7 +408,14 @@ export function ProductionForm() {
     formData.actualPaperUsed,
     formData.prodFromFFG,
     erpLeastGsmMap,
+    reelFormulaMode,
     selectedErp,
+    selectedItem?.flap,
+    selectedItem?.hOd,
+    selectedItem?.lOd,
+    selectedItem?.openWidth,
+    selectedItem?.typeName,
+    selectedItem?.wOd,
   ]);
 
   useEffect(() => {
@@ -677,7 +725,7 @@ export function ProductionForm() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} readOnly helpText="Calculated from dimensions, UPS, and ID to OD. The formula changes slightly depending on whether breadth is available." />
+              <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} readOnly helpText={getReelAsPerCalculationHelpText(reelFormulaMode)} />
               <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" />
               <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText="Auto-calculated from length, breadth, number of parts, and ID to OD 17 logic." />
 

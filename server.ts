@@ -517,6 +517,15 @@ async function initDb(retries = 5) {
         )
       `);
 
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`settings\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`reelAsPerCalculation\` TEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
       console.log("[DB] Database tables initialized successfully.");
       
       // Ensure all tables have required columns if they were created with an older schema
@@ -744,6 +753,9 @@ async function initDb(retries = 5) {
         { table: "invoice_line_items", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoice_line_items", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoice_line_items", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "settings", column: "reelAsPerCalculation", type: "TEXT" },
+        { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" },
       ];
 
 
@@ -1038,7 +1050,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "items", "suppliers", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items"];
+const entities = ["item_groups", "items", "suppliers", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

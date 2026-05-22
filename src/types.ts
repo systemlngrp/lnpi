@@ -348,3 +348,10 @@ export interface InvoiceLineItem {
   sgst: number;
   igst: number;
 }
+
+export interface Setting {
+  id: string;
+  reelAsPerCalculation?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}

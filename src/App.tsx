@@ -58,6 +58,7 @@ import { CanceledOrders } from "./pages/CanceledOrders";
 import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
 import { PlansItems } from "./pages/PlansItems";
 import { PlansProduction } from "./pages/PlansProduction";
+import { SettingsPage } from "./pages/Settings";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -87,6 +88,7 @@ export default function App() {
           <Route path="masters/trucks" element={<Trucks />} />
           <Route path="masters/machines" element={<Machines />} />
           <Route path="masters/users" element={<Users />} />
+          <Route path="masters/settings" element={<SettingsPage />} />
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />
           <Route path="orders/pending-ph" element={<OrdersPendingPH />} />

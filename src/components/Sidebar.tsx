@@ -122,6 +122,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: "Trucks", href: "/masters/trucks", icon: Truck },
         { name: "Machines", href: "/masters/machines", icon: Hammer },
         { name: "Users", href: "/masters/users", icon: Users },
+        { name: "Settings", href: "/masters/settings", icon: Database },
       ],
     },
     {
