@@ -133,7 +133,9 @@ export function ProductionPlan() {
         "Liner": processingTotals?.liner || "",
         "Printing": processingTotals?.printing || "",
         "Pasting": processingTotals?.pasting || "",
-        "Stitching": processingTotals?.stitching || ""
+        "Stitching": processingTotals?.stitching || "",
+        "Punching": processingTotals?.punching || "",
+        "Gluing": processingTotals?.gluing || ""
       };
     });
   };
@@ -254,6 +256,8 @@ export function ProductionPlan() {
                       <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.printing || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.pasting || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.stitching || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.punching || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-medium text-black border border-black whitespace-nowrap">{processingTotals?.gluing || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.length || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.breadth || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.height || "-"}</td>

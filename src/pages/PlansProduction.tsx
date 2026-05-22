@@ -47,7 +47,7 @@ const formulaCards = [
   },
   {
     title: "Reel Per Calc - TYPE Based Formula",
-    formula: "ROTARY TRAY = ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. 2 PLY LINER, U/C PLATE, Horizontal plate, and Tray = ((Width (OD) x UPS) + 20) / 25.4. die cut sheet = ((Open Width x UPS) + 20) / 25.4. RSC = ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. Otherwise = ((Height (OD) x UPS) + 20) / 25.4.",
+    formula: "If TYPE = ROTARY TRAY: ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. If TYPE = 2 PLY LINER, U/C PLATE, HORIZONTAL PLATE, or TRAY: ((Width (OD) x UPS) + 20) / 25.4. If TYPE = DIE CUT SHEET: ((Open Width x UPS) + 20) / 25.4. If TYPE = RSC: ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. For any other non-blank TYPE: ((Height (OD) x UPS) + 20) / 25.4.",
     description: "This is the TYPE Based Formula option available in Settings. In this logic, UPS is used in place of No. of Outs.",
   },
   {
@@ -388,6 +388,16 @@ const virtualColumns = [
     source: "Production Processing records",
     logic: "If no processing rows exist, show Pending. Otherwise show unique machine names used for that production plus total processed quantity in brackets.",
   },
+  {
+    column: "Punching",
+    source: "Production Processing records",
+    logic: "Total of processing quantity for the current production where machine mapping falls under Punching.",
+  },
+  {
+    column: "Gluing",
+    source: "Production Processing records",
+    logic: "Total of processing quantity for the current production where machine mapping falls under Gluing.",
+  },
 ];
 
 const settingsDrivenRules = [
@@ -397,7 +407,7 @@ const settingsDrivenRules = [
   },
   {
     setting: "TYPE Based Formula",
-    logic: "ROTARY TRAY = ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. 2 PLY LINER, U/C PLATE, Horizontal plate, and Tray = ((Width (OD) x UPS) + 20) / 25.4. die cut sheet = ((Open Width x UPS) + 20) / 25.4. RSC = ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. Otherwise = ((Height (OD) x UPS) + 20) / 25.4.",
+    logic: "If TYPE = ROTARY TRAY: ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. If TYPE = 2 PLY LINER, U/C PLATE, HORIZONTAL PLATE, or TRAY: ((Width (OD) x UPS) + 20) / 25.4. If TYPE = DIE CUT SHEET: ((Open Width x UPS) + 20) / 25.4. If TYPE = RSC: ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. For any other non-blank TYPE: ((Height (OD) x UPS) + 20) / 25.4.",
   },
 ];
 

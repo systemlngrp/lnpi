@@ -65,6 +65,7 @@ function createInitialFormData(todayStr: string) {
     breadth: "" as number | "",
     height: "" as number | "",
     reelAsPerCalc: "" as number | "",
+    noOfUpsInCuttingForPlates: "" as number | "",
     reelActualWithTrimming: "" as number | "",
     cuttingWithTrimming: "" as number | "",
     ply: "" as number | "",
@@ -726,6 +727,13 @@ export function ProductionForm() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} readOnly helpText={getReelAsPerCalculationHelpText(reelFormulaMode)} />
+              <FormInput
+                label="No. of ups in Cutting (For Plates)"
+                value={formData.noOfUpsInCuttingForPlates}
+                onChange={(v) => setFormData({ ...formData, noOfUpsInCuttingForPlates: v })}
+                type="number"
+                helpText="Editable field for plate-related cutting ups. It is saved with the production entry."
+              />
               <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" />
               <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText="Auto-calculated from length, breadth, number of parts, and ID to OD 17 logic." />
 

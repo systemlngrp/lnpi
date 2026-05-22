@@ -13,7 +13,7 @@ const REEL_FORMULA_OPTIONS = [
     value: "type-based",
     label: "TYPE Based Formula",
     description:
-      "Uses TYPE wise reel logic. ROTARY TRAY uses Length (OD) + Height (OD), RSC uses FLAP + Height (OD) + FLAP, die cut sheet uses Open Width, and other types use Width (OD) or Height (OD) with UPS in place of No. of Outs.",
+      "If TYPE = ROTARY TRAY: ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. If TYPE = 2 PLY LINER, U/C PLATE, HORIZONTAL PLATE, or TRAY: ((Width (OD) x UPS) + 20) / 25.4. If TYPE = DIE CUT SHEET: ((Open Width x UPS) + 20) / 25.4. If TYPE = RSC: ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. For any other non-blank TYPE: ((Height (OD) x UPS) + 20) / 25.4.",
   },
 ];
 

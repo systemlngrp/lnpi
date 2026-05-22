@@ -5,7 +5,9 @@ export const PROCESSING_MACHINE_COLUMNS = [
   { key: "liner", label: "Liner", machineNames: ["Corrugation Liner"] },
   { key: "printing", label: "Printing", machineNames: ["Printing"] },
   { key: "pasting", label: "Pasting", machineNames: ["Pasting"] },
-  { key: "stitching", label: "Stitching", machineNames: ["Stitching"] }
+  { key: "stitching", label: "Stitching", machineNames: ["Stitching"] },
+  { key: "punching", label: "Punching", machineNames: ["Punching"] },
+  { key: "gluing", label: "Gluing", machineNames: ["Gluing"] }
 ] as const;
 
 export type ProcessingMachineKey = (typeof PROCESSING_MACHINE_COLUMNS)[number]["key"];
@@ -16,6 +18,8 @@ export interface ProcessingMachineTotals {
   printing: number;
   pasting: number;
   stitching: number;
+  punching: number;
+  gluing: number;
 }
 
 export interface GroupedProcessingRow extends ProcessingMachineTotals {
@@ -31,7 +35,9 @@ const EMPTY_TOTALS: ProcessingMachineTotals = {
   liner: 0,
   printing: 0,
   pasting: 0,
-  stitching: 0
+  stitching: 0,
+  punching: 0,
+  gluing: 0
 };
 
 export function getEmptyProcessingTotals(): ProcessingMachineTotals {

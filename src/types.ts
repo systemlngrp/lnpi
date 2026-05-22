@@ -205,6 +205,7 @@ export interface Production {
   breadth?: number;
   height?: number;
   reelAsPerCalc?: number;
+  noOfUpsInCuttingForPlates?: number;
   reelActualWithTrimming?: number;
   cuttingWithTrimming?: number;
   ply?: number;

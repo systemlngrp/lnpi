@@ -192,9 +192,18 @@ export function Items() {
   const calculatedItemFields = useMemo(() => {
     const round2 = (value: number) => Math.round(value * 100) / 100;
 
-    const lOdCalculated = lengthNumber > 0 && plyNumber > 0 ? round2(lengthNumber + plyNumber) : "";
-    const wOdCalculated = breadthNumber > 0 && plyNumber > 0 ? round2(breadthNumber + plyNumber) : "";
-    const hOdCalculated = heightNumber > 0 && plyNumber > 0 ? round2(heightNumber + plyNumber) : "";
+    const lOdCalculated =
+      lengthNumber > 0
+        ? round2(typeNameNormalized === "RSC" && plyNumber > 0 ? lengthNumber + plyNumber : lengthNumber)
+        : "";
+    const wOdCalculated =
+      breadthNumber > 0
+        ? round2(typeNameNormalized === "RSC" && plyNumber > 0 ? breadthNumber + plyNumber : breadthNumber)
+        : "";
+    const hOdCalculated =
+      heightNumber > 0
+        ? round2(typeNameNormalized === "RSC" && plyNumber > 0 ? heightNumber + plyNumber : heightNumber)
+        : "";
 
     const flapCalculated =
       wOdCalculated !== ""

@@ -1,18 +1,18 @@
 const calculationCards = [
   {
     title: "L (OD)",
-    formula: "Length + PLY",
-    description: "Outer length is calculated by adding the item length and the ply value.",
+    formula: 'If Type = "RSC", use Length + PLY. Otherwise use Length.',
+    description: "Outer length adds ply only for RSC items. All other item types keep the original length.",
   },
   {
     title: "W (OD)",
-    formula: "Bredth + PLY",
-    description: "Outer width is calculated by adding the item bredth and the ply value.",
+    formula: 'If Type = "RSC", use Bredth + PLY. Otherwise use Bredth.',
+    description: "Outer width adds ply only for RSC items. All other item types keep the original bredth.",
   },
   {
     title: "H (OD)",
-    formula: "Height + PLY",
-    description: "Outer height is calculated by adding the item height and the ply value.",
+    formula: 'If Type = "RSC", use Height + PLY. Otherwise use Height.',
+    description: "Outer height adds ply only for RSC items. All other item types keep the original height.",
   },
   {
     title: "Flap",

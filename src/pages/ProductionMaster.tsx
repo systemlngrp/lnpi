@@ -23,7 +23,7 @@ export function ProductionMaster() {
   const processingTotalsMap = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
     processing.forEach((p) => {
-      const totals = map.get(p.productionId) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0 };
+      const totals = map.get(p.productionId) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
       const machineColumn = PROCESSING_MACHINE_COLUMNS.find(col => (col.machineNames as readonly string[]).includes(p.machineName));
       if (machineColumn) {
         totals[machineColumn.key] += Number(p.qty || 0);
@@ -87,7 +87,7 @@ export function ProductionMaster() {
     const schedule = schedules.find(s => s.id === p.scheduleId);
     const order = orders.find(o => o.id === schedule?.orderId);
     const company = companies.find(c => c.id === order?.companyId);
-    const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0 };
+    const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
     
     return {
       "Job No.": p.transactionNo,
@@ -105,6 +105,8 @@ export function ProductionMaster() {
       "Printing": procTotals.printing,
       "Pasting": procTotals.pasting,
       "Stitching": procTotals.stitching,
+      "Punching": procTotals.punching,
+      "Gluing": procTotals.gluing,
       "Status": p.status,
       "No of Parts": p.noOfParts,
       "UPS": p.ups,
@@ -175,7 +177,7 @@ export function ProductionMaster() {
                 const erp = String(p.erpCode || "").trim();
                 const leastGsm = erpLeastGsmMap.get(erp);
                 const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
-                const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0 };
+                const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
                 
                 return (
                   <div key={p.id} className={`${isHighGsm ? "bg-amber-50" : "bg-white"} border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative`}>
@@ -208,7 +210,7 @@ export function ProductionMaster() {
                         <span>{p.qty} {p.uom}</span>
                         <div className="flex flex-col items-end text-[10px] font-bold text-indigo-700 bg-indigo-50 p-1 border border-indigo-100 rounded">
                           <div>Pa:{procTotals.paper} | Li:{procTotals.liner} | Pr:{procTotals.printing}</div>
-                          <div>Pa:{procTotals.pasting} | St:{procTotals.stitching}</div>
+                          <div>Ps:{procTotals.pasting} | St:{procTotals.stitching} | Pu:{procTotals.punching} | Gl:{procTotals.gluing}</div>
                         </div>
                         <div className="flex flex-col items-end">
                             {p.gsm && <span className="font-bold text-indigo-700">GSM: {p.gsm}</span>}
@@ -259,6 +261,8 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Print</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Paste</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Stitch</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Punch</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Glue</th>
                 
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">L</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">B</th>
@@ -290,7 +294,7 @@ export function ProductionMaster() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={31} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                  <td colSpan={33} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
                 </tr>
               ) : (
                 filteredList.map((p) => {
@@ -301,7 +305,7 @@ export function ProductionMaster() {
                   const erp = String(p.erpCode || "").trim();
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
-                  const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0 };
+                  const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
                   
                   return (
                     <tr key={p.id} className={`${isHighGsm ? "bg-amber-50" : "hover:bg-slate-50"} divide-x divide-black transition-colors`}>
@@ -319,6 +323,8 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.printing.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.pasting.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.stitching.toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.punching.toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.gluing.toLocaleString()}</td>
                       
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.length || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.breadth || "-"}</td>
