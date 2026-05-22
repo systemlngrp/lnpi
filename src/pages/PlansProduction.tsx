@@ -66,6 +66,11 @@ const formulaCards = [
     description: "This field is auto-calculated in Production Form from the selected item type, ply, planned quantity, UPS, and No. of ups in Cutting (For Plates).",
   },
   {
+    title: "Paper Required (Nos)",
+    formula: "For VERTICAL PLATE, HORIZONTAL PLATE, U/C PLATE, and ROTARY TRAY: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)). For 2 PLY LINER: blank. For DIE CUT SHEET: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)) / Die Cut Ups. For RSC with PART = Single: Planned Quantity / UPS. For RSC with PART = 2 part box: (Planned Quantity / UPS) x 2.",
+    description: "This field is auto-calculated in Production Form using the selected Item Master TYPE, PART, UPS, Die Cut Ups, and No. of ups in Cutting (For Plates).",
+  },
+  {
     title: "Sheet Weight",
     formula: "((Reel Actual Trim or Reel Per Calc) x Cutting Trim x GSM) / 1,000,000,000, then divide by UPS.",
     description: "If Reel Actual Trim is blank, the app falls back to Reel Per Calc before calculating Sheet Weight.",
@@ -225,6 +230,12 @@ const fieldRules = [
     field: "Cutting Trim",
     source: "Auto-calculated",
     formula: "If Breadth is blank or 0, use Length. If No. of Parts = 1, use ((Length + Breadth) x 2) + (ID to OD 17 x No. of Parts). If No. of Parts = 2, use Length + Breadth + ID to OD 17.",
+    validation: "Read-only in Production Form.",
+  },
+  {
+    field: "Paper Required (Nos)",
+    source: "Auto-calculated",
+    formula: "For VERTICAL PLATE, HORIZONTAL PLATE, U/C PLATE, and ROTARY TRAY: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)). For 2 PLY LINER: blank. For DIE CUT SHEET: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)) / Die Cut Ups. For RSC with PART = Single: Planned Quantity / UPS. For RSC with PART = 2 part box: (Planned Quantity / UPS) x 2.",
     validation: "Read-only in Production Form.",
   },
   {

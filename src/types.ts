@@ -221,6 +221,7 @@ export interface Production {
   color1?: string;
   color2?: string;
   printingColor?: string;
+  paperRequiredNos?: number;
   sheetWeight?: number;
   plateWeight?: number;
   totalPaperWeight?: number;

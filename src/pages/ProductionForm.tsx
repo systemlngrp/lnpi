@@ -86,6 +86,7 @@ function createInitialFormData(todayStr: string) {
     color1: "",
     color2: "",
     printingColor: "",
+    paperRequiredNos: "" as number | "",
     sheetWeight: "" as number | "",
     plateWeight: "" as number | "",
     totalPaperWeight: "" as number | "",
@@ -441,6 +442,7 @@ export function ProductionForm() {
       fluteBatches,
       leastGsm: leastGsmValue,
       printingColor,
+      paperRequiredNos: paperRequiredNos === "" ? "" : parseFloat(paperRequiredNos.toFixed(2)),
       lineRequiredNos: lineRequiredNos === "" ? "" : parseFloat(lineRequiredNos.toFixed(2)),
     }));
   }, [
@@ -799,6 +801,13 @@ export function ProductionForm() {
               />
               <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" />
               <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText="Auto-calculated from length, breadth, number of parts, and ID to OD 17 logic." />
+              <FormInput
+                label="Paper Required (Nos)"
+                value={formData.paperRequiredNos}
+                readOnly
+                type="number"
+                helpText="Calculated from TYPE. For VERTICAL PLATE, HORIZONTAL PLATE, U/C PLATE, and ROTARY TRAY: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)). For 2 PLY LINER: blank. For DIE CUT SHEET: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)) / Die Cut Ups. For RSC with PART = Single: Planned Quantity / UPS. For RSC with PART = 2 part box: (Planned Quantity / UPS) x 2."
+              />
               <FormInput
                 label="Line Required (Nos)"
                 value={formData.lineRequiredNos}
