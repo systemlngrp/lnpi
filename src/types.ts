@@ -5,6 +5,28 @@ export interface ItemGroup {
   updateTimestamp?: string;
 }
 
+export interface MaterialGroup {
+  id: string;
+  name: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface Material {
+  id: string;
+  type: "Reel" | "Other";
+  erpCode?: string | number;
+  name: string;
+  uom?: string;
+  materialGroupId?: string;
+  size?: number;
+  gsm?: number;
+  bf?: number;
+  active?: "Yes" | "No";
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Item {
   id: string;
   groupId: string;
@@ -73,6 +95,23 @@ export interface MaterialLine {
 export interface Supplier {
   id: string;
   name: string;
+  contactPerson?: string;
+  contactNumber?: string;
+  email?: string;
+  gstNo?: string;
+  stateId?: string;
+  district?: string;
+  pinCode?: string;
+  address?: string;
+  active?: "Yes" | "No";
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface StateMaster {
+  id: string;
+  name: string;
+  active?: "Yes" | "No";
   updatedBy?: string;
   updateTimestamp?: string;
 }

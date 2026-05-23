@@ -6,8 +6,11 @@
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ItemGroups } from "./pages/ItemGroups";
+import { MaterialGroups } from "./pages/MaterialGroups";
 import { Items } from "./pages/Items";
+import { Materials } from "./pages/Materials";
 import { Suppliers } from "./pages/Suppliers";
+import { States } from "./pages/States";
 import { ColorMasters } from "./pages/ColorMasters";
 import { Companies } from "./pages/Companies";
 import { Trucks } from "./pages/Trucks";
@@ -82,8 +85,11 @@ export default function App() {
           
           {/* Masters */}
           <Route path="masters/item-groups" element={<ItemGroups />} />
+          <Route path="masters/material-groups" element={<MaterialGroups />} />
           <Route path="masters/items" element={<Items />} />
+          <Route path="masters/materials" element={<Materials />} />
           <Route path="masters/suppliers" element={<Suppliers />} />
+          <Route path="masters/states" element={<States />} />
           <Route path="masters/colors" element={<ColorMasters />} />
           <Route path="masters/companies" element={<Companies />} />
           <Route path="masters/trucks" element={<Trucks />} />

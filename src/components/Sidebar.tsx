@@ -119,8 +119,11 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       color: "bg-indigo-700",
       items: [
         { name: "Item Groups", href: "/masters/item-groups", icon: Layers },
+        { name: "Material Groups", href: "/masters/material-groups", icon: Layers },
         { name: "Items", href: "/masters/items", icon: Boxes },
+        { name: "Material Master", href: "/masters/materials", icon: Boxes },
         { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
+        { name: "States", href: "/masters/states", icon: Database },
         { name: "Colors", href: "/masters/colors", icon: Plus },
         { name: "Companies", href: "/masters/companies", icon: Database },
         { name: "Trucks", href: "/masters/trucks", icon: Truck },

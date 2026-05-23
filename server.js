@@ -41,6 +41,78 @@ function hasWorkflowValue(value) {
   const asNumber = Number(asString);
   return Number.isFinite(asNumber) ? asNumber > 0 : true;
 }
+function decodeHtmlEntities(value) {
+  return value.replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&ndash;/g, "-").replace(/&mdash;/g, "-");
+}
+function normalizeOfficialIndiaText(html) {
+  return decodeHtmlEntities(html).replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+function extractNamesFromSection(section) {
+  const names = /* @__PURE__ */ new Set();
+  for (const match of section.matchAll(/([A-Za-z][A-Za-z.&/\-'\s]+?)\s*\(/g)) {
+    const rawName = match[1].replace(/\s+/g, " ").trim();
+    if (!rawName || rawName.length < 3) continue;
+    if (/States and Capitals|Union Territories|About India/i.test(rawName)) continue;
+    names.add(rawName);
+  }
+  return [...names];
+}
+function extractOfficialIndiaStates(html) {
+  const normalizedText = normalizeOfficialIndiaText(html);
+  const statesSectionMatch = normalizedText.match(/States and Capitals\s+(.*?)\s+Union Territories/i);
+  const unionTerritoriesSectionMatch = normalizedText.match(/Union Territories\s+(.*?)\s+About India/i);
+  const states = statesSectionMatch ? extractNamesFromSection(statesSectionMatch[1]) : [];
+  const unionTerritories = unionTerritoriesSectionMatch ? extractNamesFromSection(unionTerritoriesSectionMatch[1]) : [];
+  return [.../* @__PURE__ */ new Set([...states, ...unionTerritories])];
+}
+async function ensureIndianStatesSeed(db) {
+  const sourceUrls = [
+    "https://knowindia.india.gov.in/states-uts/",
+    "https://www.india.gov.in/explore-india/facts-of-india/states-ut-districts"
+  ];
+  let stateNames = [];
+  for (const url of sourceUrls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "LNPI-ERP/1.0"
+        }
+      });
+      if (!response.ok) continue;
+      const html = await response.text();
+      stateNames = extractOfficialIndiaStates(html);
+      if (stateNames.length >= 36) break;
+    } catch (error) {
+      console.warn(`[DB] Failed to fetch states from ${url}:`, error.message);
+    }
+  }
+  if (stateNames.length < 36) {
+    console.warn("[DB] Official state import skipped because the source could not be parsed reliably.");
+    return;
+  }
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+  for (const name of stateNames) {
+    const trimmedName = name.trim();
+    if (!trimmedName) continue;
+    const [existingRows] = await db.query(
+      "SELECT id FROM `states` WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1",
+      [trimmedName]
+    );
+    const existing = existingRows[0];
+    if (existing) {
+      await db.query(
+        "UPDATE `states` SET `name` = ?, `updateTimestamp` = ? WHERE `id` = ?",
+        [trimmedName, timestamp, existing.id]
+      );
+      continue;
+    }
+    await db.query(
+      "INSERT INTO `states` (`id`, `name`, `active`, `updatedBy`, `updateTimestamp`) VALUES (?, ?, ?, ?, ?)",
+      [crypto.randomUUID(), trimmedName, "Yes", "System Seed", timestamp]
+    );
+  }
+  console.log(`[DB] Seeded/verified ${stateNames.length} India states and union territories.`);
+}
 function normalizeWorkflowStatus(tableName, row) {
   const normalized = { ...row };
   const currentStatus = typeof normalized.status === "string" ? normalized.status.trim() : normalized.status;
@@ -176,6 +248,14 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_groups\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`items\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`groupId\` VARCHAR(36) NOT NULL,
@@ -226,9 +306,43 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`materials\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`type\` VARCHAR(50) NOT NULL,
+          \`erpCode\` VARCHAR(100),
+          \`name\` VARCHAR(255) NOT NULL,
+          \`uom\` VARCHAR(50),
+          \`materialGroupId\` VARCHAR(36),
+          \`size\` DECIMAL(15,2),
+          \`gsm\` DECIMAL(15,2),
+          \`bf\` DECIMAL(15,2),
+          \`active\` VARCHAR(10) DEFAULT 'Yes',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`suppliers\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
+          \`contactPerson\` VARCHAR(255),
+          \`contactNumber\` VARCHAR(50),
+          \`email\` VARCHAR(255),
+          \`gstNo\` VARCHAR(100),
+          \`stateId\` VARCHAR(36),
+          \`district\` VARCHAR(255),
+          \`pinCode\` VARCHAR(20),
+          \`address\` TEXT,
+          \`active\` VARCHAR(10) DEFAULT 'Yes',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`states\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`active\` VARCHAR(10) DEFAULT 'Yes',
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -519,7 +633,28 @@ async function initDb(retries = 5) {
         { table: "items", column: "openWidth", type: "DECIMAL(15,2)" },
         { table: "items", column: "opening", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "item_groups", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "material_groups", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "materials", column: "type", type: "VARCHAR(50) NOT NULL" },
+        { table: "materials", column: "erpCode", type: "VARCHAR(100)" },
+        { table: "materials", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "materials", column: "uom", type: "VARCHAR(50)" },
+        { table: "materials", column: "materialGroupId", type: "VARCHAR(36)" },
+        { table: "materials", column: "size", type: "DECIMAL(15,2)" },
+        { table: "materials", column: "gsm", type: "DECIMAL(15,2)" },
+        { table: "materials", column: "bf", type: "DECIMAL(15,2)" },
+        { table: "materials", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "suppliers", column: "contactPerson", type: "VARCHAR(255)" },
+        { table: "suppliers", column: "contactNumber", type: "VARCHAR(50)" },
+        { table: "suppliers", column: "email", type: "VARCHAR(255)" },
+        { table: "suppliers", column: "gstNo", type: "VARCHAR(100)" },
+        { table: "suppliers", column: "stateId", type: "VARCHAR(36)" },
+        { table: "suppliers", column: "district", type: "VARCHAR(255)" },
+        { table: "suppliers", column: "pinCode", type: "VARCHAR(20)" },
+        { table: "suppliers", column: "address", type: "TEXT" },
+        { table: "suppliers", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
+        { table: "states", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "states", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
         { table: "color_masters", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "material_in", column: "timestamp", type: "VARCHAR(255) NOT NULL" },
@@ -631,10 +766,16 @@ async function initDb(retries = 5) {
         { table: "consumptions", column: "phEmailId", type: "VARCHAR(255)" },
         { table: "item_groups", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "item_groups", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_groups", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "material_groups", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "materials", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "materials", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "items", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "items", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "suppliers", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "suppliers", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "states", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "states", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "color_masters", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "color_masters", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "companies", column: "name", type: "VARCHAR(255) NOT NULL" },
@@ -803,6 +944,11 @@ async function initDb(retries = 5) {
         } catch (err) {
           console.warn(`[DB] Could not drop column ${m.column} from ${m.table}:`, err.message);
         }
+      }
+      try {
+        await ensureIndianStatesSeed(db);
+      } catch (err) {
+        console.warn("[DB] Could not seed official India states:", err.message);
       }
       return;
     } catch (error) {
@@ -1016,7 +1162,7 @@ const createHandlers = (tableName) => {
     }
   };
 };
-const entities = ["item_groups", "items", "suppliers", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach((entity) => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;
