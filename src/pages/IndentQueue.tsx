@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, Download, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { ExcelExport } from "../components/ExcelExport";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { Indent, IndentLine, Material } from "../types";
+import { Indent, IndentLine, Material, Setting } from "../types";
+import { downloadIndentPdf } from "../lib/indentPdf";
 
 type QueueMode = "Pending" | "Approved" | "Completed" | "Rejected";
 
@@ -70,8 +71,10 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
   const [indents, setIndents] = useData<Indent>("indents", []);
   const [indentLines] = useData<IndentLine>("indent-lines", []);
   const [materials] = useData<Material>("materials", []);
+  const [settings] = useData<Setting>("settings", []);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const visibleIndents = useMemo(
     () =>
@@ -158,6 +161,23 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
     await updateIndent(indent, "Rejected", remarks.trim());
   };
 
+  const handleDownloadPdf = async (indent: Indent) => {
+    setDownloadingId(indent.id);
+    try {
+      await downloadIndentPdf({
+        indent,
+        lines: indentLines.filter((line) => line.indentId === indent.id),
+        materials,
+        setting: settings[0],
+      });
+    } catch (error) {
+      console.error("Failed to download indent PDF:", error);
+      alert("Failed to generate indent PDF.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 border-b border-black pb-4">
@@ -225,6 +245,14 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                           className="inline-flex items-center justify-center min-w-[110px] rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-black hover:bg-slate-50 transition"
                         >
                           View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDownloadPdf(indent)}
+                          disabled={downloadingId === indent.id}
+                          className="inline-flex items-center justify-center min-w-[120px] rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-black hover:bg-slate-50 transition disabled:opacity-50"
+                        >
+                          {downloadingId === indent.id ? <Spinner size={16} /> : <><Download size={14} className="mr-2" />PDF</>}
                         </button>
                         {mode === "Pending" ? (
                           <>
