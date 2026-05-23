@@ -10,6 +10,7 @@ import { MaterialGroups } from "./pages/MaterialGroups";
 import { Items } from "./pages/Items";
 import { Materials } from "./pages/Materials";
 import { IndentForm } from "./pages/IndentForm";
+import { IndentDetail } from "./pages/IndentDetail";
 import { IndentApproved, IndentCompleted, IndentPending, IndentRejected } from "./pages/IndentQueue";
 import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
@@ -101,6 +102,7 @@ export default function App() {
 
           {/* Indent */}
           <Route path="indent/form" element={<IndentForm />} />
+          <Route path="indent/view/:id" element={<IndentDetail />} />
           <Route path="indent/pending" element={<IndentPending />} />
           <Route path="indent/approved" element={<IndentApproved />} />
           <Route path="indent/completed" element={<IndentCompleted />} />

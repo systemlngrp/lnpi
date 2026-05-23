@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CheckCircle, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { ExcelExport } from "../components/ExcelExport";
@@ -65,6 +66,7 @@ function ActionButton({
 }
 
 function IndentQueue({ mode }: { mode: QueueMode }) {
+  const navigate = useNavigate();
   const [indents, setIndents] = useData<Indent>("indents", []);
   const [indentLines] = useData<IndentLine>("indent-lines", []);
   const [materials] = useData<Material>("materials", []);
@@ -175,7 +177,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
               {mode === "Rejected" ? (
                 <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Remarks</th>
               ) : null}
-              {(mode === "Pending" || mode === "Approved") ? (
+              {(mode === "Pending" || mode === "Approved" || mode === "Completed" || mode === "Rejected") ? (
                 <th className="border border-black px-4 py-3 text-right text-sm font-bold uppercase text-black">Actions</th>
               ) : null}
             </tr>
@@ -184,7 +186,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
             {visibleIndents.length === 0 ? (
               <tr>
                 <td
-                  colSpan={mode === "Rejected" ? 6 : mode === "Completed" ? 5 : 6}
+                  colSpan={mode === "Rejected" ? 7 : 6}
                   className="border border-black px-6 py-10 text-center font-medium text-black"
                 >
                   No indent records found.
@@ -215,30 +217,35 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                     {mode === "Rejected" ? (
                       <td className="border border-black px-4 py-4 text-sm text-black">{indent.rejectedRemarks || ""}</td>
                     ) : null}
-                    {mode === "Pending" ? (
-                      <td className="border border-black px-4 py-4">
-                        <div className="flex justify-end gap-2">
-                          <ActionButton
-                            label={confirmId === indent.id ? "Confirm?" : "Approve"}
-                            onClick={() => handleApprove(indent)}
-                            tone="primary"
-                            loading={submittingId === indent.id}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleReject(indent)}
-                            disabled={submittingId === indent.id}
-                            className="inline-flex items-center justify-center rounded border border-red-700 bg-red-100 px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-800 hover:bg-red-200 transition disabled:opacity-50"
-                          >
-                            <XCircle size={14} className="mr-2" />
-                            Reject
-                          </button>
-                        </div>
-                      </td>
-                    ) : null}
-                    {mode === "Approved" ? (
-                      <td className="border border-black px-4 py-4">
-                        <div className="flex justify-end">
+                    <td className="border border-black px-4 py-4">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/indent/view/${indent.id}`)}
+                          className="inline-flex items-center justify-center min-w-[110px] rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-black hover:bg-slate-50 transition"
+                        >
+                          View
+                        </button>
+                        {mode === "Pending" ? (
+                          <>
+                            <ActionButton
+                              label={confirmId === indent.id ? "Confirm?" : "Approve"}
+                              onClick={() => handleApprove(indent)}
+                              tone="primary"
+                              loading={submittingId === indent.id}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleReject(indent)}
+                              disabled={submittingId === indent.id}
+                              className="inline-flex items-center justify-center rounded border border-red-700 bg-red-100 px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-800 hover:bg-red-200 transition disabled:opacity-50"
+                            >
+                              <XCircle size={14} className="mr-2" />
+                              Reject
+                            </button>
+                          </>
+                        ) : null}
+                        {mode === "Approved" ? (
                           <button
                             type="button"
                             onClick={() => handleComplete(indent)}
@@ -247,9 +254,9 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                           >
                             {submittingId === indent.id ? <Spinner size={16} /> : <><CheckCircle size={14} className="mr-2" />{confirmId === indent.id ? "Confirm?" : "Complete"}</>}
                           </button>
-                        </div>
-                      </td>
-                    ) : null}
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
                 );
               })
