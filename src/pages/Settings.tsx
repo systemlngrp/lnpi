@@ -72,6 +72,7 @@ export function SettingsPage() {
     organizationName: "",
     organizationAddress: "",
     organizationGstDetails: "",
+    organizationLogo: "",
   });
 
   const currentSetting = settings[0];
@@ -100,18 +101,24 @@ export function SettingsPage() {
     [currentSetting?.productionFormVisibleColumns]
   );
   const organizationLogoUrl = useMemo(() => {
-    if (!currentSetting?.organizationLogo) return "";
-    const encoded = currentSetting.organizationLogo.split("/").map(encodeURIComponent).join("/");
+    if (!organizationDraft.organizationLogo) return "";
+    const encoded = organizationDraft.organizationLogo.split("/").map(encodeURIComponent).join("/");
     if (typeof window === "undefined") return `/uploads/${encoded}`;
     return new URL(`/uploads/${encoded}`, window.location.origin).toString();
-  }, [currentSetting?.organizationLogo]);
+  }, [organizationDraft.organizationLogo]);
   const organizationValues = useMemo(
     () => ({
       organizationName: currentSetting?.organizationName || "",
       organizationAddress: currentSetting?.organizationAddress || "",
       organizationGstDetails: currentSetting?.organizationGstDetails || "",
+      organizationLogo: currentSetting?.organizationLogo || "",
     }),
-    [currentSetting?.organizationAddress, currentSetting?.organizationGstDetails, currentSetting?.organizationName]
+    [
+      currentSetting?.organizationAddress,
+      currentSetting?.organizationGstDetails,
+      currentSetting?.organizationLogo,
+      currentSetting?.organizationName,
+    ]
   );
 
   useEffect(() => {
@@ -123,7 +130,8 @@ export function SettingsPage() {
       Boolean(
         organizationDraft.organizationName.trim() ||
         organizationDraft.organizationAddress.trim() ||
-        organizationDraft.organizationGstDetails.trim()
+        organizationDraft.organizationGstDetails.trim() ||
+        organizationDraft.organizationLogo
       ),
     [organizationDraft]
   );
@@ -132,7 +140,8 @@ export function SettingsPage() {
     () =>
       organizationDraft.organizationName !== organizationValues.organizationName ||
       organizationDraft.organizationAddress !== organizationValues.organizationAddress ||
-      organizationDraft.organizationGstDetails !== organizationValues.organizationGstDetails,
+      organizationDraft.organizationGstDetails !== organizationValues.organizationGstDetails ||
+      organizationDraft.organizationLogo !== organizationValues.organizationLogo,
     [organizationDraft, organizationValues]
   );
 
@@ -189,7 +198,7 @@ export function SettingsPage() {
         }
 
         const result = await response.json();
-        await handleChange({ organizationLogo: result.filename });
+        setOrganizationDraft((prev) => ({ ...prev, organizationLogo: result.filename }));
       } catch (error) {
         console.error("Failed to upload organization logo:", error);
         alert("Failed to upload logo.");
@@ -208,6 +217,7 @@ export function SettingsPage() {
       organizationName: organizationDraft.organizationName,
       organizationAddress: organizationDraft.organizationAddress,
       organizationGstDetails: organizationDraft.organizationGstDetails,
+      organizationLogo: organizationDraft.organizationLogo,
     });
   };
 
@@ -282,7 +292,7 @@ export function SettingsPage() {
                     className="hidden"
                   />
                 </label>
-                {currentSetting?.organizationLogo ? (
+                {organizationDraft.organizationLogo ? (
                   <div className="space-y-2">
                     <div className="flex min-h-[96px] min-w-[220px] items-center justify-center rounded border border-black bg-slate-50 p-3">
                       <img
@@ -293,7 +303,7 @@ export function SettingsPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => void handleChange({ organizationLogo: "" })}
+                      onClick={() => setOrganizationDraft((prev) => ({ ...prev, organizationLogo: "" }))}
                       disabled={loading || saving || uploadingLogo}
                       className="text-xs font-bold uppercase tracking-wide text-red-700 hover:text-red-900 disabled:opacity-50"
                     >
