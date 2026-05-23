@@ -4,6 +4,7 @@ import { Production, Machine, User, ProductionProcessing } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { normalizeMachineName } from "../lib/productionMachineNames";
 
 export function ProductionProcessingForm() {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ export function ProductionProcessingForm() {
   const machineOptions = useMemo(() => {
     return [...machines]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map(m => ({ value: m.id, label: m.name }));
+      .map(m => ({ value: m.id, label: normalizeMachineName(m.name) }));
   }, [machines]);
 
   const operatorOptions = useMemo(() => {
@@ -61,7 +62,7 @@ export function ProductionProcessingForm() {
         productionId,
         jobNo: selectedProduction.jobCardNo || selectedProduction.transactionNo,
         machineId,
-        machineName: selectedMachine.name,
+        machineName: normalizeMachineName(selectedMachine.name),
         qty: Number(qty),
         operatorId,
         operatorName: selectedOperator.name,

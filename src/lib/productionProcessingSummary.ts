@@ -1,4 +1,5 @@
 import { ProductionProcessing } from "../types";
+import { normalizeMachineName } from "./productionMachineNames";
 
 export const PROCESSING_MACHINE_COLUMNS = [
   { key: "paper", label: "Paper", machineNames: ["Corrugation Paper"] },
@@ -51,7 +52,7 @@ export function buildProcessingTotalsMap(processing: ProductionProcessing[]) {
     if (!entry.productionId) return;
     const current = totalsMap.get(entry.productionId) || getEmptyProcessingTotals();
     const machineColumn = PROCESSING_MACHINE_COLUMNS.find((column) =>
-      (column.machineNames as readonly string[]).includes(entry.machineName)
+      (column.machineNames as readonly string[]).includes(normalizeMachineName(entry.machineName))
     );
 
     if (machineColumn) {
@@ -80,7 +81,7 @@ export function groupProcessingByProduction(processing: ProductionProcessing[]) 
     };
 
     const machineColumn = PROCESSING_MACHINE_COLUMNS.find((column) =>
-      (column.machineNames as readonly string[]).includes(entry.machineName)
+      (column.machineNames as readonly string[]).includes(normalizeMachineName(entry.machineName))
     );
 
     if (machineColumn) {

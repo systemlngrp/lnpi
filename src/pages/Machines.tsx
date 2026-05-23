@@ -4,10 +4,11 @@ import { Plus, Edit, Trash2 } from "lucide-react";
 import { Machine } from "../types";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
+import { normalizeMachineName } from "../lib/productionMachineNames";
 
 const DEFAULT_MACHINES = [
-  "Corrugation Finger",
-  "Corrugation Linear",
+  "Corrugation Paper",
+  "Corrugation Liner",
   "Printing",
   "Pasting",
   "Rotary",
@@ -37,14 +38,26 @@ export function Machines() {
         updateTimestamp: new Date().toISOString()
       }));
       setMachines(initial);
+      return;
     }
-  }, [machines.length, setMachines]);
+
+    const normalizedMachines = machines.map((machine) => {
+      const normalizedName = normalizeMachineName(machine.name);
+      return normalizedName === machine.name ? machine : { ...machine, name: normalizedName };
+    });
+    const hasChanges = normalizedMachines.some((machine, index) => machine.name !== machines[index].name);
+    if (hasChanges) {
+      setMachines(normalizedMachines);
+    }
+  }, [machines, setMachines]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    if (machines.some(m => m.name.toLowerCase() === name.trim().toLowerCase() && m.id !== editingId)) {
+    const normalizedName = normalizeMachineName(name);
+
+    if (machines.some(m => normalizeMachineName(m.name).toLowerCase() === normalizedName.toLowerCase() && m.id !== editingId)) {
       alert("Machine already exists.");
       return;
     }
@@ -53,7 +66,7 @@ export function Machines() {
     setTimeout(() => {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
       const machineData = { 
-        name: name.trim(), 
+        name: normalizedName, 
         maxOutputPerHour: maxOutputPerHour === "" ? 0 : Number(maxOutputPerHour),
         ...audit 
       };
@@ -81,7 +94,7 @@ export function Machines() {
     setDeletingId(null);
   };
 
-  const filtered = machines.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filtered = machines.filter(m => normalizeMachineName(m.name).toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -145,13 +158,13 @@ export function Machines() {
           <tbody className="bg-white divide-y divide-black">
             {filtered.map((machine) => (
               <tr key={machine.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{machine.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{normalizeMachineName(machine.name)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{machine.maxOutputPerHour || 0}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 md:block hidden">
                   {machine.updatedBy}<br />{new Date(machine.updateTimestamp || "").toLocaleString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => { setName(machine.name); setMaxOutputPerHour(machine.maxOutputPerHour || ""); setEditingId(machine.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center">
+                  <button onClick={() => { setName(normalizeMachineName(machine.name)); setMaxOutputPerHour(machine.maxOutputPerHour || ""); setEditingId(machine.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center">
                     <Edit size={16} className="mr-1" /> Edit
                   </button>
                   <button 
