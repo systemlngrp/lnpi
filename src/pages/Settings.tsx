@@ -112,6 +112,24 @@ export function SettingsPage() {
     setOrganizationDraft(organizationValues);
   }, [organizationValues]);
 
+  const hasOrganizationContent = useMemo(
+    () =>
+      Boolean(
+        organizationDraft.organizationName.trim() ||
+        organizationDraft.organizationAddress.trim() ||
+        organizationDraft.organizationGstDetails.trim()
+      ),
+    [organizationDraft]
+  );
+
+  const hasOrganizationChanges = useMemo(
+    () =>
+      organizationDraft.organizationName !== organizationValues.organizationName ||
+      organizationDraft.organizationAddress !== organizationValues.organizationAddress ||
+      organizationDraft.organizationGstDetails !== organizationValues.organizationGstDetails,
+    [organizationDraft, organizationValues]
+  );
+
   const handleChange = async (patch: Partial<Setting>) => {
     setSaving(true);
     try {
@@ -179,6 +197,7 @@ export function SettingsPage() {
   };
 
   const handleOrganizationSave = async () => {
+    if (!hasOrganizationContent || !hasOrganizationChanges) return;
     await handleChange({
       organizationName: organizationDraft.organizationName,
       organizationAddress: organizationDraft.organizationAddress,
@@ -287,7 +306,7 @@ export function SettingsPage() {
               <button
                 type="button"
                 onClick={() => void handleOrganizationSave()}
-                disabled={loading || saving || uploadingLogo}
+                disabled={loading || saving || uploadingLogo || !hasOrganizationContent || !hasOrganizationChanges}
                 className="inline-flex items-center justify-center min-w-[170px] rounded bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50"
               >
                 {saving ? <Spinner size={16} className="text-white" /> : "Save Organization"}
