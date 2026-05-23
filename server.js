@@ -34,6 +34,13 @@ app.post("/api/upload-artwork", async (req, res) => {
   }
 });
 let pool = null;
+function hasWorkflowValue(value) {
+  if (value === null || value === void 0) return false;
+  const asString = String(value).trim();
+  if (!asString) return false;
+  const asNumber = Number(asString);
+  return Number.isFinite(asNumber) ? asNumber > 0 : true;
+}
 function normalizeWorkflowStatus(tableName, row) {
   const normalized = { ...row };
   const currentStatus = typeof normalized.status === "string" ? normalized.status.trim() : normalized.status;
@@ -54,8 +61,8 @@ function normalizeWorkflowStatus(tableName, row) {
     else if (currentStatus === "Cancelled" || normalized.cancelTimestamp) normalized.status = "Cancelled";
     else if (currentStatus === "Pending Consumption" || currentStatus === "Pending FFG") normalized.status = currentStatus;
     else if (!normalized.phTimestamp) normalized.status = "Pending PH";
-    else if (!normalized.actualPaperUsed) normalized.status = "Pending Consumption";
-    else if (!normalized.prodFromFFG) normalized.status = "Pending FFG";
+    else if (!hasWorkflowValue(normalized.actualPaperUsed)) normalized.status = "Pending Consumption";
+    else if (!hasWorkflowValue(normalized.prodFromFFG)) normalized.status = "Pending FFG";
     else normalized.status = "Pending Tally";
     return normalized;
   }

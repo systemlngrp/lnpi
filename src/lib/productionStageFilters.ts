@@ -1,7 +1,11 @@
 import { Production } from "../types";
 
-function hasFilledValue(value: unknown) {
-  return !(value === null || value === undefined || String(value).trim() === "");
+function hasWorkflowValue(value: unknown) {
+  if (value === null || value === undefined) return false;
+  const asString = String(value).trim();
+  if (!asString) return false;
+  const asNumber = Number(asString);
+  return Number.isFinite(asNumber) ? asNumber > 0 : true;
 }
 
 export function isProductionPendingPH(production: Production) {
@@ -9,13 +13,13 @@ export function isProductionPendingPH(production: Production) {
 }
 
 export function isProductionPendingConsumption(production: Production) {
-  return !production.cancelTimestamp && !production.tallyTimestamp && !!production.phTimestamp && !hasFilledValue(production.actualPaperUsed);
+  return !production.cancelTimestamp && !production.tallyTimestamp && !!production.phTimestamp && !hasWorkflowValue(production.actualPaperUsed);
 }
 
 export function isProductionPendingFFG(production: Production) {
-  return !production.cancelTimestamp && !production.tallyTimestamp && !!production.phTimestamp && hasFilledValue(production.actualPaperUsed) && !hasFilledValue(production.prodFromFFG);
+  return !production.cancelTimestamp && !production.tallyTimestamp && !!production.phTimestamp && hasWorkflowValue(production.actualPaperUsed) && !hasWorkflowValue(production.prodFromFFG);
 }
 
 export function isProductionReadyForTally(production: Production) {
-  return !production.cancelTimestamp && !production.tallyTimestamp && !!production.phTimestamp && hasFilledValue(production.actualPaperUsed) && hasFilledValue(production.prodFromFFG);
+  return !production.cancelTimestamp && !production.tallyTimestamp && !!production.phTimestamp && hasWorkflowValue(production.actualPaperUsed) && hasWorkflowValue(production.prodFromFFG);
 }
