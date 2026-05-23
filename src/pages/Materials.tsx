@@ -502,49 +502,69 @@ export function Materials() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-wrap xl:flex-nowrap items-end gap-3 border-b border-black pb-4">
-            <h2 className="text-xl font-bold text-black uppercase tracking-tight whitespace-nowrap">Material Master</h2>
-            <div className="relative min-w-[240px] flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search ERP / name"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded border-2 border-black pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                />
+          <div className="rounded-xl border border-black bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-black text-black tracking-tight">Material Master</h2>
+                  <p className="text-sm font-medium text-slate-600">
+                    Showing {filteredMaterials.length} {filteredMaterials.length === 1 ? "material" : "materials"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenNew}
+                  className="inline-flex items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 whitespace-nowrap border border-black shadow"
+                >
+                  <Plus size={16} /> New Item
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1.6fr)_repeat(3,minmax(120px,0.8fr))]">
+                  <div className="space-y-1">
+                    <div className="text-blue-700 font-bold text-sm">Search</div>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Search ERP / name"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                      />
+                    </div>
+                  </div>
+                  <FilterSelect compact label="Type" value={typeFilter} onChange={setTypeFilter} options={["All", ...TYPE_OPTIONS.map((option) => option.value)]} />
+                  <FilterSelect compact label="Size" value={sizeFilter} onChange={setSizeFilter} options={["All", ...sizeOptions]} />
+                  <FilterSelect compact label="GSM" value={gsmFilter} onChange={setGsmFilter} options={["All", ...gsmOptions]} />
+                </div>
+
+                <div className="flex flex-wrap items-end gap-2 xl:justify-end">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="rounded border border-black px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExport}
+                    className="inline-flex items-center gap-2 rounded border border-black px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap"
+                  >
+                    <Download size={16} /> Excel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(-1)}
+                    className="rounded border border-black px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
             </div>
-            <FilterSelect compact label="Type" value={typeFilter} onChange={setTypeFilter} options={["All", ...TYPE_OPTIONS.map((option) => option.value)]} />
-            <FilterSelect compact label="Size" value={sizeFilter} onChange={setSizeFilter} options={["All", ...sizeOptions]} />
-            <FilterSelect compact label="GSM" value={gsmFilter} onChange={setGsmFilter} options={["All", ...gsmOptions]} />
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="px-4 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition whitespace-nowrap"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              onClick={handleExport}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition whitespace-nowrap"
-            >
-              <Download size={16} /> Excel
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="px-4 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition whitespace-nowrap"
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenNew}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition whitespace-nowrap border border-black shadow"
-            >
-              <Plus size={16} /> New Item
-            </button>
           </div>
 
           <div className="bg-white rounded shadow-sm border border-black overflow-hidden">
