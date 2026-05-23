@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Download, XCircle } from "lucide-react";
+import { CheckCircle, Download, Eye, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { ExcelExport } from "../components/ExcelExport";
 import { Spinner } from "../components/Spinner";
@@ -242,17 +242,19 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                         <button
                           type="button"
                           onClick={() => navigate(`/indent/view/${indent.id}`)}
-                          className="inline-flex items-center justify-center min-w-[110px] rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-black hover:bg-slate-50 transition"
+                          title="View Indent"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-50 transition"
                         >
-                          View
+                          <Eye size={16} />
                         </button>
                         <button
                           type="button"
                           onClick={() => void handleDownloadPdf(indent)}
                           disabled={downloadingId === indent.id}
-                          className="inline-flex items-center justify-center min-w-[120px] rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-black hover:bg-slate-50 transition disabled:opacity-50"
+                          title="Download PDF"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-50 transition disabled:opacity-50"
                         >
-                          {downloadingId === indent.id ? <Spinner size={16} /> : <><Download size={14} className="mr-2" />PDF</>}
+                          {downloadingId === indent.id ? <Spinner size={16} /> : <Download size={16} />}
                         </button>
                         {mode === "Pending" ? (
                           <>
