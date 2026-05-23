@@ -17,7 +17,12 @@ const calculationCards = [
   {
     title: "Flap",
     formula: "If PLY = 3, then W (OD) / 2. Otherwise (W (OD) / 2) + 1.",
-    description: "Flap changes based on the ply. Three-ply items use half width, while other ply values add one extra unit.",
+    description: "This is the Current Logic option. Flap changes based on the ply. Three-ply items use half of Width (OD), while other ply values use half of Width (OD) plus one.",
+  },
+  {
+    title: "Flap - TYPE Based Logic",
+    formula: 'If Type is "VERTICAL PLATE", "HORIZONTAL PLATE", or "DIE CUT SHEET", keep Flap blank. Otherwise, for 3 Ply use half of W (OD), for 5 Ply use half of W (OD) + 1, for 7 Ply use half of W (OD) + 2, and for 9 Ply use half of W (OD) + 3.',
+    description: "This is the TYPE Based Logic option available in Settings for Item Form flap calculation.",
   },
   {
     title: "Deckle Size",
@@ -60,7 +65,7 @@ export function PlansItems() {
         <div className="bg-white border border-black rounded shadow-sm p-5">
           <h3 className="text-sm font-black uppercase text-slate-600 mb-3">What Is Auto Calculated</h3>
           <p className="text-sm text-black leading-6">
-            The application automatically calculates outer dimensions, flap, deckle size, cutting size, and number of parts from the main item inputs. Users do not need to type these values manually.
+            The application automatically calculates outer dimensions, flap, deckle size, cutting size, and number of parts from the main item inputs. Users do not need to type these values manually, and flap logic now follows the setting selected on the Settings page.
           </p>
         </div>
 
@@ -105,7 +110,7 @@ export function PlansItems() {
         <div className="p-5 space-y-3">
           {[
             "First the app calculates L (OD), W (OD), and H (OD).",
-            "Then it calculates Flap from W (OD) and PLY.",
+            "Then it calculates Flap from W (OD), PLY, and the Flap setting selected in Settings.",
             "After that it calculates Deckle Size based on Type and Ups.",
             "Then it calculates Cutting Size.",
             "Finally it decides No. of Parts from Cutting Size.",

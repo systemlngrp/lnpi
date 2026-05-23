@@ -358,6 +358,7 @@ export interface InvoiceLineItem {
 export interface Setting {
   id: string;
   reelAsPerCalculation?: string;
+  flapAsPerCalculation?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

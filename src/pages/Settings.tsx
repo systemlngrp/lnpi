@@ -17,26 +17,48 @@ const REEL_FORMULA_OPTIONS = [
   },
 ];
 
+const FLAP_FORMULA_OPTIONS = [
+  {
+    value: "current-logic",
+    label: "Current Logic",
+    description:
+      "If W (OD) is blank, keep FLAP blank. If PLY = 3, FLAP = half of Width (OD). Otherwise FLAP = half of Width (OD) + 1.",
+  },
+  {
+    value: "type-based",
+    label: "TYPE Based Logic",
+    description:
+      "If TYPE is VERTICAL PLATE, HORIZONTAL PLATE, or DIE CUT SHEET, keep FLAP blank. Otherwise calculate FLAP from Width (OD) based on Ply: for 3 Ply use half of Width (OD), for 5 Ply use half of Width (OD) + 1, for 7 Ply use half of Width (OD) + 2, and for 9 Ply use half of Width (OD) + 3.",
+  },
+];
+
 export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [saving, setSaving] = useState(false);
 
   const currentSetting = settings[0];
-  const selectedFormula = currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value;
-  const selectedOption = useMemo(
-    () => REEL_FORMULA_OPTIONS.find((option) => option.value === selectedFormula) || REEL_FORMULA_OPTIONS[0],
-    [selectedFormula]
+  const selectedReelFormula = currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value;
+  const selectedReelOption = useMemo(
+    () => REEL_FORMULA_OPTIONS.find((option) => option.value === selectedReelFormula) || REEL_FORMULA_OPTIONS[0],
+    [selectedReelFormula]
+  );
+  const selectedFlapFormula = currentSetting?.flapAsPerCalculation || FLAP_FORMULA_OPTIONS[0].value;
+  const selectedFlapOption = useMemo(
+    () => FLAP_FORMULA_OPTIONS.find((option) => option.value === selectedFlapFormula) || FLAP_FORMULA_OPTIONS[0],
+    [selectedFlapFormula]
   );
 
-  const handleChange = async (value: string) => {
+  const handleChange = async (patch: Partial<Setting>) => {
     setSaving(true);
     try {
       const timestamp = new Date().toISOString();
       const nextRow: Setting = {
         id: currentSetting?.id || crypto.randomUUID(),
-        reelAsPerCalculation: value,
+        reelAsPerCalculation: currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value,
+        flapAsPerCalculation: currentSetting?.flapAsPerCalculation || FLAP_FORMULA_OPTIONS[0].value,
         updatedBy: "System User",
         updateTimestamp: timestamp,
+        ...patch,
       };
 
       await setSettings(currentSetting ? [nextRow, ...settings.slice(1)] : [nextRow]);
@@ -67,8 +89,8 @@ export function SettingsPage() {
           </label>
           <select
             id="reelAsPerCalculation"
-            value={selectedFormula}
-            onChange={(e) => void handleChange(e.target.value)}
+            value={selectedReelFormula}
+            onChange={(e) => void handleChange({ reelAsPerCalculation: e.target.value })}
             disabled={loading || saving}
             className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
           >
@@ -79,10 +101,32 @@ export function SettingsPage() {
             ))}
           </select>
           <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm text-black leading-6">
-            {selectedOption.description}
+            {selectedReelOption.description}
+          </div>
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <label htmlFor="flapAsPerCalculation" className="text-xs font-black uppercase tracking-wide text-black">
+            Flap
+          </label>
+          <select
+            id="flapAsPerCalculation"
+            value={selectedFlapFormula}
+            onChange={(e) => void handleChange({ flapAsPerCalculation: e.target.value })}
+            disabled={loading || saving}
+            className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+          >
+            {FLAP_FORMULA_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm text-black leading-6">
+            {selectedFlapOption.description}
           </div>
           <div className="text-xs font-bold text-slate-500">
-            {saving ? "Saving setting..." : "This selection is used by Production Form for new reel calculations."}
+            {saving ? "Saving setting..." : "These selections are used by Item Form and Production Form for new calculations."}
           </div>
         </div>
       </div>

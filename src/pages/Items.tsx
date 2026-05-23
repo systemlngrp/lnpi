@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, ExternalLink, FileUp, XCircle } from "lucide-react";
-import { ColorMaster, Company, Item, ItemGroup } from "../types";
+import { ColorMaster, Company, Item, ItemGroup, Setting } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { TableControls } from "../components/TableControls";
@@ -12,6 +12,7 @@ export function Items() {
   const [groups, setGroups] = useData<ItemGroup>("item-groups", []);
   const [colors, setColors] = useData<ColorMaster>("color_masters", []);
   const [companies, setCompanies] = useData<Company>("companies", []);
+  const [settings] = useData<Setting>("settings", []);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -188,6 +189,7 @@ export function Items() {
   const heightNumber = Number(height);
   const upsNumber = Number(ups);
   const openWidthNumber = Number(openWidth);
+  const flapFormulaMode = settings[0]?.flapAsPerCalculation || "current-logic";
 
   const calculatedItemFields = useMemo(() => {
     const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -205,10 +207,30 @@ export function Items() {
         ? round2(typeNameNormalized === "RSC" && plyNumber > 0 ? heightNumber + plyNumber : heightNumber)
         : "";
 
-    const flapCalculated =
-      wOdCalculated !== ""
-        ? round2(plyNumber === 3 ? Number(wOdCalculated) / 2 : Number(wOdCalculated) / 2 + 1)
-        : "";
+    let flapCalculated: number | "" = "";
+    if (wOdCalculated !== "") {
+      const widthOd = Number(wOdCalculated);
+
+      if (flapFormulaMode === "type-based") {
+        if (
+          typeNameNormalized === "VERTICAL PLATE" ||
+          typeNameNormalized === "HORIZONTAL PLATE" ||
+          typeNameNormalized === "DIE CUT SHEET"
+        ) {
+          flapCalculated = "";
+        } else if (plyNumber === 3) {
+          flapCalculated = round2(widthOd / 2);
+        } else if (plyNumber === 5) {
+          flapCalculated = round2(widthOd / 2 + 1);
+        } else if (plyNumber === 7) {
+          flapCalculated = round2(widthOd / 2 + 2);
+        } else if (plyNumber === 9) {
+          flapCalculated = round2(widthOd / 2 + 3);
+        }
+      } else {
+        flapCalculated = round2(plyNumber === 3 ? widthOd / 2 : widthOd / 2 + 1);
+      }
+    }
 
     let deckleCalculated: number | "" = "";
     if (typeNameNormalized && upsNumber > 0) {
@@ -242,7 +264,7 @@ export function Items() {
       cuttingCalculated,
       noOfPartsCalculated,
     };
-  }, [typeNameNormalized, plyNumber, lengthNumber, breadthNumber, heightNumber, upsNumber, openWidthNumber]);
+  }, [typeNameNormalized, plyNumber, lengthNumber, breadthNumber, heightNumber, upsNumber, openWidthNumber, flapFormulaMode]);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
