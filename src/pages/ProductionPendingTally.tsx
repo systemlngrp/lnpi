@@ -5,6 +5,7 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { CheckCircle, Search, Download } from "lucide-react";
 import { cn } from "../lib/utils";
+import { isProductionReadyForTally } from "../lib/productionStageFilters";
 
 export function ProductionPendingTally() {
   const [productions, setProductions] = useData<Production>("productions", []);
@@ -37,7 +38,7 @@ export function ProductionPendingTally() {
   };
 
   const pendingList = productions.filter(p => 
-    p.status === "Pending Tally" && (
+    isProductionReadyForTally(p) && (
       p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (items.find(i => i.id === p.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
     )

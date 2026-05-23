@@ -24,6 +24,7 @@ import { PendingProduction } from "./pages/PendingProduction";
 import { ProductionPendingPH } from "./pages/ProductionPendingPH";
 import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
+import { ProductionPendingConsumption, ProductionPendingFFG } from "./pages/ProductionStageQueue";
 import { ProductionPlan } from "./pages/ProductionPlan";
 import { ProductionProcessingForm } from "./pages/ProductionProcessingForm";
 import { ProductionProcessingMaster } from "./pages/ProductionProcessingMaster";
@@ -111,6 +112,8 @@ export default function App() {
           <Route path="production/form" element={<ProductionForm />} />
           <Route path="production/pending" element={<PendingProduction />} />
           <Route path="production/pending-ph" element={<ProductionPendingPH />} />
+          <Route path="production/pending-consumption" element={<ProductionPendingConsumption />} />
+          <Route path="production/pending-ffg" element={<ProductionPendingFFG />} />
           <Route path="production/pending-tally" element={<ProductionPendingTally />} />
           <Route path="production/master" element={<ProductionMaster />} />
           <Route path="production/plan" element={<ProductionPlan />} />

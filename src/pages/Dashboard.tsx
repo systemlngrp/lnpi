@@ -14,6 +14,7 @@ import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Consumption, Item, MaterialIn, Production } from "../types";
 import { formatNumber } from "../lib/utils";
+import { isProductionReadyForTally } from "../lib/productionStageFilters";
 
 type Range = {
   from: string;
@@ -119,7 +120,7 @@ export function Dashboard() {
   const pendingMD = filteredMaterialIn.filter((entry) => entry.status === "Pending MD").length;
 
   const tallyMatIn = filteredMaterialIn.filter((entry) => entry.status === "Pending Tally").length;
-  const tallyProd = filteredProductions.filter((entry) => entry.status === "Pending Tally").length;
+  const tallyProd = filteredProductions.filter((entry) => isProductionReadyForTally(entry)).length;
   const tallyCons = filteredConsumptions.filter((entry) => entry.status === "Pending Tally").length;
 
   const hourlyTotals = filteredProductions.reduce<Record<string, number>>((acc, entry) => {

@@ -1,29 +1,52 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { Consumption, Item } from "../types";
+import { Consumption, Item, Production } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { generateTransactionNo, formatDate } from "../lib/serial";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export function ConsumptionForm() {
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
   const [items, setItems] = useData<Item>("items", []);
+  const [productions, setProductions] = useData<Production>("productions", []);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialProductionId = searchParams.get("productionId") || "";
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddName, setQuickAddName] = useState("");
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
+    productionId: initialProductionId,
     itemId: "",
     qty: "" as number | "",
     remarks: "",
   });
+
+  const jobOptions = productions
+    .filter((production) => production.status !== "Cancelled")
+    .sort((a, b) => {
+      const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
+      const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
+      return timeB - timeA;
+    })
+    .map((production) => {
+      const item = items.find((row) => row.id === production.itemId);
+      const displayedJobNo = String(production.jobCardNo || production.transactionNo || "");
+      return {
+        value: production.id,
+        label: `Job: ${displayedJobNo} | ${item?.name || "Unknown"} | Qty ${production.qty}`,
+      };
+    });
 
   const itemOptions = items
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(i => ({ value: i.id, label: i.name }));
 
   const selectedItem = items.find(i => i.id === formData.itemId);
+  const selectedProduction = productions.find((production) => production.id === formData.productionId);
 
   const handleAddItem = () => {
     setShowQuickAdd(true);
@@ -57,6 +80,8 @@ export function ConsumptionForm() {
       const today = new Date().toISOString().split("T")[0];
       const timestamp = new Date().toISOString();
       const item = items.find(i => i.id === formData.itemId);
+      const nextConsumptionQty = Number(formData.qty);
+      const linkedJobNo = formData.productionId ? String(selectedProduction?.jobCardNo || selectedProduction?.transactionNo || "") : undefined;
 
       await setConsumptions(prev => {
         const txnNo = generateTransactionNo("CN", prev, formData.date);
@@ -64,8 +89,10 @@ export function ConsumptionForm() {
           id: crypto.randomUUID(),
           transactionNo: txnNo,
           date: formData.date,
+          productionId: formData.productionId || undefined,
+          jobCardNo: linkedJobNo,
           itemId: formData.itemId,
-          qty: Number(formData.qty),
+          qty: nextConsumptionQty,
           uom: item?.uom || "",
           remarks: formData.remarks,
           status: "Pending PH",
@@ -75,12 +102,36 @@ export function ConsumptionForm() {
         return [newEntry, ...prev];
       });
 
+      if (formData.productionId) {
+        const relatedConsumptionTotal = consumptions
+          .filter((row) => row.productionId === formData.productionId && !row.cancelTimestamp)
+          .reduce((sum, row) => sum + Number(row.qty || 0), 0) + nextConsumptionQty;
+
+        await setProductions((prev) =>
+          prev.map((production) =>
+            production.id === formData.productionId
+              ? {
+                  ...production,
+                  actualPaperUsed: relatedConsumptionTotal,
+                  updatedBy: "System User",
+                  updateTimestamp: timestamp,
+                }
+              : production
+          )
+        );
+      }
+
       setFormData({
         date: today,
+        productionId: "",
         itemId: "",
         qty: "",
         remarks: "",
       });
+      if (initialProductionId) {
+        setSearchParams({});
+        navigate("/production/pending-consumption");
+      }
     } catch (err) {
       console.error("Failed to save consumption:", err);
     } finally {
@@ -124,6 +175,24 @@ export function ConsumptionForm() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Job No.</label>
+              <Select
+                id="production-job"
+                value={formData.productionId}
+                onChange={(val) => {
+                  setFormData({ ...formData, productionId: val });
+                  setSearchParams(val ? { productionId: val } : {});
+                }}
+                options={jobOptions}
+                placeholder="Select Job..."
+              />
+              {selectedProduction && (
+                <span className="text-xs font-bold text-slate-500">
+                  Selected Job: {selectedProduction.jobCardNo || selectedProduction.transactionNo} | Qty {selectedProduction.qty}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Date <span className="text-red-500">*</span></label>
               <input
                 type="date"
@@ -133,7 +202,7 @@ export function ConsumptionForm() {
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm"
               />
             </div>
-            <div className="flex flex-col space-y-1">
+            <div className="flex flex-col space-y-1 md:col-span-2">
               <label className="font-bold text-black">Item Consumed <span className="text-red-500">*</span></label>
               <Select
                 id="item"
@@ -203,6 +272,7 @@ export function ConsumptionForm() {
                         <div className="font-bold text-sm">{c.transactionNo}</div>
                         <div className="text-xs text-slate-500">{formatDate(c.date)}</div>
                     </div>
+                    {c.jobCardNo && <div className="text-xs font-bold text-indigo-700 uppercase">Job: {c.jobCardNo}</div>}
                     <div className="text-sm font-bold">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
                     <div className="text-sm">{c.qty} {c.uom}</div>
                 </div>
@@ -212,6 +282,7 @@ export function ConsumptionForm() {
           <thead className="bg-slate-50 divide-x divide-black">
             <tr className="divide-x divide-black">
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Trn No</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Qty</th>
@@ -221,7 +292,7 @@ export function ConsumptionForm() {
           <tbody className="divide-y divide-black bg-white">
             {consumptions.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-black font-medium">No recent consumption entries.</td>
+                <td colSpan={6} className="px-6 py-8 text-center text-black font-medium">No recent consumption entries.</td>
               </tr>
             ) : (
               consumptions
@@ -234,6 +305,7 @@ export function ConsumptionForm() {
                 .map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50 divide-x divide-black">
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{c.transactionNo}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black">{c.jobCardNo || "-"}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(c.date)}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-amber-700 border border-black">{c.qty}</td>
