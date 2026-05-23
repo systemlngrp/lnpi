@@ -50,7 +50,7 @@ function normalizeWorkflowStatus(tableName: string, row: any) {
   const normalized = { ...row };
   const currentStatus = typeof normalized.status === "string" ? normalized.status.trim() : normalized.status;
 
-  if (currentStatus) {
+  if (currentStatus && tableName !== "productions") {
     normalized.status = currentStatus;
     return normalized;
   }
@@ -65,12 +65,13 @@ function normalizeWorkflowStatus(tableName: string, row: any) {
   }
 
   if (tableName === "productions") {
-    if (normalized.tallyTimestamp) normalized.status = "Completed";
-    else if (normalized.cancelTimestamp) normalized.status = "Cancelled";
-    else if (normalized.phTimestamp && !normalized.actualPaperUsed) normalized.status = "Pending Consumption";
-    else if (normalized.phTimestamp && normalized.actualPaperUsed && !normalized.prodFromFFG) normalized.status = "Pending FFG";
-    else if (normalized.phTimestamp && normalized.actualPaperUsed && normalized.prodFromFFG) normalized.status = "Pending Tally";
-    else normalized.status = "Pending PH";
+    if (currentStatus === "Completed" || normalized.tallyTimestamp) normalized.status = "Completed";
+    else if (currentStatus === "Cancelled" || normalized.cancelTimestamp) normalized.status = "Cancelled";
+    else if (currentStatus === "Pending Consumption" || currentStatus === "Pending FFG") normalized.status = currentStatus;
+    else if (!normalized.phTimestamp) normalized.status = "Pending PH";
+    else if (!normalized.actualPaperUsed) normalized.status = "Pending Consumption";
+    else if (!normalized.prodFromFFG) normalized.status = "Pending FFG";
+    else normalized.status = "Pending Tally";
     return normalized;
   }
 

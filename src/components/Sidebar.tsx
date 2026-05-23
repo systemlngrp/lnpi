@@ -25,7 +25,7 @@ import {
 import { useData } from "../hooks/useData";
 import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest } from "../types";
 import { cn } from "../lib/utils";
-import { isProductionPendingConsumption, isProductionPendingFFG, isProductionReadyForTally } from "../lib/productionStageFilters";
+import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -50,7 +50,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/material-in/pending-accounts": materialIn.filter(m => m.status === "Pending Accounts").length,
     "/material-in/pending-md": materialIn.filter(m => m.status === "Pending MD").length,
     "/material-in/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
-    "/production/pending-ph": productions.filter(p => isPendingPH(p.status)).length,
+    "/production/pending-ph": productions.filter(isProductionPendingPH).length,
     "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
     "/production/pending-consumption": productions.filter(isProductionPendingConsumption).length,
     "/production/pending-ffg": productions.filter(isProductionPendingFFG).length,
@@ -98,7 +98,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       return !isNaN(schedDate.getTime()) && schedDate > tomorrow && balance > 0;
     }).length,
     "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
-                  productions.filter(p => isPendingPH(p.status)).length + 
+                  productions.filter(isProductionPendingPH).length + 
                   consumptions.filter(c => isPendingPH(c.status)).length
   };
 

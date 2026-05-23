@@ -14,7 +14,7 @@ import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Consumption, Item, MaterialIn, Production } from "../types";
 import { formatNumber } from "../lib/utils";
-import { isProductionReadyForTally } from "../lib/productionStageFilters";
+import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 
 type Range = {
   from: string;
@@ -113,7 +113,7 @@ export function Dashboard() {
 
   const pendingPH =
     filteredMaterialIn.filter((entry) => isPendingPH(entry.status)).length +
-    filteredProductions.filter((entry) => isPendingPH(entry.status)).length +
+    filteredProductions.filter((entry) => isProductionPendingPH(entry)).length +
     filteredConsumptions.filter((entry) => isPendingPH(entry.status)).length;
 
   const pendingAccounts = filteredMaterialIn.filter((entry) => entry.status === "Pending Accounts").length;

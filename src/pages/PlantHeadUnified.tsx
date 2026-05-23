@@ -6,6 +6,7 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, Package, Truck, Activity, TrendingDown, XCircle } from "lucide-react";
 import { ExcelExport } from "../components/ExcelExport";
+import { isProductionPendingPH } from "../lib/productionStageFilters";
 
 type Tab = "material-in" | "production" | "consumption";
 
@@ -31,7 +32,7 @@ export function PlantHeadUnified() {
 
   const counts = {
     "material-in": materialIn.filter(m => isPendingPH(m.status)).length,
-    "production": productions.filter(p => isPendingPH(p.status)).length,
+    "production": productions.filter(isProductionPendingPH).length,
     "consumption": consumptions.filter(c => isPendingPH(c.status)).length
   };
 
@@ -343,7 +344,7 @@ export function PlantHeadUnified() {
             
             {/* Mobile View - Cards */}
             <div className="block md:hidden space-y-4 p-2">
-                {productions.filter(p => isPendingPH(p.status)).sort((a, b) => {
+                {productions.filter(isProductionPendingPH).sort((a, b) => {
                     const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
                     const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
                     return timeB - timeA;
@@ -405,7 +406,7 @@ export function PlantHeadUnified() {
                       type="checkbox" 
                       className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                       checked={counts["production"] > 0 && selectedIds.size === counts["production"]}
-                      onChange={() => toggleSelectAll(productions.filter(p => isPendingPH(p.status)).map(p => p.id))}
+                      onChange={() => toggleSelectAll(productions.filter(isProductionPendingPH).map(p => p.id))}
                     />
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
@@ -417,7 +418,7 @@ export function PlantHeadUnified() {
               </thead>
               <tbody className="divide-y divide-black">
                 {productions
-                  .filter(p => isPendingPH(p.status))
+                  .filter(isProductionPendingPH)
                   .sort((a, b) => {
                     const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
                     const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();

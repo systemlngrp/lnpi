@@ -933,7 +933,7 @@ export function ProductionForm() {
 
               {showField("Total Wt of Set") ? <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly helpText="Formula: Sheet Weight + Plate/PHP Weight." /> : null}
               {showField("Avg Weight") ? <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" helpText="Formula: Actual Paper Used / Production from FFG." /> : null}
-              {showField("Actual Paper Used") ? <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} onChange={(v) => setFormData({ ...formData, actualPaperUsed: v })} type="number" step="0.00001" helpText="Temporarily editable for formula testing. Used in Avg Weight and Wastage calculations." /> : null}
+              {showField("Actual Paper Used") ? <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" helpText="Workflow-managed field. It is updated from linked Consumption entries and then used in Avg Weight and Wastage calculations." /> : null}
 
               {showField("Rate") ? <FormInput label="Rate" value={formData.rate} readOnly type="number" helpText="Auto-fetched from the selected order." /> : null}
               {showField("Realization/KG") ? <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: (Rate / Total Weight of Set) x Number of Parts." /> : null}
@@ -941,7 +941,7 @@ export function ProductionForm() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
               {showField("Prod (Sheet Plant)") ? <FormInput label="Prod (Sheet Plant)" value={formData.prodFromSheetPlant} onChange={(v) => setFormData({ ...formData, prodFromSheetPlant: v })} type="number" helpText="Temporarily editable for formula testing." /> : null}
-              {showField("Prod (FFG)") ? <FormInput label="Prod (FFG)" value={formData.prodFromFFG} onChange={(v) => setFormData({ ...formData, prodFromFFG: v })} type="number" helpText="Temporarily editable for formula testing. Used in Avg Weight and Wastage calculations." /> : null}
+              {showField("Prod (FFG)") ? <FormInput label="Prod (FFG)" value={formData.prodFromFFG} readOnly type="number" helpText="Workflow-managed field. It is updated from the Pending FFG view and then used in Avg Weight and Wastage calculations." /> : null}
               {showField("Wastage") ? <FormInput label="Wastage" value={formData.wastage} readOnly type="number" helpText="Formula: 100 - (((Production from FFG x Sheet Weight) / Actual Paper Used) x 100)." /> : null}
 
               {showField("Prod (Meter)") ? <FormInput label="Prod (Meter)" value={formData.productionInMeter} readOnly helpText="Formula: ((Cutting Trim x Quantity) / 1000) / UPS." /> : null}

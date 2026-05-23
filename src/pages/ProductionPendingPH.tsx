@@ -5,13 +5,12 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, XCircle } from "lucide-react";
+import { isProductionPendingPH } from "../lib/productionStageFilters";
 
 export function ProductionPendingPH() {
   const [productions, setProductions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
-  const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
-
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
@@ -160,10 +159,10 @@ export function ProductionPendingPH() {
         
         {/* Mobile View - Cards */}
         <div className="block md:hidden p-4 space-y-4">
-          {productions.filter((p) => isPendingPH(p.status)).length === 0 ? (
+          {productions.filter(isProductionPendingPH).length === 0 ? (
             <div className="p-6 text-center text-black font-bold border-2 border-dashed border-black">No pending production approvals.</div>
           ) : productions
-              .filter((p) => isPendingPH(p.status))
+              .filter(isProductionPendingPH)
               .sort((a, b) => {
                 const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
                 const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
@@ -277,8 +276,8 @@ export function ProductionPendingPH() {
                 <input 
                   type="checkbox" 
                   className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                  checked={productions.filter(p => isPendingPH(p.status)).length > 0 && selectedIds.size === productions.filter(p => isPendingPH(p.status)).length}
-                  onChange={() => toggleSelectAll(productions.filter(p => isPendingPH(p.status)).map(p => p.id))}
+                  checked={productions.filter(isProductionPendingPH).length > 0 && selectedIds.size === productions.filter(isProductionPendingPH).length}
+                  onChange={() => toggleSelectAll(productions.filter(isProductionPendingPH).map(p => p.id))}
                 />
               </th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>
@@ -290,12 +289,12 @@ export function ProductionPendingPH() {
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
-            {productions.filter((p) => isPendingPH(p.status)).length === 0 ? (
+            {productions.filter(isProductionPendingPH).length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No pending production approvals.</td>
               </tr>
             ) : productions
-              .filter((p) => isPendingPH(p.status))
+              .filter(isProductionPendingPH)
               .sort((a, b) => {
                 const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
                 const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
