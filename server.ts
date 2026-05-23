@@ -528,6 +528,7 @@ async function initDb(retries = 5) {
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`reelAsPerCalculation\` TEXT,
           \`flapAsPerCalculation\` TEXT,
+          \`cuttingSizeAsPerCalculation\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -768,6 +769,7 @@ async function initDb(retries = 5) {
         { table: "invoice_line_items", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "settings", column: "reelAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "flapAsPerCalculation", type: "TEXT" },
+        { table: "settings", column: "cuttingSizeAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" },
       ];

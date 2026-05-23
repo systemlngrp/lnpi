@@ -23,12 +23,25 @@ const REEL_FORMULA_MODE = {
   typeBased: "type-based",
 } as const;
 
+const CUTTING_SIZE_FORMULA_MODE = {
+  currentLogic: "current-logic",
+  typeBased: "type-based",
+} as const;
+
 function getReelAsPerCalculationHelpText(formulaMode: string) {
   if (formulaMode === REEL_FORMULA_MODE.typeBased) {
     return "Current setting: TYPE Based Formula. TYPE based logic uses UPS in place of No. of Outs. ROTARY TRAY = ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. 2 PLY LINER, U/C PLATE, Horizontal plate, and Tray = ((Width (OD) x UPS) + 20) / 25.4. die cut sheet = ((Open Width x UPS) + 20) / 25.4. RSC = ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. Other filled types = ((Height (OD) x UPS) + 20) / 25.4.";
   }
 
   return "Current setting: Breadth/Height Based Formula. If Breadth is blank or 0, use Height x UPS. Otherwise use ((Breadth + Height) x UPS) + ((ID to OD x UPS) + 16).";
+}
+
+function getCuttingSizeHelpText(formulaMode: string) {
+  if (formulaMode === CUTTING_SIZE_FORMULA_MODE.typeBased) {
+    return "Current setting: TYPE Based Logic. If TYPE is 2 PLY ROLL, keep Cutting Size blank. If TYPE is DIE CUT SHEET, use ((Open Length x No. of ups in Cutting (For Plates)) + 20) / 25.4. If TYPE is RSC and PART is 1, use ((2 x (Length (OD) + Width (OD))) + 50) / 25.4. If TYPE is RSC and PART is 2, use ((Length (OD) + Width (OD)) + 50) / 25.4. In other filled cases, use ((Length (OD) x No. of ups in Cutting (For Plates)) + 20) / 25.4.";
+  }
+
+  return "Current setting: Current Logic. If Breadth is blank or 0, use Length. If Number of Parts = 1, use ((Length + Breadth) x 2) + (ID to OD 17 x Number of Parts). If Number of Parts = 2, use Length + Breadth + ID to OD 17.";
 }
 
 function joinPrintingColors(color1?: string, color2?: string) {
@@ -167,6 +180,7 @@ export function ProductionForm() {
   const selectedErp = String(selectedOrder?.erpCode || "").trim();
   const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
   const reelFormulaMode = settings[0]?.reelAsPerCalculation || REEL_FORMULA_MODE.breadthHeightBased;
+  const cuttingSizeFormulaMode = settings[0]?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_MODE.currentLogic;
 
   const latestRelevantProduction = useMemo(
     () =>
@@ -311,6 +325,7 @@ export function ProductionForm() {
     const hOd = Number(selectedItem?.hOd || 0);
     const flap = Number(selectedItem?.flap || 0);
     const openWidth = Number(selectedItem?.openWidth || 0);
+    const openLength = Number(selectedItem?.openLength || 0);
     const normalizedType = String(selectedItem?.typeName || "").trim().toUpperCase();
     const normalizedPart = String(selectedItem?.part || "").trim().toUpperCase();
     const dieCutUps = Number(selectedItem?.dieCutUps || 0);
@@ -350,7 +365,19 @@ export function ProductionForm() {
     }
 
     let cutting = 0;
-    if (!breadth) {
+    if (cuttingSizeFormulaMode === CUTTING_SIZE_FORMULA_MODE.typeBased) {
+      if (normalizedType === "2 PLY ROLL") {
+        cutting = 0;
+      } else if (normalizedType === "DIE CUT SHEET" && openLength > 0 && noOfUpsInCuttingForPlates > 0) {
+        cutting = ((openLength * noOfUpsInCuttingForPlates) + 20) / 25.4;
+      } else if (normalizedType === "RSC" && (normalizedPart === "1" || normalizedPart === "SINGLE")) {
+        cutting = ((2 * (lOd + wOd)) + 50) / 25.4;
+      } else if (normalizedType === "RSC" && (normalizedPart === "2" || normalizedPart === "2 PART BOX")) {
+        cutting = ((lOd + wOd) + 50) / 25.4;
+      } else if (normalizedType && lOd > 0 && noOfUpsInCuttingForPlates > 0) {
+        cutting = ((lOd * noOfUpsInCuttingForPlates) + 20) / 25.4;
+      }
+    } else if (!breadth) {
       cutting = length;
     } else if (noOfParts === 1) {
       cutting = (length + breadth) * 2 + idToOd17 * noOfParts;
@@ -469,11 +496,13 @@ export function ProductionForm() {
     formData.actualPaperUsed,
     formData.prodFromFFG,
     erpLeastGsmMap,
+    cuttingSizeFormulaMode,
     reelFormulaMode,
     selectedErp,
     selectedItem?.flap,
     selectedItem?.hOd,
     selectedItem?.lOd,
+    selectedItem?.openLength,
     selectedItem?.openWidth,
     selectedItem?.part,
     selectedItem?.dieCutUps,
@@ -800,7 +829,7 @@ export function ProductionForm() {
                 helpText="Editable field for plate-related cutting ups. It is saved with the production entry."
               />
               <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" />
-              <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText="Auto-calculated from length, breadth, number of parts, and ID to OD 17 logic." />
+              <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText={getCuttingSizeHelpText(cuttingSizeFormulaMode)} />
               <FormInput
                 label="Paper Required (Nos)"
                 value={formData.paperRequiredNos}

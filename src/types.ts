@@ -359,6 +359,7 @@ export interface Setting {
   id: string;
   reelAsPerCalculation?: string;
   flapAsPerCalculation?: string;
+  cuttingSizeAsPerCalculation?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

@@ -32,6 +32,21 @@ const FLAP_FORMULA_OPTIONS = [
   },
 ];
 
+const CUTTING_SIZE_FORMULA_OPTIONS = [
+  {
+    value: "current-logic",
+    label: "Current Logic",
+    description:
+      "If Breadth is blank or 0, use Length. If Number of Parts = 1, use ((Length + Breadth) x 2) + (ID to OD 17 x Number of Parts). If Number of Parts = 2, use Length + Breadth + ID to OD 17.",
+  },
+  {
+    value: "type-based",
+    label: "TYPE Based Logic",
+    description:
+      "If TYPE is 2 PLY ROLL, keep Cutting Size blank. If TYPE is DIE CUT SHEET, use ((Open Length x No. of ups in Cutting (For Plates)) + 20) / 25.4. If TYPE is RSC and PART is 1, use ((2 x (Length (OD) + Width (OD))) + 50) / 25.4. If TYPE is RSC and PART is 2, use ((Length (OD) + Width (OD)) + 50) / 25.4. In other filled cases, use ((Length (OD) x No. of ups in Cutting (For Plates)) + 20) / 25.4.",
+  },
+];
+
 export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [saving, setSaving] = useState(false);
@@ -47,6 +62,11 @@ export function SettingsPage() {
     () => FLAP_FORMULA_OPTIONS.find((option) => option.value === selectedFlapFormula) || FLAP_FORMULA_OPTIONS[0],
     [selectedFlapFormula]
   );
+  const selectedCuttingFormula = currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value;
+  const selectedCuttingOption = useMemo(
+    () => CUTTING_SIZE_FORMULA_OPTIONS.find((option) => option.value === selectedCuttingFormula) || CUTTING_SIZE_FORMULA_OPTIONS[0],
+    [selectedCuttingFormula]
+  );
 
   const handleChange = async (patch: Partial<Setting>) => {
     setSaving(true);
@@ -56,6 +76,7 @@ export function SettingsPage() {
         id: currentSetting?.id || crypto.randomUUID(),
         reelAsPerCalculation: currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value,
         flapAsPerCalculation: currentSetting?.flapAsPerCalculation || FLAP_FORMULA_OPTIONS[0].value,
+        cuttingSizeAsPerCalculation: currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value,
         updatedBy: "System User",
         updateTimestamp: timestamp,
         ...patch,
@@ -127,6 +148,28 @@ export function SettingsPage() {
           </div>
           <div className="text-xs font-bold text-slate-500">
             {saving ? "Saving setting..." : "These selections are used by Item Form and Production Form for new calculations."}
+          </div>
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <label htmlFor="cuttingSizeAsPerCalculation" className="text-xs font-black uppercase tracking-wide text-black">
+            Cutting Size
+          </label>
+          <select
+            id="cuttingSizeAsPerCalculation"
+            value={selectedCuttingFormula}
+            onChange={(e) => void handleChange({ cuttingSizeAsPerCalculation: e.target.value })}
+            disabled={loading || saving}
+            className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+          >
+            {CUTTING_SIZE_FORMULA_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm text-black leading-6">
+            {selectedCuttingOption.description}
           </div>
         </div>
       </div>
