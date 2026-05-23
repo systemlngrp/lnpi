@@ -31,6 +31,7 @@ export interface Item {
   height?: number;
   ply?: number;
   flute?: string;
+  takeUpFactor?: number;
   part?: string;
   dieCutUps?: number;
   topPaperShade?: string;
@@ -212,6 +213,7 @@ export interface Production {
   idToOd?: string;
   flute?: string;
   takeUpFactor?: number;
+  top?: number;
   l1?: number;
   f1?: number;
   l2?: number;
@@ -222,6 +224,9 @@ export interface Production {
   color2?: string;
   printingColor?: string;
   paperRequiredNos?: number;
+  topPaperWeightKg?: number;
+  linerWeightKg?: number;
+  totalJobWeight?: number;
   sheetWeight?: number;
   plateWeight?: number;
   totalPaperWeight?: number;
@@ -360,6 +365,7 @@ export interface Setting {
   reelAsPerCalculation?: string;
   flapAsPerCalculation?: string;
   cuttingSizeAsPerCalculation?: string;
+  gsmAsPerCalculation?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

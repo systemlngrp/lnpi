@@ -47,6 +47,21 @@ const CUTTING_SIZE_FORMULA_OPTIONS = [
   },
 ];
 
+const GSM_FORMULA_OPTIONS = [
+  {
+    value: "current-logic",
+    label: "Current Logic",
+    description:
+      "L1 + (F1 x Take up Factor) + L2 + (F2 x Take up Factor) + L3.",
+  },
+  {
+    value: "ply-based",
+    label: "Ply Based Logic",
+    description:
+      "For 3 Ply: add Top, F1, B1, F2, and B2, then add 50% of F1 and 36% of F2. For 5 Ply: add Top, F1, B1, F2, and B2, then add 36% of F1 and 36% of F2. For 2 Ply: use the same 5 Ply weighting. For 7 Ply: add Top, F1, B1, F2, B2, F3, and B3, then add 36% each of F1, F2, and F3.",
+  },
+];
+
 export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [saving, setSaving] = useState(false);
@@ -67,6 +82,11 @@ export function SettingsPage() {
     () => CUTTING_SIZE_FORMULA_OPTIONS.find((option) => option.value === selectedCuttingFormula) || CUTTING_SIZE_FORMULA_OPTIONS[0],
     [selectedCuttingFormula]
   );
+  const selectedGsmFormula = currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value;
+  const selectedGsmOption = useMemo(
+    () => GSM_FORMULA_OPTIONS.find((option) => option.value === selectedGsmFormula) || GSM_FORMULA_OPTIONS[0],
+    [selectedGsmFormula]
+  );
 
   const handleChange = async (patch: Partial<Setting>) => {
     setSaving(true);
@@ -77,6 +97,7 @@ export function SettingsPage() {
         reelAsPerCalculation: currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value,
         flapAsPerCalculation: currentSetting?.flapAsPerCalculation || FLAP_FORMULA_OPTIONS[0].value,
         cuttingSizeAsPerCalculation: currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value,
+        gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
         updatedBy: "System User",
         updateTimestamp: timestamp,
         ...patch,
@@ -170,6 +191,28 @@ export function SettingsPage() {
           </select>
           <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm text-black leading-6">
             {selectedCuttingOption.description}
+          </div>
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <label htmlFor="gsmAsPerCalculation" className="text-xs font-black uppercase tracking-wide text-black">
+            GSM
+          </label>
+          <select
+            id="gsmAsPerCalculation"
+            value={selectedGsmFormula}
+            onChange={(e) => void handleChange({ gsmAsPerCalculation: e.target.value })}
+            disabled={loading || saving}
+            className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+          >
+            {GSM_FORMULA_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm text-black leading-6">
+            {selectedGsmOption.description}
           </div>
         </div>
       </div>

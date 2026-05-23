@@ -190,6 +190,9 @@ export function Items() {
   const upsNumber = Number(ups);
   const openWidthNumber = Number(openWidth);
   const flapFormulaMode = settings[0]?.flapAsPerCalculation || "current-logic";
+  const normalizedFlute = flute.toUpperCase().trim().replace(/\s+/g, "");
+  const takeUpFactorMap: Record<string, number> = { A: 1.5, B: 1.35, C: 1.42, E: 1.26, "B+C": 1.38, "B+E": 1.3 };
+  const takeUpFactorCalculated = takeUpFactorMap[normalizedFlute] ?? "";
 
   const calculatedItemFields = useMemo(() => {
     const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -422,6 +425,7 @@ export function Items() {
         height: parseFloat(height) || undefined,
         ply: parseInt(ply) || undefined,
         flute,
+        takeUpFactor: takeUpFactorCalculated === "" ? undefined : Number(takeUpFactorCalculated),
         dieCutUps: parseInt(dieCutUps) || undefined,
         topPaperShade: topPaperShade.trim() || undefined,
         plateWeight: parseFloat(plateWeight) || undefined,
@@ -587,9 +591,12 @@ export function Items() {
                     <label className="font-bold text-black text-sm uppercase text-[10px]">Flute</label>
                     <CreatableDropdown value={flute} onChange={setFlute} options={fluteDropdownOptions} placeholder="Select or add flute..." />
                   </div>
-                  <FormItem label="PART" value={calculatedItemFields.noOfPartsCalculated} onChange={() => {}} type="number" readOnly />
+                  <FormItem label="Take Up Factor" value={String(takeUpFactorCalculated)} onChange={() => {}} type="number" readOnly />
                 </div>
-                <FormItem label="Die Cut Ups" value={dieCutUps} onChange={setDieCutUps} type="number" />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormItem label="PART" value={calculatedItemFields.noOfPartsCalculated} onChange={() => {}} type="number" readOnly />
+                  <FormItem label="Die Cut Ups" value={dieCutUps} onChange={setDieCutUps} type="number" />
+                </div>
               </div>
 
             <div className="space-y-4 border-t border-slate-100 pt-4">
@@ -824,6 +831,10 @@ export function Items() {
                               <div className="text-sm">{item.flute ?? ""}</div>
                             </div>
                             <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">Take Up Factor</div>
+                              <div className="text-sm">{item.takeUpFactor ?? ""}</div>
+                            </div>
+                            <div>
                               <div className="text-xs font-black text-slate-500 uppercase">PART</div>
                               <div className="text-sm">{item.noOfParts ?? ""}</div>
                             </div>
@@ -967,6 +978,7 @@ export function Items() {
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Ups</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">PLY</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">FLUTE</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Take Up Factor</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">PART</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Die Cut Ups</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">TOP</th>
@@ -1006,7 +1018,7 @@ export function Items() {
               </thead>
               <tbody className="divide-y divide-black bg-white">
                     {filteredItems.length === 0 ? (
-                      <tr><td colSpan={46} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
+                      <tr><td colSpan={47} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
                     ) : (
                   filteredItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
@@ -1022,6 +1034,7 @@ export function Items() {
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.ups ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.ply ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.flute ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.takeUpFactor ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.noOfParts ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.dieCutUps ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.l1 ?? ""}</td>

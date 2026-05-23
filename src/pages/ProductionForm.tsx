@@ -28,6 +28,11 @@ const CUTTING_SIZE_FORMULA_MODE = {
   typeBased: "type-based",
 } as const;
 
+const GSM_FORMULA_MODE = {
+  currentLogic: "current-logic",
+  plyBased: "ply-based",
+} as const;
+
 function getReelAsPerCalculationHelpText(formulaMode: string) {
   if (formulaMode === REEL_FORMULA_MODE.typeBased) {
     return "Current setting: TYPE Based Formula. TYPE based logic uses UPS in place of No. of Outs. ROTARY TRAY = ((Length (OD) + Height (OD)) x UPS + 20) / 25.4. 2 PLY LINER, U/C PLATE, Horizontal plate, and Tray = ((Width (OD) x UPS) + 20) / 25.4. die cut sheet = ((Open Width x UPS) + 20) / 25.4. RSC = ((FLAP + Height (OD) + FLAP) x UPS + 20) / 25.4. Other filled types = ((Height (OD) x UPS) + 20) / 25.4.";
@@ -42,6 +47,14 @@ function getCuttingSizeHelpText(formulaMode: string) {
   }
 
   return "Current setting: Current Logic. If Breadth is blank or 0, use Length. If Number of Parts = 1, use ((Length + Breadth) x 2) + (ID to OD 17 x Number of Parts). If Number of Parts = 2, use Length + Breadth + ID to OD 17.";
+}
+
+function getGsmHelpText(formulaMode: string) {
+  if (formulaMode === GSM_FORMULA_MODE.plyBased) {
+    return "Current setting: Ply Based Logic. For 3 Ply: add Top, F1, B1, F2, and B2, then add 50% of F1 and 36% of F2. For 5 Ply: add Top, F1, B1, F2, and B2, then add 36% of F1 and 36% of F2. For 2 Ply: use the same 5 Ply weighting. For 7 Ply: add Top, F1, B1, F2, B2, F3, and B3, then add 36% each of F1, F2, and F3. In this form, B1 uses L2, B2 uses L3, and 7 Ply uses F3 and B3 from Item Master.";
+  }
+
+  return "Current setting: Current Logic. L1 + (F1 x Take up Factor) + L2 + (F2 x Take up Factor) + L3.";
 }
 
 function joinPrintingColors(color1?: string, color2?: string) {
@@ -90,6 +103,7 @@ function createInitialFormData(todayStr: string) {
     idToOd17: "" as number | "",
     flute: "",
     takeUpFactor: "" as number | "",
+    top: "" as number | "",
     l1: "" as number | "",
     f1: "" as number | "",
     l2: "" as number | "",
@@ -100,6 +114,9 @@ function createInitialFormData(todayStr: string) {
     color2: "",
     printingColor: "",
     paperRequiredNos: "" as number | "",
+    topPaperWeightKg: "" as number | "",
+    linerWeightKg: "" as number | "",
+    totalJobWeight: "" as number | "",
     sheetWeight: "" as number | "",
     plateWeight: "" as number | "",
     totalPaperWeight: "" as number | "",
@@ -181,6 +198,7 @@ export function ProductionForm() {
   const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
   const reelFormulaMode = settings[0]?.reelAsPerCalculation || REEL_FORMULA_MODE.breadthHeightBased;
   const cuttingSizeFormulaMode = settings[0]?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_MODE.currentLogic;
+  const gsmFormulaMode = settings[0]?.gsmAsPerCalculation || GSM_FORMULA_MODE.currentLogic;
 
   const latestRelevantProduction = useMemo(
     () =>
@@ -290,6 +308,8 @@ export function ProductionForm() {
         ply: selectedItem.ply ?? "",
         flute: selectedItem.flute || "",
         plateWeight: selectedItem.plateWeight ?? "",
+        top: selectedItem.l1 ?? "",
+        takeUpFactor: selectedItem.takeUpFactor ?? "",
         l1: selectedItem.l1 ?? "",
         f1: selectedItem.f1 ?? "",
         l2: selectedItem.l2 ?? "",
@@ -329,19 +349,31 @@ export function ProductionForm() {
     const normalizedType = String(selectedItem?.typeName || "").trim().toUpperCase();
     const normalizedPart = String(selectedItem?.part || "").trim().toUpperCase();
     const dieCutUps = Number(selectedItem?.dieCutUps || 0);
+    const f3 = Number(selectedItem?.f3 || 0);
+    const b3 = Number(selectedItem?.b3 || 0);
 
     const idToOd = ply === 3 ? 6 : ply === 5 ? 10 : 0;
     const idToOd17 = ply === 3 ? 40 : ply === 5 ? 50 : 0;
 
-    const factorMap: Record<string, number> = { A: 1.5, B: 1.35, C: 1.42, E: 1.26, "B+C": 1.38, "B+E": 1.3 };
-    const takeUpFactor = factorMap[formData.flute] || 0;
+    const takeUpFactor = Number(formData.takeUpFactor || 0);
+    const top = Number(formData.top || 0);
+    const l1 = Number(formData.l1 || 0);
+    const f1 = Number(formData.f1 || 0);
+    const l2 = Number(formData.l2 || 0);
+    const f2 = Number(formData.f2 || 0);
+    const l3 = Number(formData.l3 || 0);
 
-    const gsm =
-      Number(formData.l1) +
-      Number(formData.f1) * takeUpFactor +
-      Number(formData.l2) +
-      Number(formData.f2) * takeUpFactor +
-      Number(formData.l3);
+    let gsm = l1 + f1 * takeUpFactor + l2 + f2 * takeUpFactor + l3;
+
+    if (gsmFormulaMode === GSM_FORMULA_MODE.plyBased) {
+      if (ply === 3) {
+        gsm = top + f1 + l2 + f2 + l3 + f1 * 0.5 + f2 * 0.36;
+      } else if (ply === 5 || ply === 2) {
+        gsm = top + f1 + l2 + f2 + l3 + f1 * 0.36 + f2 * 0.36;
+      } else if (ply === 7) {
+        gsm = top + f1 + l2 + f2 + l3 + f3 + b3 + f1 * 0.36 + f2 * 0.36 + f3 * 0.36;
+      }
+    }
 
     let reelAsPerCalc = !breadth ? height * ups : (breadth + height) * ups + (idToOd * ups + 16);
 
@@ -439,6 +471,19 @@ export function ProductionForm() {
       }
     }
 
+    const topPaperWeightKg =
+      paperRequiredNos !== ""
+        ? (reelAsPerCalc * reelActual * 25.4 * 25.4 * top * paperRequiredNos) / 1000000000
+        : "";
+    const linerWeightKg =
+      paperRequiredNos !== ""
+        ? (reelAsPerCalc * reelActual * 25.4 * 25.4 * (gsm - top) * paperRequiredNos) / 1000000000
+        : "";
+    const totalJobWeight =
+      topPaperWeightKg !== "" && linerWeightKg !== ""
+        ? topPaperWeightKg + linerWeightKg
+        : "";
+
     let lineRequiredNos: number | "" = "";
     if (!String(formData.erpCode || "").trim()) {
       lineRequiredNos = "";
@@ -470,6 +515,9 @@ export function ProductionForm() {
       leastGsm: leastGsmValue,
       printingColor,
       paperRequiredNos: paperRequiredNos === "" ? "" : parseFloat(paperRequiredNos.toFixed(2)),
+      topPaperWeightKg: topPaperWeightKg === "" ? "" : parseFloat(topPaperWeightKg.toFixed(5)),
+      linerWeightKg: linerWeightKg === "" ? "" : parseFloat(linerWeightKg.toFixed(5)),
+      totalJobWeight: totalJobWeight === "" ? "" : parseFloat(totalJobWeight.toFixed(5)),
       lineRequiredNos: lineRequiredNos === "" ? "" : parseFloat(lineRequiredNos.toFixed(2)),
     }));
   }, [
@@ -498,8 +546,11 @@ export function ProductionForm() {
     erpLeastGsmMap,
     cuttingSizeFormulaMode,
     reelFormulaMode,
+    gsmFormulaMode,
     selectedErp,
     selectedItem?.flap,
+    selectedItem?.f3,
+    selectedItem?.b3,
     selectedItem?.hOd,
     selectedItem?.lOd,
     selectedItem?.openLength,
@@ -793,12 +844,13 @@ export function ProductionForm() {
               <FormInput label="Flute" value={formData.flute} readOnly helpText="Auto-fetched from Item Master for the selected item. It also determines the Take up Factor used in GSM calculation." />
               <FormInput label="ID to OD" value={formData.idToOd} readOnly helpText="Auto-calculated from PLY. Current logic: 3 PLY = 6, 5 PLY = 10." />
 
-              <FormInput label="Take up Factor" value={formData.takeUpFactor} readOnly helpText="Auto-calculated from flute type using fixed factors: A=1.5, B=1.35, C=1.42, E=1.26, B+C=1.38, B+E=1.3." />
+              <FormInput label="Top" value={formData.top} readOnly type="number" helpText="Auto-fetched from Item Master for the selected item." />
+              <FormInput label="Take up Factor" value={formData.takeUpFactor} readOnly helpText="Auto-fetched from Item Master for the selected item." />
               <FormInput
                 label="GSM"
                 value={formData.gsm}
                 readOnly
-                helpText="Formula: L1 + (F1 x Take up Factor) + L2 + (F2 x Take up Factor) + L3. When this item is different from the last produced item, GSM must not exceed Least GSM."
+                helpText={`${getGsmHelpText(gsmFormulaMode)} When this item is different from the last produced item, GSM must not exceed Least GSM.`}
               />
               <FormInput label="Color 1" value={formData.color1} readOnly helpText="Auto-filled from Item Master for the selected item." />
               <FormInput label="Color 2" value={formData.color2} readOnly helpText="Auto-filled from Item Master for the selected item." />
@@ -836,6 +888,30 @@ export function ProductionForm() {
                 readOnly
                 type="number"
                 helpText="Calculated from TYPE. For VERTICAL PLATE, HORIZONTAL PLATE, U/C PLATE, and ROTARY TRAY: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)). For 2 PLY LINER: blank. For DIE CUT SHEET: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)) / Die Cut Ups. For RSC with PART = Single: Planned Quantity / UPS. For RSC with PART = 2 part box: (Planned Quantity / UPS) x 2."
+              />
+              <FormInput
+                label="Top Paper Weight (KG)"
+                value={formData.topPaperWeightKg}
+                readOnly
+                type="number"
+                step="0.00001"
+                helpText="Formula: Reel As per Calculation x Reel Actual with Trimming x 25.4 x 25.4 x Top x Paper Required (Nos) / 1,000,000,000."
+              />
+              <FormInput
+                label="Liner Weight (KG)"
+                value={formData.linerWeightKg}
+                readOnly
+                type="number"
+                step="0.00001"
+                helpText="Formula: Reel As per Calculation x Reel Actual with Trimming x 25.4 x 25.4 x (GSM minus Top) x Paper Required (Nos) / 1,000,000,000."
+              />
+              <FormInput
+                label="Total Job Weight"
+                value={formData.totalJobWeight}
+                readOnly
+                type="number"
+                step="0.00001"
+                helpText="Formula: Top Paper Weight (KG) + Liner Weight (KG)."
               />
               <FormInput
                 label="Line Required (Nos)"
