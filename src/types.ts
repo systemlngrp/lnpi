@@ -92,6 +92,35 @@ export interface MaterialLine {
   value: number;
 }
 
+export interface Indent {
+  id: string;
+  requestedBy: string;
+  requisitionDate: string;
+  requiredDate: string;
+  indentType: "Reel" | "Other";
+  status: "Pending" | "Approved" | "Completed" | "Rejected";
+  approvedTimestamp?: string;
+  approvedBy?: string;
+  completedTimestamp?: string;
+  completedBy?: string;
+  rejectedTimestamp?: string;
+  rejectedBy?: string;
+  rejectedRemarks?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface IndentLine {
+  id: string;
+  indentId: string;
+  erpCode?: string | number;
+  materialId: string;
+  uom?: string;
+  qty: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;

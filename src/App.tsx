@@ -9,6 +9,8 @@ import { ItemGroups } from "./pages/ItemGroups";
 import { MaterialGroups } from "./pages/MaterialGroups";
 import { Items } from "./pages/Items";
 import { Materials } from "./pages/Materials";
+import { IndentForm } from "./pages/IndentForm";
+import { IndentApproved, IndentCompleted, IndentPending, IndentRejected } from "./pages/IndentQueue";
 import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
 import { ColorMasters } from "./pages/ColorMasters";
@@ -96,6 +98,14 @@ export default function App() {
           <Route path="masters/machines" element={<Machines />} />
           <Route path="masters/users" element={<Users />} />
           <Route path="masters/settings" element={<SettingsPage />} />
+
+          {/* Indent */}
+          <Route path="indent/form" element={<IndentForm />} />
+          <Route path="indent/pending" element={<IndentPending />} />
+          <Route path="indent/approved" element={<IndentApproved />} />
+          <Route path="indent/completed" element={<IndentCompleted />} />
+          <Route path="indent/rejected" element={<IndentRejected />} />
+
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />
           <Route path="orders/pending-ph" element={<OrdersPendingPH />} />

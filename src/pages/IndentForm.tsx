@@ -1,0 +1,295 @@
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
+import { useData } from "../hooks/useData";
+import { Indent, IndentLine, Material } from "../types";
+import { Select } from "../components/Select";
+import { Spinner } from "../components/Spinner";
+
+type EditableIndentLine = {
+  id: string;
+  materialId: string;
+  qty: number | "";
+};
+
+function createEmptyLine(): EditableIndentLine {
+  return {
+    id: crypto.randomUUID(),
+    materialId: "",
+    qty: "",
+  };
+}
+
+export function IndentForm() {
+  const navigate = useNavigate();
+  const [indents, setIndents] = useData<Indent>("indents", []);
+  const [indentLines, setIndentLines] = useData<IndentLine>("indent-lines", []);
+  const [materials] = useData<Material>("materials", []);
+
+  const [requestedBy, setRequestedBy] = useState("");
+  const [requisitionDate, setRequisitionDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [requiredDate, setRequiredDate] = useState("");
+  const [indentType, setIndentType] = useState<Indent["indentType"]>("Reel");
+  const [lines, setLines] = useState<EditableIndentLine[]>([createEmptyLine()]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const activeMaterials = useMemo(
+    () => materials.filter((material) => material.active !== "No" && material.type === indentType),
+    [indentType, materials]
+  );
+
+  const materialOptions = activeMaterials
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((material) => ({
+      value: material.id,
+      label: `${material.erpCode ? `${material.erpCode} - ` : ""}${material.name}`,
+    }));
+
+  const handleLineChange = (lineId: string, field: "materialId" | "qty", value: string) => {
+    setLines((prev) =>
+      prev.map((line) =>
+        line.id === lineId
+          ? {
+              ...line,
+              [field]: field === "qty" ? (value === "" ? "" : Number(value)) : value,
+            }
+          : line
+      )
+    );
+  };
+
+  const handleAddRow = () => {
+    setLines((prev) => [...prev, createEmptyLine()]);
+  };
+
+  const handleRemoveRow = (lineId: string) => {
+    setLines((prev) => (prev.length === 1 ? [createEmptyLine()] : prev.filter((line) => line.id !== lineId)));
+  };
+
+  const handleTypeChange = (value: Indent["indentType"]) => {
+    setIndentType(value);
+    setLines([createEmptyLine()]);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!requestedBy.trim() || !requisitionDate || !requiredDate) {
+      alert("Requested By, Requisition Date, and Required Date are required.");
+      return;
+    }
+
+    const validLines = lines.filter((line) => line.materialId && Number(line.qty) > 0);
+    if (validLines.length === 0 || validLines.length !== lines.length) {
+      alert("Please select a material and enter a quantity greater than 0 for every row.");
+      return;
+    }
+
+    const missingMaterials = validLines.some((line) => !activeMaterials.find((material) => material.id === line.materialId));
+    if (missingMaterials) {
+      alert("One or more selected materials are no longer available for the chosen indent type.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const timestamp = new Date().toISOString();
+    const indentId = crypto.randomUUID();
+
+    const nextIndent: Indent = {
+      id: indentId,
+      requestedBy: requestedBy.trim(),
+      requisitionDate,
+      requiredDate,
+      indentType,
+      status: "Pending",
+      updatedBy: "System User",
+      updateTimestamp: timestamp,
+    };
+
+    const nextLines: IndentLine[] = validLines.map((line) => {
+      const material = activeMaterials.find((row) => row.id === line.materialId) as Material;
+      return {
+        id: crypto.randomUUID(),
+        indentId,
+        erpCode: material.erpCode,
+        materialId: material.id,
+        uom: material.uom || "",
+        qty: Number(line.qty),
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+      };
+    });
+
+    try {
+      await setIndents([nextIndent, ...indents]);
+      await setIndentLines([...indentLines, ...nextLines]);
+      setRequestedBy("");
+      setRequisitionDate(new Date().toISOString().split("T")[0]);
+      setRequiredDate("");
+      setIndentType("Reel");
+      setLines([createEmptyLine()]);
+      alert("Indent saved successfully.");
+    } catch (error) {
+      console.error("Failed to save indent:", error);
+      alert("Failed to save indent. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">New Indent</h2>
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="px-5 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition"
+        >
+          Back
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <label className="text-blue-700 font-bold">Requested By</label>
+            <input
+              value={requestedBy}
+              onChange={(e) => setRequestedBy(e.target.value)}
+              className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-blue-700 font-bold">Requisition Date</label>
+            <input
+              type="date"
+              value={requisitionDate}
+              onChange={(e) => setRequisitionDate(e.target.value)}
+              className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-blue-700 font-bold">Required Date</label>
+            <input
+              type="date"
+              value={requiredDate}
+              onChange={(e) => setRequiredDate(e.target.value)}
+              className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-blue-700 font-bold">Indent Type</label>
+          <select
+            value={indentType}
+            onChange={(e) => handleTypeChange(e.target.value as Indent["indentType"])}
+            className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          >
+            <option value="Reel">Reel</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div className="rounded-xl border border-black overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-black bg-slate-50">
+            <h3 className="text-sm font-bold uppercase tracking-tight text-blue-700">Items</h3>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate("/masters/materials")}
+                className="px-4 py-2 rounded border border-black text-indigo-700 font-bold hover:bg-white transition"
+              >
+                + New Item
+              </button>
+              <button
+                type="button"
+                onClick={handleAddRow}
+                className="px-4 py-2 rounded border border-black text-indigo-700 font-bold hover:bg-white transition"
+              >
+                + Add Row
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
+              <thead>
+                <tr className="bg-indigo-700 text-white">
+                  <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black">ERP</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black min-w-[420px]">Select Item</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black">Unit</th>
+                  <th className="px-4 py-3 text-right text-sm font-bold border-2 border-black">Qty</th>
+                  <th className="px-4 py-3 text-center text-sm font-bold border-2 border-black w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => {
+                  const material = activeMaterials.find((row) => row.id === line.materialId);
+                  return (
+                    <tr key={line.id} className="bg-white">
+                      <td className="px-3 py-3 border-2 border-black">
+                        <input
+                          value={material?.erpCode ? String(material.erpCode) : "Auto"}
+                          readOnly
+                          className="w-full rounded border border-slate-300 bg-slate-50 px-3 py-2 text-black"
+                        />
+                      </td>
+                      <td className="px-3 py-3 border-2 border-black">
+                        <Select
+                          options={materialOptions}
+                          value={line.materialId}
+                          onChange={(value) => handleLineChange(line.id, "materialId", value)}
+                          placeholder={activeMaterials.length === 0 ? "No material available..." : "Select Item..."}
+                        />
+                      </td>
+                      <td className="px-3 py-3 border-2 border-black">
+                        <input
+                          value={material?.uom || ""}
+                          readOnly
+                          className="w-full rounded border border-slate-300 bg-slate-50 px-3 py-2 text-black"
+                        />
+                      </td>
+                      <td className="px-3 py-3 border-2 border-black">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.qty}
+                          onChange={(e) => handleLineChange(line.id, "qty", e.target.value)}
+                          className="w-full rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                        />
+                      </td>
+                      <td className="px-3 py-3 border-2 border-black text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRow(line.id)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50 transition"
+                          title="Remove row"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex items-center justify-center min-w-[160px] rounded bg-indigo-600 px-6 py-3 font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50"
+          >
+            {isSubmitting ? <Spinner size={20} className="text-white" /> : "Save Indent"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

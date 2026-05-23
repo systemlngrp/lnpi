@@ -388,6 +388,39 @@ async function initDb(retries = 5) {
       `);
 
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`indents\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`requestedBy\` VARCHAR(255) NOT NULL,
+          \`requisitionDate\` VARCHAR(50) NOT NULL,
+          \`requiredDate\` VARCHAR(50) NOT NULL,
+          \`indentType\` VARCHAR(50) NOT NULL,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending',
+          \`approvedTimestamp\` VARCHAR(255),
+          \`approvedBy\` VARCHAR(255),
+          \`completedTimestamp\` VARCHAR(255),
+          \`completedBy\` VARCHAR(255),
+          \`rejectedTimestamp\` VARCHAR(255),
+          \`rejectedBy\` VARCHAR(255),
+          \`rejectedRemarks\` TEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`indent_lines\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`indentId\` VARCHAR(36) NOT NULL,
+          \`erpCode\` VARCHAR(100),
+          \`materialId\` VARCHAR(36) NOT NULL,
+          \`uom\` VARCHAR(50),
+          \`qty\` DECIMAL(15,2) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`suppliers\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
@@ -728,6 +761,27 @@ async function initDb(retries = 5) {
         { table: "materials", column: "gsm", type: "DECIMAL(15,2)" },
         { table: "materials", column: "bf", type: "DECIMAL(15,2)" },
         { table: "materials", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
+        { table: "indents", column: "requestedBy", type: "VARCHAR(255) NOT NULL" },
+        { table: "indents", column: "requisitionDate", type: "VARCHAR(50) NOT NULL" },
+        { table: "indents", column: "requiredDate", type: "VARCHAR(50) NOT NULL" },
+        { table: "indents", column: "indentType", type: "VARCHAR(50) NOT NULL" },
+        { table: "indents", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending'" },
+        { table: "indents", column: "approvedTimestamp", type: "VARCHAR(255)" },
+        { table: "indents", column: "approvedBy", type: "VARCHAR(255)" },
+        { table: "indents", column: "completedTimestamp", type: "VARCHAR(255)" },
+        { table: "indents", column: "completedBy", type: "VARCHAR(255)" },
+        { table: "indents", column: "rejectedTimestamp", type: "VARCHAR(255)" },
+        { table: "indents", column: "rejectedBy", type: "VARCHAR(255)" },
+        { table: "indents", column: "rejectedRemarks", type: "TEXT" },
+        { table: "indents", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "indents", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "indent_lines", column: "indentId", type: "VARCHAR(36) NOT NULL" },
+        { table: "indent_lines", column: "erpCode", type: "VARCHAR(100)" },
+        { table: "indent_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
+        { table: "indent_lines", column: "uom", type: "VARCHAR(50)" },
+        { table: "indent_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "indent_lines", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "indent_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "suppliers", column: "contactPerson", type: "VARCHAR(255)" },
         { table: "suppliers", column: "contactNumber", type: "VARCHAR(50)" },
@@ -1269,6 +1323,9 @@ const createHandlers = (tableName: string) => {
       const { id } = req.params;
       try {
         console.log(`[DB] Deleting from ${tableName}`, { id });
+        if (tableName === "indents") {
+          await db.query("DELETE FROM `indent_lines` WHERE `indentId` = ?", [id]);
+        }
         await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id]);
         res.json({ success: true });
       } catch (error) {
@@ -1280,7 +1337,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

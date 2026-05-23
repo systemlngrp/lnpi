@@ -23,7 +23,7 @@ import {
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest } from "../types";
+import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest, Indent } from "../types";
 import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 
@@ -39,6 +39,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [productions] = useData<Production>("productions", []);
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
+  const [indents] = useData<Indent>("indents", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -55,6 +56,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/production/pending-consumption": productions.filter(isProductionPendingConsumption).length,
     "/production/pending-ffg": productions.filter(isProductionPendingFFG).length,
     "/production/pending-tally": productions.filter(isProductionReadyForTally).length,
+    "/indent/pending": indents.filter(i => i.status === "Pending").length,
+    "/indent/approved": indents.filter(i => i.status === "Approved").length,
+    "/indent/completed": indents.filter(i => i.status === "Completed").length,
+    "/indent/rejected": indents.filter(i => i.status === "Rejected").length,
     "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
     "/consumption/pending-ph": consumptions.filter(c => isPendingPH(c.status)).length,
     "/consumption/pending-tally": consumptions.filter(c => c.status === "Pending Tally").length,
@@ -143,6 +148,17 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Pending Tally Entry", href: "/material-in/pending-tally", icon: FileText, countKey: "/material-in/pending-tally" },
         { name: "Material In Master", href: "/material-in/master", icon: Database },
         { name: "Item Master View", href: "/material-in/item-master", icon: BarChart3 },
+      ],
+    },
+    {
+      section: "Indent",
+      color: "bg-orange-700",
+      items: [
+        { name: "Indent Form", href: "/indent/form", icon: ClipboardList },
+        { name: "Pending", href: "/indent/pending", icon: Activity, countKey: "/indent/pending" },
+        { name: "Approved", href: "/indent/approved", icon: Database, countKey: "/indent/approved" },
+        { name: "Completed", href: "/indent/completed", icon: CheckCircle, countKey: "/indent/completed" },
+        { name: "Rejected", href: "/indent/rejected", icon: X, countKey: "/indent/rejected" },
       ],
     },
     {
