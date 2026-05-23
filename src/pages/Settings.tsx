@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Setting } from "../types";
 import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
+import { Spinner } from "../components/Spinner";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -66,6 +67,7 @@ const GSM_FORMULA_OPTIONS = [
 export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const currentSetting = settings[0];
   const selectedReelFormula = currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value;
@@ -104,6 +106,10 @@ export function SettingsPage() {
         cuttingSizeAsPerCalculation: currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value,
         gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
         productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
+        organizationName: currentSetting?.organizationName || "",
+        organizationAddress: currentSetting?.organizationAddress || "",
+        organizationGstDetails: currentSetting?.organizationGstDetails || "",
+        organizationLogo: currentSetting?.organizationLogo || "",
         updatedBy: "System User",
         updateTimestamp: timestamp,
         ...patch,
@@ -117,6 +123,44 @@ export function SettingsPage() {
     }
   };
 
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size exceeds 10MB. Please upload a smaller logo.");
+      return;
+    }
+
+    setUploadingLogo(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const response = await fetch("/api/upload-artwork", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ base64, filename: file.name }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Upload failed");
+        }
+
+        const result = await response.json();
+        await handleChange({ organizationLogo: result.filename });
+      } catch (error) {
+        console.error("Failed to upload organization logo:", error);
+        alert("Failed to upload logo.");
+      } finally {
+        setUploadingLogo(false);
+        event.target.value = "";
+      }
+    };
+
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -124,6 +168,98 @@ export function SettingsPage() {
       </div>
 
       <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-5">
+        <div className="space-y-4 border-b border-dashed border-black pb-5">
+          <div>
+            <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Organization Details</h3>
+            <p className="text-sm text-black leading-6">
+              These details can be used as the centered header section in generated PDFs such as indent documents.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex flex-col space-y-2 md:col-span-2">
+              <label htmlFor="organizationName" className="text-xs font-black uppercase tracking-wide text-black">
+                Organization Name
+              </label>
+              <input
+                id="organizationName"
+                type="text"
+                value={currentSetting?.organizationName || ""}
+                onChange={(e) => void handleChange({ organizationName: e.target.value })}
+                disabled={loading || saving}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+              />
+            </div>
+
+            <div className="flex flex-col space-y-2 md:col-span-2">
+              <label htmlFor="organizationAddress" className="text-xs font-black uppercase tracking-wide text-black">
+                Organization Address
+              </label>
+              <textarea
+                id="organizationAddress"
+                value={currentSetting?.organizationAddress || ""}
+                onChange={(e) => void handleChange({ organizationAddress: e.target.value })}
+                disabled={loading || saving}
+                rows={3}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white resize-y"
+              />
+            </div>
+
+            <div className="flex flex-col space-y-2 md:col-span-2">
+              <label htmlFor="organizationGstDetails" className="text-xs font-black uppercase tracking-wide text-black">
+                Organization GST Details
+              </label>
+              <textarea
+                id="organizationGstDetails"
+                value={currentSetting?.organizationGstDetails || ""}
+                onChange={(e) => void handleChange({ organizationGstDetails: e.target.value })}
+                disabled={loading || saving}
+                rows={2}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white resize-y"
+              />
+            </div>
+
+            <div className="flex flex-col space-y-2 md:col-span-2">
+              <label className="text-xs font-black uppercase tracking-wide text-black">Organization Logo</label>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded border border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-slate-50 transition">
+                  {uploadingLogo ? <Spinner size={16} /> : "Upload Logo"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    disabled={loading || saving || uploadingLogo}
+                    className="hidden"
+                  />
+                </label>
+                {currentSetting?.organizationLogo ? (
+                  <div className="space-y-2">
+                    <div className="rounded border border-black bg-slate-50 p-3">
+                      <img
+                        src={`/uploads/${currentSetting.organizationLogo}`}
+                        alt="Organization logo"
+                        className="max-h-20 max-w-[220px] object-contain"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleChange({ organizationLogo: "" })}
+                      disabled={loading || saving || uploadingLogo}
+                      className="text-xs font-bold uppercase tracking-wide text-red-700 hover:text-red-900 disabled:opacity-50"
+                    >
+                      Remove Logo
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded border border-dashed border-black bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    No logo uploaded yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div>
           <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Production Formula Control</h3>
           <p className="text-sm text-black leading-6">

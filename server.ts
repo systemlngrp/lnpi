@@ -732,6 +732,10 @@ async function initDb(retries = 5) {
           \`cuttingSizeAsPerCalculation\` TEXT,
           \`gsmAsPerCalculation\` TEXT,
           \`productionFormVisibleColumns\` LONGTEXT,
+          \`organizationName\` VARCHAR(255),
+          \`organizationAddress\` TEXT,
+          \`organizationGstDetails\` TEXT,
+          \`organizationLogo\` VARCHAR(255),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -1032,6 +1036,10 @@ async function initDb(retries = 5) {
         { table: "settings", column: "cuttingSizeAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "gsmAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "productionFormVisibleColumns", type: "LONGTEXT" },
+        { table: "settings", column: "organizationName", type: "VARCHAR(255)" },
+        { table: "settings", column: "organizationAddress", type: "TEXT" },
+        { table: "settings", column: "organizationGstDetails", type: "TEXT" },
+        { table: "settings", column: "organizationLogo", type: "VARCHAR(255)" },
         { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" },
       ];
