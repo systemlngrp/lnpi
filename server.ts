@@ -64,10 +64,20 @@ function normalizeWorkflowStatus(tableName: string, row: any) {
     return normalized;
   }
 
-  if (tableName === "productions" || tableName === "consumptions") {
+  if (tableName === "productions") {
     if (normalized.tallyTimestamp) normalized.status = "Completed";
-    else if (normalized.phTimestamp) normalized.status = "Pending Tally";
     else if (normalized.cancelTimestamp) normalized.status = "Cancelled";
+    else if (normalized.phTimestamp && !normalized.actualPaperUsed) normalized.status = "Pending Consumption";
+    else if (normalized.phTimestamp && normalized.actualPaperUsed && !normalized.prodFromFFG) normalized.status = "Pending FFG";
+    else if (normalized.phTimestamp && normalized.actualPaperUsed && normalized.prodFromFFG) normalized.status = "Pending Tally";
+    else normalized.status = "Pending PH";
+    return normalized;
+  }
+
+  if (tableName === "consumptions") {
+    if (normalized.tallyTimestamp) normalized.status = "Completed";
+    else if (normalized.cancelTimestamp) normalized.status = "Cancelled";
+    else if (normalized.phTimestamp) normalized.status = "Pending Tally";
     else normalized.status = "Pending PH";
     return normalized;
   }

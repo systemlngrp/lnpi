@@ -66,7 +66,7 @@ export function PlantHeadUnified() {
         ));
       } else if (activeTab === "production") {
         await setProductions(prev => prev.map(p => 
-          selectedIds.has(p.id) ? { ...p, status: "Pending Tally", phTimestamp: timestamp, phEmailId: email } : p
+          selectedIds.has(p.id) ? { ...p, status: "Pending Consumption", phTimestamp: timestamp, phEmailId: email } : p
         ));
       } else if (activeTab === "consumption") {
         await setConsumptions(prev => prev.map(c => 
@@ -109,7 +109,7 @@ export function PlantHeadUnified() {
     setSubmittingId(id);
     try {
       await setProductions(prev => prev.map(p => 
-        p.id === id ? { ...p, status: "Pending Tally", phTimestamp: new Date().toISOString(), phEmailId: "ph@lngrp.in" } : p
+        p.id === id ? { ...p, status: "Pending Consumption", phTimestamp: new Date().toISOString(), phEmailId: "ph@lngrp.in" } : p
       ));
     } catch (err) {
       console.error("Approval error:", err);

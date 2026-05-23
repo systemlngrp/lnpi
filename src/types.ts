@@ -195,7 +195,7 @@ export interface Production {
   qty: number;
   uom: string;
   remarks: string;
-  status: "Pending PH" | "Pending Tally" | "Completed" | "Cancelled";
+  status: "Pending PH" | "Pending Consumption" | "Pending FFG" | "Pending Tally" | "Completed" | "Cancelled";
   
   // New production fields
   jobCardNo?: string | number;
