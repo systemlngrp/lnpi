@@ -99,6 +99,12 @@ export function SettingsPage() {
     () => parseProductionFormVisibleColumns(currentSetting?.productionFormVisibleColumns),
     [currentSetting?.productionFormVisibleColumns]
   );
+  const organizationLogoUrl = useMemo(() => {
+    if (!currentSetting?.organizationLogo) return "";
+    const encoded = currentSetting.organizationLogo.split("/").map(encodeURIComponent).join("/");
+    if (typeof window === "undefined") return `/uploads/${encoded}`;
+    return new URL(`/uploads/${encoded}`, window.location.origin).toString();
+  }, [currentSetting?.organizationLogo]);
   const organizationValues = useMemo(
     () => ({
       organizationName: currentSetting?.organizationName || "",
@@ -278,9 +284,9 @@ export function SettingsPage() {
                 </label>
                 {currentSetting?.organizationLogo ? (
                   <div className="space-y-2">
-                    <div className="rounded border border-black bg-slate-50 p-3">
+                    <div className="flex min-h-[96px] min-w-[220px] items-center justify-center rounded border border-black bg-slate-50 p-3">
                       <img
-                        src={`/uploads/${currentSetting.organizationLogo}`}
+                        src={organizationLogoUrl}
                         alt="Organization logo"
                         className="max-h-20 max-w-[220px] object-contain"
                       />
