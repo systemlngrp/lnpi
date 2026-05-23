@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Download, Eye, XCircle } from "lucide-react";
+import { CheckCircle, Download, Eye, ThumbsUp, X, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { ExcelExport } from "../components/ExcelExport";
 import { Spinner } from "../components/Spinner";
@@ -258,20 +258,28 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                         </button>
                         {mode === "Pending" ? (
                           <>
-                            <ActionButton
-                              label={confirmId === indent.id ? "Confirm?" : "Approve"}
+                            <button
+                              type="button"
                               onClick={() => handleApprove(indent)}
-                              tone="primary"
-                              loading={submittingId === indent.id}
-                            />
+                              disabled={submittingId === indent.id}
+                              title={confirmId === indent.id ? "Confirm Approve" : "Approve"}
+                              className={cn(
+                                "inline-flex h-9 w-9 items-center justify-center rounded border transition disabled:opacity-50",
+                                confirmId === indent.id
+                                  ? "border-amber-700 bg-amber-100 text-amber-800"
+                                  : "border-sky-800 bg-sky-100 text-sky-800 hover:bg-sky-200"
+                              )}
+                            >
+                              {submittingId === indent.id ? <Spinner size={16} /> : <ThumbsUp size={16} />}
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleReject(indent)}
                               disabled={submittingId === indent.id}
-                              className="inline-flex items-center justify-center rounded border border-red-700 bg-red-100 px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-800 hover:bg-red-200 transition disabled:opacity-50"
+                              title="Reject"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded border border-red-700 bg-red-100 text-red-800 hover:bg-red-200 transition disabled:opacity-50"
                             >
-                              <XCircle size={14} className="mr-2" />
-                              Reject
+                              <X size={16} />
                             </button>
                           </>
                         ) : null}
