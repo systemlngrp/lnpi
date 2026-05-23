@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Setting } from "../types";
 import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
@@ -68,6 +68,11 @@ export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [organizationDraft, setOrganizationDraft] = useState({
+    organizationName: "",
+    organizationAddress: "",
+    organizationGstDetails: "",
+  });
 
   const currentSetting = settings[0];
   const selectedReelFormula = currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value;
@@ -94,6 +99,18 @@ export function SettingsPage() {
     () => parseProductionFormVisibleColumns(currentSetting?.productionFormVisibleColumns),
     [currentSetting?.productionFormVisibleColumns]
   );
+  const organizationValues = useMemo(
+    () => ({
+      organizationName: currentSetting?.organizationName || "",
+      organizationAddress: currentSetting?.organizationAddress || "",
+      organizationGstDetails: currentSetting?.organizationGstDetails || "",
+    }),
+    [currentSetting?.organizationAddress, currentSetting?.organizationGstDetails, currentSetting?.organizationName]
+  );
+
+  useEffect(() => {
+    setOrganizationDraft(organizationValues);
+  }, [organizationValues]);
 
   const handleChange = async (patch: Partial<Setting>) => {
     setSaving(true);
@@ -161,6 +178,14 @@ export function SettingsPage() {
     reader.readAsDataURL(file);
   };
 
+  const handleOrganizationSave = async () => {
+    await handleChange({
+      organizationName: organizationDraft.organizationName,
+      organizationAddress: organizationDraft.organizationAddress,
+      organizationGstDetails: organizationDraft.organizationGstDetails,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -184,8 +209,8 @@ export function SettingsPage() {
               <input
                 id="organizationName"
                 type="text"
-                value={currentSetting?.organizationName || ""}
-                onChange={(e) => void handleChange({ organizationName: e.target.value })}
+                value={organizationDraft.organizationName}
+                onChange={(e) => setOrganizationDraft((prev) => ({ ...prev, organizationName: e.target.value }))}
                 disabled={loading || saving}
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
               />
@@ -197,8 +222,8 @@ export function SettingsPage() {
               </label>
               <textarea
                 id="organizationAddress"
-                value={currentSetting?.organizationAddress || ""}
-                onChange={(e) => void handleChange({ organizationAddress: e.target.value })}
+                value={organizationDraft.organizationAddress}
+                onChange={(e) => setOrganizationDraft((prev) => ({ ...prev, organizationAddress: e.target.value }))}
                 disabled={loading || saving}
                 rows={3}
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white resize-y"
@@ -211,8 +236,8 @@ export function SettingsPage() {
               </label>
               <textarea
                 id="organizationGstDetails"
-                value={currentSetting?.organizationGstDetails || ""}
-                onChange={(e) => void handleChange({ organizationGstDetails: e.target.value })}
+                value={organizationDraft.organizationGstDetails}
+                onChange={(e) => setOrganizationDraft((prev) => ({ ...prev, organizationGstDetails: e.target.value }))}
                 disabled={loading || saving}
                 rows={2}
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white resize-y"
@@ -256,6 +281,17 @@ export function SettingsPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="flex justify-end md:col-span-2">
+              <button
+                type="button"
+                onClick={() => void handleOrganizationSave()}
+                disabled={loading || saving || uploadingLogo}
+                className="inline-flex items-center justify-center min-w-[170px] rounded bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50"
+              >
+                {saving ? <Spinner size={16} className="text-white" /> : "Save Organization"}
+              </button>
             </div>
           </div>
         </div>
