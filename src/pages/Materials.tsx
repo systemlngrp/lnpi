@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
-import { Edit, Plus, Download, ArrowLeft, Trash2 } from "lucide-react";
+import { Edit, Plus, Download, Trash2, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Material, MaterialGroup } from "../types";
 import { Spinner } from "../components/Spinner";
@@ -311,13 +311,13 @@ export function Materials() {
   return (
     <div className="space-y-6">
       {isFormOpen ? (
-        <div className="bg-white border border-black rounded-[28px] p-6 md:p-10 shadow-sm">
+        <div className="bg-white border border-black rounded-xl p-6 shadow-sm">
           <div className="flex justify-between items-start gap-4 mb-8">
-            <h2 className="text-3xl font-black tracking-tight text-black">New Item</h2>
+            <h2 className="text-xl font-bold text-black uppercase tracking-tight">New Item</h2>
             <button
               type="button"
               onClick={() => resetForm()}
-              className="px-6 py-3 rounded-2xl border border-slate-300 text-indigo-700 font-bold text-2sm hover:bg-slate-50 transition"
+              className="px-5 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition"
             >
               Back
             </button>
@@ -357,7 +357,7 @@ export function Materials() {
                       };
                     });
                   }}
-                  className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 >
                   {TYPE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -373,7 +373,7 @@ export function Materials() {
                   <input
                     value="CM"
                     readOnly
-                    className="w-full rounded-2xl border border-slate-300 bg-slate-100 px-5 py-4 text-xl text-slate-500 focus:outline-none"
+                    className="w-full rounded border-2 border-black bg-slate-100 px-4 py-3 text-black focus:outline-none"
                   />
                 </div>
               ) : (
@@ -382,7 +382,7 @@ export function Materials() {
                   <input
                     value={formData.erpCode}
                     onChange={(e) => setFormData((prev) => ({ ...prev, erpCode: e.target.value }))}
-                    className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                   />
                 </div>
               )}
@@ -393,7 +393,7 @@ export function Materials() {
                   <input
                     value="Reel"
                     readOnly
-                    className="w-full rounded-2xl border border-slate-300 bg-slate-100 px-5 py-4 text-xl text-slate-500 focus:outline-none"
+                    className="w-full rounded border-2 border-black bg-slate-100 px-4 py-3 text-black focus:outline-none"
                   />
                 </div>
               ) : (
@@ -403,7 +403,7 @@ export function Materials() {
                     <select
                       value={formData.uom}
                       onChange={(e) => setFormData((prev) => ({ ...prev, uom: e.target.value }))}
-                      className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                     >
                       {UNIT_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -436,7 +436,7 @@ export function Materials() {
                     <input
                       value={formData.size}
                       onChange={(e) => setFormData((prev) => ({ ...prev, size: e.target.value }))}
-                      className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                     />
                   </div>
                   <div className="space-y-2">
@@ -446,7 +446,7 @@ export function Materials() {
                     <input
                       value={formData.gsm}
                       onChange={(e) => setFormData((prev) => ({ ...prev, gsm: e.target.value }))}
-                      className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                     />
                   </div>
                   <div className="space-y-2">
@@ -456,7 +456,7 @@ export function Materials() {
                     <input
                       value={formData.bf}
                       onChange={(e) => setFormData((prev) => ({ ...prev, bf: e.target.value }))}
-                      className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                     />
                   </div>
                 </>
@@ -468,7 +468,7 @@ export function Materials() {
                   <input
                     value={formData.name}
                     onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                    className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                   />
                 </div>
               )}
@@ -479,7 +479,7 @@ export function Materials() {
               <select
                 value={formData.active}
                 onChange={(e) => setFormData((prev) => ({ ...prev, active: e.target.value as ActiveValue }))}
-                className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-xl text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
               >
                 {ACTIVE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
@@ -489,11 +489,11 @@ export function Materials() {
               </select>
             </div>
 
-            <div className="rounded-[24px] border border-slate-200 min-h-[90px] p-5 flex items-center justify-end">
+            <div className="pt-2 flex items-center justify-end">
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="bg-indigo-700 hover:bg-indigo-800 text-white font-black px-9 py-4 rounded-2xl transition disabled:opacity-50"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2 rounded transition disabled:opacity-50 border border-black shadow"
               >
                 {isSubmitting ? <Spinner size={20} className="text-white" /> : "Save Item"}
               </button>
@@ -501,58 +501,54 @@ export function Materials() {
           </form>
         </div>
       ) : (
-        <div className="space-y-5">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div>
-              <h2 className="text-3xl font-black tracking-tight text-black">Item Master</h2>
-              <p className="text-slate-500 text-2sm mt-1">LNKI</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative">
+        <div className="space-y-4">
+          <div className="flex flex-wrap xl:flex-nowrap items-end gap-3 border-b border-black pb-4">
+            <h2 className="text-xl font-bold text-black uppercase tracking-tight whitespace-nowrap">Material Master</h2>
+            <div className="relative min-w-[240px] flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
                   type="text"
                   placeholder="Search ERP / name"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-[300px] max-w-full rounded-full border border-slate-300 px-6 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded border-2 border-black pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 />
-              </div>
-              <FilterSelect label="Type" value={typeFilter} onChange={setTypeFilter} options={["All", ...TYPE_OPTIONS.map((option) => option.value)]} />
-              <FilterSelect label="Size" value={sizeFilter} onChange={setSizeFilter} options={["All", ...sizeOptions]} />
-              <FilterSelect label="GSM" value={gsmFilter} onChange={setGsmFilter} options={["All", ...gsmOptions]} />
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="px-6 py-4 rounded-2xl border border-slate-300 text-indigo-700 font-bold hover:bg-slate-50 transition"
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={handleExport}
-                className="inline-flex items-center gap-2 px-6 py-4 rounded-2xl border border-slate-300 text-indigo-700 font-bold hover:bg-slate-50 transition"
-              >
-                <Download size={18} /> Download Excel
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate(-1)}
-                className="px-6 py-4 rounded-2xl border border-slate-300 text-indigo-700 font-bold hover:bg-slate-50 transition"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenNew}
-                className="inline-flex items-center gap-2 px-6 py-4 rounded-2xl bg-indigo-700 text-white font-black hover:bg-indigo-800 transition"
-              >
-                <Plus size={18} /> New Item
-              </button>
             </div>
+            <FilterSelect compact label="Type" value={typeFilter} onChange={setTypeFilter} options={["All", ...TYPE_OPTIONS.map((option) => option.value)]} />
+            <FilterSelect compact label="Size" value={sizeFilter} onChange={setSizeFilter} options={["All", ...sizeOptions]} />
+            <FilterSelect compact label="GSM" value={gsmFilter} onChange={setGsmFilter} options={["All", ...gsmOptions]} />
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="px-4 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition whitespace-nowrap"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={handleExport}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition whitespace-nowrap"
+            >
+              <Download size={16} /> Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="px-4 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition whitespace-nowrap"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenNew}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition whitespace-nowrap border border-black shadow"
+            >
+              <Plus size={16} /> New Item
+            </button>
           </div>
 
-          <div className="bg-white rounded-[22px] border border-slate-300 overflow-hidden">
-            <div className="flex justify-between items-center px-4 py-3 text-slate-600 text-2sm">
+          <div className="bg-white rounded shadow-sm border border-black overflow-hidden">
+            <div className="flex justify-between items-center px-4 py-3 text-slate-600 text-sm border-b border-black">
               <span>Items: {filteredMaterials.length}</span>
               <span>Saved.</span>
             </div>
@@ -609,7 +605,7 @@ export function Materials() {
 
       {showGroupModal ? (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl border-2 border-black p-6 shadow-2xl">
+          <div className="bg-white w-full max-w-md rounded-xl border-2 border-black p-6 shadow-2xl">
             <h3 className="text-lg font-black text-black uppercase mb-4">Create Material Group</h3>
             <form onSubmit={handleCreateGroup} className="space-y-4">
               <div className="space-y-2">
@@ -618,7 +614,7 @@ export function Materials() {
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
                   autoFocus
-                  className="w-full border-2 border-black rounded p-3 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                    className="w-full border-2 border-black rounded p-3 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600"
                 />
               </div>
               <div className="flex justify-end gap-3">
@@ -632,7 +628,7 @@ export function Materials() {
                 >
                   Cancel
                 </button>
-                <button type="submit" disabled={savingGroup} className="px-5 py-2 bg-indigo-700 text-white rounded font-bold border border-black disabled:opacity-50">
+                <button type="submit" disabled={savingGroup} className="px-5 py-2 bg-indigo-600 text-white rounded font-bold border border-black disabled:opacity-50">
                   {savingGroup ? <Spinner size={16} className="text-white" /> : "Save Group"}
                 </button>
               </div>
@@ -649,19 +645,21 @@ function FilterSelect({
   value,
   onChange,
   options,
+  compact = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: string[];
+  compact?: boolean;
 }) {
   return (
-    <div className="space-y-1">
+    <div className={compact ? "space-y-1 min-w-[120px]" : "space-y-1"}>
       <div className="text-blue-700 font-bold text-sm">{label}</div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="min-w-[160px] rounded-2xl border border-slate-300 px-5 py-4 text-lg text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className={compact ? "w-full rounded border-2 border-black px-3 py-2 text-sm text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" : "min-w-[160px] rounded-2xl border border-slate-300 px-5 py-4 text-lg text-black focus:outline-none focus:ring-2 focus:ring-indigo-500"}
       >
         {options.map((option) => (
           <option key={option} value={option}>

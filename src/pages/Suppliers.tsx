@@ -158,10 +158,7 @@ export function Suppliers() {
       {isFormOpen ? (
         <div className="bg-white p-6 rounded-[24px] shadow-sm border border-slate-200">
           <div className="flex justify-between items-start gap-4 mb-8">
-            <div>
-              <h2 className="text-3xl font-black text-blue-700">New Supplier</h2>
-              <p className="text-slate-500 mt-1">LNKI</p>
-            </div>
+            <h2 className="text-3xl font-black text-blue-700">New Supplier</h2>
             <div className="flex items-center gap-3">
               <button
                 type="button"
