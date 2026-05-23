@@ -29,9 +29,10 @@ import { cn } from "../lib/utils";
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  isCollapsed: boolean;
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
@@ -231,13 +232,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <div className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-full w-[280px] flex-col bg-black shadow-2xl transition-transform duration-300 ease-in-out md:static md:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex h-full w-[280px] flex-col bg-black shadow-2xl transition-all duration-300 ease-in-out md:static md:translate-x-0",
+        isCollapsed ? "md:w-[78px]" : "md:w-[280px]",
         isOpen ? "translate-x-0" : "-translate-x-full"
     )}>
-      <div className="flex h-16 shrink-0 items-center justify-between px-4 bg-slate-900 border-b border-black sticky top-0 z-20">
+      <div className={cn("flex h-16 shrink-0 items-center justify-between bg-slate-900 border-b border-black sticky top-0 z-20", isCollapsed ? "px-3" : "px-4")}>
         <div className="flex items-center">
-            <Truck className="h-6 w-6 text-white mr-2 shrink-0" />
-            <h1 className="text-xs font-black text-white tracking-tight leading-tight uppercase whitespace-nowrap">LNPI Ops<br/>Portal</h1>
+            <Truck className={cn("h-6 w-6 text-white shrink-0", isCollapsed ? "" : "mr-2")} />
+            {!isCollapsed && <h1 className="text-xs font-black text-white tracking-tight leading-tight uppercase whitespace-nowrap">LNPI Ops<br/>Portal</h1>}
         </div>
         <button className="md:hidden p-2 text-white" onClick={onClose}>
             <X size={20} />
@@ -246,7 +248,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <nav className="flex-1 space-y-3 px-2 py-4 overflow-y-auto">
         {navigation.map((group) => (
           <div key={group.section} className={cn("p-1 rounded flex flex-col border border-white/10", group.color)}>
-            <h3 className="text-[10px] font-bold text-white text-left tracking-wider uppercase mb-1.5 pl-1 pt-0.5 opacity-70 whitespace-nowrap">
+            <h3 className={cn("text-[10px] font-bold text-white text-left tracking-wider uppercase mb-1.5 pl-1 pt-0.5 opacity-70 whitespace-nowrap", isCollapsed && "hidden")}>
                {group.section}
             </h3>
             <div className="space-y-px">
@@ -259,11 +261,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     key={item.name}
                     to={item.href}
                     onClick={onClose}
+                    title={item.name}
                     className={cn(
                       isActive
                         ? "bg-white text-black font-bold shadow-inner"
                         : "text-white hover:bg-black/20 hover:text-white font-medium",
-                      "group flex items-center justify-between rounded-sm px-2 py-1.5 text-[11px] transition-all whitespace-nowrap"
+                      "group flex items-center justify-between rounded-sm py-1.5 text-[11px] transition-all whitespace-nowrap",
+                      isCollapsed ? "px-2" : "px-2"
                     )}
                   >
                     <div className="flex items-center">
@@ -274,9 +278,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         )}
                         aria-hidden="true"
                       />
-                      <span>{item.name}</span>
+                      {!isCollapsed && <span>{item.name}</span>}
                     </div>
-                    {count > 0 && (
+                    {count > 0 && !isCollapsed && (
                       <span className={cn(
                         "flex items-center justify-center min-w-[18px] h-4.5 px-1 rounded-full text-[10px] font-black tracking-tighter shrink-0 ml-3",
                         isActive ? "bg-black text-white" : "bg-white text-black"

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Setting } from "../types";
+import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -87,6 +88,10 @@ export function SettingsPage() {
     () => GSM_FORMULA_OPTIONS.find((option) => option.value === selectedGsmFormula) || GSM_FORMULA_OPTIONS[0],
     [selectedGsmFormula]
   );
+  const selectedProductionFormColumns = useMemo(
+    () => parseProductionFormVisibleColumns(currentSetting?.productionFormVisibleColumns),
+    [currentSetting?.productionFormVisibleColumns]
+  );
 
   const handleChange = async (patch: Partial<Setting>) => {
     setSaving(true);
@@ -98,6 +103,7 @@ export function SettingsPage() {
         flapAsPerCalculation: currentSetting?.flapAsPerCalculation || FLAP_FORMULA_OPTIONS[0].value,
         cuttingSizeAsPerCalculation: currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value,
         gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
+        productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
         updatedBy: "System User",
         updateTimestamp: timestamp,
         ...patch,
@@ -213,6 +219,55 @@ export function SettingsPage() {
           </select>
           <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm text-black leading-6">
             {selectedGsmOption.description}
+          </div>
+        </div>
+
+        <div className="space-y-3 border-t border-dashed border-black pt-4">
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-wide text-black">Production Form Column Visibility</h3>
+            <p className="text-sm text-black leading-6 mt-1">
+              Choose which columns should stay visible in the Production Form. Unchecked columns will be hidden from the form view only.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void handleChange({ productionFormVisibleColumns: JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS) })}
+              disabled={loading || saving}
+              className="border border-black bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wide hover:bg-slate-100 disabled:opacity-50"
+            >
+              Show All
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleChange({ productionFormVisibleColumns: JSON.stringify([]) })}
+              disabled={loading || saving}
+              className="border border-black bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wide hover:bg-slate-100 disabled:opacity-50"
+            >
+              Hide All
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded border border-black bg-slate-50 p-3 max-h-[420px] overflow-y-auto">
+            {PRODUCTION_FORM_COLUMN_OPTIONS.map((column) => {
+              const checked = selectedProductionFormColumns.includes(column);
+              return (
+                <label key={column} className="flex items-center gap-2 rounded border border-black bg-white px-3 py-2 text-sm font-medium text-black">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const nextColumns = e.target.checked
+                        ? [...selectedProductionFormColumns, column]
+                        : selectedProductionFormColumns.filter((value) => value !== column);
+                      void handleChange({ productionFormVisibleColumns: JSON.stringify(nextColumns) });
+                    }}
+                    disabled={loading || saving}
+                    className="h-4 w-4 border-black"
+                  />
+                  <span>{column}</span>
+                </label>
+              );
+            })}
           </div>
         </div>
       </div>

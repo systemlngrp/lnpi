@@ -250,8 +250,8 @@ export function ProductionMaster() {
                 );
             })}
         </div>
-        <div className="overflow-x-auto hidden md:block">
-          <table className="min-w-full divide-y divide-black border-collapse border border-black">
+        <div className="hidden md:block overflow-x-auto pb-2 w-full">
+          <table className="min-w-max w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job No.</th>

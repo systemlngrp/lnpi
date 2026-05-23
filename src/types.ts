@@ -366,6 +366,7 @@ export interface Setting {
   flapAsPerCalculation?: string;
   cuttingSizeAsPerCalculation?: string;
   gsmAsPerCalculation?: string;
+  productionFormVisibleColumns?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

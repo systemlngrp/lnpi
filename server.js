@@ -481,6 +481,7 @@ async function initDb(retries = 5) {
           \`flapAsPerCalculation\` TEXT,
           \`cuttingSizeAsPerCalculation\` TEXT,
           \`gsmAsPerCalculation\` TEXT,
+          \`productionFormVisibleColumns\` LONGTEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -726,6 +727,7 @@ async function initDb(retries = 5) {
         { table: "settings", column: "flapAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "cuttingSizeAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "gsmAsPerCalculation", type: "TEXT" },
+        { table: "settings", column: "productionFormVisibleColumns", type: "LONGTEXT" },
         { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" }
       ];
