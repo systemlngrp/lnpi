@@ -387,9 +387,13 @@ async function initDb(retries = 5) {
           \`uom\` VARCHAR(50) NOT NULL,
           \`remarks\` TEXT,
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending PH',
+          \`phTimestamp\` VARCHAR(255),
+          \`phEmailId\` VARCHAR(255),
           \`tallyTimestamp\` VARCHAR(255),
           \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
+          \`updateTimestamp\` VARCHAR(255),
+          \`productionId\` VARCHAR(36),
+          \`jobCardNo\` VARCHAR(255)
         )
       `);
       await db.query(`
@@ -645,8 +649,12 @@ async function initDb(retries = 5) {
         { table: "productions", column: "scheduleId", type: "VARCHAR(36)" },
         { table: "productions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "productions", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "consumptions", column: "phTimestamp", type: "VARCHAR(255)" },
+        { table: "consumptions", column: "phEmailId", type: "VARCHAR(255)" },
         { table: "consumptions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "consumptions", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "consumptions", column: "productionId", type: "VARCHAR(36)" },
+        { table: "consumptions", column: "jobCardNo", type: "VARCHAR(255)" },
         { table: "trucks", column: "truckNo", type: "VARCHAR(50) NOT NULL" },
         { table: "trucks", column: "driverName", type: "VARCHAR(255)" },
         { table: "trucks", column: "mobileNo", type: "VARCHAR(20)" },
