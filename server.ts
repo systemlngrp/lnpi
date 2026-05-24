@@ -470,6 +470,9 @@ async function initDb(retries = 5) {
           \`invoiceNo\` VARCHAR(100) NOT NULL,
           \`invoiceValue\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`truckNo\` VARCHAR(100) NOT NULL,
+          \`mrrId\` VARCHAR(36),
+          \`mrrDate\` VARCHAR(50),
+          \`mrrNo\` VARCHAR(100),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -891,6 +894,9 @@ async function initDb(retries = 5) {
         { table: "gate_entries", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
         { table: "gate_entries", column: "invoiceValue", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "gate_entries", column: "truckNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "gate_entries", column: "mrrId", type: "VARCHAR(36)" },
+        { table: "gate_entries", column: "mrrDate", type: "VARCHAR(50)" },
+        { table: "gate_entries", column: "mrrNo", type: "VARCHAR(100)" },
         { table: "gate_entries", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "gate_entries", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_entry_photos", column: "gateEntryId", type: "VARCHAR(36) NOT NULL" },

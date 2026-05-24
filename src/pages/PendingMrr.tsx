@@ -1,21 +1,23 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Eye, Plus, X } from "lucide-react";
+import { Eye } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { GateEntry, GateEntryPhoto, Supplier } from "../types";
 
-export function GateEntryMaster() {
-  const navigate = useNavigate();
+function hasMaterialReceipt(entry: GateEntry) {
+  return Boolean((entry.mrrId || "").trim() || (entry.mrrNo || "").trim() || (entry.mrrDate || "").trim());
+}
+
+export function PendingMrr() {
   const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const [gateEntryPhotos] = useData<GateEntryPhoto>("gate-entry-photos", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
-
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
-  const filteredEntries = useMemo(
+  const pendingEntries = useMemo(
     () =>
       [...gateEntries]
+        .filter((entry) => !hasMaterialReceipt(entry))
         .filter((entry) => {
           const supplierName = suppliers.find((supplier) => supplier.id === entry.supplierId)?.name || "";
           const haystack = [entry.gateEntryNo, supplierName, entry.invoiceNo, entry.truckNo]
@@ -32,11 +34,9 @@ export function GateEntryMaster() {
     [gateEntries, searchTerm, suppliers]
   );
 
-  const selectedEntry = filteredEntries.find((entry) => entry.id === selectedEntryId) || null;
+  const selectedEntry = pendingEntries.find((entry) => entry.id === selectedEntryId) || null;
   const selectedPhotos = selectedEntry
-    ? gateEntryPhotos
-        .filter((photo) => photo.gateEntryId === selectedEntry.id)
-        .sort((a, b) => a.slotNo - b.slotNo)
+    ? gateEntryPhotos.filter((photo) => photo.gateEntryId === selectedEntry.id).sort((a, b) => a.slotNo - b.slotNo)
     : [];
 
   const getSupplierName = (supplierId: string) => suppliers.find((supplier) => supplier.id === supplierId)?.name || "";
@@ -45,14 +45,10 @@ export function GateEntryMaster() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4 border-b border-black pb-4">
-        <h2 className="text-xl font-bold uppercase tracking-tight text-black">Gate Entry Master</h2>
-        <button
-          type="button"
-          onClick={() => navigate("/gate-entry/form")}
-          className="flex items-center gap-2 rounded bg-indigo-600 px-4 py-2 font-bold text-white transition hover:bg-indigo-700"
-        >
-          <Plus size={16} /> Add Gate Entry
-        </button>
+        <div>
+          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Pending MRR</h2>
+          <p className="mt-1 text-sm text-slate-500">Gate entries where material receipt has not yet been created.</p>
+        </div>
       </div>
 
       <div className="rounded border border-black bg-white p-4 shadow-sm">
@@ -68,7 +64,7 @@ export function GateEntryMaster() {
         <table className="min-w-full border-collapse border border-black">
           <thead className="bg-slate-100">
             <tr>
-              {["Gate Entry No", "Date", "Supplier Name", "Invoice No", "Invoice Value", "Truck No", "MRR No", "MRR Date", "Photos", "Action"].map((heading) => (
+              {["Gate Entry No", "Date", "Supplier Name", "Invoice No", "Invoice Value", "Truck No", "Photos", "MRR Status", "Action"].map((heading) => (
                 <th key={heading} className="whitespace-nowrap border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">
                   {heading}
                 </th>
@@ -76,14 +72,14 @@ export function GateEntryMaster() {
             </tr>
           </thead>
           <tbody>
-            {filteredEntries.length === 0 ? (
+            {pendingEntries.length === 0 ? (
               <tr>
-                  <td colSpan={10} className="border border-black px-6 py-10 text-center font-medium text-black">
-                    No gate entries found.
-                  </td>
-                </tr>
+                <td colSpan={9} className="border border-black px-6 py-10 text-center font-medium text-black">
+                  No pending MRR gate entries found.
+                </td>
+              </tr>
             ) : (
-              filteredEntries.map((entry) => (
+              pendingEntries.map((entry) => (
                 <tr key={entry.id} className="hover:bg-slate-50">
                   <td className="border border-black px-4 py-3 text-sm font-semibold text-black">{entry.gateEntryNo || "Syncing..."}</td>
                   <td className="border border-black px-4 py-3 text-sm text-black">{entry.date}</td>
@@ -91,9 +87,8 @@ export function GateEntryMaster() {
                   <td className="border border-black px-4 py-3 text-sm text-black">{entry.invoiceNo}</td>
                   <td className="border border-black px-4 py-3 text-sm text-black">{Number(entry.invoiceValue || 0).toFixed(2)}</td>
                   <td className="border border-black px-4 py-3 text-sm text-black">{entry.truckNo}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{entry.mrrNo || "-"}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{entry.mrrDate || "-"}</td>
                   <td className="border border-black px-4 py-3 text-sm text-black">{getPhotoCount(entry.id)} Photos</td>
+                  <td className="border border-black px-4 py-3 text-sm text-amber-700">Pending</td>
                   <td className="border border-black px-4 py-3 text-right">
                     <button
                       type="button"
@@ -123,9 +118,9 @@ export function GateEntryMaster() {
               <button
                 type="button"
                 onClick={() => setSelectedEntryId(null)}
-                className="rounded-full border border-slate-300 p-2 text-slate-700 transition hover:bg-slate-100"
+                className="rounded-full border border-slate-300 px-3 py-2 text-slate-700 transition hover:bg-slate-100"
               >
-                <X size={18} />
+                Close
               </button>
             </div>
 
@@ -135,6 +130,8 @@ export function GateEntryMaster() {
               <InfoCard label="Invoice No" value={selectedEntry.invoiceNo} />
               <InfoCard label="Invoice Value" value={Number(selectedEntry.invoiceValue || 0).toFixed(2)} />
               <InfoCard label="Truck No" value={selectedEntry.truckNo} />
+              <InfoCard label="MRR No" value={selectedEntry.mrrNo || "Pending"} />
+              <InfoCard label="MRR Date" value={selectedEntry.mrrDate || "Pending"} />
               <InfoCard label="Photos" value={`${selectedPhotos.length}`} />
             </div>
 

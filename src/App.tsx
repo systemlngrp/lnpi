@@ -17,6 +17,7 @@ import { PurchaseOrderCreate } from "./pages/PurchaseOrderCreate";
 import { PurchaseOrderAll, PurchaseOrderApproved, PurchaseOrderPendingApproval, PurchaseOrderRejected } from "./pages/PurchaseOrderList";
 import { GateEntryForm } from "./pages/GateEntryForm";
 import { GateEntryMaster } from "./pages/GateEntryMaster";
+import { PendingMrr } from "./pages/PendingMrr";
 import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
 import { ColorMasters } from "./pages/ColorMasters";
@@ -124,6 +125,9 @@ export default function App() {
           {/* Gate Entry */}
           <Route path="gate-entry/form" element={<GateEntryForm />} />
           <Route path="gate-entry/master" element={<GateEntryMaster />} />
+
+          {/* Material Receipt */}
+          <Route path="material-receipt/pending-mrr" element={<PendingMrr />} />
 
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />

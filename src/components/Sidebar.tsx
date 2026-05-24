@@ -23,7 +23,7 @@ import {
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest, Indent, IndentLine, PurchaseOrder } from "../types";
+import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest, Indent, IndentLine, PurchaseOrder, GateEntry } from "../types";
 import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { withIndentTotals } from "../lib/indentTotals";
@@ -43,6 +43,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [indents] = useData<Indent>("indents", []);
   const [indentLines] = useData<IndentLine>("indent-lines", []);
   const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
+  const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -72,6 +73,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/purchase-orders/pending-approval": purchaseOrders.filter(po => po.status === "Pending Approval").length,
     "/purchase-orders/approved": purchaseOrders.filter(po => po.status === "Approved").length,
     "/purchase-orders/rejected": purchaseOrders.filter(po => po.status === "Rejected").length,
+    "/material-receipt/pending-mrr": gateEntries.filter(entry => !(entry.mrrId || "").trim() && !(entry.mrrNo || "").trim() && !(entry.mrrDate || "").trim()).length,
     "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
     "/consumption/pending-ph": consumptions.filter(c => isPendingPH(c.status)).length,
     "/consumption/pending-tally": consumptions.filter(c => c.status === "Pending Tally").length,
@@ -190,6 +192,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       items: [
         { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
         { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
+      ],
+    },
+    {
+      section: "Material Receipt",
+      color: "bg-fuchsia-700",
+      items: [
+        { name: "Pending MRR", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
       ],
     },
     {
