@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { Eye } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { GateEntry, GateEntryPhoto, Supplier } from "../types";
+import { useNavigate } from "react-router-dom";
 
 function hasMaterialReceipt(entry: GateEntry) {
   return Boolean((entry.mrrId || "").trim() || (entry.mrrNo || "").trim() || (entry.mrrDate || "").trim());
 }
 
 export function PendingMrr() {
+  const navigate = useNavigate();
   const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const [gateEntryPhotos] = useData<GateEntryPhoto>("gate-entry-photos", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
@@ -90,13 +92,22 @@ export function PendingMrr() {
                   <td className="border border-black px-4 py-3 text-sm text-black">{getPhotoCount(entry.id)} Photos</td>
                   <td className="border border-black px-4 py-3 text-sm text-amber-700">Pending</td>
                   <td className="border border-black px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedEntryId(entry.id)}
-                      className="inline-flex items-center gap-2 rounded border border-black px-3 py-2 text-sm font-semibold text-black transition hover:bg-slate-100"
-                    >
-                      <Eye size={15} /> View
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/material-in/form?gateEntryId=${entry.id}`)}
+                        className="inline-flex items-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
+                      >
+                        Create MRR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEntryId(entry.id)}
+                        className="inline-flex items-center gap-2 rounded border border-black px-3 py-2 text-sm font-semibold text-black transition hover:bg-slate-100"
+                      >
+                        <Eye size={15} /> View
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

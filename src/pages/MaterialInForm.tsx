@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, MaterialLine, Item } from "../types";
+import { GateEntry, MaterialIn, MaterialLine, Item, Supplier } from "../types";
 import { Plus, Trash2 } from "lucide-react";
 import { generateTransactionNo } from "../lib/serial";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export function MaterialInForm() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
+  const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
   const [items] = useData<Item>("items", []);
-  const [suppliers] = useData<{ id: string; name: string }>("suppliers", []);
+  const [suppliers] = useData<Supplier>("suppliers", []);
   
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [invoiceNo, setInvoiceNo] = useState("");
@@ -22,11 +26,25 @@ export function MaterialInForm() {
   const [currentRate, setCurrentRate] = useState<number | "">("");
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const gateEntryId = searchParams.get("gateEntryId") || "";
+  const linkedGateEntry = useMemo(
+    () => gateEntries.find((entry) => entry.id === gateEntryId),
+    [gateEntries, gateEntryId]
+  );
+  const linkedSupplierName = suppliers.find((supplier) => supplier.id === supplierId)?.name || "";
 
   const totalAmount = lines.reduce((sum, line) => sum + line.value, 0);
 
   const itemOptions = items.map(i => ({ value: i.id, label: i.name }));
   const supplierOptions = suppliers.map(s => ({ value: s.id, label: s.name }));
+
+  useEffect(() => {
+    if (!linkedGateEntry) return;
+    setDate(linkedGateEntry.date || new Date().toISOString().split("T")[0]);
+    setInvoiceNo(linkedGateEntry.invoiceNo || "");
+    setInvDate(linkedGateEntry.date || "");
+    setSupplierId(linkedGateEntry.supplierId || "");
+  }, [linkedGateEntry]);
 
   const handleAddLine = () => {
     if (!currentItemId || currentQty === "" || currentQty <= 0 || currentRate === "" || currentRate <= 0) return;
@@ -59,12 +77,15 @@ export function MaterialInForm() {
     setIsSubmitting(true);
     try {
       let transactionNo = "";
+      const materialInId = crypto.randomUUID();
       await setMaterialIn(prev => {
         transactionNo = generateTransactionNo("MI", prev, date);
 
         const newEntry: MaterialIn = {
-          id: crypto.randomUUID(),
+          id: materialInId,
           transactionNo,
+          gateEntryId: linkedGateEntry?.id,
+          gateEntryNo: linkedGateEntry?.gateEntryNo,
           timestamp: new Date().toISOString(),
           entryEmailId: "system@lngrp.in",
           date,
@@ -78,12 +99,31 @@ export function MaterialInForm() {
 
         return [...prev, newEntry];
       });
+
+      if (linkedGateEntry) {
+        await setGateEntries(
+          gateEntries.map((entry) =>
+            entry.id === linkedGateEntry.id
+              ? {
+                  ...entry,
+                  mrrId: materialInId,
+                  mrrDate: date,
+                  mrrNo: transactionNo,
+                  updateTimestamp: new Date().toISOString(),
+                }
+              : entry
+          )
+        );
+      }
       
       setInvoiceNo("");
       setInvDate("");
       setSupplierId("");
       setLines([]);
       alert(`Material In created with Transaction No: ${transactionNo}`);
+      if (linkedGateEntry) {
+        navigate("/material-receipt/pending-mrr");
+      }
     } catch (err) {
       console.error("Failed to save Material In:", err);
     } finally {
@@ -95,6 +135,37 @@ export function MaterialInForm() {
     <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
       <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">Material In Form</h2>
       <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
+        {linkedGateEntry ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded border border-emerald-700 bg-emerald-50 p-4">
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black text-sm">Gate Entry No</label>
+              <input
+                type="text"
+                value={linkedGateEntry.gateEntryNo || "Syncing..."}
+                disabled
+                className="border-2 border-emerald-700 rounded p-2 text-black bg-white font-semibold"
+              />
+            </div>
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black text-sm">Supplier</label>
+              <input
+                type="text"
+                value={linkedSupplierName}
+                disabled
+                className="border-2 border-emerald-700 rounded p-2 text-black bg-white font-semibold"
+              />
+            </div>
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black text-sm">Truck No</label>
+              <input
+                type="text"
+                value={linkedGateEntry.truckNo || ""}
+                disabled
+                className="border-2 border-emerald-700 rounded p-2 text-black bg-white font-semibold"
+              />
+            </div>
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">
@@ -147,13 +218,22 @@ export function MaterialInForm() {
               <label className="font-bold text-black">
                 Supplier Name <span className="text-red-500">*</span>
               </label>
-              <Select 
-                 options={supplierOptions}
-                 value={supplierId}
-                 onChange={setSupplierId}
-                 required
-                 placeholder="Select Supplier..."
-              />
+              {linkedGateEntry ? (
+                <input
+                  type="text"
+                  value={linkedSupplierName}
+                  disabled
+                  className="border-2 border-black rounded p-2 text-black bg-slate-50 w-full font-semibold opacity-80"
+                />
+              ) : (
+                <Select 
+                   options={supplierOptions}
+                   value={supplierId}
+                   onChange={setSupplierId}
+                   required
+                   placeholder="Select Supplier..."
+                />
+              )}
             </div>
         </div>
         

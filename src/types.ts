@@ -285,6 +285,8 @@ export interface OrderSchedule {
 export interface MaterialIn {
   id: string;
   transactionNo: string;
+  gateEntryId?: string;
+  gateEntryNo?: string;
   timestamp: string;
   entryEmailId: string;
   date: string;

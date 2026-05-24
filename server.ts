@@ -580,6 +580,8 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`material_in\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
+          \`gateEntryId\` VARCHAR(36),
+          \`gateEntryNo\` VARCHAR(100),
           \`timestamp\` VARCHAR(255) NOT NULL,
           \`entryEmailId\` VARCHAR(255) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
@@ -918,6 +920,8 @@ async function initDb(retries = 5) {
         { table: "states", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
         { table: "color_masters", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_in", column: "gateEntryId", type: "VARCHAR(36)" },
+        { table: "material_in", column: "gateEntryNo", type: "VARCHAR(100)" },
         { table: "material_in", column: "timestamp", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "entryEmailId", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "date", type: "VARCHAR(50) NOT NULL" },

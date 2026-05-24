@@ -108,6 +108,7 @@ export function MaterialInMaster() {
             <tr className="divide-x divide-black">
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Trn No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Gate Entry No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Supplier</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Items</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Amount</th>
@@ -118,12 +119,13 @@ export function MaterialInMaster() {
           <tbody className="divide-y divide-black bg-white">
             {filteredMaterialIn.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-black font-medium italic">No material in records found.</td>
+                <td colSpan={8} className="px-6 py-8 text-center text-black font-medium italic">No material in records found.</td>
               </tr>
             ) : filteredMaterialIn.map((m) => (
                 <tr key={m.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{m.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(m.date)}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black">{m.gateEntryNo || ""}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{getSupplierName(m.supplierId)}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">
                     {getLineItemsElement(m.lines)}
