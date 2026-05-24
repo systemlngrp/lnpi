@@ -13,7 +13,6 @@ import {
   Truck,
   Users,
   BarChart3,
-  PackageOpen,
   TrendingDown,
   Activity,
   Plus,
@@ -23,10 +22,26 @@ import {
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest, Indent, IndentLine, PurchaseOrder, GateEntry } from "../types";
+import {
+  MaterialIn,
+  Production,
+  OrderSchedule,
+  DispatchPlan,
+  LoadingSlip,
+  SampleRequest,
+  Indent,
+  IndentLine,
+  PurchaseOrder,
+  GateEntry,
+  MaterialIssue,
+  MaterialIssueLine,
+  MaterialReturn,
+  MaterialReturnLine,
+} from "../types";
 import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { withIndentTotals } from "../lib/indentTotals";
+import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -38,7 +53,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
-  const [consumptions] = useData<Consumption>("consumptions", []);
+  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
+  const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [materialReturns] = useData<MaterialReturn>("material-returns", []);
+  const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [indents] = useData<Indent>("indents", []);
   const [indentLines] = useData<IndentLine>("indent-lines", []);
@@ -51,6 +69,12 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const normalizedIndents = indents.map((indent) =>
     withIndentTotals(indent, indentLines.filter((line) => line.indentId === indent.id))
   );
+  const productionUsageMap = buildProductionMaterialUsageMap(
+    materialIssues,
+    materialIssueLines,
+    materialReturns,
+    materialReturnLines
+  );
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
@@ -61,9 +85,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/material-in/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
     "/production/pending-ph": productions.filter(isProductionPendingPH).length,
     "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
-    "/production/pending-consumption": productions.filter(isProductionPendingConsumption).length,
-    "/production/pending-ffg": productions.filter(isProductionPendingFFG).length,
-    "/production/pending-tally": productions.filter(isProductionReadyForTally).length,
+    "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
+    "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
+    "/production/pending-tally": productions.filter((p) => isProductionReadyForTally(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/indent/pending": normalizedIndents.filter(i => i.status === "Pending").length,
     "/indent/approved": normalizedIndents.filter(i => i.status === "Approved").length,
     "/indent/completed": normalizedIndents.filter(i => i.status === "Completed").length,
@@ -75,8 +99,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/purchase-orders/rejected": purchaseOrders.filter(po => po.status === "Rejected").length,
     "/material-receipt/pending-mrr": gateEntries.filter(entry => !(entry.mrrId || "").trim() && !(entry.mrrNo || "").trim() && !(entry.mrrDate || "").trim()).length,
     "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
-    "/consumption/pending-ph": consumptions.filter(c => isPendingPH(c.status)).length,
-    "/consumption/pending-tally": consumptions.filter(c => c.status === "Pending Tally").length,
     "/dispatch/pending-planning": schedules.filter(s => {
       if (!s?.scheduledDate) return false;
       const today = new Date();
@@ -117,8 +139,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       return !isNaN(schedDate.getTime()) && schedDate > tomorrow && balance > 0;
     }).length,
     "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
-                  productions.filter(isProductionPendingPH).length + 
-                  consumptions.filter(c => isPendingPH(c.status)).length
+                  productions.filter(isProductionPendingPH).length
   };
 
   const navigation = [
@@ -229,7 +250,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Production Form", href: "/production/form", icon: Hammer },
         { name: "Pending Production", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
         { name: "Pending PH Approval", href: "/production/pending-ph", icon: UserCheck, countKey: "/production/pending-ph" },
-        { name: "Pending Consumption", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
+        { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
         { name: "Pending FFG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
         { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
         { name: "Production Master", href: "/production/master", icon: Database },
@@ -277,16 +298,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       items: [
         { name: "Pending Invoicing", href: "/billing/pending", icon: Receipt, countKey: "/billing/pending" },
         { name: "Billing Master", href: "/billing/master", icon: FileText },
-      ],
-    },
-    {
-      section: "Consumption",
-      color: "bg-amber-700",
-      items: [
-        { name: "Consumption Form", href: "/consumption/form", icon: PackageOpen },
-        { name: "Pending PH Approval", href: "/consumption/pending-ph", icon: UserCheck, countKey: "/consumption/pending-ph" },
-        { name: "Pending Tally Entry", href: "/consumption/pending-tally", icon: FileText, countKey: "/consumption/pending-tally" },
-        { name: "Consumption Master", href: "/consumption/master", icon: Database },
       ],
     },
     {

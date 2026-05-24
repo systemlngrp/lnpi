@@ -15,10 +15,11 @@ import { generateTransactionNo } from "../lib/serial";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 import { getReturnableReelLinesForJob } from "../lib/materialMovement";
+import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
 
 export function MaterialReturnForm() {
   const [materials] = useData<Material>("materials", []);
-  const [productions] = useData<Production>("productions", []);
+  const [productions, setProductions] = useData<Production>("productions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
@@ -201,6 +202,24 @@ export function MaterialReturnForm() {
       await setMaterialReturnLines([...materialReturnLines, ...nextLines]);
       if (nextReelLines.length > 0) {
         await setMaterialReturnReelLines([...materialReturnReelLines, ...nextReelLines]);
+      }
+      if (returnType === "Job" && productionId) {
+        const nextMaterialReturns = [entry, ...materialReturns];
+        const nextReturnLines = [...materialReturnLines, ...nextLines];
+        const usageMap = buildProductionMaterialUsageMap(
+          materialIssues,
+          materialIssueLines,
+          nextMaterialReturns,
+          nextReturnLines
+        );
+        const netUsage = usageMap.get(productionId) || 0;
+        await setProductions((prev) =>
+          prev.map((production) =>
+            production.id === productionId
+              ? syncProductionWorkflowFromUsage(production, netUsage, timestamp)
+              : production
+          )
+        );
       }
 
       setDate(new Date().toISOString().split("T")[0]);

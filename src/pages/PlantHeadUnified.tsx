@@ -1,19 +1,18 @@
 import { useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Production, Consumption, Item, Supplier, OrderSchedule } from "../types";
+import { Material, MaterialIn, Production, Item, Supplier, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, Package, Truck, Activity, TrendingDown, XCircle } from "lucide-react";
+import { CheckCircle, Package, Truck, Activity, XCircle } from "lucide-react";
 import { ExcelExport } from "../components/ExcelExport";
 import { isProductionPendingPH } from "../lib/productionStageFilters";
 
-type Tab = "material-in" | "production" | "consumption";
+type Tab = "material-in" | "production";
 
 export function PlantHeadUnified() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [productions, setProductions] = useData<Production>("productions", []);
-  const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [materials] = useData<Material>("materials", []);
   const [items] = useData<Item>("items", []);
@@ -34,7 +33,6 @@ export function PlantHeadUnified() {
   const counts = {
     "material-in": materialIn.filter(m => isPendingPH(m.status)).length,
     "production": productions.filter(isProductionPendingPH).length,
-    "consumption": consumptions.filter(c => isPendingPH(c.status)).length
   };
 
   const toggleSelectAll = (ids: string[]) => {
@@ -69,10 +67,6 @@ export function PlantHeadUnified() {
       } else if (activeTab === "production") {
         await setProductions(prev => prev.map(p => 
           selectedIds.has(p.id) ? { ...p, status: "Pending Consumption", phTimestamp: timestamp, phEmailId: email } : p
-        ));
-      } else if (activeTab === "consumption") {
-        await setConsumptions(prev => prev.map(c => 
-          selectedIds.has(c.id) ? { ...c, status: "Pending Tally", phTimestamp: timestamp, phEmailId: email } : c
         ));
       }
       setSelectedIds(new Set());
@@ -174,25 +168,6 @@ export function PlantHeadUnified() {
     }
   };
 
-  const handleApproveConsumption = async (id: string) => {
-    if (confirmId !== id) {
-      setConfirmId(id);
-      setTimeout(() => setConfirmId(null), 3000);
-      return;
-    }
-    setSubmittingId(id);
-    try {
-      await setConsumptions(prev => prev.map(c => 
-        c.id === id ? { ...c, status: "Pending Tally", phTimestamp: new Date().toISOString(), phEmailId: "ph@lngrp.in" } : c
-      ));
-    } catch (err) {
-      console.error("Approval error:", err);
-    } finally {
-      setSubmittingId(null);
-      setConfirmId(null);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className={cn("flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4 transition-opacity", (isBulkApproving || submittingId) && "opacity-50 pointer-events-none")}>
@@ -211,13 +186,6 @@ export function PlantHeadUnified() {
             label="Production"
             count={counts["production"]}
             icon={<Activity size={14} />}
-          />
-          <TabButton 
-            active={activeTab === "consumption"} 
-            onClick={() => { setActiveTab("consumption"); setSelectedIds(new Set()); }}
-            label="Consumption"
-            count={counts["consumption"]}
-            icon={<TrendingDown size={14} />}
           />
         </div>
       </div>
@@ -482,95 +450,6 @@ export function PlantHeadUnified() {
           </div>
         )}
 
-        {activeTab === "consumption" && (
-          <div className="p-0 overflow-x-auto">
-            <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
-              <span className="font-bold text-sm uppercase text-slate-600">Pending Consumption ({counts["consumption"]})</span>
-              <ExcelExport data={consumptions.filter(c => c.status === "Pending PH")} fileName="Pending_PH_Consumption" />
-            </div>
-            
-            {/* Mobile View - Cards */}
-            <div className="block md:hidden space-y-4 p-2">
-                {consumptions.filter(c => isPendingPH(c.status)).sort((a, b) => {
-                    const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
-                    const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
-                    return timeB - timeA;
-                }).map(c => (
-                    <div key={c.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
-                        <div className="flex justify-between items-center">
-                            <input 
-                              type="checkbox" 
-                              className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                              checked={selectedIds.has(c.id)}
-                              onChange={() => toggleSelect(c.id)}
-                            />
-                            <div className="font-bold text-sm">{c.transactionNo}</div>
-                        </div>
-                        <div className="text-sm font-bold">{items.find(it => it.id === c.itemId)?.name}</div>
-                        <div className="text-sm">{c.qty} {c.uom}</div>
-                        <ApproveButton 
-                            confirming={confirmId === c.id} 
-                            submitting={submittingId === c.id} 
-                            onClick={() => handleApproveConsumption(c.id)} 
-                        />
-                    </div>
-                ))}
-            </div>
-
-            <table className="hidden md:table min-w-full divide-y divide-black">
-              <thead className="bg-slate-50 border-b border-black">
-                <tr className="divide-x divide-black">
-                  <th className="px-4 py-2 w-10">
-                    <input 
-                      type="checkbox" 
-                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                      checked={counts["consumption"] > 0 && selectedIds.size === counts["consumption"]}
-                      onChange={() => toggleSelectAll(consumptions.filter(c => isPendingPH(c.status)).map(c => c.id))}
-                    />
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Item</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">UOM</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black">
-                {consumptions
-                  .filter(c => isPendingPH(c.status))
-                  .sort((a, b) => {
-                    const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
-                    const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
-                    return timeB - timeA;
-                  })
-                  .map(c => (
-                  <tr key={c.id} className={cn("divide-x divide-black hover:bg-slate-50", selectedIds.has(c.id) && "bg-amber-50/50")}>
-                    <td className="px-4 py-2 w-10 text-center">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                        checked={selectedIds.has(c.id)}
-                        onChange={() => toggleSelect(c.id)}
-                      />
-                    </td>
-                    <td className="px-4 py-2 text-sm font-medium">{c.transactionNo}</td>
-                    <td className="px-4 py-2 text-sm">{items.find(it => it.id === c.itemId)?.name}</td>
-                    <td className="px-4 py-2 text-sm text-right font-bold">{c.qty}</td>
-                    <td className="px-4 py-2 text-sm">{c.uom}</td>
-                    <td className="px-4 py-2 text-right">
-                      <ApproveButton 
-                        confirming={confirmId === c.id} 
-                        submitting={submittingId === c.id} 
-                        onClick={() => handleApproveConsumption(c.id)} 
-                      />
-                    </td>
-                  </tr>
-                ))}
-                {counts["consumption"] === 0 && <NoPendingRows colSpan={6} />}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );

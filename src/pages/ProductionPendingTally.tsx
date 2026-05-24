@@ -1,18 +1,24 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item } from "../types";
+import { MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Production, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { CheckCircle, Search, Download } from "lucide-react";
 import { cn } from "../lib/utils";
+import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 import { isProductionReadyForTally } from "../lib/productionStageFilters";
 
 export function ProductionPendingTally() {
   const [productions, setProductions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
+  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
+  const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [materialReturns] = useData<MaterialReturn>("material-returns", []);
+  const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const usageMap = buildProductionMaterialUsageMap(materialIssues, materialIssueLines, materialReturns, materialReturnLines);
 
   const handleComplete = (id: string) => {
     if (confirmId !== id) {
@@ -38,7 +44,7 @@ export function ProductionPendingTally() {
   };
 
   const pendingList = productions.filter(p => 
-    isProductionReadyForTally(p) && (
+    isProductionReadyForTally(p, getProductionActualPaperUsed(p, usageMap)) && (
       p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (items.find(i => i.id === p.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
     )

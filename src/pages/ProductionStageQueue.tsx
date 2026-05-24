@@ -1,9 +1,20 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
-import { Company, Item, Order, OrderSchedule, Production } from "../types";
+import {
+  Company,
+  Item,
+  MaterialIssue,
+  MaterialIssueLine,
+  MaterialReturn,
+  MaterialReturnLine,
+  Order,
+  OrderSchedule,
+  Production,
+} from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
+import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
 
 type QueueMode = "consumption" | "ffg";
@@ -24,34 +35,42 @@ export function ProductionStageQueue({
   emptyMessage,
   predicate,
   enableFfgEditing = false,
-  enableConsumptionAction = false,
+  enableIssueAction = false,
 }: {
   title: string;
   emptyMessage: string;
-  predicate: (production: Production) => boolean;
+  predicate: (production: Production, actualPaperUsed: number) => boolean;
   enableFfgEditing?: boolean;
-  enableConsumptionAction?: boolean;
+  enableIssueAction?: boolean;
 }) {
   const navigate = useNavigate();
   const [productions, setProductions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
+  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
+  const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [materialReturns] = useData<MaterialReturn>("material-returns", []);
+  const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [searchTerm, setSearchTerm] = useState("");
   const [ffgValues, setFfgValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const usageMap = useMemo(
+    () => buildProductionMaterialUsageMap(materialIssues, materialIssueLines, materialReturns, materialReturnLines),
+    [materialIssueLines, materialIssues, materialReturnLines, materialReturns]
+  );
 
   const rows = useMemo(() => {
     const lowered = searchTerm.toLowerCase();
     return productions
-      .filter(predicate)
+      .filter((production) => predicate(production, getProductionActualPaperUsed(production, usageMap)))
       .map((production) => {
         const schedule = schedules.find((row) => row.id === production.scheduleId);
         const order = orders.find((row) => row.id === schedule?.orderId);
         const item = items.find((row) => row.id === production.itemId);
         const company = companies.find((row) => row.id === order?.companyId);
-        return { production, order, item, company };
+        return { production, order, item, company, actualPaperUsed: getProductionActualPaperUsed(production, usageMap) };
       })
       .filter(({ production, order, item, company }) => {
         if (!lowered) return true;
@@ -68,7 +87,7 @@ export function ProductionStageQueue({
         const timeB = new Date(b.production.updateTimestamp || b.production.date || 0).getTime();
         return timeB - timeA;
       });
-  }, [companies, items, orders, predicate, productions, schedules, searchTerm]);
+  }, [companies, items, orders, predicate, productions, schedules, searchTerm, usageMap]);
 
   const handleSaveFfg = async (productionId: string) => {
     const rawValue = ffgValues[productionId];
@@ -124,16 +143,16 @@ export function ProductionStageQueue({
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prod (FFG)</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
                 {enableFfgEditing ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Update</th> : null}
-                {enableConsumptionAction ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th> : null}
+                {enableIssueAction ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10 + (enableFfgEditing ? 1 : 0) + (enableConsumptionAction ? 1 : 0)} className="px-6 py-8 text-center text-black font-medium">{emptyMessage}</td>
+                  <td colSpan={10 + (enableFfgEditing ? 1 : 0) + (enableIssueAction ? 1 : 0)} className="px-6 py-8 text-center text-black font-medium">{emptyMessage}</td>
                 </tr>
               ) : (
-                rows.map(({ production, order, item, company }) => (
+                rows.map(({ production, order, item, company, actualPaperUsed }) => (
                   <tr key={production.id} className="hover:bg-slate-50 divide-x divide-black">
                     <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{production.transactionNo}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(production.date)}</td>
@@ -142,7 +161,7 @@ export function ProductionStageQueue({
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black">{item?.name || "Unknown"}</td>
                     <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{production.qty} {production.uom}</td>
-                    <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{production.actualPaperUsed || "-"}</td>
+                    <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{actualPaperUsed > 0 ? actualPaperUsed : "-"}</td>
                     <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{production.prodFromFFG || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{production.status}</td>
                     {enableFfgEditing ? (
@@ -168,14 +187,14 @@ export function ProductionStageQueue({
                         </div>
                       </td>
                     ) : null}
-                    {enableConsumptionAction ? (
+                    {enableIssueAction ? (
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={() => navigate(`/consumption/form?productionId=${production.id}`)}
+                          onClick={() => navigate(`/material-movement/issue?productionId=${production.id}`)}
                           className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
                         >
-                          Create Consumption
+                          Issue Material
                         </button>
                       </td>
                     ) : null}
@@ -193,10 +212,10 @@ export function ProductionStageQueue({
 export function ProductionPendingConsumption() {
   return (
     <ProductionStageQueue
-      title={CONFIG.consumption.title}
-      emptyMessage={CONFIG.consumption.empty}
+      title="Production: Pending Material Issue"
+      emptyMessage="No jobs pending material issue."
       predicate={isProductionPendingConsumption}
-      enableConsumptionAction
+      enableIssueAction
     />
   );
 }

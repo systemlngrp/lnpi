@@ -12,9 +12,10 @@ import {
 } from "recharts";
 import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Consumption, Item, Material, MaterialIn, Production } from "../types";
+import { Item, Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Production } from "../types";
 import { formatNumber } from "../lib/utils";
 import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
+import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 
 type Range = {
   from: string;
@@ -24,7 +25,10 @@ type Range = {
 export function Dashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
-  const [consumptions] = useData<Consumption>("consumptions", []);
+  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
+  const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [materialReturns] = useData<MaterialReturn>("material-returns", []);
+  const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [items] = useData<Item>("items", []);
   const [materials] = useData<Material>("materials", []);
 
@@ -104,25 +108,25 @@ export function Dashboard() {
 
   const filteredMaterialIn = materialIn.filter((entry) => isWithinSelectedRange(entry.date));
   const filteredProductions = productions.filter((entry) => isWithinSelectedRange(entry.date));
-  const filteredConsumptions = consumptions.filter((entry) => isWithinSelectedRange(entry.date));
+  const filteredMaterialIssues = materialIssues.filter((entry) => isWithinSelectedRange(entry.date));
+  const filteredMaterialReturns = materialReturns.filter((entry) => isWithinSelectedRange(entry.date));
+  const productionUsageMap = buildProductionMaterialUsageMap(filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines);
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
   const materialInCount = filteredMaterialIn.length;
   const productionCount = filteredProductions.length;
-  const consumptionCount = filteredConsumptions.length;
+  const materialIssueCount = filteredMaterialIssues.length;
 
   const pendingPH =
     filteredMaterialIn.filter((entry) => isPendingPH(entry.status)).length +
-    filteredProductions.filter((entry) => isProductionPendingPH(entry)).length +
-    filteredConsumptions.filter((entry) => isPendingPH(entry.status)).length;
+    filteredProductions.filter((entry) => isProductionPendingPH(entry)).length;
 
   const pendingAccounts = filteredMaterialIn.filter((entry) => entry.status === "Pending Accounts").length;
   const pendingMD = filteredMaterialIn.filter((entry) => entry.status === "Pending MD").length;
 
   const tallyMatIn = filteredMaterialIn.filter((entry) => entry.status === "Pending Tally").length;
-  const tallyProd = filteredProductions.filter((entry) => isProductionReadyForTally(entry)).length;
-  const tallyCons = filteredConsumptions.filter((entry) => entry.status === "Pending Tally").length;
+  const tallyProd = filteredProductions.filter((entry) => isProductionReadyForTally(entry, getProductionActualPaperUsed(entry, productionUsageMap))).length;
 
   const hourlyTotals = filteredProductions.reduce<Record<string, number>>((acc, entry) => {
     const timestamp = parseTimestamp(entry.updateTimestamp || entry.date);
@@ -141,15 +145,15 @@ export function Dashboard() {
     : []
   );
 
-  const getTopItems = (data: Array<Production | Consumption | MaterialIn>, type: "prod" | "cons" | "pur") => {
+  const getTopItems = (data: Array<Production | MaterialIn>, type: "prod" | "pur") => {
     const stats: Record<string, number> = {};
 
     data.forEach((entry) => {
-      const targetId = type === "pur" ? (entry as MaterialIn).lines?.[0]?.itemId : (entry as Production | Consumption).itemId;
+      const targetId = type === "pur" ? (entry as MaterialIn).lines?.[0]?.itemId : (entry as Production).itemId;
       if (!targetId) return;
 
       const itemName = materials.find((item) => item.id === targetId)?.name || items.find((item) => item.id === targetId)?.name || "Unknown Item";
-      const amount = type === "pur" ? Number((entry as MaterialIn).totalAmount || 0) : Number((entry as Production | Consumption).qty || 0);
+      const amount = type === "pur" ? Number((entry as MaterialIn).totalAmount || 0) : Number((entry as Production).qty || 0);
       stats[itemName] = (stats[itemName] || 0) + amount;
     });
 
@@ -162,8 +166,24 @@ export function Dashboard() {
   };
 
   const topProduced = getTopItems(filteredProductions, "prod");
-  const topConsumed = getTopItems(filteredConsumptions, "cons");
   const topPurchased = getTopItems(filteredMaterialIn, "pur");
+  const topIssued = Object.entries(
+    filteredMaterialIssues.reduce<Record<string, number>>((acc, issue) => {
+      materialIssueLines
+        .filter((line) => line.materialIssueId === issue.id)
+        .forEach((line) => {
+          const itemName = materials.find((item) => item.id === line.materialId)?.name || "Unknown Material";
+          acc[itemName] = (acc[itemName] || 0) + Number(line.qty || 0);
+        });
+      return acc;
+    }, {})
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+  const topIssuedData = topIssued.map(([name, value]) => ({
+    name,
+    percentage: Math.round((value / (topIssued[0]?.[1] || 1)) * 100),
+  }));
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fffdf5_0%,#eef6ff_45%,#f6f0ff_100%)] text-black font-sans p-4 md:p-8 space-y-8">
@@ -180,7 +200,7 @@ export function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <KpiCard title="Material In" value={formatNumber(materialInCount)} accent="from-[#ffd54f] to-[#ffb300]" />
         <KpiCard title="Production" value={formatNumber(productionCount)} accent="from-[#4dd0e1] to-[#0288d1]" />
-        <KpiCard title="Consumption" value={formatNumber(consumptionCount)} accent="from-[#ff8a80] to-[#e53935]" />
+        <KpiCard title="Material Issues" value={formatNumber(materialIssueCount)} accent="from-[#ff8a80] to-[#e53935]" />
         <KpiCard title="Pending Approvals" value={formatNumber(pendingPH + pendingAccounts + pendingMD)} accent="from-[#c5e1a5] to-[#7cb342]" />
       </div>
 
@@ -214,7 +234,7 @@ export function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <TallyCard label="Material In" count={tallyMatIn} tone="bg-[#ffe0b2]" />
           <TallyCard label="Production" count={tallyProd} tone="bg-[#d1f2eb]" />
-          <TallyCard label="Consumption" count={tallyCons} tone="bg-[#f8bbd0]" />
+          <TallyCard label="Material Issues" count={materialIssueCount} tone="bg-[#f8bbd0]" />
         </div>
       </section>
 
@@ -268,7 +288,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
         <RankList title="Top Produced" items={topProduced} tone="bg-[#fff8e1]" />
-        <RankList title="Top Consumed" items={topConsumed} tone="bg-[#e8f5e9]" />
+        <RankList title="Top Issued" items={topIssuedData} tone="bg-[#e8f5e9]" />
         <RankList title="Top Purchased" items={topPurchased} tone="bg-[#fce4ec]" />
       </div>
     </div>

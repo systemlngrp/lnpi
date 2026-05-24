@@ -48,10 +48,6 @@ import { SampleForm } from "./pages/SampleForm";
 import { PendingSamples } from "./pages/PendingSamples";
 import { SamplesProduced } from "./pages/SamplesProduced";
 import { SampleMaster } from "./pages/SampleMaster";
-import { ConsumptionForm } from "./pages/ConsumptionForm";
-import { ConsumptionPendingPH } from "./pages/ConsumptionPendingPH";
-import { ConsumptionPendingTally } from "./pages/ConsumptionPendingTally";
-import { ConsumptionMaster } from "./pages/ConsumptionMaster";
 import { Users } from "./pages/Users";
 import { Dashboard } from "./pages/Dashboard";
 import { DeliveryBook } from "./pages/DeliveryBook";
@@ -172,12 +168,6 @@ export default function App() {
           <Route path="samples/pending" element={<PendingSamples />} />
           <Route path="samples/produced" element={<SamplesProduced />} />
           <Route path="samples/master" element={<SampleMaster />} />
-          
-          {/* Consumption */}
-          <Route path="consumption/form" element={<ConsumptionForm />} />
-          <Route path="consumption/pending-ph" element={<ConsumptionPendingPH />} />
-          <Route path="consumption/pending-tally" element={<ConsumptionPendingTally />} />
-          <Route path="consumption/master" element={<ConsumptionMaster />} />
           
           {/* Dispatch */}
           <Route path="dispatch/pending-planning" element={<PendingDispatchPlanning />} />

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
@@ -9,6 +10,7 @@ import {
   MaterialIssueLine,
   MaterialIssueReelLine,
   MaterialReturnLine,
+  MaterialReturn,
   MaterialReturnReelLine,
   Production,
 } from "../types";
@@ -16,21 +18,25 @@ import { generateTransactionNo } from "../lib/serial";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 import { getAvailableReelPackingSlips, getNonReelAvailableQty } from "../lib/materialMovement";
+import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
 
 export function MaterialIssueForm() {
+  const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
-  const [productions] = useData<Production>("productions", []);
+  const [productions, setProductions] = useData<Production>("productions", []);
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines, setMaterialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materialIssueReelLines, setMaterialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
+  const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
 
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [issueType, setIssueType] = useState<"Job" | "General">("General");
-  const [productionId, setProductionId] = useState("");
+  const requestedProductionId = searchParams.get("productionId") || "";
+  const [issueType, setIssueType] = useState<"Job" | "General">(requestedProductionId ? "Job" : "General");
+  const [productionId, setProductionId] = useState(requestedProductionId);
   const [remarks, setRemarks] = useState("");
   const [currentMaterialId, setCurrentMaterialId] = useState("");
   const [currentQty, setCurrentQty] = useState<number | "">("");
@@ -212,10 +218,28 @@ export function MaterialIssueForm() {
       if (nextReelLines.length > 0) {
         await setMaterialIssueReelLines([...materialIssueReelLines, ...nextReelLines]);
       }
+      if (issueType === "Job" && productionId) {
+        const nextMaterialIssues = [issue, ...materialIssues];
+        const nextIssueLines = [...materialIssueLines, ...nextLines];
+        const usageMap = buildProductionMaterialUsageMap(
+          nextMaterialIssues,
+          nextIssueLines,
+          materialReturns,
+          materialReturnLines
+        );
+        const netUsage = usageMap.get(productionId) || 0;
+        await setProductions((prev) =>
+          prev.map((production) =>
+            production.id === productionId
+              ? syncProductionWorkflowFromUsage(production, netUsage, timestamp)
+              : production
+          )
+        );
+      }
 
       setDate(new Date().toISOString().split("T")[0]);
-      setIssueType("General");
-      setProductionId("");
+      setIssueType(requestedProductionId ? "Job" : "General");
+      setProductionId(requestedProductionId);
       setRemarks("");
       setCurrentMaterialId("");
       setCurrentQty("");
