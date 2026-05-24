@@ -71,6 +71,7 @@ import { PlansItems } from "./pages/PlansItems";
 import { PlansProduction } from "./pages/PlansProduction";
 import { SettingsPage } from "./pages/Settings";
 import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
+import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -184,6 +185,7 @@ export default function App() {
 
           {/* Reports */}
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
+          <Route path="reports/reelwise-stock" element={<ReelwiseStockReport />} />
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />

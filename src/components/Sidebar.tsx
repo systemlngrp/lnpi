@@ -305,6 +305,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       color: "bg-sky-700",
       items: [
         { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
+        { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
       ],
     },
     {

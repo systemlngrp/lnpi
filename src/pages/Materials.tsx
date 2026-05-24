@@ -35,6 +35,11 @@ function getReelDisplayName(erpCode: string | number, size: number, uom: string,
   return `${erpCode} - Size: ${size} ${uom} X GSM: ${gsm} X BF: ${bf}`;
 }
 
+function getRapcValue(size?: number) {
+  const numericSize = Number(size || 0);
+  return numericSize > 0 ? numericSize * 10 : 0;
+}
+
 function getNextNumericErpCode(materials: Material[]) {
   const numericValues = materials
     .map((material) => Number(material.erpCode))
@@ -307,6 +312,7 @@ export function Materials() {
       "Opening Qty": material.openingQty ?? "",
       "Opening Rate": material.openingRate ?? "",
       "Opening Value": material.openingValue ?? "",
+      RAPC: material.type === "Reel" ? getRapcValue(material.size) : "",
       Unit: material.uom || "",
       Active: material.active || "Yes",
     }));
@@ -528,6 +534,14 @@ export function Materials() {
                   className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 />
               </div>
+              <div className="space-y-2">
+                <label className="text-blue-700 font-bold">RAPC</label>
+                <input
+                  value={formData.type === "Reel" ? String(getRapcValue(Number(formData.size || 0)) || "") : ""}
+                  readOnly
+                  className="w-full rounded border-2 border-black bg-slate-100 px-4 py-3 text-black focus:outline-none"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -632,7 +646,7 @@ export function Materials() {
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening Qty", "Opening Rate", "Opening Value", "Unit", "Active", "Action"].map((heading) => (
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening Qty", "Opening Rate", "Opening Value", "RAPC", "Unit", "Active", "Action"].map((heading) => (
                       <th key={heading} className="px-4 py-4 text-left text-sm font-bold border-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
@@ -642,7 +656,7 @@ export function Materials() {
                 <tbody>
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                      <td colSpan={14} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                         No materials found.
                       </td>
                     </tr>
@@ -659,6 +673,7 @@ export function Materials() {
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingQty ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingRate ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingValue ?? ""}</td>
+                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.type === "Reel" ? getRapcValue(material.size) : ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.uom || ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.active || "Yes"}</td>
                         <td className="px-4 py-4 border-2 border-black">
