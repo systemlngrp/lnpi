@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, Item, Supplier, OrderSchedule } from "../types";
+import { Material, MaterialIn, Production, Consumption, Item, Supplier, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
@@ -15,6 +15,7 @@ export function PlantHeadUnified() {
   const [productions, setProductions] = useData<Production>("productions", []);
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [materials] = useData<Material>("materials", []);
   const [items] = useData<Item>("items", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
 
@@ -263,7 +264,7 @@ export function PlantHeadUnified() {
                             <div className="font-bold text-sm">{m.transactionNo}</div>
                         </div>
                         <div className="text-sm font-bold">{suppliers.find(s => s.id === m.supplierId)?.name || m.supplierId}</div>
-                        <div className="text-xs text-slate-600">{m.lines.map((l, i) => `${items.find(it => it.id === l.itemId)?.name} [${l.qty}]`).join(', ')}</div>
+                        <div className="text-xs text-slate-600">{m.lines.map((l) => `${materials.find(it => it.id === l.itemId)?.name || items.find(it => it.id === l.itemId)?.name || "Unknown"} [${l.qty}]`).join(', ')}</div>
                         <div className="font-bold text-right text-lg">₹{m.totalAmount.toLocaleString()}</div>
                         <ApproveButton 
                             confirming={confirmId === m.id} 
@@ -315,7 +316,7 @@ export function PlantHeadUnified() {
                     <td className="px-4 py-2 text-sm">
                       <ul className="text-xs space-y-1">
                         {m.lines.map((l, i) => (
-                          <li key={i}>{items.find(it => it.id === l.itemId)?.name} [{l.qty}]</li>
+                          <li key={i}>{materials.find(it => it.id === l.itemId)?.name || items.find(it => it.id === l.itemId)?.name || "Unknown"} [{l.qty}]</li>
                         ))}
                       </ul>
                     </td>

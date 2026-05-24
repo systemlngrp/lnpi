@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Consumption, Item, MaterialIn, Production } from "../types";
+import { Consumption, Item, Material, MaterialIn, Production } from "../types";
 import { formatNumber } from "../lib/utils";
 import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 
@@ -26,6 +26,7 @@ export function Dashboard() {
   const [productions] = useData<Production>("productions", []);
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [items] = useData<Item>("items", []);
+  const [materials] = useData<Material>("materials", []);
 
   const today = getLocalDateInputValue(new Date());
   const [dateRange, setDateRange] = useState<Range>({ from: today, to: today });
@@ -147,7 +148,7 @@ export function Dashboard() {
       const targetId = type === "pur" ? (entry as MaterialIn).lines?.[0]?.itemId : (entry as Production | Consumption).itemId;
       if (!targetId) return;
 
-      const itemName = items.find((item) => item.id === targetId)?.name || "Unknown Item";
+      const itemName = materials.find((item) => item.id === targetId)?.name || items.find((item) => item.id === targetId)?.name || "Unknown Item";
       const amount = type === "pur" ? Number((entry as MaterialIn).totalAmount || 0) : Number((entry as Production | Consumption).qty || 0);
       stats[itemName] = (stats[itemName] || 0) + amount;
     });

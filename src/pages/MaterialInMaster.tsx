@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Item, Supplier } from "../types";
+import { Material, MaterialIn, Item, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { Trash2, Search } from "lucide-react";
 import { ExcelExport } from "../components/ExcelExport";
 
 export function MaterialInMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
+  const [materials] = useData<Material>("materials", []);
   const [items] = useData<Item>("items", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -26,10 +27,10 @@ export function MaterialInMaster() {
     return (
       <ul className="list-none space-y-1">
         {lines.map((l, idx) => {
-          const item = items.find(i => i.id === l.itemId);
+          const itemName = materials.find(i => i.id === l.itemId)?.name || items.find(i => i.id === l.itemId)?.name;
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0">
-              <span className="font-medium text-black">{item?.name || 'Unknown'}</span>
+              <span className="font-medium text-black">{itemName || 'Unknown'}</span>
               <span className="ml-2 text-black">[{l.qty} {l.uom} @ ₹{l.rate}]</span>
             </li>
           );
@@ -42,7 +43,7 @@ export function MaterialInMaster() {
 
   const filteredMaterialIn = materialIn.filter(m => {
     const supplierName = getSupplierName(m.supplierId);
-    const itemNames = m.lines.map(l => items.find(i => i.id === l.itemId)?.name || "").join(" ");
+    const itemNames = m.lines.map(l => materials.find(i => i.id === l.itemId)?.name || items.find(i => i.id === l.itemId)?.name || "").join(" ");
     return m.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
            supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
            itemNames.toLowerCase().includes(searchTerm.toLowerCase());

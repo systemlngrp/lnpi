@@ -92,6 +92,21 @@ export interface MaterialLine {
   value: number;
 }
 
+export interface MaterialInPackingSlip {
+  id: string;
+  materialInId: string;
+  materialLineId: string;
+  materialId: string;
+  supplierReelNo?: string;
+  ourReelNo: string;
+  weightKg: number;
+  supplierPoNo?: string;
+  ourPoId?: string;
+  ourPoNo?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Indent {
   id: string;
   requestedBy: string;
@@ -170,6 +185,9 @@ export interface GateEntry {
   invoiceNo: string;
   invoiceValue: number;
   truckNo: string;
+  mrrId?: string;
+  mrrDate?: string;
+  mrrNo?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -285,6 +303,7 @@ export interface OrderSchedule {
 export interface MaterialIn {
   id: string;
   transactionNo: string;
+  mrrType?: "Reel" | "Others";
   gateEntryId?: string;
   gateEntryNo?: string;
   timestamp: string;

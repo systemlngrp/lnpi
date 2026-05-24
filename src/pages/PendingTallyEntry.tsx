@@ -1,5 +1,5 @@
 import { useData } from "../hooks/useData";
-import { MaterialIn, Item, Supplier } from "../types";
+import { Material, MaterialIn, Item, Supplier } from "../types";
 import { useState } from "react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
@@ -9,6 +9,7 @@ import { ExcelExport } from "../components/ExcelExport";
 
 export function PendingTallyEntry() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
+  const [materials] = useData<Material>("materials", []);
   const [items] = useData<Item>("items", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
@@ -40,10 +41,10 @@ export function PendingTallyEntry() {
     return (
       <ul className="list-none space-y-1">
         {lines.map((l, idx) => {
-          const item = items.find(i => i.id === l.itemId);
+          const itemName = materials.find(i => i.id === l.itemId)?.name || items.find(i => i.id === l.itemId)?.name;
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0">
-              <span className="font-medium text-black">{item?.name || 'Unknown'}</span>
+              <span className="font-medium text-black">{itemName || 'Unknown'}</span>
               <span className="ml-2 text-black">[{l.qty} {l.uom} @ ₹{l.rate}]</span>
             </li>
           );

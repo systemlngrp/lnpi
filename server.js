@@ -418,6 +418,22 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_in_packing_slips\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`materialInId\` VARCHAR(36) NOT NULL,
+          \`materialLineId\` VARCHAR(36) NOT NULL,
+          \`materialId\` VARCHAR(36) NOT NULL,
+          \`supplierReelNo\` VARCHAR(255),
+          \`ourReelNo\` VARCHAR(100) NOT NULL,
+          \`weightKg\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`supplierPoNo\` VARCHAR(255),
+          \`ourPoId\` VARCHAR(36),
+          \`ourPoNo\` VARCHAR(100),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`suppliers\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
@@ -502,6 +518,7 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`material_in\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
+          \`mrrType\` VARCHAR(50),
           \`gateEntryId\` VARCHAR(36),
           \`gateEntryNo\` VARCHAR(100),
           \`timestamp\` VARCHAR(255) NOT NULL,
@@ -815,6 +832,17 @@ async function initDb(retries = 5) {
         { table: "gate_entry_photos", column: "slotNo", type: "INT NOT NULL" },
         { table: "gate_entry_photos", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "gate_entry_photos", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in_packing_slips", column: "materialInId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_in_packing_slips", column: "materialLineId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_in_packing_slips", column: "materialId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_in_packing_slips", column: "supplierReelNo", type: "VARCHAR(255)" },
+        { table: "material_in_packing_slips", column: "ourReelNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_in_packing_slips", column: "weightKg", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "material_in_packing_slips", column: "supplierPoNo", type: "VARCHAR(255)" },
+        { table: "material_in_packing_slips", column: "ourPoId", type: "VARCHAR(36)" },
+        { table: "material_in_packing_slips", column: "ourPoNo", type: "VARCHAR(100)" },
+        { table: "material_in_packing_slips", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "material_in_packing_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "suppliers", column: "contactPerson", type: "VARCHAR(255)" },
         { table: "suppliers", column: "contactNumber", type: "VARCHAR(50)" },
@@ -829,6 +857,7 @@ async function initDb(retries = 5) {
         { table: "states", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
         { table: "color_masters", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_in", column: "mrrType", type: "VARCHAR(50)" },
         { table: "material_in", column: "gateEntryId", type: "VARCHAR(36)" },
         { table: "material_in", column: "gateEntryNo", type: "VARCHAR(100)" },
         { table: "material_in", column: "timestamp", type: "VARCHAR(255) NOT NULL" },
@@ -1375,7 +1404,7 @@ const createHandlers = (tableName) => {
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach((entity) => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;
