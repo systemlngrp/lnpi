@@ -72,6 +72,7 @@ import { PlansProduction } from "./pages/PlansProduction";
 import { SettingsPage } from "./pages/Settings";
 import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
 import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
+import { JobwiseReelConsumptionReport } from "./pages/JobwiseReelConsumptionReport";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -186,6 +187,7 @@ export default function App() {
           {/* Reports */}
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
           <Route path="reports/reelwise-stock" element={<ReelwiseStockReport />} />
+          <Route path="reports/jobwise-reel-consumption" element={<JobwiseReelConsumptionReport />} />
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />
