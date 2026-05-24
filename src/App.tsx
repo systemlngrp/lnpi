@@ -15,6 +15,8 @@ import { IndentApproved, IndentCompleted, IndentPending, IndentRejected } from "
 import { PurchaseOrderPending } from "./pages/PurchaseOrderPending";
 import { PurchaseOrderCreate } from "./pages/PurchaseOrderCreate";
 import { PurchaseOrderAll, PurchaseOrderApproved, PurchaseOrderPendingApproval, PurchaseOrderRejected } from "./pages/PurchaseOrderList";
+import { GateEntryForm } from "./pages/GateEntryForm";
+import { GateEntryMaster } from "./pages/GateEntryMaster";
 import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
 import { ColorMasters } from "./pages/ColorMasters";
@@ -118,6 +120,10 @@ export default function App() {
           <Route path="purchase-orders/pending-approval" element={<PurchaseOrderPendingApproval />} />
           <Route path="purchase-orders/approved" element={<PurchaseOrderApproved />} />
           <Route path="purchase-orders/rejected" element={<PurchaseOrderRejected />} />
+
+          {/* Gate Entry */}
+          <Route path="gate-entry/form" element={<GateEntryForm />} />
+          <Route path="gate-entry/master" element={<GateEntryMaster />} />
 
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />

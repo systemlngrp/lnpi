@@ -185,6 +185,14 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       ],
     },
     {
+      section: "Gate Entry",
+      color: "bg-violet-700",
+      items: [
+        { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
+        { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
+      ],
+    },
+    {
       section: "Orders",
       color: "bg-rose-700",
       items: [

@@ -462,6 +462,31 @@ async function initDb(retries = 5) {
       `);
 
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`gate_entries\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`gateEntryNo\` VARCHAR(100),
+          \`date\` VARCHAR(50) NOT NULL,
+          \`supplierId\` VARCHAR(36) NOT NULL,
+          \`invoiceNo\` VARCHAR(100) NOT NULL,
+          \`invoiceValue\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`truckNo\` VARCHAR(100) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`gate_entry_photos\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`gateEntryId\` VARCHAR(36) NOT NULL,
+          \`photo\` VARCHAR(255) NOT NULL,
+          \`slotNo\` INT NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`suppliers\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
@@ -860,6 +885,19 @@ async function initDb(retries = 5) {
         { table: "purchase_order_lines", column: "amount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "purchase_order_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "gate_entries", column: "gateEntryNo", type: "VARCHAR(100)" },
+        { table: "gate_entries", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "gate_entries", column: "supplierId", type: "VARCHAR(36) NOT NULL" },
+        { table: "gate_entries", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "gate_entries", column: "invoiceValue", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "gate_entries", column: "truckNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "gate_entries", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "gate_entries", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "gate_entry_photos", column: "gateEntryId", type: "VARCHAR(36) NOT NULL" },
+        { table: "gate_entry_photos", column: "photo", type: "VARCHAR(255) NOT NULL" },
+        { table: "gate_entry_photos", column: "slotNo", type: "INT NOT NULL" },
+        { table: "gate_entry_photos", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "gate_entry_photos", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "suppliers", column: "contactPerson", type: "VARCHAR(255)" },
         { table: "suppliers", column: "contactNumber", type: "VARCHAR(50)" },
@@ -1373,6 +1411,35 @@ const createHandlers = (tableName: string) => {
           }
         }
 
+        // Auto-generate gateEntryNo for gate_entries when not provided
+        if (tableName === 'gate_entries') {
+          try {
+            if (!data.gateEntryNo) {
+              const dateStr = data.date || new Date().toISOString().slice(0,10);
+              const d = new Date(dateStr);
+              let fyStart = d.getFullYear();
+              const month = d.getMonth() + 1;
+              if (month < 4) fyStart = fyStart - 1;
+              const fyLabel = `${String(fyStart).slice(2)}-${String(fyStart + 1).slice(2)}`;
+
+              const likePattern = `GE/${fyLabel}/%`;
+              const [rows] = await db.query(`SELECT gateEntryNo FROM \`gate_entries\` WHERE gateEntryNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(gateEntryNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`, [likePattern]);
+              let lastNum = 0;
+              if ((rows as any[]).length > 0) {
+                const lastGateEntryNo = (rows as any[])[0].gateEntryNo as string;
+                const parts = lastGateEntryNo.split('/');
+                const suffix = parts[parts.length - 1];
+                lastNum = parseInt(suffix || '0', 10) || 0;
+              }
+              const nextNum = lastNum + 1;
+              const padded = String(nextNum).padStart(5, '0');
+              data.gateEntryNo = `GE/${fyLabel}/${padded}`;
+            }
+          } catch (err) {
+            console.warn('[DB] Could not auto-generate gateEntryNo:', (err as Error).message);
+          }
+        }
+
         console.log(`[DB] Upserting to ${tableName}`, { 
           id: data.id, 
           status: data.status,
@@ -1411,6 +1478,9 @@ const createHandlers = (tableName: string) => {
         if (tableName === "purchase_orders") {
           await db.query("DELETE FROM `purchase_order_lines` WHERE `purchaseOrderId` = ?", [id]);
         }
+        if (tableName === "gate_entries") {
+          await db.query("DELETE FROM `gate_entry_photos` WHERE `gateEntryId` = ?", [id]);
+        }
         await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id]);
         res.json({ success: true });
       } catch (error) {
@@ -1422,7 +1492,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

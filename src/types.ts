@@ -162,6 +162,27 @@ export interface PurchaseOrderLine {
   updateTimestamp?: string;
 }
 
+export interface GateEntry {
+  id: string;
+  gateEntryNo?: string;
+  date: string;
+  supplierId: string;
+  invoiceNo: string;
+  invoiceValue: number;
+  truckNo: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface GateEntryPhoto {
+  id: string;
+  gateEntryId: string;
+  photo: string;
+  slotNo: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;
