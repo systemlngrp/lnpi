@@ -107,6 +107,78 @@ export interface MaterialInPackingSlip {
   updateTimestamp?: string;
 }
 
+export interface MaterialIssue {
+  id: string;
+  issueNo: string;
+  date: string;
+  issueType: "Job" | "General";
+  productionId?: string;
+  jobNo?: string;
+  remarks?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface MaterialIssueLine {
+  id: string;
+  materialIssueId: string;
+  materialId: string;
+  qty: number;
+  uom: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface MaterialIssueReelLine {
+  id: string;
+  materialIssueId: string;
+  materialIssueLineId: string;
+  materialId: string;
+  packingSlipId: string;
+  ourReelNo: string;
+  weightKg: number;
+  productionId: string;
+  jobNo: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface MaterialReturn {
+  id: string;
+  returnNo: string;
+  date: string;
+  returnType: "Job" | "General";
+  productionId?: string;
+  jobNo?: string;
+  remarks?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface MaterialReturnLine {
+  id: string;
+  materialReturnId: string;
+  materialId: string;
+  qty: number;
+  uom: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface MaterialReturnReelLine {
+  id: string;
+  materialReturnId: string;
+  materialReturnLineId: string;
+  materialId: string;
+  packingSlipId: string;
+  ourReelNo: string;
+  weightKg: number;
+  productionId: string;
+  jobNo: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Indent {
   id: string;
   requestedBy: string;

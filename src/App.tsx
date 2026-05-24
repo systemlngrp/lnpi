@@ -18,6 +18,8 @@ import { PurchaseOrderAll, PurchaseOrderApproved, PurchaseOrderPendingApproval, 
 import { GateEntryForm } from "./pages/GateEntryForm";
 import { GateEntryMaster } from "./pages/GateEntryMaster";
 import { PendingMrr } from "./pages/PendingMrr";
+import { MaterialIssueForm } from "./pages/MaterialIssueForm";
+import { MaterialReturnForm } from "./pages/MaterialReturnForm";
 import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
 import { ColorMasters } from "./pages/ColorMasters";
@@ -128,6 +130,10 @@ export default function App() {
 
           {/* Material Receipt */}
           <Route path="material-receipt/pending-mrr" element={<PendingMrr />} />
+
+          {/* Material Movement */}
+          <Route path="material-movement/issue" element={<MaterialIssueForm />} />
+          <Route path="material-movement/return" element={<MaterialReturnForm />} />
 
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />

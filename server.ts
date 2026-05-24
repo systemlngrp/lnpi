@@ -507,6 +507,90 @@ async function initDb(retries = 5) {
       `);
 
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_issues\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`issueNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`issueType\` VARCHAR(50) NOT NULL,
+          \`productionId\` VARCHAR(36),
+          \`jobNo\` VARCHAR(100),
+          \`remarks\` TEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_issue_lines\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`materialIssueId\` VARCHAR(36) NOT NULL,
+          \`materialId\` VARCHAR(36) NOT NULL,
+          \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`uom\` VARCHAR(50) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_issue_reel_lines\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`materialIssueId\` VARCHAR(36) NOT NULL,
+          \`materialIssueLineId\` VARCHAR(36) NOT NULL,
+          \`materialId\` VARCHAR(36) NOT NULL,
+          \`packingSlipId\` VARCHAR(36) NOT NULL,
+          \`ourReelNo\` VARCHAR(100) NOT NULL,
+          \`weightKg\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`productionId\` VARCHAR(36) NOT NULL,
+          \`jobNo\` VARCHAR(100) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_returns\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`returnNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`returnType\` VARCHAR(50) NOT NULL,
+          \`productionId\` VARCHAR(36),
+          \`jobNo\` VARCHAR(100),
+          \`remarks\` TEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_return_lines\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`materialReturnId\` VARCHAR(36) NOT NULL,
+          \`materialId\` VARCHAR(36) NOT NULL,
+          \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`uom\` VARCHAR(50) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_return_reel_lines\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`materialReturnId\` VARCHAR(36) NOT NULL,
+          \`materialReturnLineId\` VARCHAR(36) NOT NULL,
+          \`materialId\` VARCHAR(36) NOT NULL,
+          \`packingSlipId\` VARCHAR(36) NOT NULL,
+          \`ourReelNo\` VARCHAR(100) NOT NULL,
+          \`weightKg\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`productionId\` VARCHAR(36) NOT NULL,
+          \`jobNo\` VARCHAR(100) NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`suppliers\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
@@ -935,6 +1019,54 @@ async function initDb(retries = 5) {
         { table: "material_in_packing_slips", column: "ourPoNo", type: "VARCHAR(100)" },
         { table: "material_in_packing_slips", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_in_packing_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "issueNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_issues", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_issues", column: "issueType", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_issues", column: "productionId", type: "VARCHAR(36)" },
+        { table: "material_issues", column: "jobNo", type: "VARCHAR(100)" },
+        { table: "material_issues", column: "remarks", type: "TEXT" },
+        { table: "material_issues", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_issue_lines", column: "materialIssueId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_issue_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_issue_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "material_issue_lines", column: "uom", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_issue_lines", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "material_issue_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_issue_reel_lines", column: "materialIssueId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_issue_reel_lines", column: "materialIssueLineId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_issue_reel_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_issue_reel_lines", column: "packingSlipId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_issue_reel_lines", column: "ourReelNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_issue_reel_lines", column: "weightKg", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "material_issue_reel_lines", column: "productionId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_issue_reel_lines", column: "jobNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_issue_reel_lines", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "material_issue_reel_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_returns", column: "returnNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_returns", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_returns", column: "returnType", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_returns", column: "productionId", type: "VARCHAR(36)" },
+        { table: "material_returns", column: "jobNo", type: "VARCHAR(100)" },
+        { table: "material_returns", column: "remarks", type: "TEXT" },
+        { table: "material_returns", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "material_returns", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_return_lines", column: "materialReturnId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_return_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_return_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "material_return_lines", column: "uom", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_return_lines", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "material_return_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_return_reel_lines", column: "materialReturnId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_return_reel_lines", column: "materialReturnLineId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_return_reel_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_return_reel_lines", column: "packingSlipId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_return_reel_lines", column: "ourReelNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_return_reel_lines", column: "weightKg", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "material_return_reel_lines", column: "productionId", type: "VARCHAR(36) NOT NULL" },
+        { table: "material_return_reel_lines", column: "jobNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_return_reel_lines", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "material_return_reel_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "suppliers", column: "contactPerson", type: "VARCHAR(255)" },
         { table: "suppliers", column: "contactNumber", type: "VARCHAR(50)" },
@@ -1521,6 +1653,14 @@ const createHandlers = (tableName: string) => {
         if (tableName === "gate_entries") {
           await db.query("DELETE FROM `gate_entry_photos` WHERE `gateEntryId` = ?", [id]);
         }
+        if (tableName === "material_issues") {
+          await db.query("DELETE FROM `material_issue_reel_lines` WHERE `materialIssueId` = ?", [id]);
+          await db.query("DELETE FROM `material_issue_lines` WHERE `materialIssueId` = ?", [id]);
+        }
+        if (tableName === "material_returns") {
+          await db.query("DELETE FROM `material_return_reel_lines` WHERE `materialReturnId` = ?", [id]);
+          await db.query("DELETE FROM `material_return_lines` WHERE `materialReturnId` = ?", [id]);
+        }
         await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id]);
         res.json({ success: true });
       } catch (error) {
@@ -1532,7 +1672,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

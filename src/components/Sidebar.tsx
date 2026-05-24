@@ -202,6 +202,14 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       ],
     },
     {
+      section: "Material Movement",
+      color: "bg-lime-700",
+      items: [
+        { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
+        { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
+      ],
+    },
+    {
       section: "Orders",
       color: "bg-rose-700",
       items: [
