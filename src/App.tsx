@@ -12,6 +12,9 @@ import { Materials } from "./pages/Materials";
 import { IndentForm } from "./pages/IndentForm";
 import { IndentDetail } from "./pages/IndentDetail";
 import { IndentApproved, IndentCompleted, IndentPending, IndentRejected } from "./pages/IndentQueue";
+import { PurchaseOrderPending } from "./pages/PurchaseOrderPending";
+import { PurchaseOrderCreate } from "./pages/PurchaseOrderCreate";
+import { PurchaseOrderAll, PurchaseOrderApproved, PurchaseOrderPendingApproval, PurchaseOrderRejected } from "./pages/PurchaseOrderList";
 import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
 import { ColorMasters } from "./pages/ColorMasters";
@@ -107,6 +110,14 @@ export default function App() {
           <Route path="indent/approved" element={<IndentApproved />} />
           <Route path="indent/completed" element={<IndentCompleted />} />
           <Route path="indent/rejected" element={<IndentRejected />} />
+
+          {/* Purchase Orders */}
+          <Route path="purchase-orders/pending-po" element={<PurchaseOrderPending />} />
+          <Route path="purchase-orders/create/:indentId" element={<PurchaseOrderCreate />} />
+          <Route path="purchase-orders/all" element={<PurchaseOrderAll />} />
+          <Route path="purchase-orders/pending-approval" element={<PurchaseOrderPendingApproval />} />
+          <Route path="purchase-orders/approved" element={<PurchaseOrderApproved />} />
+          <Route path="purchase-orders/rejected" element={<PurchaseOrderRejected />} />
 
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />

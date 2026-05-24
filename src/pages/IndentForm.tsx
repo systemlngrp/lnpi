@@ -5,6 +5,7 @@ import { useData } from "../hooks/useData";
 import { Indent, IndentLine, Material } from "../types";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
+import { summarizeIndentLines } from "../lib/indentTotals";
 
 type EditableIndentLine = {
   id: string;
@@ -96,17 +97,6 @@ export function IndentForm() {
     const timestamp = new Date().toISOString();
     const indentId = crypto.randomUUID();
 
-    const nextIndent: Indent = {
-      id: indentId,
-      requestedBy: requestedBy.trim(),
-      requisitionDate,
-      requiredDate,
-      indentType,
-      status: "Pending",
-      updatedBy: "System User",
-      updateTimestamp: timestamp,
-    };
-
     const nextLines: IndentLine[] = validLines.map((line) => {
       const material = activeMaterials.find((row) => row.id === line.materialId) as Material;
       return {
@@ -116,10 +106,29 @@ export function IndentForm() {
         materialId: material.id,
         uom: material.uom || "",
         qty: Number(line.qty),
+        orderedQty: 0,
+        cancelledQty: 0,
+        balanceQty: Number(line.qty),
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
     });
+    const totals = summarizeIndentLines(nextLines);
+
+    const nextIndent: Indent = {
+      id: indentId,
+      requestedBy: requestedBy.trim(),
+      requisitionDate,
+      requiredDate,
+      indentType,
+      status: "Pending",
+      totalIndentQty: totals.totalIndentQty,
+      totalOrderedQty: totals.totalOrderedQty,
+      totalCancelledQty: totals.totalCancelledQty,
+      totalBalanceQty: totals.totalBalanceQty,
+      updatedBy: "System User",
+      updateTimestamp: timestamp,
+    };
 
     try {
       await setIndents([nextIndent, ...indents]);

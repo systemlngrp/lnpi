@@ -415,6 +415,47 @@ async function initDb(retries = 5) {
           \`materialId\` VARCHAR(36) NOT NULL,
           \`uom\` VARCHAR(50),
           \`qty\` DECIMAL(15,2) NOT NULL,
+          \`orderedQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`cancelledQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`balanceQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`purchase_orders\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`poNo\` VARCHAR(100) NOT NULL,
+          \`indentId\` VARCHAR(36) NOT NULL,
+          \`supplierId\` VARCHAR(36) NOT NULL,
+          \`poDate\` VARCHAR(50) NOT NULL,
+          \`requiredDate\` VARCHAR(50) NOT NULL,
+          \`totalQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`totalAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`remarks\` TEXT,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending Approval',
+          \`approvedBy\` VARCHAR(255),
+          \`approvedTimestamp\` VARCHAR(255),
+          \`rejectedBy\` VARCHAR(255),
+          \`rejectedTimestamp\` VARCHAR(255),
+          \`rejectedRemarks\` TEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`purchase_order_lines\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`purchaseOrderId\` VARCHAR(36) NOT NULL,
+          \`indentLineId\` VARCHAR(36) NOT NULL,
+          \`materialId\` VARCHAR(36) NOT NULL,
+          \`erpCode\` VARCHAR(100),
+          \`uom\` VARCHAR(50),
+          \`qty\` DECIMAL(15,2) NOT NULL,
+          \`rate\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`amount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -770,6 +811,10 @@ async function initDb(retries = 5) {
         { table: "indents", column: "requiredDate", type: "VARCHAR(50) NOT NULL" },
         { table: "indents", column: "indentType", type: "VARCHAR(50) NOT NULL" },
         { table: "indents", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending'" },
+        { table: "indents", column: "totalIndentQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "indents", column: "totalOrderedQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "indents", column: "totalCancelledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "indents", column: "totalBalanceQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "indents", column: "approvedTimestamp", type: "VARCHAR(255)" },
         { table: "indents", column: "approvedBy", type: "VARCHAR(255)" },
         { table: "indents", column: "completedTimestamp", type: "VARCHAR(255)" },
@@ -784,8 +829,37 @@ async function initDb(retries = 5) {
         { table: "indent_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
         { table: "indent_lines", column: "uom", type: "VARCHAR(50)" },
         { table: "indent_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "indent_lines", column: "orderedQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "indent_lines", column: "cancelledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "indent_lines", column: "balanceQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "indent_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "indent_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "purchase_orders", column: "poNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "purchase_orders", column: "indentId", type: "VARCHAR(36) NOT NULL" },
+        { table: "purchase_orders", column: "supplierId", type: "VARCHAR(36) NOT NULL" },
+        { table: "purchase_orders", column: "poDate", type: "VARCHAR(50) NOT NULL" },
+        { table: "purchase_orders", column: "requiredDate", type: "VARCHAR(50) NOT NULL" },
+        { table: "purchase_orders", column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "remarks", type: "TEXT" },
+        { table: "purchase_orders", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending Approval'" },
+        { table: "purchase_orders", column: "approvedBy", type: "VARCHAR(255)" },
+        { table: "purchase_orders", column: "approvedTimestamp", type: "VARCHAR(255)" },
+        { table: "purchase_orders", column: "rejectedBy", type: "VARCHAR(255)" },
+        { table: "purchase_orders", column: "rejectedTimestamp", type: "VARCHAR(255)" },
+        { table: "purchase_orders", column: "rejectedRemarks", type: "TEXT" },
+        { table: "purchase_orders", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "purchase_orders", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "purchase_order_lines", column: "purchaseOrderId", type: "VARCHAR(36) NOT NULL" },
+        { table: "purchase_order_lines", column: "indentLineId", type: "VARCHAR(36) NOT NULL" },
+        { table: "purchase_order_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
+        { table: "purchase_order_lines", column: "erpCode", type: "VARCHAR(100)" },
+        { table: "purchase_order_lines", column: "uom", type: "VARCHAR(50)" },
+        { table: "purchase_order_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "purchase_order_lines", column: "rate", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "amount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "purchase_order_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "suppliers", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "suppliers", column: "contactPerson", type: "VARCHAR(255)" },
         { table: "suppliers", column: "contactNumber", type: "VARCHAR(50)" },
@@ -1334,6 +1408,9 @@ const createHandlers = (tableName: string) => {
         if (tableName === "indents") {
           await db.query("DELETE FROM `indent_lines` WHERE `indentId` = ?", [id]);
         }
+        if (tableName === "purchase_orders") {
+          await db.query("DELETE FROM `purchase_order_lines` WHERE `purchaseOrderId` = ?", [id]);
+        }
         await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id]);
         res.json({ success: true });
       } catch (error) {
@@ -1345,7 +1422,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "suppliers", "states", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

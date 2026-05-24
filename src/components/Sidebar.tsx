@@ -23,9 +23,10 @@ import {
   X
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest, Indent } from "../types";
+import { MaterialIn, Production, Consumption, OrderSchedule, DispatchPlan, LoadingSlip, SampleRequest, Indent, IndentLine, PurchaseOrder } from "../types";
 import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
+import { withIndentTotals } from "../lib/indentTotals";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -40,9 +41,15 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [indents] = useData<Indent>("indents", []);
+  const [indentLines] = useData<IndentLine>("indent-lines", []);
+  const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+
+  const normalizedIndents = indents.map((indent) =>
+    withIndentTotals(indent, indentLines.filter((line) => line.indentId === indent.id))
+  );
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
@@ -56,10 +63,15 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/production/pending-consumption": productions.filter(isProductionPendingConsumption).length,
     "/production/pending-ffg": productions.filter(isProductionPendingFFG).length,
     "/production/pending-tally": productions.filter(isProductionReadyForTally).length,
-    "/indent/pending": indents.filter(i => i.status === "Pending").length,
-    "/indent/approved": indents.filter(i => i.status === "Approved").length,
-    "/indent/completed": indents.filter(i => i.status === "Completed").length,
-    "/indent/rejected": indents.filter(i => i.status === "Rejected").length,
+    "/indent/pending": normalizedIndents.filter(i => i.status === "Pending").length,
+    "/indent/approved": normalizedIndents.filter(i => i.status === "Approved").length,
+    "/indent/completed": normalizedIndents.filter(i => i.status === "Completed").length,
+    "/indent/rejected": normalizedIndents.filter(i => i.status === "Rejected").length,
+    "/purchase-orders/pending-po": normalizedIndents.filter(i => i.status === "Approved" && Number(i.totalBalanceQty || 0) > 0).length,
+    "/purchase-orders/all": purchaseOrders.length,
+    "/purchase-orders/pending-approval": purchaseOrders.filter(po => po.status === "Pending Approval").length,
+    "/purchase-orders/approved": purchaseOrders.filter(po => po.status === "Approved").length,
+    "/purchase-orders/rejected": purchaseOrders.filter(po => po.status === "Rejected").length,
     "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
     "/consumption/pending-ph": consumptions.filter(c => isPendingPH(c.status)).length,
     "/consumption/pending-tally": consumptions.filter(c => c.status === "Pending Tally").length,
@@ -159,6 +171,17 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Approved", href: "/indent/approved", icon: Database, countKey: "/indent/approved" },
         { name: "Completed", href: "/indent/completed", icon: CheckCircle, countKey: "/indent/completed" },
         { name: "Rejected", href: "/indent/rejected", icon: X, countKey: "/indent/rejected" },
+      ],
+    },
+    {
+      section: "Purchase Order",
+      color: "bg-cyan-700",
+      items: [
+        { name: "Pending PO", href: "/purchase-orders/pending-po", icon: Activity, countKey: "/purchase-orders/pending-po" },
+        { name: "All", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
+        { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
+        { name: "Approved", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
+        { name: "Rejected", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
       ],
     },
     {

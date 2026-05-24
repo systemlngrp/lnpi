@@ -99,6 +99,10 @@ export interface Indent {
   requiredDate: string;
   indentType: "Reel" | "Other";
   status: "Pending" | "Approved" | "Completed" | "Rejected";
+  totalIndentQty?: number;
+  totalOrderedQty?: number;
+  totalCancelledQty?: number;
+  totalBalanceQty?: number;
   approvedTimestamp?: string;
   approvedBy?: string;
   completedTimestamp?: string;
@@ -117,6 +121,43 @@ export interface IndentLine {
   materialId: string;
   uom?: string;
   qty: number;
+  orderedQty?: number;
+  cancelledQty?: number;
+  balanceQty?: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  poNo: string;
+  indentId: string;
+  supplierId: string;
+  poDate: string;
+  requiredDate: string;
+  totalQty: number;
+  totalAmount: number;
+  remarks?: string;
+  status: "Pending Approval" | "Approved" | "Rejected";
+  approvedBy?: string;
+  approvedTimestamp?: string;
+  rejectedBy?: string;
+  rejectedTimestamp?: string;
+  rejectedRemarks?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface PurchaseOrderLine {
+  id: string;
+  purchaseOrderId: string;
+  indentLineId: string;
+  materialId: string;
+  erpCode?: string | number;
+  uom?: string;
+  qty: number;
+  rate: number;
+  amount: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

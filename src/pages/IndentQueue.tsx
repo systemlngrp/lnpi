@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Download, Eye, ThumbsUp, X, XCircle } from "lucide-react";
+import { CheckCircle, Download, Eye, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { ExcelExport } from "../components/ExcelExport";
 import { Spinner } from "../components/Spinner";
@@ -8,6 +8,7 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { Indent, IndentLine, Material, Setting } from "../types";
 import { downloadIndentPdf } from "../lib/indentPdf";
+import { withIndentTotals } from "../lib/indentTotals";
 
 type QueueMode = "Pending" | "Approved" | "Completed" | "Rejected";
 
@@ -29,41 +30,6 @@ function getLineSummary(lines: IndentLine[], materials: Material[]) {
       return `${name} (${line.qty} ${line.uom || ""})`.trim();
     })
     .join(", ");
-}
-
-function ActionButton({
-  label,
-  onClick,
-  tone = "primary",
-  disabled = false,
-  loading = false,
-}: {
-  label: string;
-  onClick: () => void;
-  tone?: "primary" | "danger" | "success";
-  disabled?: boolean;
-  loading?: boolean;
-}) {
-  const className =
-    tone === "danger"
-      ? "bg-red-100 text-red-800 border-red-700 hover:bg-red-200"
-      : tone === "success"
-        ? "bg-emerald-100 text-emerald-800 border-emerald-700 hover:bg-emerald-200"
-        : "bg-sky-100 text-sky-800 border-sky-800 hover:bg-sky-200";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled || loading}
-      className={cn(
-        "inline-flex items-center justify-center min-w-[120px] rounded border px-4 py-2 text-xs font-bold uppercase tracking-wider transition disabled:opacity-50",
-        className
-      )}
-    >
-      {loading ? <Spinner size={16} /> : label}
-    </button>
-  );
 }
 
 function IndentQueue({ mode }: { mode: QueueMode }) {
@@ -108,18 +74,24 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
   const updateIndent = async (indent: Indent, nextStatus: Indent["status"], remarks?: string) => {
     setSubmittingId(indent.id);
     const timestamp = new Date().toISOString();
+    const indentSpecificLines = indentLines.filter((line) => line.indentId === indent.id);
+    const nextIndentBase = withIndentTotals(indent, indentSpecificLines);
+    const resolvedStatus =
+      nextStatus === "Approved" && Number(nextIndentBase.totalBalanceQty || 0) <= 0
+        ? "Completed"
+        : nextStatus;
     const nextIndent: Indent = {
-      ...indent,
-      status: nextStatus,
+      ...nextIndentBase,
       updatedBy: "System User",
       updateTimestamp: timestamp,
-      approvedTimestamp: nextStatus === "Approved" ? timestamp : indent.approvedTimestamp,
-      approvedBy: nextStatus === "Approved" ? "System User" : indent.approvedBy,
-      completedTimestamp: nextStatus === "Completed" ? timestamp : indent.completedTimestamp,
-      completedBy: nextStatus === "Completed" ? "System User" : indent.completedBy,
-      rejectedTimestamp: nextStatus === "Rejected" ? timestamp : indent.rejectedTimestamp,
-      rejectedBy: nextStatus === "Rejected" ? "System User" : indent.rejectedBy,
-      rejectedRemarks: nextStatus === "Rejected" ? remarks || indent.rejectedRemarks || "" : indent.rejectedRemarks,
+      status: resolvedStatus,
+      approvedTimestamp: resolvedStatus === "Approved" || resolvedStatus === "Completed" ? (indent.approvedTimestamp || timestamp) : indent.approvedTimestamp,
+      approvedBy: resolvedStatus === "Approved" || resolvedStatus === "Completed" ? (indent.approvedBy || "System User") : indent.approvedBy,
+      completedTimestamp: resolvedStatus === "Completed" ? (indent.completedTimestamp || timestamp) : indent.completedTimestamp,
+      completedBy: resolvedStatus === "Completed" ? (indent.completedBy || "System User") : indent.completedBy,
+      rejectedTimestamp: resolvedStatus === "Rejected" ? timestamp : indent.rejectedTimestamp,
+      rejectedBy: resolvedStatus === "Rejected" ? "System User" : indent.rejectedBy,
+      rejectedRemarks: resolvedStatus === "Rejected" ? remarks || indent.rejectedRemarks || "" : indent.rejectedRemarks,
     };
 
     try {
