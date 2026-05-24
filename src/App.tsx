@@ -70,6 +70,7 @@ import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
 import { PlansItems } from "./pages/PlansItems";
 import { PlansProduction } from "./pages/PlansProduction";
 import { SettingsPage } from "./pages/Settings";
+import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -180,6 +181,9 @@ export default function App() {
           {/* Billing */}
           <Route path="billing/pending" element={<PendingInvoicing />} />
           <Route path="billing/master" element={<InvoicesMaster />} />
+
+          {/* Reports */}
+          <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />

@@ -301,6 +301,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       ],
     },
     {
+      section: "Reports",
+      color: "bg-sky-700",
+      items: [
+        { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
+      ],
+    },
+    {
       section: "Documentation",
       color: "bg-slate-700",
       items: [

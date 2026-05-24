@@ -54,6 +54,9 @@ function createInitialFormState(materials: Material[], reelGroupId = "") {
     size: "",
     gsm: "",
     bf: "",
+    openingQty: "",
+    openingRate: "",
+    openingValue: "",
     active: "Yes" as ActiveValue,
   };
 }
@@ -117,6 +120,9 @@ export function Materials() {
       size: formatOptionalNumber(material.size),
       gsm: formatOptionalNumber(material.gsm),
       bf: formatOptionalNumber(material.bf),
+      openingQty: formatOptionalNumber(material.openingQty),
+      openingRate: formatOptionalNumber(material.openingRate),
+      openingValue: formatOptionalNumber(material.openingValue),
       active: material.active === "No" ? "No" : "Yes",
     });
     setIsFormOpen(true);
@@ -187,6 +193,15 @@ export function Materials() {
     const size = parseNumericInput(formData.size);
     const gsm = parseNumericInput(formData.gsm);
     const bf = parseNumericInput(formData.bf);
+    const openingQty = parseNumericInput(formData.openingQty);
+    const openingRate = parseNumericInput(formData.openingRate);
+    const openingValueInput = parseNumericInput(formData.openingValue);
+    const openingValue =
+      openingValueInput !== ""
+        ? Number(openingValueInput)
+        : openingQty !== "" && openingRate !== ""
+          ? Number(openingQty) * Number(openingRate)
+          : undefined;
 
     if (normalizedType === "Reel" && (size === "" || gsm === "" || bf === "")) {
       alert("Size, GSM, and BF are required for Reel.");
@@ -230,6 +245,9 @@ export function Materials() {
         size: normalizedType === "Reel" ? Number(size) : undefined,
         gsm: normalizedType === "Reel" ? Number(gsm) : undefined,
         bf: normalizedType === "Reel" ? Number(bf) : undefined,
+        openingQty: openingQty === "" ? undefined : Number(openingQty),
+        openingRate: openingRate === "" ? undefined : Number(openingRate),
+        openingValue,
         active: formData.active,
         updatedBy: "System User",
         updateTimestamp: timestamp,
@@ -286,6 +304,9 @@ export function Materials() {
       Size: material.size ?? "",
       GSM: material.gsm ?? "",
       BF: material.bf ?? "",
+      "Opening Qty": material.openingQty ?? "",
+      "Opening Rate": material.openingRate ?? "",
+      "Opening Value": material.openingValue ?? "",
       Unit: material.uom || "",
       Active: material.active || "Yes",
     }));
@@ -354,6 +375,9 @@ export function Materials() {
                         size: "",
                         gsm: "",
                         bf: "",
+                        openingQty: prev.openingQty,
+                        openingRate: prev.openingRate,
+                        openingValue: prev.openingValue,
                       };
                     });
                   }}
@@ -474,6 +498,38 @@ export function Materials() {
               )}
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-blue-700 font-bold">Opening Qty</label>
+                <input
+                  value={formData.openingQty}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, openingQty: e.target.value }))}
+                  className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-blue-700 font-bold">Opening Rate</label>
+                <input
+                  value={formData.openingRate}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, openingRate: e.target.value }))}
+                  className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-blue-700 font-bold">Opening Value</label>
+                <input
+                  value={formData.openingValue}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, openingValue: e.target.value }))}
+                  placeholder={
+                    formData.openingQty && formData.openingRate && !formData.openingValue
+                      ? String(Number(formData.openingQty || 0) * Number(formData.openingRate || 0))
+                      : ""
+                  }
+                  className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-blue-700 font-bold">Active</label>
               <select
@@ -576,7 +632,7 @@ export function Materials() {
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Unit", "Active", "Action"].map((heading) => (
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening Qty", "Opening Rate", "Opening Value", "Unit", "Active", "Action"].map((heading) => (
                       <th key={heading} className="px-4 py-4 text-left text-sm font-bold border-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
@@ -586,7 +642,7 @@ export function Materials() {
                 <tbody>
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                      <td colSpan={13} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                         No materials found.
                       </td>
                     </tr>
@@ -600,6 +656,9 @@ export function Materials() {
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.size ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.gsm ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.bf ?? ""}</td>
+                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingQty ?? ""}</td>
+                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingRate ?? ""}</td>
+                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingValue ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.uom || ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.active || "Yes"}</td>
                         <td className="px-4 py-4 border-2 border-black">

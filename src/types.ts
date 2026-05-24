@@ -22,6 +22,9 @@ export interface Material {
   size?: number;
   gsm?: number;
   bf?: number;
+  openingQty?: number;
+  openingRate?: number;
+  openingValue?: number;
   active?: "Yes" | "No";
   updatedBy?: string;
   updateTimestamp?: string;
