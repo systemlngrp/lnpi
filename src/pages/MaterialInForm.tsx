@@ -53,7 +53,8 @@ export function MaterialInForm() {
   const [lines, setLines] = useState<MaterialLine[]>([]);
   const [currentItemId, setCurrentItemId] = useState("");
   const [currentQty, setCurrentQty] = useState<number | "">("");
-  const [currentRate, setCurrentRate] = useState<number | "">("");
+  const [currentInvoiceRate, setCurrentInvoiceRate] = useState<number | "">("");
+  const [currentPoLineId, setCurrentPoLineId] = useState("");
   const [packingSlipDrafts, setPackingSlipDrafts] = useState<Record<string, PackingSlipDraft[]>>({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,7 +94,10 @@ export function MaterialInForm() {
     { value: "Others", label: "Others" },
   ];
 
-  const totalAmount = lines.reduce((sum, line) => sum + Number(line.value || 0), 0);
+  const totalPoValue = lines.reduce((sum, line) => sum + (Number(line.actualQty || line.qty || 0) * Number(line.poRate || 0)), 0);
+  const totalInvoiceValue = lines.reduce((sum, line) => sum + Number(line.invoiceValue || 0), 0);
+  const totalActualValue = lines.reduce((sum, line) => sum + Number(line.actualValue || line.value || 0), 0);
+  const totalAmount = totalActualValue;
 
   useEffect(() => {
     if (!linkedGateEntry) return;
@@ -113,15 +117,39 @@ export function MaterialInForm() {
     );
 
     return approvedOrders
-      .filter((order) =>
-        purchaseOrderLines.some(
-          (line) => line.purchaseOrderId === order.id && line.materialId === materialId
-        )
-      )
-      .map((order) => ({
-        value: order.id,
-        label: order.poNo,
-      }));
+      .flatMap((order) =>
+        purchaseOrderLines
+          .filter((line) => line.purchaseOrderId === order.id && line.materialId === materialId)
+          .map((line) => ({
+            value: line.id,
+            label: `${order.poNo} | Qty ${Number(line.qty || 0)} @ ${Number(line.rate || 0).toFixed(2)}`,
+          }))
+      );
+  };
+
+  const getPurchaseOrderLine = (poLineId: string) =>
+    purchaseOrderLines.find((line) => line.id === poLineId);
+
+  const getPurchaseOrder = (purchaseOrderId?: string) =>
+    purchaseOrders.find((order) => order.id === purchaseOrderId);
+
+  const computeLineValues = (line: MaterialLine) => {
+    const invoiceQty = Number(line.invoiceQty ?? line.qty ?? 0);
+    const invoiceRate = Number(line.invoiceRate ?? line.rate ?? 0);
+    const actualQty = Number(line.actualQty ?? line.qty ?? invoiceQty);
+    const poRate = Number(line.poRate || 0);
+    return {
+      ...line,
+      qty: actualQty,
+      invoiceQty,
+      invoiceRate,
+      invoiceValue: Number((invoiceQty * invoiceRate).toFixed(2)),
+      actualQty,
+      actualValue: Number((actualQty * invoiceRate).toFixed(2)),
+      poRate,
+      rate: invoiceRate,
+      value: Number((actualQty * invoiceRate).toFixed(2)),
+    };
   };
 
   const getAllDraftSlips = () => Object.values(packingSlipDrafts).flat();
@@ -143,11 +171,12 @@ export function MaterialInForm() {
     setLines((prev) =>
       prev.map((line) =>
         line.id === lineId
-          ? {
+          ? computeLineValues({
               ...line,
               qty: totalWeight,
-              value: totalWeight * Number(line.rate || 0),
-            }
+              invoiceQty: totalWeight,
+              actualQty: totalWeight,
+            })
           : line
       )
     );
@@ -156,7 +185,8 @@ export function MaterialInForm() {
   const resetLineDrafts = () => {
     setCurrentItemId("");
     setCurrentQty("");
-    setCurrentRate("");
+    setCurrentInvoiceRate("");
+    setCurrentPoLineId("");
   };
 
   const handleMrrTypeChange = (value: string) => {
@@ -168,28 +198,56 @@ export function MaterialInForm() {
   };
 
   const handleAddLine = () => {
-    if (!currentItemId || currentRate === "" || Number(currentRate) <= 0) return;
+    if (!currentItemId || currentInvoiceRate === "" || Number(currentInvoiceRate) <= 0) return;
     const material = getMaterial(currentItemId);
     if (!material) return;
 
     if (mrrType === "Others" && (currentQty === "" || Number(currentQty) <= 0)) return;
 
     const qty = mrrType === "Reel" ? 0 : Number(currentQty);
-    const rate = Number(currentRate);
-    const newLine: MaterialLine = {
+    const invoiceRate = Number(currentInvoiceRate);
+    const selectedPoLine = currentPoLineId ? getPurchaseOrderLine(currentPoLineId) : undefined;
+    const selectedPo = selectedPoLine ? getPurchaseOrder(selectedPoLine.purchaseOrderId) : undefined;
+    const newLine = computeLineValues({
       id: crypto.randomUUID(),
       itemId: currentItemId,
       qty,
       uom: material.uom || (mrrType === "Reel" ? "KG" : ""),
-      rate,
-      value: qty * rate,
-    };
+      poId: selectedPo?.id,
+      poNo: selectedPo?.poNo,
+      poLineId: selectedPoLine?.id,
+      poRate: Number(selectedPoLine?.rate || 0),
+      invoiceQty: qty,
+      invoiceRate,
+      actualQty: qty,
+      rate: invoiceRate,
+      value: qty * invoiceRate,
+    });
 
     setLines((prev) => [...prev, newLine]);
     if (mrrType === "Reel") {
       setPackingSlipDrafts((prev) => ({ ...prev, [newLine.id]: [] }));
     }
     resetLineDrafts();
+  };
+
+  const updateLine = (lineId: string, patch: Partial<MaterialLine>) => {
+    setLines((prev) =>
+      prev.map((line) => {
+        if (line.id !== lineId) return line;
+        const poLineId = patch.poLineId ?? line.poLineId;
+        const poLine = poLineId ? getPurchaseOrderLine(poLineId) : undefined;
+        const po = poLine ? getPurchaseOrder(poLine.purchaseOrderId) : undefined;
+        return computeLineValues({
+          ...line,
+          ...patch,
+          poLineId,
+          poId: po?.id,
+          poNo: po?.poNo,
+          poRate: poLine ? Number(poLine.rate || 0) : Number(patch.poRate ?? line.poRate ?? 0),
+        });
+      })
+    );
   };
 
   const handleRemoveLine = (lineId: string) => {
@@ -279,6 +337,9 @@ export function MaterialInForm() {
           invoiceNo,
           invDate,
           supplierId,
+          totalPoValue,
+          totalInvoiceValue,
+          totalActualValue,
           totalAmount,
           lines,
           status: "Pending PH",
@@ -333,6 +394,8 @@ export function MaterialInForm() {
       setSupplierId("");
       setLines([]);
       setPackingSlipDrafts({});
+      setCurrentPoLineId("");
+      setCurrentInvoiceRate("");
       alert(`Material In created with Transaction No: ${transactionNo}`);
       if (linkedGateEntry) {
         navigate("/material-receipt/pending-mrr");
@@ -445,12 +508,21 @@ export function MaterialInForm() {
                 />
               </div>
             ) : null}
+            <div className="flex flex-col space-y-1 w-full md:w-80">
+              <label className="text-sm font-bold text-black">Our PO No.</label>
+              <Select
+                options={currentItemId ? getApprovedPoOptionsForMaterial(currentItemId) : []}
+                value={currentPoLineId}
+                onChange={setCurrentPoLineId}
+                placeholder="Select PO line..."
+              />
+            </div>
             <div className="flex flex-col space-y-1 w-full md:w-24">
-              <label className="text-sm font-bold text-black">Rate</label>
+              <label className="text-sm font-bold text-black">Invoice Rate</label>
               <input
                 type="number"
-                value={currentRate}
-                onChange={(e) => setCurrentRate(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                value={currentInvoiceRate}
+                onChange={(e) => setCurrentInvoiceRate(e.target.value === "" ? "" : parseFloat(e.target.value))}
                 className="border-2 border-black rounded p-[6px] text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-white"
               />
             </div>
@@ -466,10 +538,14 @@ export function MaterialInForm() {
                   <thead className="bg-slate-100 divide-x divide-black">
                     <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Material</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Qty</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Qty</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Rate</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Actual Qty</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Rate</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Value</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Actual Value</th>
                       <th className="px-4 py-3 text-right border border-black"></th>
                     </tr>
                   </thead>
@@ -479,10 +555,52 @@ export function MaterialInForm() {
                       return (
                         <tr key={line.id} className="divide-x divide-black">
                           <td className="px-4 py-3 text-sm text-black border border-black">{materialName}</td>
-                          <td className="px-4 py-3 text-sm text-black border border-black">{line.qty}</td>
+                          <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
+                            <Select
+                              options={getApprovedPoOptionsForMaterial(line.itemId)}
+                              value={line.poLineId || ""}
+                              onChange={(value) => updateLine(line.id, { poLineId: value })}
+                              placeholder="Select PO line..."
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-sm text-black border border-black">{Number(line.poRate || 0).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-black border border-black">
+                            {mrrType === "Reel" ? Number(line.invoiceQty || 0).toFixed(2) : (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={line.invoiceQty ?? line.qty}
+                                onChange={(e) => updateLine(line.id, { invoiceQty: Number(e.target.value || 0) })}
+                                className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                              />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-black border border-black">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={line.invoiceRate ?? line.rate}
+                              onChange={(e) => updateLine(line.id, { invoiceRate: Number(e.target.value || 0) })}
+                              className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-black border border-black">{Number(line.invoiceValue || 0).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-black border border-black">
+                            {mrrType === "Reel" ? Number(line.actualQty || 0).toFixed(2) : (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={line.actualQty ?? line.qty}
+                                onChange={(e) => updateLine(line.id, { actualQty: Number(e.target.value || 0) })}
+                                className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                              />
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-sm text-black border border-black">{line.uom}</td>
-                          <td className="px-4 py-3 text-sm text-black border border-black">{line.rate}</td>
-                          <td className="px-4 py-3 text-sm font-medium text-black border border-black">{line.value}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-black border border-black">{Number(line.actualValue || line.value || 0).toFixed(2)}</td>
                           <td className="px-4 py-3 text-right border border-black">
                             <button type="button" onClick={() => handleRemoveLine(line.id)} className="text-red-600 hover:text-red-800">
                               <Trash2 size={18} />
@@ -603,7 +721,9 @@ export function MaterialInForm() {
             </div>
           )}
           <div className="mt-4 text-right font-bold text-black text-xl">
-            Total Amount: <span className="text-indigo-700">Rs {totalAmount.toLocaleString()}</span>
+            <div>Total PO Value: <span className="text-slate-700">Rs {totalPoValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total Invoice Value: <span className="text-amber-700">Rs {totalInvoiceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total Actual Value: <span className="text-indigo-700">Rs {totalActualValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
           </div>
         </div>
 

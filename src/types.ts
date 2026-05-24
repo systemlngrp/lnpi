@@ -88,6 +88,15 @@ export interface MaterialLine {
   itemId: string;
   qty: number;
   uom: string;
+  poId?: string;
+  poNo?: string;
+  poLineId?: string;
+  poRate?: number;
+  invoiceQty?: number;
+  invoiceRate?: number;
+  invoiceValue?: number;
+  actualQty?: number;
+  actualValue?: number;
   rate: number;
   value: number;
 }
@@ -384,6 +393,9 @@ export interface MaterialIn {
   invoiceNo: string;
   invDate: string;
   supplierId: string;
+  totalPoValue?: number;
+  totalInvoiceValue?: number;
+  totalActualValue?: number;
   totalAmount: number;
   lines: MaterialLine[];
   phTimestamp?: string;
