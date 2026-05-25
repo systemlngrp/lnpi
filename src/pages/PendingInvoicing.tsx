@@ -8,7 +8,8 @@ import {
   InvoiceLineItem,
   DispatchPlan,
   Order,
-  Truck
+  Truck,
+  Setting
 } from "../types";
 import { 
   FileText, 
@@ -37,6 +38,12 @@ interface GroupedLoading {
   })[];
 }
 
+function extractGstStateCode(value?: string) {
+  if (!value) return "";
+  const match = value.trim().match(/\b(\d{2})[A-Z0-9]{3,}/i);
+  return match?.[1] || "";
+}
+
 export function PendingInvoicing() {
   const [loadingSlips, updateSlips] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
@@ -44,8 +51,9 @@ export function PendingInvoicing() {
   const [trucks] = useData<Truck>("trucks", []);
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
-  const [, updateInvoices] = useData<Invoice>("invoices", []);
+  const [invoices, updateInvoices] = useData<Invoice>("invoices", []);
   const [, updateLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -143,13 +151,23 @@ export function PendingInvoicing() {
         const o = orders.find(ord => ord.id === p?.orderId);
         const item = items.find(i => i.id === o?.itemId);
         if (item && !initialRates[item.id]) {
-          initialRates[item.id] = 0;
+          initialRates[item.id] = Number(o?.rate || 0);
           initialGstRates[item.id] = item.gstRate ?? 18;
         }
       });
     });
     setInvoiceRates(initialRates);
     setItemGstRates(initialGstRates);
+
+    const company = companies.find(c => c.id === billingMode);
+    const organization = settings[0];
+    const companyGstStateCode = extractGstStateCode(company?.gstNo);
+    const organizationGstStateCode = extractGstStateCode(organization?.organizationGstDetails);
+    if (companyGstStateCode && organizationGstStateCode) {
+      setIsInterState(companyGstStateCode !== organizationGstStateCode);
+    } else {
+      setIsInterState(false);
+    }
   };
 
   const invoiceItems = useMemo(() => {
@@ -267,6 +285,15 @@ export function PendingInvoicing() {
       // 1. Save Invoice
       await updateInvoices(prev => [...prev, newInvoice]);
 
+      let savedInvoice = invoices.find((invoice) => invoice.id === invoiceId);
+      if (!savedInvoice) {
+        const response = await fetch("/api/invoices");
+        if (response.ok) {
+          const latestInvoices: Invoice[] = await response.json();
+          savedInvoice = latestInvoices.find((invoice) => invoice.id === invoiceId);
+        }
+      }
+
       // 2. Save Line Items
       const lineItems: InvoiceLineItem[] = [];
       invoiceItems.forEach(item => {
@@ -313,8 +340,7 @@ export function PendingInvoicing() {
       }));
 
       // 4. Generate PDF (using a dummy invoice no since it's server generated, 
-      // in a real app we'd fetch the generated ID back)
-      generatePDF({ ...newInvoice, invoiceNo: "DRAFT-INV" }, company, invoiceItems.map(i => ({
+      generatePDF({ ...newInvoice, ...savedInvoice, invoiceNo: savedInvoice?.invoiceNo || newInvoice.invoiceNo || `INV-${invoiceId.slice(0, 8)}` }, company, invoiceItems.map(i => ({
         ...i,
         rate: itemRates[i.itemId] || 0,
         amount: i.qty * (itemRates[i.itemId] || 0)
