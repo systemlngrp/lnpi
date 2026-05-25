@@ -28,6 +28,8 @@ import { useData } from "../hooks/useData";
 import {
   MaterialIn,
   Production,
+  Order,
+  Consumption,
   OrderSchedule,
   DispatchPlan,
   LoadingSlip,
@@ -57,6 +59,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
+  const [orders] = useData<Order>("orders", []);
+  const [consumptions] = useData<Consumption>("consumptions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
@@ -143,7 +147,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       return !isNaN(schedDate.getTime()) && schedDate > tomorrow && balance > 0;
     }).length,
     "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
-                  productions.filter(isProductionPendingPH).length
+                  productions.filter(isProductionPendingPH).length +
+                  orders.filter(o => isPendingPH(o.status)).length +
+                  consumptions.filter(c => isPendingPH(c.status)).length
   };
 
   const navigation = [
@@ -154,7 +160,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Dashboard", href: "/", icon: LayoutDashboard },
         { name: "Delivery Book", href: "/delivery-book", icon: BookOpenText },
         { name: "Production Plan", href: "/production/plan", icon: ClipboardList },
-        { name: "Bulk Entry Form", href: "/bulk-entry", icon: Plus },
         { name: "Unified PH Approval", href: "/plant-head", icon: UserCheck, countKey: "/plant-head" },
       ],
     },

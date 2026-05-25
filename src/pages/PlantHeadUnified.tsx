@@ -1,22 +1,27 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Production, Item, Supplier, OrderSchedule } from "../types";
+import { Material, MaterialIn, Production, Item, Supplier, OrderSchedule, Order, Consumption, Company } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, Package, Truck, Activity, XCircle } from "lucide-react";
+import { CheckCircle, Truck, Activity, XCircle, ClipboardList, Package } from "lucide-react";
 import { ExcelExport } from "../components/ExcelExport";
 import { isProductionPendingPH } from "../lib/productionStageFilters";
 
-type Tab = "material-in" | "production";
+type Tab = "material-in" | "production" | "orders" | "consumption";
 
 export function PlantHeadUnified() {
+  const navigate = useNavigate();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [productions, setProductions] = useData<Production>("productions", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [orders, setOrders] = useData<Order>("orders", []);
+  const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
   const [materials] = useData<Material>("materials", []);
   const [items] = useData<Item>("items", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
 
   const [activeTab, setActiveTab] = useState<Tab>("material-in");
   const [submittingId, setSubmittingId] = useState<string | null>(null);
@@ -29,10 +34,16 @@ export function PlantHeadUnified() {
   const [isBulkApproving, setIsBulkApproving] = useState(false);
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
+  const pendingMaterialIn = materialIn.filter((m) => isPendingPH(m.status));
+  const pendingProductions = productions.filter(isProductionPendingPH);
+  const pendingOrders = orders.filter((o) => isPendingPH(o.status));
+  const pendingConsumptions = consumptions.filter((c) => isPendingPH(c.status));
 
   const counts = {
-    "material-in": materialIn.filter(m => isPendingPH(m.status)).length,
-    "production": productions.filter(isProductionPendingPH).length,
+    "material-in": pendingMaterialIn.length,
+    "production": pendingProductions.length,
+    "orders": pendingOrders.length,
+    "consumption": pendingConsumptions.length,
   };
 
   const toggleSelectAll = (ids: string[]) => {
@@ -67,6 +78,14 @@ export function PlantHeadUnified() {
       } else if (activeTab === "production") {
         await setProductions(prev => prev.map(p => 
           selectedIds.has(p.id) ? { ...p, status: "Pending Consumption", phTimestamp: timestamp, phEmailId: email } : p
+        ));
+      } else if (activeTab === "orders") {
+        await setOrders(prev => prev.map(o =>
+          selectedIds.has(o.id) ? { ...o, status: "Pending Scheduling", updatedBy: "System User", updateTimestamp: timestamp } : o
+        ));
+      } else if (activeTab === "consumption") {
+        await setConsumptions(prev => prev.map(c =>
+          selectedIds.has(c.id) ? { ...c, status: "Pending Tally", phTimestamp: timestamp, phEmailId: email, updateTimestamp: timestamp } : c
         ));
       }
       setSelectedIds(new Set());
@@ -107,6 +126,84 @@ export function PlantHeadUnified() {
       await setProductions(prev => prev.map(p => 
         p.id === id ? { ...p, status: "Pending Consumption", phTimestamp: new Date().toISOString(), phEmailId: "ph@lngrp.in" } : p
       ));
+    } catch (err) {
+      console.error("Approval error:", err);
+    } finally {
+      setSubmittingId(null);
+      setConfirmId(null);
+    }
+  };
+
+  const handleApproveOrder = async (id: string) => {
+    if (confirmId !== id) {
+      setConfirmId(id);
+      setTimeout(() => setConfirmId(null), 3000);
+      return;
+    }
+    setSubmittingId(id);
+    try {
+      await setOrders(prev =>
+        prev.map((o) =>
+          o.id === id
+            ? { ...o, status: "Pending Scheduling", updatedBy: "System User", updateTimestamp: new Date().toISOString() }
+            : o
+        )
+      );
+    } catch (err) {
+      console.error("Approval error:", err);
+    } finally {
+      setSubmittingId(null);
+      setConfirmId(null);
+    }
+  };
+
+  const handleCancelOrder = async (id: string) => {
+    const cancelRemarks = window.prompt("Enter cancel remarks");
+    if (cancelRemarks === null) return;
+    if (!cancelRemarks.trim()) {
+      alert("Cancel remarks are required.");
+      return;
+    }
+
+    setSubmittingId(id);
+    try {
+      const timestamp = new Date().toISOString();
+      await setOrders(prev =>
+        prev.map((o) =>
+          o.id === id
+            ? {
+                ...o,
+                status: "Cancelled",
+                remarks: [o.remarks?.trim(), `Cancel Remarks: ${cancelRemarks.trim()}`].filter(Boolean).join(" | "),
+                updatedBy: "System User",
+                updateTimestamp: timestamp,
+              }
+            : o
+        )
+      );
+    } catch (err) {
+      console.error("Order cancellation error:", err);
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const handleApproveConsumption = async (id: string) => {
+    if (confirmId !== id) {
+      setConfirmId(id);
+      setTimeout(() => setConfirmId(null), 3000);
+      return;
+    }
+    setSubmittingId(id);
+    try {
+      const timestamp = new Date().toISOString();
+      await setConsumptions(prev =>
+        prev.map((c) =>
+          c.id === id
+            ? { ...c, status: "Pending Tally", phTimestamp: timestamp, phEmailId: "ph@lngrp.in", updateTimestamp: timestamp }
+            : c
+        )
+      );
     } catch (err) {
       console.error("Approval error:", err);
     } finally {
@@ -187,6 +284,20 @@ export function PlantHeadUnified() {
             count={counts["production"]}
             icon={<Activity size={14} />}
           />
+          <TabButton
+            active={activeTab === "orders"}
+            onClick={() => { setActiveTab("orders"); setSelectedIds(new Set()); }}
+            label="Orders"
+            count={counts["orders"]}
+            icon={<ClipboardList size={14} />}
+          />
+          <TabButton
+            active={activeTab === "consumption"}
+            onClick={() => { setActiveTab("consumption"); setSelectedIds(new Set()); }}
+            label="Consumption"
+            count={counts["consumption"]}
+            icon={<Package size={14} />}
+          />
         </div>
       </div>
 
@@ -211,12 +322,12 @@ export function PlantHeadUnified() {
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Material In ({counts["material-in"]})</span>
-              <ExcelExport data={materialIn.filter(m => m.status === "Pending PH")} fileName="Pending_PH_MaterialIn" />
+              <ExcelExport data={pendingMaterialIn} fileName="Pending_PH_MaterialIn" />
             </div>
             
             {/* Mobile View - Cards */}
             <div className="block md:hidden space-y-4 p-2">
-                {materialIn.filter(m => isPendingPH(m.status)).sort((a, b) => {
+                {pendingMaterialIn.sort((a, b) => {
                     const timeA = new Date(a.updateTimestamp || a.timestamp || a.date || 0).getTime();
                     const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
                     return timeB - timeA;
@@ -251,7 +362,7 @@ export function PlantHeadUnified() {
                       type="checkbox" 
                       className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                       checked={counts["material-in"] > 0 && selectedIds.size === counts["material-in"]}
-                      onChange={() => toggleSelectAll(materialIn.filter(m => isPendingPH(m.status)).map(m => m.id))}
+                      onChange={() => toggleSelectAll(pendingMaterialIn.map(m => m.id))}
                     />
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
@@ -262,8 +373,7 @@ export function PlantHeadUnified() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
-                {materialIn
-                  .filter(m => isPendingPH(m.status))
+                {pendingMaterialIn
                   .sort((a, b) => {
                     const timeA = new Date(a.updateTimestamp || a.timestamp || a.date || 0).getTime();
                     const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
@@ -308,12 +418,12 @@ export function PlantHeadUnified() {
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Production ({counts["production"]})</span>
-              <ExcelExport data={productions.filter(p => p.status === "Pending PH")} fileName="Pending_PH_Production" />
+              <ExcelExport data={pendingProductions} fileName="Pending_PH_Production" />
             </div>
             
             {/* Mobile View - Cards */}
             <div className="block md:hidden space-y-4 p-2">
-                {productions.filter(isProductionPendingPH).sort((a, b) => {
+                {pendingProductions.sort((a, b) => {
                     const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
                     const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
                     return timeB - timeA;
@@ -375,7 +485,7 @@ export function PlantHeadUnified() {
                       type="checkbox" 
                       className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                       checked={counts["production"] > 0 && selectedIds.size === counts["production"]}
-                      onChange={() => toggleSelectAll(productions.filter(isProductionPendingPH).map(p => p.id))}
+                      onChange={() => toggleSelectAll(pendingProductions.map(p => p.id))}
                     />
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
@@ -386,8 +496,7 @@ export function PlantHeadUnified() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
-                {productions
-                  .filter(isProductionPendingPH)
+                {pendingProductions
                   .sort((a, b) => {
                     const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
                     const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
@@ -445,6 +554,174 @@ export function PlantHeadUnified() {
                   </tr>
                 ))}
                 {counts["production"] === 0 && <NoPendingRows colSpan={6} />}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === "orders" && (
+          <div className="p-0 overflow-x-auto">
+            <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
+              <span className="font-bold text-sm uppercase text-slate-600">Pending Orders ({counts["orders"]})</span>
+              <ExcelExport data={pendingOrders} fileName="Pending_PH_Orders" />
+            </div>
+
+            <div className="block md:hidden space-y-4 p-2">
+              {pendingOrders.map((o) => (
+                <div key={o.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
+                  <div className="flex justify-between items-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                      checked={selectedIds.has(o.id)}
+                      onChange={() => toggleSelect(o.id)}
+                    />
+                    <div className="font-bold text-sm">{o.orderNo}</div>
+                  </div>
+                  <div className="text-sm font-bold">{companies.find((c) => c.id === o.companyId)?.name || o.companyId}</div>
+                  <div className="text-xs text-slate-600">{items.find((it) => it.id === o.itemId)?.name || "Unknown"} [{o.qty}]</div>
+                  <div className="flex gap-2 justify-end">
+                    <ApproveButton confirming={confirmId === o.id} submitting={submittingId === o.id} onClick={() => handleApproveOrder(o.id)} />
+                    <button onClick={() => handleCancelOrder(o.id)} disabled={submittingId === o.id} className="bg-red-50 text-red-800 border border-red-800 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest">
+                      Cancel
+                    </button>
+                    <button onClick={() => navigate(`/orders/form?edit=${o.id}`)} className="bg-slate-200 text-black border border-black px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest">
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {counts["orders"] === 0 ? <div className="p-6 text-center text-black font-bold border-2 border-dashed border-black">No pending orders.</div> : null}
+            </div>
+
+            <table className="hidden md:table min-w-full divide-y divide-black">
+              <thead className="bg-slate-50 border-b border-black">
+                <tr className="divide-x divide-black">
+                  <th className="px-4 py-2 w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                      checked={counts["orders"] > 0 && selectedIds.size === counts["orders"]}
+                      onChange={() => toggleSelectAll(pendingOrders.map((o) => o.id))}
+                    />
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Order No</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Date</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Company</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Item</th>
+                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Qty</th>
+                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black">
+                {pendingOrders
+                  .sort((a, b) => new Date(b.updateTimestamp || b.orderDate || 0).getTime() - new Date(a.updateTimestamp || a.orderDate || 0).getTime())
+                  .map((o) => (
+                    <tr key={o.id} className={cn("divide-x divide-black hover:bg-slate-50", selectedIds.has(o.id) && "bg-emerald-50/50")}>
+                      <td className="px-4 py-2 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                          checked={selectedIds.has(o.id)}
+                          onChange={() => toggleSelect(o.id)}
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-sm font-medium">{o.orderNo}</td>
+                      <td className="px-4 py-2 text-sm">{formatDate(o.orderDate)}</td>
+                      <td className="px-4 py-2 text-sm">{companies.find((c) => c.id === o.companyId)?.name || o.companyId}</td>
+                      <td className="px-4 py-2 text-sm">{items.find((it) => it.id === o.itemId)?.name || "Unknown"}</td>
+                      <td className="px-4 py-2 text-sm text-right font-bold">{o.qty}</td>
+                      <td className="px-4 py-2 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <ApproveButton confirming={confirmId === o.id} submitting={submittingId === o.id} onClick={() => handleApproveOrder(o.id)} />
+                          <button onClick={() => handleCancelOrder(o.id)} disabled={submittingId === o.id} className="bg-red-50 text-red-800 border border-red-800 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest">
+                            Cancel
+                          </button>
+                          <button onClick={() => navigate(`/orders/form?edit=${o.id}`)} className="bg-slate-200 text-black border border-black px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest">
+                            Edit
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                {counts["orders"] === 0 && <NoPendingRows colSpan={7} />}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === "consumption" && (
+          <div className="p-0 overflow-x-auto">
+            <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
+              <span className="font-bold text-sm uppercase text-slate-600">Pending Consumption ({counts["consumption"]})</span>
+              <ExcelExport data={pendingConsumptions} fileName="Pending_PH_Consumption" />
+            </div>
+
+            <div className="block md:hidden space-y-4 p-2">
+              {pendingConsumptions.map((c) => (
+                <div key={c.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
+                  <div className="flex justify-between items-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                      checked={selectedIds.has(c.id)}
+                      onChange={() => toggleSelect(c.id)}
+                    />
+                    <div className="font-bold text-sm">{c.transactionNo}</div>
+                  </div>
+                  <div className="text-sm font-bold">{items.find((it) => it.id === c.itemId)?.name || "Unknown"}</div>
+                  <div className="text-xs text-slate-600">{c.qty} {c.uom}</div>
+                  <div className="flex justify-end">
+                    <ApproveButton confirming={confirmId === c.id} submitting={submittingId === c.id} onClick={() => handleApproveConsumption(c.id)} />
+                  </div>
+                </div>
+              ))}
+              {counts["consumption"] === 0 ? <div className="p-6 text-center text-black font-bold border-2 border-dashed border-black">No pending consumption approvals.</div> : null}
+            </div>
+
+            <table className="hidden md:table min-w-full divide-y divide-black">
+              <thead className="bg-slate-50 border-b border-black">
+                <tr className="divide-x divide-black">
+                  <th className="px-4 py-2 w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                      checked={counts["consumption"] > 0 && selectedIds.size === counts["consumption"]}
+                      onChange={() => toggleSelectAll(pendingConsumptions.map((c) => c.id))}
+                    />
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Date</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Item</th>
+                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Qty</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">UOM</th>
+                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black">
+                {pendingConsumptions
+                  .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime())
+                  .map((c) => (
+                    <tr key={c.id} className={cn("divide-x divide-black hover:bg-slate-50", selectedIds.has(c.id) && "bg-emerald-50/50")}>
+                      <td className="px-4 py-2 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                          checked={selectedIds.has(c.id)}
+                          onChange={() => toggleSelect(c.id)}
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-sm font-medium">{c.transactionNo}</td>
+                      <td className="px-4 py-2 text-sm">{formatDate(c.date)}</td>
+                      <td className="px-4 py-2 text-sm">{items.find((it) => it.id === c.itemId)?.name || "Unknown"}</td>
+                      <td className="px-4 py-2 text-sm text-right font-bold">{c.qty}</td>
+                      <td className="px-4 py-2 text-sm">{c.uom}</td>
+                      <td className="px-4 py-2 text-right">
+                        <ApproveButton confirming={confirmId === c.id} submitting={submittingId === c.id} onClick={() => handleApproveConsumption(c.id)} />
+                      </td>
+                    </tr>
+                  ))}
+                {counts["consumption"] === 0 && <NoPendingRows colSpan={7} />}
               </tbody>
             </table>
           </div>

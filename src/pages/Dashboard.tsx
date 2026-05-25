@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Company, DispatchPlan, Invoice, Item, LoadingSlip, Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Order, OrderSchedule, Production } from "../types";
+import { Company, Consumption, DispatchPlan, Invoice, Item, LoadingSlip, Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Order, OrderSchedule, Production } from "../types";
 import { cn, formatNumber } from "../lib/utils";
 import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
@@ -32,6 +32,7 @@ export function Dashboard() {
   const [items] = useData<Item>("items", []);
   const [materials] = useData<Material>("materials", []);
   const [orders] = useData<Order>("orders", []);
+  const [consumptions] = useData<Consumption>("consumptions", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -132,7 +133,9 @@ export function Dashboard() {
 
   const pendingPH =
     filteredMaterialIn.filter((entry) => isPendingPH(entry.status)).length +
-    filteredProductions.filter((entry) => isProductionPendingPH(entry)).length;
+    filteredProductions.filter((entry) => isProductionPendingPH(entry)).length +
+    orders.filter((entry) => isPendingPH(entry.status) && isWithinSelectedRange(entry.orderDate)).length +
+    consumptions.filter((entry) => isPendingPH(entry.status) && isWithinSelectedRange(entry.date)).length;
 
   const pendingAccounts = filteredMaterialIn.filter((entry) => entry.status === "Pending Accounts").length;
   const pendingMD = filteredMaterialIn.filter((entry) => entry.status === "Pending MD").length;
