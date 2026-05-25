@@ -94,18 +94,6 @@ export function MaterialInForm() {
     { value: "Others", label: "Others" },
   ];
 
-  const totalPoValue = lines.reduce((sum, line) => sum + (Number(line.actualQty || line.qty || 0) * Number(line.poRate || 0)), 0);
-  const totalReelPoValue = Object.entries(packingSlipDrafts).reduce((sum, [, slips]) => {
-    return sum + slips.reduce((lineSum, slip) => {
-      const poLine = slip.ourPoId ? getPurchaseOrderLine(slip.ourPoId) : undefined;
-      return lineSum + Number(slip.weightKg || 0) * Number(poLine?.rate || 0);
-    }, 0);
-  }, 0);
-  const totalInvoiceValue = lines.reduce((sum, line) => sum + Number(line.invoiceValue || 0), 0);
-  const totalActualValue = lines.reduce((sum, line) => sum + Number(line.actualValue || line.value || 0), 0);
-  const totalPoValueResolved = mrrType === "Reel" ? totalReelPoValue : totalPoValue;
-  const totalAmount = totalActualValue;
-
   useEffect(() => {
     if (!linkedGateEntry) return;
     setDate(linkedGateEntry.date || new Date().toISOString().split("T")[0]);
@@ -139,6 +127,18 @@ export function MaterialInForm() {
 
   const getPurchaseOrder = (purchaseOrderId?: string) =>
     purchaseOrders.find((order) => order.id === purchaseOrderId);
+
+  const totalPoValue = lines.reduce((sum, line) => sum + (Number(line.actualQty || line.qty || 0) * Number(line.poRate || 0)), 0);
+  const totalReelPoValue = Object.entries(packingSlipDrafts).reduce((sum, [, slips]) => {
+    return sum + slips.reduce((lineSum, slip) => {
+      const poLine = slip.ourPoId ? getPurchaseOrderLine(slip.ourPoId) : undefined;
+      return lineSum + Number(slip.weightKg || 0) * Number(poLine?.rate || 0);
+    }, 0);
+  }, 0);
+  const totalInvoiceValue = lines.reduce((sum, line) => sum + Number(line.invoiceValue || 0), 0);
+  const totalActualValue = lines.reduce((sum, line) => sum + Number(line.actualValue || line.value || 0), 0);
+  const totalPoValueResolved = mrrType === "Reel" ? totalReelPoValue : totalPoValue;
+  const totalAmount = totalActualValue;
 
   const computeLineValues = (line: MaterialLine) => {
     const invoiceQty = Number(line.invoiceQty ?? line.qty ?? 0);
