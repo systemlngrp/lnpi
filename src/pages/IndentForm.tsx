@@ -21,6 +21,10 @@ function createEmptyLine(): EditableIndentLine {
   };
 }
 
+function getIndentLineUom(indentType: Indent["indentType"], material?: Material | null) {
+  return indentType === "Reel" ? "Kgs" : material?.uom || "";
+}
+
 export function IndentForm() {
   const navigate = useNavigate();
   const [indents, setIndents] = useData<Indent>("indents", []);
@@ -120,7 +124,7 @@ export function IndentForm() {
         indentId,
         erpCode: material.erpCode,
         materialId: material.id,
-        uom: material.uom || "",
+        uom: getIndentLineUom(indentType, material),
         qty: Number(line.qty),
         orderedQty: 0,
         cancelledQty: 0,
@@ -285,7 +289,7 @@ export function IndentForm() {
                       </td>
                       <td className="px-3 py-3 border-2 border-black">
                         <input
-                          value={material?.uom || ""}
+                          value={getIndentLineUom(indentType, material)}
                           readOnly
                           className="w-full rounded border border-slate-300 bg-slate-50 px-3 py-2 text-black"
                         />
