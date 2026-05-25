@@ -119,8 +119,19 @@ export function MaterialIssueForm() {
     });
   };
 
-  const getLineAvailableReels = (materialId: string) =>
-    getAvailableReelPackingSlips(materialId, packingSlips, materialIssueReelLines, materialReturnReelLines);
+  const getSelectedReelsAcrossOtherLines = (lineId: string) =>
+    new Set(
+      Object.entries(selectedReels)
+        .filter(([id]) => id !== lineId)
+        .flatMap(([, reelIds]) => reelIds)
+    );
+
+  const getLineAvailableReels = (lineId: string, materialId: string) => {
+    const selectedElsewhere = getSelectedReelsAcrossOtherLines(lineId);
+    return getAvailableReelPackingSlips(materialId, packingSlips, materialIssueReelLines, materialReturnReelLines).filter(
+      (slip) => !selectedElsewhere.has(slip.id)
+    );
+  };
 
   const updateSelectedReels = (lineId: string, materialId: string, packingSlipId: string, checked: boolean) => {
     setSelectedReels((prev) => {
@@ -128,7 +139,16 @@ export function MaterialIssueForm() {
       if (checked) current.add(packingSlipId);
       else current.delete(packingSlipId);
       const nextIds = Array.from(current);
-      const totalWeight = getLineAvailableReels(materialId)
+      const selectedElsewhere = new Set(
+        Object.entries(prev)
+          .filter(([id]) => id !== lineId)
+          .flatMap(([, reelIds]) => reelIds)
+      );
+      if (checked && selectedElsewhere.has(packingSlipId)) {
+        alert("This reel is already selected in another line.");
+        return prev;
+      }
+      const totalWeight = getAvailableReelPackingSlips(materialId, packingSlips, materialIssueReelLines, materialReturnReelLines)
         .filter((slip) => nextIds.includes(slip.id))
         .reduce((sum, slip) => sum + Number(slip.weightKg || 0), 0);
       setLines((old) => old.map((line) => (line.id === lineId ? { ...line, qty: totalWeight } : line)));
@@ -194,6 +214,7 @@ export function MaterialIssueForm() {
         if (line.isReel) {
           const reelIds = selectedReels[line.id] || [];
           getLineAvailableReels(line.materialId)
+          getAvailableReelPackingSlips(line.materialId, packingSlips, materialIssueReelLines, materialReturnReelLines)
             .filter((slip) => reelIds.includes(slip.id))
             .forEach((slip) => {
               nextReelLines.push({
@@ -303,7 +324,7 @@ export function MaterialIssueForm() {
               {lines.map((line) => {
                 const material = getMaterial(line.materialId);
                 const availableQty = !line.isReel ? getNonReelAvailableQty(line.materialId, materialIn, materialIssueLines, materialReturnLines) : null;
-                const availableReels = line.isReel ? getLineAvailableReels(line.materialId) : [];
+                const availableReels = line.isReel ? getLineAvailableReels(line.id, line.materialId) : [];
                 const selectedIds = selectedReels[line.id] || [];
                 return (
                   <div key={line.id} className="rounded border border-black p-4 space-y-3">

@@ -34,7 +34,7 @@ export function MaterialReturnForm() {
   const [currentMaterialId, setCurrentMaterialId] = useState("");
   const [currentQty, setCurrentQty] = useState<number | "">("");
   const [lines, setLines] = useState<Array<{ id: string; materialId: string; qty: number; uom: string; isReel: boolean }>>([]);
-  const [selectedReels, setSelectedReels] = useState<Record<string, string[]>>({});
+  const [returnQtyDrafts, setReturnQtyDrafts] = useState<Record<string, Record<string, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const jobOptions = useMemo(
@@ -98,7 +98,7 @@ export function MaterialReturnForm() {
 
   const handleRemoveLine = (lineId: string) => {
     setLines((prev) => prev.filter((line) => line.id !== lineId));
-    setSelectedReels((prev) => {
+    setReturnQtyDrafts((prev) => {
       const next = { ...prev };
       delete next[lineId];
       return next;
@@ -108,17 +108,25 @@ export function MaterialReturnForm() {
   const getReturnableReels = (materialId: string) =>
     productionId ? getReturnableReelLinesForJob(materialId, productionId, materialIssueReelLines, materialReturnReelLines) : [];
 
-  const updateSelectedReels = (lineId: string, materialId: string, packingSlipId: string, checked: boolean) => {
-    setSelectedReels((prev) => {
-      const current = new Set(prev[lineId] || []);
-      if (checked) current.add(packingSlipId);
-      else current.delete(packingSlipId);
-      const nextIds = Array.from(current);
-      const totalWeight = getReturnableReels(materialId)
-        .filter((line) => nextIds.includes(line.packingSlipId))
-        .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
+  const updateReturnQty = (lineId: string, materialId: string, packingSlipId: string, value: string) => {
+    setReturnQtyDrafts((prev) => {
+      const next = {
+        ...prev,
+        [lineId]: {
+          ...(prev[lineId] || {}),
+          [packingSlipId]: value,
+        },
+      };
+      const returnableMap = new Map(
+        getReturnableReels(materialId).map((line) => [line.packingSlipId, Number(line.weightKg || 0)])
+      );
+      const totalWeight = Object.entries(next[lineId] || {}).reduce((sum, [id, qty]) => {
+        const enteredQty = Number(qty || 0);
+        const maxQty = returnableMap.get(id) || 0;
+        return sum + Math.min(Math.max(enteredQty, 0), maxQty);
+      }, 0);
       setLines((old) => old.map((line) => (line.id === lineId ? { ...line, qty: totalWeight } : line)));
-      return { ...prev, [lineId]: nextIds };
+      return next;
     });
   };
 
@@ -129,8 +137,20 @@ export function MaterialReturnForm() {
 
     for (const line of lines) {
       if (line.isReel) {
-        if ((selectedReels[line.id] || []).length === 0) {
-          alert("Please select reel serial numbers for each reel return line.");
+        const drafts = returnQtyDrafts[line.id] || {};
+        const selectedEntries = Object.entries(drafts).filter(([, qty]) => Number(qty || 0) > 0);
+        if (selectedEntries.length === 0) {
+          alert("Please enter return quantity for at least one issued reel in each reel return line.");
+          return;
+        }
+        const issuedMap = new Map(getReturnableReels(line.materialId).map((row) => [row.packingSlipId, Number(row.weightKg || 0)]));
+        const invalidQty = selectedEntries.find(([packingSlipId, qty]) => {
+          const returnQty = Number(qty || 0);
+          const issuedQty = issuedMap.get(packingSlipId) || 0;
+          return returnQty <= 0 || returnQty > issuedQty;
+        });
+        if (invalidQty) {
+          alert("Return quantity cannot be more than issued weight for a reel.");
           return;
         }
       } else if (Number(line.qty || 0) <= 0) {
@@ -177,9 +197,9 @@ export function MaterialReturnForm() {
         });
 
         if (line.isReel) {
-          const reelIds = selectedReels[line.id] || [];
+          const drafts = returnQtyDrafts[line.id] || {};
           getReturnableReels(line.materialId)
-            .filter((reelLine) => reelIds.includes(reelLine.packingSlipId))
+            .filter((reelLine) => Number(drafts[reelLine.packingSlipId] || 0) > 0)
             .forEach((reelLine) => {
               nextReelLines.push({
                 id: crypto.randomUUID(),
@@ -188,7 +208,7 @@ export function MaterialReturnForm() {
                 materialId: line.materialId,
                 packingSlipId: reelLine.packingSlipId,
                 ourReelNo: reelLine.ourReelNo,
-                weightKg: Number(reelLine.weightKg || 0),
+                weightKg: Number(drafts[reelLine.packingSlipId] || 0),
                 productionId,
                 jobNo: selectedProduction?.transactionNo || "",
                 updatedBy: "System User",
@@ -229,7 +249,7 @@ export function MaterialReturnForm() {
       setCurrentMaterialId("");
       setCurrentQty("");
       setLines([]);
-      setSelectedReels({});
+      setReturnQtyDrafts({});
       alert(`Material Return created with Return No: ${returnNo}`);
     } catch (error) {
       console.error("Failed to save material return:", error);
@@ -288,7 +308,7 @@ export function MaterialReturnForm() {
               {lines.map((line) => {
                 const material = getMaterial(line.materialId);
                 const returnableReels = line.isReel ? getReturnableReels(line.materialId) : [];
-                const selectedIds = selectedReels[line.id] || [];
+                const draftQtys = returnQtyDrafts[line.id] || {};
                 return (
                   <div key={line.id} className="rounded border border-black p-4 space-y-3">
                     <div className="flex items-start justify-between gap-4">
@@ -308,7 +328,7 @@ export function MaterialReturnForm() {
                         <table className="min-w-full border-collapse border border-black">
                           <thead className="bg-slate-100">
                             <tr>
-                              {["Select", "Our Reel No.", "Weight KG", "Job No."].map((heading) => (
+                              {["Our Reel No.", "Issued Weight KG", "Return Qty KG"].map((heading) => (
                                 <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase">{heading}</th>
                               ))}
                             </tr>
@@ -316,21 +336,24 @@ export function MaterialReturnForm() {
                           <tbody>
                             {returnableReels.length === 0 ? (
                               <tr>
-                                <td colSpan={4} className="border border-black px-4 py-6 text-center text-sm text-slate-500">No issued reels available for return for this job.</td>
+                                <td colSpan={3} className="border border-black px-4 py-6 text-center text-sm text-slate-500">No issued reels available for return for this job.</td>
                               </tr>
                             ) : (
                               returnableReels.map((reelLine) => (
                                 <tr key={`${reelLine.packingSlipId}-${reelLine.productionId}`}>
-                                  <td className="border border-black px-3 py-2 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedIds.includes(reelLine.packingSlipId)}
-                                      onChange={(e) => updateSelectedReels(line.id, line.materialId, reelLine.packingSlipId, e.target.checked)}
-                                    />
-                                  </td>
                                   <td className="border border-black px-3 py-2 text-sm">{reelLine.ourReelNo}</td>
                                   <td className="border border-black px-3 py-2 text-sm">{Number(reelLine.weightKg || 0).toFixed(2)}</td>
-                                  <td className="border border-black px-3 py-2 text-sm">{reelLine.jobNo}</td>
+                                  <td className="border border-black px-3 py-2 text-sm">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={Number(reelLine.weightKg || 0)}
+                                      step="0.01"
+                                      value={draftQtys[reelLine.packingSlipId] || ""}
+                                      onChange={(e) => updateReturnQty(line.id, line.materialId, reelLine.packingSlipId, e.target.value)}
+                                      className="w-28 rounded border border-slate-300 px-2 py-1 text-right text-sm"
+                                    />
+                                  </td>
                                 </tr>
                               ))
                             )}
