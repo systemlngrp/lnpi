@@ -274,22 +274,23 @@ export function PurchaseOrderCreate() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-black">
-          <table className="min-w-full border-collapse">
+        <div className="overflow-hidden rounded-xl border border-black bg-white">
+          <div className="overflow-x-auto pb-2">
+          <table className="min-w-[1680px] border-collapse">
             <thead>
               <tr className="bg-indigo-700 text-white">
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold">ERP</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[280px]">Material</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold">Unit</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Indent Qty</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Already Ordered Qty</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Already Cancelled Qty</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Balance Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[120px]">Indent Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[130px]">Already Ordered Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[140px]">Already Cancelled Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[120px]">Balance Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[220px]">Supplier</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">New PO Qty</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">New Cancel Qty</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Rate</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Amount</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[140px]">New PO Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[150px]">New Cancel Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[140px]">Rate</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[160px]">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -323,7 +324,7 @@ export function PurchaseOrderCreate() {
                         step="0.01"
                         value={draft.poQty}
                         onChange={(e) => setDraftField(line.id, { poQty: e.target.value })}
-                        className="w-full rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                        className="w-[120px] rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                       />
                     </td>
                     <td className="border-2 border-black px-3 py-3">
@@ -333,7 +334,7 @@ export function PurchaseOrderCreate() {
                         step="0.01"
                         value={draft.cancelQty}
                         onChange={(e) => setDraftField(line.id, { cancelQty: e.target.value })}
-                        className="w-full rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                        className="w-[130px] rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                       />
                     </td>
                     <td className="border-2 border-black px-3 py-3">
@@ -343,7 +344,7 @@ export function PurchaseOrderCreate() {
                         step="0.01"
                         value={draft.rate}
                         onChange={(e) => setDraftField(line.id, { rate: e.target.value })}
-                        className="w-full rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                        className="w-[120px] rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                       />
                     </td>
                     <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{amount ? amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}</td>
@@ -352,6 +353,7 @@ export function PurchaseOrderCreate() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
 
         <div className="flex justify-end">

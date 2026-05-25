@@ -9,10 +9,6 @@ export function getIndentLineCancelledQty(line: IndentLine) {
 }
 
 export function getIndentLineBalanceQty(line: IndentLine) {
-  const explicitBalance = Number(line.balanceQty);
-  if (Number.isFinite(explicitBalance) && explicitBalance >= 0) {
-    return explicitBalance;
-  }
   return Math.max(0, Number(line.qty || 0) - getIndentLineOrderedQty(line) - getIndentLineCancelledQty(line));
 }
 
