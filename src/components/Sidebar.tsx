@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import {
   Boxes,
   ClipboardList,
@@ -19,7 +20,9 @@ import {
   Receipt,
   FlaskConical,
   BookOpenText,
-  X
+  X,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
@@ -51,6 +54,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
@@ -321,7 +325,45 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     },
   ];
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem("sidebar-collapsed-sections");
+    if (saved) {
+      try {
+        setCollapsedSections(JSON.parse(saved));
+      } catch {
+        setCollapsedSections({});
+      }
+    }
+  }, []);
 
+  const sortedNavigation = useMemo(() => {
+    const rank = (section: string) => {
+      if (section === "Quick Access") return -1;
+      if (section === "Documentation") return 999;
+      return 0;
+    };
+
+    return navigation
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+        ),
+      }))
+      .sort((a, b) => {
+        const rankDiff = rank(a.section) - rank(b.section);
+        if (rankDiff !== 0) return rankDiff;
+        return a.section.localeCompare(b.section, undefined, { sensitivity: "base" });
+      });
+  }, [navigation]);
+
+  const toggleSection = (section: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [section]: !prev[section] };
+      window.localStorage.setItem("sidebar-collapsed-sections", JSON.stringify(next));
+      return next;
+    });
+  };
 
   return (
     <div className={cn(
@@ -339,12 +381,19 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         </button>
       </div>
       <nav className="flex-1 space-y-3 px-2 py-4 overflow-y-auto">
-        {navigation.map((group) => (
+        {sortedNavigation.map((group) => (
           <div key={group.section} className={cn("p-1 rounded flex flex-col border border-white/10", group.color)}>
-            <h3 className={cn("text-[10px] font-bold text-white text-left tracking-wider uppercase mb-1.5 pl-1 pt-0.5 opacity-70 whitespace-nowrap", isCollapsed && "hidden")}>
-               {group.section}
-            </h3>
-            <div className="space-y-px">
+            {!isCollapsed ? (
+              <button
+                type="button"
+                onClick={() => toggleSection(group.section)}
+                className="mb-1 flex w-full items-center justify-between rounded px-1 pt-0.5 pb-1 text-left text-[10px] font-bold uppercase tracking-wider text-white/80 hover:bg-black/10"
+              >
+                <span className="whitespace-nowrap">{group.section}</span>
+                {collapsedSections[group.section] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+              </button>
+            ) : null}
+            <div className={cn("space-y-px", !isCollapsed && collapsedSections[group.section] && "hidden")}>
               {group.items.map((item) => {
                 const isActive = (item.href === "/" && location.pathname === "/") || (item.href !== "/" && location.pathname.startsWith(item.href));
                 const count = item.countKey ? counts[item.countKey] : 0;
