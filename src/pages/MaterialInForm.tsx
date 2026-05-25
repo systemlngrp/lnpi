@@ -95,8 +95,15 @@ export function MaterialInForm() {
   ];
 
   const totalPoValue = lines.reduce((sum, line) => sum + (Number(line.actualQty || line.qty || 0) * Number(line.poRate || 0)), 0);
+  const totalReelPoValue = Object.entries(packingSlipDrafts).reduce((sum, [, slips]) => {
+    return sum + slips.reduce((lineSum, slip) => {
+      const poLine = slip.ourPoId ? getPurchaseOrderLine(slip.ourPoId) : undefined;
+      return lineSum + Number(slip.weightKg || 0) * Number(poLine?.rate || 0);
+    }, 0);
+  }, 0);
   const totalInvoiceValue = lines.reduce((sum, line) => sum + Number(line.invoiceValue || 0), 0);
   const totalActualValue = lines.reduce((sum, line) => sum + Number(line.actualValue || line.value || 0), 0);
+  const totalPoValueResolved = mrrType === "Reel" ? totalReelPoValue : totalPoValue;
   const totalAmount = totalActualValue;
 
   useEffect(() => {
@@ -337,7 +344,7 @@ export function MaterialInForm() {
           invoiceNo,
           invDate,
           supplierId,
-          totalPoValue,
+          totalPoValue: totalPoValueResolved,
           totalInvoiceValue,
           totalActualValue,
           totalAmount,
@@ -508,15 +515,17 @@ export function MaterialInForm() {
                 />
               </div>
             ) : null}
-            <div className="flex flex-col space-y-1 w-full md:w-80">
-              <label className="text-sm font-bold text-black">Our PO No.</label>
-              <Select
-                options={currentItemId ? getApprovedPoOptionsForMaterial(currentItemId) : []}
-                value={currentPoLineId}
-                onChange={setCurrentPoLineId}
-                placeholder="Select PO line..."
-              />
-            </div>
+            {mrrType === "Others" ? (
+              <div className="flex flex-col space-y-1 w-full md:w-80">
+                <label className="text-sm font-bold text-black">Our PO No.</label>
+                <Select
+                  options={currentItemId ? getApprovedPoOptionsForMaterial(currentItemId) : []}
+                  value={currentPoLineId}
+                  onChange={setCurrentPoLineId}
+                  placeholder="Select PO line..."
+                />
+              </div>
+            ) : null}
             <div className="flex flex-col space-y-1 w-full md:w-24">
               <label className="text-sm font-bold text-black">Invoice Rate</label>
               <input
@@ -538,8 +547,8 @@ export function MaterialInForm() {
                   <thead className="bg-slate-100 divide-x divide-black">
                     <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Material</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th>
+                      {mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th> : null}
+                      {mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th> : null}
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Qty</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Rate</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value</th>
@@ -555,15 +564,19 @@ export function MaterialInForm() {
                       return (
                         <tr key={line.id} className="divide-x divide-black">
                           <td className="px-4 py-3 text-sm text-black border border-black">{materialName}</td>
-                          <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
-                            <Select
-                              options={getApprovedPoOptionsForMaterial(line.itemId)}
-                              value={line.poLineId || ""}
-                              onChange={(value) => updateLine(line.id, { poLineId: value })}
-                              placeholder="Select PO line..."
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-sm text-black border border-black">{Number(line.poRate || 0).toFixed(2)}</td>
+                          {mrrType === "Others" ? (
+                            <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
+                              <Select
+                                options={getApprovedPoOptionsForMaterial(line.itemId)}
+                                value={line.poLineId || ""}
+                                onChange={(value) => updateLine(line.id, { poLineId: value })}
+                                placeholder="Select PO line..."
+                              />
+                            </td>
+                          ) : null}
+                          {mrrType === "Others" ? (
+                            <td className="px-4 py-3 text-sm text-black border border-black">{Number(line.poRate || 0).toFixed(2)}</td>
+                          ) : null}
                           <td className="px-4 py-3 text-sm text-black border border-black">
                             {mrrType === "Reel" ? Number(line.invoiceQty || 0).toFixed(2) : (
                               <input
@@ -721,7 +734,7 @@ export function MaterialInForm() {
             </div>
           )}
           <div className="mt-4 text-right font-bold text-black text-xl">
-            <div>Total PO Value: <span className="text-slate-700">Rs {totalPoValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total PO Value: <span className="text-slate-700">Rs {totalPoValueResolved.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total Invoice Value: <span className="text-amber-700">Rs {totalInvoiceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total Actual Value: <span className="text-indigo-700">Rs {totalActualValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
           </div>
