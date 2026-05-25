@@ -282,12 +282,12 @@ export function PurchaseOrderCreate() {
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[280px]">Material</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold">Unit</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Indent Qty</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Ordered Qty</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Cancelled Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Already Ordered Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Already Cancelled Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Balance Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[220px]">Supplier</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">PO Qty</th>
-                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Cancel Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">New PO Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">New Cancel Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Rate</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold">Amount</th>
               </tr>

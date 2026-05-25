@@ -6,11 +6,12 @@ import { Indent, IndentLine, Material, Setting } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { downloadIndentPdf } from "../lib/indentPdf";
+import { withIndentTotals } from "../lib/indentTotals";
 
 export function IndentDetail() {
   const navigate = useNavigate();
   const { id = "" } = useParams();
-  const [indents] = useData<Indent>("indents", []);
+  const [indents, setIndents] = useData<Indent>("indents", []);
   const [indentLines, setIndentLines] = useData<IndentLine>("indent-lines", []);
   const [materials] = useData<Material>("materials", []);
   const [settings] = useData<Setting>("settings", []);
@@ -56,9 +57,13 @@ export function IndentDetail() {
       if (line.indentId !== indent.id) return line;
       const qtyValue = editableQty[line.id];
       if (qtyValue === undefined) return line;
+      const qty = Number(qtyValue);
+      const orderedQty = Number(line.orderedQty || 0);
+      const cancelledQty = Number(line.cancelledQty || 0);
       return {
         ...line,
-        qty: Number(qtyValue),
+        qty,
+        balanceQty: Math.max(0, qty - orderedQty - cancelledQty),
         updateTimestamp: timestamp,
         updatedBy: "System User",
       };
@@ -66,6 +71,13 @@ export function IndentDetail() {
 
     try {
       await setIndentLines(nextLines);
+      const nextIndentLines = nextLines.filter((line) => line.indentId === indent.id);
+      const nextIndent = {
+        ...withIndentTotals(indent, nextIndentLines),
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+      };
+      await setIndents((prev) => prev.map((row) => (row.id === indent.id ? nextIndent : row)));
       setEditableQty({});
       alert("Indent quantities updated.");
     } catch (error) {
