@@ -7,6 +7,7 @@ import { formatDate } from "../lib/utils";
 import { Select } from "../components/Select";
 import { useLocation } from "react-router-dom";
 import { User } from "../types";
+import { getFinancialYear } from "../lib/serial";
 
 export function OrderForm() {
   const [orders, setOrders, isLoading] = useData<Order>("orders", []);
@@ -28,6 +29,22 @@ export function OrderForm() {
   const [rate, setRate] = useState<string>("");
   const [orderBy, setOrderBy] = useState("");
   const [remarks, setRemarks] = useState("");
+
+  const getNextVerbalPoNumber = (effectiveOrderDate: string, ignoreOrderId?: string | null) => {
+    const fy = getFinancialYear(effectiveOrderDate);
+    const matching = orders.filter(
+      (order) =>
+        order.id !== ignoreOrderId &&
+        order.poType === "Verbal" &&
+        String(order.poNumber || "").startsWith(`${fy}/`)
+    );
+    const maxNo = matching.reduce((max, order) => {
+      const parts = String(order.poNumber || "").split("/");
+      const num = parseInt(parts[1] || "0", 10);
+      return Number.isFinite(num) && num > max ? num : max;
+    }, 0);
+    return `${fy}/${maxNo + 1}`;
+  };
 
   const poOptions = [
     { value: "Verbal", label: "Verbal" },
@@ -88,6 +105,22 @@ export function OrderForm() {
     setRemarks("");
   };
 
+  useEffect(() => {
+    if (poType === "Verbal") {
+      const editingOrder = editingId ? orders.find((o) => o.id === editingId) : null;
+      if (editingOrder?.poType === "Verbal" && editingOrder.poNumber) {
+        setPoNumber(editingOrder.poNumber);
+      } else {
+        setPoNumber(getNextVerbalPoNumber(orderDate, editingId));
+      }
+    } else if (editingId) {
+      const editingOrder = orders.find((o) => o.id === editingId);
+      setPoNumber(editingOrder?.poType === "Ref No." ? editingOrder.poNumber || "" : "");
+    } else {
+      setPoNumber("");
+    }
+  }, [poType, orderDate, editingId, orders]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !itemId || !qty) return;
@@ -105,7 +138,7 @@ export function OrderForm() {
         ...(editingId ? { orderNo: orders.find(o=>o.id===editingId)?.orderNo } : {}),
         orderDate,
         companyId,
-        poNumber,
+        poNumber: poType === "Verbal" ? getNextVerbalPoNumber(orderDate, editingId) : poNumber,
         erpCode,
         itemId,
         qty: parseInt(qty,10),

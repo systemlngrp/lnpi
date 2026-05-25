@@ -15,7 +15,8 @@ export function OrdersPendingScheduling() {
 
   const totalScheduled = (orderId: string) => rowsFor(orderId).reduce((sum, r) => sum + (Number((r as any).qty) || 0), 0);
 
-  const pending = orders.filter(o => (o.qty || 0) > totalScheduled(o.id));
+  const today = new Date().toISOString().slice(0, 10);
+  const pending = orders.filter(o => o.status === "Pending Scheduling" && o.status !== "Cancelled" && (o.qty || 0) > totalScheduled(o.id));
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalOrderId, setModalOrderId] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function OrdersPendingScheduling() {
     const newRow: any = {
       id: crypto.randomUUID(),
       orderId,
-      scheduledDate: new Date().toISOString().slice(0,10),
+      scheduledDate: today,
       _isNew: true,
       qty: '',
       producedQty: 0,
@@ -70,6 +71,14 @@ export function OrdersPendingScheduling() {
       setModalError(null);
       setModalRows(rows);
       return;
+    }
+
+    if (field === "scheduledDate") {
+      if (value < today) {
+        setModalError("Previous date scheduling is not allowed.");
+        return;
+      }
+      setModalError(null);
     }
 
     setModalRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
@@ -98,6 +107,10 @@ export function OrdersPendingScheduling() {
       const total = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
       if (total > Number(order.qty || 0)) {
         setModalError('Total scheduled quantity exceeds order quantity');
+        return;
+      }
+      if (rows.some((r) => (r.scheduledDate || "") < today)) {
+        setModalError("Previous date scheduling is not allowed.");
         return;
       }
 
@@ -214,7 +227,7 @@ export function OrdersPendingScheduling() {
                   {modalRows.map((r, idx) => (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <td className="px-3 py-2 border border-black">{idx + 1}</td>
-                      <td className="px-3 py-2 border border-black"><input type="date" value={r.scheduledDate} onChange={(e)=>handleChangeRow(r.id, 'scheduledDate', e.target.value)} className="border-2 border-black rounded p-1" /></td>
+                      <td className="px-3 py-2 border border-black"><input type="date" min={today} value={r.scheduledDate} onChange={(e)=>handleChangeRow(r.id, 'scheduledDate', e.target.value)} className="border-2 border-black rounded p-1" /></td>
                       <td className="px-3 py-2 border border-black"><input type="number" min={0} step="any" value={(r as any).qty ?? ''} onChange={(e)=>handleChangeRow(r.id, 'qty', e.target.value)} className="border-2 border-black rounded p-1 w-40" /></td>
                       <td className="px-3 py-2 border border-black text-center"><button onClick={()=>handleDeleteRow(r.id)} aria-label="Delete schedule" className="text-red-600"><Trash2 size={18} /></button></td>
                     </tr>

@@ -17,7 +17,26 @@ export function OrdersPendingPH() {
   };
 
   const handleCancel = (id: string) => {
-    setOrders(orders.map(o => o.id === id ? { ...o, status: 'Cancelled', updatedBy: 'System User', updateTimestamp: new Date().toISOString() } : o));
+    const cancelRemarks = window.prompt("Enter cancel remarks");
+    if (cancelRemarks === null) return;
+    if (!cancelRemarks.trim()) {
+      alert("Cancel remarks are required.");
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    setOrders(
+      orders.map((o) =>
+        o.id === id
+          ? {
+              ...o,
+              status: 'Cancelled',
+              remarks: [o.remarks?.trim(), `Cancel Remarks: ${cancelRemarks.trim()}`].filter(Boolean).join(" | "),
+              updatedBy: 'System User',
+              updateTimestamp: timestamp,
+            }
+          : o
+      )
+    );
   };
 
   return (
