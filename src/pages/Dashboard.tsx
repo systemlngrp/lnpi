@@ -13,7 +13,7 @@ import {
 import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, Consumption, DispatchPlan, Invoice, Item, LoadingSlip, Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Order, OrderSchedule, Production } from "../types";
-import { cn, formatNumber } from "../lib/utils";
+import { cn, formatDate, formatNumber } from "../lib/utils";
 import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 
@@ -272,7 +272,19 @@ export function Dashboard() {
       </div>
 
       <section className="space-y-4">
-        <div className="rounded-none border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+        <DashboardHero
+          todaysProduction={formatNumber(todaysProduction, false)}
+          yesterdaysProduction={formatNumber(yesterdaysProduction, false)}
+          totalProduction={formatNumber(totalProduction, false)}
+          todaysPlanValue={todaysPlanValue > 0 ? formatNumber(todaysPlanValue, false) : "N/A"}
+          totalWastage={`${totalWastage.toFixed(2)}%`}
+          yesterdaysSale={formatNumber(yesterdaysSale, false)}
+          totalSale={formatNumber(totalSale, false)}
+          todaysSale={formatNumber(todaysSale, false)}
+          fromDate={formatDisplayDate(dateRange.from)}
+          toDate={formatDisplayDate(dateRange.to)}
+        />
+        {false ? <div className="rounded-none border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
           <div className="bg-cyan-400 px-4 py-2 text-center text-xl font-black tracking-tight text-red-700">|| श्री गणेशाय नमः ||</div>
           <div className="grid grid-cols-1 md:grid-cols-4">
             <DashboardStatCell label="Today's Production" value={formatNumber(todaysProduction)} tone="bg-[#ffe8a3]" />
@@ -291,7 +303,7 @@ export function Dashboard() {
             <DashboardBannerCell label="Pending Task" value={formatNumber(pendingTasks)} tone="bg-[#111827] text-white" />
             <DashboardBannerCell label="Today's Snapshot" value={`${formatDisplayDate(today)} / ${formatDisplayDate(yesterdayDate)}`} tone="bg-[#143d59] text-white" />
           </div>
-        </div>
+        </div> : null}
       </section>
 
       <section className="space-y-5">
@@ -386,10 +398,51 @@ export function Dashboard() {
   );
 }
 
+function DashboardHero({
+  todaysProduction,
+  yesterdaysProduction,
+  totalProduction,
+  todaysPlanValue,
+  totalWastage,
+  yesterdaysSale,
+  totalSale,
+  todaysSale,
+  fromDate,
+  toDate,
+}: {
+  todaysProduction: string;
+  yesterdaysProduction: string;
+  totalProduction: string;
+  todaysPlanValue: string;
+  totalWastage: string;
+  yesterdaysSale: string;
+  totalSale: string;
+  todaysSale: string;
+  fromDate: string;
+  toDate: string;
+}) {
+  return (
+    <div className="overflow-hidden border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
+      <div className="grid grid-cols-1 md:grid-cols-10">
+        <HeroMetricCell label="Today's Production" value={todaysProduction} tone="bg-[#f7cf79]" className="md:col-span-3" />
+        <HeroTitleCell title="LNPI Production Management" className="md:col-span-4" />
+        <HeroMetricCell label="Yesterday's Production" value={yesterdaysProduction} tone="bg-[#a8c8d6]" className="md:col-span-3" />
+        <HeroMetricCell label="Total Production" value={totalProduction} tone="bg-[#d4a8c2]" className="md:col-span-3 md:border-t-2" />
+        <HeroMetricCell label="Today's Plan Value" value={todaysPlanValue} tone="bg-[#4f2fa4] text-white" className="md:col-span-4 md:border-t-2" />
+        <HeroMetricCell label="Total Wastage" value={totalWastage} tone="bg-[#ffe28d]" valueTone="text-[#ff1f1f]" className="md:col-span-3 md:border-t-2" />
+        <HeroMetricCell label="Yesterday's Sale" value={yesterdaysSale} tone="bg-[#efc3c3]" valueTone="text-[#ff1f1f]" className="md:col-span-3 md:border-t-2" />
+        <HeroMetricCell label="Total Sale" value={totalSale} tone="bg-[#6a54b6] text-white" className="md:col-span-4 md:border-t-2" />
+        <HeroMetricCell label="Today's Sale" value={todaysSale} tone="bg-[#1adbe6]" className="md:col-span-3 md:border-t-2" />
+        <HeroDateCell value={fromDate} className="md:col-span-2 md:border-t-2" />
+        <HeroTitleCell title="Dispatch Report" tone="bg-[#29549b] text-white" className="md:col-span-6 md:border-t-2" />
+        <HeroDateCell value={toDate} className="md:col-span-2 md:border-t-2" />
+      </div>
+    </div>
+  );
+}
+
 function formatDisplayDate(value: string) {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) return value || "-";
-  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+  return formatDate(value) || "-";
 }
 
 function getLocalDateInputValue(date: Date) {
@@ -410,6 +463,7 @@ function DateInput({ label, value, onChange }: { label: string; value: string; o
           value={value}
           onChange={(event) => onChange(event.target.value)}
         />
+        <span className="mt-1 text-[10px] font-black text-slate-500 tracking-wide">{formatDisplayDate(value)}</span>
       </div>
     </div>
   );
@@ -427,32 +481,48 @@ function KpiCard({ title, value, accent }: { title: string; value: string; accen
   );
 }
 
-function DashboardStatCell({
+function HeroMetricCell({
   label,
   value,
   tone,
+  className,
+  valueTone,
 }: {
   label: string;
   value: string;
   tone: string;
+  className?: string;
+  valueTone?: string;
 }) {
   return (
-    <div className={cn("min-h-[108px] border-r-2 border-black last:border-r-0 flex flex-col justify-center px-4 py-4 text-center", tone)}>
-      <div className="text-[13px] font-black tracking-tight text-current">{label}</div>
-      <div className="mt-3 text-4xl font-black leading-none tracking-tighter">{value}</div>
+    <div className={cn("min-h-[92px] border-r-2 border-black last:border-r-0 flex flex-col justify-center px-4 py-4 text-center", tone, className)}>
+      <div className="text-sm font-black uppercase tracking-tight text-current">{label}</div>
+      <div className={cn("mt-3 text-3xl md:text-4xl font-black leading-none tracking-tight", valueTone)}>{value}</div>
     </div>
   );
 }
 
-function DashboardBannerCell({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: string;
-}) {
+function HeroTitleCell({ title, tone = "bg-[#6a1400] text-white", className }: { title: string; tone?: string; className?: string }) {
+  return (
+    <div className={cn("min-h-[92px] border-r-2 border-black last:border-r-0 px-4 py-4 flex items-center justify-center text-center", tone, className)}>
+      <span className="text-2xl md:text-[2rem] font-black uppercase tracking-tight">{title}</span>
+    </div>
+  );
+}
+
+function HeroDateCell({ value, className }: { value: string; className?: string }) {
+  return (
+    <div className={cn("min-h-[74px] border-r-2 border-black last:border-r-0 px-4 py-4 flex items-center justify-center text-center bg-[#4f86db]", className)}>
+      <span className="text-2xl font-black tracking-tight text-white">{value}</span>
+    </div>
+  );
+}
+
+function DashboardStatCell({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return <HeroMetricCell label={label} value={value} tone={tone} />;
+}
+
+function DashboardBannerCell({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div className={cn("min-h-[78px] border-r-2 border-black last:border-r-0 px-4 py-4 flex items-center justify-between gap-4", tone)}>
       <span className="text-lg font-black uppercase tracking-tight">{label}</span>
