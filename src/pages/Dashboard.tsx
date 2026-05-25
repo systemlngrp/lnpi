@@ -13,7 +13,7 @@ import {
 import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, DispatchPlan, Invoice, Item, LoadingSlip, Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Order, OrderSchedule, Production } from "../types";
-import { formatNumber } from "../lib/utils";
+import { cn, formatNumber } from "../lib/utils";
 import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 
