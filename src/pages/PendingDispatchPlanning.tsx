@@ -3,7 +3,9 @@ import { useData } from "../hooks/useData";
 import { OrderSchedule, Order, Company, Item, Truck, DispatchPlan } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { Search, Save } from "lucide-react";
+import { ArrowUpDown, Save } from "lucide-react";
+
+type SortKey = "scheduledDate" | "orderNo" | "companyName" | "itemName" | "pendingQty";
 
 export function PendingDispatchPlanning() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -18,6 +20,8 @@ export function PendingDispatchPlanning() {
   const [rowTrucks, setRowTrucks] = useState<Record<string, string>>({});
   const [rowPlannedQty, setRowPlannedQty] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("scheduledDate");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -54,12 +58,72 @@ export function PendingDispatchPlanning() {
 
   // Final filtered list based on company selection
   const filteredSchedules = useMemo(() => {
-    if (!selectedCompanyId) return basePendingSchedules;
-    return basePendingSchedules.filter(s => {
+    const rows = !selectedCompanyId ? basePendingSchedules : basePendingSchedules.filter(s => {
       const order = orders.find(o => o.id === s.orderId);
       return order?.companyId === selectedCompanyId;
     });
-  }, [basePendingSchedules, selectedCompanyId, orders]);
+
+    return [...rows].sort((a, b) => {
+      const orderA = orders.find(o => o.id === a.orderId);
+      const orderB = orders.find(o => o.id === b.orderId);
+      const companyA = companies.find(c => c.id === orderA?.companyId)?.name || "";
+      const companyB = companies.find(c => c.id === orderB?.companyId)?.name || "";
+      const itemA = items.find(i => i.id === orderA?.itemId)?.name || "";
+      const itemB = items.find(i => i.id === orderB?.itemId)?.name || "";
+      const plannedA = dispatchPlans
+        .filter(plan => plan.scheduleId === a.id)
+        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
+      const plannedB = dispatchPlans
+        .filter(plan => plan.scheduleId === b.id)
+        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
+      const pendingA = Number(a.qty || 0) - plannedA;
+      const pendingB = Number(b.qty || 0) - plannedB;
+
+      let compare = 0;
+      switch (sortKey) {
+        case "scheduledDate":
+          compare = new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
+          break;
+        case "orderNo":
+          compare = (orderA?.orderNo || "").localeCompare(orderB?.orderNo || "", undefined, { numeric: true, sensitivity: "base" });
+          break;
+        case "companyName":
+          compare = companyA.localeCompare(companyB, undefined, { sensitivity: "base" });
+          break;
+        case "itemName":
+          compare = itemA.localeCompare(itemB, undefined, { sensitivity: "base" });
+          break;
+        case "pendingQty":
+          compare = pendingA - pendingB;
+          break;
+      }
+
+      return sortDirection === "asc" ? compare : -compare;
+    });
+  }, [basePendingSchedules, selectedCompanyId, orders, companies, items, dispatchPlans, sortDirection, sortKey]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
+  const renderSortHeader = (label: string, key: SortKey, align: "left" | "right" = "left") => (
+    <button
+      type="button"
+      onClick={() => handleSort(key)}
+      className={cn(
+        "inline-flex items-center gap-1 font-bold uppercase",
+        align === "right" ? "ml-auto justify-end" : "justify-start"
+      )}
+    >
+      <span>{label}</span>
+      <ArrowUpDown size={12} className={cn(sortKey === key ? "text-indigo-700" : "text-slate-400")} />
+    </button>
+  );
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -205,11 +269,11 @@ export function PendingDispatchPlanning() {
                     />
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Scheduled Date</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Order No</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Company</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Item Name</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Pending Qty</th>
+                <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Scheduled Date", "scheduledDate")}</th>
+                <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Order No", "orderNo")}</th>
+                <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Company", "companyName")}</th>
+                <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Item Name", "itemName")}</th>
+                <th className="px-4 py-3 text-right text-xs text-black uppercase border border-black">{renderSortHeader("Pending Qty", "pendingQty", "right")}</th>
                 
                 {selectedCompanyId && (
                   <>

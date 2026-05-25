@@ -87,7 +87,7 @@ export function ProductionPendingTally() {
                         <div className="text-xs text-slate-500">{formatDate(p.date)}</div>
                     </div>
                     <div className="text-sm font-bold">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
-                    <div className="text-sm">{p.qty} {p.uom}</div>
+                    <div className="text-sm">{Number(p.prodFromFFG || 0).toLocaleString()} {p.uom}</div>
                      <button
                       onClick={() => handleComplete(p.id)}
                       disabled={submittingId === p.id}
@@ -109,7 +109,7 @@ export function ProductionPendingTally() {
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Produced Qty</th>
+              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">FFG Qty</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
             </tr>
@@ -127,7 +127,7 @@ export function ProductionPendingTally() {
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{p.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-emerald-700 border border-black">{p.qty}</td>
+                  <td className="px-6 py-4 text-right text-sm font-medium text-emerald-700 border border-black">{Number(p.prodFromFFG || 0).toLocaleString()}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{p.uom}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black">
                     <button

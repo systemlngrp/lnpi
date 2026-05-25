@@ -74,7 +74,7 @@ export function PendingLoading() {
       const item = items.find(i => i.id === order?.itemId);
       const company = companies.find(c => c.id === order?.companyId);
 
-      const searchStr = `${truck?.truckNo} ${item?.name} ${company?.name} ${order?.orderNo} ${p.id}`.toLowerCase();
+      const searchStr = `${truck?.truckNo} ${item?.name} ${company?.name} ${order?.orderNo}`.toLowerCase();
       return searchStr.includes(searchTerm.toLowerCase());
     });
 
@@ -267,7 +267,6 @@ export function PendingLoading() {
                         <table className="min-w-full divide-y divide-black border-collapse">
                           <thead className="bg-slate-100">
                             <tr className="divide-x divide-black">
-                              <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider">Plan ID</th>
                               <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider">Company</th>
                               <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider">Order No</th>
                               <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-wider">Planned</th>
@@ -280,9 +279,6 @@ export function PendingLoading() {
                           <tbody className="bg-white divide-y divide-black">
                             {item.plans.map((p) => (
                               <tr key={p.id} className="divide-x divide-black hover:bg-slate-50">
-                                <td className="px-3 py-2 text-xs font-mono" title={p.id}>
-                                  {p.id.slice(0, 8)}...
-                                </td>
                                 <td className="px-3 py-2 text-xs truncate max-w-[200px]" title={p.companyName}>
                                   {p.companyName}
                                 </td>
@@ -390,7 +386,6 @@ export function PendingLoading() {
                         <td className="px-4 py-3">
                           <div className="text-sm font-medium">{p.companyName}</div>
                           <div className="text-[10px] text-slate-500">{p.orderNo}</div>
-                          <div className="text-[9px] text-slate-400 font-mono">ID: {p.id}</div>
                         </td>
                         <td className="px-4 py-3 text-right text-sm">
                           {Number(p.plannedQty || 0).toLocaleString()}
