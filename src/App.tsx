@@ -22,6 +22,7 @@ import { MaterialIssueForm } from "./pages/MaterialIssueForm";
 import { MaterialReturnForm } from "./pages/MaterialReturnForm";
 import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
+import { Units } from "./pages/Units";
 import { ColorMasters } from "./pages/ColorMasters";
 import { Companies } from "./pages/Companies";
 import { Trucks } from "./pages/Trucks";
@@ -100,6 +101,7 @@ export default function App() {
           <Route path="masters/materials" element={<Materials />} />
           <Route path="masters/suppliers" element={<Suppliers />} />
           <Route path="masters/states" element={<States />} />
+          <Route path="masters/units" element={<Units />} />
           <Route path="masters/colors" element={<ColorMasters />} />
           <Route path="masters/companies" element={<Companies />} />
           <Route path="masters/trucks" element={<Trucks />} />

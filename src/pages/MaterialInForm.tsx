@@ -212,7 +212,7 @@ export function MaterialInForm() {
       id: crypto.randomUUID(),
       itemId: currentItemId,
       qty,
-      uom: material.uom || (mrrType === "Reel" ? "KG" : ""),
+      uom: mrrType === "Reel" ? "KG" : material.uom || "",
       poId: selectedPo?.id,
       poNo: selectedPo?.poNo,
       poLineId: selectedPoLine?.id,

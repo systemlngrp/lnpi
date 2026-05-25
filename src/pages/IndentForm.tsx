@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Indent, IndentLine, Material } from "../types";
+import { Indent, IndentLine, Material, User } from "../types";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 import { summarizeIndentLines } from "../lib/indentTotals";
@@ -26,6 +26,7 @@ export function IndentForm() {
   const [indents, setIndents] = useData<Indent>("indents", []);
   const [indentLines, setIndentLines] = useData<IndentLine>("indent-lines", []);
   const [materials] = useData<Material>("materials", []);
+  const [users] = useData<User>("users", []);
 
   const [requestedBy, setRequestedBy] = useState("");
   const [requisitionDate, setRequisitionDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -38,6 +39,21 @@ export function IndentForm() {
     () => materials.filter((material) => material.active !== "No" && material.type === indentType),
     [indentType, materials]
   );
+
+  const requestedByOptions = useMemo(() => {
+    const userOptions = users
+      .slice()
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+      .map((user) => ({ value: user.name, label: user.name }));
+
+    return userOptions.length > 0 ? userOptions : [{ value: "System", label: "System" }];
+  }, [users]);
+
+  useEffect(() => {
+    if (!requestedBy) {
+      setRequestedBy(requestedByOptions[0]?.value || "System");
+    }
+  }, [requestedBy, requestedByOptions]);
 
   const materialOptions = activeMaterials
     .slice()
@@ -133,7 +149,7 @@ export function IndentForm() {
     try {
       await setIndents([nextIndent, ...indents]);
       await setIndentLines([...indentLines, ...nextLines]);
-      setRequestedBy("");
+      setRequestedBy(requestedByOptions[0]?.value || "System");
       setRequisitionDate(new Date().toISOString().split("T")[0]);
       setRequiredDate("");
       setIndentType("Reel");
@@ -163,38 +179,51 @@ export function IndentForm() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           <div className="space-y-2">
-            <label className="text-blue-700 font-bold">Requested By</label>
-            <input
+            <label className="text-blue-700 font-bold">
+              Requested By <span className="text-red-500">*</span>
+            </label>
+            <Select
+              options={requestedByOptions}
               value={requestedBy}
-              onChange={(e) => setRequestedBy(e.target.value)}
-              className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+              onChange={setRequestedBy}
+              required
+              placeholder="Select user..."
             />
           </div>
           <div className="space-y-2">
-            <label className="text-blue-700 font-bold">Requisition Date</label>
+            <label className="text-blue-700 font-bold">
+              Requisition Date <span className="text-red-500">*</span>
+            </label>
             <input
               type="date"
               value={requisitionDate}
               onChange={(e) => setRequisitionDate(e.target.value)}
+              required
               className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-blue-700 font-bold">Required Date</label>
+            <label className="text-blue-700 font-bold">
+              Required Date <span className="text-red-500">*</span>
+            </label>
             <input
               type="date"
               value={requiredDate}
               onChange={(e) => setRequiredDate(e.target.value)}
+              required
               className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
           </div>
         </div>
 
         <div className="space-y-2">
-          <label className="text-blue-700 font-bold">Indent Type</label>
+          <label className="text-blue-700 font-bold">
+            Indent Type <span className="text-red-500">*</span>
+          </label>
           <select
             value={indentType}
             onChange={(e) => handleTypeChange(e.target.value as Indent["indentType"])}
+            required
             className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
           >
             <option value="Reel">Reel</option>
@@ -228,9 +257,9 @@ export function IndentForm() {
               <thead>
                 <tr className="bg-indigo-700 text-white">
                   <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black">ERP</th>
-                  <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black min-w-[420px]">Select Item</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black min-w-[420px]">Select Item <span className="text-red-200">*</span></th>
                   <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black">Unit</th>
-                  <th className="px-4 py-3 text-right text-sm font-bold border-2 border-black">Qty</th>
+                  <th className="px-4 py-3 text-right text-sm font-bold border-2 border-black">Qty <span className="text-red-200">*</span></th>
                   <th className="px-4 py-3 text-center text-sm font-bold border-2 border-black w-16"></th>
                 </tr>
               </thead>

@@ -164,6 +164,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Material Master", href: "/masters/materials", icon: Boxes },
         { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
         { name: "States", href: "/masters/states", icon: Database },
+        { name: "Units", href: "/masters/units", icon: Database },
         { name: "Colors", href: "/masters/colors", icon: Plus },
         { name: "Companies", href: "/masters/companies", icon: Database },
         { name: "Trucks", href: "/masters/trucks", icon: Truck },

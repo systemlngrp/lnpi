@@ -309,6 +309,14 @@ export interface StateMaster {
   updateTimestamp?: string;
 }
 
+export interface UnitMaster {
+  id: string;
+  name: string;
+  active?: "Yes" | "No";
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface ColorMaster {
   id: string;
   name: string;

@@ -255,16 +255,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                             </button>
                           </>
                         ) : null}
-                        {mode === "Approved" ? (
-                          <button
-                            type="button"
-                            onClick={() => handleComplete(indent)}
-                            disabled={submittingId === indent.id}
-                            className="inline-flex items-center justify-center min-w-[130px] rounded border border-emerald-700 bg-emerald-100 px-4 py-2 text-xs font-bold uppercase tracking-wider text-emerald-800 hover:bg-emerald-200 transition disabled:opacity-50"
-                          >
-                            {submittingId === indent.id ? <Spinner size={16} /> : <><CheckCircle size={14} className="mr-2" />{confirmId === indent.id ? "Confirm?" : "Complete"}</>}
-                          </button>
-                        ) : null}
+                        {mode === "Approved" ? null : null}
                       </div>
                     </td>
                   </tr>
