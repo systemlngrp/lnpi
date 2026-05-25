@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Item, Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Production } from "../types";
+import { Company, DispatchPlan, Invoice, Item, LoadingSlip, Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Order, OrderSchedule, Production } from "../types";
 import { formatNumber } from "../lib/utils";
 import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
@@ -31,6 +31,12 @@ export function Dashboard() {
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [items] = useData<Item>("items", []);
   const [materials] = useData<Material>("materials", []);
+  const [orders] = useData<Order>("orders", []);
+  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [invoices] = useData<Invoice>("invoices", []);
+  const [companies] = useData<Company>("companies", []);
 
   const today = getLocalDateInputValue(new Date());
   const [dateRange, setDateRange] = useState<Range>({ from: today, to: today });
@@ -111,6 +117,12 @@ export function Dashboard() {
   const filteredMaterialIssues = materialIssues.filter((entry) => isWithinSelectedRange(entry.date));
   const filteredMaterialReturns = materialReturns.filter((entry) => isWithinSelectedRange(entry.date));
   const productionUsageMap = buildProductionMaterialUsageMap(filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines);
+  const yesterdayDate = (() => {
+    const date = parseAppDate(today);
+    if (!date) return today;
+    date.setDate(date.getDate() - 1);
+    return getLocalDateInputValue(date);
+  })();
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
@@ -127,6 +139,65 @@ export function Dashboard() {
 
   const tallyMatIn = filteredMaterialIn.filter((entry) => entry.status === "Pending Tally").length;
   const tallyProd = filteredProductions.filter((entry) => isProductionReadyForTally(entry, getProductionActualPaperUsed(entry, productionUsageMap))).length;
+  const pendingDispatchPlanning = schedules.filter((s) => {
+    if (!s?.scheduledDate) return false;
+    const todayDate = parseAppDate(today);
+    if (!todayDate) return false;
+    todayDate.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(todayDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(23, 59, 59, 999);
+    const schedDate = new Date(s.scheduledDate);
+    const alreadyPlanned = dispatchPlans
+      .filter((plan) => plan.scheduleId === s.id)
+      .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
+    const balance = Number(s.qty || 0) - alreadyPlanned;
+    return !Number.isNaN(schedDate.getTime()) && schedDate <= tomorrow && balance > 0;
+  }).length;
+  const pendingLoading = dispatchPlans.filter((plan) => Number(plan.plannedQty || 0) - Number(plan.loadedQty || 0) - Number(plan.canceledQty || 0) > 0).length;
+  const pendingBilling = loadingSlips.filter((slip) => !slip.invoiceId).length;
+  const pendingTasks = pendingPH + pendingAccounts + pendingMD + tallyMatIn + tallyProd + pendingDispatchPlanning + pendingLoading + pendingBilling;
+
+  const getProductionTotalForDate = (dateValue: string) =>
+    productions
+      .filter((entry) => entry.date === dateValue && entry.status !== "Cancelled" && !entry.cancelTimestamp)
+      .reduce((sum, entry) => sum + Number(entry.prodFromFFG || entry.qty || 0), 0);
+
+  const todaysProduction = getProductionTotalForDate(today);
+  const yesterdaysProduction = getProductionTotalForDate(yesterdayDate);
+  const totalProduction = filteredProductions
+    .filter((entry) => entry.status !== "Cancelled" && !entry.cancelTimestamp)
+    .reduce((sum, entry) => sum + Number(entry.prodFromFFG || entry.qty || 0), 0);
+
+  const todaysPlanValue = schedules
+    .filter((schedule) => schedule.scheduledDate === today)
+    .reduce((sum, schedule) => {
+      const order = orders.find((row) => row.id === schedule.orderId);
+      return sum + Number(schedule.qty || 0) * Number(order?.rate || 0);
+    }, 0);
+
+  const totalActualPaperUsed = filteredProductions.reduce(
+    (sum, entry) => sum + Number(getProductionActualPaperUsed(entry, productionUsageMap) || 0),
+    0
+  );
+  const totalUsefulWeight = filteredProductions.reduce(
+    (sum, entry) => sum + Number(entry.prodFromFFG || 0) * Number(entry.sheetWeight || 0),
+    0
+  );
+  const totalWastage = totalActualPaperUsed > 0
+    ? Math.max(0, 100 - (totalUsefulWeight / totalActualPaperUsed) * 100)
+    : 0;
+
+  const getInvoiceTotalForDate = (dateValue: string) =>
+    invoices
+      .filter((invoice) => invoice.date === dateValue)
+      .reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);
+
+  const todaysSale = getInvoiceTotalForDate(today);
+  const yesterdaysSale = getInvoiceTotalForDate(yesterdayDate);
+  const totalSale = invoices
+    .filter((invoice) => isWithinSelectedRange(invoice.date))
+    .reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);
 
   const hourlyTotals = filteredProductions.reduce<Record<string, number>>((acc, entry) => {
     const timestamp = parseTimestamp(entry.updateTimestamp || entry.date);
@@ -197,12 +268,28 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KpiCard title="Material In" value={formatNumber(materialInCount)} accent="from-[#ffd54f] to-[#ffb300]" />
-        <KpiCard title="Production" value={formatNumber(productionCount)} accent="from-[#4dd0e1] to-[#0288d1]" />
-        <KpiCard title="Material Issues" value={formatNumber(materialIssueCount)} accent="from-[#ff8a80] to-[#e53935]" />
-        <KpiCard title="Pending Approvals" value={formatNumber(pendingPH + pendingAccounts + pendingMD)} accent="from-[#c5e1a5] to-[#7cb342]" />
-      </div>
+      <section className="space-y-4">
+        <div className="rounded-none border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <div className="bg-cyan-400 px-4 py-2 text-center text-xl font-black tracking-tight text-red-700">|| श्री गणेशाय नमः ||</div>
+          <div className="grid grid-cols-1 md:grid-cols-4">
+            <DashboardStatCell label="Today's Production" value={formatNumber(todaysProduction)} tone="bg-[#ffe8a3]" />
+            <DashboardStatCell label="Total Production" value={formatNumber(totalProduction)} tone="bg-[#d4a5c5]" />
+            <DashboardStatCell label="Today's Plan Value" value={todaysPlanValue > 0 ? formatNumber(todaysPlanValue) : "N/A"} tone="bg-[#40227a] text-white" />
+            <DashboardStatCell label="Yesterday's Production" value={formatNumber(yesterdaysProduction)} tone="bg-[#aec9d1]" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 border-t-2 border-black">
+            <DashboardStatCell label="Yesterday's Sale" value={formatNumber(yesterdaysSale)} tone="bg-[#f4c8c8]" />
+            <DashboardStatCell label="Total Sale" value={formatNumber(totalSale)} tone="bg-[#6f55b3] text-white" />
+            <DashboardStatCell label="Today's Sale" value={formatNumber(todaysSale)} tone="bg-[#16e0eb]" />
+            <DashboardStatCell label="Total Wastage" value={`${totalWastage.toFixed(2)}%`} tone="bg-[#ff1e1e] text-white" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 border-t-2 border-black">
+            <DashboardBannerCell label="Dispatch Report" value={`${formatDisplayDate(dateRange.from)} to ${formatDisplayDate(dateRange.to)}`} tone="bg-[#294f92] text-white" />
+            <DashboardBannerCell label="Pending Task" value={formatNumber(pendingTasks)} tone="bg-[#111827] text-white" />
+            <DashboardBannerCell label="Today's Snapshot" value={`${formatDisplayDate(today)} / ${formatDisplayDate(yesterdayDate)}`} tone="bg-[#143d59] text-white" />
+          </div>
+        </div>
+      </section>
 
       <section className="space-y-5">
         <div className="flex items-center justify-between border-b-4 border-black pb-4">
@@ -214,10 +301,11 @@ export function Dashboard() {
             View All Tasks <ChevronRight size={14} strokeWidth={4} />
           </Link>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <WorkflowCard label="PH Approval" count={pendingPH} tone="bg-[#fff3cd]" />
           <WorkflowCard label="Accounts Approval" count={pendingAccounts} tone="bg-[#d9f2ff]" />
           <WorkflowCard label="MD Approval" count={pendingMD} tone="bg-[#f3e5f5]" />
+          <WorkflowCard label="Pending Task" count={pendingTasks} tone="bg-[#e5e7eb]" />
         </div>
       </section>
 
@@ -295,6 +383,12 @@ export function Dashboard() {
   );
 }
 
+function formatDisplayDate(value: string) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return value || "-";
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+}
+
 function getLocalDateInputValue(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -326,6 +420,40 @@ function KpiCard({ title, value, accent }: { title: string; value: string; accen
         <p className="text-[10px] font-black text-black uppercase tracking-[0.22em] leading-none opacity-60">{title}</p>
         <p className="mt-5 text-4xl font-black text-black tracking-tighter leading-none italic">{value}</p>
       </div>
+    </div>
+  );
+}
+
+function DashboardStatCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <div className={cn("min-h-[108px] border-r-2 border-black last:border-r-0 flex flex-col justify-center px-4 py-4 text-center", tone)}>
+      <div className="text-[13px] font-black tracking-tight text-current">{label}</div>
+      <div className="mt-3 text-4xl font-black leading-none tracking-tighter">{value}</div>
+    </div>
+  );
+}
+
+function DashboardBannerCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <div className={cn("min-h-[78px] border-r-2 border-black last:border-r-0 px-4 py-4 flex items-center justify-between gap-4", tone)}>
+      <span className="text-lg font-black uppercase tracking-tight">{label}</span>
+      <span className="text-xl font-black tracking-tight">{value}</span>
     </div>
   );
 }
