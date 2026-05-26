@@ -121,8 +121,7 @@ export function ProductionStageQueue({
           prereqQty,
         };
       })
-      .filter(({ production, order, item, company, prereqQty }) => {
-        if (prereqMachine && !(prereqQty > 0)) return false;
+      .filter(({ production, order, item, company }) => {
         if (!lowered) return true;
         return (
           production.transactionNo.toLowerCase().includes(lowered) ||
@@ -450,6 +449,21 @@ export function ProductionStageQueue({
                               entry.productionId === production.id &&
                               normalizeMachineName(entry.machineName) === "Corrugation Liner"
                           );
+
+                          const prereqMissing = !!issuePrereqMachineName && !(prereqQty > 0);
+
+                          if (prereqMissing) {
+                            return (
+                              <button
+                                type="button"
+                                disabled
+                                title={`${normalizeMachineName(issuePrereqMachineName || "Corrugation Liner")} entry pending`}
+                                className="bg-slate-200 text-slate-500 px-3 py-1 rounded font-bold text-[11px] uppercase border border-black cursor-not-allowed"
+                              >
+                                Issue Material
+                              </button>
+                            );
+                          }
 
                           if (!requiresLiner || linerDone) {
                             return (
