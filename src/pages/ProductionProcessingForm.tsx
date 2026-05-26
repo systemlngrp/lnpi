@@ -28,7 +28,7 @@ export function ProductionProcessingForm() {
       .filter(p => p.status !== "Cancelled")
       .map(p => ({
         value: p.id,
-        label: `Job: ${p.jobCardNo || "N/A"} - ${p.transactionNo} (Qty: ${p.qty})`
+        label: `Job: ${String(p.jobCardNo || "").trim() || p.transactionNo} (Qty: ${p.qty})`
       }));
   }, [productions]);
 
