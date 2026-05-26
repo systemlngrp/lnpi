@@ -48,12 +48,14 @@ export function ProductionStageQueue({
   predicate,
   enableFfgEditing = false,
   enableIssueAction = false,
+  enableCloseAction = false,
 }: {
   title: string;
   emptyMessage: string;
   predicate: (production: Production, actualPaperUsed: number) => boolean;
   enableFfgEditing?: boolean;
   enableIssueAction?: boolean;
+  enableCloseAction?: boolean;
 }) {
   const navigate = useNavigate();
   const [productions, setProductions] = useData<Production>("productions", []);
@@ -212,6 +214,7 @@ export function ProductionStageQueue({
   };
 
   const handleCloseJob = async (productionId: string) => {
+    if (!enableCloseAction) return;
     const target = productions.find((p) => p.id === productionId);
     if (!target || target.status === "Completed" || target.status === "Cancelled") return;
     if (!processing.some((entry) => entry.productionId === productionId)) {
@@ -311,7 +314,9 @@ export function ProductionStageQueue({
                     Status <SortIcon column="status" />
                   </button>
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close</th>
+                {enableCloseAction ? (
+                  <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close</th>
+                ) : null}
                 {enableFfgEditing ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Update</th> : null}
                 {enableIssueAction ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th> : null}
               </tr>
@@ -319,7 +324,12 @@ export function ProductionStageQueue({
             <tbody className="divide-y divide-black bg-white">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11 + (enableFfgEditing ? 1 : 0) + (enableIssueAction ? 1 : 0)} className="px-6 py-8 text-center text-black font-medium">{emptyMessage}</td>
+                  <td
+                    colSpan={10 + (enableCloseAction ? 1 : 0) + (enableFfgEditing ? 1 : 0) + (enableIssueAction ? 1 : 0)}
+                    className="px-6 py-8 text-center text-black font-medium"
+                  >
+                    {emptyMessage}
+                  </td>
                 </tr>
               ) : (
                 rows.map(({ production, order, item, company, actualPaperUsed }) => (
@@ -334,24 +344,26 @@ export function ProductionStageQueue({
                     <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{actualPaperUsed > 0 ? actualPaperUsed : "-"}</td>
                     <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{production.prodFromFFG || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{production.status}</td>
-                    <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => void handleCloseJob(production.id)}
-                        disabled={production.status === "Completed" || production.status === "Cancelled"}
-                        className={
-                          production.status === "Completed" || production.status === "Cancelled"
-                            ? "inline-flex items-center gap-1 rounded border border-slate-300 bg-slate-100 px-3 py-1 text-[11px] font-black uppercase text-slate-400 cursor-not-allowed"
-                            : closingId === production.id
-                              ? "inline-flex items-center gap-1 rounded border border-black bg-amber-400 px-3 py-1 text-[11px] font-black uppercase text-black animate-pulse"
-                              : "inline-flex items-center gap-1 rounded border border-black bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase text-white hover:bg-emerald-700"
-                        }
-                        title={production.status === "Completed" || production.status === "Cancelled" ? "Job already closed" : "Close Job"}
-                      >
-                        <CheckCircle size={12} />
-                        {closingId === production.id ? "Confirm?" : "Close"}
-                      </button>
-                    </td>
+                    {enableCloseAction ? (
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => void handleCloseJob(production.id)}
+                          disabled={production.status === "Completed" || production.status === "Cancelled"}
+                          className={
+                            production.status === "Completed" || production.status === "Cancelled"
+                              ? "inline-flex items-center gap-1 rounded border border-slate-300 bg-slate-100 px-3 py-1 text-[11px] font-black uppercase text-slate-400 cursor-not-allowed"
+                              : closingId === production.id
+                                ? "inline-flex items-center gap-1 rounded border border-black bg-amber-400 px-3 py-1 text-[11px] font-black uppercase text-black animate-pulse"
+                                : "inline-flex items-center gap-1 rounded border border-black bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase text-white hover:bg-emerald-700"
+                          }
+                          title={production.status === "Completed" || production.status === "Cancelled" ? "Job already closed" : "Close Job"}
+                        >
+                          <CheckCircle size={12} />
+                          {closingId === production.id ? "Confirm?" : "Close"}
+                        </button>
+                      </td>
+                    ) : null}
                     {enableFfgEditing ? (
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
                         <div className="flex items-center gap-2">
