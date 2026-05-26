@@ -693,6 +693,16 @@ async function initDb(retries = 5) {
       `);
 
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`machines\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`maxOutputPerHour\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`material_in\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
@@ -802,6 +812,23 @@ async function initDb(retries = 5) {
           \`cancelTimestamp\` VARCHAR(255),
           \`cancelEmailId\` VARCHAR(255),
           \`cancelRemarks\` TEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`production_processing\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`productionId\` VARCHAR(36) NOT NULL,
+          \`jobNo\` VARCHAR(100),
+          \`machineId\` VARCHAR(36) NOT NULL,
+          \`machineName\` VARCHAR(255),
+          \`shift\` VARCHAR(10) DEFAULT 'Day',
+          \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`operatorId\` VARCHAR(36) NOT NULL,
+          \`operatorName\` VARCHAR(255),
+          \`date\` VARCHAR(50) NOT NULL,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -1239,6 +1266,21 @@ async function initDb(retries = 5) {
         { table: "companies", column: "district", type: "VARCHAR(255)" },
         { table: "companies", column: "state", type: "VARCHAR(255)" },
         { table: "companies", column: "gstNo", type: "VARCHAR(100)" },
+        { table: "machines", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "machines", column: "maxOutputPerHour", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "machines", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "machines", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "production_processing", column: "productionId", type: "VARCHAR(36) NOT NULL" },
+        { table: "production_processing", column: "jobNo", type: "VARCHAR(100)" },
+        { table: "production_processing", column: "machineId", type: "VARCHAR(36) NOT NULL" },
+        { table: "production_processing", column: "machineName", type: "VARCHAR(255)" },
+        { table: "production_processing", column: "shift", type: "VARCHAR(10) DEFAULT 'Day'" },
+        { table: "production_processing", column: "qty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "production_processing", column: "operatorId", type: "VARCHAR(36) NOT NULL" },
+        { table: "production_processing", column: "operatorName", type: "VARCHAR(255)" },
+        { table: "production_processing", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "production_processing", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "production_processing", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_in", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "users", column: "updatedBy", type: "VARCHAR(255)" },
@@ -1700,7 +1742,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;
