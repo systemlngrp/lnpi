@@ -23,6 +23,7 @@ import { MaterialIssueForm } from "./pages/MaterialIssueForm";
 import { MaterialReturnForm } from "./pages/MaterialReturnForm";
 import { ReelIssueReturnForm } from "./pages/ReelIssueReturnForm";
 import { DailyConsumptionIssueForm } from "./pages/DailyConsumptionIssueForm";
+import { DailyConsumptionMaster } from "./pages/DailyConsumptionMaster";
 import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
 import { Units } from "./pages/Units";
@@ -137,6 +138,7 @@ export default function App() {
           {/* Material Movement */}
           <Route path="material-movement/reel-issue-return" element={<ReelIssueReturnForm />} />
           <Route path="material-movement/daily-consumption" element={<DailyConsumptionIssueForm />} />
+          <Route path="material-movement/daily-consumption-master" element={<DailyConsumptionMaster />} />
           <Route path="material-movement/issue" element={<MaterialIssueForm />} />
           <Route path="material-movement/return" element={<MaterialReturnForm />} />
 
