@@ -244,7 +244,7 @@ export function OrderForm() {
             </div>
 
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">PO Rate</label>
+              <label className="font-bold text-black">Rate</label>
               <input value={rate} onChange={(e)=>setRate(e.target.value)} className="border-2 border-black rounded p-2" />
             </div>
 
