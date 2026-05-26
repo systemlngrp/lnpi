@@ -16,9 +16,10 @@ interface SelectProps {
   placeholder?: string;
   id?: string;
   required?: boolean;
+  disabled?: boolean;
 }
 
-export function Select({ options, value, onChange, onAdd, placeholder = "Select...", id, required }: SelectProps) {
+export function Select({ options, value, onChange, onAdd, placeholder = "Select...", id, required, disabled }: SelectProps) {
   const selectedOption = options.find(opt => opt.value === value) || null;
 
   const handleChange = (newValue: SingleValue<OptionType>, actionMeta: ActionMeta<OptionType>) => {
@@ -42,6 +43,7 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
           noOptionsMessage={() => "No items found"}
           isClearable
           isSearchable
+          isDisabled={disabled}
           placeholder={placeholder}
           required={required}
           menuPortalTarget={typeof document !== 'undefined' ? document.body : null}

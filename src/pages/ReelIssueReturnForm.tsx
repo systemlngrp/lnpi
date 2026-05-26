@@ -574,13 +574,10 @@ export function ReelIssueReturnForm() {
           })}
         </div>
 
-        <div className="rounded border border-black p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold uppercase">Return Reels</h3>
-            <button type="button" onClick={addReturnLine} className="inline-flex items-center gap-2 rounded border border-black px-3 py-2 text-sm font-bold hover:bg-slate-50">
-              <Plus size={16} /> Add
-            </button>
-          </div>
+	        <div className="rounded border border-black p-4 space-y-4">
+	          <div className="flex items-center justify-between">
+	            <h3 className="text-lg font-bold uppercase">Return Reels</h3>
+	          </div>
 
           {returnLines.map((line) => {
             const returnableReels = line.materialId ? getReturnableReels(line.materialId) : [];
@@ -589,22 +586,17 @@ export function ReelIssueReturnForm() {
             return (
               <div key={line.id} className="rounded border border-black p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="w-full max-w-xl space-y-1">
-                    <label className="text-sm font-bold">Material</label>
-                    <Select
-                      options={reelMaterialOptions}
-                      value={line.materialId}
-                      onChange={(value) => {
-                        setReturnLines((prev) => prev.map((row) => (row.id === line.id ? { ...row, materialId: value } : row)));
-                        setReturnQtyDrafts((prev) => ({ ...prev, [line.id]: {} }));
-                      }}
-                      placeholder="Select reel material..."
-                    />
-                  </div>
-                  <button type="button" onClick={() => removeReturnLine(line.id)} className="mt-6 text-red-600 hover:text-red-800" title="Remove line">
-                    <Trash2 size={18} />
-                  </button>
-                </div>
+	                  <div className="w-full max-w-xl space-y-1">
+	                    <label className="text-sm font-bold">Material</label>
+	                    <Select
+	                      options={reelMaterialOptions}
+	                      value={line.materialId}
+	                      onChange={() => {}}
+	                      placeholder="Select reel material..."
+	                      disabled
+	                    />
+	                  </div>
+	                </div>
 
                 {line.materialId ? (
                   <>
