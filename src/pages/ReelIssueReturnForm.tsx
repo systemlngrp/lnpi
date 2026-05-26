@@ -58,22 +58,24 @@ export function ReelIssueReturnForm() {
 
     const slipById = new Map(packingSlips.map((slip) => [slip.id, slip]));
     const materialToSelectedSlipIds = new Map<string, string[]>();
+    const issueMaterialIds = new Set<string>();
 
     issueLines.forEach((line) => {
       if (!line.materialId) return;
+      issueMaterialIds.add(line.materialId);
       const selected = selectedIssueReels[line.id] || [];
       if (selected.length === 0) return;
       const existing = materialToSelectedSlipIds.get(line.materialId) || [];
       materialToSelectedSlipIds.set(line.materialId, [...existing, ...selected]);
     });
 
-    if (materialToSelectedSlipIds.size === 0) return;
+    if (issueMaterialIds.size === 0) return;
 
     setReturnLines((prev) => {
       const next = [...prev];
       const hasLineForMaterial = (materialId: string) => next.some((row) => row.materialId === materialId);
 
-      for (const materialId of materialToSelectedSlipIds.keys()) {
+      for (const materialId of issueMaterialIds) {
         if (hasLineForMaterial(materialId)) continue;
         const emptyIndex = next.findIndex((row) => !row.materialId);
         if (emptyIndex >= 0) next[emptyIndex] = { ...next[emptyIndex], materialId };
