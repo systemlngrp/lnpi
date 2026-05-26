@@ -5,6 +5,7 @@ import { useData } from "../hooks/useData";
 import { Indent, IndentLine, Material, Setting } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
+import { exportsAllowed } from "../lib/exportPolicy";
 import { downloadIndentPdf } from "../lib/indentPdf";
 import { withIndentTotals } from "../lib/indentTotals";
 
@@ -17,6 +18,7 @@ export function IndentDetail() {
   const [settings] = useData<Setting>("settings", []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const allowExports = exportsAllowed();
 
   const indent = useMemo(() => indents.find((row) => row.id === id) || null, [id, indents]);
   const lineRows = useMemo(() => indentLines.filter((line) => line.indentId === id), [id, indentLines]);
@@ -142,14 +144,16 @@ export function IndentDetail() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleDownloadPdf()}
-              disabled={isDownloadingPdf}
-              className="inline-flex items-center justify-center min-w-[140px] rounded border border-black bg-white px-5 py-2 font-bold text-black hover:bg-slate-50 transition disabled:opacity-50"
-            >
-              {isDownloadingPdf ? <Spinner size={18} /> : <><Download size={16} className="mr-2" />Download PDF</>}
-            </button>
+            {allowExports ? (
+              <button
+                type="button"
+                onClick={() => void handleDownloadPdf()}
+                disabled={isDownloadingPdf}
+                className="inline-flex items-center justify-center min-w-[140px] rounded border border-black bg-white px-5 py-2 font-bold text-black hover:bg-slate-50 transition disabled:opacity-50"
+              >
+                {isDownloadingPdf ? <Spinner size={18} /> : <><Download size={16} className="mr-2" />Download PDF</>}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => navigate(-1)}

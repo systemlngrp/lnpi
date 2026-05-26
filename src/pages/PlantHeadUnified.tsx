@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Production, Item, Supplier, OrderSchedule, Order, Consumption, Company } from "../types";
@@ -9,7 +9,7 @@ import { CheckCircle, Truck, Activity, XCircle, ClipboardList, Package } from "l
 import { ExcelExport } from "../components/ExcelExport";
 import { isProductionPendingPH } from "../lib/productionStageFilters";
 
-type Tab = "material-in" | "production" | "orders" | "consumption";
+type Tab = "all" | "material-in" | "production" | "orders" | "consumption";
 
 export function PlantHeadUnified() {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ export function PlantHeadUnified() {
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
 
-  const [activeTab, setActiveTab] = useState<Tab>("material-in");
+  const [activeTab, setActiveTab] = useState<Tab>("all");
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
@@ -45,6 +45,9 @@ export function PlantHeadUnified() {
     "orders": pendingOrders.length,
     "consumption": pendingConsumptions.length,
   };
+
+  const totalApprovals = counts["material-in"] + counts["production"] + counts["orders"] + counts["consumption"];
+  const showSelection = activeTab !== "all";
 
   const toggleSelectAll = (ids: string[]) => {
     if (selectedIds.size === ids.length) {
@@ -270,6 +273,13 @@ export function PlantHeadUnified() {
       <div className={cn("flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4 transition-opacity", (isBulkApproving || submittingId) && "opacity-50 pointer-events-none")}>
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Plant Head Unified Approvals</h2>
         <div className="flex bg-slate-100 p-1 rounded border border-black">
+          <TabButton
+            active={activeTab === "all"}
+            onClick={() => { setActiveTab("all"); setSelectedIds(new Set()); }}
+            label="All"
+            count={totalApprovals}
+            icon={<CheckCircle size={14} />}
+          />
           <TabButton 
             active={activeTab === "material-in"} 
             onClick={() => { setActiveTab("material-in"); setSelectedIds(new Set()); }}
@@ -302,7 +312,7 @@ export function PlantHeadUnified() {
       </div>
 
       <div className={cn("bg-white rounded border border-black shadow-sm transition-opacity", (isBulkApproving || submittingId) && "opacity-50 pointer-events-none")}>
-        {selectedIds.size > 0 && (
+        {showSelection && selectedIds.size > 0 && (
           <div className="p-3 bg-emerald-50 border-b border-black flex justify-between items-center animate-in fade-in slide-in-from-top-1">
             <span className="text-sm font-bold text-emerald-900 uppercase tracking-tight">
               {selectedIds.size} {selectedIds.size === 1 ? 'item' : 'items'} selected
@@ -318,7 +328,7 @@ export function PlantHeadUnified() {
           </div>
         )}
 
-        {activeTab === "material-in" && (
+        {(activeTab === "material-in" || activeTab === "all") && (
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Material In ({counts["material-in"]})</span>
@@ -334,12 +344,14 @@ export function PlantHeadUnified() {
                 }).map(m => (
                     <div key={m.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
                         <div className="flex justify-between items-center">
-                            <input 
-                              type="checkbox" 
-                              className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                              checked={selectedIds.has(m.id)}
-                              onChange={() => toggleSelect(m.id)}
-                            />
+                            {showSelection ? (
+                              <input 
+                                type="checkbox" 
+                                className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                                checked={selectedIds.has(m.id)}
+                                onChange={() => toggleSelect(m.id)}
+                              />
+                            ) : null}
                             <div className="font-bold text-sm">{m.transactionNo}</div>
                         </div>
                         <div className="text-sm font-bold">{suppliers.find(s => s.id === m.supplierId)?.name || m.supplierId}</div>
@@ -357,14 +369,16 @@ export function PlantHeadUnified() {
             <table className="hidden md:table min-w-full divide-y divide-black">
               <thead className="bg-slate-50 border-b border-black">
                 <tr className="divide-x divide-black">
-                  <th className="px-4 py-2 w-10">
-                    <input 
-                      type="checkbox" 
-                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                      checked={counts["material-in"] > 0 && selectedIds.size === counts["material-in"]}
-                      onChange={() => toggleSelectAll(pendingMaterialIn.map(m => m.id))}
-                    />
-                  </th>
+                  {showSelection ? (
+                    <th className="px-4 py-2 w-10">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        checked={counts["material-in"] > 0 && selectedIds.size === counts["material-in"]}
+                        onChange={() => toggleSelectAll(pendingMaterialIn.map(m => m.id))}
+                      />
+                    </th>
+                  ) : null}
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Supplier</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Items</th>
@@ -381,14 +395,16 @@ export function PlantHeadUnified() {
                   })
                   .map(m => (
                   <tr key={m.id} className={cn("divide-x divide-black hover:bg-slate-50", selectedIds.has(m.id) && "bg-emerald-50/50")}>
-                    <td className="px-4 py-2 w-10 text-center">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                        checked={selectedIds.has(m.id)}
-                        onChange={() => toggleSelect(m.id)}
-                      />
-                    </td>
+                    {showSelection ? (
+                      <td className="px-4 py-2 w-10 text-center">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                          checked={selectedIds.has(m.id)}
+                          onChange={() => toggleSelect(m.id)}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-4 py-2 text-sm font-medium">{m.transactionNo}</td>
                     <td className="px-4 py-2 text-sm">{suppliers.find(s => s.id === m.supplierId)?.name || m.supplierId}</td>
                     <td className="px-4 py-2 text-sm">
@@ -408,13 +424,13 @@ export function PlantHeadUnified() {
                     </td>
                   </tr>
                 ))}
-                {counts["material-in"] === 0 && <NoPendingRows colSpan={6} />}
+                {counts["material-in"] === 0 && <NoPendingRows colSpan={showSelection ? 6 : 5} />}
               </tbody>
             </table>
           </div>
         )}
 
-        {activeTab === "production" && (
+        {(activeTab === "production" || activeTab === "all") && (
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Production ({counts["production"]})</span>
@@ -430,12 +446,14 @@ export function PlantHeadUnified() {
                 }).map(p => (
                     <div key={p.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
                         <div className="flex justify-between items-center">
-                            <input 
-                              type="checkbox" 
-                              className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                              checked={selectedIds.has(p.id)}
-                              onChange={() => toggleSelect(p.id)}
-                            />
+                            {showSelection ? (
+                              <input 
+                                type="checkbox" 
+                                className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                                checked={selectedIds.has(p.id)}
+                                onChange={() => toggleSelect(p.id)}
+                              />
+                            ) : null}
                             <div className="font-bold text-sm">{p.transactionNo}</div>
                         </div>
                         <div className="text-sm font-bold">{items.find(it => it.id === p.itemId)?.name}</div>
@@ -480,14 +498,16 @@ export function PlantHeadUnified() {
             <table className="hidden md:table min-w-full divide-y divide-black">
               <thead className="bg-slate-50 border-b border-black">
                 <tr className="divide-x divide-black">
-                  <th className="px-4 py-2 w-10">
-                    <input 
-                      type="checkbox" 
-                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                      checked={counts["production"] > 0 && selectedIds.size === counts["production"]}
-                      onChange={() => toggleSelectAll(pendingProductions.map(p => p.id))}
-                    />
-                  </th>
+                  {showSelection ? (
+                    <th className="px-4 py-2 w-10">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        checked={counts["production"] > 0 && selectedIds.size === counts["production"]}
+                        onChange={() => toggleSelectAll(pendingProductions.map(p => p.id))}
+                      />
+                    </th>
+                  ) : null}
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Item</th>
                   <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Qty</th>
@@ -504,14 +524,16 @@ export function PlantHeadUnified() {
                   })
                   .map(p => (
                   <tr key={p.id} className={cn("divide-x divide-black hover:bg-slate-50", selectedIds.has(p.id) && "bg-emerald-50/50")}>
-                    <td className="px-4 py-2 w-10 text-center">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                        checked={selectedIds.has(p.id)}
-                        onChange={() => toggleSelect(p.id)}
-                      />
-                    </td>
+                    {showSelection ? (
+                      <td className="px-4 py-2 w-10 text-center">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                          checked={selectedIds.has(p.id)}
+                          onChange={() => toggleSelect(p.id)}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-4 py-2 text-sm font-medium">{p.transactionNo}</td>
                     <td className="px-4 py-2 text-sm">{items.find(it => it.id === p.itemId)?.name}</td>
                     <td className="px-4 py-2 text-sm text-right font-bold">{p.qty}</td>
@@ -553,13 +575,13 @@ export function PlantHeadUnified() {
                     </td>
                   </tr>
                 ))}
-                {counts["production"] === 0 && <NoPendingRows colSpan={6} />}
+                {counts["production"] === 0 && <NoPendingRows colSpan={showSelection ? 6 : 5} />}
               </tbody>
             </table>
           </div>
         )}
 
-        {activeTab === "orders" && (
+        {(activeTab === "orders" || activeTab === "all") && (
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Orders ({counts["orders"]})</span>
@@ -570,12 +592,14 @@ export function PlantHeadUnified() {
               {pendingOrders.map((o) => (
                 <div key={o.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
                   <div className="flex justify-between items-center">
-                    <input
-                      type="checkbox"
-                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                      checked={selectedIds.has(o.id)}
-                      onChange={() => toggleSelect(o.id)}
-                    />
+                    {showSelection ? (
+                      <input
+                        type="checkbox"
+                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        checked={selectedIds.has(o.id)}
+                        onChange={() => toggleSelect(o.id)}
+                      />
+                    ) : null}
                     <div className="font-bold text-sm">{o.orderNo}</div>
                   </div>
                   <div className="text-sm font-bold">{companies.find((c) => c.id === o.companyId)?.name || o.companyId}</div>
@@ -597,14 +621,16 @@ export function PlantHeadUnified() {
             <table className="hidden md:table min-w-full divide-y divide-black">
               <thead className="bg-slate-50 border-b border-black">
                 <tr className="divide-x divide-black">
-                  <th className="px-4 py-2 w-10">
-                    <input
-                      type="checkbox"
-                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                      checked={counts["orders"] > 0 && selectedIds.size === counts["orders"]}
-                      onChange={() => toggleSelectAll(pendingOrders.map((o) => o.id))}
-                    />
-                  </th>
+                  {showSelection ? (
+                    <th className="px-4 py-2 w-10">
+                      <input
+                        type="checkbox"
+                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        checked={counts["orders"] > 0 && selectedIds.size === counts["orders"]}
+                        onChange={() => toggleSelectAll(pendingOrders.map((o) => o.id))}
+                      />
+                    </th>
+                  ) : null}
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Order No</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Date</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Company</th>
@@ -618,14 +644,16 @@ export function PlantHeadUnified() {
                   .sort((a, b) => new Date(b.updateTimestamp || b.orderDate || 0).getTime() - new Date(a.updateTimestamp || a.orderDate || 0).getTime())
                   .map((o) => (
                     <tr key={o.id} className={cn("divide-x divide-black hover:bg-slate-50", selectedIds.has(o.id) && "bg-emerald-50/50")}>
-                      <td className="px-4 py-2 w-10 text-center">
-                        <input
-                          type="checkbox"
-                          className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                          checked={selectedIds.has(o.id)}
-                          onChange={() => toggleSelect(o.id)}
-                        />
-                      </td>
+                      {showSelection ? (
+                        <td className="px-4 py-2 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                            checked={selectedIds.has(o.id)}
+                            onChange={() => toggleSelect(o.id)}
+                          />
+                        </td>
+                      ) : null}
                       <td className="px-4 py-2 text-sm font-medium">{o.orderNo}</td>
                       <td className="px-4 py-2 text-sm">{formatDate(o.orderDate)}</td>
                       <td className="px-4 py-2 text-sm">{companies.find((c) => c.id === o.companyId)?.name || o.companyId}</td>
@@ -644,13 +672,13 @@ export function PlantHeadUnified() {
                       </td>
                     </tr>
                   ))}
-                {counts["orders"] === 0 && <NoPendingRows colSpan={7} />}
+                {counts["orders"] === 0 && <NoPendingRows colSpan={showSelection ? 7 : 6} />}
               </tbody>
             </table>
           </div>
         )}
 
-        {activeTab === "consumption" && (
+        {(activeTab === "consumption" || activeTab === "all") && (
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Consumption ({counts["consumption"]})</span>
@@ -661,12 +689,14 @@ export function PlantHeadUnified() {
               {pendingConsumptions.map((c) => (
                 <div key={c.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
                   <div className="flex justify-between items-center">
-                    <input
-                      type="checkbox"
-                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                      checked={selectedIds.has(c.id)}
-                      onChange={() => toggleSelect(c.id)}
-                    />
+                    {showSelection ? (
+                      <input
+                        type="checkbox"
+                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        checked={selectedIds.has(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                      />
+                    ) : null}
                     <div className="font-bold text-sm">{c.transactionNo}</div>
                   </div>
                   <div className="text-sm font-bold">{items.find((it) => it.id === c.itemId)?.name || "Unknown"}</div>
@@ -682,14 +712,16 @@ export function PlantHeadUnified() {
             <table className="hidden md:table min-w-full divide-y divide-black">
               <thead className="bg-slate-50 border-b border-black">
                 <tr className="divide-x divide-black">
-                  <th className="px-4 py-2 w-10">
-                    <input
-                      type="checkbox"
-                      className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                      checked={counts["consumption"] > 0 && selectedIds.size === counts["consumption"]}
-                      onChange={() => toggleSelectAll(pendingConsumptions.map((c) => c.id))}
-                    />
-                  </th>
+                  {showSelection ? (
+                    <th className="px-4 py-2 w-10">
+                      <input
+                        type="checkbox"
+                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        checked={counts["consumption"] > 0 && selectedIds.size === counts["consumption"]}
+                        onChange={() => toggleSelectAll(pendingConsumptions.map((c) => c.id))}
+                      />
+                    </th>
+                  ) : null}
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Date</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Item</th>
@@ -703,14 +735,16 @@ export function PlantHeadUnified() {
                   .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime())
                   .map((c) => (
                     <tr key={c.id} className={cn("divide-x divide-black hover:bg-slate-50", selectedIds.has(c.id) && "bg-emerald-50/50")}>
-                      <td className="px-4 py-2 w-10 text-center">
-                        <input
-                          type="checkbox"
-                          className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                          checked={selectedIds.has(c.id)}
-                          onChange={() => toggleSelect(c.id)}
-                        />
-                      </td>
+                      {showSelection ? (
+                        <td className="px-4 py-2 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                            checked={selectedIds.has(c.id)}
+                            onChange={() => toggleSelect(c.id)}
+                          />
+                        </td>
+                      ) : null}
                       <td className="px-4 py-2 text-sm font-medium">{c.transactionNo}</td>
                       <td className="px-4 py-2 text-sm">{formatDate(c.date)}</td>
                       <td className="px-4 py-2 text-sm">{items.find((it) => it.id === c.itemId)?.name || "Unknown"}</td>
@@ -721,7 +755,7 @@ export function PlantHeadUnified() {
                       </td>
                     </tr>
                   ))}
-                {counts["consumption"] === 0 && <NoPendingRows colSpan={7} />}
+                {counts["consumption"] === 0 && <NoPendingRows colSpan={showSelection ? 7 : 6} />}
               </tbody>
             </table>
           </div>

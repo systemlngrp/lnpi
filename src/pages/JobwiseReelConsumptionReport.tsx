@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Download, Filter, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { exportsAllowed } from "../lib/exportPolicy";
 import {
   Material,
   MaterialIn,
@@ -104,6 +105,7 @@ export function JobwiseReelConsumptionReport() {
   const [dateTo, setDateTo] = useState("");
   const [minGpPercent, setMinGpPercent] = useState("");
   const [positiveConsumptionOnly, setPositiveConsumptionOnly] = useState(false);
+  const allowExports = exportsAllowed();
 
   const rows = useMemo<JobwiseReelConsumptionRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -358,22 +360,26 @@ export function JobwiseReelConsumptionReport() {
               >
                 Clear
               </button>
-              <button
-                type="button"
-                onClick={handlePdf}
-                className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 text-sm font-bold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50"
-              >
-                <Download size={16} />
-                Download PDF
-              </button>
-              <button
-                type="button"
-                onClick={handleExcel}
-                className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
-              >
-                <Download size={16} />
-                Download Excel
-              </button>
+              {allowExports ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePdf}
+                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 text-sm font-bold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50"
+                  >
+                    <Download size={16} />
+                    Download PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExcel}
+                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                  >
+                    <Download size={16} />
+                    Download Excel
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>

@@ -8,6 +8,7 @@ import { FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { buildProcessingTotalsMap } from "../lib/productionProcessingSummary";
+import { exportsAllowed } from "../lib/exportPolicy";
 
 export function ProductionPlan() {
   const [productions] = useData<Production>("productions", []);
@@ -24,6 +25,7 @@ export function ProductionPlan() {
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [searchTerm, setSearchTerm] = useState("");
+  const allowExports = exportsAllowed();
 
   const processingTotalsMap = useMemo(() => {
     return buildProcessingTotalsMap(processing);
@@ -165,8 +167,8 @@ export function ProductionPlan() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center pb-4 border-b border-black">
+    <div className="space-y-3">
+      <div className="flex justify-between items-center pb-2 border-b border-black">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Production Plan</h2>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -178,13 +180,17 @@ export function ProductionPlan() {
               className="border-2 border-black rounded p-1 text-sm focus:outline-none focus:border-indigo-600"
             />
           </div>
-          <ExcelExport data={getExportData(filteredList)} fileName={`Production_Plan_${selectedDate}`} />
-          <button
-            onClick={handleExportPDF}
-            className="flex items-center gap-2 bg-red-600 text-white px-3 py-1.5 rounded font-bold hover:bg-red-700 transition shadow border border-black text-sm"
-          >
-            <FileText size={16} /> PDF
-          </button>
+          {allowExports ? (
+            <>
+              <ExcelExport data={getExportData(filteredList)} fileName={`Production_Plan_${selectedDate}`} />
+              <button
+                onClick={handleExportPDF}
+                className="flex items-center gap-2 bg-red-600 text-white px-3 py-1.5 rounded font-bold hover:bg-red-700 transition shadow border border-black text-sm"
+              >
+                <FileText size={16} /> PDF
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, ExternalLink, FileUp, XCircle } from "lucide-react";
-import { ColorMaster, Company, Item, ItemGroup, Setting } from "../types";
+import { ColorMaster, Company, Item, ItemGroup, Production, Setting } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { TableControls } from "../components/TableControls";
@@ -13,6 +13,7 @@ export function Items() {
   const [colors, setColors] = useData<ColorMaster>("color_masters", []);
   const [companies, setCompanies] = useData<Company>("companies", []);
   const [settings] = useData<Setting>("settings", []);
+  const [productions] = useData<Production>("productions", []);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -181,6 +182,13 @@ export function Items() {
   const [showQuickCompany, setShowQuickCompany] = useState(false);
   const [quickCompanyName, setQuickCompanyName] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const getUploadHref = (filename: string) => {
+    const trimmed = (filename || "").trim();
+    if (!trimmed) return "";
+    const normalized = trimmed.replace(/^\/?uploads\//i, "");
+    const encoded = normalized.split("/").map(encodeURIComponent).join("/");
+    return `/uploads/${encoded}`;
+  };
 
   const typeNameNormalized = typeName.trim().toUpperCase();
   const plyNumber = Number(ply);
@@ -269,7 +277,20 @@ export function Items() {
     };
   }, [typeNameNormalized, plyNumber, lengthNumber, breadthNumber, heightNumber, upsNumber, openWidthNumber, flapFormulaMode]);
 
+  const producedItemIds = useMemo(() => {
+    return new Set(
+      productions
+        .filter((production) => production.itemId && production.status !== "Cancelled" && !production.cancelTimestamp)
+        .map((production) => production.itemId)
+    );
+  }, [productions]);
+
   const handleDelete = (id: string) => {
+    if (producedItemIds.has(id)) {
+      alert("This item cannot be deleted because it is already used in Production.");
+      setDeletingId(null);
+      return;
+    }
     if (deletingId !== id) {
       setDeletingId(id);
       setTimeout(() => setDeletingId(null), 3000);
@@ -655,7 +676,7 @@ export function Items() {
                             <button type="button" onClick={() => setArtwork("")} className="text-red-600 hover:text-red-800">
                               <XCircle size={16} />
                             </button>
-                            <a href={`/uploads/${artwork}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800">
+                            <a href={getUploadHref(artwork)} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800">
                               <ExternalLink size={16} />
                             </a>
                           </div>
@@ -789,16 +810,22 @@ export function Items() {
                                      setEditingId(item.id); 
                                      setIsFormOpen(true); 
                                  }} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
-                                 <button 
-                                      onClick={() => handleDelete(item.id)} 
-                                      className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold`}
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
-                             </div>
-                        </div>
-                        <div className="flex gap-4 flex-wrap">
-                            <div>
+                                  <button
+                                    onClick={() => handleDelete(item.id)}
+                                    disabled={producedItemIds.has(item.id)}
+                                    title={producedItemIds.has(item.id) ? "Cannot delete: item already produced" : "Delete"}
+                                    className={[
+                                      deletingId === item.id ? "text-amber-600 animate-pulse" : (producedItemIds.has(item.id) ? "text-slate-300" : "text-red-600"),
+                                      producedItemIds.has(item.id) ? "cursor-not-allowed" : "hover:text-red-900",
+                                      "font-bold",
+                                    ].join(" ")}
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                              </div>
+                         </div>
+                         <div className="flex gap-4 flex-wrap">
+                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">ERP</div>
                               <div className="text-sm">{item.erp ?? ""}</div>
                             </div>
@@ -899,7 +926,7 @@ export function Items() {
                               <div className="text-sm">
                                 {item.artwork ? (
                                   <a 
-                                    href={`/uploads/${item.artwork}`} 
+                                    href={getUploadHref(item.artwork)} 
                                     target="_blank" 
                                     rel="noreferrer"
                                     className="text-indigo-600 hover:text-indigo-900 font-bold inline-flex items-center gap-1"
@@ -1058,7 +1085,7 @@ export function Items() {
                       <td className="px-4 py-3 text-sm text-black border border-black">
                         {item.artwork ? (
                           <a 
-                            href={`/uploads/${item.artwork}`} 
+                            href={getUploadHref(item.artwork)} 
                             target="_blank" 
                             rel="noreferrer"
                             className="text-indigo-600 hover:text-indigo-900 font-bold inline-flex items-center gap-1"
@@ -1128,11 +1155,17 @@ export function Items() {
                                 setEditingId(item.id); 
                                 setIsFormOpen(true); 
                             }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
-                        <button 
-                          onClick={() => handleDelete(item.id)} 
-                          className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          disabled={producedItemIds.has(item.id)}
+                          title={producedItemIds.has(item.id) ? "Cannot delete: item already produced" : "Delete"}
+                          className={[
+                            deletingId === item.id ? "text-amber-600 animate-pulse" : (producedItemIds.has(item.id) ? "text-slate-300" : "text-red-600"),
+                            producedItemIds.has(item.id) ? "cursor-not-allowed" : "hover:text-red-900",
+                            "font-bold inline-flex items-center min-w-[80px] justify-end",
+                          ].join(" ")}
                         >
-                          <Trash2 size={16} className="mr-1" /> {deletingId === item.id ? "Confirm?" : "Delete"}
+                          <Trash2 size={16} className="mr-1" /> {producedItemIds.has(item.id) ? "Locked" : (deletingId === item.id ? "Confirm?" : "Delete")}
                         </button>
                       </td>
                     </tr>

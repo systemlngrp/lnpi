@@ -41,7 +41,7 @@ export function OrdersPendingPH() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-black uppercase">Pending Plant Head Approval</h2>
+      <h2 className="text-xl font-bold text-black uppercase">Pending Salesman Approval</h2>
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">

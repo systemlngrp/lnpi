@@ -160,6 +160,16 @@ export function Dashboard() {
   const pendingLoading = dispatchPlans.filter((plan) => Number(plan.plannedQty || 0) - Number(plan.loadedQty || 0) - Number(plan.canceledQty || 0) > 0).length;
   const pendingBilling = loadingSlips.filter((slip) => !slip.invoiceId).length;
   const pendingTasks = pendingPH + pendingAccounts + pendingMD + tallyMatIn + tallyProd + pendingDispatchPlanning + pendingLoading + pendingBilling;
+  const pendingTaskRows = [
+    { name: "PH Approval (All)", count: pendingPH, href: "/plant-head" },
+    { name: "Accounts Approval", count: pendingAccounts, href: "/material-in/pending-accounts" },
+    { name: "MD Approval", count: pendingMD, href: "/material-in/pending-md" },
+    { name: "Tally Entry (Material In)", count: tallyMatIn, href: "/material-in/pending-tally" },
+    { name: "Tally Entry (Production)", count: tallyProd, href: "/production/pending-tally" },
+    { name: "Dispatch Planning", count: pendingDispatchPlanning, href: "/dispatch/pending-planning" },
+    { name: "Loading", count: pendingLoading, href: "/loading/pending" },
+    { name: "Billing", count: pendingBilling, href: "/billing/pending" },
+  ];
 
   const getProductionTotalForDate = (dateValue: string) =>
     productions
@@ -281,8 +291,6 @@ export function Dashboard() {
           yesterdaysSale={formatNumber(yesterdaysSale, false)}
           totalSale={formatNumber(totalSale, false)}
           todaysSale={formatNumber(todaysSale, false)}
-          fromDate={formatDisplayDate(dateRange.from)}
-          toDate={formatDisplayDate(dateRange.to)}
         />
         {false ? <div className="rounded-none border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
           <div className="bg-cyan-400 px-4 py-2 text-center text-xl font-black tracking-tight text-red-700">|| श्री गणेशाय नमः ||</div>
@@ -321,6 +329,44 @@ export function Dashboard() {
           <WorkflowCard label="Accounts Approval" count={pendingAccounts} tone="bg-[#d9f2ff]" />
           <WorkflowCard label="MD Approval" count={pendingMD} tone="bg-[#f3e5f5]" />
           <WorkflowCard label="Pending Task" count={pendingTasks} tone="bg-[#e5e7eb]" />
+        </div>
+        <div className="bg-white/90 rounded-none border-2 border-black shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50 border-b-2 border-black flex items-center justify-between">
+            <div className="text-sm font-black uppercase tracking-widest">Pending Task List</div>
+            <div className="text-xs font-black text-slate-600">Total: {formatNumber(pendingTasks, false)}</div>
+          </div>
+          <table className="min-w-full divide-y divide-black">
+            <thead className="bg-white border-b-2 border-black">
+              <tr className="divide-x divide-black">
+                <th className="px-4 py-2 text-left text-xs font-black uppercase tracking-widest">Task</th>
+                <th className="px-4 py-2 text-right text-xs font-black uppercase tracking-widest w-28">Count</th>
+                <th className="px-4 py-2 text-right text-xs font-black uppercase tracking-widest w-28">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black bg-white">
+              {pendingTaskRows.map((row) => (
+                <tr key={row.name} className={cn("divide-x divide-black", row.count > 0 ? "bg-amber-50/40" : "bg-white")}>
+                  <td className="px-4 py-2 text-sm font-bold">{row.name}</td>
+                  <td className="px-4 py-2 text-right text-sm font-black tabular-nums">{formatNumber(row.count, false)}</td>
+                  <td className="px-4 py-2 text-right">
+                    <Link
+                      to={row.href}
+                      className={cn(
+                        "inline-flex items-center justify-center px-3 py-1.5 rounded-none border-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                        row.count > 0
+                          ? "bg-black text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-px hover:translate-x-px hover:shadow-none"
+                          : "bg-white text-slate-500 border-slate-300 pointer-events-none"
+                      )}
+                      aria-disabled={row.count === 0}
+                      tabIndex={row.count === 0 ? -1 : 0}
+                    >
+                      View
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -407,8 +453,6 @@ function DashboardHero({
   yesterdaysSale,
   totalSale,
   todaysSale,
-  fromDate,
-  toDate,
 }: {
   todaysProduction: string;
   yesterdaysProduction: string;
@@ -418,8 +462,6 @@ function DashboardHero({
   yesterdaysSale: string;
   totalSale: string;
   todaysSale: string;
-  fromDate: string;
-  toDate: string;
 }) {
   return (
     <div className="overflow-hidden border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
@@ -433,9 +475,6 @@ function DashboardHero({
         <HeroMetricCell label="Yesterday's Sale" value={yesterdaysSale} tone="bg-[#efc3c3]" valueTone="text-[#ff1f1f]" className="md:col-span-3 md:border-t-2" />
         <HeroMetricCell label="Total Sale" value={totalSale} tone="bg-[#6a54b6] text-white" className="md:col-span-4 md:border-t-2" />
         <HeroMetricCell label="Today's Sale" value={todaysSale} tone="bg-[#1adbe6]" className="md:col-span-3 md:border-t-2" />
-        <HeroDateCell value={fromDate} className="md:col-span-2 md:border-t-2" />
-        <HeroTitleCell title="Dispatch Report" tone="bg-[#29549b] text-white" className="md:col-span-6 md:border-t-2" />
-        <HeroDateCell value={toDate} className="md:col-span-2 md:border-t-2" />
       </div>
     </div>
   );

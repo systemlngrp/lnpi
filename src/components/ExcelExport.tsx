@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { Download } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { exportsAllowed } from '../lib/exportPolicy';
 
 interface ExcelExportProps {
   data: any[];
@@ -10,6 +11,8 @@ interface ExcelExportProps {
 }
 
 export function ExcelExport({ data, fileName, sheetName = 'Sheet1', className }: ExcelExportProps) {
+  if (!exportsAllowed()) return null;
+
   const handleExport = () => {
     if (!data || data.length === 0) return;
 

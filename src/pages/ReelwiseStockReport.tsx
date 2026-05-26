@@ -11,6 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { exportsAllowed } from "../lib/exportPolicy";
 import {
   Material,
   MaterialIn,
@@ -132,6 +133,7 @@ export function ReelwiseStockReport() {
   const [stockYetToIssueOnly, setStockYetToIssueOnly] = useState(false);
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
+  const allowExports = exportsAllowed();
 
   const rows = useMemo<ReelwiseStockRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -151,7 +153,7 @@ export function ReelwiseStockReport() {
         const issuedWeight = relatedIssueLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
         const returnedWeight = relatedReturnLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
         const mrrQty = Number(slip.weightKg || 0);
-        const availableWeight = Number(Math.max(0, mrrQty - issuedWeight + returnedWeight).toFixed(2));
+        const availableWeight = Number(Math.max(0, mrrQty - issuedWeight - returnedWeight).toFixed(2));
 
         const issueDates = relatedIssueLines
           .map((line) => issueMap.get(line.materialIssueId)?.date || "")
@@ -423,30 +425,34 @@ export function ReelwiseStockReport() {
               >
                 Clear
               </button>
-              <button
-                type="button"
-                onClick={handleDownloadPdf}
-                className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-white px-5 text-sm font-bold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
-              >
-                <Download size={16} />
-                Download PDF
-              </button>
-              <button
-                type="button"
-                onClick={handleExportExcel}
-                className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 text-sm font-bold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50"
-              >
-                <Download size={16} />
-                Download Excel
-              </button>
-              <button
-                type="button"
-                onClick={handleSendPdf}
-                className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700"
-              >
-                <Mail size={16} />
-                Send PDF
-              </button>
+              {allowExports ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-white px-5 text-sm font-bold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
+                  >
+                    <Download size={16} />
+                    Download PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportExcel}
+                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 text-sm font-bold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50"
+                  >
+                    <Download size={16} />
+                    Download Excel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendPdf}
+                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700"
+                  >
+                    <Mail size={16} />
+                    Send PDF
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
