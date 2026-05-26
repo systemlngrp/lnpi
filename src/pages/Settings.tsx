@@ -66,6 +66,19 @@ const GSM_FORMULA_OPTIONS = [
   },
 ];
 
+const DEFAULT_ITEM_TYPES = [
+  "2 PLY LINER",
+  "2 PLY ROLL",
+  "DIE CUT SHEET",
+  "HORIZONTAL PLATE",
+  "PARTITION",
+  "Paper",
+  "ROTARY TRAY",
+  "RSC",
+  "U/C PLATE",
+  "VERTICAL PLATE",
+];
+
 export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [machines] = useData<Machine>("machines", []);
@@ -82,10 +95,13 @@ export function SettingsPage() {
   const currentSetting = settings[0];
 
   const typeNames = useMemo(() => {
-    return Array.from(new Set(items.map((item) => String(item.typeName || "").trim()).filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b)
-    );
-  }, [items]);
+    const fromItems = items.map((item) => String(item.typeName || "").trim()).filter(Boolean);
+    const fromSetting = Object.keys(parseMandatoryMachinesByType(currentSetting));
+    return Array.from(new Set([...DEFAULT_ITEM_TYPES, ...fromItems, ...fromSetting]))
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [currentSetting, items]);
 
   const machineNames = useMemo(() => {
     return Array.from(new Set(machines.map((m) => normalizeMachineName(m.name)).filter(Boolean))).sort((a, b) =>

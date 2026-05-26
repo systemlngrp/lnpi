@@ -52,6 +52,7 @@ export function ProductionStageQueue({
   enableFfgEditing = false,
   enableIssueAction = false,
   enableCloseAction = false,
+  issuePrereqMachineName,
 }: {
   title: string;
   emptyMessage: string;
@@ -59,6 +60,7 @@ export function ProductionStageQueue({
   enableFfgEditing?: boolean;
   enableIssueAction?: boolean;
   enableCloseAction?: boolean;
+  issuePrereqMachineName?: string;
 }) {
   const navigate = useNavigate();
   const [productions, setProductions] = useData<Production>("productions", []);
@@ -95,6 +97,7 @@ export function ProductionStageQueue({
   const rows = useMemo(() => {
     const lowered = searchTerm.toLowerCase();
     const mandatoryMap = parseMandatoryMachinesByType(settings[0]);
+    const prereqMachine = issuePrereqMachineName ? normalizeMachineName(issuePrereqMachineName) : "";
     return productions
       .filter((production) => predicate(production, getProductionActualPaperUsed(production, usageMap)))
       .map((production) => {
@@ -102,10 +105,24 @@ export function ProductionStageQueue({
         const order = orders.find((row) => row.id === schedule?.orderId);
         const item = items.find((row) => row.id === production.itemId);
         const company = companies.find((row) => row.id === order?.companyId);
+        const prereqQty = prereqMachine
+          ? processing
+              .filter((entry) => entry.productionId === production.id && normalizeMachineName(entry.machineName) === prereqMachine)
+              .reduce((sum, entry) => sum + Number(entry.qty || 0), 0)
+          : 0;
         const requiredMachines = getRequiredMachinesForType(mandatoryMap, item?.typeName);
-        return { production, order, item, company, actualPaperUsed: getProductionActualPaperUsed(production, usageMap), requiredMachines };
+        return {
+          production,
+          order,
+          item,
+          company,
+          actualPaperUsed: getProductionActualPaperUsed(production, usageMap),
+          requiredMachines,
+          prereqQty,
+        };
       })
-      .filter(({ production, order, item, company }) => {
+      .filter(({ production, order, item, company, prereqQty }) => {
+        if (prereqMachine && !(prereqQty > 0)) return false;
         if (!lowered) return true;
         return (
           production.transactionNo.toLowerCase().includes(lowered) ||
@@ -182,7 +199,21 @@ export function ProductionStageQueue({
         const timeB = new Date(b.production.updateTimestamp || b.production.date || 0).getTime();
         return timeB - timeA;
       });
-  }, [companies, items, orders, predicate, productions, schedules, searchTerm, settings, sortDir, sortKey, usageMap]);
+  }, [
+    companies,
+    items,
+    issuePrereqMachineName,
+    orders,
+    predicate,
+    processing,
+    productions,
+    schedules,
+    searchTerm,
+    settings,
+    sortDir,
+    sortKey,
+    usageMap,
+  ]);
 
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (column !== sortKey) return <ArrowUpDown size={12} className="opacity-60" />;
@@ -300,6 +331,11 @@ export function ProductionStageQueue({
                     Item <SortIcon column="item" />
                   </button>
                 </th>
+                {issuePrereqMachineName ? (
+                  <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                    {normalizeMachineName(issuePrereqMachineName)}
+                  </th>
+                ) : null}
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
                   <button type="button" onClick={() => toggleSort("qty")} className="inline-flex items-center gap-1">
                     Qty <SortIcon column="qty" />
@@ -331,14 +367,20 @@ export function ProductionStageQueue({
               {rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10 + (enableCloseAction ? 1 : 0) + (enableFfgEditing ? 1 : 0) + (enableIssueAction ? 1 : 0)}
+                    colSpan={
+                      10 +
+                      (issuePrereqMachineName ? 1 : 0) +
+                      (enableCloseAction ? 1 : 0) +
+                      (enableFfgEditing ? 1 : 0) +
+                      (enableIssueAction ? 1 : 0)
+                    }
                     className="px-6 py-8 text-center text-black font-medium"
                   >
                     {emptyMessage}
                   </td>
                 </tr>
               ) : (
-                rows.map(({ production, order, item, company, actualPaperUsed, requiredMachines }) => (
+                rows.map(({ production, order, item, company, actualPaperUsed, prereqQty, requiredMachines }) => (
                   <tr key={production.id} className="hover:bg-slate-50 divide-x divide-black">
                     <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{production.transactionNo}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(production.date)}</td>
@@ -346,6 +388,11 @@ export function ProductionStageQueue({
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{production.erpCode || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black">{item?.name || "Unknown"}</td>
+                    {issuePrereqMachineName ? (
+                      <td className="px-4 py-4 text-right text-xs font-black text-emerald-700 border border-black whitespace-nowrap">
+                        {prereqQty > 0 ? prereqQty.toFixed(2) : "-"}
+                      </td>
+                    ) : null}
                     <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{production.qty} {production.uom}</td>
                     <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{actualPaperUsed > 0 ? actualPaperUsed : "-"}</td>
                     <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{production.prodFromFFG || "-"}</td>
@@ -442,6 +489,7 @@ export function ProductionPendingConsumption() {
       emptyMessage="No jobs pending material issue."
       predicate={isProductionPendingConsumption}
       enableIssueAction
+      issuePrereqMachineName="Corrugation Liner"
     />
   );
 }
