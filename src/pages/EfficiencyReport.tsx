@@ -331,8 +331,8 @@ export function EfficiencyReport() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-8">
-          <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-2">
+        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-12">
+          <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-4">
             <Search size={16} className="text-slate-400" />
             <input
               value={searchTerm}
@@ -342,7 +342,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-2">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">From</div>
             <input
               type="date"
@@ -352,7 +352,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-2">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">To</div>
             <input
               type="date"
@@ -362,7 +362,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-1">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Day hrs</div>
             <input
               type="number"
@@ -374,7 +374,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-1">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Night hrs</div>
             <input
               type="number"
@@ -386,7 +386,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-2">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">View</div>
             <select
               value={viewMode}
@@ -399,7 +399,7 @@ export function EfficiencyReport() {
             </select>
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-2">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Shift</div>
             <select
               value={shift}
@@ -412,12 +412,12 @@ export function EfficiencyReport() {
             </select>
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 md:col-span-1 xl:col-span-2">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 md:col-span-1 xl:col-span-4">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Machine</div>
             <select
               value={machineId}
               onChange={(e) => setMachineId(e.target.value)}
-              className="max-w-[220px] truncate text-right text-sm font-semibold text-slate-800 outline-none"
+              className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-slate-800 outline-none"
             >
               <option value="">All</option>
               {machineOptions.map((opt) => (
@@ -428,12 +428,12 @@ export function EfficiencyReport() {
             </select>
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 md:col-span-1 xl:col-span-2">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 md:col-span-1 xl:col-span-4">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Operator</div>
             <select
               value={operatorId}
               onChange={(e) => setOperatorId(e.target.value)}
-              className="max-w-[220px] truncate text-right text-sm font-semibold text-slate-800 outline-none"
+              className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-slate-800 outline-none"
             >
               <option value="">All</option>
               {operatorOptions.map((opt) => (
@@ -444,11 +444,11 @@ export function EfficiencyReport() {
             </select>
           </div>
 
-          <div className="flex items-center gap-3 md:col-span-2 xl:col-span-2">
+          <div className="flex items-center justify-end gap-3 md:col-span-2 xl:col-span-2">
             <button
               type="button"
               onClick={handleClear}
-              className="inline-flex h-[52px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+              className="inline-flex h-[52px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200 xl:w-auto"
             >
               Clear
             </button>
