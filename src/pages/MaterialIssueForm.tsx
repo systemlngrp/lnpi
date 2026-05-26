@@ -106,18 +106,20 @@ export function MaterialIssueForm() {
       return;
     }
 
-    if (!isReel) {
-      const qty = Number(currentQty || 0);
-      if (qty <= 0) return;
-      const availableQty = getNonReelAvailableQty(currentMaterialId, materialIn, materialIssueLines, materialReturnLines);
-      if (qty > availableQty) {
-        alert(`Available quantity is only ${availableQty}.`);
-        return;
-      }
-      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false }]);
-    } else {
-      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty: 0, uom: "KG", isReel: true }]);
-    }
+	    if (!isReel) {
+	      const qty = Number(currentQty || 0);
+	      if (qty <= 0) return;
+	      if (issueType === "Job") {
+	        const availableQty = getNonReelAvailableQty(currentMaterialId, materialIn, materialIssueLines, materialReturnLines);
+	        if (qty > availableQty) {
+	          alert(`Available quantity is only ${availableQty}.`);
+	          return;
+	        }
+	      }
+	      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false }]);
+	    } else {
+	      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty: 0, uom: "KG", isReel: true }]);
+	    }
 
     setCurrentMaterialId("");
     setCurrentQty("");
@@ -385,15 +387,19 @@ export function MaterialIssueForm() {
                 const availableQty = !line.isReel ? getNonReelAvailableQty(line.materialId, materialIn, materialIssueLines, materialReturnLines) : null;
                 const availableReels = line.isReel ? getLineAvailableReels(line.id, line.materialId) : [];
                 const selectedIds = selectedReels[line.id] || [];
-                return (
-                  <div key={line.id} className="rounded border border-black p-4 space-y-3">
+	                return (
+	                  <div key={line.id} className="rounded border border-black p-4 space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="font-bold">{material?.name || "Unknown Material"}</div>
-                        <div className="text-sm text-slate-500">
-                          {line.isReel ? `Selected Weight: ${line.qty.toFixed(2)} KG` : `Issue Qty: ${line.qty} ${line.uom} | Available: ${availableQty}`}
-                        </div>
-                      </div>
+	                        <div className="font-bold">{material?.name || "Unknown Material"}</div>
+	                        <div className="text-sm text-slate-500">
+	                          {line.isReel
+	                            ? `Selected Weight: ${line.qty.toFixed(2)} KG`
+	                            : issueType === "General"
+	                              ? `Qty: ${line.qty}`
+	                              : `Issue Qty: ${line.qty} ${line.uom} | Available: ${availableQty}`}
+	                        </div>
+	                      </div>
                       <button type="button" onClick={() => handleRemoveLine(line.id)} className="text-red-600 hover:text-red-800">
                         <Trash2 size={18} />
                       </button>
