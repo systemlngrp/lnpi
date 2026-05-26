@@ -8,7 +8,7 @@ import { Machine, ProductionProcessing, User } from "../types";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { formatDate } from "../lib/serial";
 
-type ViewMode = "detailed" | "machineDaily";
+type ViewMode = "detailed" | "machineDaily" | "operatorMachineDaily";
 type Shift = "Day" | "Night";
 
 type EfficiencyRow = {
@@ -44,7 +44,13 @@ function buildEfficiencyPdf({
   doc.setFontSize(9);
   doc.text(`Generated on ${new Date().toLocaleString("en-GB")}`, 14, 20);
   doc.text(
-    `View: ${viewMode === "detailed" ? "Detailed" : "Daily by machine+shift"} • Day hrs: ${dayShiftHours} • Night hrs: ${nightShiftHours}`,
+    `View: ${
+      viewMode === "detailed"
+        ? "Detailed"
+        : viewMode === "operatorMachineDaily"
+          ? "Daily by operator+machine+shift"
+          : "Daily by machine+shift"
+    } • Day hrs: ${dayShiftHours} • Night hrs: ${nightShiftHours}`,
     14,
     25
   );
@@ -164,7 +170,10 @@ export function EfficiencyReport() {
 
     const grouped = new Map<string, EfficiencyRow & { operatorNames: Set<string>; jobNos: Set<string> }>();
     for (const entry of base) {
-      const key = `${entry.date}__${entry.machineId}__${entry.shift}`;
+      const key =
+        viewMode === "operatorMachineDaily"
+          ? `${entry.date}__${entry.operatorId}__${entry.machineId}__${entry.shift}`
+          : `${entry.date}__${entry.machineId}__${entry.shift}`;
       const current = grouped.get(key);
       if (!current) {
         grouped.set(key, {
@@ -201,6 +210,10 @@ export function EfficiencyReport() {
     return finalized.sort((a, b) => {
       const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
       if (dateDiff !== 0) return dateDiff;
+      if (viewMode === "operatorMachineDaily") {
+        const operatorDiff = a.operatorName.localeCompare(b.operatorName);
+        if (operatorDiff !== 0) return operatorDiff;
+      }
       const machineDiff = a.machineName.localeCompare(b.machineName);
       if (machineDiff !== 0) return machineDiff;
       return a.shift.localeCompare(b.shift);
@@ -381,6 +394,7 @@ export function EfficiencyReport() {
               className="text-sm font-semibold text-slate-800 outline-none"
             >
               <option value="machineDaily">Daily by machine+shift</option>
+              <option value="operatorMachineDaily">Daily by operator+machine+shift</option>
               <option value="detailed">Detailed</option>
             </select>
           </div>
