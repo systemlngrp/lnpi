@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
@@ -53,6 +53,61 @@ export function ReelIssueReturnForm() {
 
   const selectedProduction = productions.find((production) => production.id === productionId) || null;
 
+  useEffect(() => {
+    if (!productionId) return;
+
+    const slipById = new Map(packingSlips.map((slip) => [slip.id, slip]));
+    const materialToSelectedSlipIds = new Map<string, string[]>();
+
+    issueLines.forEach((line) => {
+      if (!line.materialId) return;
+      const selected = selectedIssueReels[line.id] || [];
+      if (selected.length === 0) return;
+      const existing = materialToSelectedSlipIds.get(line.materialId) || [];
+      materialToSelectedSlipIds.set(line.materialId, [...existing, ...selected]);
+    });
+
+    if (materialToSelectedSlipIds.size === 0) return;
+
+    setReturnLines((prev) => {
+      const next = [...prev];
+      const hasLineForMaterial = (materialId: string) => next.some((row) => row.materialId === materialId);
+
+      for (const materialId of materialToSelectedSlipIds.keys()) {
+        if (hasLineForMaterial(materialId)) continue;
+        const emptyIndex = next.findIndex((row) => !row.materialId);
+        if (emptyIndex >= 0) next[emptyIndex] = { ...next[emptyIndex], materialId };
+        else next.push({ id: crypto.randomUUID(), materialId });
+      }
+
+      setReturnQtyDrafts((prevDrafts) => {
+        const nextDrafts = { ...prevDrafts };
+
+        for (const [materialId, slipIdsRaw] of materialToSelectedSlipIds.entries()) {
+          const lineId =
+            next.find((row) => row.materialId === materialId)?.id ?? next.find((row) => !row.materialId)?.id;
+          if (!lineId) continue;
+
+          const slipIds = Array.from(new Set(slipIdsRaw));
+          const currentDrafts = nextDrafts[lineId] ? { ...nextDrafts[lineId] } : {};
+
+          slipIds.forEach((slipId) => {
+            if (currentDrafts[slipId] !== undefined) return;
+            const slip = slipById.get(slipId);
+            const weight = Number(slip?.weightKg || 0);
+            currentDrafts[slipId] = weight > 0 ? weight.toFixed(2) : "";
+          });
+
+          nextDrafts[lineId] = currentDrafts;
+        }
+
+        return nextDrafts;
+      });
+
+      return next.length === 0 ? [createEmptyReelLine()] : next;
+    });
+  }, [productionId, issueLines, selectedIssueReels, packingSlips]);
+
   const jobOptions = useMemo(
     () =>
       productions
@@ -78,6 +133,20 @@ export function ReelIssueReturnForm() {
   );
 
   const getMaterial = (materialId: string) => materials.find((material) => material.id === materialId);
+
+  const ensureReturnLineForMaterial = (materialId: string) => {
+    if (!materialId) return "";
+    const existing = returnLines.find((line) => line.materialId === materialId);
+    if (existing) return existing.id;
+
+    const newId = crypto.randomUUID();
+    setReturnLines((prev) => {
+      const hasOnlyEmpty = prev.length === 1 && !prev[0].materialId;
+      if (hasOnlyEmpty) return [{ id: newId, materialId }];
+      return [...prev, { id: newId, materialId }];
+    });
+    return newId;
+  };
 
   const getIssueAvailableReels = (materialId: string, currentLineId: string) => {
     const selectedElsewhere = new Set(
@@ -169,6 +238,19 @@ export function ReelIssueReturnForm() {
 
       return { ...prev, [lineId]: Array.from(current) };
     });
+
+    if (productionId && materialId) {
+      const returnLineId = ensureReturnLineForMaterial(materialId);
+      if (returnLineId) {
+        setReturnQtyDrafts((prev) => ({
+          ...prev,
+          [returnLineId]: {
+            ...(prev[returnLineId] || {}),
+            [packingSlipId]: (prev[returnLineId] || {})[packingSlipId] ?? "",
+          },
+        }));
+      }
+    }
   };
 
   const updateReturnQty = (lineId: string, materialId: string, packingSlipId: string, value: string) => {
