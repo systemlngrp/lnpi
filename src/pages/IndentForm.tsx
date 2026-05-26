@@ -11,6 +11,7 @@ type EditableIndentLine = {
   id: string;
   materialId: string;
   qty: number | "";
+  targetDeliveryDate: string;
 };
 
 function createEmptyLine(): EditableIndentLine {
@@ -18,6 +19,7 @@ function createEmptyLine(): EditableIndentLine {
     id: crypto.randomUUID(),
     materialId: "",
     qty: "",
+    targetDeliveryDate: "",
   };
 }
 
@@ -67,13 +69,14 @@ export function IndentForm() {
       label: `${material.erpCode ? `${material.erpCode} - ` : ""}${material.name}`,
     }));
 
-  const handleLineChange = (lineId: string, field: "materialId" | "qty", value: string) => {
+  const handleLineChange = (lineId: string, field: "materialId" | "qty" | "targetDeliveryDate", value: string) => {
     setLines((prev) =>
       prev.map((line) =>
         line.id === lineId
           ? {
               ...line,
               [field]: field === "qty" ? (value === "" ? "" : Number(value)) : value,
+              ...(field === "materialId" && !line.targetDeliveryDate && requiredDate ? { targetDeliveryDate: requiredDate } : {}),
             }
           : line
       )
@@ -126,6 +129,7 @@ export function IndentForm() {
         materialId: material.id,
         uom: getIndentLineUom(indentType, material),
         qty: Number(line.qty),
+        targetDeliveryDate: (line.targetDeliveryDate || requiredDate || "").trim() || undefined,
         orderedQty: 0,
         cancelledQty: 0,
         balanceQty: Number(line.qty),
@@ -264,6 +268,7 @@ export function IndentForm() {
                   <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black min-w-[420px]">Select Item <span className="text-red-200">*</span></th>
                   <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black">Unit</th>
                   <th className="px-4 py-3 text-right text-sm font-bold border-2 border-black">Qty <span className="text-red-200">*</span></th>
+                  <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black min-w-[180px]">Target Delivery</th>
                   <th className="px-4 py-3 text-center text-sm font-bold border-2 border-black w-16"></th>
                 </tr>
               </thead>
@@ -302,6 +307,14 @@ export function IndentForm() {
                           value={line.qty}
                           onChange={(e) => handleLineChange(line.id, "qty", e.target.value)}
                           className="w-full rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                        />
+                      </td>
+                      <td className="px-3 py-3 border-2 border-black">
+                        <input
+                          type="date"
+                          value={line.targetDeliveryDate}
+                          onChange={(e) => handleLineChange(line.id, "targetDeliveryDate", e.target.value)}
+                          className="w-full rounded border border-slate-300 px-3 py-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                         />
                       </td>
                       <td className="px-3 py-3 border-2 border-black text-center">

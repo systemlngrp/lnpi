@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { Indent, IndentLine, Material, PurchaseOrder, PurchaseOrderLine, Supplier } from "../types";
@@ -49,6 +49,21 @@ export function PurchaseOrderCreate() {
   );
 
   const materialMap = useMemo(() => new Map(materials.map((material) => [material.id, material])), [materials]);
+  const purchaseOrderMap = useMemo(() => new Map(purchaseOrders.map((po) => [po.id, po])), [purchaseOrders]);
+
+  const lastOrderMap = useMemo(() => {
+    const best = new Map<string, { rate: number; poDate: string }>();
+    for (const line of purchaseOrderLines) {
+      const po = purchaseOrderMap.get(line.purchaseOrderId);
+      if (!po?.poDate) continue;
+      const materialId = line.materialId;
+      const existing = best.get(materialId);
+      if (!existing || new Date(po.poDate).getTime() > new Date(existing.poDate).getTime()) {
+        best.set(materialId, { rate: Number(line.rate || 0), poDate: po.poDate });
+      }
+    }
+    return best;
+  }, [purchaseOrderLines, purchaseOrderMap]);
 
   const getDraft = (lineId: string): RowDraft => rowDrafts[lineId] || { supplierId: "", poQty: "", cancelQty: "", rate: "" };
 
@@ -61,6 +76,27 @@ export function PurchaseOrderCreate() {
       },
     }));
   };
+
+  useEffect(() => {
+    if (relevantLines.length === 0) return;
+    setRowDrafts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const line of relevantLines) {
+        if (next[line.id]) continue;
+        const balanceQty = Number(line.balanceQty || 0);
+        const last = lastOrderMap.get(line.materialId);
+        next[line.id] = {
+          supplierId: "",
+          poQty: balanceQty > 0 ? String(balanceQty) : "",
+          cancelQty: "",
+          rate: last?.rate ? String(last.rate) : "",
+        };
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [lastOrderMap, relevantLines]);
 
   const handleCreatePo = async () => {
     if (!indent || !normalizedIndent) return;
@@ -153,6 +189,7 @@ export function PurchaseOrderCreate() {
             qty: poQty,
             rate,
             amount: poQty * rate,
+            targetDeliveryDate: (line.targetDeliveryDate || "").trim() || undefined,
             updatedBy: "System User",
             updateTimestamp: timestamp,
           });
@@ -286,10 +323,12 @@ export function PurchaseOrderCreate() {
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[130px]">Already Ordered Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[140px]">Already Cancelled Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[120px]">Balance Qty</th>
+                <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[140px]">Target Delivery</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[220px]">Supplier</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[140px]">New PO Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[150px]">New Cancel Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[140px]">Rate</th>
+                <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[150px]">Last PO</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[160px]">Amount</th>
               </tr>
             </thead>
@@ -300,6 +339,7 @@ export function PurchaseOrderCreate() {
                 const poQty = Number(draft.poQty || 0);
                 const rate = Number(draft.rate || 0);
                 const amount = poQty * rate;
+                const last = lastOrderMap.get(line.materialId);
                 return (
                   <tr key={line.id} className="bg-white hover:bg-slate-50">
                     <td className="border-2 border-black px-4 py-3 text-sm text-black">{line.erpCode || ""}</td>
@@ -309,6 +349,9 @@ export function PurchaseOrderCreate() {
                     <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{Number(line.orderedQty || 0).toLocaleString()}</td>
                     <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{Number(line.cancelledQty || 0).toLocaleString()}</td>
                     <td className="border-2 border-black px-4 py-3 text-sm font-bold text-black text-right">{Number(line.balanceQty || 0).toLocaleString()}</td>
+                    <td className="border-2 border-black px-4 py-3 text-sm text-black whitespace-nowrap">
+                      {line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-"}
+                    </td>
                     <td className="border-2 border-black px-3 py-3">
                       <Select
                         value={draft.supplierId}
@@ -346,6 +389,16 @@ export function PurchaseOrderCreate() {
                         onChange={(e) => setDraftField(line.id, { rate: e.target.value })}
                         className="w-[120px] rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                       />
+                    </td>
+                    <td className="border-2 border-black px-4 py-3 text-xs text-slate-700 whitespace-nowrap">
+                      {last ? (
+                        <div>
+                          <div className="font-bold">{Number(last.rate || 0).toFixed(2)}</div>
+                          <div className="text-[10px] text-slate-500">{formatDate(last.poDate)}</div>
+                        </div>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{amount ? amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}</td>
                   </tr>

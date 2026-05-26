@@ -205,6 +205,11 @@ export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
                           <li key={line.id}>
                             <span className="font-medium">{materialMap.get(line.materialId) || line.erpCode || "Unknown Material"}</span>
                             <span className="ml-2">[{Number(line.qty).toLocaleString()} {line.uom || ""}]</span>
+                            {(line.targetDeliveryDate || indent?.requiredDate) ? (
+                              <span className="ml-2 text-xs text-slate-500 whitespace-nowrap">
+                                (Delivery: {formatDate(line.targetDeliveryDate || indent?.requiredDate || "")})
+                              </span>
+                            ) : null}
                           </li>
                         ))}
                       </ul>

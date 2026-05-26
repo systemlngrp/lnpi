@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle, Download, Eye, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
@@ -56,19 +57,38 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
 
   const exportRows = useMemo(
     () =>
-      visibleIndents.map((indent) => ({
-        "Requested By": indent.requestedBy,
-        "Requisition Date": formatDate(indent.requisitionDate),
-        "Required Date": formatDate(indent.requiredDate),
-        "Indent Type": indent.indentType,
-        Status: indent.status,
-        Items: getLineSummary(
-          indentLines.filter((line) => line.indentId === indent.id),
-          materials
-        ),
-        "Rejected Remarks": indent.rejectedRemarks || "",
-      })),
-    [indentLines, materials, visibleIndents]
+      mode === "Pending"
+        ? visibleIndents.flatMap((indent) => {
+            const lines = indentLines.filter((line) => line.indentId === indent.id);
+            return lines.map((line) => {
+              const material = materials.find((row) => row.id === line.materialId);
+              return {
+                "Requested By": indent.requestedBy,
+                "Requisition Date": formatDate(indent.requisitionDate),
+                "Required Date": formatDate(indent.requiredDate),
+                "Indent Type": indent.indentType,
+                ERP: line.erpCode || "",
+                Item: material?.name || line.erpCode || "Unknown Material",
+                Qty: line.qty,
+                Unit: line.uom || "",
+                "Target Delivery": formatDate(line.targetDeliveryDate || ""),
+                Status: indent.status,
+              };
+            });
+          })
+        : visibleIndents.map((indent) => ({
+            "Requested By": indent.requestedBy,
+            "Requisition Date": formatDate(indent.requisitionDate),
+            "Required Date": formatDate(indent.requiredDate),
+            "Indent Type": indent.indentType,
+            Status: indent.status,
+            Items: getLineSummary(
+              indentLines.filter((line) => line.indentId === indent.id),
+              materials
+            ),
+            "Rejected Remarks": indent.rejectedRemarks || "",
+          })),
+    [indentLines, materials, mode, visibleIndents]
   );
 
   const updateIndent = async (indent: Indent, nextStatus: Indent["status"], remarks?: string) => {
@@ -164,8 +184,20 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Requested By</th>
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Requisition Date</th>
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Required Date</th>
-              <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Indent Type</th>
-              <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Items</th>
+              {mode === "Pending" ? (
+                <>
+                  <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">ERP</th>
+                  <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black min-w-[320px]">Item</th>
+                  <th className="border border-black px-4 py-3 text-right text-sm font-bold uppercase text-black">Qty</th>
+                  <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Unit</th>
+                  <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Target Delivery</th>
+                </>
+              ) : (
+                <>
+                  <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Indent Type</th>
+                  <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Items</th>
+                </>
+              )}
               {mode === "Rejected" ? (
                 <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Remarks</th>
               ) : null}
@@ -185,27 +217,52 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                 </td>
               </tr>
             ) : (
-              visibleIndents.map((indent) => {
-                const lineRows = indentLines.filter((line) => line.indentId === indent.id);
+              (mode === "Pending"
+                ? visibleIndents.flatMap((indent) =>
+                    indentLines
+                      .filter((line) => line.indentId === indent.id)
+                      .map((line) => ({ indent, line }))
+                  )
+                : visibleIndents.map((indent) => ({ indent, line: null as IndentLine | null }))
+              ).map(({ indent, line }) => {
+                const lineRows = indentLines.filter((row) => row.indentId === indent.id);
+                const material = line ? materials.find((row) => row.id === line.materialId) : null;
+
                 return (
-                  <tr key={indent.id} className="hover:bg-slate-50">
+                  <tr key={line ? `${indent.id}-${line.id}` : indent.id} className="hover:bg-slate-50">
                     <td className="border border-black px-4 py-4 text-sm text-black">{indent.requestedBy}</td>
                     <td className="border border-black px-4 py-4 text-sm text-black whitespace-nowrap">{formatDate(indent.requisitionDate)}</td>
                     <td className="border border-black px-4 py-4 text-sm text-black whitespace-nowrap">{formatDate(indent.requiredDate)}</td>
-                    <td className="border border-black px-4 py-4 text-sm text-black">{indent.indentType}</td>
-                    <td className="border border-black px-4 py-4 text-sm text-black min-w-[360px]">
-                      <ul className="space-y-1">
-                        {lineRows.map((line) => {
-                          const material = materials.find((row) => row.id === line.materialId);
-                          return (
-                            <li key={line.id}>
-                              <span className="font-medium">{material?.name || line.erpCode || "Unknown Material"}</span>
-                              <span className="ml-2">[{line.qty} {line.uom || ""}]</span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </td>
+                    {mode === "Pending" ? (
+                      <>
+                        <td className="border border-black px-4 py-4 text-sm text-black">{line?.erpCode || ""}</td>
+                        <td className="border border-black px-4 py-4 text-sm text-black min-w-[320px]">
+                          {material?.name || line?.erpCode || "Unknown Material"}
+                        </td>
+                        <td className="border border-black px-4 py-4 text-sm text-black text-right">{Number(line?.qty || 0).toLocaleString()}</td>
+                        <td className="border border-black px-4 py-4 text-sm text-black">{line?.uom || ""}</td>
+                        <td className="border border-black px-4 py-4 text-sm text-black whitespace-nowrap">
+                          {line?.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : ""}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="border border-black px-4 py-4 text-sm text-black">{indent.indentType}</td>
+                        <td className="border border-black px-4 py-4 text-sm text-black min-w-[360px]">
+                          <ul className="space-y-1">
+                            {lineRows.map((row) => {
+                              const rowMaterial = materials.find((m) => m.id === row.materialId);
+                              return (
+                                <li key={row.id}>
+                                  <span className="font-medium">{rowMaterial?.name || row.erpCode || "Unknown Material"}</span>
+                                  <span className="ml-2">[{row.qty} {row.uom || ""}]</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </td>
+                      </>
+                    )}
                     {mode === "Rejected" ? (
                       <td className="border border-black px-4 py-4 text-sm text-black">{indent.rejectedRemarks || ""}</td>
                     ) : null}
@@ -255,7 +312,6 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                             </button>
                           </>
                         ) : null}
-                        {mode === "Approved" ? null : null}
                       </div>
                     </td>
                   </tr>

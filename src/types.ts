@@ -220,6 +220,7 @@ export interface IndentLine {
   materialId: string;
   uom?: string;
   qty: number;
+  targetDeliveryDate?: string;
   orderedQty?: number;
   cancelledQty?: number;
   balanceQty?: number;
@@ -257,6 +258,7 @@ export interface PurchaseOrderLine {
   qty: number;
   rate: number;
   amount: number;
+  targetDeliveryDate?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

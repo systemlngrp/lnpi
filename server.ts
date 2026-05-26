@@ -418,6 +418,7 @@ async function initDb(retries = 5) {
           \`materialId\` VARCHAR(36) NOT NULL,
           \`uom\` VARCHAR(50),
           \`qty\` DECIMAL(15,2) NOT NULL,
+          \`targetDeliveryDate\` VARCHAR(50),
           \`orderedQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`cancelledQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`balanceQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
@@ -459,6 +460,7 @@ async function initDb(retries = 5) {
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`amount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`targetDeliveryDate\` VARCHAR(50),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -981,6 +983,7 @@ async function initDb(retries = 5) {
         { table: "indent_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
         { table: "indent_lines", column: "uom", type: "VARCHAR(50)" },
         { table: "indent_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "indent_lines", column: "targetDeliveryDate", type: "VARCHAR(50)" },
         { table: "indent_lines", column: "orderedQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "indent_lines", column: "cancelledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "indent_lines", column: "balanceQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
@@ -1010,6 +1013,7 @@ async function initDb(retries = 5) {
         { table: "purchase_order_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "purchase_order_lines", column: "rate", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "amount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "targetDeliveryDate", type: "VARCHAR(50)" },
         { table: "purchase_order_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "purchase_order_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_entries", column: "gateEntryNo", type: "VARCHAR(100)" },
