@@ -621,6 +621,7 @@ export interface Setting {
   gsmAsPerCalculation?: string;
   productionFormVisibleColumns?: string;
   realizationPerKgTargets?: string;
+  mandatoryMachinesByType?: string;
   organizationName?: string;
   organizationAddress?: string;
   organizationGstDetails?: string;

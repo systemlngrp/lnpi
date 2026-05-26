@@ -13,12 +13,14 @@ import {
   OrderSchedule,
   Production,
   ProductionProcessing,
+  Setting,
 } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
 import { normalizeMachineName } from "../lib/productionMachineNames";
+import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 
 type QueueMode = "consumption" | "ffg";
 
@@ -69,6 +71,7 @@ export function ProductionStageQueue({
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
+  const [settings] = useData<Setting>("settings", []);
   const [searchTerm, setSearchTerm] = useState("");
   const [ffgValues, setFfgValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -91,6 +94,7 @@ export function ProductionStageQueue({
 
   const rows = useMemo(() => {
     const lowered = searchTerm.toLowerCase();
+    const mandatoryMap = parseMandatoryMachinesByType(settings[0]);
     return productions
       .filter((production) => predicate(production, getProductionActualPaperUsed(production, usageMap)))
       .map((production) => {
@@ -98,7 +102,8 @@ export function ProductionStageQueue({
         const order = orders.find((row) => row.id === schedule?.orderId);
         const item = items.find((row) => row.id === production.itemId);
         const company = companies.find((row) => row.id === order?.companyId);
-        return { production, order, item, company, actualPaperUsed: getProductionActualPaperUsed(production, usageMap) };
+        const requiredMachines = getRequiredMachinesForType(mandatoryMap, item?.typeName);
+        return { production, order, item, company, actualPaperUsed: getProductionActualPaperUsed(production, usageMap), requiredMachines };
       })
       .filter(({ production, order, item, company }) => {
         if (!lowered) return true;
@@ -177,7 +182,7 @@ export function ProductionStageQueue({
         const timeB = new Date(b.production.updateTimestamp || b.production.date || 0).getTime();
         return timeB - timeA;
       });
-  }, [companies, items, orders, predicate, productions, schedules, searchTerm, sortDir, sortKey, usageMap]);
+  }, [companies, items, orders, predicate, productions, schedules, searchTerm, settings, sortDir, sortKey, usageMap]);
 
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (column !== sortKey) return <ArrowUpDown size={12} className="opacity-60" />;
@@ -333,7 +338,7 @@ export function ProductionStageQueue({
                   </td>
                 </tr>
               ) : (
-                rows.map(({ production, order, item, company, actualPaperUsed }) => (
+                rows.map(({ production, order, item, company, actualPaperUsed, requiredMachines }) => (
                   <tr key={production.id} className="hover:bg-slate-50 divide-x divide-black">
                     <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{production.transactionNo}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(production.date)}</td>
@@ -390,23 +395,33 @@ export function ProductionStageQueue({
                     ) : null}
                     {enableIssueAction ? (
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-                        {processing.some(
-                          (entry) =>
-                            entry.productionId === production.id &&
-                            normalizeMachineName(entry.machineName) === "Corrugation Liner"
-                        ) ? (
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/material-movement/issue?productionId=${production.id}`)}
-                            className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
-                          >
-                            Issue Material
-                          </button>
-                        ) : (
-                          <span className="inline-flex items-center rounded border border-amber-700 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-800">
-                            Add Corrugation Liner entry
-                          </span>
-                        )}
+                        {(() => {
+                          const normalizedRequired = requiredMachines.map((m) => normalizeMachineName(m));
+                          const requiresLiner = normalizedRequired.includes("Corrugation Liner");
+                          const linerDone = processing.some(
+                            (entry) =>
+                              entry.productionId === production.id &&
+                              normalizeMachineName(entry.machineName) === "Corrugation Liner"
+                          );
+
+                          if (!requiresLiner || linerDone) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/material-movement/issue?productionId=${production.id}`)}
+                                className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
+                              >
+                                Issue Material
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <span className="inline-flex items-center rounded border border-amber-700 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-800">
+                              Add Corrugation Liner entry
+                            </span>
+                          );
+                        })()}
                       </td>
                     ) : null}
                   </tr>

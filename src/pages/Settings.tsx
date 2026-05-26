@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Setting } from "../types";
+import { Item, Machine, Setting } from "../types";
 import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { Spinner } from "../components/Spinner";
+import { normalizeMachineName } from "../lib/productionMachineNames";
+import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -66,6 +68,8 @@ const GSM_FORMULA_OPTIONS = [
 
 export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
+  const [machines] = useData<Machine>("machines", []);
+  const [items] = useData<Item>("items", []);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [organizationDraft, setOrganizationDraft] = useState({
@@ -76,6 +80,24 @@ export function SettingsPage() {
   });
 
   const currentSetting = settings[0];
+
+  const typeNames = useMemo(() => {
+    return Array.from(new Set(items.map((item) => String(item.typeName || "").trim()).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [items]);
+
+  const machineNames = useMemo(() => {
+    return Array.from(new Set(machines.map((m) => normalizeMachineName(m.name)).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [machines]);
+
+  const [mandatoryDraft, setMandatoryDraft] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    setMandatoryDraft(parseMandatoryMachinesByType(currentSetting));
+  }, [currentSetting?.mandatoryMachinesByType]);
 
   const realizationTargets = useMemo(() => {
     const raw = currentSetting?.realizationPerKgTargets;
@@ -179,6 +201,7 @@ export function SettingsPage() {
         gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
         productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
         realizationPerKgTargets: currentSetting?.realizationPerKgTargets || JSON.stringify([]),
+        mandatoryMachinesByType: currentSetting?.mandatoryMachinesByType || JSON.stringify({}),
         organizationName: currentSetting?.organizationName || "",
         organizationAddress: currentSetting?.organizationAddress || "",
         organizationGstDetails: currentSetting?.organizationGstDetails || "",
@@ -346,6 +369,96 @@ export function SettingsPage() {
               className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all"
             >
               {saving ? <Spinner size={18} className="text-white" /> : "Save Realization Setup"}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 border-b border-dashed border-black pb-5">
+          <div>
+            <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Mandatory Machines By Type</h3>
+            <p className="text-sm text-black leading-6">
+              Select which machine entries are mandatory (Production Processing) for each item TYPE. These selections can be used to
+              control pending/workflow visibility.
+            </p>
+          </div>
+
+          {typeNames.length === 0 ? (
+            <div className="rounded border border-black bg-slate-50 p-4 text-sm font-semibold text-slate-700">
+              No TYPE values found in Items master.
+            </div>
+          ) : machineNames.length === 0 ? (
+            <div className="rounded border border-black bg-slate-50 p-4 text-sm font-semibold text-slate-700">
+              No Machines found. Add machines first in Masters → Machines.
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {typeNames.map((typeName) => {
+                const selected = new Set(mandatoryDraft[typeName] || []);
+                return (
+                  <div key={typeName} className="rounded-xl border-2 border-black bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Type</div>
+                        <div className="mt-1 text-sm font-black text-black">{typeName}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMandatoryDraft((prev) => {
+                            const next = { ...prev };
+                            delete next[typeName];
+                            return next;
+                          })
+                        }
+                        disabled={saving || loading}
+                        className="text-xs font-black uppercase tracking-wide text-red-700 hover:text-red-900 disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                    </div>
+
+                    <div className="mt-3 max-h-48 space-y-2 overflow-auto rounded border border-black bg-slate-50 p-3">
+                      {machineNames.map((machineName) => {
+                        const checked = selected.has(machineName);
+                        return (
+                          <label key={machineName} className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                            <span className="font-semibold text-slate-800">{machineName}</span>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const nextChecked = e.target.checked;
+                                setMandatoryDraft((prev) => {
+                                  const current = new Set(prev[typeName] || []);
+                                  if (nextChecked) current.add(machineName);
+                                  else current.delete(machineName);
+                                  return { ...prev, [typeName]: Array.from(current).sort((a, b) => a.localeCompare(b)) };
+                                });
+                              }}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Selected: {selected.size}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void handleChange({ mandatoryMachinesByType: JSON.stringify(mandatoryDraft) })}
+              disabled={loading || saving}
+              className="bg-indigo-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all disabled:opacity-50"
+            >
+              {saving ? <Spinner size={18} className="text-white" /> : "Save Mandatory Machines"}
             </button>
           </div>
         </div>

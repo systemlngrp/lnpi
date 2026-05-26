@@ -1407,6 +1407,7 @@ async function initDb(retries = 5) {
         { table: "settings", column: "gsmAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "productionFormVisibleColumns", type: "LONGTEXT" },
         { table: "settings", column: "realizationPerKgTargets", type: "LONGTEXT" },
+        { table: "settings", column: "mandatoryMachinesByType", type: "LONGTEXT" },
         { table: "settings", column: "organizationName", type: "VARCHAR(255)" },
         { table: "settings", column: "organizationAddress", type: "TEXT" },
         { table: "settings", column: "organizationGstDetails", type: "TEXT" },
