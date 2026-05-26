@@ -232,13 +232,14 @@ export function ProductionPlan() {
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Color 1</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Color 2</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Sheet Wt</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Real/KG</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Remarks</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={28} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
+                  <td colSpan={29} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
                 </tr>
               ) : (
                 filteredList.map((p) => {
@@ -279,6 +280,9 @@ export function ProductionPlan() {
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{item?.printingColour1 || "-"}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{item?.printingColour2 || "-"}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.sheetWeight || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-bold text-indigo-700 border border-black whitespace-nowrap">
+                        {Number(p.realizationPerKg || 0) ? Number(p.realizationPerKg || 0).toFixed(2) : "-"}
+                      </td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black max-w-[150px] truncate" title={p.remarks}>{p.remarks || "-"}</td>
                     </tr>
                   );

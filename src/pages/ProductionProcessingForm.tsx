@@ -21,7 +21,7 @@ export function ProductionProcessingForm() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [productionId, setProductionId] = useState(initialProductionId);
   const [machineId, setMachineId] = useState("");
-  const [shift, setShift] = useState<"Day" | "Night">("Day");
+  const [shift, setShift] = useState<"" | "Day" | "Night">("");
   const [qty, setQty] = useState<string>("");
   const [operatorId, setOperatorId] = useState("");
 
@@ -92,7 +92,7 @@ export function ProductionProcessingForm() {
         jobNo: selectedProduction.jobCardNo || selectedProduction.transactionNo,
         machineId,
         machineName: normalizedMachineName,
-        shift,
+        shift: shift as "Day" | "Night",
         qty: qtyNumber,
         operatorId,
         operatorName: selectedOperator.name,
@@ -155,10 +155,13 @@ export function ProductionProcessingForm() {
               <label className="font-bold text-black text-sm">Shift *</label>
               <select
                 value={shift}
-                onChange={(e) => setShift(e.target.value as "Day" | "Night")}
+                onChange={(e) => setShift(e.target.value as "" | "Day" | "Night")}
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 font-medium"
                 required
               >
+                <option value="" disabled>
+                  Select shift...
+                </option>
                 <option value="Day">Day</option>
                 <option value="Night">Night</option>
               </select>
