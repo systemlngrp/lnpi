@@ -50,7 +50,7 @@ function buildEfficiencyPdf({
         : viewMode === "operatorMachineDaily"
           ? "Daily by operator+machine+shift"
           : "Daily by machine+shift"
-    } • Day hrs: ${dayShiftHours} • Night hrs: ${nightShiftHours}`,
+    } | Day hrs: ${dayShiftHours} | Night hrs: ${nightShiftHours}`,
     14,
     25
   );
@@ -104,17 +104,17 @@ export function EfficiencyReport() {
   const [machineId, setMachineId] = useState("");
   const [operatorId, setOperatorId] = useState("");
   const [shift, setShift] = useState<"" | Shift>("");
-  const [dayShiftHoursInput, setDayShiftHoursInput] = useState("8");
-  const [nightShiftHoursInput, setNightShiftHoursInput] = useState("8");
+  const [dayShiftHoursInput, setDayShiftHoursInput] = useState("12");
+  const [nightShiftHoursInput, setNightShiftHoursInput] = useState("12");
 
   const dayShiftHours = useMemo(() => {
     const value = Number(dayShiftHoursInput);
-    return Number.isFinite(value) && value > 0 ? value : 8;
+    return Number.isFinite(value) && value > 0 ? value : 12;
   }, [dayShiftHoursInput]);
 
   const nightShiftHours = useMemo(() => {
     const value = Number(nightShiftHoursInput);
-    return Number.isFinite(value) && value > 0 ? value : 8;
+    return Number.isFinite(value) && value > 0 ? value : 12;
   }, [nightShiftHoursInput]);
 
   const shiftHoursFor = (value: Shift) => (value === "Night" ? nightShiftHours : dayShiftHours);
@@ -253,8 +253,8 @@ export function EfficiencyReport() {
     setMachineId("");
     setOperatorId("");
     setShift("");
-    setDayShiftHoursInput("8");
-    setNightShiftHoursInput("8");
+    setDayShiftHoursInput("12");
+    setNightShiftHoursInput("12");
     setViewMode("machineDaily");
   };
 
@@ -332,7 +332,7 @@ export function EfficiencyReport() {
         </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-8">
-          <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
+          <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 xl:col-span-2">
             <Search size={16} className="text-slate-400" />
             <input
               value={searchTerm}
@@ -342,7 +342,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">From</div>
             <input
               type="date"
@@ -352,7 +352,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">To</div>
             <input
               type="date"
@@ -362,7 +362,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Day hrs</div>
             <input
               type="number"
@@ -374,7 +374,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Night hrs</div>
             <input
               type="number"
@@ -386,7 +386,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">View</div>
             <select
               value={viewMode}
@@ -399,7 +399,7 @@ export function EfficiencyReport() {
             </select>
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Shift</div>
             <select
               value={shift}
@@ -412,7 +412,7 @@ export function EfficiencyReport() {
             </select>
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm md:col-span-1 xl:col-span-2">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 md:col-span-1 xl:col-span-2">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Machine</div>
             <select
               value={machineId}
@@ -428,7 +428,7 @@ export function EfficiencyReport() {
             </select>
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm md:col-span-1 xl:col-span-2">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition hover:border-slate-300 focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 md:col-span-1 xl:col-span-2">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Operator</div>
             <select
               value={operatorId}
@@ -448,7 +448,7 @@ export function EfficiencyReport() {
             <button
               type="button"
               onClick={handleClear}
-              className="inline-flex h-[52px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+              className="inline-flex h-[52px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
             >
               Clear
             </button>
