@@ -76,6 +76,28 @@ export function SettingsPage() {
   });
 
   const currentSetting = settings[0];
+
+  const realizationTargets = useMemo(() => {
+    const raw = currentSetting?.realizationPerKgTargets;
+    if (!raw) return [] as { year: string; value: number }[];
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((row) => row && typeof row.year === "string")
+        .map((row) => ({ year: String(row.year).trim(), value: Number(row.value || 0) }))
+        .filter((row) => row.year.length > 0)
+        .sort((a, b) => a.year.localeCompare(b.year));
+    } catch {
+      return [];
+    }
+  }, [currentSetting?.realizationPerKgTargets]);
+
+  const [realizationDraft, setRealizationDraft] = useState<{ year: string; value: number | "" }[]>([]);
+
+  useEffect(() => {
+    setRealizationDraft(realizationTargets.map((row) => ({ year: row.year, value: Number(row.value || 0) })));
+  }, [realizationTargets]);
   const selectedReelFormula = currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value;
   const selectedReelOption = useMemo(
     () => REEL_FORMULA_OPTIONS.find((option) => option.value === selectedReelFormula) || REEL_FORMULA_OPTIONS[0],
@@ -156,6 +178,7 @@ export function SettingsPage() {
         cuttingSizeAsPerCalculation: currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value,
         gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
         productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
+        realizationPerKgTargets: currentSetting?.realizationPerKgTargets || JSON.stringify([]),
         organizationName: currentSetting?.organizationName || "",
         organizationAddress: currentSetting?.organizationAddress || "",
         organizationGstDetails: currentSetting?.organizationGstDetails || "",
@@ -228,6 +251,105 @@ export function SettingsPage() {
       </div>
 
       <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-5">
+        <div className="space-y-4 border-b border-dashed border-black pb-5">
+          <div>
+            <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Realization Setup (Year wise)</h3>
+            <p className="text-sm text-black leading-6">
+              Store year-wise target values for Realization/KG (used for reporting/benchmarking).
+            </p>
+          </div>
+
+          <div className="overflow-x-auto border border-black rounded">
+            <table className="min-w-full divide-y divide-black border-collapse">
+              <thead className="bg-slate-100">
+                <tr className="divide-x divide-black">
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Year</th>
+                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Target Real/KG</th>
+                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-black">
+                {realizationDraft.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-4 text-sm text-slate-500 text-center">
+                      No realization targets configured.
+                    </td>
+                  </tr>
+                ) : (
+                  realizationDraft.map((row, idx) => (
+                    <tr key={`${row.year}-${idx}`} className="divide-x divide-black">
+                      <td className="px-4 py-2 border border-black">
+                        <input
+                          value={row.year}
+                          onChange={(e) =>
+                            setRealizationDraft((prev) =>
+                              prev.map((r, i) => (i === idx ? { ...r, year: e.target.value } : r))
+                            )
+                          }
+                          disabled={loading || saving}
+                          placeholder="e.g. 2026-27"
+                          className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none"
+                        />
+                      </td>
+                      <td className="px-4 py-2 border border-black text-right">
+                        <input
+                          type="number"
+                          value={row.value}
+                          onChange={(e) =>
+                            setRealizationDraft((prev) =>
+                              prev.map((r, i) =>
+                                i === idx ? { ...r, value: e.target.value === "" ? "" : Number(e.target.value) } : r
+                              )
+                            )
+                          }
+                          disabled={loading || saving}
+                          className="w-32 border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none text-right"
+                          step={0.01}
+                          min={0}
+                        />
+                      </td>
+                      <td className="px-4 py-2 border border-black text-right">
+                        <button
+                          type="button"
+                          onClick={() => setRealizationDraft((prev) => prev.filter((_, i) => i !== idx))}
+                          disabled={loading || saving}
+                          className="px-3 py-1 border-2 border-black rounded bg-white text-black text-xs font-bold hover:bg-slate-50"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setRealizationDraft((prev) => [...prev, { year: "", value: "" }])}
+              disabled={loading || saving}
+              className="bg-white text-black border-2 border-black px-4 py-2 rounded font-bold hover:bg-slate-50 transition shadow-sm"
+            >
+              Add Year
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const cleaned = realizationDraft
+                  .map((row) => ({ year: String(row.year || "").trim(), value: Number(row.value || 0) }))
+                  .filter((row) => row.year.length > 0);
+                void handleChange({ realizationPerKgTargets: JSON.stringify(cleaned) });
+              }}
+              disabled={loading || saving}
+              className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all"
+            >
+              {saving ? <Spinner size={18} className="text-white" /> : "Save Realization Setup"}
+            </button>
+          </div>
+        </div>
+
         <div className="space-y-4 border-b border-dashed border-black pb-5">
           <div>
             <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Organization Details</h3>

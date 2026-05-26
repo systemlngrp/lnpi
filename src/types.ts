@@ -618,6 +618,7 @@ export interface Setting {
   cuttingSizeAsPerCalculation?: string;
   gsmAsPerCalculation?: string;
   productionFormVisibleColumns?: string;
+  realizationPerKgTargets?: string;
   organizationName?: string;
   organizationAddress?: string;
   organizationGstDetails?: string;
