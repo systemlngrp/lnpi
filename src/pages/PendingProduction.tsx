@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Company, Item, Order, OrderSchedule } from "../types";
+import { Company, Item, Order, OrderSchedule, Production } from "../types";
 import { Spinner } from "../components/Spinner";
-import { formatDate } from "../lib/serial";
+import { formatDate, generateTransactionNo } from "../lib/serial";
 
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
@@ -11,19 +11,49 @@ function getPendingProductionQty(schedule: OrderSchedule) {
   );
 }
 
+function parseLocalYmd(dateStr?: string) {
+  if (!dateStr) return null;
+  const match = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, monthIndex, day);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
 export function PendingProduction() {
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [items] = useData<Item>("items", []);
   const [companies] = useData<Company>("companies", []);
+  const [productions, setProductions] = useData<Production>("productions", []);
 
   const [cancelValues, setCancelValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [makeConfirmId, setMakeConfirmId] = useState<string | null>(null);
+  const [makingId, setMakingId] = useState<string | null>(null);
+
+  const cutoffDate = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cutoff = new Date(today);
+    cutoff.setDate(cutoff.getDate() + 2);
+    cutoff.setHours(23, 59, 59, 999);
+    return cutoff;
+  }, []);
 
   const pendingRows = useMemo(
     () =>
       schedules
-        .filter((schedule) => getPendingProductionQty(schedule) > 0)
+        .filter((schedule) => {
+          if (getPendingProductionQty(schedule) <= 0) return false;
+          const scheduledDate = parseLocalYmd(schedule.scheduledDate);
+          if (!scheduledDate) return false;
+          return scheduledDate.getTime() <= cutoffDate.getTime();
+        })
         .map((schedule) => {
           const order = orders.find((row) => row.id === schedule.orderId);
           const item = items.find((row) => row.id === order?.itemId);
@@ -35,7 +65,7 @@ export function PendingProduction() {
           const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
           return timeB - timeA;
         }),
-    [companies, items, orders, schedules]
+    [companies, cutoffDate, items, orders, schedules]
   );
 
   const handleCancelQty = async (schedule: OrderSchedule) => {
@@ -65,6 +95,63 @@ export function PendingProduction() {
       console.error("Failed to cancel scheduled quantity:", err);
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleMakeJob = async (schedule: OrderSchedule) => {
+    const pendingQty = getPendingProductionQty(schedule);
+    if (pendingQty <= 0) return;
+
+    if (makeConfirmId !== schedule.id) {
+      setMakeConfirmId(schedule.id);
+      setTimeout(() => setMakeConfirmId(null), 3000);
+      return;
+    }
+
+    setMakingId(schedule.id);
+    try {
+      const timestamp = new Date().toISOString();
+      const todayStr = timestamp.split("T")[0];
+      const order = orders.find((row) => row.id === schedule.orderId);
+      const item = items.find((row) => row.id === order?.itemId);
+      if (!order || !item) return;
+
+      const txnNo = generateTransactionNo("PR", productions, todayStr);
+
+      await setProductions((prev) => [
+        {
+          id: crypto.randomUUID(),
+          transactionNo: txnNo,
+          date: todayStr,
+          scheduleId: schedule.id,
+          itemId: order.itemId,
+          qty: pendingQty,
+          uom: item.uom || "",
+          remarks: "",
+          status: "Pending PH",
+          updatedBy: "System User",
+          updateTimestamp: timestamp,
+        } as Production,
+        ...prev,
+      ]);
+
+      await setSchedules((prev) =>
+        prev.map((row) =>
+          row.id === schedule.id
+            ? {
+                ...row,
+                producedQty: Number(row.producedQty || 0) + pendingQty,
+                updateTimestamp: timestamp,
+                updatedBy: "System User",
+              }
+            : row
+        )
+      );
+    } catch (err) {
+      console.error("Failed to make job:", err);
+    } finally {
+      setMakingId(null);
+      setMakeConfirmId(null);
     }
   };
 
@@ -128,6 +215,15 @@ export function PendingProduction() {
                         className="bg-rose-600 text-white px-3 py-1 rounded font-bold disabled:opacity-50"
                       >
                         {savingId === schedule.id ? <Spinner size={14} className="text-white" /> : "Cancel Qty"}
+                      </button>
+                      <button
+                        onClick={() => void handleMakeJob(schedule)}
+                        disabled={makingId === schedule.id || pendingQty <= 0}
+                        className={`px-3 py-1 rounded font-bold disabled:opacity-50 ${
+                          makeConfirmId === schedule.id ? "bg-amber-500 text-black" : "bg-emerald-600 text-white"
+                        }`}
+                      >
+                        {makingId === schedule.id ? <Spinner size={14} className="text-white" /> : makeConfirmId === schedule.id ? "Confirm?" : "Make Job"}
                       </button>
                     </div>
                   </td>

@@ -5,6 +5,19 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { Search, Save } from "lucide-react";
 
+function parseLocalYmd(dateStr?: string) {
+  if (!dateStr) return null;
+  const match = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, monthIndex, day);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
 export function UpcomingScheduledOrders() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
@@ -18,18 +31,20 @@ export function UpcomingScheduledOrders() {
   const [rowPlannedQty, setRowPlannedQty] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(23, 59, 59, 999);
+  const cutoffDate = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cutoff = new Date(today);
+    cutoff.setDate(cutoff.getDate() + 2);
+    cutoff.setHours(23, 59, 59, 999);
+    return cutoff;
+  }, []);
 
-  // Filter schedules that are pending and beyond tomorrow
+  // Filter schedules that are pending and beyond Today + 2 days
   const filteredSchedules = useMemo(() => {
     return schedules.filter(s => {
-      const scheduledDate = new Date(s.scheduledDate);
-      if (isNaN(scheduledDate.getTime())) return false;
+      const scheduledDate = parseLocalYmd(s.scheduledDate);
+      if (!scheduledDate) return false;
       
       // Calculate already planned quantity from dispatch_plans table
       const alreadyPlanned = dispatchPlans
@@ -37,10 +52,13 @@ export function UpcomingScheduledOrders() {
         .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
       
       const balance = Number(s.qty || 0) - alreadyPlanned;
-      // ONLY DIFFERENCE: Filter for dates GREATER than tomorrow
-      return scheduledDate > tomorrow && balance > 0;
-    }).sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
-  }, [schedules, tomorrow, dispatchPlans]);
+      return scheduledDate.getTime() > cutoffDate.getTime() && balance > 0;
+    }).sort((a, b) => {
+      const timeA = parseLocalYmd(a.scheduledDate)?.getTime() ?? 0;
+      const timeB = parseLocalYmd(b.scheduledDate)?.getTime() ?? 0;
+      return timeA - timeB;
+    });
+  }, [schedules, cutoffDate, dispatchPlans]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
