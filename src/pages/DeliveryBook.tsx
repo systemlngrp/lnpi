@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from "react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { useData } from "../hooks/useData";
 import { 
   OrderSchedule, 
@@ -10,7 +13,7 @@ import {
   Item
 } from "../types";
 import { formatDate } from "../lib/serial";
-import { Search, Calendar, Building2, Package, X, Filter } from "lucide-react";
+import { Search, Calendar, Building2, Package, X, Download } from "lucide-react";
 
 export function DeliveryBook() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -100,16 +103,103 @@ export function DeliveryBook() {
     setToDate("");
   };
 
+  const handleExportExcel = () => {
+    const exportRows = detailedSchedules.map((row, index) => ({
+      "SL No": index + 1,
+      "Sch. Date": formatDate(row.scheduledDate),
+      "Order No": row.orderNo,
+      Company: row.companyName,
+      Item: row.itemName,
+      "Sch. Qty": Number(row.qty || 0),
+      Canceled: Number(row.canceledQty || 0),
+      Produced: Number(row.produced || 0),
+      "Pending Planning": Number(row.pendingPlanning || 0),
+      Loaded: Number(row.loaded || 0),
+      Invoiced: Number(row.invoiced || 0),
+      "Pending Invoice": Number(row.pendingInvoice || 0),
+      "Pending Order Qty": Number(row.pendingOrderQty || 0),
+    }));
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Delivery Book");
+    XLSX.writeFile(workbook, `Delivery_Book_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const handleExportPdf = () => {
+    const doc = new jsPDF("l", "mm", "a4");
+    doc.setFontSize(16);
+    doc.text("Delivery Book", 14, 14);
+    doc.setFontSize(9);
+    doc.text(`Generated on ${new Date().toLocaleString("en-GB")}`, 14, 20);
+
+    autoTable(doc, {
+      startY: 25,
+      head: [[
+        "SL",
+        "Sch. Date",
+        "Order No",
+        "Company",
+        "Item",
+        "Sch Qty",
+        "Canceled",
+        "Produced",
+        "Pending Planning",
+        "Loaded",
+        "Invoiced",
+        "Pending Invoice",
+        "Pending Order Qty",
+      ]],
+      body: detailedSchedules.map((row, index) => [
+        index + 1,
+        formatDate(row.scheduledDate),
+        row.orderNo,
+        row.companyName,
+        row.itemName,
+        Number(row.qty || 0).toFixed(2),
+        Number(row.canceledQty || 0).toFixed(2),
+        Number(row.produced || 0).toFixed(2),
+        Number(row.pendingPlanning || 0).toFixed(2),
+        Number(row.loaded || 0).toFixed(2),
+        Number(row.invoiced || 0).toFixed(2),
+        Number(row.pendingInvoice || 0).toFixed(2),
+        Number(row.pendingOrderQty || 0).toFixed(2),
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: "bold" },
+      styles: { fontSize: 7, cellPadding: 1.6, textColor: 0 },
+    });
+
+    doc.save(`Delivery_Book_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Delivery Book</h2>
-        <button 
-          onClick={clearFilters}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
-        >
-          <X size={14} /> Clear Filters
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
+          >
+            <Download size={14} /> PDF
+          </button>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
+          >
+            <Download size={14} /> Excel
+          </button>
+          <button 
+            type="button"
+            onClick={clearFilters}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
+          >
+            <X size={14} /> Clear Filters
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}

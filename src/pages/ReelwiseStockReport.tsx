@@ -1,17 +1,11 @@
 import React, { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   ArrowUpDown,
   Circle,
-  Download,
   Filter,
-  Mail,
   Search,
 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { exportsAllowed } from "../lib/exportPolicy";
 import {
   Material,
   MaterialIn,
@@ -65,59 +59,6 @@ function getAgeDays(dateStr?: string) {
   return Math.max(0, Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
-function buildReelwisePdf(rows: ReelwiseStockRow[]) {
-  const doc = new jsPDF("l", "mm", "a4");
-  doc.setFontSize(16);
-  doc.text("Reelwise Stock Report", 14, 14);
-  doc.setFontSize(9);
-  doc.text(`Generated on ${new Date().toLocaleString("en-GB")}`, 14, 20);
-
-  autoTable(doc, {
-    startY: 25,
-    head: [[
-      "SL No",
-      "MRR DATE",
-      "MRR No.",
-      "Our Reel No.",
-      "ERP",
-      "Suppliers Name",
-      "GSM",
-      "SIZE",
-      "BF",
-      "ISSUED DATE",
-      "ISSUED WEIGHT",
-      "RETURNED DATE",
-      "RETURNED WEIGHT",
-      "Available Weight",
-      "MRR QTY",
-      "AGE(D days)",
-    ]],
-    body: rows.map((row, index) => [
-      index + 1,
-      formatReportDate(row.mrrDate),
-      row.mrrNo,
-      row.ourReelNo,
-      row.erp,
-      row.supplierName,
-      row.gsm || "",
-      row.size || "",
-      row.bf || "",
-      formatReportDate(row.issuedDate),
-      row.issuedWeight.toFixed(2),
-      formatReportDate(row.returnedDate),
-      row.returnedWeight.toFixed(2),
-      row.availableWeight.toFixed(2),
-      row.mrrQty.toFixed(2),
-      row.ageDays,
-    ]),
-    theme: "grid",
-    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
-    styles: { fontSize: 7, cellPadding: 1.8, textColor: 0 },
-  });
-
-  return doc;
-}
-
 export function ReelwiseStockReport() {
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
@@ -133,7 +74,6 @@ export function ReelwiseStockReport() {
   const [stockYetToIssueOnly, setStockYetToIssueOnly] = useState(false);
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
-  const allowExports = exportsAllowed();
 
   const rows = useMemo<ReelwiseStockRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -243,55 +183,6 @@ export function ReelwiseStockReport() {
     setStockYetToIssueOnly(false);
     setMinAge("");
     setMaxAge("");
-  };
-
-  const handleExportExcel = () => {
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(
-      rows.map((row, index) => ({
-        "SL No": index + 1,
-        "MRR DATE": formatReportDate(row.mrrDate),
-        "MRR No.": row.mrrNo,
-        "Our Reel No.": row.ourReelNo,
-        ERP: row.erp,
-        "Suppliers Name": row.supplierName,
-        GSM: row.gsm,
-        SIZE: row.size,
-        BF: row.bf,
-        "ISSUED DATE": formatReportDate(row.issuedDate),
-        "ISSUED WEIGHT": row.issuedWeight,
-        "RETURNED DATE": formatReportDate(row.returnedDate),
-        "RETURNED WEIGHT": row.returnedWeight,
-        "Available Weight": row.availableWeight,
-        "MRR QTY": row.mrrQty,
-        "AGE(D days)": row.ageDays,
-      }))
-    );
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Reelwise Stock");
-    XLSX.writeFile(workbook, "Reelwise_Stock_Report.xlsx");
-  };
-
-  const handleDownloadPdf = () => {
-    buildReelwisePdf(rows).save(`Reelwise_Stock_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
-  };
-
-  const handleSendPdf = async () => {
-    const doc = buildReelwisePdf(rows);
-    const blob = doc.output("blob");
-    const file = new File([blob], `Reelwise_Stock_Report_${new Date().toISOString().slice(0, 10)}.pdf`, {
-      type: "application/pdf",
-    });
-
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({
-        files: [file],
-        title: "Reelwise Stock Report",
-        text: "Sharing reelwise stock report.",
-      });
-      return;
-    }
-
-    doc.save(file.name);
   };
 
   return (
@@ -425,34 +316,6 @@ export function ReelwiseStockReport() {
               >
                 Clear
               </button>
-              {allowExports ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-white px-5 text-sm font-bold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
-                  >
-                    <Download size={16} />
-                    Download PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleExportExcel}
-                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 text-sm font-bold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50"
-                  >
-                    <Download size={16} />
-                    Download Excel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSendPdf}
-                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-700"
-                  >
-                    <Mail size={16} />
-                    Send PDF
-                  </button>
-                </>
-              ) : null}
             </div>
           </div>
         </div>

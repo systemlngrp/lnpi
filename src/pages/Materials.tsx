@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import * as XLSX from "xlsx";
-import { Edit, Plus, Download, Trash2, Search } from "lucide-react";
+import { Edit, Plus, Trash2, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Material, MaterialGroup } from "../types";
 import { Spinner } from "../components/Spinner";
@@ -300,28 +299,7 @@ export function Materials() {
       });
   }, [gsmFilter, materials, searchTerm, sizeFilter, typeFilter]);
 
-  const handleExport = () => {
-    const exportRows = filteredMaterials.map((material, index) => ({
-      SL: index + 1,
-      Type: material.type,
-      "ERP Code": material.erpCode || "",
-      "Item Name": material.name,
-      Size: material.size ?? "",
-      GSM: material.gsm ?? "",
-      BF: material.bf ?? "",
-      "Opening Qty": material.openingQty ?? "",
-      "Opening Rate": material.openingRate ?? "",
-      "Opening Value": material.openingValue ?? "",
-      RAPC: material.type === "Reel" ? getRapcValue(material.size) : "",
-      Unit: material.uom || "",
-      Active: material.active || "Yes",
-    }));
-
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Item Master");
-    XLSX.writeFile(workbook, "Material_Master.xlsx");
-  };
+  const handleExport = () => {};
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -618,13 +596,7 @@ export function Materials() {
                   >
                     Clear
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleExport}
-                    className="inline-flex items-center gap-2 rounded border border-black px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap"
-                  >
-                    <Download size={16} /> Excel
-                  </button>
+                  {/* Downloads removed (only shown in Delivery Book) */}
                   <button
                     type="button"
                     onClick={() => navigate(-1)}

@@ -1,8 +1,5 @@
 import React, { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { Download, Filter, Search } from "lucide-react";
+import { Filter, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Machine, ProductionProcessing, User } from "../types";
 import { normalizeMachineName } from "../lib/productionMachineNames";
@@ -26,66 +23,6 @@ type EfficiencyRow = {
   expectedQty: number;
   efficiencyPercent: number | null;
 };
-
-function buildEfficiencyPdf({
-  rows,
-  viewMode,
-  dayShiftHours,
-  nightShiftHours,
-}: {
-  rows: EfficiencyRow[];
-  viewMode: ViewMode;
-  dayShiftHours: number;
-  nightShiftHours: number;
-}) {
-  const doc = new jsPDF("l", "mm", "a4");
-  doc.setFontSize(16);
-  doc.text("Machine Efficiency Report", 14, 14);
-  doc.setFontSize(9);
-  doc.text(`Generated on ${new Date().toLocaleString("en-GB")}`, 14, 20);
-  doc.text(
-    `View: ${
-      viewMode === "detailed"
-        ? "Detailed"
-        : viewMode === "operatorMachineDaily"
-          ? "Daily by operator+machine+shift"
-          : "Daily by machine+shift"
-    } | Day hrs: ${dayShiftHours} | Night hrs: ${nightShiftHours}`,
-    14,
-    25
-  );
-
-  autoTable(doc, {
-    startY: 30,
-    head: [[
-      "Date",
-      "Job No.",
-      "Machine",
-      "Shift",
-      "Operator",
-      "Qty",
-      "Max/Hr",
-      "Expected",
-      "Eff%",
-    ]],
-    body: rows.map((row) => [
-      formatDate(row.date),
-      row.jobNo,
-      row.machineName,
-      row.shift,
-      row.operatorName,
-      row.qty.toFixed(2),
-      row.maxOutputPerHour.toFixed(2),
-      row.expectedQty.toFixed(2),
-      row.efficiencyPercent == null ? "-" : row.efficiencyPercent.toFixed(2),
-    ]),
-    theme: "grid",
-    headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: "bold" },
-    styles: { fontSize: 8, cellPadding: 2, textColor: 0 },
-  });
-
-  return doc;
-}
 
 function safePercent(numerator: number, denominator: number) {
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null;
@@ -258,32 +195,6 @@ export function EfficiencyReport() {
     setViewMode("machineDaily");
   };
 
-  const handleExcel = () => {
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(
-      rows.map((row) => ({
-        Date: formatDate(row.date),
-        "Job No.": row.jobNo,
-        Machine: row.machineName,
-        Shift: row.shift,
-        Operator: row.operatorName,
-        Qty: row.qty,
-        "Max Output/Hr": row.maxOutputPerHour,
-        "Shift Hours": row.shiftHours,
-        "Expected Qty": row.expectedQty,
-        "Efficiency %": row.efficiencyPercent ?? "",
-      }))
-    );
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Efficiency");
-    XLSX.writeFile(workbook, `Efficiency_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
-
-  const handlePdf = () => {
-    buildEfficiencyPdf({ rows, viewMode, dayShiftHours, nightShiftHours }).save(
-      `Efficiency_Report_${new Date().toISOString().slice(0, 10)}.pdf`
-    );
-  };
-
   const machineOptions = useMemo(() => {
     return [...machines]
       .sort((a, b) => normalizeMachineName(a.name).localeCompare(normalizeMachineName(b.name)))
@@ -312,22 +223,7 @@ export function EfficiencyReport() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={handlePdf}
-              className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-teal-200 bg-white px-5 text-sm font-bold text-teal-700 shadow-sm transition hover:border-teal-300 hover:bg-teal-50"
-            >
-              <Download size={16} />
-              Download PDF
-            </button>
-            <button
-              type="button"
-              onClick={handleExcel}
-              className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl bg-teal-700 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-teal-800"
-            >
-              <Download size={16} />
-              Download Excel
-            </button>
+            {/* Downloads removed (only shown in Delivery Book) */}
           </div>
         </div>
 

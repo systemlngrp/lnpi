@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
 import { User } from "../types";
-import { Plus, Edit, Trash2, Search, Download } from "lucide-react";
+import { Plus, Edit, Trash2, Search } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 
 export function Users() {
@@ -199,14 +199,6 @@ export function Users() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 pr-4 py-2 w-full border-2 border-black rounded focus:outline-none focus:ring-1 focus:ring-indigo-600"
               />
-            </div>
-            <div className="flex gap-2">
-              <button className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-black rounded font-bold text-sm hover:bg-slate-200 uppercase tracking-tighter">
-                <Download size={16} /> PDF
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-black rounded font-bold text-sm hover:bg-slate-200 uppercase tracking-tighter">
-                <Download size={16} /> Excel
-              </button>
             </div>
           </div>
 

@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
-import { Download, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   Material,
@@ -111,25 +110,7 @@ export function ErpWiseReelStockReport() {
     [rows]
   );
 
-  const handleExport = () => {
-    const exportRows = rows.map((row) => ({
-      ERP: row.erp,
-      SIZE: row.size,
-      GSM: row.gsm,
-      BF: row.bf,
-      "Opening Stock": row.openingStock,
-      ISSUED: row.issued,
-      RETURNED: row.returned,
-      "Available Weight": row.availableWeight,
-      "Rate Valuation": row.rate,
-      VALUATION: row.valuation,
-      "NO OF REELS": row.noOfReels,
-    }));
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    XLSX.utils.book_append_sheet(workbook, worksheet, "ERP Wise Reel Stock");
-    XLSX.writeFile(workbook, "ERP_Wise_Reel_Stock.xlsx");
-  };
+  // Downloads removed (only shown in Delivery Book)
 
   return (
     <div className="space-y-6">
@@ -149,13 +130,7 @@ export function ErpWiseReelStockReport() {
               className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
           </div>
-          <button
-            type="button"
-            onClick={handleExport}
-            className="inline-flex items-center gap-2 rounded border border-black px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50"
-          >
-            <Download size={16} /> Excel
-          </button>
+          {/* Downloads removed (only shown in Delivery Book) */}
         </div>
       </div>
 

@@ -1,12 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Download } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Indent, IndentLine, Material, Setting } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
-import { exportsAllowed } from "../lib/exportPolicy";
-import { downloadIndentPdf } from "../lib/indentPdf";
 import { withIndentTotals } from "../lib/indentTotals";
 
 export function IndentDetail() {
@@ -17,8 +14,6 @@ export function IndentDetail() {
   const [materials] = useData<Material>("materials", []);
   const [settings] = useData<Setting>("settings", []);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  const allowExports = exportsAllowed();
 
   const indent = useMemo(() => indents.find((row) => row.id === id) || null, [id, indents]);
   const lineRows = useMemo(() => indentLines.filter((line) => line.indentId === id), [id, indentLines]);
@@ -90,33 +85,6 @@ export function IndentDetail() {
     }
   };
 
-  const handleDownloadPdf = async () => {
-    if (!indent) return;
-    setIsDownloadingPdf(true);
-    try {
-      await downloadIndentPdf({
-        indent,
-        lines: lineValues.map((line) => ({
-          id: line.id,
-          indentId: line.indentId,
-          erpCode: line.erpCode,
-          materialId: line.materialId,
-          uom: line.uom,
-          qty: Number(line.qtyValue || line.qty || 0),
-          updatedBy: line.updatedBy,
-          updateTimestamp: line.updateTimestamp,
-        })),
-        materials,
-        setting: currentSetting,
-      });
-    } catch (error) {
-      console.error("Failed to download indent PDF:", error);
-      alert("Failed to generate indent PDF.");
-    } finally {
-      setIsDownloadingPdf(false);
-    }
-  };
-
   if (!indent) {
     return (
       <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-4">
@@ -144,16 +112,6 @@ export function IndentDetail() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {allowExports ? (
-              <button
-                type="button"
-                onClick={() => void handleDownloadPdf()}
-                disabled={isDownloadingPdf}
-                className="inline-flex items-center justify-center min-w-[140px] rounded border border-black bg-white px-5 py-2 font-bold text-black hover:bg-slate-50 transition disabled:opacity-50"
-              >
-                {isDownloadingPdf ? <Spinner size={18} /> : <><Download size={16} className="mr-2" />Download PDF</>}
-              </button>
-            ) : null}
             <button
               type="button"
               onClick={() => navigate(-1)}

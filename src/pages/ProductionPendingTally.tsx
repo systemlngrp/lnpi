@@ -3,7 +3,7 @@ import { useData } from "../hooks/useData";
 import { MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Production, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
-import { CheckCircle, Search, Download } from "lucide-react";
+import { CheckCircle, Search } from "lucide-react";
 import { cn } from "../lib/utils";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 import { isProductionReadyForTally } from "../lib/productionStageFilters";
@@ -66,14 +66,6 @@ export function ProductionPendingTally() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 pr-4 py-2 w-full border-2 border-black rounded focus:outline-none focus:ring-1 focus:ring-indigo-600"
           />
-        </div>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-black rounded font-bold text-sm hover:bg-slate-200 uppercase tracking-tighter">
-            <Download size={16} /> PDF
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-black rounded font-bold text-sm hover:bg-slate-200 uppercase tracking-tighter">
-            <Download size={16} /> Excel
-          </button>
         </div>
       </div>
 

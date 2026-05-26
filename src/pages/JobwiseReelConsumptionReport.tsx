@@ -1,10 +1,6 @@
 import React, { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { Download, Filter, Search } from "lucide-react";
+import { Filter, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { exportsAllowed } from "../lib/exportPolicy";
 import {
   Material,
   MaterialIn,
@@ -48,49 +44,6 @@ function getReelRateForSlip({
   return Number(line?.invoiceRate ?? line?.poRate ?? line?.rate ?? material?.openingRate ?? 0);
 }
 
-function buildConsumptionPdf(rows: JobwiseReelConsumptionRow[]) {
-  const doc = new jsPDF("l", "mm", "a4");
-  doc.setFontSize(16);
-  doc.text("Jobwise Reel Consumption Report", 14, 14);
-  doc.setFontSize(9);
-  doc.text(`Generated on ${new Date().toLocaleString("en-GB")}`, 14, 20);
-
-  autoTable(doc, {
-    startY: 25,
-    head: [[
-      "Job No.",
-      "Corrugation Date",
-      "Job FFG",
-      "Job Rate",
-      "Job Value",
-      "Reel Issued",
-      "Reel Returned",
-      "Reel Consumed",
-      "Consumed Value",
-      "GP",
-      "GP%",
-    ]],
-    body: rows.map((row) => [
-      row.jobNo,
-      formatDate(row.corrugationDate),
-      row.jobFfg.toFixed(2),
-      row.jobRate.toFixed(2),
-      row.jobValue.toFixed(2),
-      row.reelIssued.toFixed(2),
-      row.reelReturned.toFixed(2),
-      row.reelConsumed.toFixed(2),
-      row.consumedValue.toFixed(2),
-      row.gp.toFixed(2),
-      row.gpPercent.toFixed(2),
-    ]),
-    theme: "grid",
-    headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: "bold" },
-    styles: { fontSize: 8, cellPadding: 2, textColor: 0 },
-  });
-
-  return doc;
-}
-
 export function JobwiseReelConsumptionReport() {
   const [productions] = useData<Production>("productions", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
@@ -105,7 +58,6 @@ export function JobwiseReelConsumptionReport() {
   const [dateTo, setDateTo] = useState("");
   const [minGpPercent, setMinGpPercent] = useState("");
   const [positiveConsumptionOnly, setPositiveConsumptionOnly] = useState(false);
-  const allowExports = exportsAllowed();
 
   const rows = useMemo<JobwiseReelConsumptionRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -223,31 +175,6 @@ export function JobwiseReelConsumptionReport() {
     setPositiveConsumptionOnly(false);
   };
 
-  const handleExcel = () => {
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(
-      rows.map((row) => ({
-        "Job No.": row.jobNo,
-        "Corrugation Date": formatDate(row.corrugationDate),
-        "Job FFG": row.jobFfg,
-        "Job Rate": row.jobRate,
-        "Job Value": row.jobValue,
-        "Reel Issued": row.reelIssued,
-        "Reel Returned": row.reelReturned,
-        "Reel Consumed": row.reelConsumed,
-        "Consumed Value": row.consumedValue,
-        GP: row.gp,
-        "GP%": row.gpPercent,
-      }))
-    );
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Jobwise Reel Consumption");
-    XLSX.writeFile(workbook, "Jobwise_Reel_Consumption_Report.xlsx");
-  };
-
-  const handlePdf = () => {
-    buildConsumptionPdf(rows).save(`Jobwise_Reel_Consumption_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
-  };
-
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
@@ -360,26 +287,6 @@ export function JobwiseReelConsumptionReport() {
               >
                 Clear
               </button>
-              {allowExports ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={handlePdf}
-                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 text-sm font-bold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50"
-                  >
-                    <Download size={16} />
-                    Download PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleExcel}
-                    className="inline-flex h-[52px] items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
-                  >
-                    <Download size={16} />
-                    Download Excel
-                  </button>
-                </>
-              ) : null}
             </div>
           </div>
         </div>
