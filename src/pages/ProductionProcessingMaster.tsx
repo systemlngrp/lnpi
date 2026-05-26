@@ -29,7 +29,8 @@ export function ProductionProcessingMaster() {
         return (
           String(p.jobNo || "").toLowerCase().includes(query) ||
           (p.machineName || "").toLowerCase().includes(query) ||
-          (p.operatorName || "").toLowerCase().includes(query)
+          (p.operatorName || "").toLowerCase().includes(query) ||
+          String(p.shift || "Day").toLowerCase().includes(query)
         );
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -57,6 +58,7 @@ export function ProductionProcessingMaster() {
                 <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Job No</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Shift</th>
                 <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Quantity</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Operator Name</th>
                 <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
@@ -65,7 +67,7 @@ export function ProductionProcessingMaster() {
             <tbody className="bg-white divide-y divide-black">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500 font-medium">No reporting records found.</td>
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500 font-medium">No reporting records found.</td>
                 </tr>
               ) : (
                 filtered.map((item) => (
@@ -73,6 +75,7 @@ export function ProductionProcessingMaster() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{formatDate(item.date)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{item.jobNo}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{item.machineName}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{item.shift || "Day"}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-right text-emerald-700">
                       {Number(item.qty || 0).toLocaleString()}
                     </td>

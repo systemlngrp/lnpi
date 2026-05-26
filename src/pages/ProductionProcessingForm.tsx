@@ -21,6 +21,7 @@ export function ProductionProcessingForm() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [productionId, setProductionId] = useState(initialProductionId);
   const [machineId, setMachineId] = useState("");
+  const [shift, setShift] = useState<"Day" | "Night">("Day");
   const [qty, setQty] = useState<string>("");
   const [operatorId, setOperatorId] = useState("");
 
@@ -45,7 +46,7 @@ export function ProductionProcessingForm() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productionId || !machineId || !qty || !operatorId) {
+    if (!productionId || !machineId || !qty || !operatorId || !shift) {
       alert("Please fill all required fields.");
       return;
     }
@@ -91,6 +92,7 @@ export function ProductionProcessingForm() {
         jobNo: selectedProduction.jobCardNo || selectedProduction.transactionNo,
         machineId,
         machineName: normalizedMachineName,
+        shift,
         qty: qtyNumber,
         operatorId,
         operatorName: selectedOperator.name,
@@ -147,6 +149,19 @@ export function ProductionProcessingForm() {
                 placeholder="Select Machine..." 
                 required 
               />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black text-sm">Shift *</label>
+              <select
+                value={shift}
+                onChange={(e) => setShift(e.target.value as "Day" | "Night")}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 font-medium"
+                required
+              >
+                <option value="Day">Day</option>
+                <option value="Night">Night</option>
+              </select>
             </div>
 
             <div className="flex flex-col space-y-1">

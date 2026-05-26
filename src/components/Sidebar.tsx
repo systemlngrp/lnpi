@@ -316,6 +316,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
         { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
         { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
+        { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
       ],
     },
     {

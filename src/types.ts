@@ -340,6 +340,7 @@ export interface ProductionProcessing {
   jobNo: string | number;
   machineId: string;
   machineName: string;
+  shift?: "Day" | "Night";
   qty: number;
   operatorId: string;
   operatorName: string;
