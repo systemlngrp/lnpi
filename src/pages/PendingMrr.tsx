@@ -48,7 +48,7 @@ export function PendingMrr() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4 border-b border-black pb-4">
         <div>
-          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Pending MRR</h2>
+          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Pending Material Receipt</h2>
           <p className="mt-1 text-sm text-slate-500">Gate entries where material receipt has not yet been created.</p>
         </div>
       </div>

@@ -228,13 +228,15 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       section: "Material Receipt",
       color: "bg-fuchsia-700",
       items: [
-        { name: "Pending MRR", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
+        { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
+        { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText },
       ],
     },
     {
       section: "Material Movement",
       color: "bg-lime-700",
       items: [
+        { name: "Reel Issue/Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
         { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
         { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
       ],

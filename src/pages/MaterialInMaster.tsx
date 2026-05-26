@@ -103,7 +103,6 @@ export function MaterialInMaster() {
 
               <div className="flex justify-between items-center mt-2">
                 <div className="text-right">
-                  <div className="font-bold text-sm">PO: Rs {Number(entry.totalPoValue || 0).toLocaleString()}</div>
                   <div className="font-bold text-sm">Invoice: Rs {Number(entry.totalInvoiceValue || 0).toLocaleString()}</div>
                   <div className="font-bold text-lg">Actual: Rs {Number(entry.totalActualValue || entry.totalAmount || 0).toLocaleString()}</div>
                 </div>
@@ -126,7 +125,6 @@ export function MaterialInMaster() {
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Gate Entry No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Supplier</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Items</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">PO Value</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Invoice Value</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actual Value</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Status</th>
@@ -136,7 +134,7 @@ export function MaterialInMaster() {
           <tbody className="divide-y divide-black bg-white">
             {filteredMaterialIn.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium italic">No material in records found.</td>
+                <td colSpan={9} className="px-6 py-8 text-center text-black font-medium italic">No material in records found.</td>
               </tr>
             ) : (
               filteredMaterialIn.map((entry) => (
@@ -146,7 +144,6 @@ export function MaterialInMaster() {
                   <td className="px-6 py-4 text-sm text-black border border-black">{entry.gateEntryNo || ""}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{getSupplierName(entry.supplierId)}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{getLineItemsElement(entry.lines)}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">Rs {Number(entry.totalPoValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">Rs {Number(entry.totalInvoiceValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">Rs {Number(entry.totalActualValue || entry.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4 text-sm border border-black whitespace-nowrap">

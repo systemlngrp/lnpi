@@ -128,16 +128,8 @@ export function MaterialInForm() {
   const getPurchaseOrder = (purchaseOrderId?: string) =>
     purchaseOrders.find((order) => order.id === purchaseOrderId);
 
-  const totalPoValue = lines.reduce((sum, line) => sum + (Number(line.actualQty || line.qty || 0) * Number(line.poRate || 0)), 0);
-  const totalReelPoValue = Object.entries(packingSlipDrafts).reduce((sum, [, slips]) => {
-    return sum + slips.reduce((lineSum, slip) => {
-      const poLine = slip.ourPoId ? getPurchaseOrderLine(slip.ourPoId) : undefined;
-      return lineSum + Number(slip.weightKg || 0) * Number(poLine?.rate || 0);
-    }, 0);
-  }, 0);
   const totalInvoiceValue = lines.reduce((sum, line) => sum + Number(line.invoiceValue || 0), 0);
   const totalActualValue = lines.reduce((sum, line) => sum + Number(line.actualValue || line.value || 0), 0);
-  const totalPoValueResolved = mrrType === "Reel" ? totalReelPoValue : totalPoValue;
   const totalAmount = totalActualValue;
 
   const computeLineValues = (line: MaterialLine) => {
@@ -196,6 +188,15 @@ export function MaterialInForm() {
     setCurrentPoLineId("");
   };
 
+  const handleCurrentPoLineChange = (value: string) => {
+    setCurrentPoLineId(value);
+    if (!value) return;
+    if (currentInvoiceRate !== "" && Number(currentInvoiceRate || 0) > 0) return;
+    const poLine = getPurchaseOrderLine(value);
+    if (!poLine) return;
+    setCurrentInvoiceRate(String(Number(poLine.rate || 0)));
+  };
+
   const handleMrrTypeChange = (value: string) => {
     const nextType = value === "Reel" ? "Reel" : "Others";
     setMrrType(nextType);
@@ -205,15 +206,22 @@ export function MaterialInForm() {
   };
 
   const handleAddLine = () => {
-    if (!currentItemId || currentInvoiceRate === "" || Number(currentInvoiceRate) <= 0) return;
+    if (!currentItemId) return;
+
+    const selectedPoLine = currentPoLineId ? getPurchaseOrderLine(currentPoLineId) : undefined;
+    const resolvedInvoiceRate =
+      currentInvoiceRate !== "" && Number(currentInvoiceRate) > 0
+        ? Number(currentInvoiceRate)
+        : Number(selectedPoLine?.rate || 0);
+
+    if (!resolvedInvoiceRate || resolvedInvoiceRate <= 0) return;
     const material = getMaterial(currentItemId);
     if (!material) return;
 
     if (mrrType === "Others" && (currentQty === "" || Number(currentQty) <= 0)) return;
 
     const qty = mrrType === "Reel" ? 0 : Number(currentQty);
-    const invoiceRate = Number(currentInvoiceRate);
-    const selectedPoLine = currentPoLineId ? getPurchaseOrderLine(currentPoLineId) : undefined;
+    const invoiceRate = resolvedInvoiceRate;
     const selectedPo = selectedPoLine ? getPurchaseOrder(selectedPoLine.purchaseOrderId) : undefined;
     const newLine = computeLineValues({
       id: crypto.randomUUID(),
@@ -245,6 +253,10 @@ export function MaterialInForm() {
         const poLineId = patch.poLineId ?? line.poLineId;
         const poLine = poLineId ? getPurchaseOrderLine(poLineId) : undefined;
         const po = poLine ? getPurchaseOrder(poLine.purchaseOrderId) : undefined;
+        const resolvedInvoiceRate =
+          patch.invoiceRate !== undefined
+            ? Number(patch.invoiceRate || 0)
+            : (line.invoiceRate ? Number(line.invoiceRate) : 0) || Number(poLine?.rate || 0);
         return computeLineValues({
           ...line,
           ...patch,
@@ -252,6 +264,7 @@ export function MaterialInForm() {
           poId: po?.id,
           poNo: po?.poNo,
           poRate: poLine ? Number(poLine.rate || 0) : Number(patch.poRate ?? line.poRate ?? 0),
+          invoiceRate: resolvedInvoiceRate,
         });
       })
     );
@@ -344,7 +357,6 @@ export function MaterialInForm() {
           invoiceNo,
           invDate,
           supplierId,
-          totalPoValue: totalPoValueResolved,
           totalInvoiceValue,
           totalActualValue,
           totalAmount,
@@ -521,7 +533,7 @@ export function MaterialInForm() {
                 <Select
                   options={currentItemId ? getApprovedPoOptionsForMaterial(currentItemId) : []}
                   value={currentPoLineId}
-                  onChange={setCurrentPoLineId}
+                  onChange={handleCurrentPoLineChange}
                   placeholder="Select PO line..."
                 />
               </div>
@@ -552,7 +564,7 @@ export function MaterialInForm() {
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Qty</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Rate</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Actual Qty</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Kanta Weight</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Actual Value</th>
                       <th className="px-4 py-3 text-right border border-black"></th>
@@ -734,7 +746,6 @@ export function MaterialInForm() {
             </div>
           )}
           <div className="mt-4 text-right font-bold text-black text-xl">
-            <div>Total PO Value: <span className="text-slate-700">Rs {totalPoValueResolved.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total Invoice Value: <span className="text-amber-700">Rs {totalInvoiceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total Actual Value: <span className="text-indigo-700">Rs {totalActualValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
           </div>
