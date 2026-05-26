@@ -232,15 +232,16 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText },
       ],
     },
-    {
-      section: "Material Movement",
-      color: "bg-lime-700",
-      items: [
-        { name: "Reel Issue/Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
-        { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
-        { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
-      ],
-    },
+	    {
+	      section: "Material Movement",
+	      color: "bg-lime-700",
+	      items: [
+	        { name: "Reel Issue/Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
+	        { name: "Daily Consumption Issue", href: "/material-movement/daily-consumption", icon: ClipboardList },
+	        { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
+	        { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
+	      ],
+	    },
     {
       section: "Orders",
       color: "bg-rose-700",
