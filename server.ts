@@ -1592,6 +1592,66 @@ const createHandlers = (tableName: string) => {
               const padded = String(nextNum).padStart(5, '0');
               data.orderNo = `${fyLabel}/${padded}`;
             }
+
+            // Auto-approve order (skip Pending Salesman Approval) when:
+            // 1) Last 2 realizationPerKg for the item <= current FY target (settings.realizationPerKgTargets)
+            // 2) Last 2 billing rates for the item are the same
+            const currentStatus = String(data.status || "Pending PH");
+            if (currentStatus === "Pending PH" || !currentStatus) {
+              const dateStr = data.orderDate || new Date().toISOString().slice(0, 10);
+              const d = new Date(dateStr);
+              let fyStart = d.getFullYear();
+              const month = d.getMonth() + 1;
+              if (month < 4) fyStart = fyStart - 1;
+              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
+
+              const [settingRows] = await db.query(`SELECT realizationPerKgTargets FROM \`settings\` LIMIT 1`);
+              const realizationTargetsRaw = (settingRows as any[])?.[0]?.realizationPerKgTargets;
+              let targetForFy: number | null = null;
+              if (realizationTargetsRaw) {
+                try {
+                  const parsed = JSON.parse(realizationTargetsRaw);
+                  if (Array.isArray(parsed)) {
+                    const match = parsed.find((row) => String(row?.year || "").trim() === fyLabel);
+                    const value = Number(match?.value);
+                    if (Number.isFinite(value) && value > 0) targetForFy = value;
+                  }
+                } catch {
+                  targetForFy = null;
+                }
+              }
+
+              const itemId = String(data.itemId || "").trim();
+              if (itemId && targetForFy != null) {
+                const [realizationRows] = await db.query(
+                  `SELECT realizationPerKg, date FROM \`productions\` WHERE itemId = ? AND realizationPerKg IS NOT NULL ORDER BY date DESC LIMIT 2`,
+                  [itemId]
+                );
+                const lastTwoRealizations = (realizationRows as any[]).map((row) => Number(row.realizationPerKg)).filter((n) => Number.isFinite(n));
+
+                const [rateRows] = await db.query(
+                  `SELECT ili.rate, inv.date
+                   FROM \`invoice_line_items\` ili
+                   JOIN \`invoices\` inv ON inv.id = ili.invoiceId
+                   WHERE ili.itemId = ?
+                   ORDER BY inv.date DESC, inv.id DESC
+                   LIMIT 2`,
+                  [itemId]
+                );
+                const lastTwoRates = (rateRows as any[]).map((row) => Number(row.rate)).filter((n) => Number.isFinite(n));
+
+                const realizationOk =
+                  lastTwoRealizations.length === 2 && lastTwoRealizations.every((val) => val <= (targetForFy as number));
+                const ratesOk =
+                  lastTwoRates.length === 2 && Math.abs(lastTwoRates[0] - lastTwoRates[1]) < 0.0001;
+
+                if (realizationOk && ratesOk) {
+                  data.status = "Pending Scheduling";
+                } else {
+                  data.status = data.status || "Pending PH";
+                }
+              }
+            }
           } catch (err) {
             console.warn('[DB] Could not auto-generate orderNo:', (err as Error).message);
           }
