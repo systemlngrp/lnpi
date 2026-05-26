@@ -892,6 +892,7 @@ async function initDb(retries = 5) {
           \`sgst\` DECIMAL(15,2) NOT NULL,
           \`igst\` DECIMAL(15,2) NOT NULL,
           \`totalAfterGst\` DECIMAL(15,2) NOT NULL,
+          \`roundOff\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -1292,6 +1293,7 @@ async function initDb(retries = 5) {
         { table: "invoices", column: "sgst", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoices", column: "igst", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoices", column: "totalAfterGst", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoices", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoices", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "invoice_line_items", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },

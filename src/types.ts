@@ -589,6 +589,7 @@ export interface Invoice {
   sgst: number;
   igst: number;
   totalAfterGst: number;
+  roundOff?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

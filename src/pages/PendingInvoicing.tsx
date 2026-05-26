@@ -19,14 +19,11 @@ import {
   ChevronRight, 
   ChevronDown,
   Receipt,
-  Download,
   Building2,
   Package
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 interface GroupedLoading {
   companyId: string;
@@ -68,6 +65,7 @@ export function PendingInvoicing() {
   const [itemRates, setInvoiceRates] = useState<Record<string, number>>({});
   const [itemGstRates, setItemGstRates] = useState<Record<string, number>>({});
   const [isInterState, setIsInterState] = useState(false);
+  const [roundOff, setRoundOff] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleCompany = (id: string) => {
@@ -158,6 +156,7 @@ export function PendingInvoicing() {
     });
     setInvoiceRates(initialRates);
     setItemGstRates(initialGstRates);
+    setRoundOff("");
 
     const company = companies.find(c => c.id === billingMode);
     const organization = settings[0];
@@ -223,47 +222,11 @@ export function PendingInvoicing() {
     });
 
     const totalAfterGst = totalBeforeGst + totalCgst + totalSgst + totalIgst;
+    const roundOffValue = roundOff === "" ? 0 : Number(roundOff || 0);
+    const grandTotal = totalAfterGst + roundOffValue;
 
-    return { totalBeforeGst, cgst: totalCgst, sgst: totalSgst, igst: totalIgst, totalAfterGst };
-  }, [invoiceItems, itemRates, itemGstRates, isInterState]);
-
-  const generatePDF = (invoice: Invoice, company: Company, lines: any[]) => {
-    const doc = new jsPDF();
-    
-    // Header
-    doc.setFontSize(20);
-    doc.text("TAX INVOICE", 105, 20, { align: "center" });
-    
-    doc.setFontSize(10);
-    doc.text(`Invoice No: ${invoice.invoiceNo}`, 14, 40);
-    doc.text(`Date: ${formatDate(invoice.date)}`, 14, 45);
-    
-    // Company Details
-    doc.setFontSize(12);
-    doc.text("Bill To:", 14, 60);
-    doc.setFontSize(10);
-    doc.text(company.name, 14, 65);
-    doc.text(company.address || "", 14, 70, { maxWidth: 80 });
-    doc.text(`GSTIN: ${company.gstNo || "N/A"}`, 14, 85);
-
-    // Table
-    autoTable(doc, {
-      startY: 95,
-      head: [["Item", "Quantity", "Rate", "Amount"]],
-      body: lines.map(l => [l.itemName, l.qty, Number(l.rate || 0).toFixed(2), Number(l.amount || 0).toFixed(2)]),
-      foot: [
-        ["Total Before GST", "", "", Number(calculations.totalBeforeGst || 0).toFixed(2)],
-        ["CGST", "", "", Number(calculations.cgst || 0).toFixed(2)],
-        ["SGST", "", "", Number(calculations.sgst || 0).toFixed(2)],
-        ["IGST", "", "", Number(calculations.igst || 0).toFixed(2)],
-        ["Grand Total", "", "", Number(calculations.totalAfterGst || 0).toFixed(2)]
-      ],
-      theme: "striped",
-      headStyles: { fillColor: [79, 70, 229] }
-    });
-
-    doc.save(`${invoice.invoiceNo}.pdf`);
-  };
+    return { totalBeforeGst, cgst: totalCgst, sgst: totalSgst, igst: totalIgst, totalAfterGst, roundOff: roundOffValue, grandTotal };
+  }, [invoiceItems, itemRates, itemGstRates, isInterState, roundOff]);
 
   const handleSubmitInvoice = async () => {
     if (!invoiceModal) return;
@@ -279,7 +242,12 @@ export function PendingInvoicing() {
         date: new Date().toISOString().slice(0, 10),
         companyId: company.id,
         gstRate: 0, // No longer used as a single value
-        ...calculations
+        totalBeforeGst: calculations.totalBeforeGst,
+        cgst: calculations.cgst,
+        sgst: calculations.sgst,
+        igst: calculations.igst,
+        totalAfterGst: calculations.grandTotal,
+        roundOff: calculations.roundOff
       };
 
       // 1. Save Invoice
@@ -338,13 +306,6 @@ export function PendingInvoicing() {
         }
         return s;
       }));
-
-      // 4. Generate PDF (using a dummy invoice no since it's server generated, 
-      generatePDF({ ...newInvoice, ...savedInvoice, invoiceNo: savedInvoice?.invoiceNo || newInvoice.invoiceNo || `INV-${invoiceId.slice(0, 8)}` }, company, invoiceItems.map(i => ({
-        ...i,
-        rate: itemRates[i.itemId] || 0,
-        amount: i.qty * (itemRates[i.itemId] || 0)
-      })));
 
       setInvoiceModal(null);
       setBillingMode(null);
@@ -571,6 +532,23 @@ export function PendingInvoicing() {
                       <td colSpan={4} className="px-3 py-3 text-right text-sm uppercase">Total Amount After GST</td>
                       <td className="px-3 py-3 text-right text-lg">{calculations.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
+                    <tr className="divide-x divide-black">
+                      <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase">Round Off</td>
+                      <td className="px-3 py-2 text-right text-xs">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={roundOff}
+                          onChange={(e) => setRoundOff(e.target.value === "" ? "" : Number(e.target.value))}
+                          className="w-28 px-2 py-1 border-2 border-black rounded text-right bg-white"
+                          placeholder="0.00"
+                        />
+                      </td>
+                    </tr>
+                    <tr className="divide-x divide-black bg-emerald-700 text-white border-t-2 border-black">
+                      <td colSpan={4} className="px-3 py-3 text-right text-sm uppercase tracking-wider">Grand Total</td>
+                      <td className="px-3 py-3 text-right text-lg font-black">{calculations.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
                   </tfoot>
                 </table>
               </div>
@@ -589,8 +567,8 @@ export function PendingInvoicing() {
                 >
                   {isSubmitting ? <Spinner size={16} className="text-white" /> : (
                     <>
-                      <Download size={18} />
-                      Generate & Save Invoice
+                      <Check size={18} />
+                      Save Invoice
                     </>
                   )}
                 </button>

@@ -15,14 +15,11 @@ import {
   ChevronRight,
   ChevronDown,
   X,
-  Download,
   FileText
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { ExcelExport } from "../components/ExcelExport";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 export function InvoicesMaster() {
   const [invoices] = useData<Invoice>("invoices", []);
@@ -85,52 +82,7 @@ export function InvoicesMaster() {
       });
   }, [selectedInvoice, lineItems, items, slips]);
 
-  const downloadPDF = (invoice: any, lines: any[]) => {
-    const doc = new jsPDF();
-    const company = companies.find(c => c.id === invoice.companyId);
-    
-    doc.setFontSize(20);
-    doc.text("TAX INVOICE", 105, 20, { align: "center" });
-    
-    doc.setFontSize(10);
-    doc.text(`Invoice No: ${invoice.invoiceNo}`, 14, 40);
-    doc.text(`Date: ${formatDate(invoice.date)}`, 14, 45);
-    
-    doc.setFontSize(12);
-    doc.text("Bill To:", 14, 60);
-    doc.setFontSize(10);
-    doc.text(company?.name || "Unknown", 14, 65);
-    doc.text(company?.address || "", 14, 70, { maxWidth: 80 });
-    doc.text(`GSTIN: ${company?.gstNo || "N/A"}`, 14, 85);
-
-    autoTable(doc, {
-      startY: 95,
-      head: [["Item", "Slip No", "Qty", "Rate", "GST %", "Tax", "Amount"]],
-      body: lines.map(l => {
-        const tax = (Number(l.cgst) || 0) + (Number(l.sgst) || 0) + (Number(l.igst) || 0);
-        return [
-          l.itemName, 
-          l.slipNo, 
-          l.qty, 
-          Number(l.rate || 0).toFixed(2), 
-          `${l.gstRate || 0}%`,
-          tax.toFixed(2),
-          (Number(l.amount) + tax).toFixed(2)
-        ];
-      }),
-      foot: [
-        ["Total Before GST", "", "", "", "", "", Number(invoice.totalBeforeGst || 0).toFixed(2)],
-        ["CGST", "", "", "", "", "", Number(invoice.cgst || 0).toFixed(2)],
-        ["SGST", "", "", "", "", "", Number(invoice.sgst || 0).toFixed(2)],
-        ["IGST", "", "", "", "", "", Number(invoice.igst || 0).toFixed(2)],
-        ["Grand Total", "", "", "", "", "", Number(invoice.totalAfterGst || 0).toFixed(2)]
-      ],
-      theme: "striped",
-      headStyles: { fillColor: [79, 70, 229] }
-    });
-
-    doc.save(`${invoice.invoiceNo}.pdf`);
-  };
+  const getRoundOff = (invoice: Invoice) => Number(invoice.roundOff || 0);
 
   return (
     <div className="space-y-6">
@@ -201,13 +153,6 @@ export function InvoicesMaster() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                     <div className="flex justify-end gap-2">
-                      <button 
-                        onClick={() => downloadPDF(inv, inv.details)}
-                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
-                        title="Download PDF"
-                      >
-                        <Download size={18} />
-                      </button>
                       <button 
                         onClick={() => setSelectedInvoice(inv)}
                         className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
@@ -348,17 +293,15 @@ export function InvoicesMaster() {
                         {selectedInvoice.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                     </tr>
+                    <tr className="divide-x divide-black">
+                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Round Off</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{getRoundOff(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
                   </tfoot>
                 </table>
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
-                <button 
-                  onClick={() => downloadPDF(selectedInvoice, invoiceDetails)}
-                  className="px-6 py-2 border-2 border-black font-bold uppercase text-sm hover:bg-slate-100 transition flex items-center gap-2"
-                >
-                  <Download size={18} /> Download PDF
-                </button>
                 <button 
                   onClick={() => setSelectedInvoice(null)}
                   className="px-8 py-2 bg-slate-900 text-white border-2 border-black font-bold uppercase text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-black transition active:shadow-none active:translate-x-1 active:translate-y-1"
