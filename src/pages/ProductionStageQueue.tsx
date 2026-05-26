@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CheckCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   Company,
@@ -11,6 +12,7 @@ import {
   Order,
   OrderSchedule,
   Production,
+  ProductionProcessing,
 } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
@@ -53,9 +55,11 @@ export function ProductionStageQueue({
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [searchTerm, setSearchTerm] = useState("");
   const [ffgValues, setFfgValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
   const usageMap = useMemo(
     () => buildProductionMaterialUsageMap(materialIssues, materialIssueLines, materialReturns, materialReturnLines),
     [materialIssueLines, materialIssues, materialReturnLines, materialReturns]
@@ -119,6 +123,43 @@ export function ProductionStageQueue({
     }
   };
 
+  const handleCloseJob = async (productionId: string) => {
+    const target = productions.find((p) => p.id === productionId);
+    if (!target || target.status === "Completed" || target.status === "Cancelled") return;
+    if (!processing.some((entry) => entry.productionId === productionId)) {
+      alert("Processing data is mandatory. Please add Production Processing entry before closing the job.");
+      return;
+    }
+
+    if (closingId !== productionId) {
+      setClosingId(productionId);
+      setTimeout(() => setClosingId(null), 3000);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    try {
+      await setProductions((prev) =>
+        prev.map((p) =>
+          p.id === productionId
+            ? {
+                ...p,
+                status: "Completed",
+                tallyTimestamp: p.tallyTimestamp || timestamp,
+                updateTimestamp: timestamp,
+                updatedBy: "System User",
+              }
+            : p
+        )
+      );
+    } catch (error) {
+      console.error("Failed to close job:", error);
+      alert("Failed to close job. Please try again.");
+    } finally {
+      setClosingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -142,6 +183,7 @@ export function ProductionStageQueue({
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actual Paper Used</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prod (FFG)</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close</th>
                 {enableFfgEditing ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Update</th> : null}
                 {enableIssueAction ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th> : null}
               </tr>
@@ -149,7 +191,7 @@ export function ProductionStageQueue({
             <tbody className="divide-y divide-black bg-white">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10 + (enableFfgEditing ? 1 : 0) + (enableIssueAction ? 1 : 0)} className="px-6 py-8 text-center text-black font-medium">{emptyMessage}</td>
+                  <td colSpan={11 + (enableFfgEditing ? 1 : 0) + (enableIssueAction ? 1 : 0)} className="px-6 py-8 text-center text-black font-medium">{emptyMessage}</td>
                 </tr>
               ) : (
                 rows.map(({ production, order, item, company, actualPaperUsed }) => (
@@ -164,6 +206,24 @@ export function ProductionStageQueue({
                     <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{actualPaperUsed > 0 ? actualPaperUsed : "-"}</td>
                     <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{production.prodFromFFG || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{production.status}</td>
+                    <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => void handleCloseJob(production.id)}
+                        disabled={production.status === "Completed" || production.status === "Cancelled"}
+                        className={
+                          production.status === "Completed" || production.status === "Cancelled"
+                            ? "inline-flex items-center gap-1 rounded border border-slate-300 bg-slate-100 px-3 py-1 text-[11px] font-black uppercase text-slate-400 cursor-not-allowed"
+                            : closingId === production.id
+                              ? "inline-flex items-center gap-1 rounded border border-black bg-amber-400 px-3 py-1 text-[11px] font-black uppercase text-black animate-pulse"
+                              : "inline-flex items-center gap-1 rounded border border-black bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase text-white hover:bg-emerald-700"
+                        }
+                        title={production.status === "Completed" || production.status === "Cancelled" ? "Job already closed" : "Close Job"}
+                      >
+                        <CheckCircle size={12} />
+                        {closingId === production.id ? "Confirm?" : "Close"}
+                      </button>
+                    </td>
                     {enableFfgEditing ? (
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
                         <div className="flex items-center gap-2">

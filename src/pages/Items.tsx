@@ -185,6 +185,7 @@ export function Items() {
   const getUploadHref = (filename: string) => {
     const trimmed = (filename || "").trim();
     if (!trimmed) return "";
+    if (/^(https?:)?\/\//i.test(trimmed) || /^blob:/i.test(trimmed)) return trimmed;
     const normalized = trimmed.replace(/^\/?uploads\//i, "");
     const encoded = normalized.split("/").map(encodeURIComponent).join("/");
     return `/uploads/${encoded}`;

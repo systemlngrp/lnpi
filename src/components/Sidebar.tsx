@@ -330,14 +330,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   ];
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("sidebar-collapsed-sections");
-    if (!saved) return;
-    try {
-      setCollapsedSections(JSON.parse(saved));
-    } catch {
-      window.localStorage.removeItem("sidebar-collapsed-sections");
-      setCollapsedSections({});
-    }
+    const next: Record<string, boolean> = {};
+    for (const group of navigation) next[group.section] = true;
+    setCollapsedSections(next);
   }, []);
 
   const toggleSection = (section: string) => {
@@ -346,49 +341,15 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       const nextCollapsed = !currentlyCollapsed;
 
       if (nextCollapsed) {
-        const next = { ...prev, [section]: true };
-        window.localStorage.setItem("sidebar-collapsed-sections", JSON.stringify(next));
-        return next;
+        return { ...prev, [section]: true };
       }
 
       const next: Record<string, boolean> = {};
       for (const group of navigation) next[group.section] = true;
       next[section] = false;
-      window.localStorage.setItem("sidebar-collapsed-sections", JSON.stringify(next));
       return next;
     });
   };
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem("sidebar-collapsed-sections");
-    if (saved) return;
-
-    const path = location.pathname;
-    let activeSection: string | null = null;
-    let bestMatchLength = -1;
-
-    for (const group of navigation) {
-      for (const item of group.items) {
-        const href = item.href;
-        const matches =
-          (href === "/" && path === "/") ||
-          (href !== "/" && (path === href || path.startsWith(href + "/") || path.startsWith(href)));
-        if (!matches) continue;
-        if (href.length > bestMatchLength) {
-          bestMatchLength = href.length;
-          activeSection = group.section;
-        }
-      }
-    }
-
-    setCollapsedSections(() => {
-      const next: Record<string, boolean> = {};
-      for (const group of navigation) next[group.section] = true;
-      if (activeSection) next[activeSection] = false;
-      window.localStorage.setItem("sidebar-collapsed-sections", JSON.stringify(next));
-      return next;
-    });
-  }, [location.pathname]);
 
 
 

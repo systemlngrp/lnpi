@@ -5,6 +5,7 @@ import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { normalizeMachineName } from "../lib/productionMachineNames";
+import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 
 export function ProductionProcessingForm() {
   const navigate = useNavigate();
@@ -54,6 +55,33 @@ export function ProductionProcessingForm() {
     const selectedOperator = users.find(u => u.id === operatorId);
 
     if (!selectedProduction || !selectedMachine || !selectedOperator) return;
+    const qtyNumber = Number(qty);
+    if (!Number.isFinite(qtyNumber) || qtyNumber <= 0) {
+      alert("Please enter a quantity greater than 0.");
+      return;
+    }
+
+    const plannedQty = Number(selectedProduction.qty || 0);
+    const normalizedMachineName = normalizeMachineName(selectedMachine.name);
+    const machineColumn = PROCESSING_MACHINE_COLUMNS.find((column) =>
+      (column.machineNames as readonly string[]).includes(normalizedMachineName)
+    );
+
+    if (!machineColumn) {
+      alert("Selected machine is not mapped for processing. Please contact admin.");
+      return;
+    }
+
+    if (machineColumn.key !== "liner" && plannedQty > 0) {
+      const alreadyProcessedQty = processing
+        .filter((entry) => entry.productionId === productionId && normalizeMachineName(entry.machineName) === normalizedMachineName)
+        .reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
+      const nextTotal = alreadyProcessedQty + qtyNumber;
+      if (nextTotal > plannedQty) {
+        alert(`Cannot report more than planned qty.\nPlan: ${plannedQty}\nAlready reported (${machineColumn.label}): ${alreadyProcessedQty}\nNow: ${qtyNumber}`);
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     setTimeout(() => {
@@ -62,8 +90,8 @@ export function ProductionProcessingForm() {
         productionId,
         jobNo: selectedProduction.jobCardNo || selectedProduction.transactionNo,
         machineId,
-        machineName: normalizeMachineName(selectedMachine.name),
-        qty: Number(qty),
+        machineName: normalizedMachineName,
+        qty: qtyNumber,
         operatorId,
         operatorName: selectedOperator.name,
         date,

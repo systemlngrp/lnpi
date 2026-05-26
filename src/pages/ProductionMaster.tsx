@@ -64,6 +64,11 @@ export function ProductionMaster() {
   const handleCloseJob = async (id: string) => {
     const target = productions.find((p) => p.id === id);
     if (!target || target.status === "Completed" || target.status === "Cancelled") return;
+    const hasProcessing = processing.some((entry) => entry.productionId === id);
+    if (!hasProcessing) {
+      alert("Processing data is mandatory. Please add Production Processing entry before closing the job.");
+      return;
+    }
 
     if (closingId !== id) {
       setClosingId(id);
