@@ -72,9 +72,9 @@ export function Machines() {
       };
 
       if (editingId) {
-        setMachines(machines.map(m => m.id === editingId ? { ...m, ...machineData } : m));
+        setMachines((prev) => prev.map((m) => (m.id === editingId ? { ...m, ...machineData } : m)));
       } else {
-        setMachines([...machines, { id: crypto.randomUUID(), ...machineData }]);
+        setMachines((prev) => [...prev, { id: crypto.randomUUID(), ...machineData }]);
       }
       setName("");
       setMaxOutputPerHour("");
@@ -90,7 +90,7 @@ export function Machines() {
       setTimeout(() => setDeletingId(null), 3000);
       return;
     }
-    setMachines(machines.filter(m => m.id !== id));
+    setMachines((prev) => prev.filter((m) => m.id !== id));
     setDeletingId(null);
   };
 

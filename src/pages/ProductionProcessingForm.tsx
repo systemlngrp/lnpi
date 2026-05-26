@@ -101,7 +101,7 @@ export function ProductionProcessingForm() {
         updateTimestamp: new Date().toISOString()
       };
 
-      setProcessing([...processing, newEntry]);
+      setProcessing((prev) => [...prev, newEntry]);
       setIsSubmitting(false);
       navigate("/production-processing/master");
     }, 500);

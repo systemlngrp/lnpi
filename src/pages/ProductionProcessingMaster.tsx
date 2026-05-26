@@ -18,7 +18,7 @@ export function ProductionProcessingMaster() {
       setTimeout(() => setDeletingId(null), 3000);
       return;
     }
-    setProcessing(processing.filter(p => p.id !== id));
+    setProcessing((prev) => prev.filter((p) => p.id !== id));
     setDeletingId(null);
   };
 
