@@ -54,47 +54,47 @@ export function ReelIssueReturnForm() {
   const selectedProduction = productions.find((production) => production.id === productionId) || null;
 
   useEffect(() => {
-    if (!productionId) return;
-
     const slipById = new Map(packingSlips.map((slip) => [slip.id, slip]));
     const materialToSelectedSlipIds = new Map<string, string[]>();
-    const issueMaterialIds = new Set<string>();
 
     issueLines.forEach((line) => {
       if (!line.materialId) return;
-      issueMaterialIds.add(line.materialId);
       const selected = selectedIssueReels[line.id] || [];
       if (selected.length === 0) return;
       const existing = materialToSelectedSlipIds.get(line.materialId) || [];
       materialToSelectedSlipIds.set(line.materialId, [...existing, ...selected]);
     });
 
-    if (issueMaterialIds.size === 0) return;
+    const selectedMaterials = Array.from(materialToSelectedSlipIds.keys());
+
+    if (selectedMaterials.length === 0) {
+      setReturnLines([]);
+      setReturnQtyDrafts({});
+      return;
+    }
 
     setReturnLines((prev) => {
-      const next = [...prev];
-      const hasLineForMaterial = (materialId: string) => next.some((row) => row.materialId === materialId);
-
-      for (const materialId of issueMaterialIds) {
-        if (hasLineForMaterial(materialId)) continue;
-        const emptyIndex = next.findIndex((row) => !row.materialId);
-        if (emptyIndex >= 0) next[emptyIndex] = { ...next[emptyIndex], materialId };
-        else next.push({ id: crypto.randomUUID(), materialId });
-      }
+      const existingByMaterial = new Map(prev.filter((row) => row.materialId).map((row) => [row.materialId, row]));
+      const next: ReelLineDraft[] = selectedMaterials.map(
+        (materialId) => existingByMaterial.get(materialId) ?? { id: crypto.randomUUID(), materialId }
+      );
 
       setReturnQtyDrafts((prevDrafts) => {
-        const nextDrafts = { ...prevDrafts };
+        const nextDrafts: Record<string, Record<string, string>> = {};
 
-        for (const [materialId, slipIdsRaw] of materialToSelectedSlipIds.entries()) {
-          const lineId =
-            next.find((row) => row.materialId === materialId)?.id ?? next.find((row) => !row.materialId)?.id;
+        for (const materialId of selectedMaterials) {
+          const lineId = next.find((row) => row.materialId === materialId)?.id;
           if (!lineId) continue;
 
-          const slipIds = Array.from(new Set(slipIdsRaw));
-          const currentDrafts = nextDrafts[lineId] ? { ...nextDrafts[lineId] } : {};
+          const slipIds = Array.from(new Set(materialToSelectedSlipIds.get(materialId) || []));
+          const previousLineDrafts = prevDrafts[lineId] || {};
+          const currentDrafts: Record<string, string> = {};
 
           slipIds.forEach((slipId) => {
-            if (currentDrafts[slipId] !== undefined) return;
+            if (previousLineDrafts[slipId] !== undefined) {
+              currentDrafts[slipId] = previousLineDrafts[slipId];
+              return;
+            }
             const slip = slipById.get(slipId);
             const weight = Number(slip?.weightKg || 0);
             currentDrafts[slipId] = weight > 0 ? weight.toFixed(2) : "";
@@ -106,9 +106,9 @@ export function ReelIssueReturnForm() {
         return nextDrafts;
       });
 
-      return next.length === 0 ? [createEmptyReelLine()] : next;
+      return next;
     });
-  }, [productionId, issueLines, selectedIssueReels, packingSlips]);
+  }, [issueLines, selectedIssueReels, packingSlips]);
 
   const jobOptions = useMemo(
     () =>
@@ -162,7 +162,6 @@ export function ReelIssueReturnForm() {
   };
 
   const getDraftIssuedReelsForMaterial = (materialId: string) => {
-    if (!productionId) return [];
     const selectedIds = new Set(
       issueLines
         .filter((line) => line.materialId === materialId)
@@ -183,14 +182,15 @@ export function ReelIssueReturnForm() {
         packingSlipId: slip.id,
         ourReelNo: slip.ourReelNo,
         weightKg: Number(slip.weightKg || 0),
-        productionId,
+        productionId: productionId || "",
         jobNo: selectedProduction?.transactionNo || "",
       }));
   };
 
   const getReturnableReels = (materialId: string) => {
-    if (!productionId) return [];
-    const persisted = getReturnableReelLinesForJob(materialId, productionId, materialIssueReelLines, materialReturnReelLines);
+    const persisted = productionId
+      ? getReturnableReelLinesForJob(materialId, productionId, materialIssueReelLines, materialReturnReelLines)
+      : [];
     const drafts = getDraftIssuedReelsForMaterial(materialId);
     const seen = new Set<string>();
     const merged = [...persisted, ...drafts].filter((line) => {
@@ -579,11 +579,14 @@ export function ReelIssueReturnForm() {
 	            <h3 className="text-lg font-bold uppercase">Return Reels</h3>
 	          </div>
 
-          {returnLines.map((line) => {
-            const returnableReels = line.materialId ? getReturnableReels(line.materialId) : [];
-            const drafts = returnQtyDrafts[line.id] || {};
-            const totalWeight = line.materialId ? computeReturnLineWeight(line) : 0;
-            return (
+	          {returnLines.length === 0 ? (
+	            <div className="text-sm text-slate-500">Select reels in Issue Reels to auto-fill return.</div>
+	          ) : (
+	          returnLines.map((line) => {
+	            const returnableReels = line.materialId ? getReturnableReels(line.materialId) : [];
+	            const drafts = returnQtyDrafts[line.id] || {};
+	            const totalWeight = line.materialId ? computeReturnLineWeight(line) : 0;
+	            return (
               <div key={line.id} className="rounded border border-black p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
 	                  <div className="w-full max-w-xl space-y-1">
@@ -645,10 +648,10 @@ export function ReelIssueReturnForm() {
                     </div>
                   </>
                 ) : null}
-              </div>
-            );
-          })}
-        </div>
+	              </div>
+	            );
+	          }))}
+	        </div>
 
         <div className="flex justify-end">
           <button
