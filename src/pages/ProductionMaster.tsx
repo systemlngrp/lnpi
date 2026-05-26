@@ -24,13 +24,18 @@ export function ProductionMaster() {
   const [closingId, setClosingId] = useState<string | null>(null);
 
   const updateCloseMeta = async (id: string, patch: Partial<Pick<Production, "closeBy" | "closeDate">>) => {
+    const resolvedPatch = { ...patch };
+    if (resolvedPatch.closeBy === "Yes" && !resolvedPatch.closeDate) {
+      alert("Close Date is mandatory when Closer is Yes.");
+      return;
+    }
     const timestamp = new Date().toISOString();
     await setProductions((prev) =>
       prev.map((p) =>
         p.id === id
           ? {
               ...p,
-              ...patch,
+              ...resolvedPatch,
               updateTimestamp: timestamp,
               updatedBy: "System User",
             }
@@ -116,7 +121,7 @@ export function ProductionMaster() {
                 ...p,
                 status: "Completed",
                 tallyTimestamp: p.tallyTimestamp || timestamp,
-                closeBy: p.closeBy || "System User",
+                closeBy: p.closeBy || "Yes",
                 closeDate: p.closeDate || closeDate,
                 updateTimestamp: timestamp,
                 updatedBy: "System User",
@@ -203,7 +208,7 @@ export function ProductionMaster() {
 	                      <div className="text-xs text-slate-500">Prod Date: {formatDate(p.date)}</div>
 	                      {p.status === "Completed" ? (
 	                        <div className="text-xs text-slate-500">
-	                          Closed: {formatDate(p.closeDate || p.tallyTimestamp || p.updateTimestamp || "") || "-"} {p.closeBy ? `| ${p.closeBy}` : ""}
+	                          Closed: {formatDate(p.closeDate || p.tallyTimestamp || p.updateTimestamp || "") || "-"}
 	                        </div>
 	                      ) : null}
 	                      {order && (
@@ -442,21 +447,39 @@ export function ProductionMaster() {
 	                        )}
 	                      </td>
 	                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-	                        <input
+	                        <select
 	                          value={p.closeBy || ""}
-	                          onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeBy: e.target.value } : row)))}
-	                          onBlur={(e) => void updateCloseMeta(p.id, { closeBy: e.target.value.trim() })}
-	                          className="w-32 border border-black rounded px-2 py-1 text-xs"
-	                          placeholder="-"
-	                        />
+	                          onChange={(e) => {
+	                            const nextValue = e.target.value;
+	                            const today = new Date().toISOString().split("T")[0];
+	                            void setProductions((prev) =>
+	                              prev.map((row) =>
+	                                row.id === p.id
+	                                  ? {
+	                                      ...row,
+	                                      closeBy: nextValue,
+	                                      closeDate: nextValue === "Yes" ? row.closeDate || today : row.closeDate,
+	                                    }
+	                                  : row
+	                              )
+	                            );
+	                          }}
+	                          onBlur={(e) => void updateCloseMeta(p.id, { closeBy: e.target.value, closeDate: p.closeDate })}
+	                          className="w-24 border border-black rounded px-2 py-1 text-xs bg-white"
+	                        >
+	                          <option value=""></option>
+	                          <option value="Yes">Yes</option>
+	                          <option value="No">No</option>
+	                        </select>
 	                      </td>
 	                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
 	                        <input
 	                          type="date"
 	                          value={(p.closeDate || "").split("T")[0]}
 	                          onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeDate: e.target.value } : row)))}
-	                          onBlur={(e) => void updateCloseMeta(p.id, { closeDate: e.target.value })}
-	                          className="w-36 border border-black rounded px-2 py-1 text-xs"
+	                          onBlur={(e) => void updateCloseMeta(p.id, { closeDate: e.target.value, closeBy: p.closeBy })}
+	                          className={`w-36 border rounded px-2 py-1 text-xs ${p.closeBy === "Yes" && !p.closeDate ? "border-red-600" : "border-black"}`}
+	                          required={p.closeBy === "Yes"}
 	                        />
 	                      </td>
 	                      <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
