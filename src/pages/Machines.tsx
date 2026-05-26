@@ -18,7 +18,7 @@ const DEFAULT_MACHINES = [
 ];
 
 export function Machines() {
-  const [machines, setMachines] = useData<Machine>("machines", []);
+  const [machines, setMachines, machinesLoading] = useData<Machine>("machines", []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,20 +27,37 @@ export function Machines() {
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Initialize default machines if list is empty
+  // Seed defaults once data has finished loading, and only for missing names.
   useEffect(() => {
-    if (machines.length === 0) {
-      const initial = DEFAULT_MACHINES.map(m => ({
+    if (machinesLoading) return;
+
+    const existing = new Set(
+      machines.map((machine) => normalizeMachineName(machine.name).trim().toLowerCase()).filter(Boolean)
+    );
+
+    const missing = DEFAULT_MACHINES.filter(
+      (machineName) => !existing.has(normalizeMachineName(machineName).trim().toLowerCase())
+    );
+
+    if (missing.length === 0) return;
+
+    const timestamp = new Date().toISOString();
+    setMachines((prev) => [
+      ...prev,
+      ...missing.map((machineName) => ({
         id: crypto.randomUUID(),
-        name: m,
+        name: normalizeMachineName(machineName),
         maxOutputPerHour: 0,
         updatedBy: "System",
-        updateTimestamp: new Date().toISOString()
-      }));
-      setMachines(initial);
-      return;
-    }
+        updateTimestamp: timestamp,
+      })),
+    ]);
+  }, [machines, machinesLoading, setMachines]);
 
+  // Normalize existing machine names to keep reports consistent.
+  // Runs after load and only writes when there are actual changes.
+  useEffect(() => {
+    if (machinesLoading || machines.length === 0) return;
     const normalizedMachines = machines.map((machine) => {
       const normalizedName = normalizeMachineName(machine.name);
       return normalizedName === machine.name ? machine : { ...machine, name: normalizedName };
@@ -49,7 +66,7 @@ export function Machines() {
     if (hasChanges) {
       setMachines(normalizedMachines);
     }
-  }, [machines, setMachines]);
+  }, [machines, machinesLoading, setMachines]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
