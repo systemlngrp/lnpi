@@ -151,7 +151,7 @@ export function ReelwiseStockReport() {
         const issuedWeight = relatedIssueLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
         const returnedWeight = relatedReturnLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
         const mrrQty = Number(slip.weightKg || 0);
-        const availableWeight = Number(Math.max(0, mrrQty - issuedWeight - returnedWeight).toFixed(2));
+        const availableWeight = Number(Math.max(0, mrrQty - issuedWeight + returnedWeight).toFixed(2));
 
         const issueDates = relatedIssueLines
           .map((line) => issueMap.get(line.materialIssueId)?.date || "")
