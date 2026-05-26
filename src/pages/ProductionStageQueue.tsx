@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle } from "lucide-react";
+import { ArrowUpDown, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   Company,
@@ -20,6 +20,16 @@ import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from ".
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
 
 type QueueMode = "consumption" | "ffg";
+
+type SortKey = "jobNo" | "date" | "orderNo" | "erpCode" | "company" | "item" | "qty" | "actualPaperUsed" | "prodFfg" | "status";
+type SortDir = "asc" | "desc";
+
+const parseJobNo = (value: string) => {
+  const raw = String(value || "").trim();
+  const lastPart = raw.split("/").pop() || raw;
+  const num = Number.parseInt(lastPart, 10);
+  return Number.isFinite(num) ? num : null;
+};
 
 const CONFIG: Record<QueueMode, { title: string; empty: string }> = {
   consumption: {
@@ -60,10 +70,21 @@ export function ProductionStageQueue({
   const [ffgValues, setFfgValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("jobNo");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const usageMap = useMemo(
     () => buildProductionMaterialUsageMap(materialIssues, materialIssueLines, materialReturns, materialReturnLines),
     [materialIssueLines, materialIssues, materialReturnLines, materialReturns]
   );
+
+  const toggleSort = (nextKey: SortKey) => {
+    if (nextKey === sortKey) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(nextKey);
+    setSortDir("asc");
+  };
 
   const rows = useMemo(() => {
     const lowered = searchTerm.toLowerCase();
@@ -87,11 +108,78 @@ export function ProductionStageQueue({
         );
       })
       .sort((a, b) => {
+        const dir = sortDir === "asc" ? 1 : -1;
+
+        const getString = (value: unknown) => String(value ?? "").toLowerCase();
+        const getNumber = (value: unknown) => {
+          const num = Number(value);
+          return Number.isFinite(num) ? num : null;
+        };
+
+        let cmp = 0;
+        switch (sortKey) {
+          case "jobNo": {
+            const nA = parseJobNo(a.production.transactionNo);
+            const nB = parseJobNo(b.production.transactionNo);
+            if (nA != null && nB != null) cmp = nA - nB;
+            else cmp = getString(a.production.transactionNo).localeCompare(getString(b.production.transactionNo));
+            break;
+          }
+          case "date": {
+            const tA = new Date(a.production.date || 0).getTime();
+            const tB = new Date(b.production.date || 0).getTime();
+            cmp = tA - tB;
+            break;
+          }
+          case "orderNo":
+            cmp = getString(a.order?.orderNo).localeCompare(getString(b.order?.orderNo));
+            break;
+          case "erpCode":
+            cmp = getString(a.production.erpCode).localeCompare(getString(b.production.erpCode));
+            break;
+          case "company":
+            cmp = getString(a.company?.name).localeCompare(getString(b.company?.name));
+            break;
+          case "item":
+            cmp = getString(a.item?.name).localeCompare(getString(b.item?.name));
+            break;
+          case "qty": {
+            const qA = getNumber(a.production.qty) ?? 0;
+            const qB = getNumber(b.production.qty) ?? 0;
+            cmp = qA - qB;
+            break;
+          }
+          case "actualPaperUsed": {
+            const pA = getNumber(a.actualPaperUsed) ?? 0;
+            const pB = getNumber(b.actualPaperUsed) ?? 0;
+            cmp = pA - pB;
+            break;
+          }
+          case "prodFfg": {
+            const fA = getNumber(a.production.prodFromFFG) ?? 0;
+            const fB = getNumber(b.production.prodFromFFG) ?? 0;
+            cmp = fA - fB;
+            break;
+          }
+          case "status":
+            cmp = getString(a.production.status).localeCompare(getString(b.production.status));
+            break;
+          default:
+            cmp = 0;
+        }
+
+        if (cmp !== 0) return cmp * dir;
+
         const timeA = new Date(a.production.updateTimestamp || a.production.date || 0).getTime();
         const timeB = new Date(b.production.updateTimestamp || b.production.date || 0).getTime();
         return timeB - timeA;
       });
-  }, [companies, items, orders, predicate, productions, schedules, searchTerm, usageMap]);
+  }, [companies, items, orders, predicate, productions, schedules, searchTerm, sortDir, sortKey, usageMap]);
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (column !== sortKey) return <ArrowUpDown size={12} className="opacity-60" />;
+    return sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />;
+  };
 
   const handleSaveFfg = async (productionId: string) => {
     const rawValue = ffgValues[productionId];
@@ -173,16 +261,56 @@ export function ProductionStageQueue({
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job No.</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Order No.</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">ERP Code</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Company</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Item</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Qty</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actual Paper Used</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prod (FFG)</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("jobNo")} className="inline-flex items-center gap-1">
+                    Job No. <SortIcon column="jobNo" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("date")} className="inline-flex items-center gap-1">
+                    Date <SortIcon column="date" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("orderNo")} className="inline-flex items-center gap-1">
+                    Order No. <SortIcon column="orderNo" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("erpCode")} className="inline-flex items-center gap-1">
+                    ERP Code <SortIcon column="erpCode" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("company")} className="inline-flex items-center gap-1">
+                    Company <SortIcon column="company" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("item")} className="inline-flex items-center gap-1">
+                    Item <SortIcon column="item" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("qty")} className="inline-flex items-center gap-1">
+                    Qty <SortIcon column="qty" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("actualPaperUsed")} className="inline-flex items-center gap-1">
+                    Actual Paper Used <SortIcon column="actualPaperUsed" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("prodFfg")} className="inline-flex items-center gap-1">
+                    Prod (FFG) <SortIcon column="prodFfg" />
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <button type="button" onClick={() => toggleSort("status")} className="inline-flex items-center gap-1">
+                    Status <SortIcon column="status" />
+                  </button>
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close</th>
                 {enableFfgEditing ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Update</th> : null}
                 {enableIssueAction ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th> : null}
