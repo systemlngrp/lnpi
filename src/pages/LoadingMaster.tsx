@@ -174,6 +174,7 @@ export function LoadingMaster() {
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-bold uppercase">Item Name</th>
                       <th className="px-4 py-3 text-left text-xs font-bold uppercase">Order No</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold uppercase">Jobs</th>
                       <th className="px-4 py-3 text-right text-xs font-bold uppercase">Planned</th>
                       <th className="px-4 py-3 text-right text-xs font-bold uppercase">Loaded</th>
                     </tr>
@@ -188,6 +189,9 @@ export function LoadingMaster() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm">{line.orderNo}</td>
+                        <td className="px-4 py-3 text-xs">
+                          {(line.jobNos || []).length ? (line.jobNos || []).join(", ") : "-"}
+                        </td>
                         <td className="px-4 py-3 text-right text-sm">{line.plannedQty}</td>
                         <td className="px-4 py-3 text-right text-sm font-bold text-indigo-600">{line.loadedQty}</td>
                       </tr>

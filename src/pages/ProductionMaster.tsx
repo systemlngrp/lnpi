@@ -3,7 +3,7 @@ import { useData } from "../hooks/useData";
 import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
-import { Trash2, ClipboardList } from "lucide-react";
+import { Trash2, ClipboardList, CheckCircle } from "lucide-react";
 import { ExcelExport } from "../components/ExcelExport";
 import { useNavigate } from "react-router-dom";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
@@ -19,6 +19,7 @@ export function ProductionMaster() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
 
   const processingTotalsMap = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
@@ -58,6 +59,38 @@ export function ProductionMaster() {
     }
     setProductions(productions.filter(p => p.id !== id));
     setDeletingId(null);
+  };
+
+  const handleCloseJob = async (id: string) => {
+    const target = productions.find((p) => p.id === id);
+    if (!target || target.status === "Completed" || target.status === "Cancelled") return;
+
+    if (closingId !== id) {
+      setClosingId(id);
+      setTimeout(() => setClosingId(null), 3000);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    try {
+      await setProductions((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: "Completed",
+                tallyTimestamp: p.tallyTimestamp || timestamp,
+                updateTimestamp: timestamp,
+                updatedBy: "System User",
+              }
+            : p
+        )
+      );
+    } catch (err) {
+      console.error("Failed to close job:", err);
+    } finally {
+      setClosingId(null);
+    }
   };
 
   const filteredList = productions
@@ -233,11 +266,24 @@ export function ProductionMaster() {
                         </div>
                       )}
                        <div className="flex gap-2 mt-2">
-                        <button 
+                       <button 
                           onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
                           className="flex-1 bg-indigo-600 text-white font-bold inline-flex items-center justify-center p-2 border border-black text-xs hover:bg-indigo-700"
                         >
                           <ClipboardList size={14} className="mr-1" /> Report Proc.
+                        </button>
+                        <button
+                          onClick={() => handleCloseJob(p.id)}
+                          disabled={p.status === "Completed" || p.status === "Cancelled"}
+                          className={`flex-1 font-bold inline-flex items-center justify-center p-2 border border-black text-xs ${
+                            p.status === "Completed" || p.status === "Cancelled"
+                              ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                              : closingId === p.id
+                                ? "bg-amber-500 text-black animate-pulse"
+                                : "bg-emerald-600 text-white hover:bg-emerald-700"
+                          }`}
+                        >
+                          <CheckCircle size={14} className="mr-1" /> {closingId === p.id ? "Confirm?" : "Close Job"}
                         </button>
                         <button 
                           onClick={() => handleDelete(p.id)} 
@@ -395,6 +441,26 @@ export function ProductionMaster() {
                             className="text-indigo-600 hover:text-indigo-900 transition-all p-1"
                           >
                             <ClipboardList size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleCloseJob(p.id)}
+                            disabled={p.status === "Completed" || p.status === "Cancelled"}
+                            title={
+                              p.status === "Completed" || p.status === "Cancelled"
+                                ? "Job already closed"
+                                : closingId === p.id
+                                  ? "Click to confirm close"
+                                  : "Close job"
+                            }
+                            className={`transition-all p-1 ${
+                              p.status === "Completed" || p.status === "Cancelled"
+                                ? "text-slate-400 cursor-not-allowed"
+                                : closingId === p.id
+                                  ? "text-amber-600 animate-pulse scale-110"
+                                  : "text-emerald-700 hover:text-emerald-900"
+                            }`}
+                          >
+                            <CheckCircle size={16} />
                           </button>
                           <button 
                             onClick={() => handleDelete(p.id)} 

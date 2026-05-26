@@ -564,6 +564,7 @@ export interface DispatchPlan {
 export interface LoadingSlipLine {
   dispatchPlanId: string;
   loadedQty: number;
+  jobNos?: Array<string | number>;
 }
 
 export interface LoadingSlip {

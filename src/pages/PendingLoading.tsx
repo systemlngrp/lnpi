@@ -7,7 +7,8 @@ import {
   Order, 
   Company, 
   LoadingSlip,
-  LoadingSlipLine
+  LoadingSlipLine,
+  Production
 } from "../types";
 import { 
   Truck as TruckIcon, 
@@ -43,6 +44,7 @@ export function PendingLoading() {
   const [items] = useData<Item>("items", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [productions] = useData<Production>("productions", []);
   const [, updateLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,6 +55,7 @@ export function PendingLoading() {
     plans: any[];
   } | null>(null);
   const [loadedQuantities, setLoadedQuantities] = useState<Record<string, number>>({});
+  const [selectedJobs, setSelectedJobs] = useState<Record<string, string[]>>({});
   const [cancelingPlanId, setCancelingPlanId] = useState<string | null>(null);
   const [cancelQty, setCancelQty] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -128,11 +131,13 @@ export function PendingLoading() {
       initialQtys[p.id] = p.pendingQty;
     });
     setLoadedQuantities(initialQtys);
+    setSelectedJobs({});
   };
 
   const handleCloseLoad = () => {
     setLoadingModal(null);
     setLoadedQuantities({});
+    setSelectedJobs({});
   };
 
   const handleSubmitLoading = async () => {
@@ -142,7 +147,8 @@ export function PendingLoading() {
       .filter(([, qty]) => Number(qty) > 0)
       .map(([id, qty]) => ({
         dispatchPlanId: id,
-        loadedQty: Number(qty)
+        loadedQty: Number(qty),
+        jobNos: (selectedJobs[id] || []).filter(Boolean)
       }));
 
     if (lines.length === 0) return;
@@ -375,17 +381,59 @@ export function PendingLoading() {
                   <thead className="bg-slate-100">
                     <tr className="divide-x divide-black">
                       <th className="px-4 py-2 text-left text-xs font-bold uppercase">Company / Order</th>
+                      <th className="px-4 py-2 text-left text-xs font-bold uppercase">Jobs</th>
                       <th className="px-4 py-2 text-right text-xs font-bold uppercase">Planned</th>
                       <th className="px-4 py-2 text-right text-xs font-bold uppercase">Pending</th>
                       <th className="px-4 py-2 text-right text-xs font-bold uppercase">Loaded</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black bg-white">
-                    {loadingModal.plans.map(p => (
-                      <tr key={p.id} className="divide-x divide-black">
+                    {loadingModal.plans.map((p) => {
+                      const plan = p as DispatchPlan;
+                      const jobOptionsForSchedule = productions
+                        .filter((prod) => prod.scheduleId === plan.scheduleId)
+                        .map((prod) => String(prod.transactionNo || "").trim())
+                        .filter(Boolean);
+
+                      const jobOptionsForItem = productions
+                        .filter((prod) => prod.itemId === loadingModal.itemId && prod.status !== "Cancelled")
+                        .map((prod) => String(prod.transactionNo || "").trim())
+                        .filter(Boolean);
+
+                      const options = Array.from(
+                        new Set(jobOptionsForSchedule.length ? jobOptionsForSchedule : jobOptionsForItem)
+                      ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+
+                      return (
+                        <tr key={p.id} className="divide-x divide-black">
                         <td className="px-4 py-3">
                           <div className="text-sm font-medium">{p.companyName}</div>
                           <div className="text-[10px] text-slate-500">{p.orderNo}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            multiple
+                            value={selectedJobs[p.id] || []}
+                            onChange={(e) => {
+                              const values = Array.from(e.target.selectedOptions).map((o) => o.value);
+                              setSelectedJobs((prev) => ({ ...prev, [p.id]: values }));
+                            }}
+                            className="w-56 max-w-[14rem] border border-black rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-black bg-white"
+                            title="Select jobs (Ctrl/Shift for multi-select)"
+                          >
+                            {options.length === 0 ? (
+                              <option value="" disabled>No jobs found</option>
+                            ) : (
+                              options.map((jobNo) => (
+                                <option key={jobNo} value={jobNo}>
+                                  {jobNo}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                          <div className="text-[10px] text-slate-500 mt-1">
+                            Ctrl/Shift multi-select
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right text-sm">
                           {Number(p.plannedQty || 0).toLocaleString()}
@@ -410,11 +458,12 @@ export function PendingLoading() {
                           />
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-black">
                     <tr className="divide-x divide-black">
-                      <td colSpan={3} className="px-4 py-3 text-right text-sm uppercase">Total Loaded</td>
+                      <td colSpan={4} className="px-4 py-3 text-right text-sm uppercase">Total Loaded</td>
                       <td className="px-4 py-3 text-right text-sm text-indigo-600 text-lg">
                         {Object.values(loadedQuantities).reduce((sum, q) => sum + q, 0).toLocaleString()}
                       </td>

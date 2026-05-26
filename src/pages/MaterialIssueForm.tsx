@@ -51,7 +51,7 @@ export function MaterialIssueForm() {
         .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
         .map((production) => ({
           value: production.id,
-          label: `${production.transactionNo}${production.itemId ? ` | ${production.date}` : ""}`,
+          label: `${production.transactionNo}${production.date ? ` | ${production.date.split("T")[0]}` : ""}`,
         })),
     [productions]
   );

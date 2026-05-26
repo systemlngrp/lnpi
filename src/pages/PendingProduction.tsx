@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { Company, Item, Order, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
@@ -13,7 +12,6 @@ function getPendingProductionQty(schedule: OrderSchedule) {
 }
 
 export function PendingProduction() {
-  const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [items] = useData<Item>("items", []);
@@ -73,7 +71,7 @@ export function PendingProduction() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center border-b border-black pb-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Production</h2>
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Production Plan</h2>
       </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
@@ -124,12 +122,6 @@ export function PendingProduction() {
                   </td>
                   <td className="px-3 py-2 border border-black">
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => navigate(`/production/form?scheduleId=${schedule.id}`)}
-                        className="bg-emerald-600 text-white px-3 py-1 rounded font-bold"
-                      >
-                        Produce
-                      </button>
                       <button
                         onClick={() => handleCancelQty(schedule)}
                         disabled={savingId === schedule.id || !cancelValues[schedule.id] || Number(cancelValues[schedule.id]) <= 0}

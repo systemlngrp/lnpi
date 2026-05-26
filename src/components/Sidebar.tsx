@@ -91,7 +91,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/material-in/pending-accounts": materialIn.filter(m => m.status === "Pending Accounts").length,
     "/material-in/pending-md": materialIn.filter(m => m.status === "Pending MD").length,
     "/material-in/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
-    "/production/pending-ph": productions.filter(isProductionPendingPH).length,
     "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
     "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
@@ -257,9 +256,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       section: "Production",
       color: "bg-emerald-700",
       items: [
-        { name: "Production Form", href: "/production/form", icon: Hammer },
-        { name: "Pending Production", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
-        { name: "Pending PH Approval", href: "/production/pending-ph", icon: UserCheck, countKey: "/production/pending-ph" },
+        { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
         { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
         { name: "Pending FFG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
         { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
@@ -336,17 +333,60 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     try {
       setCollapsedSections(JSON.parse(saved));
     } catch {
+      window.localStorage.removeItem("sidebar-collapsed-sections");
       setCollapsedSections({});
     }
   }, []);
 
   const toggleSection = (section: string) => {
     setCollapsedSections((prev) => {
-      const next = { ...prev, [section]: !prev[section] };
+      const currentlyCollapsed = !!prev[section];
+      const nextCollapsed = !currentlyCollapsed;
+
+      if (nextCollapsed) {
+        const next = { ...prev, [section]: true };
+        window.localStorage.setItem("sidebar-collapsed-sections", JSON.stringify(next));
+        return next;
+      }
+
+      const next: Record<string, boolean> = {};
+      for (const group of navigation) next[group.section] = true;
+      next[section] = false;
       window.localStorage.setItem("sidebar-collapsed-sections", JSON.stringify(next));
       return next;
     });
   };
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("sidebar-collapsed-sections");
+    if (saved) return;
+
+    const path = location.pathname;
+    let activeSection: string | null = null;
+    let bestMatchLength = -1;
+
+    for (const group of navigation) {
+      for (const item of group.items) {
+        const href = item.href;
+        const matches =
+          (href === "/" && path === "/") ||
+          (href !== "/" && (path === href || path.startsWith(href + "/") || path.startsWith(href)));
+        if (!matches) continue;
+        if (href.length > bestMatchLength) {
+          bestMatchLength = href.length;
+          activeSection = group.section;
+        }
+      }
+    }
+
+    setCollapsedSections(() => {
+      const next: Record<string, boolean> = {};
+      for (const group of navigation) next[group.section] = true;
+      if (activeSection) next[activeSection] = false;
+      window.localStorage.setItem("sidebar-collapsed-sections", JSON.stringify(next));
+      return next;
+    });
+  }, [location.pathname]);
 
 
 
