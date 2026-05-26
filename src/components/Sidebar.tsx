@@ -328,6 +328,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Production Planning Logic", href: "/plans/production-planning", icon: BookOpenText },
         { name: "Production", href: "/plans/production", icon: BookOpenText },
         { name: "Items", href: "/plans/items", icon: BookOpenText },
+        { name: "Loading Plan", href: "/plans/loading", icon: BookOpenText },
       ],
     },
   ];

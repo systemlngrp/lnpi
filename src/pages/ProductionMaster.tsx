@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting } from "../types";
+import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Trash2, ClipboardList, CheckCircle } from "lucide-react";
@@ -18,6 +18,7 @@ export function ProductionMaster() {
   const [companies] = useData<Company>("companies", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
+  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -85,6 +86,24 @@ export function ProductionMaster() {
     });
     return map;
   }, [productions]);
+
+  const loadedQtyByProductionId = useMemo(() => {
+    const map = new Map<string, number>();
+    const getJobAllocations = (line: LoadingSlipLine) =>
+      Array.isArray(line.allocations)
+        ? line.allocations.filter((allocation) => allocation.sourceType === "job")
+        : [];
+
+    loadingSlips.forEach((slip) => {
+      slip.lines.forEach((line) => {
+        getJobAllocations(line).forEach((allocation) => {
+          map.set(allocation.jobId, (map.get(allocation.jobId) || 0) + Number(allocation.qty || 0));
+        });
+      });
+    });
+
+    return map;
+  }, [loadingSlips]);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -227,6 +246,7 @@ export function ProductionMaster() {
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span>{p.qty} {p.uom}</span>
+                        <span className="font-bold text-amber-700">Loaded: {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}</span>
                         <div className="flex flex-col items-end text-[10px] font-bold text-indigo-700 bg-indigo-50 p-1 border border-indigo-100 rounded">
                           <div>Pa:{procTotals.paper} | Li:{procTotals.liner} | Pr:{procTotals.printing}</div>
                           <div>Ps:{procTotals.pasting} | St:{procTotals.stitching} | Pu:{procTotals.punching} | Gl:{procTotals.gluing}</div>
@@ -300,6 +320,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Mandatory</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Planned Qty</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap bg-amber-50">Loaded Qty</th>
 
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Paper</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Liner</th>
@@ -349,7 +370,7 @@ export function ProductionMaster() {
 	            <tbody className="divide-y divide-black bg-white">
 	              {filteredList.length === 0 ? (
 	                <tr>
-	                  <td colSpan={44} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+	                  <td colSpan={45} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
 	                </tr>
 	              ) : (
                 filteredList.map((p) => {
@@ -387,6 +408,9 @@ export function ProductionMaster() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-amber-700 border border-black whitespace-nowrap bg-amber-50/40">
+                        {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}
+                      </td>
 
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.paper.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.liner.toLocaleString()}</td>

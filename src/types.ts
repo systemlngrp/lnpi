@@ -572,7 +572,21 @@ export interface LoadingSlipLine {
   dispatchPlanId: string;
   loadedQty: number;
   jobNos?: Array<string | number>;
+  allocations?: LoadingSlipAllocation[];
 }
+
+export type LoadingSlipAllocation =
+  | {
+      sourceType: "job";
+      jobId: string;
+      jobNo: string;
+      qty: number;
+    }
+  | {
+      sourceType: "opening_stock";
+      sourceRef: "Opening Stock";
+      qty: number;
+    };
 
 export interface LoadingSlip {
   id: string;

@@ -351,6 +351,7 @@ async function initDb(retries = 5) {
           \`materialId\` VARCHAR(36) NOT NULL,
           \`uom\` VARCHAR(50),
           \`qty\` DECIMAL(15,2) NOT NULL,
+          \`targetDeliveryDate\` VARCHAR(50),
           \`orderedQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`cancelledQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`balanceQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
@@ -390,6 +391,7 @@ async function initDb(retries = 5) {
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`amount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`targetDeliveryDate\` VARCHAR(50),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -572,6 +574,18 @@ async function initDb(retries = 5) {
           \`poType\` VARCHAR(50),
           \`remarks\` TEXT,
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending PH',
+          \`approvedTimestamp\` VARCHAR(255),
+          \`approvedEmail\` VARCHAR(255),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`realization_rate_chart\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`dateFrom\` VARCHAR(50) NOT NULL,
+          \`dateTo\` VARCHAR(50) NOT NULL,
+          \`realizationRate\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -600,6 +614,15 @@ async function initDb(retries = 5) {
           \`state\` VARCHAR(255),
           \`gstNo\` VARCHAR(100),
           \`deviationAllowed\` DECIMAL(10,2),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`machines\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`maxOutputPerHour\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -645,8 +668,8 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
-        CREATE TABLE IF NOT EXISTS \`productions\` (
-          \`id\` VARCHAR(36) PRIMARY KEY,
+	        CREATE TABLE IF NOT EXISTS \`productions\` (
+	          \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`scheduleId\` VARCHAR(36),
@@ -706,12 +729,30 @@ async function initDb(retries = 5) {
           \`year\` INT,
           \`month\` VARCHAR(50),
           \`idToOd17\` DECIMAL(15,2),
-          \`phTimestamp\` VARCHAR(255),
-          \`phEmailId\` VARCHAR(255),
-          \`tallyTimestamp\` VARCHAR(255),
-          \`cancelTimestamp\` VARCHAR(255),
-          \`cancelEmailId\` VARCHAR(255),
-          \`cancelRemarks\` TEXT,
+	          \`phTimestamp\` VARCHAR(255),
+	          \`phEmailId\` VARCHAR(255),
+	          \`tallyTimestamp\` VARCHAR(255),
+	          \`closeBy\` VARCHAR(255),
+	          \`closeDate\` VARCHAR(50),
+	          \`cancelTimestamp\` VARCHAR(255),
+	          \`cancelEmailId\` VARCHAR(255),
+	          \`cancelRemarks\` TEXT,
+	          \`updatedBy\` VARCHAR(255),
+	          \`updateTimestamp\` VARCHAR(255)
+	        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`production_processing\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`productionId\` VARCHAR(36) NOT NULL,
+          \`jobNo\` VARCHAR(100),
+          \`machineId\` VARCHAR(36) NOT NULL,
+          \`machineName\` VARCHAR(255),
+          \`shift\` VARCHAR(10) DEFAULT 'Day',
+          \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`operatorId\` VARCHAR(36) NOT NULL,
+          \`operatorName\` VARCHAR(255),
+          \`date\` VARCHAR(50) NOT NULL,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -798,6 +839,7 @@ async function initDb(retries = 5) {
           \`sgst\` DECIMAL(15,2) NOT NULL,
           \`igst\` DECIMAL(15,2) NOT NULL,
           \`totalAfterGst\` DECIMAL(15,2) NOT NULL,
+          \`roundOff\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -825,6 +867,7 @@ async function initDb(retries = 5) {
           \`cuttingSizeAsPerCalculation\` TEXT,
           \`gsmAsPerCalculation\` TEXT,
           \`productionFormVisibleColumns\` LONGTEXT,
+          \`realizationPerKgTargets\` LONGTEXT,
           \`organizationName\` VARCHAR(255),
           \`organizationAddress\` TEXT,
           \`organizationGstDetails\` TEXT,
@@ -881,6 +924,7 @@ async function initDb(retries = 5) {
         { table: "indent_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
         { table: "indent_lines", column: "uom", type: "VARCHAR(50)" },
         { table: "indent_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "indent_lines", column: "targetDeliveryDate", type: "VARCHAR(50)" },
         { table: "indent_lines", column: "orderedQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "indent_lines", column: "cancelledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "indent_lines", column: "balanceQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
@@ -910,6 +954,7 @@ async function initDb(retries = 5) {
         { table: "purchase_order_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "purchase_order_lines", column: "rate", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "amount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "targetDeliveryDate", type: "VARCHAR(50)" },
         { table: "purchase_order_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "purchase_order_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_entries", column: "gateEntryNo", type: "VARCHAR(100)" },
@@ -1029,6 +1074,8 @@ async function initDb(retries = 5) {
         { table: "productions", column: "remarks", type: "TEXT" },
         { table: "productions", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
         { table: "productions", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "productions", column: "closeBy", type: "VARCHAR(255)" },
+        { table: "productions", column: "closeDate", type: "VARCHAR(50)" },
         { table: "productions", column: "cancelTimestamp", type: "VARCHAR(255)" },
         { table: "productions", column: "cancelEmailId", type: "VARCHAR(255)" },
         { table: "productions", column: "cancelRemarks", type: "TEXT" },
@@ -1059,6 +1106,8 @@ async function initDb(retries = 5) {
         { table: "companies", column: "deviationAllowed", type: "DECIMAL(10,2)" },
         { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },
+        { table: "orders", column: "approvedTimestamp", type: "VARCHAR(255)" },
+        { table: "orders", column: "approvedEmail", type: "VARCHAR(255)" },
         { table: "productions", column: "phTimestamp", type: "VARCHAR(255)" },
         { table: "productions", column: "phEmailId", type: "VARCHAR(255)" },
         { table: "productions", column: "noOfParts", type: "INT" },
@@ -1136,6 +1185,21 @@ async function initDb(retries = 5) {
         { table: "companies", column: "district", type: "VARCHAR(255)" },
         { table: "companies", column: "state", type: "VARCHAR(255)" },
         { table: "companies", column: "gstNo", type: "VARCHAR(100)" },
+        { table: "machines", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "machines", column: "maxOutputPerHour", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "machines", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "machines", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "production_processing", column: "productionId", type: "VARCHAR(36) NOT NULL" },
+        { table: "production_processing", column: "jobNo", type: "VARCHAR(100)" },
+        { table: "production_processing", column: "machineId", type: "VARCHAR(36) NOT NULL" },
+        { table: "production_processing", column: "machineName", type: "VARCHAR(255)" },
+        { table: "production_processing", column: "shift", type: "VARCHAR(10) DEFAULT 'Day'" },
+        { table: "production_processing", column: "qty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "production_processing", column: "operatorId", type: "VARCHAR(36) NOT NULL" },
+        { table: "production_processing", column: "operatorName", type: "VARCHAR(255)" },
+        { table: "production_processing", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "production_processing", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "production_processing", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_in", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "users", column: "updatedBy", type: "VARCHAR(255)" },
@@ -1194,6 +1258,7 @@ async function initDb(retries = 5) {
         { table: "invoices", column: "sgst", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoices", column: "igst", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoices", column: "totalAfterGst", type: "DECIMAL(15,2) NOT NULL" },
+        { table: "invoices", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoices", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "invoice_line_items", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
@@ -1244,6 +1309,8 @@ async function initDb(retries = 5) {
         { table: "settings", column: "cuttingSizeAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "gsmAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "productionFormVisibleColumns", type: "LONGTEXT" },
+        { table: "settings", column: "realizationPerKgTargets", type: "LONGTEXT" },
+        { table: "settings", column: "mandatoryMachinesByType", type: "LONGTEXT" },
         { table: "settings", column: "organizationName", type: "VARCHAR(255)" },
         { table: "settings", column: "organizationAddress", type: "TEXT" },
         { table: "settings", column: "organizationGstDetails", type: "TEXT" },
@@ -1424,6 +1491,59 @@ const createHandlers = (tableName) => {
               const padded = String(nextNum).padStart(5, "0");
               data.orderNo = `${fyLabel}/${padded}`;
             }
+            const currentStatus = String(data.status || "Pending PH").trim();
+            const alreadyApproved = hasWorkflowValue(data.approvedTimestamp) || hasWorkflowValue(data.approvedEmail);
+            if (!alreadyApproved && (currentStatus === "Pending PH" || !currentStatus)) {
+              const itemId = String(data.itemId || "").trim();
+              const orderRate = Number(data.rate);
+              const punchDate = String(data.orderDate || "").trim() || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+              if (itemId && Number.isFinite(orderRate) && punchDate) {
+                const [billingRows] = await db.query(
+                  `SELECT ili.rate
+                   FROM \`invoice_line_items\` ili
+                   JOIN \`invoices\` inv ON inv.id = ili.invoiceId
+                   WHERE ili.itemId = ?
+                   ORDER BY inv.date DESC, inv.id DESC
+                   LIMIT 1`,
+                  [itemId]
+                );
+                const lastBillingRate1 = Number(billingRows?.[0]?.rate);
+                const ratesMatch = Number.isFinite(lastBillingRate1) && Math.abs(orderRate - lastBillingRate1) < 1e-4;
+                if (ratesMatch) {
+                  const [chartRows] = await db.query(
+                    `SELECT realizationRate
+                     FROM \`realization_rate_chart\`
+                     WHERE STR_TO_DATE(?, '%Y-%m-%d') BETWEEN STR_TO_DATE(dateFrom, '%Y-%m-%d') AND STR_TO_DATE(dateTo, '%Y-%m-%d')
+                     ORDER BY STR_TO_DATE(dateFrom, '%Y-%m-%d') DESC
+                     LIMIT 1`,
+                    [punchDate]
+                  );
+                  const realizationRate = Number(chartRows?.[0]?.realizationRate);
+                  if (Number.isFinite(realizationRate)) {
+                    const [rapcRows] = await db.query(
+                      `SELECT realizationPerKg
+                       FROM \`productions\`
+                       WHERE itemId = ? AND realizationPerKg IS NOT NULL
+                       ORDER BY date DESC
+                       LIMIT 1`,
+                      [itemId]
+                    );
+                    const lastRapc1 = Number(rapcRows?.[0]?.realizationPerKg);
+                    if (Number.isFinite(lastRapc1) && lastRapc1 >= realizationRate) {
+                      data.status = "Pending Scheduling";
+                      data.approvedTimestamp = (/* @__PURE__ */ new Date()).toISOString();
+                      data.approvedEmail = String(data.updatedBy || data.orderBy || "System").trim() || "System";
+                    } else {
+                      data.status = data.status || "Pending PH";
+                    }
+                  } else {
+                    data.status = data.status || "Pending PH";
+                  }
+                } else {
+                  data.status = data.status || "Pending PH";
+                }
+              }
+            }
           } catch (err) {
             console.warn("[DB] Could not auto-generate orderNo:", err.message);
           }
@@ -1559,7 +1679,7 @@ const createHandlers = (tableName) => {
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "orders", "orders_schedule", "material_in", "users", "productions", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach((entity) => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

@@ -72,6 +72,7 @@ import { CanceledOrders } from "./pages/CanceledOrders";
 import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
 import { PlansItems } from "./pages/PlansItems";
 import { PlansProduction } from "./pages/PlansProduction";
+import { PlansLoading } from "./pages/PlansLoading";
 import { SettingsPage } from "./pages/Settings";
 import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
 import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
@@ -201,6 +202,7 @@ export default function App() {
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />
           <Route path="plans/production" element={<PlansProduction />} />
           <Route path="plans/items" element={<PlansItems />} />
+          <Route path="plans/loading" element={<PlansLoading />} />
         </Route>
       </Routes>
     </HashRouter>

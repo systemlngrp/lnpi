@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { 
   LoadingSlip, 
+  LoadingSlipAllocation,
   Truck, 
   DispatchPlan,
   Order,
@@ -19,6 +20,22 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { ExcelExport } from "../components/ExcelExport";
+
+function formatAllocations(line: LoadingSlip["lines"][number]) {
+  if (Array.isArray(line.allocations) && line.allocations.length > 0) {
+    return line.allocations.map((allocation: LoadingSlipAllocation) =>
+      allocation.sourceType === "job"
+        ? `${allocation.jobNo} - ${Number(allocation.qty || 0).toLocaleString()}`
+        : `${allocation.sourceRef} - ${Number(allocation.qty || 0).toLocaleString()}`
+    );
+  }
+
+  if (Array.isArray(line.jobNos) && line.jobNos.length > 0) {
+    return line.jobNos.map((jobNo) => String(jobNo));
+  }
+
+  return [];
+}
 
 export function LoadingMaster() {
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -190,7 +207,7 @@ export function LoadingMaster() {
                         </td>
                         <td className="px-4 py-3 text-sm">{line.orderNo}</td>
                         <td className="px-4 py-3 text-xs">
-                          {(line.jobNos || []).length ? (line.jobNos || []).join(", ") : "-"}
+                          {formatAllocations(line).length ? formatAllocations(line).join(", ") : "-"}
                         </td>
                         <td className="px-4 py-3 text-right text-sm">{line.plannedQty}</td>
                         <td className="px-4 py-3 text-right text-sm font-bold text-indigo-600">{line.loadedQty}</td>
