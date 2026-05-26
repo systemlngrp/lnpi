@@ -18,6 +18,7 @@ import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
+import { normalizeMachineName } from "../lib/productionMachineNames";
 
 type QueueMode = "consumption" | "ffg";
 
@@ -389,13 +390,23 @@ export function ProductionStageQueue({
                     ) : null}
                     {enableIssueAction ? (
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/material-movement/issue?productionId=${production.id}`)}
-                          className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
-                        >
-                          Issue Material
-                        </button>
+                        {processing.some(
+                          (entry) =>
+                            entry.productionId === production.id &&
+                            normalizeMachineName(entry.machineName) === "Corrugation Liner"
+                        ) ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/material-movement/issue?productionId=${production.id}`)}
+                            className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
+                          >
+                            Issue Material
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center rounded border border-amber-700 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-800">
+                            Add Corrugation Liner entry
+                          </span>
+                        )}
                       </td>
                     ) : null}
                   </tr>

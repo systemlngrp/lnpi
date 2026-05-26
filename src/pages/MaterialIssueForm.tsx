@@ -44,6 +44,19 @@ export function MaterialIssueForm() {
   const [selectedReels, setSelectedReels] = useState<Record<string, string[]>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const generalIssuesForDate = useMemo(() => {
+    const selected = String(date || "").trim();
+    if (!selected) return [];
+    return materialIssues
+      .filter((issue) => issue.issueType === "General" && String(issue.date || "").slice(0, 10) === selected)
+      .slice()
+      .sort((a, b) => {
+        const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
+        const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
+        return timeB - timeA;
+      });
+  }, [date, materialIssues]);
+
   const jobOptions = useMemo(
     () =>
       productions
@@ -160,6 +173,11 @@ export function MaterialIssueForm() {
     event.preventDefault();
     if (!date || lines.length === 0) return;
     if (issueType === "Job" && !productionId) return;
+
+    if (issueType === "Job" && generalIssuesForDate.length === 0) {
+      alert("Daily one Other Consumption (General) issue is mandatory. Please create a General issue for this date first.");
+      return;
+    }
 
     for (const line of lines) {
       if (line.isReel) {
@@ -289,6 +307,47 @@ export function MaterialIssueForm() {
           <Field label="Issue Type" required>
             <Select options={issueTypeOptions} value={issueType} onChange={(value) => setIssueType(value === "Job" ? "Job" : "General")} required />
           </Field>
+          <div className="md:col-span-2 rounded border border-black bg-slate-50 p-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="text-sm font-bold text-black">
+                Other Consumption (General) issues on {date}: {generalIssuesForDate.length}
+              </div>
+              {issueType === "Job" && generalIssuesForDate.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIssueType("General");
+                    setProductionId("");
+                    setLines([]);
+                    setSelectedReels({});
+                  }}
+                  className="rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase hover:bg-slate-100"
+                >
+                  Create General Issue
+                </button>
+              ) : null}
+            </div>
+            {generalIssuesForDate.length === 0 ? (
+              <div className="mt-2 text-xs font-semibold text-slate-600">
+                No General issue found for this date. Create one daily (mandatory) before issuing against jobs.
+              </div>
+            ) : (
+              <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                {generalIssuesForDate.slice(0, 6).map((issue) => (
+                  <div key={issue.id} className="rounded border border-black bg-white px-3 py-2 text-xs">
+                    <div className="font-black text-black">{issue.issueNo}</div>
+                    <div className="text-slate-600">{issue.remarks || "-"}</div>
+                    <div className="mt-1 text-[10px] font-semibold text-slate-500">
+                      {issue.updatedBy || "-"} | {new Date(issue.updateTimestamp || issue.date || "").toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+                {generalIssuesForDate.length > 6 ? (
+                  <div className="text-xs font-bold text-slate-600 self-center">+{generalIssuesForDate.length - 6} more</div>
+                ) : null}
+              </div>
+            )}
+          </div>
           {issueType === "Job" ? (
             <Field label="Job No." required>
               <Select options={jobOptions} value={productionId} onChange={setProductionId} required placeholder="Select Job..." />
@@ -383,7 +442,11 @@ export function MaterialIssueForm() {
         </div>
 
         <div className="flex justify-end">
-          <button type="submit" disabled={isSubmitting || lines.length === 0} className="min-w-[150px] bg-indigo-600 text-white px-6 py-3 rounded font-bold hover:bg-indigo-700 disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={isSubmitting || lines.length === 0 || (issueType === "Job" && generalIssuesForDate.length === 0)}
+            className="min-w-[150px] bg-indigo-600 text-white px-6 py-3 rounded font-bold hover:bg-indigo-700 disabled:opacity-50"
+          >
             {isSubmitting ? <Spinner size={22} className="text-white" /> : "Save Issue"}
           </button>
         </div>
