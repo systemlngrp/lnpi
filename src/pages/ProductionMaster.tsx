@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing } from "../types";
+import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Trash2, ClipboardList, CheckCircle } from "lucide-react";
-import { ExcelExport } from "../components/ExcelExport";
 import { useNavigate } from "react-router-dom";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
+import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
+import { normalizeMachineName } from "../lib/productionMachineNames";
 
 export function ProductionMaster() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export function ProductionMaster() {
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
+  const [settings] = useData<Setting>("settings", []);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -33,6 +35,18 @@ export function ProductionMaster() {
     });
     return map;
   }, [processing]);
+
+  const processingMachinesMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    processing.forEach((row) => {
+      const set = map.get(row.productionId) || new Set<string>();
+      set.add(normalizeMachineName(row.machineName));
+      map.set(row.productionId, set);
+    });
+    return map;
+  }, [processing]);
+
+  const mandatoryMachinesByType = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
 
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -120,89 +134,19 @@ export function ProductionMaster() {
     return `${machines} (${totalQty})`;
   };
 
-  const exportData = filteredList.map(p => {
-    const item = items.find(i => i.id === p.itemId);
-    const schedule = schedules.find(s => s.id === p.scheduleId);
-    const order = orders.find(o => o.id === schedule?.orderId);
-    const company = companies.find(c => c.id === order?.companyId);
-    const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-    
-    return {
-      "Job No.": p.transactionNo,
-      "Prod Date": formatDate(p.date),
-      "Order No.": order?.orderNo || "-",
-      "Order Date": order ? formatDate(order.orderDate) : "-",
-      "ERP Code": p.erpCode || "-",
-      "Company": company?.name || "-",
-      "Item Name": item?.name || "Unknown",
-      "Type": item?.typeName || "-",
-      "Planned Qty": p.qty,
-      "UOM": p.uom,
-      "Paper": procTotals.paper,
-      "Liner": procTotals.liner,
-      "Printing": procTotals.printing,
-      "Pasting": procTotals.pasting,
-      "Stitching": procTotals.stitching,
-      "Punching": procTotals.punching,
-      "Gluing": procTotals.gluing,
-      "Status": p.status,
-      "No of Parts": p.noOfParts,
-      "UPS": p.ups,
-      "Length": p.length,
-      "Breadth": p.breadth,
-      "Height": p.height,
-      "L (OD)": item?.lOd || "-",
-      "W (OD)": item?.wOd || "-",
-      "H (OD)": item?.hOd || "-",
-      "Flap": item?.flap || "-",
-      "Deckle Size": item?.deckleSize || "-",
-      "Cutting Size": item?.cuttingSize || "-",
-      "PLY": p.ply,
-      "ID to OD": p.idToOd,
-      "Flute": p.flute,
-      "Top": p.top,
-      "Take up Factor": p.takeUpFactor,
-      "L1": p.l1,
-      "F1": p.f1,
-      "L2": p.l2,
-      "F2": p.f2,
-      "L3": p.l3,
-      "GSM": p.gsm,
-      "Least GSM": erpLeastGsmMap.get(String(p.erpCode || "").trim()) || "-",
-      "Color 1": p.color1 || "-",
-      "Color 2": p.color2 || "-",
-      "Printing Color": p.printingColor || "-",
-      "Paper Required (Nos)": p.paperRequiredNos || "-",
-      "Top Paper Weight (KG)": p.topPaperWeightKg || "-",
-      "Liner Weight (KG)": p.linerWeightKg || "-",
-      "Total Job Weight": p.totalJobWeight || "-",
-      "Line Required (Nos)": p.lineRequiredNos || "-",
-      "Sheet Wt": p.sheetWeight,
-      "Plate Wt": p.plateWeight,
-      "Total Paper Wt": p.totalPaperWeight,
-      "Rate": p.rate,
-      "Total Wt of Set": p.totalWeightOfSet,
-      "Realization/KG": p.realizationPerKg,
-      "Actual Paper Used": p.actualPaperUsed,
-      "Avg Wt": p.avgWeight,
-      "Prod (Sheet)": p.prodFromSheetPlant,
-      "Prod (FFG)": p.prodFromFFG,
-      "Wastage": p.wastage,
-      "Prod (Meter)": p.productionInMeter,
-      "Planned Prod (Meter)": p.plannedProductionInMeter,
-      "ERP Code Reel": p.erpCodeReel,
-      "Processing Info": getProcessingSummary(p.id),
-      "Remarks": p.remarks,
-      "Cancel Date": p.cancelTimestamp ? formatDate(p.cancelTimestamp) : "-",
-      "Cancel Remarks": p.cancelRemarks || "-"
-    };
-  });
+  const getMandatoryStatus = (productionId: string, typeName?: string) => {
+    const required = getRequiredMachinesForType(mandatoryMachinesByType, typeName);
+    if (required.length === 0) return { required, done: 0, missing: [] as string[] };
+
+    const doneSet = processingMachinesMap.get(productionId) || new Set<string>();
+    const missing = required.filter((name) => !doneSet.has(normalizeMachineName(name)));
+    return { required, done: required.length - missing.length, missing };
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Production Master</h2>
-        <ExcelExport data={exportData} fileName="Production_Master" />
       </div>
 
       <TableControls 
@@ -223,6 +167,7 @@ export function ProductionMaster() {
                 const leastGsm = erpLeastGsmMap.get(erp);
                 const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                 const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
+                const mandatory = getMandatoryStatus(p.id, item?.typeName);
                 
                 return (
                   <div key={p.id} className={`${isHighGsm ? "bg-amber-50" : "bg-white"} border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative`}>
@@ -265,6 +210,18 @@ export function ProductionMaster() {
                       <div className="text-[10px] font-bold text-indigo-600 bg-indigo-50 p-1.5 rounded border border-indigo-100">
                         Processing: {getProcessingSummary(p.id)}
                       </div>
+                      {mandatory.required.length > 0 ? (
+                        <div
+                          className={
+                            mandatory.missing.length === 0
+                              ? "text-[10px] font-black text-emerald-700 bg-emerald-50 p-1.5 rounded border border-emerald-200"
+                              : "text-[10px] font-black text-amber-700 bg-amber-50 p-1.5 rounded border border-amber-200"
+                          }
+                        >
+                          Mandatory: {mandatory.done}/{mandatory.required.length}
+                          {mandatory.missing.length ? ` | Missing: ${mandatory.missing.join(", ")}` : ""}
+                        </div>
+                      ) : null}
                       {p.status === 'Cancelled' && p.cancelRemarks && (
                         <div className="text-xs bg-red-50 text-red-700 p-2 border border-red-200 rounded font-medium mt-1">
                           Cancel Reason: {p.cancelRemarks}
@@ -312,6 +269,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prod Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Item Name</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Mandatory</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Planned Qty</th>
 
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Paper</th>
@@ -360,7 +318,7 @@ export function ProductionMaster() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={41} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                  <td colSpan={42} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
                 </tr>
               ) : (
                 filteredList.map((p) => {
@@ -368,6 +326,7 @@ export function ProductionMaster() {
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = items.find(i => i.id === p.itemId);
+                  const mandatory = getMandatoryStatus(p.id, item?.typeName);
                   const erp = String(p.erpCode || "").trim();
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
@@ -382,6 +341,20 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{item?.name || "Unknown"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{item?.typeName || "-"}</td>
+                      <td className="px-4 py-4 text-[11px] text-black border border-black whitespace-nowrap">
+                        {mandatory.required.length === 0 ? (
+                          "-"
+                        ) : mandatory.missing.length === 0 ? (
+                          <span className="font-black text-emerald-700">Done {mandatory.done}/{mandatory.required.length}</span>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="font-black text-amber-700">Pending {mandatory.done}/{mandatory.required.length}</div>
+                            <div className="text-[10px] font-semibold text-slate-600 whitespace-normal max-w-[240px]">
+                              Missing: {mandatory.missing.join(", ")}
+                            </div>
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
 
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.paper.toLocaleString()}</td>
