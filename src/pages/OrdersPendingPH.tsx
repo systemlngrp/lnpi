@@ -13,7 +13,21 @@ export function OrdersPendingPH() {
   const pending = orders.filter(o => !o.status || o.status === 'Pending PH');
 
   const handleApprove = (id: string) => {
-    setOrders(orders.map(o => o.id === id ? { ...o, status: 'Pending Scheduling', updatedBy: 'System User', updateTimestamp: new Date().toISOString() } : o));
+    const now = new Date().toISOString();
+    setOrders(
+      orders.map((o) =>
+        o.id === id
+          ? {
+              ...o,
+              status: "Pending Scheduling",
+              approvedTimestamp: o.approvedTimestamp || now,
+              approvedEmail: o.approvedEmail || "System User",
+              updatedBy: "System User",
+              updateTimestamp: now,
+            }
+          : o
+      )
+    );
   };
 
   const handleCancel = (id: string) => {

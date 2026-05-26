@@ -657,6 +657,19 @@ async function initDb(retries = 5) {
           \`poType\` VARCHAR(50),
           \`remarks\` TEXT,
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending PH',
+          \`approvedTimestamp\` VARCHAR(255),
+          \`approvedEmail\` VARCHAR(255),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`realization_rate_chart\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`dateFrom\` VARCHAR(50) NOT NULL,
+          \`dateTo\` VARCHAR(50) NOT NULL,
+          \`realizationRate\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -1191,6 +1204,8 @@ async function initDb(retries = 5) {
         { table: "companies", column: "deviationAllowed", type: "DECIMAL(10,2)" },
         { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },
+        { table: "orders", column: "approvedTimestamp", type: "VARCHAR(255)" },
+        { table: "orders", column: "approvedEmail", type: "VARCHAR(255)" },
         { table: "productions", column: "phTimestamp", type: "VARCHAR(255)" },
         { table: "productions", column: "phEmailId", type: "VARCHAR(255)" },
         { table: "productions", column: "noOfParts", type: "INT" },
@@ -1594,59 +1609,64 @@ const createHandlers = (tableName: string) => {
             }
 
             // Auto-approve order (skip Pending Salesman Approval) when:
-            // 1) Last 2 realizationPerKg for the item <= current FY target (settings.realizationPerKgTargets)
-            // 2) Last 2 billing rates for the item are the same
-            const currentStatus = String(data.status || "Pending PH");
-            if (currentStatus === "Pending PH" || !currentStatus) {
-              const dateStr = data.orderDate || new Date().toISOString().slice(0, 10);
-              const d = new Date(dateStr);
-              let fyStart = d.getFullYear();
-              const month = d.getMonth() + 1;
-              if (month < 4) fyStart = fyStart - 1;
-              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
-
-              const [settingRows] = await db.query(`SELECT realizationPerKgTargets FROM \`settings\` LIMIT 1`);
-              const realizationTargetsRaw = (settingRows as any[])?.[0]?.realizationPerKgTargets;
-              let targetForFy: number | null = null;
-              if (realizationTargetsRaw) {
-                try {
-                  const parsed = JSON.parse(realizationTargetsRaw);
-                  if (Array.isArray(parsed)) {
-                    const match = parsed.find((row) => String(row?.year || "").trim() === fyLabel);
-                    const value = Number(match?.value);
-                    if (Number.isFinite(value) && value > 0) targetForFy = value;
-                  }
-                } catch {
-                  targetForFy = null;
-                }
-              }
-
+            // 1) Order Rate == Last Billing Rate 1 (latest invoice rate for same item)
+            // 2) Punch Date (orderDate) falls into a Realization Rate Chart range
+            // 3) Last RAPC 1 (latest productions.realizationPerKg for same item) >= Realization Rate (from chart)
+            // If auto-approved: fill approvedTimestamp + approvedEmail
+            const currentStatus = String(data.status || "Pending PH").trim();
+            const alreadyApproved = hasWorkflowValue(data.approvedTimestamp) || hasWorkflowValue(data.approvedEmail);
+            if (!alreadyApproved && (currentStatus === "Pending PH" || !currentStatus)) {
               const itemId = String(data.itemId || "").trim();
-              if (itemId && targetForFy != null) {
-                const [realizationRows] = await db.query(
-                  `SELECT realizationPerKg, date FROM \`productions\` WHERE itemId = ? AND realizationPerKg IS NOT NULL ORDER BY date DESC LIMIT 2`,
-                  [itemId]
-                );
-                const lastTwoRealizations = (realizationRows as any[]).map((row) => Number(row.realizationPerKg)).filter((n) => Number.isFinite(n));
+              const orderRate = Number(data.rate);
+              const punchDate = String(data.orderDate || "").trim() || new Date().toISOString().slice(0, 10);
 
-                const [rateRows] = await db.query(
-                  `SELECT ili.rate, inv.date
+              if (itemId && Number.isFinite(orderRate) && punchDate) {
+                const [billingRows] = await db.query(
+                  `SELECT ili.rate
                    FROM \`invoice_line_items\` ili
                    JOIN \`invoices\` inv ON inv.id = ili.invoiceId
                    WHERE ili.itemId = ?
                    ORDER BY inv.date DESC, inv.id DESC
-                   LIMIT 2`,
+                   LIMIT 1`,
                   [itemId]
                 );
-                const lastTwoRates = (rateRows as any[]).map((row) => Number(row.rate)).filter((n) => Number.isFinite(n));
+                const lastBillingRate1 = Number((billingRows as any[])?.[0]?.rate);
 
-                const realizationOk =
-                  lastTwoRealizations.length === 2 && lastTwoRealizations.every((val) => val <= (targetForFy as number));
-                const ratesOk =
-                  lastTwoRates.length === 2 && Math.abs(lastTwoRates[0] - lastTwoRates[1]) < 0.0001;
+                const ratesMatch =
+                  Number.isFinite(lastBillingRate1) && Math.abs(orderRate - lastBillingRate1) < 0.0001;
 
-                if (realizationOk && ratesOk) {
-                  data.status = "Pending Scheduling";
+                if (ratesMatch) {
+                  const [chartRows] = await db.query(
+                    `SELECT realizationRate
+                     FROM \`realization_rate_chart\`
+                     WHERE STR_TO_DATE(?, '%Y-%m-%d') BETWEEN STR_TO_DATE(dateFrom, '%Y-%m-%d') AND STR_TO_DATE(dateTo, '%Y-%m-%d')
+                     ORDER BY STR_TO_DATE(dateFrom, '%Y-%m-%d') DESC
+                     LIMIT 1`,
+                    [punchDate]
+                  );
+                  const realizationRate = Number((chartRows as any[])?.[0]?.realizationRate);
+
+                  if (Number.isFinite(realizationRate)) {
+                    const [rapcRows] = await db.query(
+                      `SELECT realizationPerKg
+                       FROM \`productions\`
+                       WHERE itemId = ? AND realizationPerKg IS NOT NULL
+                       ORDER BY date DESC
+                       LIMIT 1`,
+                      [itemId]
+                    );
+                    const lastRapc1 = Number((rapcRows as any[])?.[0]?.realizationPerKg);
+
+                    if (Number.isFinite(lastRapc1) && lastRapc1 >= realizationRate) {
+                      data.status = "Pending Scheduling";
+                      data.approvedTimestamp = new Date().toISOString();
+                      data.approvedEmail = String(data.updatedBy || data.orderBy || "System").trim() || "System";
+                    } else {
+                      data.status = data.status || "Pending PH";
+                    }
+                  } else {
+                    data.status = data.status || "Pending PH";
+                  }
                 } else {
                   data.status = data.status || "Pending PH";
                 }
@@ -1804,7 +1824,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

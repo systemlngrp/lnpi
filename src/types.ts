@@ -380,6 +380,8 @@ export interface Order {
   poType?: POType;
   remarks?: string;
   status?: "Pending PH" | "Approved" | "Pending Scheduling" | "Scheduled" | "Cancelled";
+  approvedTimestamp?: string;
+  approvedEmail?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
