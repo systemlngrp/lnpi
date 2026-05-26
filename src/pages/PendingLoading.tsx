@@ -353,7 +353,7 @@ export function PendingLoading() {
       {/* Loading Modal */}
       {loadingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-2xl border-2 border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <div className="bg-white w-full max-w-5xl max-h-[92vh] border-2 border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b-2 border-black">
               <div className="flex items-center gap-3">
                 <TruckIcon size={20} />
@@ -364,7 +364,7 @@ export function PendingLoading() {
               </button>
             </div>
             
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 border border-black rounded">
                 <div>
                   <div className="text-[10px] text-slate-500 uppercase font-bold">Item</div>
