@@ -216,9 +216,6 @@ export function EfficiencyReport() {
             </div>
             <div>
               <h2 className="text-xl font-black tracking-tight text-slate-900">Efficiency Report</h2>
-              <p className="text-sm font-medium text-slate-600">
-                Efficiency% = Qty ÷ (Max Output/Hr × Shift Hours)
-              </p>
             </div>
           </div>
 
@@ -227,8 +224,8 @@ export function EfficiencyReport() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-8">
-          <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
+        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-12">
+          <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-4">
             <Search size={16} className="text-slate-400" />
             <input
               value={searchTerm}
@@ -238,7 +235,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">From</div>
             <input
               type="date"
@@ -248,7 +245,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">To</div>
             <input
               type="date"
@@ -258,8 +255,8 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Day hrs</div>
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Day hrs</div>
             <input
               type="number"
               value={dayShiftHoursInput}
@@ -270,8 +267,8 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Night hrs</div>
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Night hrs</div>
             <input
               type="number"
               value={nightShiftHoursInput}
@@ -282,7 +279,7 @@ export function EfficiencyReport() {
             />
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-3">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">View</div>
             <select
               value={viewMode}
@@ -295,7 +292,7 @@ export function EfficiencyReport() {
             </select>
           </div>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-3">
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Shift</div>
             <select
               value={shift}
