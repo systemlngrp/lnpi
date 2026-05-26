@@ -5,6 +5,7 @@ import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } fro
 import { Spinner } from "../components/Spinner";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
+import { getFinancialYear } from "../lib/serial";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -79,6 +80,22 @@ const DEFAULT_ITEM_TYPES = [
   "VERTICAL PLATE",
 ];
 
+const MONTH_OPTIONS = [
+  "All",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
 export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [machines] = useData<Machine>("machines", []);
@@ -115,26 +132,43 @@ export function SettingsPage() {
     setMandatoryDraft(parseMandatoryMachinesByType(currentSetting));
   }, [currentSetting?.mandatoryMachinesByType]);
 
+  const fyOptions = useMemo(() => {
+    const now = new Date();
+    const baseStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const toFy = (startYear: number) => `${String(startYear % 100).padStart(2, "0")}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+    return Array.from({ length: 8 }, (_, i) => toFy(baseStartYear - 5 + i));
+  }, []);
+
   const realizationTargets = useMemo(() => {
     const raw = currentSetting?.realizationPerKgTargets;
-    if (!raw) return [] as { year: string; value: number }[];
+    if (!raw) return [] as { fy: string; month: string; value: number }[];
     try {
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
       return parsed
-        .filter((row) => row && typeof row.year === "string")
-        .map((row) => ({ year: String(row.year).trim(), value: Number(row.value || 0) }))
-        .filter((row) => row.year.length > 0)
-        .sort((a, b) => a.year.localeCompare(b.year));
+        .filter((row) => row && (typeof row.fy === "string" || typeof row.year === "string"))
+        .map((row) => ({
+          fy: String((row.fy ?? row.year) || "").trim(),
+          month: String(row.month || "All").trim() || "All",
+          value: Number(row.value || 0),
+        }))
+        .filter((row) => row.fy.length > 0)
+        .sort((a, b) => a.fy.localeCompare(b.fy, undefined, { sensitivity: "base" }) || a.month.localeCompare(b.month));
     } catch {
       return [];
     }
   }, [currentSetting?.realizationPerKgTargets]);
 
-  const [realizationDraft, setRealizationDraft] = useState<{ year: string; value: number | "" }[]>([]);
+  const [realizationDraft, setRealizationDraft] = useState<{ fy: string; month: string; value: number | "" }[]>([]);
 
   useEffect(() => {
-    setRealizationDraft(realizationTargets.map((row) => ({ year: row.year, value: Number(row.value || 0) })));
+    setRealizationDraft(
+      realizationTargets.map((row) => ({
+        fy: row.fy,
+        month: MONTH_OPTIONS.includes(row.month) ? row.month : "All",
+        value: Number(row.value || 0),
+      }))
+    );
   }, [realizationTargets]);
   const selectedReelFormula = currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value;
   const selectedReelOption = useMemo(
@@ -302,7 +336,8 @@ export function SettingsPage() {
             <table className="min-w-full divide-y divide-black border-collapse">
               <thead className="bg-slate-100">
                 <tr className="divide-x divide-black">
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Year</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">FY</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Month</th>
                   <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Target Real/KG</th>
                   <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th>
                 </tr>
@@ -310,25 +345,46 @@ export function SettingsPage() {
               <tbody className="bg-white divide-y divide-black">
                 {realizationDraft.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-4 py-4 text-sm text-slate-500 text-center">
+                    <td colSpan={4} className="px-4 py-4 text-sm text-slate-500 text-center">
                       No realization targets configured.
                     </td>
                   </tr>
                 ) : (
                   realizationDraft.map((row, idx) => (
-                    <tr key={`${row.year}-${idx}`} className="divide-x divide-black">
+                    <tr key={`${row.fy}-${row.month}-${idx}`} className="divide-x divide-black">
                       <td className="px-4 py-2 border border-black">
-                        <input
-                          value={row.year}
+                        <select
+                          value={row.fy}
+                          onChange={(e) =>
+                            setRealizationDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, fy: e.target.value } : r)))
+                          }
+                          disabled={loading || saving}
+                          className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
+                        >
+                          {fyOptions.map((fy) => (
+                            <option key={fy} value={fy}>
+                              {fy}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-4 py-2 border border-black">
+                        <select
+                          value={row.month}
                           onChange={(e) =>
                             setRealizationDraft((prev) =>
-                              prev.map((r, i) => (i === idx ? { ...r, year: e.target.value } : r))
+                              prev.map((r, i) => (i === idx ? { ...r, month: e.target.value } : r))
                             )
                           }
                           disabled={loading || saving}
-                          placeholder="e.g. 2026-27"
-                          className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none"
-                        />
+                          className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
+                        >
+                          {MONTH_OPTIONS.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-4 py-2 border border-black text-right">
                         <input
@@ -367,18 +423,27 @@ export function SettingsPage() {
           <div className="flex flex-wrap gap-3 items-center justify-between">
             <button
               type="button"
-              onClick={() => setRealizationDraft((prev) => [...prev, { year: "", value: "" }])}
+              onClick={() =>
+                setRealizationDraft((prev) => [
+                  ...prev,
+                  { fy: getFinancialYear(new Date().toISOString()), month: "All", value: "" },
+                ])
+              }
               disabled={loading || saving}
               className="bg-white text-black border-2 border-black px-4 py-2 rounded font-bold hover:bg-slate-50 transition shadow-sm"
             >
-              Add Year
+              Add FY/Month
             </button>
             <button
               type="button"
               onClick={() => {
                 const cleaned = realizationDraft
-                  .map((row) => ({ year: String(row.year || "").trim(), value: Number(row.value || 0) }))
-                  .filter((row) => row.year.length > 0);
+                  .map((row) => ({
+                    fy: String(row.fy || "").trim(),
+                    month: MONTH_OPTIONS.includes(String(row.month || "").trim()) ? String(row.month || "").trim() : "All",
+                    value: Number(row.value || 0),
+                  }))
+                  .filter((row) => row.fy.length > 0);
                 void handleChange({ realizationPerKgTargets: JSON.stringify(cleaned) });
               }}
               disabled={loading || saving}

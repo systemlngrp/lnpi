@@ -90,9 +90,44 @@ export function ReelIssueReturnForm() {
     );
   };
 
+  const getDraftIssuedReelsForMaterial = (materialId: string) => {
+    if (!productionId) return [];
+    const selectedIds = new Set(
+      issueLines
+        .filter((line) => line.materialId === materialId)
+        .flatMap((line) => selectedIssueReels[line.id] || [])
+    );
+
+    if (selectedIds.size === 0) return [];
+
+    const slipById = new Map(packingSlips.map((slip) => [slip.id, slip]));
+    return Array.from(selectedIds)
+      .map((id) => slipById.get(id))
+      .filter((slip): slip is MaterialInPackingSlip => Boolean(slip))
+      .map((slip) => ({
+        id: `draft-${slip.id}`,
+        materialIssueId: "draft",
+        materialIssueLineId: "draft",
+        materialId,
+        packingSlipId: slip.id,
+        ourReelNo: slip.ourReelNo,
+        weightKg: Number(slip.weightKg || 0),
+        productionId,
+        jobNo: selectedProduction?.transactionNo || "",
+      }));
+  };
+
   const getReturnableReels = (materialId: string) => {
     if (!productionId) return [];
-    return getReturnableReelLinesForJob(materialId, productionId, materialIssueReelLines, materialReturnReelLines);
+    const persisted = getReturnableReelLinesForJob(materialId, productionId, materialIssueReelLines, materialReturnReelLines);
+    const drafts = getDraftIssuedReelsForMaterial(materialId);
+    const seen = new Set<string>();
+    const merged = [...persisted, ...drafts].filter((line) => {
+      if (seen.has(line.packingSlipId)) return false;
+      seen.add(line.packingSlipId);
+      return true;
+    });
+    return merged;
   };
 
   const addIssueLine = () => setIssueLines((prev) => [...prev, createEmptyReelLine()]);
