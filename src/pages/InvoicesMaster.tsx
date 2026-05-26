@@ -39,6 +39,9 @@ export function InvoicesMaster() {
     setExpandedRows(next);
   };
 
+  const getRoundOff = (invoice: Invoice) => Number(invoice.roundOff || 0);
+  const getGrandTotal = (invoice: Invoice) => Number(invoice.totalAfterGst || 0) + getRoundOff(invoice);
+
   const processedInvoices = useMemo(() => {
     return invoices.map(inv => {
       const company = companies.find(c => c.id === inv.companyId);
@@ -47,6 +50,8 @@ export function InvoicesMaster() {
         const item = items.find(i => i.id === li.itemId);
         return item?.name || "Unknown";
       });
+      const roundOff = getRoundOff(inv);
+      const grandTotal = Number(inv.totalAfterGst || 0) + roundOff;
       
       return {
         ...inv,
@@ -54,6 +59,8 @@ export function InvoicesMaster() {
         address: company?.address || "",
         gstNo: company?.gstNo || "N/A",
         itemSummary: Array.from(new Set(invItems)).join(", "),
+        roundOff,
+        grandTotal,
         details: invLines.map(li => ({
           ...li,
           itemName: items.find(i => i.id === li.itemId)?.name || "Unknown",
@@ -81,8 +88,6 @@ export function InvoicesMaster() {
         };
       });
   }, [selectedInvoice, lineItems, items, slips]);
-
-  const getRoundOff = (invoice: Invoice) => Number(invoice.roundOff || 0);
 
   return (
     <div className="space-y-6">
@@ -149,7 +154,7 @@ export function InvoicesMaster() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-700">
-                    {inv.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {getGrandTotal(inv).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                     <div className="flex justify-end gap-2">
@@ -232,12 +237,12 @@ export function InvoicesMaster() {
                   <div className="text-[10px] text-slate-500 uppercase font-bold">Status</div>
                   <div className="font-bold text-emerald-600 uppercase text-xs">Generated</div>
                 </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">Grand Total</div>
-                  <div className="font-bold text-indigo-700 text-lg">
-                    {selectedInvoice.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
+	                <div>
+	                  <div className="text-[10px] text-slate-500 uppercase font-bold">Grand Total</div>
+	                  <div className="font-bold text-indigo-700 text-lg">
+	                    {getGrandTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+	                  </div>
+	                </div>
               </div>
 
               <div className="overflow-x-auto border border-black">
@@ -287,19 +292,25 @@ export function InvoicesMaster() {
                       <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">IGST</td>
                       <td className="px-4 py-2 text-right text-[10px] text-slate-500">{selectedInvoice.igst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
-                    <tr className="divide-x divide-black bg-indigo-600 text-white">
-                      <td colSpan={5} className="px-4 py-3 text-right text-sm uppercase tracking-wider">Total Amount After GST</td>
-                      <td className="px-4 py-3 text-right text-lg font-bold">
-                        {selectedInvoice.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                    <tr className="divide-x divide-black">
-                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Round Off</td>
-                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{getRoundOff(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+	                    <tr className="divide-x divide-black bg-indigo-600 text-white">
+	                      <td colSpan={5} className="px-4 py-3 text-right text-sm uppercase tracking-wider">Total Amount After GST</td>
+	                      <td className="px-4 py-3 text-right text-lg font-bold">
+	                        {selectedInvoice.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+	                      </td>
+	                    </tr>
+	                    <tr className="divide-x divide-black">
+	                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Round Off</td>
+	                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{getRoundOff(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+	                    </tr>
+	                    <tr className="divide-x divide-black bg-emerald-700 text-white border-t-2 border-black">
+	                      <td colSpan={5} className="px-4 py-3 text-right text-sm uppercase tracking-wider">Grand Total</td>
+	                      <td className="px-4 py-3 text-right text-lg font-black">
+	                        {getGrandTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+	                      </td>
+	                    </tr>
+	                  </tfoot>
+	                </table>
+	              </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <button 

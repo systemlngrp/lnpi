@@ -181,10 +181,15 @@ export function ProductionMaster() {
                               {p.status}
                           </span>
                       </div>
-                      <div className="text-xs text-slate-500">Prod Date: {formatDate(p.date)}</div>
-                      {order && (
-                        <>
-                          <div className="text-xs font-bold text-slate-700">Order: {order.orderNo} ({formatDate(order.orderDate)})</div>
+	                      <div className="text-xs text-slate-500">Prod Date: {formatDate(p.date)}</div>
+	                      {p.status === "Completed" ? (
+	                        <div className="text-xs text-slate-500">
+	                          Closed: {formatDate(p.tallyTimestamp || p.updateTimestamp || "") || "-"} {p.updatedBy ? `| ${p.updatedBy}` : ""}
+	                        </div>
+	                      ) : null}
+	                      {order && (
+	                        <>
+	                          <div className="text-xs font-bold text-slate-700">Order: {order.orderNo} ({formatDate(order.orderDate)})</div>
                           <div className="text-xs font-bold text-slate-700">ERP Code: {p.erpCode || "-"}</div>
                           <div className="text-xs font-bold text-slate-700">Company: {company?.name || "Unknown"}</div>
                         </>
@@ -310,17 +315,19 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Wastage</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Real/KG</th>
                 
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Processing Status</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
-                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black bg-white">
-              {filteredList.length === 0 ? (
-                <tr>
-                  <td colSpan={42} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
-                </tr>
-              ) : (
+	                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Processing Status</th>
+	                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
+	                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job Closer</th>
+	                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close Date</th>
+	                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
+	              </tr>
+	            </thead>
+	            <tbody className="divide-y divide-black bg-white">
+	              {filteredList.length === 0 ? (
+	                <tr>
+	                  <td colSpan={44} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+	                </tr>
+	              ) : (
                 filteredList.map((p) => {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
@@ -397,11 +404,11 @@ export function ProductionMaster() {
                         {Number(p.realizationPerKg || 0) ? Number(p.realizationPerKg || 0).toFixed(2) : "-"}
                       </td>
 
-                      <td className="px-4 py-4 text-xs text-indigo-600 font-bold border border-black max-w-[200px] truncate" title={getProcessingSummary(p.id)}>
-                        {getProcessingSummary(p.id)}
-                      </td>
+	                      <td className="px-4 py-4 text-xs text-indigo-600 font-bold border border-black max-w-[200px] truncate" title={getProcessingSummary(p.id)}>
+	                        {getProcessingSummary(p.id)}
+	                      </td>
 
-                      <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
+	                      <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
                           p.status === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
                           p.status === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
@@ -412,12 +419,18 @@ export function ProductionMaster() {
                         {p.status === 'Cancelled' && p.cancelRemarks && (
                           <div className="text-[9px] text-red-600 font-bold mt-1 max-w-[120px] truncate" title={p.cancelRemarks}>
                             {p.cancelRemarks}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-3">
-                          <button 
+	                          </div>
+	                        )}
+	                      </td>
+	                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
+	                        {p.status === "Completed" ? p.updatedBy || "-" : "-"}
+	                      </td>
+	                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
+	                        {p.status === "Completed" ? formatDate(p.tallyTimestamp || p.updateTimestamp || "") || "-" : "-"}
+	                      </td>
+	                      <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
+	                        <div className="flex items-center justify-center gap-3">
+	                          <button 
                             onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
                             title="Report Processing"
                             className="text-indigo-600 hover:text-indigo-900 transition-all p-1"
