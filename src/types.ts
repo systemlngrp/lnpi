@@ -500,14 +500,16 @@ export interface Production {
   month?: string;
   idToOd17?: number;
 
-  phTimestamp?: string;
-  phEmailId?: string;
-  tallyTimestamp?: string;
-  cancelTimestamp?: string;
-  cancelEmailId?: string;
-  cancelRemarks?: string;
-  updatedBy?: string;
-  updateTimestamp?: string;
+	  phTimestamp?: string;
+	  phEmailId?: string;
+	  tallyTimestamp?: string;
+	  closeBy?: string;
+	  closeDate?: string;
+	  cancelTimestamp?: string;
+	  cancelEmailId?: string;
+	  cancelRemarks?: string;
+	  updatedBy?: string;
+	  updateTimestamp?: string;
 }
 
 export interface Consumption {

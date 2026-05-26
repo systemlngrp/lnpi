@@ -758,8 +758,8 @@ async function initDb(retries = 5) {
       `);
 
       await db.query(`
-        CREATE TABLE IF NOT EXISTS \`productions\` (
-          \`id\` VARCHAR(36) PRIMARY KEY,
+	        CREATE TABLE IF NOT EXISTS \`productions\` (
+	          \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`scheduleId\` VARCHAR(36),
@@ -819,15 +819,17 @@ async function initDb(retries = 5) {
           \`year\` INT,
           \`month\` VARCHAR(50),
           \`idToOd17\` DECIMAL(15,2),
-          \`phTimestamp\` VARCHAR(255),
-          \`phEmailId\` VARCHAR(255),
-          \`tallyTimestamp\` VARCHAR(255),
-          \`cancelTimestamp\` VARCHAR(255),
-          \`cancelEmailId\` VARCHAR(255),
-          \`cancelRemarks\` TEXT,
-          \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
-        )
+	          \`phTimestamp\` VARCHAR(255),
+	          \`phEmailId\` VARCHAR(255),
+	          \`tallyTimestamp\` VARCHAR(255),
+	          \`closeBy\` VARCHAR(255),
+	          \`closeDate\` VARCHAR(50),
+	          \`cancelTimestamp\` VARCHAR(255),
+	          \`cancelEmailId\` VARCHAR(255),
+	          \`cancelRemarks\` TEXT,
+	          \`updatedBy\` VARCHAR(255),
+	          \`updateTimestamp\` VARCHAR(255)
+	        )
       `);
 
       await db.query(`
@@ -1173,10 +1175,12 @@ async function initDb(retries = 5) {
         { table: "productions", column: "uom", type: "VARCHAR(50) NOT NULL" },
         { table: "productions", column: "remarks", type: "TEXT" },
         { table: "productions", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
-        { table: "productions", column: "tallyTimestamp", type: "VARCHAR(255)" },
-        { table: "productions", column: "cancelTimestamp", type: "VARCHAR(255)" },
-        { table: "productions", column: "cancelEmailId", type: "VARCHAR(255)" },
-        { table: "productions", column: "cancelRemarks", type: "TEXT" },
+	        { table: "productions", column: "tallyTimestamp", type: "VARCHAR(255)" },
+	        { table: "productions", column: "closeBy", type: "VARCHAR(255)" },
+	        { table: "productions", column: "closeDate", type: "VARCHAR(50)" },
+	        { table: "productions", column: "cancelTimestamp", type: "VARCHAR(255)" },
+	        { table: "productions", column: "cancelEmailId", type: "VARCHAR(255)" },
+	        { table: "productions", column: "cancelRemarks", type: "TEXT" },
         { table: "consumptions", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "consumptions", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "consumptions", column: "itemId", type: "VARCHAR(36) NOT NULL" },

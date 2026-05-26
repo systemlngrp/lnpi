@@ -23,6 +23,22 @@ export function ProductionMaster() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
 
+  const updateCloseMeta = async (id: string, patch: Partial<Pick<Production, "closeBy" | "closeDate">>) => {
+    const timestamp = new Date().toISOString();
+    await setProductions((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              ...patch,
+              updateTimestamp: timestamp,
+              updatedBy: "System User",
+            }
+          : p
+      )
+    );
+  };
+
   const processingTotalsMap = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
     processing.forEach((p) => {
@@ -91,6 +107,7 @@ export function ProductionMaster() {
     }
 
     const timestamp = new Date().toISOString();
+    const closeDate = new Date().toISOString().split("T")[0];
     try {
       await setProductions((prev) =>
         prev.map((p) =>
@@ -99,6 +116,8 @@ export function ProductionMaster() {
                 ...p,
                 status: "Completed",
                 tallyTimestamp: p.tallyTimestamp || timestamp,
+                closeBy: p.closeBy || "System User",
+                closeDate: p.closeDate || closeDate,
                 updateTimestamp: timestamp,
                 updatedBy: "System User",
               }
@@ -184,7 +203,7 @@ export function ProductionMaster() {
 	                      <div className="text-xs text-slate-500">Prod Date: {formatDate(p.date)}</div>
 	                      {p.status === "Completed" ? (
 	                        <div className="text-xs text-slate-500">
-	                          Closed: {formatDate(p.tallyTimestamp || p.updateTimestamp || "") || "-"} {p.updatedBy ? `| ${p.updatedBy}` : ""}
+	                          Closed: {formatDate(p.closeDate || p.tallyTimestamp || p.updateTimestamp || "") || "-"} {p.closeBy ? `| ${p.closeBy}` : ""}
 	                        </div>
 	                      ) : null}
 	                      {order && (
@@ -423,10 +442,22 @@ export function ProductionMaster() {
 	                        )}
 	                      </td>
 	                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-	                        {p.status === "Completed" ? p.updatedBy || "-" : "-"}
+	                        <input
+	                          value={p.closeBy || ""}
+	                          onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeBy: e.target.value } : row)))}
+	                          onBlur={(e) => void updateCloseMeta(p.id, { closeBy: e.target.value.trim() })}
+	                          className="w-32 border border-black rounded px-2 py-1 text-xs"
+	                          placeholder="-"
+	                        />
 	                      </td>
 	                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-	                        {p.status === "Completed" ? formatDate(p.tallyTimestamp || p.updateTimestamp || "") || "-" : "-"}
+	                        <input
+	                          type="date"
+	                          value={(p.closeDate || "").split("T")[0]}
+	                          onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeDate: e.target.value } : row)))}
+	                          onBlur={(e) => void updateCloseMeta(p.id, { closeDate: e.target.value })}
+	                          className="w-36 border border-black rounded px-2 py-1 text-xs"
+	                        />
 	                      </td>
 	                      <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
 	                        <div className="flex items-center justify-center gap-3">
