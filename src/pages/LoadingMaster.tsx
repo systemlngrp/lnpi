@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { 
   LoadingSlip, 
@@ -14,10 +14,8 @@ import {
   Search, 
   FileText, 
   Truck as TruckIcon, 
-  Calendar, 
-  Package,
+  ChevronDown,
   ChevronRight,
-  X,
   Download
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
@@ -25,33 +23,19 @@ import { formatDate } from "../lib/serial";
 import { ExcelExport } from "../components/ExcelExport";
 import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
 
-function formatAllocations(line: LoadingSlip["lines"][number]) {
-  if (Array.isArray(line.allocations) && line.allocations.length > 0) {
-    return line.allocations.map((allocation: LoadingSlipAllocation) =>
-      allocation.sourceType === "job"
-        ? `${allocation.jobNo} - ${Number(allocation.qty || 0).toLocaleString()}`
-        : `${allocation.sourceRef} - ${Number(allocation.qty || 0).toLocaleString()}`
-    );
-  }
-
-  if (Array.isArray(line.jobNos) && line.jobNos.length > 0) {
-    return line.jobNos.map((jobNo) => String(jobNo));
-  }
-
-  return [];
-}
-
 export function LoadingMaster() {
-  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [trucks] = useData<Truck>("trucks", []);
-  const [plans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const [items] = useData<Item>("items", []);
   const [companies] = useData<Company>("companies", []);
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSlip, setSelectedSlip] = useState<LoadingSlip | null>(null);
+  const [expandedSlipIds, setExpandedSlipIds] = useState<Set<string>>(new Set());
+  const [editingSlipIds, setEditingSlipIds] = useState<Set<string>>(new Set());
+  const [draftBySlipId, setDraftBySlipId] = useState<Record<string, LoadingSlip>>({});
 
   const getTruckNo = (id: string) => trucks.find(t => t.id === id)?.truckNo || "Unknown";
 
@@ -69,20 +53,152 @@ export function LoadingMaster() {
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [loadingSlips, trucks, searchTerm]);
 
-  const slipDetails = useMemo(() => {
-    if (!selectedSlip) return [];
-    return selectedSlip.lines.map(line => {
-      const plan = plans.find(p => p.id === line.dispatchPlanId);
-      const order = orders.find(o => o.id === plan?.orderId);
-      const item = items.find(i => i.id === order?.itemId);
+  const getSlipLines = (slip: LoadingSlip) =>
+    slip.lines.map((line) => {
+      const plan = plans.find((p) => p.id === line.dispatchPlanId);
+      const order = orders.find((o) => o.id === plan?.orderId);
+      const item = items.find((i) => i.id === order?.itemId);
+      const company = companies.find((c) => c.id === order?.companyId);
+      const plannedQty = Number(plan?.plannedQty || 0);
+      const cancelledQty = Number(plan?.canceledQty || 0);
+      const maxAllowed = Math.max(0, plannedQty - cancelledQty);
       return {
         ...line,
         orderNo: order?.orderNo || "N/A",
         itemName: item?.name || "Unknown",
-        plannedQty: plan?.plannedQty || 0
+        companyName: company?.name || "Unknown",
+        plannedQty,
+        maxAllowed,
       };
     });
-  }, [selectedSlip, plans, orders, items]);
+
+  const toggleSlip = (id: string) => {
+    setExpandedSlipIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const startEdit = (slip: LoadingSlip) => {
+    if (slip.invoiceId) {
+      alert("Cannot edit a slip after invoice is created.");
+      return;
+    }
+    if (slip.status === "Cancelled") {
+      alert("Cancelled slip cannot be edited.");
+      return;
+    }
+    setEditingSlipIds((prev) => new Set(prev).add(slip.id));
+    setDraftBySlipId((prev) => ({ ...prev, [slip.id]: JSON.parse(JSON.stringify(slip)) }));
+    setExpandedSlipIds((prev) => new Set(prev).add(slip.id));
+  };
+
+  const cancelEdit = (slipId: string) => {
+    setEditingSlipIds((prev) => {
+      const next = new Set(prev);
+      next.delete(slipId);
+      return next;
+    });
+    setDraftBySlipId((prev) => {
+      const next = { ...prev };
+      delete next[slipId];
+      return next;
+    });
+  };
+
+  const getAllocationTotal = (allocations?: LoadingSlipAllocation[]) =>
+    (allocations || []).reduce((sum, a) => sum + Number(a.qty || 0), 0);
+
+  const validateSlipDraft = (draft: LoadingSlip) => {
+    const errors: string[] = [];
+    const lines = getSlipLines(draft);
+    lines.forEach((line, index) => {
+      const loadedQty = Number(line.loadedQty || 0);
+      if (loadedQty < 0) errors.push(`Line ${index + 1}: Loaded qty cannot be negative.`);
+      if (loadedQty > line.maxAllowed) errors.push(`Line ${index + 1}: Loaded qty cannot exceed ${line.maxAllowed}.`);
+      const allocTotal = getAllocationTotal(line.allocations);
+      if (Math.abs(allocTotal - loadedQty) > 0.0001) errors.push(`Line ${index + 1}: Allocations must equal Loaded qty.`);
+      (line.allocations || []).forEach((a) => {
+        if (Number(a.qty || 0) < 0) errors.push(`Line ${index + 1}: Allocation qty cannot be negative.`);
+      });
+    });
+    return errors;
+  };
+
+  const saveEdit = async (slipId: string) => {
+    const original = loadingSlips.find((s) => s.id === slipId);
+    const draft = draftBySlipId[slipId];
+    if (!original || !draft) return;
+    if (original.invoiceId) {
+      alert("Cannot edit a slip after invoice is created.");
+      return;
+    }
+    if (original.status === "Cancelled") {
+      alert("Cancelled slip cannot be edited.");
+      return;
+    }
+
+    const errors = validateSlipDraft(draft);
+    if (errors.length > 0) {
+      alert(errors[0]);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const originalByPlan = new Map(original.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
+    const draftByPlan = new Map(draft.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
+    const allPlanIds = new Set<string>([...originalByPlan.keys(), ...draftByPlan.keys()]);
+
+    await setPlans((prev) =>
+      prev.map((plan) => {
+        if (!allPlanIds.has(plan.id)) return plan;
+        const delta = (draftByPlan.get(plan.id) || 0) - (originalByPlan.get(plan.id) || 0);
+        if (Math.abs(delta) < 0.0001) return plan;
+        return { ...plan, loadedQty: Math.max(0, Number(plan.loadedQty || 0) + delta), updateTimestamp: now, updatedBy: "System User" };
+      })
+    );
+
+    await setLoadingSlips((prev) =>
+      prev.map((s) =>
+        s.id === slipId ? { ...draft, updatedBy: "System User", updateTimestamp: now } : s
+      )
+    );
+
+    cancelEdit(slipId);
+  };
+
+  const cancelSlip = async (slip: LoadingSlip) => {
+    if (slip.invoiceId) {
+      alert("Cannot cancel a slip after invoice is created.");
+      return;
+    }
+    if (slip.status === "Cancelled") return;
+
+    const reason = window.prompt("Cancel reason (optional)") || "";
+    const confirmed = window.confirm("Cancel this loading slip? This will reverse loaded qty from dispatch plans.");
+    if (!confirmed) return;
+
+    const now = new Date().toISOString();
+    const byPlan = new Map(slip.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
+
+    await setPlans((prev) =>
+      prev.map((plan) => {
+        if (!byPlan.has(plan.id)) return plan;
+        const qty = byPlan.get(plan.id) || 0;
+        return { ...plan, loadedQty: Math.max(0, Number(plan.loadedQty || 0) - qty), updateTimestamp: now, updatedBy: "System User" };
+      })
+    );
+
+    await setLoadingSlips((prev) =>
+      prev.map((row) =>
+        row.id === slip.id
+          ? { ...row, status: "Cancelled", cancelReason: reason, cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
+          : row
+      )
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -125,6 +241,19 @@ export function LoadingMaster() {
                   <div className="flex items-center">
                     <FileText size={16} className="text-indigo-600 mr-2" />
                     <span className="font-bold text-sm">{slip.slipNo}</span>
+                    {slip.status === "Cancelled" ? (
+                      <span className="ml-2 rounded border border-red-700 bg-red-100 px-2 py-0.5 text-[10px] font-black uppercase text-red-800">
+                        Cancelled
+                      </span>
+                    ) : slip.invoiceId ? (
+                      <span className="ml-2 rounded border border-emerald-700 bg-emerald-100 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-800">
+                        Invoiced
+                      </span>
+                    ) : (
+                      <span className="ml-2 rounded border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase text-slate-700">
+                        Not Invoiced
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -160,101 +289,171 @@ export function LoadingMaster() {
                       <Download size={14} /> PDF
                     </button>
                     <button 
-                      onClick={() => setSelectedSlip(slip)}
+                      type="button"
+                      onClick={() => toggleSlip(slip.id)}
                       className="text-indigo-600 hover:text-indigo-900 font-bold uppercase flex items-center justify-end gap-1"
                     >
-                      Details <ChevronRight size={16} />
+                      {expandedSlipIds.has(slip.id) ? "Hide" : "Details"}{" "}
+                      {expandedSlipIds.has(slip.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     </button>
                   </div>
                 </td>
               </tr>
             ))}
+            {processedSlips.map((slip) => {
+              const isExpanded = expandedSlipIds.has(slip.id);
+              if (!isExpanded) return null;
+              const draft = draftBySlipId[slip.id] || slip;
+              const isEditing = editingSlipIds.has(slip.id);
+              const lines = getSlipLines(draft);
+              return (
+                <tr key={`${slip.id}-details`} className="bg-white">
+                  <td colSpan={5} className="px-6 pb-6 pt-2 border-t border-black">
+                    <div className="rounded border border-black overflow-hidden">
+                      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3 border-b border-black">
+                        <div className="text-sm font-bold text-black">
+                          Slip {slip.slipNo} - Truck {slip.truckNo} - Date {formatDate(slip.date)}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {!slip.invoiceId && slip.status !== "Cancelled" ? (
+                            isEditing ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void saveEdit(slip.id)}
+                                  className="px-3 py-1.5 text-xs font-bold border border-black rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => cancelEdit(slip.id)}
+                                  className="px-3 py-1.5 text-xs font-bold border border-black rounded bg-white hover:bg-slate-100"
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => startEdit(slip)}
+                                  className="px-3 py-1.5 text-xs font-bold border border-black rounded bg-white hover:bg-slate-100"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void cancelSlip(slip)}
+                                  className="px-3 py-1.5 text-xs font-bold border border-red-700 rounded bg-red-100 text-red-800 hover:bg-red-200"
+                                >
+                                  Cancel Slip
+                                </button>
+                              </>
+                            )
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-black border-collapse">
+                          <thead className="bg-slate-100 divide-x divide-black">
+                            <tr className="divide-x divide-black">
+                              <th className="px-4 py-2 text-left text-xs font-bold uppercase border border-black">Company</th>
+                              <th className="px-4 py-2 text-left text-xs font-bold uppercase border border-black">Order No</th>
+                              <th className="px-4 py-2 text-left text-xs font-bold uppercase border border-black">Item</th>
+                              <th className="px-4 py-2 text-right text-xs font-bold uppercase border border-black">Planned</th>
+                              <th className="px-4 py-2 text-right text-xs font-bold uppercase border border-black">Loaded</th>
+                              <th className="px-4 py-2 text-left text-xs font-bold uppercase border border-black">Allocations</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-black bg-white">
+                            {lines.map((line, idx) => {
+                              const originalLine = slip.lines.find((l) => l.dispatchPlanId === line.dispatchPlanId);
+                              const loadedValue = Number(line.loadedQty || 0);
+                              const allocTotal = getAllocationTotal(line.allocations);
+                              const balanced = Math.abs(allocTotal - loadedValue) < 0.0001;
+                              return (
+                                <tr key={`${slip.id}-${idx}`} className="divide-x divide-black">
+                                  <td className="px-4 py-3 text-xs border border-black">{line.companyName}</td>
+                                  <td className="px-4 py-3 text-xs border border-black">{line.orderNo}</td>
+                                  <td className="px-4 py-3 text-xs border border-black">{line.itemName}</td>
+                                  <td className="px-4 py-3 text-xs text-right border border-black">{Number(line.plannedQty || 0).toLocaleString()}</td>
+                                  <td className="px-4 py-3 text-xs text-right border border-black">
+                                    {isEditing ? (
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={line.maxAllowed}
+                                        value={loadedValue}
+                                        onChange={(e) => {
+                                          const next = e.target.value === "" ? 0 : Math.max(0, Math.min(Number(e.target.value), line.maxAllowed));
+                                          setDraftBySlipId((prev) => {
+                                            const draftSlip = prev[slip.id];
+                                            if (!draftSlip) return prev;
+                                            const nextSlip: LoadingSlip = JSON.parse(JSON.stringify(draftSlip));
+                                            const lineToUpdate = nextSlip.lines.find((l) => l.dispatchPlanId === line.dispatchPlanId);
+                                            if (lineToUpdate) lineToUpdate.loadedQty = next;
+                                            return { ...prev, [slip.id]: nextSlip };
+                                          });
+                                        }}
+                                        className="w-24 rounded border border-black px-2 py-1 text-xs text-right"
+                                      />
+                                    ) : (
+                                      <span className="font-bold text-indigo-700">{loadedValue.toLocaleString()}</span>
+                                    )}
+                                    {!balanced ? <div className="text-[10px] font-bold text-red-600">Alloc != Loaded</div> : null}
+                                  </td>
+                                  <td className="px-4 py-3 text-xs border border-black">
+                                    {Array.isArray(line.allocations) && line.allocations.length > 0 ? (
+                                      <div className="space-y-1">
+                                        {line.allocations.map((a, aidx) => (
+                                          <div key={aidx} className="flex items-center gap-2">
+                                            <span className="font-bold">
+                                              {a.sourceType === "job" ? a.jobNo : (a as any).sourceRef}
+                                            </span>
+                                            {isEditing ? (
+                                              <input
+                                                type="number"
+                                                min={0}
+                                                value={Number(a.qty || 0)}
+                                                onChange={(e) => {
+                                                  const nextQty = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value));
+                                                  setDraftBySlipId((prev) => {
+                                                    const draftSlip = prev[slip.id];
+                                                    if (!draftSlip) return prev;
+                                                    const nextSlip: LoadingSlip = JSON.parse(JSON.stringify(draftSlip));
+                                                    const lineToUpdate = nextSlip.lines.find((l) => l.dispatchPlanId === line.dispatchPlanId);
+                                                    if (lineToUpdate?.allocations?.[aidx]) lineToUpdate.allocations[aidx].qty = nextQty as any;
+                                                    return { ...prev, [slip.id]: nextSlip };
+                                                  });
+                                                }}
+                                                className="w-20 rounded border border-black px-2 py-1 text-xs text-right"
+                                              />
+                                            ) : (
+                                              <span className="text-slate-700">{Number(a.qty || 0).toLocaleString()}</span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-500">-</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-
-      {/* Slip Details Modal */}
-      {selectedSlip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-3xl border-2 border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b-2 border-black">
-              <div className="flex items-center gap-3">
-                <FileText size={20} />
-                <h3 className="font-bold uppercase tracking-tight">Loading Slip: {selectedSlip.slipNo}</h3>
-              </div>
-              <button onClick={() => setSelectedSlip(null)} className="hover:text-slate-300 transition">
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-6 bg-slate-50 p-4 border border-black rounded">
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">Truck</div>
-                  <div className="font-bold flex items-center gap-2">
-                    <TruckIcon size={14} className="text-indigo-600" />
-                    {getTruckNo(selectedSlip.truckId)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">Date</div>
-                  <div className="font-bold flex items-center gap-2">
-                    <Calendar size={14} className="text-indigo-600" />
-                    {formatDate(selectedSlip.date)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">Total Quantity</div>
-                  <div className="font-bold text-indigo-600 text-lg">
-                    {selectedSlip.lines.reduce((sum, l) => sum + l.loadedQty, 0).toLocaleString()}
-                  </div>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto border border-black rounded">
-                <table className="min-w-full divide-y divide-black">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase">Item Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase">Order No</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold uppercase">Jobs</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold uppercase">Planned</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold uppercase">Loaded</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {slipDetails.map((line, idx) => (
-                      <tr key={idx}>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Package size={14} className="text-slate-400" />
-                            <span className="text-sm font-bold uppercase">{line.itemName}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm">{line.orderNo}</td>
-                        <td className="px-4 py-3 text-xs">
-                          {formatAllocations(line).length ? formatAllocations(line).join(", ") : "-"}
-                        </td>
-                        <td className="px-4 py-3 text-right text-sm">{line.plannedQty}</td>
-                        <td className="px-4 py-3 text-right text-sm font-bold text-indigo-600">{line.loadedQty}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button 
-                  onClick={() => setSelectedSlip(null)}
-                  className="px-8 py-2 bg-slate-900 text-white border-2 border-black font-bold uppercase text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-black transition active:shadow-none active:translate-x-1 active:translate-y-1"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

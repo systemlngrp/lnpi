@@ -596,6 +596,10 @@ export interface LoadingSlip {
   date: string;
   truckId: string;
   lines: LoadingSlipLine[];
+  status?: "Active" | "Cancelled";
+  cancelReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
   invoiceId?: string;
   updatedBy?: string;
   updateTimestamp?: string;

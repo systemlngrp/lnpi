@@ -92,6 +92,7 @@ export function PendingLoading() {
   const existingLoadedByJobId = useMemo(() => {
     const map = new Map<string, number>();
     loadingSlips.forEach((slip) => {
+      if (slip.status === "Cancelled") return;
       slip.lines.forEach((line) => {
         getLoadingSlipJobAllocations(line).forEach((allocation) => {
           map.set(allocation.jobId, (map.get(allocation.jobId) || 0) + allocation.qty);

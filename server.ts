@@ -1197,6 +1197,10 @@ async function initDb(retries = 5) {
           \`truckId\` VARCHAR(36) NOT NULL,
           \`lines\` JSON NOT NULL,
           \`invoiceId\` VARCHAR(36),
+          \`status\` VARCHAR(20) DEFAULT 'Active',
+          \`cancelReason\` TEXT,
+          \`cancelledAt\` VARCHAR(255),
+          \`cancelledBy\` VARCHAR(255),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -1685,6 +1689,10 @@ async function initDb(retries = 5) {
         { table: "invoice_line_items", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoice_line_items", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoice_line_items", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "loading_slips", column: "status", type: "VARCHAR(20) DEFAULT 'Active'" },
+        { table: "loading_slips", column: "cancelReason", type: "TEXT" },
+        { table: "loading_slips", column: "cancelledAt", type: "VARCHAR(255)" },
+        { table: "loading_slips", column: "cancelledBy", type: "VARCHAR(255)" },
         { table: "settings", column: "reelAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "flapAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "cuttingSizeAsPerCalculation", type: "TEXT" },

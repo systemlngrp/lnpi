@@ -50,6 +50,7 @@ export function DeliveryBook() {
       let invoiced = 0;
 
       loadingSlips.forEach(ls => {
+        if ((ls as any).status === "Cancelled") return;
         ls.lines.forEach(line => {
           if (planIds.has(line.dispatchPlanId)) {
             const qty = Number(line.loadedQty) || 0;

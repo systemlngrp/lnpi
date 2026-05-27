@@ -54,6 +54,7 @@ export function PendingDispatchPlanning() {
   const loadedQtyByDispatchPlanId = useMemo(() => {
     const map = new Map<string, number>();
     loadingSlips.forEach((slip) => {
+      if (slip.status === "Cancelled") return;
       slip.lines.forEach((line) => {
         const planId = String(line.dispatchPlanId || "").trim();
         if (!planId) return;
@@ -67,6 +68,7 @@ export function PendingDispatchPlanning() {
     const map = new Map<string, number>();
     const planById = new Map(dispatchPlans.map((p) => [p.id, p]));
     loadingSlips.forEach((slip) => {
+      if (slip.status === "Cancelled") return;
       slip.lines.forEach((line) => {
         const plan = planById.get(String(line.dispatchPlanId || ""));
         if (!plan) return;

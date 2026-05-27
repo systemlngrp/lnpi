@@ -117,6 +117,7 @@ export async function downloadLoadingSlipPdf({
     ["Date", formatDate(slip.date)],
     ["Truck No", truckNo],
     ["Total Qty", slip.lines.reduce((sum, l) => sum + Number(l.loadedQty || 0), 0).toLocaleString()],
+    ["Status", slip.status === "Cancelled" ? "Cancelled" : "Active"],
   ];
 
   details.forEach(([label, value], index) => {

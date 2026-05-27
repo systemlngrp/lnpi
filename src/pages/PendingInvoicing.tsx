@@ -71,7 +71,7 @@ export function PendingInvoicing() {
   };
 
   const groupedData = useMemo(() => {
-    const uninvoiced = loadingSlips.filter(s => !s.invoiceId);
+    const uninvoiced = loadingSlips.filter((s) => !s.invoiceId && s.status !== "Cancelled");
     
     const companyMap = new Map<string, GroupedLoading>();
 
