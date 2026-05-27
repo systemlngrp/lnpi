@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../hooks/useData";
 import {
   DispatchPlan,
@@ -96,6 +96,7 @@ export function PendingLoading() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedTrucks, setExpandedTrucks] = useState<Set<string>>(new Set());
+  const didInitExpand = useRef(false);
   const [loadingModal, setLoadingModal] = useState<LoadingModalState | null>(null);
   const [loadedQuantities, setLoadedQuantities] = useState<Record<string, number>>({});
   const [jobAllocations, setJobAllocations] = useState<Record<string, JobAllocationDraft[]>>({});
@@ -166,6 +167,13 @@ export function PendingLoading() {
 
     return Array.from(truckMap.values()).sort((a, b) => a.truckNo.localeCompare(b.truckNo));
   }, [companies, items, orders, plans, searchTerm, trucks]);
+
+  useEffect(() => {
+    if (didInitExpand.current) return;
+    if (groupedData.length === 0) return;
+    didInitExpand.current = true;
+    setExpandedTrucks(new Set(groupedData.map((group) => group.truckId)));
+  }, [groupedData]);
 
   const currentAdjustmentByJobId = useMemo(() => {
     const map = new Map<string, number>();
