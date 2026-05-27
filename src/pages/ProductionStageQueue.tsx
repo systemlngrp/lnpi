@@ -53,6 +53,7 @@ export function ProductionStageQueue({
   enableIssueAction = false,
   enableCloseAction = false,
   hideStatusColumn = false,
+  hideProdFfgColumn = false,
   issuePrereqMachineName,
 }: {
   title: string;
@@ -62,6 +63,7 @@ export function ProductionStageQueue({
   enableIssueAction?: boolean;
   enableCloseAction?: boolean;
   hideStatusColumn?: boolean;
+  hideProdFfgColumn?: boolean;
   issuePrereqMachineName?: string;
 }) {
   const navigate = useNavigate();
@@ -347,11 +349,13 @@ export function ProductionStageQueue({
                     Actual Paper Used <SortIcon column="actualPaperUsed" />
                   </button>
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
-                  <button type="button" onClick={() => toggleSort("prodFfg")} className="inline-flex items-center gap-1">
-                    Prod (FFG) <SortIcon column="prodFfg" />
-                  </button>
-                </th>
+                {!hideProdFfgColumn ? (
+                  <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                    <button type="button" onClick={() => toggleSort("prodFfg")} className="inline-flex items-center gap-1">
+                      Prod (FFG) <SortIcon column="prodFfg" />
+                    </button>
+                  </th>
+                ) : null}
                 {!hideStatusColumn ? (
                   <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
                     <button type="button" onClick={() => toggleSort("status")} className="inline-flex items-center gap-1">
@@ -371,7 +375,7 @@ export function ProductionStageQueue({
                 <tr>
                   <td
                     colSpan={
-                      (10 - (hideStatusColumn ? 1 : 0)) +
+                      (10 - (hideStatusColumn ? 1 : 0) - (hideProdFfgColumn ? 1 : 0)) +
                       (issuePrereqMachineName ? 1 : 0) +
                       (enableCloseAction ? 1 : 0) +
                       (enableFfgEditing ? 1 : 0) +
@@ -398,7 +402,9 @@ export function ProductionStageQueue({
                     ) : null}
                     <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{production.qty} {production.uom}</td>
                     <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{actualPaperUsed > 0 ? actualPaperUsed : "-"}</td>
-                    <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{production.prodFromFFG || "-"}</td>
+                    {!hideProdFfgColumn ? (
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{production.prodFromFFG || "-"}</td>
+                    ) : null}
                     {!hideStatusColumn ? (
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{production.status}</td>
                     ) : null}
@@ -531,6 +537,8 @@ export function ProductionPendingFFG() {
       emptyMessage={CONFIG.ffg.empty}
       predicate={isProductionPendingFFG}
       enableFfgEditing
+      hideStatusColumn
+      hideProdFfgColumn
     />
   );
 }
