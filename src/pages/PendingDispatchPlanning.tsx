@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { OrderSchedule, Order, Company, Item, Truck, DispatchPlan } from "../types";
+import { OrderSchedule, Order, Company, Item, Truck, DispatchPlan, LoadingSlip, Production } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { ArrowUpDown, Save } from "lucide-react";
@@ -14,6 +14,8 @@ export function PendingDispatchPlanning() {
   const [items] = useData<Item>("items", []);
   const [trucks] = useData<Truck>("trucks", []);
   const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [productions] = useData<Production>("productions", []);
 
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -29,6 +31,98 @@ export function PendingDispatchPlanning() {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(23, 59, 59, 999);
+
+  const isFfgFilled = (value: unknown) => {
+    if (value === null || value === undefined) return false;
+    const asString = String(value).trim();
+    if (!asString) return false;
+    const asNumber = Number(asString);
+    return Number.isFinite(asNumber) ? asNumber > 0 : true;
+  };
+
+  const itemIdByScheduleId = useMemo(() => {
+    const scheduleToOrderId = new Map(schedules.map((s) => [s.id, s.orderId]));
+    const orderToItemId = new Map(orders.map((o) => [o.id, o.itemId]));
+    const map = new Map<string, string>();
+    schedules.forEach((s) => {
+      const itemId = orderToItemId.get(scheduleToOrderId.get(s.id) || "") || "";
+      map.set(s.id, itemId);
+    });
+    return map;
+  }, [orders, schedules]);
+
+  const loadedQtyByDispatchPlanId = useMemo(() => {
+    const map = new Map<string, number>();
+    loadingSlips.forEach((slip) => {
+      slip.lines.forEach((line) => {
+        const planId = String(line.dispatchPlanId || "").trim();
+        if (!planId) return;
+        map.set(planId, (map.get(planId) || 0) + Number(line.loadedQty || 0));
+      });
+    });
+    return map;
+  }, [loadingSlips]);
+
+  const loadedQtyByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    const planById = new Map(dispatchPlans.map((p) => [p.id, p]));
+    loadingSlips.forEach((slip) => {
+      slip.lines.forEach((line) => {
+        const plan = planById.get(String(line.dispatchPlanId || ""));
+        if (!plan) return;
+        const itemId = itemIdByScheduleId.get(plan.scheduleId) || "";
+        if (!itemId) return;
+        map.set(itemId, (map.get(itemId) || 0) + Number(line.loadedQty || 0));
+      });
+    });
+    return map;
+  }, [dispatchPlans, itemIdByScheduleId, loadingSlips]);
+
+  const pendingProductionPlanQtyByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    productions.forEach((p) => {
+      if (!p.itemId) return;
+      if (p.status === "Cancelled" || p.cancelTimestamp) return;
+      if (isFfgFilled(p.prodFromFFG)) return;
+      map.set(p.itemId, (map.get(p.itemId) || 0) + Number(p.qty || 0));
+    });
+    return map;
+  }, [productions]);
+
+  const reservedDispatchPlanQtyByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    dispatchPlans.forEach((plan) => {
+      if (!plan.scheduleId) return;
+      const itemId = itemIdByScheduleId.get(plan.scheduleId) || "";
+      if (!itemId) return;
+
+      const effectivePlanned = Math.max(0, Number(plan.plannedQty || 0) - Number(plan.canceledQty || 0));
+      const loaded = Math.max(0, Number(loadedQtyByDispatchPlanId.get(plan.id) || 0));
+      const remaining = Math.max(0, effectivePlanned - loaded);
+      if (remaining <= 0) return;
+
+      map.set(itemId, (map.get(itemId) || 0) + remaining);
+    });
+    return map;
+  }, [dispatchPlans, itemIdByScheduleId, loadedQtyByDispatchPlanId]);
+
+  const availableToPlanByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    items.forEach((item) => {
+      const opening = Number((item as any).opening || 0);
+      const receipt = Number((item as any).receipt || 0);
+      const production = Number((item as any).production || 0);
+      const baseStock = opening + receipt + production;
+
+      const loaded = Number(loadedQtyByItemId.get(item.id) || 0);
+      const dispatchBalance = baseStock - loaded;
+      const pendingProduction = Number(pendingProductionPlanQtyByItemId.get(item.id) || 0);
+      const reserved = Number(reservedDispatchPlanQtyByItemId.get(item.id) || 0);
+
+      map.set(item.id, Math.max(0, dispatchBalance + pendingProduction - reserved));
+    });
+    return map;
+  }, [items, loadedQtyByItemId, pendingProductionPlanQtyByItemId, reservedDispatchPlanQtyByItemId]);
 
   // Filter schedules that are pending and within time range
   const basePendingSchedules = useMemo(() => {
@@ -172,6 +266,40 @@ export function PendingDispatchPlanning() {
     const missingTruck = Array.from(selectedIds).some(id => !rowTrucks[id]);
     if (missingTruck) {
       alert("Please select a Truck for all selected orders.");
+      return;
+    }
+
+    // Cross-row validation: for each item, total planned in this submission must not exceed availability.
+    const plannedNowByItemId = new Map<string, number>();
+    const scheduleBalanceById = new Map<string, number>();
+
+    Array.from(selectedIds).forEach((id) => {
+      const schedule = schedules.find((s) => s.id === id);
+      if (!schedule) return;
+      const alreadyPlanned = dispatchPlans
+        .filter((plan) => plan.scheduleId === id)
+        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
+      const scheduleBalance = Math.max(0, Number(schedule.qty || 0) - alreadyPlanned);
+      scheduleBalanceById.set(id, scheduleBalance);
+
+      // derived from schedule -> order -> item
+      const itemId = itemIdByScheduleId.get(id) || "";
+      if (!itemId) return;
+      const plannedQty = rowPlannedQty[id] !== undefined ? rowPlannedQty[id] : scheduleBalance;
+      plannedNowByItemId.set(itemId, (plannedNowByItemId.get(itemId) || 0) + Number(plannedQty || 0));
+    });
+
+    const violations: string[] = [];
+    plannedNowByItemId.forEach((plannedNow, itemId) => {
+      const available = Number(availableToPlanByItemId.get(itemId) || 0);
+      if (plannedNow > available + 1e-9) {
+        const itemName = items.find((i) => i.id === itemId)?.name || "Unknown Item";
+        violations.push(`${itemName}: Trying to plan ${plannedNow.toLocaleString()} but only ${available.toLocaleString()} is available.`);
+      }
+    });
+
+    if (violations.length > 0) {
+      alert(`Dispatch planning limit exceeded:\n\n${violations.join("\n")}`);
       return;
     }
 
