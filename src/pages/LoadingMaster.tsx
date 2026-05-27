@@ -6,7 +6,9 @@ import {
   Truck, 
   DispatchPlan,
   Order,
-  Item
+  Item,
+  Company,
+  Setting
 } from "../types";
 import { 
   Search, 
@@ -15,11 +17,13 @@ import {
   Calendar, 
   Package,
   ChevronRight,
-  X
+  X,
+  Download
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { ExcelExport } from "../components/ExcelExport";
+import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
 
 function formatAllocations(line: LoadingSlip["lines"][number]) {
   if (Array.isArray(line.allocations) && line.allocations.length > 0) {
@@ -43,6 +47,8 @@ export function LoadingMaster() {
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const [items] = useData<Item>("items", []);
+  const [companies] = useData<Company>("companies", []);
+  const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSlip, setSelectedSlip] = useState<LoadingSlip | null>(null);
@@ -134,12 +140,32 @@ export function LoadingMaster() {
                   {slip.totalQty.toLocaleString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                  <button 
-                    onClick={() => setSelectedSlip(slip)}
-                    className="text-indigo-600 hover:text-indigo-900 font-bold uppercase flex items-center justify-end gap-1 ml-auto"
-                  >
-                    Details <ChevronRight size={16} />
-                  </button>
+                  <div className="flex justify-end items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadLoadingSlipPdf({
+                          slip,
+                          setting: settings[0],
+                          trucks,
+                          plans,
+                          orders,
+                          items,
+                          companies,
+                        })
+                      }
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
+                      title="Download PDF"
+                    >
+                      <Download size={14} /> PDF
+                    </button>
+                    <button 
+                      onClick={() => setSelectedSlip(slip)}
+                      className="text-indigo-600 hover:text-indigo-900 font-bold uppercase flex items-center justify-end gap-1"
+                    >
+                      Details <ChevronRight size={16} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
