@@ -469,7 +469,16 @@ export function ProductionStageQueue({
                             return (
                               <button
                                 type="button"
-                                onClick={() => navigate(`/material-movement/issue?productionId=${production.id}`)}
+                                onClick={() => {
+                                  const date = String(production.date || "").slice(0, 10);
+                                  const params = new URLSearchParams({
+                                    productionId: production.id,
+                                    date,
+                                    lockDate: "1",
+                                    lockJob: "1",
+                                  });
+                                  navigate(`/material-movement/reel-issue-return?${params.toString()}`);
+                                }}
                                 className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
                               >
                                 Issue Material

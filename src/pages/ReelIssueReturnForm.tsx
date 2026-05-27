@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { useSearchParams } from "react-router-dom";
 import {
   Material,
   MaterialInPackingSlip,
@@ -27,7 +28,12 @@ function createEmptyReelLine(): ReelLineDraft {
   return { id: crypto.randomUUID(), materialId: "" };
 }
 
+function normalizeDate(value?: string | null) {
+  return String(value || "").slice(0, 10);
+}
+
 export function ReelIssueReturnForm() {
+  const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [productions, setProductions] = useData<Production>("productions", []);
@@ -40,8 +46,13 @@ export function ReelIssueReturnForm() {
   const [materialReturnLines, setMaterialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [materialReturnReelLines, setMaterialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
 
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [productionId, setProductionId] = useState("");
+  const requestedDate = normalizeDate(searchParams.get("date"));
+  const requestedProductionId = String(searchParams.get("productionId") || "").trim();
+  const lockDate = searchParams.get("lockDate") === "1";
+  const lockJob = searchParams.get("lockJob") === "1";
+
+  const [date, setDate] = useState(() => requestedDate || new Date().toISOString().split("T")[0]);
+  const [productionId, setProductionId] = useState(() => requestedProductionId);
   const [remarks, setRemarks] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -467,6 +478,8 @@ export function ReelIssueReturnForm() {
       setReturnLines([createEmptyReelLine()]);
       setSelectedIssueReels({});
       setReturnQtyDrafts({});
+      if (!lockDate) setDate(new Date().toISOString().split("T")[0]);
+      if (!lockJob) setProductionId("");
       alert("Saved reel issue/return successfully.");
     } catch (error) {
       console.error("Failed to save reel issue/return:", error);
@@ -483,10 +496,24 @@ export function ReelIssueReturnForm() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Date" required>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full border-2 border-black rounded p-2" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+              disabled={lockDate}
+              className="w-full border-2 border-black rounded p-2 disabled:bg-slate-50 disabled:opacity-80"
+            />
           </Field>
           <Field label="Job No." required>
-            <Select options={jobOptions} value={productionId} onChange={setProductionId} required placeholder="Select Job..." />
+            <Select
+              options={jobOptions}
+              value={productionId}
+              onChange={setProductionId}
+              required
+              placeholder="Select Job..."
+              disabled={lockJob}
+            />
           </Field>
           <Field label="Remarks" className="md:col-span-2">
             <input value={remarks} onChange={(e) => setRemarks(e.target.value)} className="w-full border-2 border-black rounded p-2" />
