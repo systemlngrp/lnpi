@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../hooks/useData";
 import { 
   LoadingSlip, 
@@ -48,6 +48,7 @@ export function PendingInvoicing() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+  const didInitExpand = useRef(false);
   const [billingMode, setBillingMode] = useState<string | null>(null); // companyId
   const [selectedSlips, setSelectedSlips] = useState<Set<string>>(new Set());
   
@@ -113,6 +114,13 @@ export function PendingInvoicing() {
       .filter(g => g.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
       .sort((a, b) => a.companyName.localeCompare(b.companyName));
   }, [loadingSlips, companies, plans, orders, trucks, items, searchTerm]);
+
+  useEffect(() => {
+    if (didInitExpand.current) return;
+    if (groupedData.length === 0) return;
+    didInitExpand.current = true;
+    setExpandedCompanies(new Set(groupedData.map((group) => group.companyId)));
+  }, [groupedData]);
 
   const handleStartBilling = (companyId: string, slips: any[]) => {
     setBillingMode(companyId);
