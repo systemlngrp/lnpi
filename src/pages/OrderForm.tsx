@@ -124,6 +124,10 @@ export function OrderForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !itemId || !qty) return;
+    if (!orderBy) {
+      alert("Order By is mandatory.");
+      return;
+    }
 
     if (!/^[0-9]+$/.test(qty)) {
       alert("Qty must be a whole number (no decimals) or enter integer value.");
@@ -164,10 +168,14 @@ export function OrderForm() {
 
   // Auto-fill ERP when item selected
   const handleItemChange = (id: string) => {
+    if (id === itemId) return;
     setItemId(id);
     const it = items.find(i => i.id === id);
     if (it && typeof it.erp !== 'undefined') setErpCode((it.erp || "").toString());
     else setErpCode("");
+    if (it && typeof it.rate !== "undefined" && it.rate !== null) {
+      setRate(String(it.rate));
+    }
   };
 
   // Auto-open edit when ?edit=<id> in URL (used by Plant Head edit link)
@@ -249,8 +257,8 @@ export function OrderForm() {
             </div>
 
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Order By</label>
-              <Select value={orderBy} onChange={setOrderBy} options={userOptions} placeholder="Select user..." />
+              <label className="font-bold text-black">Order By <span className="text-red-500">*</span></label>
+              <Select value={orderBy} onChange={setOrderBy} options={userOptions} placeholder="Select user..." required />
             </div>
 
             <div className="flex flex-col space-y-1 md:col-span-3">

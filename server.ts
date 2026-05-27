@@ -46,6 +46,87 @@ app.post("/api/upload-artwork", async (req, res) => {
 // Database connection pool
 let pool: mysql.Pool | null = null;
 
+type DeleteReference = { table: string; column: string; label: string };
+const DELETE_REFERENCES: Record<string, DeleteReference[]> = {
+  companies: [
+    { table: "orders", column: "companyId", label: "Orders" },
+    { table: "invoices", column: "companyId", label: "Invoices" },
+  ],
+  items: [
+    { table: "orders", column: "itemId", label: "Orders" },
+    { table: "invoice_line_items", column: "itemId", label: "Invoice Line Items" },
+    { table: "productions", column: "itemId", label: "Productions" },
+    { table: "sample_requests", column: "itemId", label: "Sample Requests" },
+  ],
+  orders: [{ table: "orders_schedule", column: "orderId", label: "Order Schedule" }],
+  orders_schedule: [
+    { table: "productions", column: "scheduleId", label: "Productions" },
+    { table: "dispatch_plans", column: "scheduleId", label: "Dispatch Plans" },
+  ],
+  indents: [
+    { table: "indent_lines", column: "indentId", label: "Indent Lines" },
+    { table: "purchase_orders", column: "indentId", label: "Purchase Orders" },
+  ],
+  indent_lines: [{ table: "purchase_order_lines", column: "indentLineId", label: "Purchase Order Lines" }],
+  purchase_orders: [{ table: "purchase_order_lines", column: "purchaseOrderId", label: "Purchase Order Lines" }],
+  purchase_order_lines: [],
+  suppliers: [
+    { table: "purchase_orders", column: "supplierId", label: "Purchase Orders" },
+    { table: "material_in", column: "supplierId", label: "Material In" },
+    { table: "gate_entries", column: "supplierId", label: "Gate Entries" },
+  ],
+  gate_entries: [
+    { table: "gate_entry_photos", column: "gateEntryId", label: "Gate Entry Photos" },
+    { table: "material_in", column: "gateEntryId", label: "Material In" },
+  ],
+  materials: [
+    { table: "indent_lines", column: "materialId", label: "Indent Lines" },
+    { table: "purchase_order_lines", column: "materialId", label: "Purchase Order Lines" },
+    { table: "material_issue_lines", column: "materialId", label: "Material Issue Lines" },
+    { table: "material_return_lines", column: "materialId", label: "Material Return Lines" },
+    { table: "material_in_packing_slips", column: "materialId", label: "Material In Packing Slips" },
+  ],
+  material_groups: [{ table: "materials", column: "materialGroupId", label: "Materials" }],
+  item_groups: [{ table: "items", column: "groupId", label: "Items" }],
+  loading_slips: [{ table: "invoice_line_items", column: "loadingSlipId", label: "Invoice Line Items" }],
+  invoices: [
+    { table: "invoice_line_items", column: "invoiceId", label: "Invoice Line Items" },
+    { table: "loading_slips", column: "invoiceId", label: "Loading Slips" },
+  ],
+  productions: [
+    { table: "production_processing", column: "productionId", label: "Production Processing" },
+    { table: "material_issues", column: "productionId", label: "Material Issues" },
+    { table: "material_returns", column: "productionId", label: "Material Returns" },
+    { table: "consumptions", column: "productionId", label: "Consumptions" },
+  ],
+  production_processing: [],
+  material_issues: [
+    { table: "material_issue_lines", column: "materialIssueId", label: "Material Issue Lines" },
+    { table: "material_issue_reel_lines", column: "materialIssueId", label: "Material Issue Reel Lines" },
+  ],
+  material_returns: [
+    { table: "material_return_lines", column: "materialReturnId", label: "Material Return Lines" },
+    { table: "material_return_reel_lines", column: "materialReturnId", label: "Material Return Reel Lines" },
+  ],
+  material_issue_lines: [{ table: "material_issue_reel_lines", column: "materialIssueLineId", label: "Material Issue Reel Lines" }],
+  material_return_lines: [{ table: "material_return_reel_lines", column: "materialReturnLineId", label: "Material Return Reel Lines" }],
+};
+
+async function getDeleteBlockers(db: mysql.Pool, tableName: string, id: string) {
+  const refs = DELETE_REFERENCES[tableName] || [];
+  const blockers: { label: string; count: number }[] = [];
+  for (const ref of refs) {
+    try {
+      const [rows] = await db.query(`SELECT COUNT(*) as cnt FROM \`${ref.table}\` WHERE \`${ref.column}\` = ?`, [id]);
+      const count = Number((rows as any[])?.[0]?.cnt || 0);
+      if (count > 0) blockers.push({ label: ref.label, count });
+    } catch (err) {
+      console.warn(`[DB] Delete reference check failed: ${tableName} -> ${ref.table}.${ref.column}`, (err as Error).message);
+    }
+  }
+  return blockers;
+}
+
 function hasWorkflowValue(value: any) {
   if (value === null || value === undefined) return false;
   const asString = String(value).trim();
@@ -1874,23 +1955,13 @@ const createHandlers = (tableName: string) => {
       const { id } = req.params;
       try {
         console.log(`[DB] Deleting from ${tableName}`, { id });
-        if (tableName === "indents") {
-          await db.query("DELETE FROM `indent_lines` WHERE `indentId` = ?", [id]);
+
+        const blockers = await getDeleteBlockers(db, tableName, id);
+        if (blockers.length) {
+          const details = blockers.map((b) => `${b.label} (${b.count})`).join(", ");
+          return res.status(409).json({ error: `Cannot delete ${tableName}: used in ${details}.` });
         }
-        if (tableName === "purchase_orders") {
-          await db.query("DELETE FROM `purchase_order_lines` WHERE `purchaseOrderId` = ?", [id]);
-        }
-        if (tableName === "gate_entries") {
-          await db.query("DELETE FROM `gate_entry_photos` WHERE `gateEntryId` = ?", [id]);
-        }
-        if (tableName === "material_issues") {
-          await db.query("DELETE FROM `material_issue_reel_lines` WHERE `materialIssueId` = ?", [id]);
-          await db.query("DELETE FROM `material_issue_lines` WHERE `materialIssueId` = ?", [id]);
-        }
-        if (tableName === "material_returns") {
-          await db.query("DELETE FROM `material_return_reel_lines` WHERE `materialReturnId` = ?", [id]);
-          await db.query("DELETE FROM `material_return_lines` WHERE `materialReturnId` = ?", [id]);
-        }
+
         await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id]);
         res.json({ success: true });
       } catch (error) {

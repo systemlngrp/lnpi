@@ -98,7 +98,8 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
         const response = await fetch(`${endpoint}/${item.id}`, { method: "DELETE" });
         if (!response.ok) {
           hasError = true;
-          lastErrorMessage = response.statusText;
+          const errData = await response.json().catch(() => ({}));
+          lastErrorMessage = errData.error || response.statusText;
         }
       }
 

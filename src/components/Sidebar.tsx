@@ -85,6 +85,61 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   );
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
+  const normalizeDate = (value?: string | null) => String(value || "").slice(0, 10);
+  const isWithoutJobIssue = (issueType?: string | null) => {
+    const t = String(issueType || "").trim().toLowerCase();
+    return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
+  };
+
+  const pendingNonJobIssueCount = (() => {
+    const firstJobDate = productions
+      .map((p) => normalizeDate(p.date))
+      .filter(Boolean)
+      .sort()[0];
+    if (!firstJobDate) return 0;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const issuesByDate = new Set(
+      materialIssues
+        .filter((i) => isWithoutJobIssue(i.issueType))
+        .map((i) => normalizeDate(i.date))
+        .filter(Boolean)
+    );
+
+    let count = 0;
+    const cursor = new Date(`${firstJobDate}T00:00:00Z`);
+    const end = new Date(`${today}T00:00:00Z`);
+    while (cursor <= end) {
+      const d = cursor.toISOString().slice(0, 10);
+      if (!issuesByDate.has(d)) count += 1;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return count;
+  })();
+
+  const [pendingJobClosureCount, setPendingJobClosureCount] = useState<number>(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/get-pending-job-closure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const rows = await response.json();
+        const nextCount = Array.isArray(rows) ? rows.length : 0;
+        if (!cancelled) setPendingJobClosureCount(nextCount);
+      } catch {
+        if (!cancelled) setPendingJobClosureCount(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const counts: Record<string, number> = {
     "/material-in/pending-ph": materialIn.filter(m => isPendingPH(m.status)).length,
@@ -95,6 +150,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-tally": productions.filter((p) => isProductionReadyForTally(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
+    "/production/pending-job-closure": pendingJobClosureCount,
     "/indent/pending": normalizedIndents.filter(i => i.status === "Pending").length,
     "/indent/approved": normalizedIndents.filter(i => i.status === "Approved").length,
     "/indent/completed": normalizedIndents.filter(i => i.status === "Completed").length,
@@ -105,7 +161,11 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/purchase-orders/approved": purchaseOrders.filter(po => po.status === "Approved").length,
     "/purchase-orders/rejected": purchaseOrders.filter(po => po.status === "Rejected").length,
     "/material-receipt/pending-mrr": gateEntries.filter(entry => !(entry.mrrId || "").trim() && !(entry.mrrNo || "").trim() && !(entry.mrrDate || "").trim()).length,
+    "/material-receipt/pending-debit-note": 0,
+    "/material-movement/pending-non-job-issue": pendingNonJobIssueCount,
     "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
+    "/orders/pending-ph": orders.filter(o => isPendingPH(o.status)).length,
+    "/orders/pending-scheduling": orders.filter(o => o.status === "Pending Scheduling").length,
     "/dispatch/pending-planning": schedules.filter(s => {
       if (!s?.scheduledDate) return false;
       const today = new Date();
@@ -229,7 +289,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       color: "bg-fuchsia-700",
       items: [
         { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
-        { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText },
+        { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
       ],
     },
 	    {
@@ -239,7 +299,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
 	        { name: "Reel Issue/Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
 	        { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
 	        { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
-	        { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText },
+	        { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
 	        { name: "Non-Job Issue Master", href: "/material-movement/non-job-issue-master", icon: Database },
 	        { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
 	        { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
@@ -250,8 +310,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       color: "bg-rose-700",
       items: [
         { name: "Order Form", href: "/orders/form", icon: ClipboardList },
-        { name: "Pending Salesman Approval", href: "/orders/pending-ph", icon: UserCheck },
-        { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity },
+        { name: "Pending Salesman Approval", href: "/orders/pending-ph", icon: UserCheck, countKey: "/orders/pending-ph" },
+        { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity, countKey: "/orders/pending-scheduling" },
         { name: "Orders Master", href: "/orders/master", icon: FileText },
         { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
         { name: "Upcoming Scheduled Orders", href: "/orders/upcoming", icon: Activity, countKey: "/orders/upcoming" },
@@ -266,7 +326,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
         { name: "Pending FFG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
         { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
-        { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText },
+        { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
         { name: "Production Master", href: "/production/master", icon: Database },
         { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
         { name: "Canceled Jobs", href: "/production/canceled", icon: X },
