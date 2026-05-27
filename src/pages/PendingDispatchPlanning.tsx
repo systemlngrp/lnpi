@@ -446,7 +446,7 @@ export function PendingDispatchPlanning() {
           <div className="px-4 py-3 border-b border-black bg-slate-50">
             <div className="text-sm font-black uppercase text-black">Dispatch Planning Calculation</div>
             <div className="text-[11px] font-bold text-slate-600">
-              Available = (Opening + Receipt + Production − Loaded) + Pending Production (FG not filled) − Reserved Dispatch (not loaded)
+              Available = (Opening + Receipt + Production − Loaded) + Pending Production (FG not filled) − Pending Loading (not loaded)
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -460,7 +460,7 @@ export function PendingDispatchPlanning() {
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Loaded</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Dispatch Balance</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Production</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Reserved</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Loading</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Available</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Planned Now</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Exceeded</th>
