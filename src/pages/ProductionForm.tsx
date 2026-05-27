@@ -155,7 +155,9 @@ export function ProductionForm() {
   const [settings] = useData<Setting>("settings", []);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedScheduleId, setSelectedScheduleId] = useState(searchParams.get("scheduleId") || "");
+  const urlScheduleId = searchParams.get("scheduleId") || searchParams.get("scheduledId") || "";
+  const isScheduleLocked = Boolean(urlScheduleId);
+  const [selectedScheduleId, setSelectedScheduleId] = useState(urlScheduleId);
   const todayStr = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -678,12 +680,14 @@ export function ProductionForm() {
               id="schedule"
               value={selectedScheduleId}
               onChange={(value) => {
+                if (isScheduleLocked) return;
                 setSelectedScheduleId(value);
                 setSearchParams(value ? { scheduleId: value } : {});
               }}
               options={scheduleOptions}
               placeholder="Select pending production schedule..."
               required
+              disabled={isScheduleLocked}
             />
           </div>}
 

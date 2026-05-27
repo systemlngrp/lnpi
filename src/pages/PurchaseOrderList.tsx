@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Download, ThumbsUp, X } from "lucide-react";
+import { CheckCircle, Download, ThumbsUp, X } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useData } from "../hooks/useData";
