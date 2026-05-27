@@ -189,6 +189,35 @@ function normalizeWorkflowStatus(tableName: string, row: any) {
   return normalized;
 }
 
+function normalizeMachineName(name?: string | null) {
+  const trimmed = String(name || "").trim();
+  if (trimmed === "Corrugation Finger") return "Corrugation Paper";
+  if (trimmed === "Corrugation Linear") return "Corrugation Liner";
+  return trimmed;
+}
+
+function parseMandatoryMachinesByType(setting?: any | null): Record<string, string[]> {
+  const raw = setting?.mandatoryMachinesByType;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const entries = Object.entries(parsed as Record<string, unknown>);
+    const normalized: Record<string, string[]> = {};
+    for (const [typeName, value] of entries) {
+      if (!typeName || typeof typeName !== "string") continue;
+      const list = Array.isArray(value) ? value : [];
+      const machines = list
+        .map((v) => normalizeMachineName(String(v || "")).trim())
+        .filter(Boolean);
+      normalized[typeName.trim()] = Array.from(new Set(machines));
+    }
+    return normalized;
+  } catch {
+    return {};
+  }
+}
+
 async function getPool() {
   if (pool) return pool;
   
@@ -603,6 +632,7 @@ async function initDb(retries = 5) {
           \`contactNumber\` VARCHAR(50),
           \`email\` VARCHAR(255),
           \`gstNo\` VARCHAR(100),
+          \`gstSupplyType\` VARCHAR(20) DEFAULT 'INTRA_STATE',
           \`stateId\` VARCHAR(36),
           \`district\` VARCHAR(255),
           \`pinCode\` VARCHAR(20),
@@ -699,6 +729,7 @@ async function initDb(retries = 5) {
           \`district\` VARCHAR(255),
           \`state\` VARCHAR(255),
           \`gstNo\` VARCHAR(100),
+          \`gstSupplyType\` VARCHAR(20) DEFAULT 'INTRA_STATE',
           \`deviationAllowed\` DECIMAL(10,2),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
@@ -1139,6 +1170,7 @@ async function initDb(retries = 5) {
         { table: "suppliers", column: "contactNumber", type: "VARCHAR(50)" },
         { table: "suppliers", column: "email", type: "VARCHAR(255)" },
         { table: "suppliers", column: "gstNo", type: "VARCHAR(100)" },
+        { table: "suppliers", column: "gstSupplyType", type: "VARCHAR(20) DEFAULT 'INTRA_STATE'" },
         { table: "suppliers", column: "stateId", type: "VARCHAR(36)" },
         { table: "suppliers", column: "district", type: "VARCHAR(255)" },
         { table: "suppliers", column: "pinCode", type: "VARCHAR(20)" },
@@ -1206,6 +1238,7 @@ async function initDb(retries = 5) {
         { table: "users", column: "email", type: "VARCHAR(255)" },
         { table: "users", column: "password", type: "VARCHAR(255)" },
         { table: "companies", column: "deviationAllowed", type: "DECIMAL(10,2)" },
+        { table: "companies", column: "gstSupplyType", type: "VARCHAR(20) DEFAULT 'INTRA_STATE'" },
         { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },
         { table: "orders", column: "approvedTimestamp", type: "VARCHAR(255)" },
@@ -1588,6 +1621,46 @@ const createHandlers = (tableName: string) => {
           delete data.balance;
         }
 
+        if (tableName === "production_processing") {
+          const missing: string[] = [];
+          if (!String(data.productionId || "").trim()) missing.push("Job/Production");
+          if (!String(data.machineId || "").trim()) missing.push("Machine");
+          if (!String(data.operatorId || "").trim()) missing.push("Operator");
+          if (!String(data.shift || "").trim()) missing.push("Shift");
+          if (!String(data.date || "").trim()) missing.push("Date");
+
+          const qtyNumber = Number(data.qty);
+          if (!Number.isFinite(qtyNumber) || qtyNumber <= 0) missing.push("Quantity");
+
+          if (missing.length) {
+            return res.status(400).json({ error: `Mandatory fields missing/invalid: ${missing.join(", ")}` });
+          }
+
+          data.machineName = normalizeMachineName(String(data.machineName || ""));
+
+          const normalizedMachineNameLower = String(data.machineName || "").trim().toLowerCase();
+          const isCorrugationLiner = normalizedMachineNameLower === "corrugation liner";
+
+          const [prodRows] = await db.query("SELECT qty FROM `productions` WHERE id = ? LIMIT 1", [
+            String(data.productionId),
+          ]);
+          const plannedQty = Number((prodRows as any[])[0]?.qty || 0);
+
+          if (!isCorrugationLiner && plannedQty > 0) {
+            const [sumRows] = await db.query(
+              "SELECT SUM(qty) as total FROM `production_processing` WHERE productionId = ? AND LOWER(TRIM(machineName)) = LOWER(TRIM(?)) AND id <> ?",
+              [String(data.productionId), String(data.machineName), String(data.id || "")]
+            );
+            const alreadyReported = Number((sumRows as any[])[0]?.total || 0);
+            const nextTotal = alreadyReported + qtyNumber;
+            if (nextTotal > plannedQty) {
+              return res.status(400).json({
+                error: `Cannot report more than planned qty for ${data.machineName}.\nPlan: ${plannedQty}\nAlready reported: ${alreadyReported}\nNow: ${qtyNumber}\nExceeds by: ${nextTotal - plannedQty}`,
+              });
+            }
+          }
+        }
+
         // Auto-generate orderNo for orders when not provided
         if (tableName === 'orders') {
           try {
@@ -1830,6 +1903,246 @@ const createHandlers = (tableName: string) => {
 
 // Routes
 const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+
+app.post("/api/get-pending-job-closure", async (req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  const filters = (req.body || {}) as {
+    date_from?: string;
+    date_to?: string;
+    machine_id?: string;
+    type?: string;
+    job_no?: string;
+    company?: string;
+  };
+
+  try {
+    const [settingsRows] = await db.query("SELECT * FROM `settings` LIMIT 1");
+    const setting = (settingsRows as any[])[0];
+    const mandatoryByType = parseMandatoryMachinesByType(setting);
+
+    const [machinesRows] = await db.query("SELECT id, name FROM `machines`");
+    const machines = (machinesRows as any[]).map((m) => ({
+      id: String(m.id),
+      name: normalizeMachineName(String(m.name || "")),
+    }));
+    const machineIdByName = new Map(machines.map((m) => [m.name.toLowerCase(), m.id]));
+
+    const where: string[] = ["(status IS NULL OR status NOT IN ('Completed','Cancelled'))"];
+    const params: any[] = [];
+
+    if (filters.date_from) {
+      where.push("STR_TO_DATE(`date`, '%Y-%m-%d') >= STR_TO_DATE(?, '%Y-%m-%d')");
+      params.push(filters.date_from);
+    }
+    if (filters.date_to) {
+      where.push("STR_TO_DATE(`date`, '%Y-%m-%d') <= STR_TO_DATE(?, '%Y-%m-%d')");
+      params.push(filters.date_to);
+    }
+    if (filters.job_no) {
+      where.push("LOWER(`transactionNo`) LIKE LOWER(?)");
+      params.push(`%${filters.job_no}%`);
+    }
+
+    const [productionRows] = await db.query(
+      `SELECT * FROM \`productions\` ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY transactionNo DESC`,
+      params
+    );
+    const productions = productionRows as any[];
+
+    const productionIds = productions.map((p) => String(p.id));
+    const scheduleIds = productions.map((p) => String(p.scheduleId || "")).filter(Boolean);
+    const itemIds = productions.map((p) => String(p.itemId || "")).filter(Boolean);
+
+    const [itemsRows] = itemIds.length
+      ? await db.query(`SELECT id, name, typeName FROM \`items\` WHERE id IN (${itemIds.map(() => "?").join(",")})`, itemIds)
+      : ([[]] as any);
+    const itemsById = new Map((itemsRows as any[]).map((row) => [String(row.id), row]));
+
+    const [schedulesRows] = scheduleIds.length
+      ? await db.query(`SELECT id, orderId FROM \`orders_schedule\` WHERE id IN (${scheduleIds.map(() => "?").join(",")})`, scheduleIds)
+      : ([[]] as any);
+    const schedulesById = new Map((schedulesRows as any[]).map((row) => [String(row.id), row]));
+
+    const orderIds = (schedulesRows as any[]).map((s) => String(s.orderId || "")).filter(Boolean);
+    const [ordersRows] = orderIds.length
+      ? await db.query(`SELECT id, orderNo, companyId FROM \`orders\` WHERE id IN (${orderIds.map(() => "?").join(",")})`, orderIds)
+      : ([[]] as any);
+    const ordersById = new Map((ordersRows as any[]).map((row) => [String(row.id), row]));
+
+    const companyIds = (ordersRows as any[]).map((o) => String(o.companyId || "")).filter(Boolean);
+    const [companiesRows] = companyIds.length
+      ? await db.query(`SELECT id, name FROM \`companies\` WHERE id IN (${companyIds.map(() => "?").join(",")})`, companyIds)
+      : ([[]] as any);
+    const companiesById = new Map((companiesRows as any[]).map((row) => [String(row.id), row]));
+
+    const [processingRows] = productionIds.length
+      ? await db.query(
+          `SELECT productionId, machineId, machineName, shift, qty, operatorId, date FROM \`production_processing\` WHERE productionId IN (${productionIds
+            .map(() => "?")
+            .join(",")})`,
+          productionIds
+        )
+      : ([[]] as any);
+
+    const processingByProductionId = new Map<string, any[]>();
+    (processingRows as any[]).forEach((row) => {
+      const key = String(row.productionId);
+      const list = processingByProductionId.get(key) || [];
+      list.push({
+        ...row,
+        machineName: normalizeMachineName(String(row.machineName || "")),
+      });
+      processingByProductionId.set(key, list);
+    });
+
+    const isCorrugationLiner = (machineName: string) =>
+      String(machineName || "").trim().toLowerCase() === "corrugation liner";
+
+    const requiredFieldsByStep = {
+      machineId: "Machine",
+      operatorId: "Operator",
+      shift: "Shift",
+      date: "Date",
+      qty: "Quantity",
+    } as const;
+
+    const rows = productions
+      .map((p) => {
+        const productionId = String(p.id);
+        const planQty = Number(p.qty || 0);
+        const planDate = String(p.date || "");
+
+        const item = itemsById.get(String(p.itemId));
+        const typeName = String(item?.typeName || "").trim();
+        const itemName = String(item?.name || "").trim();
+
+        const schedule = schedulesById.get(String(p.scheduleId || ""));
+        const order = schedule ? ordersById.get(String(schedule.orderId || "")) : undefined;
+        const orderNo = String(order?.orderNo || "").trim();
+        const company = order ? companiesById.get(String(order.companyId || "")) : undefined;
+        const companyName = String(company?.name || "").trim();
+
+        if (filters.company && companyName && !companyName.toLowerCase().includes(String(filters.company).toLowerCase())) {
+          return null;
+        }
+        if (filters.type && typeName && typeName.toLowerCase() !== String(filters.type).toLowerCase()) {
+          return null;
+        }
+
+        const requiredSteps = (mandatoryByType[typeName] || []).map((name) => normalizeMachineName(name));
+        const records = processingByProductionId.get(productionId) || [];
+        const normalizedRecords = records.map((r) => ({
+          ...r,
+          machineName: normalizeMachineName(String(r.machineName || "")),
+        }));
+
+        const missingSteps: { stepKey: string; machineName: string; machineId?: string }[] = [];
+        const missingFields: { stepKey: string; machineName: string; machineId?: string; fields: string[] }[] = [];
+        const blockingReasons: string[] = [];
+
+        if (requiredSteps.length === 0) {
+          blockingReasons.push(`No required process steps configured for Type: ${typeName || "-"}`);
+        }
+
+        requiredSteps.forEach((stepMachineName) => {
+          const stepKey = stepMachineName;
+          const normalizedStep = normalizeMachineName(stepMachineName);
+          const machineId = machineIdByName.get(normalizedStep.toLowerCase());
+          const stepRecords = normalizedRecords.filter(
+            (r) => normalizeMachineName(String(r.machineName || "")) === normalizedStep
+          );
+
+          if (stepRecords.length === 0) {
+            missingSteps.push({ stepKey, machineName: normalizedStep, machineId });
+            return;
+          }
+
+          const completedRecord = stepRecords.find((r) => {
+            const qtyValue = Number(r.qty || 0);
+            if (!Number.isFinite(qtyValue) || qtyValue <= 0) return false;
+            if (!String(r.machineId || "").trim()) return false;
+            if (!String(r.operatorId || "").trim()) return false;
+            if (!String(r.shift || "").trim()) return false;
+            if (!String(r.date || "").trim()) return false;
+            return true;
+          });
+
+          if (!completedRecord) {
+            const fields = new Set<string>();
+            stepRecords.forEach((r) => {
+              Object.entries(requiredFieldsByStep).forEach(([key, label]) => {
+                const value = (r as any)[key];
+                if (key === "qty") {
+                  const qtyValue = Number(value || 0);
+                  if (!Number.isFinite(qtyValue) || qtyValue <= 0) fields.add(label);
+                  return;
+                }
+                if (!String(value || "").trim()) fields.add(label);
+              });
+            });
+            missingFields.push({ stepKey, machineName: normalizedStep, machineId, fields: Array.from(fields) });
+          }
+
+          if (!isCorrugationLiner(normalizedStep) && planQty > 0) {
+            const stepQty = stepRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+            if (stepQty > planQty) {
+              blockingReasons.push(`Qty exceeds Plan Qty for ${normalizedStep} (Plan ${planQty}, Reported ${stepQty})`);
+            }
+          }
+        });
+
+        if (missingSteps.length) blockingReasons.push(`Missing processing steps: ${missingSteps.map((s) => s.machineName).join(", ")}`);
+        if (missingFields.length) blockingReasons.push(`Incomplete processing entries: ${missingFields.map((s) => s.machineName).join(", ")}`);
+
+        if (!blockingReasons.length) return null;
+
+        const machineSet = new Set<string>();
+        [...missingSteps, ...missingFields].forEach((s) => {
+          if (s.machineName) machineSet.add(s.machineName);
+        });
+
+        const groupMachineName =
+          machineSet.size === 0 ? "Unassigned" : machineSet.size === 1 ? [...machineSet][0] : "Multiple/Various";
+        const groupMachineId =
+          groupMachineName && groupMachineName !== "Multiple/Various" && groupMachineName !== "Unassigned"
+            ? machineIdByName.get(groupMachineName.toLowerCase())
+            : undefined;
+
+        if (filters.machine_id && groupMachineId !== filters.machine_id) {
+          return null;
+        }
+
+        const processedQty = normalizedRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+        const exceededBy = planQty > 0 ? Math.max(0, processedQty - planQty) : 0;
+
+        return {
+          productionId,
+          jobNo: String(p.transactionNo || ""),
+          orderNo,
+          itemName,
+          companyName,
+          typeName,
+          planQty,
+          planDate,
+          blockingReasons,
+          missingSteps,
+          missingFields,
+          qtyStatus: { planQty, processedQty, exceededBy },
+          groupMachineName,
+          groupMachineId,
+        };
+      })
+      .filter(Boolean);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("[API] get-pending-job-closure failed:", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

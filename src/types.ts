@@ -294,6 +294,7 @@ export interface Supplier {
   contactNumber?: string;
   email?: string;
   gstNo?: string;
+  gstSupplyType?: "INTRA_STATE" | "INTER_STATE";
   stateId?: string;
   district?: string;
   pinCode?: string;
@@ -359,6 +360,7 @@ export interface Company {
   district?: string;
   state?: string;
   gstNo?: string;
+  gstSupplyType?: "INTRA_STATE" | "INTER_STATE";
   deviationAllowed?: number;
   updatedBy?: string;
   updateTimestamp?: string;

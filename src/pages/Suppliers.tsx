@@ -5,6 +5,8 @@ import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { Edit, Trash2 } from "lucide-react";
+import { MandatoryLegend, MandatoryLabel } from "../components/Mandatory";
+import { isMandatoryField } from "../lib/mandatoryFields";
 
 type SupplierFormState = {
   name: string;
@@ -12,6 +14,7 @@ type SupplierFormState = {
   contactNumber: string;
   email: string;
   gstNo: string;
+  gstSupplyType: "" | "INTRA_STATE" | "INTER_STATE";
   stateId: string;
   district: string;
   pinCode: string;
@@ -25,6 +28,7 @@ const createInitialFormState = (): SupplierFormState => ({
   contactNumber: "",
   email: "",
   gstNo: "",
+  gstSupplyType: "INTRA_STATE",
   stateId: "",
   district: "",
   pinCode: "",
@@ -98,6 +102,7 @@ export function Suppliers() {
       contactNumber: supplier.contactNumber || "",
       email: supplier.email || "",
       gstNo: supplier.gstNo || "",
+      gstSupplyType: (supplier.gstSupplyType as any) || "INTRA_STATE",
       stateId: supplier.stateId || "",
       district: supplier.district || "",
       pinCode: supplier.pinCode || "",
@@ -114,6 +119,10 @@ export function Suppliers() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!formData.name.trim()) return;
+    if (isMandatoryField("supplier_form", "gstSupplyType") && !formData.gstSupplyType) {
+      alert("GST Supply Type is mandatory.");
+      return;
+    }
 
     const duplicate = suppliers.some(
       (supplier) => supplier.id !== editingId && supplier.name.toLowerCase() === formData.name.trim().toLowerCase()
@@ -133,6 +142,7 @@ export function Suppliers() {
         contactNumber: formData.contactNumber.trim() || undefined,
         email: formData.email.trim() || undefined,
         gstNo: formData.gstNo.trim() || undefined,
+        gstSupplyType: formData.gstSupplyType || undefined,
         stateId: formData.stateId || undefined,
         district: formData.district.trim() || undefined,
         pinCode: formData.pinCode.trim() || undefined,
@@ -179,6 +189,7 @@ export function Suppliers() {
           </div>
 
           <form id="supplier-form" onSubmit={handleSubmit} className="space-y-6">
+            <MandatoryLegend />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <Field label="Supplier Name" required>
                 <input
@@ -217,6 +228,22 @@ export function Suppliers() {
                   onChange={(e) => setFormData((prev) => ({ ...prev, gstNo: e.target.value }))}
                   className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+              </Field>
+              <Field label="GST Supply Type" required={isMandatoryField("supplier_form", "gstSupplyType")}>
+                <select
+                  value={formData.gstSupplyType}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, gstSupplyType: e.target.value as SupplierFormState["gstSupplyType"] }))
+                  }
+                  required={isMandatoryField("supplier_form", "gstSupplyType")}
+                  className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="" disabled>
+                    Select GST Supply Type...
+                  </option>
+                  <option value="INTRA_STATE">INTRA_STATE (CGST+SGST)</option>
+                  <option value="INTER_STATE">INTER_STATE (IGST)</option>
+                </select>
               </Field>
               <Field label="State">
                 <Select
@@ -286,7 +313,7 @@ export function Suppliers() {
             <table className="min-w-full divide-y divide-black border-collapse border border-black">
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
-                  {["Supplier Name", "Contact Person", "Contact Number", "Email", "GST No.", "State", "District", "PIN Code", "Active", "Actions"].map((heading) => (
+                  {["Supplier Name", "Contact Person", "Contact Number", "Email", "GST No.", "GST Supply Type", "State", "District", "PIN Code", "Active", "Actions"].map((heading) => (
                     <th key={heading} className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black whitespace-nowrap">
                       {heading}
                     </th>
@@ -296,7 +323,7 @@ export function Suppliers() {
               <tbody className="divide-y divide-black bg-white">
                 {filteredSuppliers.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                    <td colSpan={11} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                       No suppliers found.
                     </td>
                   </tr>
@@ -308,6 +335,7 @@ export function Suppliers() {
                       <td className="px-4 py-3 text-sm text-black border border-black">{supplier.contactNumber || ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{supplier.email || ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{supplier.gstNo || ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{supplier.gstSupplyType || "INTRA_STATE"}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{getStateName(supplier.stateId)}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{supplier.district || ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{supplier.pinCode || ""}</td>
@@ -345,9 +373,7 @@ function Field({
 }) {
   return (
     <div className={`space-y-2 ${className}`}>
-      <label className="text-blue-700 font-bold">
-        {label} {required ? <span className="text-red-500">*</span> : null}
-      </label>
+      <MandatoryLabel label={label} required={required} className="text-blue-700 font-bold" />
       {children}
     </div>
   );

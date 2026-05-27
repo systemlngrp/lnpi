@@ -264,6 +264,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
         { name: "Pending FFG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
         { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
+        { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText },
         { name: "Production Master", href: "/production/master", icon: Database },
         { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
         { name: "Canceled Jobs", href: "/production/canceled", icon: X },

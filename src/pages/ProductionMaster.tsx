@@ -70,6 +70,66 @@ export function ProductionMaster() {
 
   const mandatoryMachinesByType = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
 
+  const jobClosureStatusMap = useMemo(() => {
+    const isCorrugationLiner = (name?: string | null) =>
+      String(normalizeMachineName(name || "")).trim().toLowerCase() === "corrugation liner";
+
+    const result = new Map<string, { canClose: boolean; reasons: string[] }>();
+
+    productions.forEach((production) => {
+      const item = items.find((i) => i.id === production.itemId);
+      const typeName = item?.typeName;
+      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, typeName).map((m) =>
+        normalizeMachineName(m)
+      );
+
+      const records = processing.filter((entry) => entry.productionId === production.id);
+      const planQty = Number(production.qty || 0);
+
+      const reasons: string[] = [];
+
+      if (requiredMachines.length === 0) {
+        reasons.push(`No required process steps configured for Type: ${String(typeName || "-")}`);
+      }
+
+      const isEntryComplete = (entry: ProductionProcessing) => {
+        const qtyValue = Number(entry.qty || 0);
+        if (!Number.isFinite(qtyValue) || qtyValue <= 0) return false;
+        if (!String(entry.machineId || "").trim()) return false;
+        if (!String(entry.operatorId || "").trim()) return false;
+        if (!String(entry.shift || "").trim()) return false;
+        if (!String(entry.date || "").trim()) return false;
+        return true;
+      };
+
+      requiredMachines.forEach((machineName) => {
+        const normalized = normalizeMachineName(machineName);
+        const stepRecords = records.filter(
+          (r) => normalizeMachineName(r.machineName) === normalized
+        );
+        if (stepRecords.length === 0) {
+          reasons.push(`Missing processing step: ${normalized}`);
+          return;
+        }
+
+        if (!stepRecords.some(isEntryComplete)) {
+          reasons.push(`Incomplete processing entry: ${normalized}`);
+        }
+
+        if (!isCorrugationLiner(normalized) && planQty > 0) {
+          const stepQty = stepRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+          if (stepQty > planQty) {
+            reasons.push(`Qty exceeds Plan Qty for ${normalized} (Plan ${planQty}, Reported ${stepQty})`);
+          }
+        }
+      });
+
+      result.set(production.id, { canClose: reasons.length === 0, reasons });
+    });
+
+    return result;
+  }, [productions, items, processing, mandatoryMachinesByType]);
+
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
     productions.forEach(p => {
@@ -118,9 +178,11 @@ export function ProductionMaster() {
   const handleCloseJob = async (id: string) => {
     const target = productions.find((p) => p.id === id);
     if (!target || target.status === "Completed" || target.status === "Cancelled") return;
-    const hasProcessing = processing.some((entry) => entry.productionId === id);
-    if (!hasProcessing) {
-      alert("Processing data is mandatory. Please add Production Processing entry before closing the job.");
+
+    const closureStatus = jobClosureStatusMap.get(id);
+    if (!closureStatus?.canClose) {
+      const reasons = closureStatus?.reasons?.length ? closureStatus.reasons : ["Processing data is incomplete."];
+      alert(`Job Close is blocked:\n- ${reasons.join("\n- ")}`);
       return;
     }
 
@@ -283,19 +345,18 @@ export function ProductionMaster() {
                         >
                           <ClipboardList size={14} className="mr-1" /> Report Proc.
                         </button>
-                        <button
-                          onClick={() => handleCloseJob(p.id)}
-                          disabled={p.status === "Completed" || p.status === "Cancelled"}
-                          className={`flex-1 font-bold inline-flex items-center justify-center p-2 border border-black text-xs ${
-                            p.status === "Completed" || p.status === "Cancelled"
-                              ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                              : closingId === p.id
+                        {p.status !== "Completed" && p.status !== "Cancelled" && jobClosureStatusMap.get(p.id)?.canClose ? (
+                          <button
+                            onClick={() => handleCloseJob(p.id)}
+                            className={`flex-1 font-bold inline-flex items-center justify-center p-2 border border-black text-xs ${
+                              closingId === p.id
                                 ? "bg-amber-500 text-black animate-pulse"
                                 : "bg-emerald-600 text-white hover:bg-emerald-700"
-                          }`}
-                        >
-                          <CheckCircle size={14} className="mr-1" /> {closingId === p.id ? "Confirm?" : "Close Job"}
-                        </button>
+                            }`}
+                          >
+                            <CheckCircle size={14} className="mr-1" /> {closingId === p.id ? "Confirm?" : "Close Job"}
+                          </button>
+                        ) : null}
                         <button 
                           onClick={() => handleDelete(p.id)} 
                           className={`${deletingId === p.id ? "text-amber-600 animate-pulse bg-amber-50" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-center p-2 border border-black text-xs min-w-[80px]`}
@@ -315,7 +376,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Order No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">ERP Code</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Company</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prod Date</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Plan Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Item Name</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Mandatory</th>
@@ -515,26 +576,19 @@ export function ProductionMaster() {
                           >
                             <ClipboardList size={16} />
                           </button>
-                          <button
-                            onClick={() => handleCloseJob(p.id)}
-                            disabled={p.status === "Completed" || p.status === "Cancelled"}
-                            title={
-                              p.status === "Completed" || p.status === "Cancelled"
-                                ? "Job already closed"
-                                : closingId === p.id
-                                  ? "Click to confirm close"
-                                  : "Close job"
-                            }
-                            className={`transition-all p-1 ${
-                              p.status === "Completed" || p.status === "Cancelled"
-                                ? "text-slate-400 cursor-not-allowed"
-                                : closingId === p.id
+                          {p.status !== "Completed" && p.status !== "Cancelled" && jobClosureStatusMap.get(p.id)?.canClose ? (
+                            <button
+                              onClick={() => handleCloseJob(p.id)}
+                              title={closingId === p.id ? "Click to confirm close" : "Close job"}
+                              className={`transition-all p-1 ${
+                                closingId === p.id
                                   ? "text-amber-600 animate-pulse scale-110"
                                   : "text-emerald-700 hover:text-emerald-900"
-                            }`}
-                          >
-                            <CheckCircle size={16} />
-                          </button>
+                              }`}
+                            >
+                              <CheckCircle size={16} />
+                            </button>
+                          ) : null}
                           <button 
                             onClick={() => handleDelete(p.id)} 
                             title={deletingId === p.id ? "Click to confirm delete" : "Delete production entry"}

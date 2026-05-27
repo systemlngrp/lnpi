@@ -8,10 +8,9 @@ import {
   InvoiceLineItem,
   DispatchPlan,
   Order,
-  Truck,
-  Setting
+  Truck
 } from "../types";
-import { 
+import {
   FileText, 
   Search, 
   Check, 
@@ -24,6 +23,8 @@ import {
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
+import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
+import { isMandatoryField } from "../lib/mandatoryFields";
 
 interface GroupedLoading {
   companyId: string;
@@ -35,12 +36,6 @@ interface GroupedLoading {
   })[];
 }
 
-function extractGstStateCode(value?: string) {
-  if (!value) return "";
-  const match = value.trim().match(/\b(\d{2})[A-Z0-9]{3,}/i);
-  return match?.[1] || "";
-}
-
 export function PendingInvoicing() {
   const [loadingSlips, updateSlips] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
@@ -50,7 +45,6 @@ export function PendingInvoicing() {
   const [orders] = useData<Order>("orders", []);
   const [invoices, updateInvoices] = useData<Invoice>("invoices", []);
   const [, updateLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
-  const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -64,7 +58,7 @@ export function PendingInvoicing() {
   
   const [itemRates, setInvoiceRates] = useState<Record<string, number>>({});
   const [itemGstRates, setItemGstRates] = useState<Record<string, number>>({});
-  const [isInterState, setIsInterState] = useState(false);
+  const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
   const [roundOff, setRoundOff] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -159,14 +153,7 @@ export function PendingInvoicing() {
     setRoundOff("");
 
     const company = companies.find(c => c.id === billingMode);
-    const organization = settings[0];
-    const companyGstStateCode = extractGstStateCode(company?.gstNo);
-    const organizationGstStateCode = extractGstStateCode(organization?.organizationGstDetails);
-    if (companyGstStateCode && organizationGstStateCode) {
-      setIsInterState(companyGstStateCode !== organizationGstStateCode);
-    } else {
-      setIsInterState(false);
-    }
+    setGstSupplyType((company?.gstSupplyType as any) || "INTRA_STATE");
   };
 
   const invoiceItems = useMemo(() => {
@@ -201,6 +188,7 @@ export function PendingInvoicing() {
   }, [invoiceModal, plans, orders, items]);
 
   const calculations = useMemo(() => {
+    const isInterState = gstSupplyType === "INTER_STATE";
     let totalBeforeGst = 0;
     let totalCgst = 0;
     let totalSgst = 0;
@@ -226,13 +214,18 @@ export function PendingInvoicing() {
     const grandTotal = totalAfterGst + roundOffValue;
 
     return { totalBeforeGst, cgst: totalCgst, sgst: totalSgst, igst: totalIgst, totalAfterGst, roundOff: roundOffValue, grandTotal };
-  }, [invoiceItems, itemRates, itemGstRates, isInterState, roundOff]);
+  }, [invoiceItems, itemRates, itemGstRates, gstSupplyType, roundOff]);
 
   const handleSubmitInvoice = async () => {
     if (!invoiceModal) return;
     const company = companies.find(c => c.id === invoiceModal.companyId);
     if (!company) return;
+    if (isMandatoryField("invoice_form", "gstSupplyType") && !gstSupplyType) {
+      alert("GST Supply Type is mandatory.");
+      return;
+    }
 
+    const isInterState = gstSupplyType === "INTER_STATE";
     setIsSubmitting(true);
     try {
       const invoiceId = crypto.randomUUID();
@@ -316,6 +309,8 @@ export function PendingInvoicing() {
       setIsSubmitting(false);
     }
   };
+
+  const isInterState = gstSupplyType === "INTER_STATE";
 
   return (
     <div className="space-y-6">
@@ -431,22 +426,27 @@ export function PendingInvoicing() {
             </div>
             
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              <div className="flex justify-between items-center bg-slate-50 p-4 border border-black rounded">
-                <div className="font-bold uppercase text-xs">Billing Type</div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => setIsInterState(false)}
-                    className={`px-4 py-1.5 text-xs font-bold rounded border-2 border-black transition-all ${!isInterState ? 'bg-indigo-600 text-white translate-x-1 translate-y-1 shadow-none' : 'bg-white text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'}`}
-                  >
-                    INTRA (CGST+SGST)
-                  </button>
-                  <button 
-                    onClick={() => setIsInterState(true)}
-                    className={`px-4 py-1.5 text-xs font-bold rounded border-2 border-black transition-all ${isInterState ? 'bg-indigo-600 text-white translate-x-1 translate-y-1 shadow-none' : 'bg-white text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'}`}
-                  >
-                    INTER (IGST)
-                  </button>
-                </div>
+              <MandatoryLegend />
+              <div className="bg-slate-50 p-4 border border-black rounded space-y-2">
+                <MandatoryLabel
+                  label="GST Supply Type"
+                  required={isMandatoryField("invoice_form", "gstSupplyType")}
+                  className="font-bold uppercase text-xs"
+                />
+                <select
+                  value={gstSupplyType}
+                  onChange={(e) => setGstSupplyType(e.target.value as "" | "INTRA_STATE" | "INTER_STATE")}
+                  required={isMandatoryField("invoice_form", "gstSupplyType")}
+                  disabled
+                  className="w-full border-2 border-black rounded px-3 py-2 text-sm font-bold bg-white disabled:bg-slate-100 disabled:text-slate-700"
+                >
+                  <option value="" disabled>
+                    Select GST Supply Type...
+                  </option>
+                  <option value="INTRA_STATE">INTRA_STATE (CGST+SGST)</option>
+                  <option value="INTER_STATE">INTER_STATE (IGST)</option>
+                </select>
+                <div className="text-[11px] text-slate-600">Set in Companies Master.</div>
               </div>
 
               <div className="overflow-x-auto border border-black">

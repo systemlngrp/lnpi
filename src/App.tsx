@@ -44,6 +44,7 @@ import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
 import { ProductionPendingConsumption, ProductionPendingFFG } from "./pages/ProductionStageQueue";
 import { ProductionPlan } from "./pages/ProductionPlan";
+import { PendingJobClosure } from "./pages/PendingJobClosure";
 import { ProductionProcessingForm } from "./pages/ProductionProcessingForm";
 import { ProductionProcessingMaster } from "./pages/ProductionProcessingMaster";
 import { ItemwiseLeastCost } from "./pages/ItemwiseLeastCost";
@@ -167,6 +168,7 @@ export default function App() {
           <Route path="production/pending-consumption" element={<ProductionPendingConsumption />} />
           <Route path="production/pending-ffg" element={<ProductionPendingFFG />} />
           <Route path="production/pending-tally" element={<ProductionPendingTally />} />
+          <Route path="production/pending-job-closure" element={<PendingJobClosure />} />
           <Route path="production/master" element={<ProductionMaster />} />
           <Route path="production/plan" element={<ProductionPlan />} />
           <Route path="production-processing/form" element={<ProductionProcessingForm />} />

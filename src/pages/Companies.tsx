@@ -3,6 +3,8 @@ import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { Company } from "../types";
 import { Spinner } from "../components/Spinner";
+import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
+import { isMandatoryField } from "../lib/mandatoryFields";
 
 export function Companies() {
   const [companies, setCompanies, isLoading] = useData<Company>("companies", []);
@@ -19,6 +21,7 @@ export function Companies() {
   const [district, setDistrict] = useState("");
   const [stateField, setStateField] = useState("");
   const [gstNo, setGstNo] = useState("");
+  const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("INTRA_STATE");
   const [deviationAllowed, setDeviationAllowed] = useState<number | "">("");
 
   const resetForm = () => {
@@ -30,6 +33,7 @@ export function Companies() {
     setDistrict("");
     setStateField("");
     setGstNo("");
+    setGstSupplyType("INTRA_STATE");
     setDeviationAllowed("");
     setEditingId(null);
   };
@@ -37,6 +41,10 @@ export function Companies() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    if (isMandatoryField("company_form", "gstSupplyType") && !gstSupplyType) {
+      alert("GST Supply Type is mandatory.");
+      return;
+    }
 
     const isDuplicate = companies.some(
       (c) => c.name.toLowerCase() === name.trim().toLowerCase() && c.id !== editingId
@@ -59,6 +67,7 @@ export function Companies() {
         district: district.trim() || undefined,
         state: stateField.trim() || undefined,
         gstNo: gstNo.trim() || undefined,
+        gstSupplyType: gstSupplyType || undefined,
         deviationAllowed: deviationAllowed === "" ? undefined : Number(deviationAllowed),
         ...audit,
       };
@@ -96,6 +105,7 @@ export function Companies() {
     setDistrict(company.district || "");
     setStateField(company.state || "");
     setGstNo(company.gstNo || "");
+    setGstSupplyType((company.gstSupplyType as any) || "INTRA_STATE");
     setDeviationAllowed(company.deviationAllowed ?? "");
     setEditingId(company.id);
     setIsFormOpen(true);
@@ -124,9 +134,10 @@ export function Companies() {
 
       {isFormOpen && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm border border-black space-y-4 max-w-2xl">
+          <MandatoryLegend />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Company Name <span className="text-red-500">*</span></label>
+              <MandatoryLabel label="Company Name" required className="font-bold text-black" />
               <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
             </div>
 
@@ -165,6 +176,22 @@ export function Companies() {
               <input value={gstNo} onChange={(e) => setGstNo(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
             </div>
 
+            <div className="flex flex-col space-y-1 md:col-span-2">
+              <MandatoryLabel label="GST Supply Type" required={isMandatoryField("company_form", "gstSupplyType")} className="font-bold text-black" />
+              <select
+                value={gstSupplyType}
+                onChange={(e) => setGstSupplyType(e.target.value as "" | "INTRA_STATE" | "INTER_STATE")}
+                required={isMandatoryField("company_form", "gstSupplyType")}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
+              >
+                <option value="" disabled>
+                  Select GST Supply Type...
+                </option>
+                <option value="INTRA_STATE">INTRA_STATE (CGST+SGST)</option>
+                <option value="INTER_STATE">INTER_STATE (IGST)</option>
+              </select>
+            </div>
+
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Deviation Allowed (%)</label>
               <input
@@ -197,6 +224,7 @@ export function Companies() {
                   <div className="text-xs text-slate-700">{c.contactPerson} {c.contactNumber ? `| ${c.contactNumber}` : ""}</div>
                   <div className="text-xs text-slate-700">{c.email}</div>
                   <div className="text-xs text-slate-700">{c.district} {c.state ? `| ${c.state}` : ""}</div>
+                  <div className="text-xs text-slate-700">GST Supply Type: {c.gstSupplyType || "INTRA_STATE"}</div>
                   <div className="text-xs text-slate-700">Deviation Allowed: {c.deviationAllowed ?? "-"}%</div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -220,6 +248,7 @@ export function Companies() {
               <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">District</th>
               <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">State</th>
               <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">GST NO</th>
+              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">GST Supply Type</th>
               <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Deviation Allowed</th>
               <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
             </tr>
@@ -227,7 +256,7 @@ export function Companies() {
           <tbody className="divide-y divide-black bg-white">
             {sortedCompanies.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                <td colSpan={11} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                   {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found. Click "Add New Company" to create one.'}
                 </td>
               </tr>
@@ -242,6 +271,7 @@ export function Companies() {
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.district}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.state}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.gstNo}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.gstSupplyType || "INTRA_STATE"}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.deviationAllowed ?? "-"}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium border border-black">
                     <button

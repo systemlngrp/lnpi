@@ -6,11 +6,14 @@ import { Select } from "../components/Select";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
+import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
+import { isMandatoryField } from "../lib/mandatoryFields";
 
 export function ProductionProcessingForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialProductionId = searchParams.get("productionId") || "";
+  const initialMachineId = searchParams.get("machineId") || "";
   
   const [productions] = useData<Production>("productions", []);
   const [machines] = useData<Machine>("machines", []);
@@ -20,7 +23,7 @@ export function ProductionProcessingForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [productionId, setProductionId] = useState(initialProductionId);
-  const [machineId, setMachineId] = useState("");
+  const [machineId, setMachineId] = useState(initialMachineId);
   const [shift, setShift] = useState<"" | "Day" | "Night">("");
   const [qty, setQty] = useState<string>("");
   const [operatorId, setOperatorId] = useState("");
@@ -44,10 +47,22 @@ export function ProductionProcessingForm() {
     return users.map(u => ({ value: u.id, label: u.name }));
   }, [users]);
 
+  const isCorrugationLiner = (machineName: string) =>
+    String(machineName || "").trim().toLowerCase() === "corrugation liner";
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productionId || !machineId || !qty || !operatorId || !shift) {
-      alert("Please fill all required fields.");
+
+    const missing: string[] = [];
+    if (isMandatoryField("production_processing_form", "date") && !date) missing.push("Date");
+    if (isMandatoryField("production_processing_form", "productionId") && !productionId) missing.push("Job No");
+    if (isMandatoryField("production_processing_form", "machineId") && !machineId) missing.push("Machine");
+    if (isMandatoryField("production_processing_form", "shift") && !shift) missing.push("Shift");
+    if (isMandatoryField("production_processing_form", "qty") && !qty) missing.push("Quantity");
+    if (isMandatoryField("production_processing_form", "operatorId") && !operatorId) missing.push("Operator Name");
+
+    if (missing.length) {
+      alert(`Please fill mandatory fields: ${missing.join(", ")}`);
       return;
     }
 
@@ -73,13 +88,15 @@ export function ProductionProcessingForm() {
       return;
     }
 
-    if (machineColumn.key !== "liner" && plannedQty > 0) {
+    if (!isCorrugationLiner(normalizedMachineName) && plannedQty > 0) {
       const alreadyProcessedQty = processing
         .filter((entry) => entry.productionId === productionId && normalizeMachineName(entry.machineName) === normalizedMachineName)
         .reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
       const nextTotal = alreadyProcessedQty + qtyNumber;
       if (nextTotal > plannedQty) {
-        alert(`Cannot report more than planned qty.\nPlan: ${plannedQty}\nAlready reported (${machineColumn.label}): ${alreadyProcessedQty}\nNow: ${qtyNumber}`);
+        alert(
+          `Cannot report more than planned qty.\nJob: ${selectedProduction.jobCardNo || selectedProduction.transactionNo}\nStep/Machine: ${machineColumn.label}\nPlan Qty: ${plannedQty}\nAlready reported: ${alreadyProcessedQty}\nNow: ${qtyNumber}\nExceeds by: ${nextTotal - plannedQty}`
+        );
         return;
       }
     }
@@ -115,11 +132,12 @@ export function ProductionProcessingForm() {
 
       <div className="bg-white p-6 rounded shadow-sm border border-black">
         <form onSubmit={handleSubmit} className="space-y-6">
+          <MandatoryLegend />
           <div className="space-y-4">
             <h4 className="font-black text-xs uppercase text-indigo-600 border-b border-indigo-100 pb-1">Reporting Details</h4>
             
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Date *</label>
+              <MandatoryLabel label="Date" required className="font-bold text-black text-sm" />
               <input 
                 type="date" 
                 value={date} 
@@ -130,7 +148,7 @@ export function ProductionProcessingForm() {
             </div>
 
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Job No *</label>
+              <MandatoryLabel label="Job No" required className="font-bold text-black text-sm" />
               <Select 
                 value={productionId} 
                 onChange={setProductionId} 
@@ -141,7 +159,7 @@ export function ProductionProcessingForm() {
             </div>
 
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Machine *</label>
+              <MandatoryLabel label="Machine" required className="font-bold text-black text-sm" />
               <Select 
                 value={machineId} 
                 onChange={setMachineId} 
@@ -152,7 +170,7 @@ export function ProductionProcessingForm() {
             </div>
 
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Shift *</label>
+              <MandatoryLabel label="Shift" required className="font-bold text-black text-sm" />
               <select
                 value={shift}
                 onChange={(e) => setShift(e.target.value as "" | "Day" | "Night")}
@@ -168,7 +186,7 @@ export function ProductionProcessingForm() {
             </div>
 
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Quantity *</label>
+              <MandatoryLabel label="Quantity" required className="font-bold text-black text-sm" />
               <input 
                 type="number" 
                 value={qty} 
@@ -180,7 +198,7 @@ export function ProductionProcessingForm() {
             </div>
 
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Operator Name *</label>
+              <MandatoryLabel label="Operator Name" required className="font-bold text-black text-sm" />
               <Select 
                 value={operatorId} 
                 onChange={setOperatorId} 
