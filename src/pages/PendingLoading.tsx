@@ -19,8 +19,6 @@ import {
   Check,
   ChevronRight,
   ChevronDown,
-  Plus,
-  Trash2,
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
@@ -55,13 +53,6 @@ interface JobOption {
   ffg: number;
 }
 
-interface JobAllocationDraft {
-  id: string;
-  sourceType: "job";
-  jobId: string;
-  qty: number | "";
-}
-
 function getLoadingSlipJobAllocations(line: LoadingSlipLine): Array<{ jobId: string; jobNo: string; qty: number }> {
   if (Array.isArray(line.allocations) && line.allocations.length > 0) {
     return line.allocations
@@ -74,15 +65,6 @@ function getLoadingSlipJobAllocations(line: LoadingSlipLine): Array<{ jobId: str
   }
 
   return [];
-}
-
-function createJobAllocationDraft(): JobAllocationDraft {
-  return {
-    id: crypto.randomUUID(),
-    sourceType: "job",
-    jobId: "",
-    qty: "",
-  };
 }
 
 export function PendingLoading() {
@@ -99,7 +81,7 @@ export function PendingLoading() {
   const didInitExpand = useRef(false);
   const [loadingModal, setLoadingModal] = useState<LoadingModalState | null>(null);
   const [loadedQuantities, setLoadedQuantities] = useState<Record<string, number>>({});
-  const [jobAllocations, setJobAllocations] = useState<Record<string, JobAllocationDraft[]>>({});
+  const [jobSplitQtys, setJobSplitQtys] = useState<Record<string, Record<string, number | "">>>({});
   const [openingStockQtys, setOpeningStockQtys] = useState<Record<string, number | "">>({});
   const [cancelingPlanId, setCancelingPlanId] = useState<string | null>(null);
   const [cancelQty, setCancelQty] = useState<number | "">("");
@@ -177,14 +159,14 @@ export function PendingLoading() {
 
   const currentAdjustmentByJobId = useMemo(() => {
     const map = new Map<string, number>();
-    Object.values(jobAllocations).forEach((allocations) => {
-      allocations.forEach((allocation) => {
-        if (!allocation.jobId) return;
-        map.set(allocation.jobId, (map.get(allocation.jobId) || 0) + Number(allocation.qty || 0));
+    Object.values(jobSplitQtys).forEach((byJobId) => {
+      Object.entries(byJobId).forEach(([jobId, qty]) => {
+        if (!jobId) return;
+        map.set(jobId, (map.get(jobId) || 0) + Number(qty || 0));
       });
     });
     return map;
-  }, [jobAllocations]);
+  }, [jobSplitQtys]);
 
   const getJobOptionsForPlan = (plan: DispatchPlan, itemId: string): JobOption[] => {
     const jobOptionsForSchedule = productions
@@ -215,18 +197,7 @@ export function PendingLoading() {
     );
   };
 
-  const getPlanJobAllocationsTotal = (planId: string) =>
-    (jobAllocations[planId] || []).reduce((sum, allocation) => sum + Number(allocation.qty || 0), 0);
-
   const getPlanOpeningStockQty = (planId: string) => Number(openingStockQtys[planId] || 0);
-
-  const getPlanAllocatedTotal = (planId: string) => getPlanJobAllocationsTotal(planId) + getPlanOpeningStockQty(planId);
-
-  const getCurrentJobOptionById = (plan: DispatchPlan, itemId: string, jobId: string) =>
-    getJobOptionsForPlan(plan, itemId).find((option) => option.jobId === jobId);
-
-  const getCurrentRowQtyForJob = (planId: string, allocationId: string) =>
-    Number((jobAllocations[planId] || []).find((allocation) => allocation.id === allocationId)?.qty || 0);
 
   const getAlreadyLoadedForJob = (jobId: string) => existingLoadedByJobId.get(jobId) || 0;
 
@@ -238,157 +209,145 @@ export function PendingLoading() {
     return Math.max(0, ffg - alreadyLoaded - currentAdjustments + currentRowQty);
   };
 
-  const getPlanValidation = (plan: PendingPlan) => {
-    const rowLoadedQty = Number(loadedQuantities[plan.id] || 0);
-    const allocations = jobAllocations[plan.id] || [];
-    const openingStockQty = getPlanOpeningStockQty(plan.id);
-    const allocatedTotal = getPlanAllocatedTotal(plan.id);
+  const getModalKey = (truckId: string, itemId: string) => `${truckId}::${itemId}`;
+
+  const getModalValidation = (modal: LoadingModalState) => {
+    const modalKey = getModalKey(modal.truckId, modal.itemId);
+    const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
+    const byJobId = jobSplitQtys[modalKey] || {};
+    const openingStockQty = getPlanOpeningStockQty(modalKey);
+    const jobAllocatedTotal = Object.values(byJobId).reduce((sum, qty) => sum + Number(qty || 0), 0);
+    const allocatedTotal = jobAllocatedTotal + openingStockQty;
     const errors: string[] = [];
 
-    if (rowLoadedQty <= 0) {
-      errors.push("Loaded qty must be greater than 0.");
-    }
+    const totalPending = modal.plans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
-    const selectedJobIds = new Set<string>();
-    allocations.forEach((allocation) => {
-      const qty = Number(allocation.qty || 0);
-      if (!allocation.jobId) {
-        errors.push("Select a job number for each job row.");
-        return;
-      }
+    if (rowLoadedQty <= 0) errors.push("Loaded qty must be greater than 0.");
+    if (rowLoadedQty > totalPending + 0.0001) errors.push("Loaded qty cannot exceed total pending for loading.");
 
-      if (selectedJobIds.has(allocation.jobId)) {
-        errors.push("Duplicate job number selected in the same row.");
-      }
-      selectedJobIds.add(allocation.jobId);
-
-      if (qty <= 0) {
-        errors.push("Adjust Now must be greater than 0 for selected jobs.");
-      }
-
-      const remainingCapacity = getRemainingCapacityForJob(allocation.jobId, getCurrentRowQtyForJob(plan.id, allocation.id));
-      if (qty > remainingCapacity) {
+    Object.entries(byJobId).forEach(([jobId, qty]) => {
+      const value = Number(qty || 0);
+      if (value <= 0) return;
+      const remainingCapacity = getRemainingCapacityForJob(jobId, value);
+      if (value > remainingCapacity + 0.0001) {
         errors.push("Adjust Now cannot exceed Yet to Load for a job.");
       }
     });
 
-    if (openingStockQty < 0) {
-      errors.push("Opening Stock quantity cannot be negative.");
-    }
+    if (openingStockQty < 0) errors.push("Opening Stock quantity cannot be negative.");
+    if (allocatedTotal <= 0) errors.push("At least one positive adjustment is required.");
+    if (Math.abs(allocatedTotal - rowLoadedQty) > 0.0001) errors.push("Job/Open Stock total must exactly match Loaded qty.");
 
-    if (allocatedTotal <= 0) {
-      errors.push("At least one positive adjustment is required.");
-    }
-
-    if (Math.abs(allocatedTotal - rowLoadedQty) > 0.0001) {
-      errors.push("Job/Open Stock total must exactly match Loaded qty.");
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-      allocatedTotal,
-      openingStockQty,
-    };
+    return { isValid: errors.length === 0, errors, allocatedTotal, openingStockQty, totalPending };
   };
 
   const modalHasErrors = useMemo(() => {
     if (!loadingModal) return false;
-    return loadingModal.plans.some((plan) => !getPlanValidation(plan).isValid);
-  }, [jobAllocations, loadedQuantities, loadingModal, openingStockQtys, currentAdjustmentByJobId, existingLoadedByJobId, productionMap]);
+    return !getModalValidation(loadingModal).isValid;
+  }, [jobSplitQtys, loadedQuantities, loadingModal, openingStockQtys, currentAdjustmentByJobId, existingLoadedByJobId, productionMap]);
 
   const handleOpenLoad = (truckId: string, itemId: string, itemPlans: PendingPlan[]) => {
     setLoadingModal({ truckId, itemId, plans: itemPlans });
+    const modalKey = getModalKey(truckId, itemId);
+    const totalPending = itemPlans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
-    const initialQtys: Record<string, number> = {};
-    const initialAllocations: Record<string, JobAllocationDraft[]> = {};
-    const initialOpeningStockQtys: Record<string, number | ""> = {};
-    itemPlans.forEach((plan) => {
-      initialQtys[plan.id] = plan.pendingQty;
-      initialAllocations[plan.id] = [];
-      initialOpeningStockQtys[plan.id] = "";
+    const eligibleJobs = productions
+      .filter((p) => p.itemId === itemId && p.status !== "Cancelled" && !p.cancelTimestamp)
+      .map((p) => {
+        const ffg = Number(p.prodFromFFG || 0);
+        const alreadyLoaded = getAlreadyLoadedForJob(p.id);
+        return { jobId: p.id, jobNo: String(p.transactionNo || "").trim(), ffg, yetToLoad: Math.max(0, ffg - alreadyLoaded) };
+      })
+      .filter((j) => j.jobNo && j.yetToLoad > 0)
+      .sort((a, b) => a.jobNo.localeCompare(b.jobNo, undefined, { numeric: true, sensitivity: "base" }));
+
+    setLoadedQuantities({ [modalKey]: totalPending });
+    setOpeningStockQtys({ [modalKey]: "" });
+    setJobSplitQtys({
+      [modalKey]: Object.fromEntries(eligibleJobs.map((j) => [j.jobId, ""])),
     });
-
-    setLoadedQuantities(initialQtys);
-    setJobAllocations(initialAllocations);
-    setOpeningStockQtys(initialOpeningStockQtys);
   };
 
   const handleCloseLoad = () => {
     setLoadingModal(null);
     setLoadedQuantities({});
-    setJobAllocations({});
+    setJobSplitQtys({});
     setOpeningStockQtys({});
-  };
-
-  const addJobAllocationRow = (planId: string) => {
-    setJobAllocations((prev) => ({
-      ...prev,
-      [planId]: [...(prev[planId] || []), createJobAllocationDraft()],
-    }));
-  };
-
-  const updateJobAllocation = (planId: string, allocationId: string, patch: Partial<JobAllocationDraft>) => {
-    setJobAllocations((prev) => ({
-      ...prev,
-      [planId]: (prev[planId] || []).map((allocation) =>
-        allocation.id === allocationId ? { ...allocation, ...patch } : allocation
-      ),
-    }));
-  };
-
-  const removeJobAllocation = (planId: string, allocationId: string) => {
-    setJobAllocations((prev) => ({
-      ...prev,
-      [planId]: (prev[planId] || []).filter((allocation) => allocation.id !== allocationId),
-    }));
   };
 
   const handleSubmitLoading = async () => {
     if (!loadingModal) return;
 
-    const lines: LoadingSlipLine[] = [];
-    for (const plan of loadingModal.plans) {
-      const rowLoadedQty = Number(loadedQuantities[plan.id] || 0);
-      if (rowLoadedQty <= 0) continue;
+    const modalKey = getModalKey(loadingModal.truckId, loadingModal.itemId);
+    const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
+    const validation = getModalValidation(loadingModal);
 
-      const validation = getPlanValidation(plan);
-      if (!validation.isValid) {
-        alert(`${plan.orderNo}: ${validation.errors[0]}`);
+    if (!validation.isValid) {
+      alert(validation.errors[0] || "Loading data is invalid.");
+      return;
+    }
+
+    // Build allocation pool (job splits + opening stock) and then distribute into dispatch plan lines FIFO.
+    const byJobId = jobSplitQtys[modalKey] || {};
+    const allocationPool: LoadingSlipAllocation[] = [];
+
+    Object.entries(byJobId).forEach(([jobId, qty]) => {
+      const value = Number(qty || 0);
+      if (!jobId || value <= 0) return;
+      const production = productionMap.get(jobId);
+      const jobNo = String(production?.transactionNo || "").trim();
+      if (!jobNo) return;
+      allocationPool.push({ sourceType: "job", jobId, jobNo, qty: value });
+    });
+
+    const openingStockQty = getPlanOpeningStockQty(modalKey);
+    if (openingStockQty > 0) {
+      allocationPool.push({ sourceType: "opening_stock", sourceRef: "Opening Stock", qty: openingStockQty });
+    }
+
+    const sortedPlans = [...loadingModal.plans].sort((a, b) =>
+      String(a.orderNo || "").localeCompare(String(b.orderNo || ""), undefined, { numeric: true, sensitivity: "base" })
+    );
+
+    const consumeFromPool = (need: number) => {
+      const allocations: LoadingSlipAllocation[] = [];
+      let remaining = need;
+      while (remaining > 0.0001 && allocationPool.length > 0) {
+        const head = allocationPool[0];
+        const take = Math.min(remaining, Number(head.qty || 0));
+        if (take <= 0) {
+          allocationPool.shift();
+          continue;
+        }
+        allocations.push({ ...(head as any), qty: take });
+        remaining -= take;
+        const left = Number(head.qty || 0) - take;
+        if (left <= 0.0001) allocationPool.shift();
+        else allocationPool[0] = { ...(head as any), qty: left };
+      }
+      return { allocations, remaining };
+    };
+
+    const lines: LoadingSlipLine[] = [];
+    let remainingToDistribute = rowLoadedQty;
+    for (const plan of sortedPlans) {
+      if (remainingToDistribute <= 0.0001) break;
+      const planPending = Math.max(0, Number(plan.pendingQty || 0));
+      const planLoad = Math.min(planPending, remainingToDistribute);
+      if (planLoad <= 0.0001) continue;
+
+      const consumed = consumeFromPool(planLoad);
+      if (consumed.remaining > 0.0001) {
+        alert("Job split allocations are insufficient to cover Loaded qty.");
         return;
       }
 
-      const allocations: LoadingSlipAllocation[] = [];
-
-      (jobAllocations[plan.id] || []).forEach((allocation) => {
-        const option = getCurrentJobOptionById(plan, loadingModal.itemId, allocation.jobId);
-        if (!option) return;
-        allocations.push({
-          sourceType: "job",
-          jobId: option.jobId,
-          jobNo: option.jobNo,
-          qty: Number(allocation.qty || 0),
-        });
-      });
-
-      const openingStockQty = getPlanOpeningStockQty(plan.id);
-      if (openingStockQty > 0) {
-        allocations.push({
-          sourceType: "opening_stock",
-          sourceRef: "Opening Stock",
-          qty: openingStockQty,
-        });
-      }
-
-      lines.push({
-        dispatchPlanId: plan.id,
-        loadedQty: rowLoadedQty,
-        allocations,
-      });
+      lines.push({ dispatchPlanId: plan.id, loadedQty: planLoad, allocations: consumed.allocations });
+      remainingToDistribute -= planLoad;
     }
 
-    if (lines.length === 0) {
-      alert("Please enter at least one valid loading row.");
+    if (remainingToDistribute > 0.0001) {
+      alert("Unable to distribute Loaded qty across pending dispatch plans.");
       return;
     }
 
@@ -613,28 +572,44 @@ export function PendingLoading() {
                 </div>
               </div>
 
-              <div className="space-y-5">
-                {loadingModal.plans.map((plan) => {
-                  const jobOptions = getJobOptionsForPlan(plan, loadingModal.itemId);
-                  const validation = getPlanValidation(plan);
-                  const rowLoadedQty = Number(loadedQuantities[plan.id] || 0);
+                            <div className="space-y-5">
+                {(() => {
+                  const modalKey = getModalKey(loadingModal.truckId, loadingModal.itemId);
+                  const item = items.find((row) => row.id === loadingModal.itemId);
+                  const totalPlanned = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
+                  const totalLoaded = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.loadedQty || 0), 0);
+                  const totalCancelled = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.canceledQty || 0), 0);
+                  const totalPending = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
+                  const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
+                  const validation = getModalValidation(loadingModal);
+
+                  const jobs = productions
+                    .filter((p) => p.itemId === loadingModal.itemId && p.status !== "Cancelled" && !p.cancelTimestamp)
+                    .map((p) => {
+                      const ffg = Number(p.prodFromFFG || 0);
+                      const alreadyLoaded = getAlreadyLoadedForJob(p.id);
+                      const yetToLoad = Math.max(0, ffg - alreadyLoaded);
+                      return { jobId: p.id, jobNo: String(p.transactionNo || "").trim(), ffg, alreadyLoaded, yetToLoad };
+                    })
+                    .filter((j) => j.jobNo && j.yetToLoad > 0)
+                    .sort((a, b) => a.jobNo.localeCompare(b.jobNo, undefined, { numeric: true, sensitivity: "base" }));
 
                   return (
-                    <div key={plan.id} className="border border-black rounded overflow-hidden">
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-0 bg-slate-100 border-b border-black">
-                        <div className="px-4 py-3 border-r border-black">
-                          <div className="text-sm font-medium">{plan.companyName}</div>
-                          <div className="text-[10px] text-slate-500">{plan.orderNo}</div>
+                    <div className="border border-black rounded overflow-hidden">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-0 bg-slate-100 border-b border-black">
+                        <div className="px-4 py-3 border-r border-black col-span-2">
+                          <div className="text-sm font-medium">{item?.name || "Unknown Item"}</div>
+                          <div className="text-[10px] text-slate-500">Combined Loading for {loadingModal.plans.length} dispatch plans</div>
                         </div>
                         <div className="px-4 py-3 border-r border-black text-right">
                           <div className="text-[10px] uppercase text-slate-500 font-bold">Planned</div>
-                          <div className="font-bold">{Number(plan.plannedQty || 0).toLocaleString()}</div>
+                          <div className="font-bold">{totalPlanned.toLocaleString()}</div>
                         </div>
                         <div className="px-4 py-3 border-r border-black text-right">
                           <div className="text-[10px] uppercase text-slate-500 font-bold">Pending</div>
-                          <div className="font-bold text-indigo-700">{plan.pendingQty.toLocaleString()}</div>
+                          <div className="font-bold text-indigo-700">{totalPending.toLocaleString()}</div>
                         </div>
-                        <div className="px-4 py-3 border-r border-black text-right">
+                        <div className="px-4 py-3 text-right">
                           <div className="text-[10px] uppercase text-slate-500 font-bold">Loaded</div>
                           <input
                             type="number"
@@ -643,18 +618,15 @@ export function PendingLoading() {
                               const nextValue = e.target.value === "" ? 0 : parseFloat(e.target.value);
                               setLoadedQuantities((prev) => ({
                                 ...prev,
-                                [plan.id]: Math.min(Math.max(nextValue, 0), plan.pendingQty),
+                                [modalKey]: Math.min(Math.max(nextValue, 0), totalPending),
                               }));
                             }}
-                            max={plan.pendingQty}
+                            max={totalPending}
                             min={0}
-                            className="mt-1 w-24 rounded border-2 border-indigo-600 px-2 py-1 text-right font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                            className="mt-1 w-28 rounded border-2 border-indigo-600 px-2 py-1 text-right font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600"
                           />
-                        </div>
-                        <div className="px-4 py-3 text-right">
-                          <div className="text-[10px] uppercase text-slate-500 font-bold">Allocated / Balance</div>
-                          <div className={`font-bold ${Math.abs(validation.allocatedTotal - rowLoadedQty) < 0.0001 ? "text-emerald-700" : "text-red-600"}`}>
-                            {validation.allocatedTotal.toLocaleString()} / {(rowLoadedQty - validation.allocatedTotal).toLocaleString()}
+                          <div className="mt-1 text-[10px] font-bold text-slate-500">
+                            Loaded so far: {totalLoaded.toLocaleString()} | Cancelled: {totalCancelled.toLocaleString()}
                           </div>
                         </div>
                       </div>
@@ -668,59 +640,44 @@ export function PendingLoading() {
                               <th className="px-4 py-2 text-right text-xs font-bold uppercase">Already Loaded</th>
                               <th className="px-4 py-2 text-right text-xs font-bold uppercase">Yet to Load</th>
                               <th className="px-4 py-2 text-right text-xs font-bold uppercase">Adjust Now</th>
-                              <th className="px-4 py-2 text-center text-xs font-bold uppercase">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-black bg-white">
-                            {(jobAllocations[plan.id] || []).map((allocation) => {
-                              const option = getCurrentJobOptionById(plan, loadingModal.itemId, allocation.jobId);
-                              const production = allocation.jobId ? productionMap.get(allocation.jobId) : undefined;
-                              const alreadyLoaded = allocation.jobId ? getAlreadyLoadedForJob(allocation.jobId) : 0;
-                              const remainingCapacity = allocation.jobId ? getRemainingCapacityForJob(allocation.jobId, getCurrentRowQtyForJob(plan.id, allocation.id)) : 0;
-                              return (
-                                <tr key={allocation.id} className="divide-x divide-black">
-                                  <td className="px-4 py-3">
-                                    <select
-                                      value={allocation.jobId}
-                                      onChange={(e) => updateJobAllocation(plan.id, allocation.id, { jobId: e.target.value })}
-                                      className="w-full rounded border border-black px-2 py-1 text-xs bg-white"
-                                    >
-                                      <option value="">Select job...</option>
-                                      {jobOptions.map((job) => (
-                                        <option key={job.jobId} value={job.jobId}>
-                                          {job.jobNo}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="px-4 py-3 text-right text-xs">{Number(option?.ffg || production?.prodFromFFG || 0).toLocaleString()}</td>
-                                  <td className="px-4 py-3 text-right text-xs text-amber-700 font-bold">{alreadyLoaded.toLocaleString()}</td>
-                                  <td className="px-4 py-3 text-right text-xs text-indigo-700 font-bold">{remainingCapacity.toLocaleString()}</td>
-                                  <td className="px-4 py-3 text-right">
-                                    <input
-                                      type="number"
-                                      value={allocation.qty}
-                                      min={0}
-                                      max={remainingCapacity}
-                                      onChange={(e) => {
-                                        const nextValue = e.target.value === "" ? "" : Math.min(parseFloat(e.target.value), remainingCapacity);
-                                        updateJobAllocation(plan.id, allocation.id, { qty: nextValue });
-                                      }}
-                                      className="w-24 rounded border-2 border-indigo-600 px-2 py-1 text-right font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                                    />
-                                  </td>
-                                  <td className="px-4 py-3 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => removeJobAllocation(plan.id, allocation.id)}
-                                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                            {jobs.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-6 text-center text-xs text-slate-500">
+                                  No jobs available (Yet to Load is 0 for all jobs of this item).
+                                </td>
+                              </tr>
+                            ) : (
+                              jobs.map((job) => {
+                                const currentValue = jobSplitQtys[modalKey]?.[job.jobId] ?? "";
+                                return (
+                                  <tr key={job.jobId} className="divide-x divide-black">
+                                    <td className="px-4 py-3 text-xs font-bold text-black whitespace-nowrap">{job.jobNo}</td>
+                                    <td className="px-4 py-3 text-right text-xs text-slate-600">{job.ffg.toLocaleString()}</td>
+                                    <td className="px-4 py-3 text-right text-xs text-slate-600">{job.alreadyLoaded.toLocaleString()}</td>
+                                    <td className="px-4 py-3 text-right text-xs font-bold text-emerald-700">{job.yetToLoad.toLocaleString()}</td>
+                                    <td className="px-4 py-3 text-right">
+                                      <input
+                                        type="number"
+                                        value={currentValue}
+                                        min={0}
+                                        max={job.yetToLoad}
+                                        onChange={(e) => {
+                                          const next = e.target.value === "" ? "" : Math.min(parseFloat(e.target.value), job.yetToLoad);
+                                          setJobSplitQtys((prev) => ({
+                                            ...prev,
+                                            [modalKey]: { ...(prev[modalKey] || {}), [job.jobId]: next },
+                                          }));
+                                        }}
+                                        className="w-24 rounded border-2 border-indigo-600 px-2 py-1 text-right font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
                             <tr className="divide-x divide-black bg-emerald-50/40">
                               <td className="px-4 py-3 text-xs font-bold uppercase text-emerald-800">Opening Stock</td>
                               <td className="px-4 py-3 text-right text-xs text-slate-500">-</td>
@@ -729,38 +686,29 @@ export function PendingLoading() {
                               <td className="px-4 py-3 text-right">
                                 <input
                                   type="number"
-                                  value={openingStockQtys[plan.id] ?? ""}
+                                  value={openingStockQtys[modalKey] ?? ""}
                                   min={0}
                                   onChange={(e) =>
                                     setOpeningStockQtys((prev) => ({
                                       ...prev,
-                                      [plan.id]: e.target.value === "" ? "" : parseFloat(e.target.value),
+                                      [modalKey]: e.target.value === "" ? "" : parseFloat(e.target.value),
                                     }))
                                   }
                                   className="w-24 rounded border-2 border-emerald-600 px-2 py-1 text-right font-bold focus:outline-none focus:ring-1 focus:ring-emerald-600"
                                 />
                               </td>
-                              <td className="px-4 py-3 text-center text-xs text-slate-500">Fixed Source</td>
                             </tr>
-                            {(jobAllocations[plan.id] || []).length === 0 ? (
-                              <tr>
-                                <td colSpan={6} className="px-4 py-4 text-center text-xs text-slate-500">
-                                  No job adjustments added yet.
-                                </td>
-                              </tr>
-                            ) : null}
                           </tbody>
                         </table>
                       </div>
 
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-t border-black bg-slate-50 px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => addJobAllocationRow(plan.id)}
-                          className="inline-flex items-center gap-2 rounded border border-black bg-white px-3 py-2 text-xs font-bold uppercase hover:bg-slate-100"
-                        >
-                          <Plus size={14} /> Add Job Row
-                        </button>
+                        <div className="text-xs font-bold text-slate-700">
+                          Allocated / Balance:{" "}
+                          <span className={Math.abs(validation.allocatedTotal - rowLoadedQty) < 0.0001 ? "text-emerald-700" : "text-red-600"}>
+                            {validation.allocatedTotal.toLocaleString()} / {(rowLoadedQty - validation.allocatedTotal).toLocaleString()}
+                          </span>
+                        </div>
                         <div className="text-right">
                           {validation.errors.length > 0 ? (
                             <div className="text-xs font-bold text-red-600">{validation.errors[0]}</div>
@@ -771,7 +719,7 @@ export function PendingLoading() {
                       </div>
                     </div>
                   );
-                })}
+                })()}
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
