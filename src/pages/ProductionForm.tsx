@@ -715,7 +715,7 @@ export function ProductionForm() {
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 required
                 className={cn(
-                  "border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm",
+                  "border-2 border-black rounded p-2 text-black bg-yellow-100 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm",
                   formData.date && formData.date < todayStr && "border-red-500"
                 )}
               />
@@ -1091,7 +1091,7 @@ function FormInput({
         onChange={(e) => onChange?.(type === "number" ? (e.target.value === "" ? "" : parseFloat(e.target.value)) : e.target.value)}
         className={cn(
           "border border-black rounded px-2 py-1 text-sm text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600",
-          readOnly && "bg-slate-100 cursor-not-allowed"
+          readOnly ? "bg-slate-100 cursor-not-allowed" : "bg-yellow-100"
         )}
       />
     </div>

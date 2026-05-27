@@ -36,7 +36,6 @@ export function IndentForm() {
 
   const [requestedBy, setRequestedBy] = useState("");
   const [requisitionDate, setRequisitionDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [requiredDate, setRequiredDate] = useState("");
   const [indentType, setIndentType] = useState<Indent["indentType"]>("Reel");
   const [lines, setLines] = useState<EditableIndentLine[]>([createEmptyLine()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,7 +75,7 @@ export function IndentForm() {
           ? {
               ...line,
               [field]: field === "qty" ? (value === "" ? "" : Number(value)) : value,
-              ...(field === "materialId" && !line.targetDeliveryDate && requiredDate ? { targetDeliveryDate: requiredDate } : {}),
+              ...(field === "materialId" && !line.targetDeliveryDate && requisitionDate ? { targetDeliveryDate: requisitionDate } : {}),
             }
           : line
       )
@@ -99,8 +98,8 @@ export function IndentForm() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!requestedBy.trim() || !requisitionDate || !requiredDate) {
-      alert("Requested By, Requisition Date, and Required Date are required.");
+    if (!requestedBy.trim() || !requisitionDate) {
+      alert("Requested By and Requisition Date are required.");
       return;
     }
 
@@ -129,7 +128,7 @@ export function IndentForm() {
         materialId: material.id,
         uom: getIndentLineUom(indentType, material),
         qty: Number(line.qty),
-        targetDeliveryDate: (line.targetDeliveryDate || requiredDate || "").trim() || undefined,
+        targetDeliveryDate: (line.targetDeliveryDate || requisitionDate || "").trim() || undefined,
         orderedQty: 0,
         cancelledQty: 0,
         balanceQty: Number(line.qty),
@@ -143,7 +142,7 @@ export function IndentForm() {
       id: indentId,
       requestedBy: requestedBy.trim(),
       requisitionDate,
-      requiredDate,
+      requiredDate: requisitionDate,
       indentType,
       status: "Pending",
       totalIndentQty: totals.totalIndentQty,
@@ -159,7 +158,6 @@ export function IndentForm() {
       await setIndentLines([...indentLines, ...nextLines]);
       setRequestedBy(requestedByOptions[0]?.value || "System");
       setRequisitionDate(new Date().toISOString().split("T")[0]);
-      setRequiredDate("");
       setIndentType("Reel");
       setLines([createEmptyLine()]);
       alert("Indent saved successfully.");
@@ -206,18 +204,6 @@ export function IndentForm() {
               type="date"
               value={requisitionDate}
               onChange={(e) => setRequisitionDate(e.target.value)}
-              required
-              className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-blue-700 font-bold">
-              Required Date <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={requiredDate}
-              onChange={(e) => setRequiredDate(e.target.value)}
               required
               className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />

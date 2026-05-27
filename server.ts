@@ -79,6 +79,11 @@ const DELETE_REFERENCES: Record<string, DeleteReference[]> = {
     { table: "gate_entry_photos", column: "gateEntryId", label: "Gate Entry Photos" },
     { table: "material_in", column: "gateEntryId", label: "Material In" },
   ],
+  material_in: [{ table: "material_in_packing_slips", column: "materialInId", label: "Packing Slips" }],
+  material_in_packing_slips: [
+    { table: "material_issue_reel_lines", column: "packingSlipId", label: "Material Issue Reel Lines" },
+    { table: "material_return_reel_lines", column: "packingSlipId", label: "Material Return Reel Lines" },
+  ],
   materials: [
     { table: "indent_lines", column: "materialId", label: "Indent Lines" },
     { table: "purchase_order_lines", column: "materialId", label: "Purchase Order Lines" },
@@ -100,6 +105,11 @@ const DELETE_REFERENCES: Record<string, DeleteReference[]> = {
     { table: "consumptions", column: "productionId", label: "Consumptions" },
   ],
   production_processing: [],
+  machines: [{ table: "production_processing", column: "machineId", label: "Production Processing" }],
+  trucks: [
+    { table: "dispatch_plans", column: "truckId", label: "Dispatch Plans" },
+    { table: "loading_slips", column: "truckId", label: "Loading Slips" },
+  ],
   material_issues: [
     { table: "material_issue_lines", column: "materialIssueId", label: "Material Issue Lines" },
     { table: "material_issue_reel_lines", column: "materialIssueId", label: "Material Issue Reel Lines" },
@@ -125,6 +135,162 @@ async function getDeleteBlockers(db: mysql.Pool, tableName: string, id: string) 
     }
   }
   return blockers;
+}
+
+type ForeignKeyDef = {
+  table: string;
+  column: string;
+  refTable: string;
+  refColumn: string;
+  constraintName: string;
+  indexName: string;
+};
+
+async function ensureIndex(db: mysql.Pool, database: string, table: string, column: string, indexName: string) {
+  try {
+    const [rows] = await db.query(
+      "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?",
+      [database, table, indexName]
+    );
+    if ((rows as any[]).length > 0) return;
+
+    await db.query(`CREATE INDEX \`${indexName}\` ON \`${table}\` (\`${column}\`)`);
+    console.log(`[DB] Added index ${indexName} on ${table}(${column})`);
+  } catch (err) {
+    console.warn(`[DB] Could not ensure index ${indexName} on ${table}(${column}):`, (err as Error).message);
+  }
+}
+
+async function ensureForeignKey(db: mysql.Pool, database: string, def: ForeignKeyDef) {
+  try {
+    const [rows] = await db.query(
+      "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND CONSTRAINT_NAME = ?",
+      [database, def.table, def.constraintName]
+    );
+    if ((rows as any[]).length > 0) return;
+
+    await ensureIndex(db, database, def.table, def.column, def.indexName);
+
+    await db.query(
+      `ALTER TABLE \`${def.table}\` ADD CONSTRAINT \`${def.constraintName}\` FOREIGN KEY (\`${def.column}\`) REFERENCES \`${def.refTable}\` (\`${def.refColumn}\`) ON DELETE RESTRICT ON UPDATE CASCADE`
+    );
+    console.log(`[DB] Added foreign key ${def.constraintName}: ${def.table}.${def.column} -> ${def.refTable}.${def.refColumn}`);
+  } catch (err) {
+    console.warn(`[DB] Could not ensure foreign key ${def.constraintName}:`, (err as Error).message);
+  }
+}
+
+async function ensureBestEffortForeignKeys(db: mysql.Pool, database: string) {
+  const defs: ForeignKeyDef[] = [
+    {
+      table: "indent_lines",
+      column: "indentId",
+      refTable: "indents",
+      refColumn: "id",
+      constraintName: "fk_indent_lines_indentId_indents",
+      indexName: "idx_indent_lines_indentId",
+    },
+    {
+      table: "purchase_orders",
+      column: "indentId",
+      refTable: "indents",
+      refColumn: "id",
+      constraintName: "fk_purchase_orders_indentId_indents",
+      indexName: "idx_purchase_orders_indentId",
+    },
+    {
+      table: "purchase_order_lines",
+      column: "purchaseOrderId",
+      refTable: "purchase_orders",
+      refColumn: "id",
+      constraintName: "fk_purchase_order_lines_purchaseOrderId_purchase_orders",
+      indexName: "idx_purchase_order_lines_purchaseOrderId",
+    },
+    {
+      table: "purchase_order_lines",
+      column: "indentLineId",
+      refTable: "indent_lines",
+      refColumn: "id",
+      constraintName: "fk_purchase_order_lines_indentLineId_indent_lines",
+      indexName: "idx_purchase_order_lines_indentLineId",
+    },
+    {
+      table: "orders_schedule",
+      column: "orderId",
+      refTable: "orders",
+      refColumn: "id",
+      constraintName: "fk_orders_schedule_orderId_orders",
+      indexName: "idx_orders_schedule_orderId",
+    },
+    {
+      table: "productions",
+      column: "scheduleId",
+      refTable: "orders_schedule",
+      refColumn: "id",
+      constraintName: "fk_productions_scheduleId_orders_schedule",
+      indexName: "idx_productions_scheduleId",
+    },
+    {
+      table: "invoices",
+      column: "companyId",
+      refTable: "companies",
+      refColumn: "id",
+      constraintName: "fk_invoices_companyId_companies",
+      indexName: "idx_invoices_companyId",
+    },
+    {
+      table: "invoice_line_items",
+      column: "invoiceId",
+      refTable: "invoices",
+      refColumn: "id",
+      constraintName: "fk_invoice_line_items_invoiceId_invoices",
+      indexName: "idx_invoice_line_items_invoiceId",
+    },
+    {
+      table: "invoice_line_items",
+      column: "loadingSlipId",
+      refTable: "loading_slips",
+      refColumn: "id",
+      constraintName: "fk_invoice_line_items_loadingSlipId_loading_slips",
+      indexName: "idx_invoice_line_items_loadingSlipId",
+    },
+    {
+      table: "invoice_line_items",
+      column: "itemId",
+      refTable: "items",
+      refColumn: "id",
+      constraintName: "fk_invoice_line_items_itemId_items",
+      indexName: "idx_invoice_line_items_itemId",
+    },
+    {
+      table: "material_issue_lines",
+      column: "materialIssueId",
+      refTable: "material_issues",
+      refColumn: "id",
+      constraintName: "fk_material_issue_lines_materialIssueId_material_issues",
+      indexName: "idx_material_issue_lines_materialIssueId",
+    },
+    {
+      table: "material_return_lines",
+      column: "materialReturnId",
+      refTable: "material_returns",
+      refColumn: "id",
+      constraintName: "fk_material_return_lines_materialReturnId_material_returns",
+      indexName: "idx_material_return_lines_materialReturnId",
+    },
+    {
+      table: "production_processing",
+      column: "productionId",
+      refTable: "productions",
+      refColumn: "id",
+      constraintName: "fk_production_processing_productionId_productions",
+      indexName: "idx_production_processing_productionId",
+    },
+  ];
+
+  for (const def of defs) {
+    await ensureForeignKey(db, database, def);
+  }
 }
 
 function hasWorkflowValue(value: any) {
@@ -1595,6 +1761,12 @@ async function initDb(retries = 5) {
         await ensureIndianStatesSeed(db);
       } catch (err) {
         console.warn("[DB] Could not seed official India states:", (err as Error).message);
+      }
+
+      try {
+        await ensureBestEffortForeignKeys(db, database);
+      } catch (err) {
+        console.warn("[DB] Could not ensure foreign keys:", (err as Error).message);
       }
       
       return; // Success

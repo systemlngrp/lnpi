@@ -34,6 +34,234 @@ app.post("/api/upload-artwork", async (req, res) => {
   }
 });
 let pool = null;
+const DELETE_REFERENCES = {
+  companies: [
+    { table: "orders", column: "companyId", label: "Orders" },
+    { table: "invoices", column: "companyId", label: "Invoices" }
+  ],
+  items: [
+    { table: "orders", column: "itemId", label: "Orders" },
+    { table: "invoice_line_items", column: "itemId", label: "Invoice Line Items" },
+    { table: "productions", column: "itemId", label: "Productions" },
+    { table: "sample_requests", column: "itemId", label: "Sample Requests" }
+  ],
+  orders: [{ table: "orders_schedule", column: "orderId", label: "Order Schedule" }],
+  orders_schedule: [
+    { table: "productions", column: "scheduleId", label: "Productions" },
+    { table: "dispatch_plans", column: "scheduleId", label: "Dispatch Plans" }
+  ],
+  indents: [
+    { table: "indent_lines", column: "indentId", label: "Indent Lines" },
+    { table: "purchase_orders", column: "indentId", label: "Purchase Orders" }
+  ],
+  indent_lines: [{ table: "purchase_order_lines", column: "indentLineId", label: "Purchase Order Lines" }],
+  purchase_orders: [{ table: "purchase_order_lines", column: "purchaseOrderId", label: "Purchase Order Lines" }],
+  purchase_order_lines: [],
+  suppliers: [
+    { table: "purchase_orders", column: "supplierId", label: "Purchase Orders" },
+    { table: "material_in", column: "supplierId", label: "Material In" },
+    { table: "gate_entries", column: "supplierId", label: "Gate Entries" }
+  ],
+  gate_entries: [
+    { table: "gate_entry_photos", column: "gateEntryId", label: "Gate Entry Photos" },
+    { table: "material_in", column: "gateEntryId", label: "Material In" }
+  ],
+  material_in: [{ table: "material_in_packing_slips", column: "materialInId", label: "Packing Slips" }],
+  material_in_packing_slips: [
+    { table: "material_issue_reel_lines", column: "packingSlipId", label: "Material Issue Reel Lines" },
+    { table: "material_return_reel_lines", column: "packingSlipId", label: "Material Return Reel Lines" }
+  ],
+  materials: [
+    { table: "indent_lines", column: "materialId", label: "Indent Lines" },
+    { table: "purchase_order_lines", column: "materialId", label: "Purchase Order Lines" },
+    { table: "material_issue_lines", column: "materialId", label: "Material Issue Lines" },
+    { table: "material_return_lines", column: "materialId", label: "Material Return Lines" },
+    { table: "material_in_packing_slips", column: "materialId", label: "Material In Packing Slips" }
+  ],
+  material_groups: [{ table: "materials", column: "materialGroupId", label: "Materials" }],
+  item_groups: [{ table: "items", column: "groupId", label: "Items" }],
+  loading_slips: [{ table: "invoice_line_items", column: "loadingSlipId", label: "Invoice Line Items" }],
+  invoices: [
+    { table: "invoice_line_items", column: "invoiceId", label: "Invoice Line Items" },
+    { table: "loading_slips", column: "invoiceId", label: "Loading Slips" }
+  ],
+  productions: [
+    { table: "production_processing", column: "productionId", label: "Production Processing" },
+    { table: "material_issues", column: "productionId", label: "Material Issues" },
+    { table: "material_returns", column: "productionId", label: "Material Returns" },
+    { table: "consumptions", column: "productionId", label: "Consumptions" }
+  ],
+  production_processing: [],
+  machines: [{ table: "production_processing", column: "machineId", label: "Production Processing" }],
+  trucks: [
+    { table: "dispatch_plans", column: "truckId", label: "Dispatch Plans" },
+    { table: "loading_slips", column: "truckId", label: "Loading Slips" }
+  ],
+  material_issues: [
+    { table: "material_issue_lines", column: "materialIssueId", label: "Material Issue Lines" },
+    { table: "material_issue_reel_lines", column: "materialIssueId", label: "Material Issue Reel Lines" }
+  ],
+  material_returns: [
+    { table: "material_return_lines", column: "materialReturnId", label: "Material Return Lines" },
+    { table: "material_return_reel_lines", column: "materialReturnId", label: "Material Return Reel Lines" }
+  ],
+  material_issue_lines: [{ table: "material_issue_reel_lines", column: "materialIssueLineId", label: "Material Issue Reel Lines" }],
+  material_return_lines: [{ table: "material_return_reel_lines", column: "materialReturnLineId", label: "Material Return Reel Lines" }]
+};
+async function getDeleteBlockers(db, tableName, id) {
+  const refs = DELETE_REFERENCES[tableName] || [];
+  const blockers = [];
+  for (const ref of refs) {
+    try {
+      const [rows] = await db.query(`SELECT COUNT(*) as cnt FROM \`${ref.table}\` WHERE \`${ref.column}\` = ?`, [id]);
+      const count = Number((rows == null ? void 0 : rows[0])?.cnt || 0);
+      if (count > 0) blockers.push({ label: ref.label, count });
+    } catch (err) {
+      console.warn(`[DB] Delete reference check failed: ${tableName} -> ${ref.table}.${ref.column}`, err.message);
+    }
+  }
+  return blockers;
+}
+async function ensureIndex(db, database, table, column, indexName) {
+  try {
+    const [rows] = await db.query(
+      "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?",
+      [database, table, indexName]
+    );
+    if (rows.length > 0) return;
+    await db.query(`CREATE INDEX \`${indexName}\` ON \`${table}\` (\`${column}\`)`);
+    console.log(`[DB] Added index ${indexName} on ${table}(${column})`);
+  } catch (err) {
+    console.warn(`[DB] Could not ensure index ${indexName} on ${table}(${column}):`, err.message);
+  }
+}
+async function ensureForeignKey(db, database, def) {
+  try {
+    const [rows] = await db.query(
+      "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND CONSTRAINT_NAME = ?",
+      [database, def.table, def.constraintName]
+    );
+    if (rows.length > 0) return;
+    await ensureIndex(db, database, def.table, def.column, def.indexName);
+    await db.query(
+      `ALTER TABLE \`${def.table}\` ADD CONSTRAINT \`${def.constraintName}\` FOREIGN KEY (\`${def.column}\`) REFERENCES \`${def.refTable}\` (\`${def.refColumn}\`) ON DELETE RESTRICT ON UPDATE CASCADE`
+    );
+    console.log(`[DB] Added foreign key ${def.constraintName}: ${def.table}.${def.column} -> ${def.refTable}.${def.refColumn}`);
+  } catch (err) {
+    console.warn(`[DB] Could not ensure foreign key ${def.constraintName}:`, err.message);
+  }
+}
+async function ensureBestEffortForeignKeys(db, database) {
+  const defs = [
+    {
+      table: "indent_lines",
+      column: "indentId",
+      refTable: "indents",
+      refColumn: "id",
+      constraintName: "fk_indent_lines_indentId_indents",
+      indexName: "idx_indent_lines_indentId"
+    },
+    {
+      table: "purchase_orders",
+      column: "indentId",
+      refTable: "indents",
+      refColumn: "id",
+      constraintName: "fk_purchase_orders_indentId_indents",
+      indexName: "idx_purchase_orders_indentId"
+    },
+    {
+      table: "purchase_order_lines",
+      column: "purchaseOrderId",
+      refTable: "purchase_orders",
+      refColumn: "id",
+      constraintName: "fk_purchase_order_lines_purchaseOrderId_purchase_orders",
+      indexName: "idx_purchase_order_lines_purchaseOrderId"
+    },
+    {
+      table: "purchase_order_lines",
+      column: "indentLineId",
+      refTable: "indent_lines",
+      refColumn: "id",
+      constraintName: "fk_purchase_order_lines_indentLineId_indent_lines",
+      indexName: "idx_purchase_order_lines_indentLineId"
+    },
+    {
+      table: "orders_schedule",
+      column: "orderId",
+      refTable: "orders",
+      refColumn: "id",
+      constraintName: "fk_orders_schedule_orderId_orders",
+      indexName: "idx_orders_schedule_orderId"
+    },
+    {
+      table: "productions",
+      column: "scheduleId",
+      refTable: "orders_schedule",
+      refColumn: "id",
+      constraintName: "fk_productions_scheduleId_orders_schedule",
+      indexName: "idx_productions_scheduleId"
+    },
+    {
+      table: "invoices",
+      column: "companyId",
+      refTable: "companies",
+      refColumn: "id",
+      constraintName: "fk_invoices_companyId_companies",
+      indexName: "idx_invoices_companyId"
+    },
+    {
+      table: "invoice_line_items",
+      column: "invoiceId",
+      refTable: "invoices",
+      refColumn: "id",
+      constraintName: "fk_invoice_line_items_invoiceId_invoices",
+      indexName: "idx_invoice_line_items_invoiceId"
+    },
+    {
+      table: "invoice_line_items",
+      column: "loadingSlipId",
+      refTable: "loading_slips",
+      refColumn: "id",
+      constraintName: "fk_invoice_line_items_loadingSlipId_loading_slips",
+      indexName: "idx_invoice_line_items_loadingSlipId"
+    },
+    {
+      table: "invoice_line_items",
+      column: "itemId",
+      refTable: "items",
+      refColumn: "id",
+      constraintName: "fk_invoice_line_items_itemId_items",
+      indexName: "idx_invoice_line_items_itemId"
+    },
+    {
+      table: "material_issue_lines",
+      column: "materialIssueId",
+      refTable: "material_issues",
+      refColumn: "id",
+      constraintName: "fk_material_issue_lines_materialIssueId_material_issues",
+      indexName: "idx_material_issue_lines_materialIssueId"
+    },
+    {
+      table: "material_return_lines",
+      column: "materialReturnId",
+      refTable: "material_returns",
+      refColumn: "id",
+      constraintName: "fk_material_return_lines_materialReturnId_material_returns",
+      indexName: "idx_material_return_lines_materialReturnId"
+    },
+    {
+      table: "production_processing",
+      column: "productionId",
+      refTable: "productions",
+      refColumn: "id",
+      constraintName: "fk_production_processing_productionId_productions",
+      indexName: "idx_production_processing_productionId"
+    }
+  ];
+  for (const def of defs) {
+    await ensureForeignKey(db, database, def);
+  }
+}
 function hasWorkflowValue(value) {
   if (value === null || value === void 0) return false;
   const asString = String(value).trim();
@@ -1400,6 +1628,11 @@ async function initDb(retries = 5) {
       } catch (err) {
         console.warn("[DB] Could not seed official India states:", err.message);
       }
+      try {
+        await ensureBestEffortForeignKeys(db, database);
+      } catch (err) {
+        console.warn("[DB] Could not ensure foreign keys:", err.message);
+      }
       return;
     } catch (error) {
       console.error(`[DB] Initialization attempt ${i + 1} failed:`, error.message);
@@ -1713,22 +1946,10 @@ const createHandlers = (tableName) => {
       const { id } = req.params;
       try {
         console.log(`[DB] Deleting from ${tableName}`, { id });
-        if (tableName === "indents") {
-          await db.query("DELETE FROM `indent_lines` WHERE `indentId` = ?", [id]);
-        }
-        if (tableName === "purchase_orders") {
-          await db.query("DELETE FROM `purchase_order_lines` WHERE `purchaseOrderId` = ?", [id]);
-        }
-        if (tableName === "gate_entries") {
-          await db.query("DELETE FROM `gate_entry_photos` WHERE `gateEntryId` = ?", [id]);
-        }
-        if (tableName === "material_issues") {
-          await db.query("DELETE FROM `material_issue_reel_lines` WHERE `materialIssueId` = ?", [id]);
-          await db.query("DELETE FROM `material_issue_lines` WHERE `materialIssueId` = ?", [id]);
-        }
-        if (tableName === "material_returns") {
-          await db.query("DELETE FROM `material_return_reel_lines` WHERE `materialReturnId` = ?", [id]);
-          await db.query("DELETE FROM `material_return_lines` WHERE `materialReturnId` = ?", [id]);
+        const blockers = await getDeleteBlockers(db, tableName, id);
+        if (blockers.length > 0) {
+          const details = blockers.map((b) => `${b.label} (${b.count})`).join(", ");
+          return res.status(409).json({ error: `Cannot delete ${tableName}: used in ${details}.` });
         }
         await db.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [id]);
         res.json({ success: true });

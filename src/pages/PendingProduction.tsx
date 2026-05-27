@@ -177,10 +177,10 @@ export function PendingProduction() {
                         onClick={() => void handleMakeJob(schedule)}
                         disabled={pendingQty <= 0}
                         className={`px-3 py-1 rounded font-bold disabled:opacity-50 ${
-                          makeConfirmId === schedule.id ? "bg-amber-500 text-black" : "bg-emerald-600 text-white"
+                          makeConfirmId === schedule.id ? "bg-amber-500 text-black" : "bg-yellow-400 text-black"
                         }`}
                       >
-                        {makeConfirmId === schedule.id ? "Confirm?" : "Make Job"}
+                        {makeConfirmId === schedule.id ? "Confirm?" : "Plan Job"}
                       </button>
                     </div>
                   </td>

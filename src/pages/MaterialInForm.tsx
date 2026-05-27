@@ -613,16 +613,14 @@ export function MaterialInForm() {
                           </td>
                           <td className="px-4 py-3 text-sm font-medium text-black border border-black">{Number(line.invoiceValue || 0).toFixed(2)}</td>
                           <td className="px-4 py-3 text-sm text-black border border-black">
-                            {mrrType === "Reel" ? Number(line.actualQty || 0).toFixed(2) : (
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={line.actualQty ?? line.qty}
-                                onChange={(e) => updateLine(line.id, { actualQty: Number(e.target.value || 0) })}
-                                className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
-                              />
-                            )}
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={line.actualQty ?? line.qty}
+                              onChange={(e) => updateLine(line.id, { actualQty: Number(e.target.value || 0) })}
+                              className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                            />
                           </td>
                           <td className="px-4 py-3 text-sm text-black border border-black">{line.uom}</td>
                           <td className="px-4 py-3 text-sm font-medium text-black border border-black">{Number(line.actualValue || line.value || 0).toFixed(2)}</td>

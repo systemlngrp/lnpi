@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { CheckCircle, ThumbsUp, X } from "lucide-react";
+import { Download, ThumbsUp, X } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { useData } from "../hooks/useData";
 import { Indent, IndentLine, Material, PurchaseOrder, PurchaseOrderLine, Supplier } from "../types";
 import { Spinner } from "../components/Spinner";
@@ -20,6 +22,76 @@ function getFilteredOrders(orders: PurchaseOrder[], mode: PurchaseOrderMode) {
   if (mode === "pending-approval") return orders.filter((order) => order.status === "Pending Approval");
   if (mode === "approved") return orders.filter((order) => order.status === "Approved");
   return orders.filter((order) => order.status === "Rejected");
+}
+
+function downloadPurchaseOrderPdf({
+  order,
+  indent,
+  supplierName,
+  lines,
+  materialMap,
+}: {
+  order: PurchaseOrder;
+  indent?: Indent;
+  supplierName: string;
+  lines: PurchaseOrderLine[];
+  materialMap: Map<string, string>;
+}) {
+  const doc = new jsPDF("p", "mm", "a4");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("PURCHASE ORDER", 105, 14, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const details: Array<[string, string]> = [
+    ["PO No", order.poNo],
+    ["PO Date", formatDate(order.poDate)],
+    ["Supplier", supplierName],
+    ["Indent", indent ? `${indent.requestedBy} (${formatDate(indent.requisitionDate)})` : "-"],
+    ["Required Date", indent?.requiredDate ? formatDate(indent.requiredDate) : "-"],
+    ["Status", order.status],
+  ];
+
+  let y = 24;
+  details.forEach(([label, value], index) => {
+    const x = index % 2 === 0 ? 14 : 110;
+    const rowY = y + Math.floor(index / 2) * 7;
+    doc.setFont("helvetica", "bold");
+    doc.text(`${label}:`, x, rowY);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(value || "-"), x + 28, rowY);
+  });
+  y += 24;
+
+  const rows = lines.map((line, idx) => [
+    idx + 1,
+    line.erpCode || "",
+    materialMap.get(line.materialId) || "Unknown Material",
+    Number(line.qty || 0).toLocaleString(),
+    line.uom || "",
+    Number(line.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    Number(line.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : indent?.requiredDate ? formatDate(indent.requiredDate) : "-",
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [["SL", "ERP", "Material", "Qty", "UOM", "Rate", "Amount", "Delivery Date"]],
+    body: rows,
+    theme: "grid",
+    styles: { fontSize: 8.5, cellPadding: 2.2, textColor: 0 },
+    headStyles: { fillColor: [15, 23, 42] },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 10 },
+      3: { halign: "right" },
+      5: { halign: "right" },
+      6: { halign: "right" },
+    },
+  });
+
+  const safePoNo = String(order.poNo || "PO").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
+  doc.save(`PO_${safePoNo}.pdf`);
 }
 
 export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
@@ -221,6 +293,22 @@ export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
                     ) : null}
                     <td className="border border-black px-4 py-4">
                       <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            downloadPurchaseOrderPdf({
+                              order,
+                              indent,
+                              supplierName: supplierMap.get(order.supplierId) || "Unknown Supplier",
+                              lines,
+                              materialMap,
+                            })
+                          }
+                          title="Download PDF"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-50 transition"
+                        >
+                          <Download size={16} />
+                        </button>
                         {mode === "pending-approval" ? (
                           <>
                             <button
