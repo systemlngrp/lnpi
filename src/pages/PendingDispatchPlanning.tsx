@@ -257,6 +257,65 @@ export function PendingDispatchPlanning() {
     }, 0);
   }, [selectedIds, rowPlannedQty, schedules, dispatchPlans]);
 
+  const plannedNowByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    selectedIds.forEach((scheduleId) => {
+      const itemId = itemIdByScheduleId.get(scheduleId) || "";
+      if (!itemId) return;
+
+      const schedule = schedules.find((row) => row.id === scheduleId);
+      const alreadyPlanned = dispatchPlans
+        .filter((plan) => plan.scheduleId === scheduleId)
+        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
+      const schedulePendingQty = schedule ? Math.max(0, Number(schedule.qty || 0) - alreadyPlanned) : 0;
+
+      const plannedQty = rowPlannedQty[scheduleId] !== undefined ? rowPlannedQty[scheduleId] : schedulePendingQty;
+      map.set(itemId, (map.get(itemId) || 0) + Number(plannedQty || 0));
+    });
+    return map;
+  }, [dispatchPlans, itemIdByScheduleId, rowPlannedQty, schedules, selectedIds]);
+
+  const calculationRows = useMemo(() => {
+    const itemIds = Array.from(plannedNowByItemId.keys());
+    return itemIds
+      .map((itemId) => {
+        const item = items.find((row) => row.id === itemId);
+        const opening = Number((item as any)?.opening || 0);
+        const receipt = Number((item as any)?.receipt || 0);
+        const production = Number((item as any)?.production || 0);
+        const baseStock = opening + receipt + production;
+        const loaded = Number(loadedQtyByItemId.get(itemId) || 0);
+        const dispatchBalance = baseStock - loaded;
+        const pendingProduction = Number(pendingProductionPlanQtyByItemId.get(itemId) || 0);
+        const reserved = Number(reservedDispatchPlanQtyByItemId.get(itemId) || 0);
+        const available = Number(availableToPlanByItemId.get(itemId) || 0);
+        const plannedNow = Number(plannedNowByItemId.get(itemId) || 0);
+        return {
+          itemId,
+          itemName: item?.name || "Unknown Item",
+          opening,
+          receipt,
+          production,
+          baseStock,
+          loaded,
+          dispatchBalance,
+          pendingProduction,
+          reserved,
+          available,
+          plannedNow,
+          exceededBy: Math.max(0, plannedNow - available),
+        };
+      })
+      .sort((a, b) => a.itemName.localeCompare(b.itemName));
+  }, [
+    availableToPlanByItemId,
+    items,
+    loadedQtyByItemId,
+    pendingProductionPlanQtyByItemId,
+    plannedNowByItemId,
+    reservedDispatchPlanQtyByItemId,
+  ]);
+
   const handleSubmit = () => {
     if (selectedIds.size === 0) {
       alert("Please select at least one order to plan.");
@@ -381,6 +440,55 @@ export function PendingDispatchPlanning() {
           )}
         </div>
       </div>
+
+      {calculationRows.length > 0 ? (
+        <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+          <div className="px-4 py-3 border-b border-black bg-slate-50">
+            <div className="text-sm font-black uppercase text-black">Dispatch Planning Calculation</div>
+            <div className="text-[11px] font-bold text-slate-600">
+              Available = (Opening + Receipt + Production − Loaded) + Pending Production (FG not filled) − Reserved Dispatch (not loaded)
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-black border-collapse border border-black">
+              <thead className="bg-slate-100 divide-x divide-black">
+                <tr className="divide-x divide-black">
+                  <th className="px-3 py-2 text-left text-[11px] font-black uppercase border border-black">Item</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Opening</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Receipt</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Production</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Loaded</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Dispatch Balance</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Production</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Reserved</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Available</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Planned Now</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Exceeded</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black bg-white">
+                {calculationRows.map((row) => (
+                  <tr key={row.itemId} className={cn("divide-x divide-black", row.exceededBy > 0 && "bg-rose-50")}>
+                    <td className="px-3 py-2 text-[11px] font-bold text-black border border-black min-w-[260px]">{row.itemName}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.opening.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.receipt.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.production.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.loaded.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.dispatchBalance.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.pendingProduction.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.reserved.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] font-black text-black border border-black">{row.available.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] font-black text-black border border-black">{row.plannedNow.toLocaleString()}</td>
+                    <td className={cn("px-3 py-2 text-right text-[11px] font-black border border-black", row.exceededBy > 0 ? "text-rose-700" : "text-slate-500")}>
+                      {row.exceededBy > 0 ? row.exceededBy.toLocaleString() : "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
          <div className="overflow-x-auto">
