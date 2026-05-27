@@ -20,6 +20,15 @@ import { Spinner } from "../components/Spinner";
 import { getAvailableReelPackingSlips, getNonReelAvailableQty } from "../lib/materialMovement";
 import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
 
+function normalizeDate(value?: string | null) {
+  return String(value || "").slice(0, 10);
+}
+
+function isWithoutJobIssue(issueType?: string) {
+  const t = String(issueType || "").trim().toLowerCase();
+  return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
+}
+
 export function MaterialIssueForm() {
   const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
@@ -33,9 +42,18 @@ export function MaterialIssueForm() {
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
 
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const requestedDate = normalizeDate(searchParams.get("date"));
+  const lockDate = searchParams.get("lockDate") === "1";
+  const lockIssueType = searchParams.get("lockIssueType") === "1";
+  const requestedIssueTypeRaw = String(searchParams.get("issueType") || "").trim();
+
+  const [date, setDate] = useState(() => requestedDate || new Date().toISOString().split("T")[0]);
   const requestedProductionId = searchParams.get("productionId") || "";
-  const [issueType, setIssueType] = useState<"Job" | "General">(requestedProductionId ? "Job" : "General");
+  const [issueType, setIssueType] = useState<MaterialIssue["issueType"]>(() => {
+    if (requestedProductionId) return "Job";
+    if (requestedIssueTypeRaw && isWithoutJobIssue(requestedIssueTypeRaw)) return "Without Job";
+    return "Without Job";
+  });
   const [productionId, setProductionId] = useState(requestedProductionId);
   const [remarks, setRemarks] = useState("");
   const [currentMaterialId, setCurrentMaterialId] = useState("");
@@ -48,7 +66,7 @@ export function MaterialIssueForm() {
     const selected = String(date || "").trim();
     if (!selected) return [];
     return materialIssues
-      .filter((issue) => issue.issueType === "General" && String(issue.date || "").slice(0, 10) === selected)
+      .filter((issue) => isWithoutJobIssue(issue.issueType) && normalizeDate(issue.date) === selected)
       .slice()
       .sort((a, b) => {
         const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
@@ -73,7 +91,7 @@ export function MaterialIssueForm() {
     () =>
       materials
         .filter((material) => material.active !== "No")
-        .filter((material) => (issueType === "General" ? material.type !== "Reel" : true))
+        .filter((material) => (isWithoutJobIssue(issueType) ? material.type !== "Reel" : true))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((material) => ({
           value: material.id,
@@ -84,7 +102,7 @@ export function MaterialIssueForm() {
 
   const issueTypeOptions = [
     { value: "Job", label: "Against Job" },
-    { value: "General", label: "Without Job" },
+    { value: "Without Job", label: "Without Job" },
   ];
 
   const selectedProduction = productions.find((production) => production.id === productionId);
@@ -177,7 +195,7 @@ export function MaterialIssueForm() {
     if (issueType === "Job" && !productionId) return;
 
     if (issueType === "Job" && generalIssuesForDate.length === 0) {
-      alert("Daily one Other Consumption (General) issue is mandatory. Please create a General issue for this date first.");
+      alert("Daily one Without Job material issue is mandatory. Please create a Without Job issue for this date first.");
       return;
     }
 
@@ -208,7 +226,7 @@ export function MaterialIssueForm() {
         id: issueId,
         issueNo,
         date,
-        issueType,
+        issueType: issueType === "General" ? "Without Job" : issueType,
         productionId: issueType === "Job" ? productionId : undefined,
         jobNo: issueType === "Job" ? (selectedProduction?.transactionNo || "") : undefined,
         remarks: remarks.trim() || undefined,
@@ -278,8 +296,8 @@ export function MaterialIssueForm() {
         );
       }
 
-      setDate(new Date().toISOString().split("T")[0]);
-      setIssueType(requestedProductionId ? "Job" : "General");
+      if (!lockDate) setDate(new Date().toISOString().split("T")[0]);
+      if (!lockIssueType) setIssueType(requestedProductionId ? "Job" : "Without Job");
       setProductionId(requestedProductionId);
       setRemarks("");
       setCurrentMaterialId("");
@@ -301,37 +319,50 @@ export function MaterialIssueForm() {
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Date" required>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full border-2 border-black rounded p-2" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+              disabled={lockDate}
+              className="w-full border-2 border-black rounded p-2 disabled:bg-slate-50 disabled:opacity-80"
+            />
           </Field>
           <Field label="Issue No (Auto)">
             <input type="text" value="Generated on Submit" disabled className="w-full border-2 border-black rounded p-2 bg-slate-50 opacity-70" />
           </Field>
           <Field label="Issue Type" required>
-            <Select options={issueTypeOptions} value={issueType} onChange={(value) => setIssueType(value === "Job" ? "Job" : "General")} required />
+            <Select
+              options={issueTypeOptions}
+              value={issueType}
+              onChange={(value) => setIssueType(value === "Job" ? "Job" : "Without Job")}
+              required
+              disabled={lockIssueType}
+            />
           </Field>
           <div className="md:col-span-2 rounded border border-black bg-slate-50 p-3">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="text-sm font-bold text-black">
-                Other Consumption (General) issues on {date}: {generalIssuesForDate.length}
+                Without Job issues on {date}: {generalIssuesForDate.length}
               </div>
               {issueType === "Job" && generalIssuesForDate.length === 0 ? (
                 <button
                   type="button"
                   onClick={() => {
-                    setIssueType("General");
+                    setIssueType("Without Job");
                     setProductionId("");
                     setLines([]);
                     setSelectedReels({});
                   }}
                   className="rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase hover:bg-slate-100"
                 >
-                  Create General Issue
+                  Create Without Job Issue
                 </button>
               ) : null}
             </div>
             {generalIssuesForDate.length === 0 ? (
               <div className="mt-2 text-xs font-semibold text-slate-600">
-                No General issue found for this date. Create one daily (mandatory) before issuing against jobs.
+                No Without Job issue found for this date. Create one daily (mandatory) before issuing against jobs.
               </div>
             ) : (
               <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
@@ -395,7 +426,7 @@ export function MaterialIssueForm() {
 	                        <div className="text-sm text-slate-500">
 	                          {line.isReel
 	                            ? `Selected Weight: ${line.qty.toFixed(2)} KG`
-	                            : issueType === "General"
+	                            : isWithoutJobIssue(issueType)
 	                              ? `Qty: ${line.qty}`
 	                              : `Issue Qty: ${line.qty} ${line.uom} | Available: ${availableQty}`}
 	                        </div>

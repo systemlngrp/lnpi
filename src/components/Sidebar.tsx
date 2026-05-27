@@ -237,10 +237,12 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
 	      color: "bg-lime-700",
 	      items: [
 	        { name: "Reel Issue/Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
-	        { name: "Daily Consumption Issue", href: "/material-movement/daily-consumption", icon: ClipboardList },
-	        { name: "Daily Consumption Master", href: "/material-movement/daily-consumption-master", icon: Database },
 	        { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
+	        { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
+	        { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText },
+	        { name: "Non-Job Issue Master", href: "/material-movement/non-job-issue-master", icon: Database },
 	        { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
+	        { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
 	      ],
 	    },
     {

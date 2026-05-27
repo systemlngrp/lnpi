@@ -123,7 +123,7 @@ export interface MaterialIssue {
   id: string;
   issueNo: string;
   date: string;
-  issueType: "Job" | "General";
+  issueType: "Job" | "Without Job" | "General";
   productionId?: string;
   jobNo?: string;
   remarks?: string;

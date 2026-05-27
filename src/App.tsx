@@ -21,6 +21,10 @@ import { PendingMrr } from "./pages/PendingMrr";
 import { PendingDebitNote } from "./pages/PendingDebitNote";
 import { MaterialIssueForm } from "./pages/MaterialIssueForm";
 import { MaterialReturnForm } from "./pages/MaterialReturnForm";
+import { MaterialIssueMaster } from "./pages/MaterialIssueMaster";
+import { MaterialReturnMaster } from "./pages/MaterialReturnMaster";
+import { PendingNonJobMaterialIssue } from "./pages/PendingNonJobMaterialIssue";
+import { NonJobIssueMaster } from "./pages/NonJobIssueMaster";
 import { ReelIssueReturnForm } from "./pages/ReelIssueReturnForm";
 import { DailyConsumptionIssueForm } from "./pages/DailyConsumptionIssueForm";
 import { DailyConsumptionMaster } from "./pages/DailyConsumptionMaster";
@@ -142,7 +146,11 @@ export default function App() {
           <Route path="material-movement/daily-consumption" element={<DailyConsumptionIssueForm />} />
           <Route path="material-movement/daily-consumption-master" element={<DailyConsumptionMaster />} />
           <Route path="material-movement/issue" element={<MaterialIssueForm />} />
+          <Route path="material-movement/issue-master" element={<MaterialIssueMaster />} />
+          <Route path="material-movement/pending-non-job-issue" element={<PendingNonJobMaterialIssue />} />
+          <Route path="material-movement/non-job-issue-master" element={<NonJobIssueMaster />} />
           <Route path="material-movement/return" element={<MaterialReturnForm />} />
+          <Route path="material-movement/return-master" element={<MaterialReturnMaster />} />
 
           {/* Orders */}
           <Route path="orders/form" element={<OrderForm />} />
