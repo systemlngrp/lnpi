@@ -91,7 +91,6 @@ export async function downloadIndentPdf({
   const detailRows = [
     ["Requested By", indent.requestedBy],
     ["Requisition Date", formatDate(indent.requisitionDate)],
-    ["Required Date", formatDate(indent.requiredDate)],
     ["Indent Type", indent.indentType],
     ["Status", indent.status],
   ];

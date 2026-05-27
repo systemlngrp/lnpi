@@ -49,7 +49,6 @@ function downloadPurchaseOrderPdf({
     ["PO Date", formatDate(order.poDate)],
     ["Supplier", supplierName],
     ["Indent", indent ? `${indent.requestedBy} (${formatDate(indent.requisitionDate)})` : "-"],
-    ["Required Date", indent?.requiredDate ? formatDate(indent.requiredDate) : "-"],
     ["Status", order.status],
   ];
 
@@ -81,7 +80,7 @@ function downloadPurchaseOrderPdf({
     body: rows,
     theme: "grid",
     styles: { fontSize: 8.5, cellPadding: 2.2, textColor: 0 },
-    headStyles: { fillColor: [15, 23, 42] },
+    headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold" },
     columnStyles: {
       0: { halign: "center", cellWidth: 10 },
       3: { halign: "right" },
