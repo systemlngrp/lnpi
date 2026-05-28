@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { User } from "../types";
 import { Plus, Edit, Trash2, Search } from "lucide-react";
@@ -132,6 +132,23 @@ export function Users() {
     setFormData((prev) => ({ ...prev, menuAccess: [] }));
   };
 
+  useEffect(() => {
+    if (!isFormOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isSubmitting) setIsFormOpen(false);
+    };
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isFormOpen, isSubmitting]);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -148,12 +165,35 @@ export function Users() {
       </div>
 
       {isFormOpen ? (
-        <div className="flex justify-center px-4">
-          <div className="bg-white w-full p-8 rounded shadow-md border border-black max-w-3xl">
-          <h3 className="text-lg font-bold text-black mb-6 uppercase">
-            {editingId ? "Edit User" : "Create User"}
-          </h3>
-          <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/40 overflow-y-auto"
+          onMouseDown={() => {
+            if (!isSubmitting) setIsFormOpen(false);
+          }}
+        >
+          <div className="min-h-full flex items-start justify-center p-4 sm:p-6">
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="bg-white w-full max-w-4xl rounded-xl shadow-xl border border-black overflow-hidden"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-black">
+                <h3 className="text-lg font-bold text-black uppercase">
+                  {editingId ? "Edit User" : "Create User"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsFormOpen(false)}
+                  disabled={isSubmitting}
+                  className="bg-indigo-600 text-white px-4 py-1.5 rounded font-bold hover:bg-indigo-700 transition disabled:opacity-50"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="p-6 max-h-[calc(100vh-120px)] overflow-y-auto">
+                <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col space-y-1">
                 <label className="font-bold text-black text-sm">User ID *</label>
@@ -319,7 +359,10 @@ export function Users() {
                 Cancel
               </button>
             </div>
-          </form>
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
