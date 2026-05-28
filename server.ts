@@ -16,6 +16,31 @@ const app = express();
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
 app.use(express.json({ limit: "50mb" }));
+
+app.get("/uploads/:filename", async (req, res, next) => {
+  const filename = String(req.params.filename || "").trim();
+  if (!filename) return res.status(400).send("Missing filename");
+
+  try {
+    const db = await getPool();
+    if (!db) return next();
+
+    const [rows] = await db.query("SELECT mimeType, data FROM `uploaded_files` WHERE filename = ? LIMIT 1", [filename]);
+    const row = (rows as any[])?.[0];
+    if (!row?.data) return next();
+
+    const mimeType = String(row.mimeType || "application/octet-stream");
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+
+    const data = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
+    return res.send(data);
+  } catch (error) {
+    console.error("[uploads] Failed to serve from DB:", error);
+    return next();
+  }
+});
+
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 type AuthUser = {
@@ -215,24 +240,41 @@ app.post("/api/upload-artwork", async (req, res) => {
   }
 
   try {
+    const base64String = String(base64);
+    const match = base64String.match(/^data:([^;]+);base64,/i);
+    const mimeType = match?.[1] || "application/octet-stream";
     // Robustly extract base64 data regardless of prefix
-    const base64Data = base64.replace(/^data:.*;base64,/, "");
-    const extension = path.extname(filename) || ".bin";
+    const base64Data = base64String.replace(/^data:.*;base64,/, "");
+    const extension = path.extname(String(filename)) || ".bin";
     const newFilename = `${crypto.randomUUID()}${extension}`;
-    const uploadsDir = path.join(process.cwd(), "uploads");
-    
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
+    const fileBuffer = Buffer.from(base64Data, "base64");
+
+    const db = await getPool();
+    if (db) {
+      await db.query("REPLACE INTO `uploaded_files` (`filename`, `mimeType`, `data`) VALUES (?, ?, ?)", [
+        newFilename,
+        mimeType,
+        fileBuffer,
+      ]);
+    } else {
+      console.warn("[UPLOAD] DB not available; falling back to filesystem upload only.");
     }
 
-    const filePath = path.join(uploadsDir, newFilename);
-    fs.writeFileSync(filePath, base64Data, { encoding: "base64" });
-    
-    console.log(`[UPLOAD] Saved ${filename} as ${newFilename}`);
-    res.json({ filename: newFilename });
+    // Optional disk write (useful for local dev / fallback)
+    try {
+      const uploadsDir = path.join(process.cwd(), "uploads");
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const filePath = path.join(uploadsDir, newFilename);
+      fs.writeFileSync(filePath, fileBuffer);
+    } catch (diskError) {
+      console.warn("[UPLOAD] Failed to write file to disk (continuing):", diskError);
+    }
+
+    console.log(`[UPLOAD] Saved ${filename} as ${newFilename} (${mimeType})`);
+    return res.json({ filename: newFilename });
   } catch (error) {
     console.error("Upload failed:", error);
-    res.status(500).json({ error: "Failed to save file" });
+    return res.status(500).json({ error: "Failed to save file" });
   }
 });
 
@@ -1591,6 +1633,15 @@ async function initDb(retries = 5) {
           \`organizationLogo\` VARCHAR(255),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`uploaded_files\` (
+          \`filename\` VARCHAR(255) PRIMARY KEY,
+          \`mimeType\` VARCHAR(100),
+          \`data\` LONGBLOB NOT NULL,
+          \`createdAt\` DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
 
