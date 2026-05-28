@@ -41,10 +41,6 @@ import { Trucks } from "./pages/Trucks";
 import { Machines } from "./pages/Machines";
 import { MaterialInForm } from "./pages/MaterialInForm";
 import { MrrApprovals } from "./pages/MrrApprovals";
-import { PendingPHApproval } from "./pages/PendingPHApproval";
-import { PendingAccountsApproval } from "./pages/PendingAccountsApproval";
-import { PendingMDApproval } from "./pages/PendingMDApproval";
-import { PendingTallyEntry } from "./pages/PendingTallyEntry";
 import { MaterialInMaster } from "./pages/MaterialInMaster";
 import { MaterialInItemMaster } from "./pages/MaterialInItemMaster";
 import { ProductionForm } from "./pages/ProductionForm";
@@ -154,6 +150,7 @@ export default function App() {
 
           {/* Material Receipt */}
           <Route path="material-receipt/pending-mrr" element={<PendingMrr />} />
+          <Route path="material-receipt/approvals" element={<MrrApprovals />} />
           <Route path="material-receipt/pending-debit-note" element={<PendingDebitNote />} />
 
           {/* Material Movement */}
@@ -178,7 +175,6 @@ export default function App() {
           
           {/* Material In */}
           <Route path="material-in/form" element={<MaterialInForm />} />
-          <Route path="material-in/approvals" element={<MrrApprovals />} />
           <Route path="material-in/master" element={<MaterialInMaster />} />
           <Route path="material-in/item-master" element={<MaterialInItemMaster />} />
           

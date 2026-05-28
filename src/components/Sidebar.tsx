@@ -103,7 +103,6 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-slate-800",
     items: [
       { name: "Material In Form", href: "/material-in/form", icon: ClipboardList },
-      { name: "MRR Approvals", href: "/material-in/approvals", icon: CheckCircle, countKey: "/material-in/approvals" },
       { name: "Material In Master", href: "/material-in/master", icon: Database },
       { name: "Item Master View", href: "/material-in/item-master", icon: BarChart3 },
     ],
@@ -144,6 +143,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-fuchsia-700",
     items: [
       { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
+      { name: "MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
       { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
     ],
   },
@@ -344,7 +344,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   }, []);
 
   const counts: Record<string, number> = {
-    "/material-in/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
+    "/material-receipt/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
     "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
     "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,

@@ -416,7 +416,7 @@ export function MaterialInForm() {
       setCurrentPoLineId("");
       setCurrentInvoiceRate("");
       alert(`Material In created with Transaction No: ${transactionNo}`);
-      navigate("/material-in/approvals");
+      navigate("/material-receipt/approvals");
     } catch (err) {
       console.error("Failed to save Material In:", err);
       alert("Failed to save Material In.");
