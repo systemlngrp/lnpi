@@ -23,6 +23,8 @@ type PendingIndentLineRow = {
   poQtyCreated: number;
   pendingQty: number;
   suggestedRate?: number;
+  lastPoRate?: number;
+  lastPoDate?: string;
 };
 
 export function PurchaseOrderPendingIndentLines() {
@@ -270,6 +272,8 @@ export function PurchaseOrderPendingIndentLines() {
               <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black min-w-[320px]">Item Name</th>
               <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">UOM</th>
               <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Supplier</th>
+              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Rate</th>
+              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Date</th>
               <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Order Qty</th>
               <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Rate</th>
               <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Qty</th>
@@ -283,7 +287,7 @@ export function PurchaseOrderPendingIndentLines() {
           <tbody>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={16} className="border border-black px-6 py-10 text-center text-sm text-slate-600">
+                <td colSpan={18} className="border border-black px-6 py-10 text-center text-sm text-slate-600">
                   No pending indent lines found.
                 </td>
               </tr>
@@ -333,6 +337,12 @@ export function PurchaseOrderPendingIndentLines() {
                             </option>
                           ))}
                       </select>
+                    </td>
+                    <td className="border border-black px-4 py-3 text-sm text-black text-right whitespace-nowrap">
+                      {row.lastPoRate ? Number(row.lastPoRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}
+                    </td>
+                    <td className="border border-black px-4 py-3 text-sm text-black whitespace-nowrap">
+                      {row.lastPoDate ? formatDate(row.lastPoDate) : "-"}
                     </td>
                     <td className="border border-black px-4 py-3 text-sm text-black text-right whitespace-nowrap">
                       <input

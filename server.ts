@@ -2816,7 +2816,7 @@ app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
       .filter((row) => row.pendingQty > 0);
 
     const materialIds = Array.from(new Set(base.map((r) => r.materialId))).filter(Boolean);
-    const suggestedRateByMaterial = new Map<string, number>();
+    const lastPoInfoByMaterial = new Map<string, { rate: number; date: string }>();
     if (materialIds.length > 0) {
       const [rateRows] = await db.query(
         `
@@ -2830,15 +2830,23 @@ app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
       );
       (rateRows as any[]).forEach((r) => {
         const mid = String(r.materialId || "");
-        if (!mid || suggestedRateByMaterial.has(mid)) return;
-        suggestedRateByMaterial.set(mid, Number(r.rate || 0));
+        if (!mid || lastPoInfoByMaterial.has(mid)) return;
+        lastPoInfoByMaterial.set(mid, { 
+          rate: Number(r.rate || 0), 
+          date: r.poDate ? String(r.poDate) : "" 
+        });
       });
     }
 
-    const result = base.map((r) => ({
-      ...r,
-      suggestedRate: suggestedRateByMaterial.get(r.materialId) || 0,
-    }));
+    const result = base.map((r) => {
+      const info = lastPoInfoByMaterial.get(r.materialId);
+      return {
+        ...r,
+        suggestedRate: info?.rate || 0,
+        lastPoRate: info?.rate || 0,
+        lastPoDate: info?.date || "",
+      };
+    });
 
     res.json(result);
   } catch (error) {
