@@ -2106,6 +2106,19 @@ async function initDb(retries = 5) {
         { table: "users", column: "role", type: "VARCHAR(20) NOT NULL DEFAULT 'Employee'" },
         { table: "users", column: "status", type: "VARCHAR(20) NOT NULL DEFAULT 'Active'" },
         { table: "users", column: "menuAccess", type: "JSON" },
+        { table: "material_in", column: "phTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "phEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "plant_head_remark", type: "TEXT" },
+        { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "accounts_remark", type: "TEXT" },
+        { table: "material_in", column: "debitNote", type: "VARCHAR(255)" },
+        { table: "material_in", column: "debitNoteDate", type: "VARCHAR(50)" },
+        { table: "material_in", column: "debitNoteAmount", type: "DECIMAL(15,2)" },
+        { table: "material_in", column: "mdTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "mdEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "md_approval_remark", type: "TEXT" },
+        { table: "material_in", column: "tallyTimestamp", type: "VARCHAR(255)" },
       ];
 
 

@@ -1631,7 +1631,20 @@ async function initDb(retries = 5) {
         { table: "settings", column: "organizationGstDetails", type: "TEXT" },
         { table: "settings", column: "organizationLogo", type: "VARCHAR(255)" },
         { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
-        { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" }
+        { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "plant_head_remark", type: "TEXT" },
+        { table: "material_in", column: "accounts_remark", type: "TEXT" },
+        { table: "material_in", column: "md_approval_remark", type: "TEXT" },
+        { table: "material_in", column: "phTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "phEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "mdTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "mdEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "debitNote", type: "VARCHAR(255)" },
+        { table: "material_in", column: "debitNoteDate", type: "VARCHAR(50)" },
+        { table: "material_in", column: "debitNoteAmount", type: "DECIMAL(15,2)" },
+        { table: "material_in", column: "tallyTimestamp", type: "VARCHAR(255)" }
       ];
       for (const m of migrations) {
         try {
