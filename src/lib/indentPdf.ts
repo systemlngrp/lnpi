@@ -2,27 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "./serial";
 import { Indent, IndentLine, Material, Setting } from "../types";
-
-export async function getImageDataUrl(url: string) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Failed to load logo image.");
-  }
-  const blob = await response.blob();
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Failed to read logo image."));
-    reader.readAsDataURL(blob);
-  });
-}
-
-export function getOrganizationLogoUrl(setting?: Setting | null) {
-  if (!setting?.organizationLogo) return "";
-  const encoded = setting.organizationLogo.split("/").map(encodeURIComponent).join("/");
-  if (typeof window === "undefined") return `/uploads/${encoded}`;
-  return new URL(`/uploads/${encoded}`, window.location.origin).toString();
-}
+import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
 export async function downloadIndentPdf({
   indent,
@@ -36,50 +16,7 @@ export async function downloadIndentPdf({
   setting?: Setting | null;
 }) {
   const doc = new jsPDF("p", "mm", "a4");
-  let currentY = 16;
-  const organizationLogoUrl = getOrganizationLogoUrl(setting);
-
-  if (organizationLogoUrl) {
-    try {
-      const imageDataUrl = await getImageDataUrl(organizationLogoUrl);
-      doc.addImage(imageDataUrl, "PNG", 90, currentY, 30, 18, undefined, "FAST");
-      currentY += 22;
-    } catch (error) {
-      console.warn("Organization logo could not be added to indent PDF:", error);
-    }
-  }
-
-  const organizationName = setting?.organizationName?.trim();
-  const organizationAddress = setting?.organizationAddress?.trim();
-  const organizationGstDetails = setting?.organizationGstDetails?.trim();
-
-  if (organizationName) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text(organizationName, 105, currentY, { align: "center" });
-    currentY += 7;
-  }
-
-  if (organizationAddress) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    const addressLines = doc.splitTextToSize(organizationAddress, 160);
-    doc.text(addressLines, 105, currentY, { align: "center" });
-    currentY += addressLines.length * 5;
-  }
-
-  if (organizationGstDetails) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    const gstLines = doc.splitTextToSize(organizationGstDetails, 160);
-    doc.text(gstLines, 105, currentY, { align: "center" });
-    currentY += gstLines.length * 5;
-  }
-
-  currentY += 4;
-  doc.setDrawColor(0);
-  doc.line(14, currentY, 196, currentY);
-  currentY += 8;
+  const { currentY } = await renderOrganizationHeader(doc, setting);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);

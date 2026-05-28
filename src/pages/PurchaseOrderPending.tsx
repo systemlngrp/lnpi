@@ -261,7 +261,7 @@ export function PurchaseOrderPending() {
                 const inputs = rowInputs[key] || { orderQty: "0", rate: "0" };
 
                 return (
-                  <React.Fragment key={key}>
+                  <>
                     <tr className={`${isSelected ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
                       <td className="border border-black px-4 py-4 text-center">
                         <button onClick={() => toggleSelect(key)} className={`${isSelected ? 'text-indigo-600' : 'text-slate-400'}`}>
@@ -335,7 +335,7 @@ export function PurchaseOrderPending() {
                         </td>
                       </tr>
                     )}
-                  </React.Fragment>
+                  </>
                 );
               })
             )}

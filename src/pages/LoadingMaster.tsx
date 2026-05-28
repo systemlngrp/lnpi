@@ -8,6 +8,8 @@ import {
   Order,
   Item,
   Company,
+  Invoice,
+  InvoiceLineItem,
   Setting
 } from "../types";
 import { 
@@ -30,6 +32,8 @@ export function LoadingMaster() {
   const [orders] = useData<Order>("orders", []);
   const [items] = useData<Item>("items", []);
   const [companies] = useData<Company>("companies", []);
+  const [invoices, setInvoices] = useData<Invoice>("invoices", []);
+  const [invoiceLineItems, setInvoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -82,13 +86,13 @@ export function LoadingMaster() {
   };
 
   const startEdit = (slip: LoadingSlip) => {
-    if (slip.invoiceId) {
-      alert("Cannot edit a slip after invoice is created.");
-      return;
-    }
     if (slip.status === "Cancelled") {
       alert("Cancelled slip cannot be edited.");
       return;
+    }
+    if (slip.invoiceId) {
+      const confirmed = window.confirm("This slip is invoiced. Editing will update the linked invoice totals. Continue?");
+      if (!confirmed) return;
     }
     setEditingSlipIds((prev) => new Set(prev).add(slip.id));
     setDraftBySlipId((prev) => ({ ...prev, [slip.id]: JSON.parse(JSON.stringify(slip)) }));
@@ -131,10 +135,6 @@ export function LoadingMaster() {
     const original = loadingSlips.find((s) => s.id === slipId);
     const draft = draftBySlipId[slipId];
     if (!original || !draft) return;
-    if (original.invoiceId) {
-      alert("Cannot edit a slip after invoice is created.");
-      return;
-    }
     if (original.status === "Cancelled") {
       alert("Cancelled slip cannot be edited.");
       return;
@@ -147,6 +147,15 @@ export function LoadingMaster() {
     }
 
     const now = new Date().toISOString();
+
+    if (original.invoiceId) {
+      const invoice = invoices.find((inv) => inv.id === original.invoiceId);
+      if (!invoice) {
+        alert("Linked invoice not found. Cannot save changes.");
+        return;
+      }
+    }
+
     const originalByPlan = new Map(original.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
     const draftByPlan = new Map(draft.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
     const allPlanIds = new Set<string>([...originalByPlan.keys(), ...draftByPlan.keys()]);
@@ -165,6 +174,79 @@ export function LoadingMaster() {
         s.id === slipId ? { ...draft, updatedBy: "System User", updateTimestamp: now } : s
       )
     );
+
+    if (original.invoiceId) {
+      const invoiceId = original.invoiceId;
+      const invoice = invoices.find((inv) => inv.id === invoiceId);
+      if (!invoice) return;
+
+      const isInterState = (companies.find((c) => c.id === invoice.companyId)?.gstSupplyType || "INTRA_STATE") === "INTER_STATE";
+
+      const qtyByItemId = new Map<string, number>();
+      draft.lines.forEach((line) => {
+        const plan = plans.find((p) => p.id === line.dispatchPlanId);
+        const order = orders.find((o) => o.id === plan?.orderId);
+        if (!order?.itemId) return;
+        qtyByItemId.set(order.itemId, (qtyByItemId.get(order.itemId) || 0) + Number(line.loadedQty || 0));
+      });
+
+      const hadSlipLineItems = invoiceLineItems.some((li) => li.invoiceId === invoiceId && li.loadingSlipId === slipId);
+
+      const nextInvoiceLineItems = invoiceLineItems
+        .map((li) => {
+          if (li.invoiceId !== invoiceId || li.loadingSlipId !== slipId) return li;
+          const nextQty = Number(qtyByItemId.get(li.itemId) || 0);
+          const nextAmount = nextQty * Number(li.rate || 0);
+          const taxAmount = (nextAmount * Number(li.gstRate || 0)) / 100;
+          return {
+            ...li,
+            qty: nextQty,
+            amount: nextAmount,
+            cgst: isInterState ? 0 : taxAmount / 2,
+            sgst: isInterState ? 0 : taxAmount / 2,
+            igst: isInterState ? taxAmount : 0,
+          };
+        })
+        .filter((li) => !(li.invoiceId === invoiceId && li.loadingSlipId === slipId && Number(li.qty || 0) <= 0));
+
+      await setInvoiceLineItems(nextInvoiceLineItems);
+
+      const allForInvoice = nextInvoiceLineItems.filter((li) => li.invoiceId === invoiceId);
+      const totals = allForInvoice.reduce(
+        (acc, li) => {
+          acc.totalBeforeGst += Number(li.amount || 0);
+          acc.cgst += Number(li.cgst || 0);
+          acc.sgst += Number(li.sgst || 0);
+          acc.igst += Number(li.igst || 0);
+          return acc;
+        },
+        { totalBeforeGst: 0, cgst: 0, sgst: 0, igst: 0 }
+      );
+
+      const roundOff = Number(invoice.roundOff || 0);
+      const nextTotalAfterGst = totals.totalBeforeGst + totals.cgst + totals.sgst + totals.igst + roundOff;
+
+      await setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === invoiceId
+            ? {
+                ...inv,
+                totalBeforeGst: totals.totalBeforeGst,
+                cgst: totals.cgst,
+                sgst: totals.sgst,
+                igst: totals.igst,
+                totalAfterGst: nextTotalAfterGst,
+                updatedBy: "System User",
+                updateTimestamp: now,
+              }
+            : inv
+        )
+      );
+
+      if (!hadSlipLineItems) {
+        alert("Saved. Note: no existing invoice line items were found for this slip; invoice totals were recomputed from remaining items.");
+      }
+    }
 
     cancelEdit(slipId);
   };
@@ -270,7 +352,7 @@ export function LoadingMaster() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                   <div className="flex justify-end items-center gap-3">
-                    {!slip.invoiceId && slip.status !== "Cancelled" ? (
+                    {slip.status !== "Cancelled" ? (
                       <button
                         type="button"
                         onClick={() => startEdit(slip)}
@@ -334,7 +416,7 @@ export function LoadingMaster() {
                           Slip {slip.slipNo} - Truck {slip.truckNo} - Date {formatDate(slip.date)}
                         </div>
                         <div className="flex items-center gap-2">
-                          {!slip.invoiceId && slip.status !== "Cancelled" ? (
+                          {slip.status !== "Cancelled" ? (
                             isEditing ? (
                               <>
                                 <button

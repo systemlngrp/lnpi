@@ -2,25 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "./serial";
 import type { Company, DispatchPlan, Item, LoadingSlip, LoadingSlipAllocation, Order, Setting, Truck } from "../types";
-
-async function getImageDataUrl(url: string) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Failed to load logo image.");
-  const blob = await response.blob();
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Failed to read logo image."));
-    reader.readAsDataURL(blob);
-  });
-}
-
-function getOrganizationLogoUrl(setting?: Setting | null) {
-  if (!setting?.organizationLogo) return "";
-  const encoded = setting.organizationLogo.split("/").map(encodeURIComponent).join("/");
-  if (typeof window === "undefined") return `/uploads/${encoded}`;
-  return new URL(`/uploads/${encoded}`, window.location.origin).toString();
-}
+import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
 function formatAllocations(allocations?: LoadingSlip["lines"][number]["allocations"], jobNos?: LoadingSlip["lines"][number]["jobNos"]) {
   if (Array.isArray(allocations) && allocations.length > 0) {
@@ -58,50 +40,7 @@ export async function downloadLoadingSlipPdf({
   companies: Company[];
 }) {
   const doc = new jsPDF("p", "mm", "a4");
-  let currentY = 16;
-
-  const organizationLogoUrl = getOrganizationLogoUrl(setting);
-  if (organizationLogoUrl) {
-    try {
-      const imageDataUrl = await getImageDataUrl(organizationLogoUrl);
-      doc.addImage(imageDataUrl, "PNG", 90, currentY, 30, 18, undefined, "FAST");
-      currentY += 22;
-    } catch (err) {
-      console.warn("Organization logo could not be added to loading slip PDF:", err);
-    }
-  }
-
-  const organizationName = setting?.organizationName?.trim();
-  const organizationAddress = setting?.organizationAddress?.trim();
-  const organizationGstDetails = setting?.organizationGstDetails?.trim();
-
-  if (organizationName) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text(organizationName, 105, currentY, { align: "center" });
-    currentY += 7;
-  }
-
-  if (organizationAddress) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    const lines = doc.splitTextToSize(organizationAddress, 160);
-    doc.text(lines, 105, currentY, { align: "center" });
-    currentY += lines.length * 5;
-  }
-
-  if (organizationGstDetails) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    const lines = doc.splitTextToSize(organizationGstDetails, 160);
-    doc.text(lines, 105, currentY, { align: "center" });
-    currentY += lines.length * 5;
-  }
-
-  currentY += 4;
-  doc.setDrawColor(0);
-  doc.line(14, currentY, 196, currentY);
-  currentY += 8;
+  const { currentY } = await renderOrganizationHeader(doc, setting);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);

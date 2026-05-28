@@ -10,8 +10,8 @@ export function LoginPage() {
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const next = params.get("next") || "/";
 
-  const [identifier, setIdentifier] = useState("system@lngrp.in");
-  const [password, setPassword] = useState("abcd");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,11 +69,7 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-4 text-xs text-slate-500">
-          Dev test user: <span className="font-bold">system@lngrp.in</span> / <span className="font-bold">abcd</span>
-        </div>
       </div>
     </div>
   );
 }
-

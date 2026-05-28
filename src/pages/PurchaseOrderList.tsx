@@ -3,10 +3,11 @@ import { CheckCircle, Download, ThumbsUp, X } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useData } from "../hooks/useData";
-import { Indent, IndentLine, Material, PurchaseOrder, PurchaseOrderLine, Supplier } from "../types";
+import { Indent, IndentLine, Material, PurchaseOrder, PurchaseOrderLine, Setting, Supplier } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { summarizeIndentLines } from "../lib/indentTotals";
+import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
 
 type PurchaseOrderMode = "all" | "pending-approval" | "approved" | "rejected";
 
@@ -24,23 +25,35 @@ function getFilteredOrders(orders: PurchaseOrder[], mode: PurchaseOrderMode) {
   return orders.filter((order) => order.status === "Rejected");
 }
 
-function downloadPurchaseOrderPdf({
+async function downloadPurchaseOrderPdf({
   order,
   indent,
   supplierName,
   lines,
   materialMap,
+  setting,
 }: {
   order: PurchaseOrder;
   indent?: Indent;
   supplierName: string;
   lines: PurchaseOrderLine[];
   materialMap: Map<string, string>;
+  setting?: Setting | null;
 }) {
   const doc = new jsPDF("p", "mm", "a4");
+
+  let titleY = 14;
+  let detailsStartY = 24;
+
+  const header = await renderOrganizationHeader(doc, setting, { startY: 16, requireAnyContent: true });
+  if (header.hasAnyContent) {
+    titleY = header.currentY;
+    detailsStartY = titleY + 10;
+  }
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text("PURCHASE ORDER", 105, 14, { align: "center" });
+  doc.text("PURCHASE ORDER", 105, titleY, { align: "center" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
@@ -52,7 +65,7 @@ function downloadPurchaseOrderPdf({
     ["Status", order.status],
   ];
 
-  let y = 24;
+  let y = detailsStartY;
   details.forEach(([label, value], index) => {
     const x = index % 2 === 0 ? 14 : 110;
     const rowY = y + Math.floor(index / 2) * 7;
@@ -100,8 +113,10 @@ export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [indents, setIndents] = useData<Indent>("indents", []);
   const [indentLines, setIndentLines] = useData<IndentLine>("indent-lines", []);
+  const [settings] = useData<Setting>("settings", []);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const currentSetting = settings[0];
 
   const visibleOrders = useMemo(
     () =>
@@ -295,12 +310,13 @@ export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
                         <button
                           type="button"
                           onClick={() =>
-                            downloadPurchaseOrderPdf({
+                            void downloadPurchaseOrderPdf({
                               order,
                               indent,
                               supplierName: supplierMap.get(order.supplierId) || "Unknown Supplier",
                               lines,
                               materialMap,
+                              setting: currentSetting,
                             })
                           }
                           title="Download PDF"
