@@ -270,6 +270,25 @@ export function LoadingMaster() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                   <div className="flex justify-end items-center gap-3">
+                    {!slip.invoiceId && slip.status !== "Cancelled" ? (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(slip)}
+                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded bg-white hover:bg-slate-50 transition-colors uppercase"
+                        title="Edit loading slip"
+                      >
+                        Edit
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => toggleSlip(slip.id)}
+                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded bg-white hover:bg-slate-50 transition-colors uppercase"
+                        title="Open slip details"
+                      >
+                        Open
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() =>
