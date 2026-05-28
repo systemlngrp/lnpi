@@ -40,7 +40,7 @@ export async function downloadLoadingSlipPdf({
   companies: Company[];
 }) {
   const doc = new jsPDF("p", "mm", "a4");
-  const { currentY } = await renderOrganizationHeader(doc, setting);
+  let currentY = (await renderOrganizationHeader(doc, setting)).currentY;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);

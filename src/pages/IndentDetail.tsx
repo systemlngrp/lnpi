@@ -132,10 +132,14 @@ export function IndentDetail() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
           <div className="rounded border border-black bg-slate-50 p-3">
             <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Requested By</div>
             <div className="mt-1 text-sm font-bold text-black">{indent.requestedBy}</div>
+          </div>
+          <div className="rounded border border-black bg-slate-50 p-3">
+            <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Requisition No</div>
+            <div className="mt-1 text-sm font-bold text-black">{indent.indentNo || "-"}</div>
           </div>
           <div className="rounded border border-black bg-slate-50 p-3">
             <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Requisition Date</div>

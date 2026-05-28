@@ -122,6 +122,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
         <table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-slate-100">
+              <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black whitespace-nowrap">Requisition No</th>
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Requested By</th>
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Requisition Date</th>
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Required Date</th>
@@ -151,7 +152,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
             {visibleIndents.length === 0 ? (
               <tr>
                 <td
-                  colSpan={mode === "Rejected" ? 7 : 6}
+                  colSpan={mode === "Pending" ? 10 : mode === "Rejected" ? 8 : 7}
                   className="border border-black px-6 py-10 text-center font-medium text-black"
                 >
                   No indent records found.
@@ -171,6 +172,9 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
 
                 return (
                   <tr key={line ? `${indent.id}-${line.id}` : indent.id} className="hover:bg-slate-50">
+                    <td className="border border-black px-4 py-4 text-sm font-bold text-black whitespace-nowrap">
+                      {indent.indentNo || indent.id}
+                    </td>
                     <td className="border border-black px-4 py-4 text-sm text-black">{indent.requestedBy}</td>
                     <td className="border border-black px-4 py-4 text-sm text-black whitespace-nowrap">{formatDate(indent.requisitionDate)}</td>
                     <td className="border border-black px-4 py-4 text-sm text-black whitespace-nowrap">{formatDate(indent.requiredDate)}</td>

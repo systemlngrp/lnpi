@@ -1030,6 +1030,7 @@ async function initDb(retries = 5) {
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`indents\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
+          \`indentNo\` VARCHAR(30),
           \`requestedBy\` VARCHAR(255) NOT NULL,
           \`requisitionDate\` VARCHAR(50) NOT NULL,
           \`requiredDate\` VARCHAR(50) NOT NULL,
@@ -1672,6 +1673,7 @@ async function initDb(retries = 5) {
         { table: "materials", column: "openingRate", type: "DECIMAL(15,2)" },
         { table: "materials", column: "openingValue", type: "DECIMAL(15,2)" },
         { table: "materials", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
+        { table: "indents", column: "indentNo", type: "VARCHAR(30)" },
         { table: "indents", column: "requestedBy", type: "VARCHAR(255) NOT NULL" },
         { table: "indents", column: "requisitionDate", type: "VARCHAR(50) NOT NULL" },
         { table: "indents", column: "requiredDate", type: "VARCHAR(50) NOT NULL" },
@@ -2427,6 +2429,38 @@ const createHandlers = (tableName: string) => {
             }
           } catch (err) {
             console.warn('[DB] Could not auto-generate orderNo:', (err as Error).message);
+          }
+        }
+
+        // Auto-generate indentNo for indents when not provided (FY-based: YY-YY/NNNNN)
+        if (tableName === "indents") {
+          try {
+            if (!data.indentNo) {
+              const dateStr = data.requisitionDate || new Date().toISOString().slice(0, 10);
+              const d = new Date(dateStr);
+              let fyStart = d.getFullYear();
+              const month = d.getMonth() + 1;
+              if (month < 4) fyStart = fyStart - 1;
+              const fyLabel = `${String(fyStart).slice(2)}-${String(fyStart + 1).slice(2)}`;
+
+              const likePattern = `${fyLabel}/%`;
+              const [rows] = await db.query(
+                "SELECT indentNo FROM `indents` WHERE indentNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(indentNo,'/',-1) AS UNSIGNED) DESC LIMIT 1",
+                [likePattern]
+              );
+              let lastNum = 0;
+              if ((rows as any[]).length > 0) {
+                const lastIndentNo = String((rows as any[])[0].indentNo || "");
+                const parts = lastIndentNo.split("/");
+                const suffix = parts[parts.length - 1];
+                lastNum = parseInt(suffix || "0", 10) || 0;
+              }
+              const nextNum = lastNum + 1;
+              const padded = String(nextNum).padStart(5, "0");
+              data.indentNo = `${fyLabel}/${padded}`;
+            }
+          } catch (err) {
+            console.warn("[DB] Could not auto-generate indentNo:", (err as Error).message);
           }
         }
 

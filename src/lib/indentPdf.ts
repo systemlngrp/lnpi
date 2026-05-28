@@ -16,7 +16,7 @@ export async function downloadIndentPdf({
   setting?: Setting | null;
 }) {
   const doc = new jsPDF("p", "mm", "a4");
-  const { currentY } = await renderOrganizationHeader(doc, setting);
+  let currentY = (await renderOrganizationHeader(doc, setting)).currentY;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
@@ -26,6 +26,7 @@ export async function downloadIndentPdf({
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   const detailRows = [
+    ["Requisition No", indent.indentNo || "-"],
     ["Requested By", indent.requestedBy],
     ["Requisition Date", formatDate(indent.requisitionDate)],
     ["Indent Type", indent.indentType],
@@ -83,6 +84,10 @@ export async function downloadIndentPdf({
   doc.setTextColor(80);
   doc.text(`Generated on ${formatDate(new Date().toISOString())}`, 14, Math.min(footerY, 285));
 
-  const safeRequestedBy = indent.requestedBy.trim().replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "Indent";
-  doc.save(`Indent_${safeRequestedBy}_${indent.requisitionDate}.pdf`);
+  const safeIndentNo = String(indent.indentNo || "").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
+  const safeSuffix =
+    safeIndentNo ||
+    indent.requestedBy.trim().replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") ||
+    "Indent";
+  doc.save(`Indent_${safeSuffix}_${indent.requisitionDate}.pdf`);
 }

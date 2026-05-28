@@ -193,6 +193,7 @@ export interface MaterialReturnReelLine {
 
 export interface Indent {
   id: string;
+  indentNo?: string;
   requestedBy: string;
   requisitionDate: string;
   requiredDate: string;
