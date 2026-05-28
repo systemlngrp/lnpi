@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
@@ -30,6 +30,7 @@ function isWithoutJobIssue(issueType?: string) {
 }
 
 export function MaterialIssueForm() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
@@ -305,6 +306,13 @@ export function MaterialIssueForm() {
       setLines([]);
       setSelectedReels({});
       alert(`Material Issue created with Issue No: ${issueNo}`);
+
+      // Redirect back to relevant pending view
+      if (isWithoutJobIssue(issueType)) {
+        navigate("/material-movement/pending-non-job-issue");
+      } else {
+        navigate("/production/pending-consumption");
+      }
     } catch (error) {
       console.error("Failed to save material issue:", error);
       alert("Failed to save material issue.");

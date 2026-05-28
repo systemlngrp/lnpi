@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Material,
   MaterialInPackingSlip,
@@ -33,6 +33,7 @@ function normalizeDate(value?: string | null) {
 }
 
 export function ReelIssueReturnForm() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
@@ -481,6 +482,7 @@ export function ReelIssueReturnForm() {
       if (!lockDate) setDate(new Date().toISOString().split("T")[0]);
       if (!lockJob) setProductionId("");
       alert("Saved reel issue/return successfully.");
+      navigate("/production/pending-consumption");
     } catch (error) {
       console.error("Failed to save reel issue/return:", error);
       alert("Failed to save reel issue/return.");
