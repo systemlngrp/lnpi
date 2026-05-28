@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation();
+  const { user, hasAccess, logout } = useAuth();
 
   useEffect(() => {
     const saved = window.localStorage.getItem("layout-sidebar-collapsed");
@@ -19,6 +22,12 @@ export function Layout() {
       return next;
     });
   };
+
+  if (user && !hasAccess(location.pathname)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  const avatar = (user?.name || user?.userId || "U").trim().slice(0, 1).toUpperCase();
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans">
@@ -56,8 +65,22 @@ export function Layout() {
                  </button>
                </div>
                <div className="flex items-center space-x-4">
+                  {user && (
+                    <div className="hidden sm:flex flex-col items-end leading-tight">
+                      <div className="text-[11px] font-black text-black">{user.name}</div>
+                      <div className="text-[10px] font-bold text-slate-600">{user.role}</div>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => logout()}
+                    className="hidden sm:inline-flex items-center rounded border border-black bg-white px-3 py-1.5 text-[11px] font-black text-black hover:bg-slate-100 transition"
+                    title="Logout"
+                  >
+                    Logout
+                  </button>
                   <div className="h-8 w-8 rounded-full bg-black flex items-center justify-center text-white font-bold border border-black">
-                    S
+                    {avatar}
                   </div>
                </div>
              </div>

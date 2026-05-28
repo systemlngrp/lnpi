@@ -17,7 +17,10 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(endpoint);
+      const token = window.localStorage.getItem("authToken") || "";
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const response = await fetch(endpoint, { headers });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to fetch data");
@@ -78,12 +81,14 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
     // Send to server
     let hasError = false;
     let lastErrorMessage = "";
+    const token = window.localStorage.getItem("authToken") || "";
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     try {
       for (const item of [...added, ...modified]) {
         const response = await fetch(endpoint, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify(item),
         });
         if (!response.ok) {
@@ -95,7 +100,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
         }
       }
       for (const item of deleted) {
-        const response = await fetch(`${endpoint}/${item.id}`, { method: "DELETE" });
+        const response = await fetch(`${endpoint}/${item.id}`, { method: "DELETE", headers: { ...authHeaders } });
         if (!response.ok) {
           hasError = true;
           const errData = await response.json().catch(() => ({}));
@@ -123,9 +128,11 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const addItem = async (item: T) => {
     try {
       setDataState(prev => [...prev, item]);
+      const token = window.localStorage.getItem("authToken") || "";
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(item),
       });
       if (!response.ok) {
@@ -142,7 +149,9 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const removeItem = async (id: string) => {
     try {
       setDataState(prev => prev.filter(i => i.id !== id));
-      const response = await fetch(`${endpoint}/${id}`, { method: "DELETE" });
+      const token = window.localStorage.getItem("authToken") || "";
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await fetch(`${endpoint}/${id}`, { method: "DELETE", headers: { ...authHeaders } });
       if (!response.ok) {
         throw new Error("Failed to delete item");
       }
@@ -156,9 +165,11 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const saveItem = async (item: T) => {
     try {
       setDataState(prev => prev.map(i => i.id === item.id ? item : i));
+      const token = window.localStorage.getItem("authToken") || "";
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(item),
       });
       if (!response.ok) {

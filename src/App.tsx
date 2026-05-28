@@ -5,6 +5,9 @@
 
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { RequireAuth } from "./auth/RequireAuth";
+import { LoginPage } from "./pages/Login";
+import { UnauthorizedPage } from "./pages/Unauthorized";
 import { ItemGroups } from "./pages/ItemGroups";
 import { MaterialGroups } from "./pages/MaterialGroups";
 import { Items } from "./pages/Items";
@@ -97,7 +100,16 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        <Route path="/" element={<Layout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/unauthorized" element={<UnauthorizedPage />} />
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <Layout />
+            </RequireAuth>
+          }
+        >
           <Route index element={<Dashboard />} />
           <Route path="delivery-book" element={<DeliveryBook />} />
           <Route path="plant-head" element={<PlantHeadUnified />} />
@@ -214,6 +226,7 @@ export default function App() {
           <Route path="plans/items" element={<PlansItems />} />
           <Route path="plans/loading" element={<PlansLoading />} />
         </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
   );

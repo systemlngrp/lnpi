@@ -18,6 +18,191 @@ const PORT = parseInt(process.env.PORT || "3000", 10);
 app.use(express.json({ limit: "50mb" }));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+type AuthUser = {
+  id: string;
+  userId: string;
+  name: string;
+  email?: string | null;
+  role: "Admin" | "Employee";
+  status: "Active" | "Inactive";
+  menuAccess: string[];
+};
+
+const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";
+const AUTH_TTL_SECONDS = Number(process.env.AUTH_TTL_SECONDS || 60 * 60 * 24); // 24h
+
+function base64UrlEncode(input: Buffer | string) {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
+  return buf
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+function base64UrlDecodeToString(input: string) {
+  const pad = input.length % 4 === 0 ? "" : "=".repeat(4 - (input.length % 4));
+  const b64 = input.replace(/-/g, "+").replace(/_/g, "/") + pad;
+  return Buffer.from(b64, "base64").toString("utf8");
+}
+
+function signToken(payload: Record<string, unknown>) {
+  const header = { alg: "HS256", typ: "JWT" };
+  const now = Math.floor(Date.now() / 1000);
+  const body = { ...payload, iat: now, exp: now + AUTH_TTL_SECONDS };
+  const headerPart = base64UrlEncode(JSON.stringify(header));
+  const bodyPart = base64UrlEncode(JSON.stringify(body));
+  const data = `${headerPart}.${bodyPart}`;
+  const sig = crypto.createHmac("sha256", AUTH_SECRET).update(data).digest();
+  return `${data}.${base64UrlEncode(sig)}`;
+}
+
+function verifyToken(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [headerPart, bodyPart, sigPart] = parts;
+  const data = `${headerPart}.${bodyPart}`;
+  const expected = crypto.createHmac("sha256", AUTH_SECRET).update(data).digest();
+  const expectedPart = base64UrlEncode(expected);
+  if (sigPart.length !== expectedPart.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sigPart), Buffer.from(expectedPart))) return null;
+
+  try {
+    const body = JSON.parse(base64UrlDecodeToString(bodyPart));
+    const exp = Number((body as any)?.exp || 0);
+    const now = Math.floor(Date.now() / 1000);
+    if (!exp || exp < now) return null;
+    return body as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeMenuAccess(raw: unknown): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((v) => String(v)).filter(Boolean);
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map((v) => String(v)).filter(Boolean);
+    } catch {
+      // ignore
+    }
+  }
+  return [];
+}
+
+function hasPermission(user: AuthUser, required: string) {
+  if (user.role === "Admin") return true;
+  if (user.status !== "Active") return false;
+  const list = user.menuAccess || [];
+  if (list.includes("*")) return true;
+  if (!required) return false;
+  return list.some((entry) => {
+    if (!entry) return false;
+    if (entry === required) return true;
+    if (required.startsWith(entry)) return true; // user granted section access like "/production"
+    if (entry.startsWith(required)) return true; // user granted a specific page under this section
+    if (entry.endsWith("/*") && required.startsWith(entry.slice(0, -1))) return true;
+    return false;
+  });
+}
+
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const auth = String(req.headers.authorization || "");
+  const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "Unauthorized" });
+  const uid = String((payload as any).uid || "");
+  if (!uid) return res.status(401).json({ error: "Unauthorized" });
+  (req as any).authUserId = uid;
+  next();
+}
+
+app.post("/api/auth/login", async (req, res) => {
+  const identifier = String(req.body?.identifier || req.body?.userId || req.body?.email || "").trim();
+  const password = String(req.body?.password || "").trim();
+
+  if (!identifier || !password) {
+    return res.status(400).json({ error: "Missing credentials" });
+  }
+
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM `users` WHERE userId = ? OR email = ? LIMIT 1",
+      [identifier, identifier]
+    );
+    const row = (rows as any[])[0];
+    if (!row) return res.status(401).json({ error: "Invalid credentials" });
+
+    const status = String(row.status || "Active") === "Inactive" ? "Inactive" : "Active";
+    if (status !== "Active") return res.status(403).json({ error: "User is inactive" });
+
+    const storedPassword = String(row.password || "");
+    if (!storedPassword || storedPassword !== password) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const user: AuthUser = {
+      id: String(row.id),
+      userId: String(row.userId || ""),
+      name: String(row.name || ""),
+      email: row.email ? String(row.email) : null,
+      role: String(row.role || "Employee") === "Admin" ? "Admin" : "Employee",
+      status,
+      menuAccess: normalizeMenuAccess(row.menuAccess),
+    };
+
+    const token = signToken({ uid: user.id });
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        menuAccess: user.menuAccess,
+      },
+    });
+  } catch (error) {
+    console.error("[AUTH] login failed:", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.get("/api/auth/me", requireAuth, async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  res.json({
+    id: user.id,
+    userId: user.userId,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    menuAccess: user.menuAccess,
+  });
+});
+
+app.post("/api/auth/logout", requireAuth, async (_req, res) => {
+  // Stateless token: client just deletes token.
+  res.json({ success: true });
+});
+
+// Protect all /api routes except auth + db-status
+app.use("/api", (req, res, next) => {
+  if (req.path.startsWith("/auth/") || req.path === "/db-status") return next();
+  return requireAuth(req, res, next);
+});
+
 // Ensure uploads directory exists
 if (!fs.existsSync(path.join(process.cwd(), "uploads"))) {
   fs.mkdirSync(path.join(process.cwd(), "uploads"));
@@ -516,6 +701,132 @@ async function getPool() {
   });
 
   return pool;
+}
+
+async function loadAuthUserById(userId: string): Promise<AuthUser | null> {
+  const db = await getPool();
+  if (!db) return null;
+  const [rows] = await db.query("SELECT * FROM `users` WHERE id = ? LIMIT 1", [userId]);
+  const row = (rows as any[])[0];
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    userId: String(row.userId || ""),
+    name: String(row.name || ""),
+    email: row.email ? String(row.email) : null,
+    role: String(row.role || "Employee") === "Admin" ? "Admin" : "Employee",
+    status: String(row.status || "Active") === "Inactive" ? "Inactive" : "Active",
+    menuAccess: normalizeMenuAccess(row.menuAccess),
+  };
+}
+
+async function ensureDevSeedUser(db: mysql.Pool) {
+  const userId = "system@lngrp.in";
+  const password = "abcd";
+
+  const [rows] = await db.query("SELECT id FROM `users` WHERE userId = ? OR email = ? LIMIT 1", [userId, userId]);
+  const existing = (rows as any[])[0];
+  if (existing?.id) return;
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const seed = {
+    id,
+    userId,
+    name: "System Admin",
+    mobile: "",
+    email: userId,
+    password,
+    role: "Admin",
+    status: "Active",
+    menuAccess: JSON.stringify(["*"]),
+    updatedBy: "System",
+    updateTimestamp: now,
+  };
+
+  const keys = Object.keys(seed);
+  const values = Object.values(seed);
+  const placeholders = keys.map(() => "?").join(",");
+  const columnNames = keys.map((k) => `\`${k}\``).join(",");
+  await db.query(`INSERT INTO \`users\` (${columnNames}) VALUES (${placeholders})`, values);
+  console.log("[DB] Seeded dev admin user:", userId);
+}
+
+async function getRequestUser(req: express.Request): Promise<AuthUser | null> {
+  const id = String((req as any).authUserId || "");
+  if (!id) return null;
+  return await loadAuthUserById(id);
+}
+
+function entityPermissionKey(entity: string): string {
+  switch (entity) {
+    case "users":
+      return "/masters/users";
+    case "item_groups":
+      return "/masters/item-groups";
+    case "material_groups":
+      return "/masters/material-groups";
+    case "items":
+      return "/masters/items";
+    case "materials":
+      return "/masters/materials";
+    case "suppliers":
+      return "/masters/suppliers";
+    case "states":
+      return "/masters/states";
+    case "units":
+      return "/masters/units";
+    case "color_masters":
+      return "/masters/colors";
+    case "companies":
+      return "/masters/companies";
+    case "trucks":
+      return "/masters/trucks";
+    case "machines":
+      return "/masters/machines";
+    case "settings":
+      return "/masters/settings";
+    case "material_in":
+    case "material_in_packing_slips":
+      return "/material-in";
+    case "indent_lines":
+    case "indents":
+      return "/indent";
+    case "purchase_orders":
+    case "purchase_order_lines":
+      return "/purchase-orders";
+    case "gate_entries":
+    case "gate_entry_photos":
+      return "/gate-entry";
+    case "material_issues":
+    case "material_issue_lines":
+    case "material_issue_reel_lines":
+    case "material_returns":
+    case "material_return_lines":
+    case "material_return_reel_lines":
+    case "consumptions":
+      return "/material-movement";
+    case "orders":
+    case "orders_schedule":
+      return "/orders";
+    case "productions":
+      return "/production";
+    case "production_processing":
+      return "/production-processing";
+    case "sample_requests":
+      return "/samples";
+    case "dispatch_plans":
+      return "/dispatch";
+    case "loading_slips":
+      return "/loading";
+    case "invoices":
+    case "invoice_line_items":
+      return "/billing";
+    case "realization_rate_chart":
+      return "/reports";
+    default:
+      return "";
+  }
 }
 
 // Health check endpoint to verify DB status
@@ -1030,6 +1341,9 @@ async function initDb(retries = 5) {
           \`mobile\` VARCHAR(20),
           \`email\` VARCHAR(255),
           \`password\` VARCHAR(255),
+          \`role\` VARCHAR(20) NOT NULL DEFAULT 'Employee',
+          \`status\` VARCHAR(20) NOT NULL DEFAULT 'Active',
+          \`menuAccess\` JSON,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -1706,6 +2020,9 @@ async function initDb(retries = 5) {
         { table: "settings", column: "organizationLogo", type: "VARCHAR(255)" },
         { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "users", column: "role", type: "VARCHAR(20) NOT NULL DEFAULT 'Employee'" },
+        { table: "users", column: "status", type: "VARCHAR(20) NOT NULL DEFAULT 'Active'" },
+        { table: "users", column: "menuAccess", type: "JSON" },
       ];
 
 
@@ -1776,6 +2093,14 @@ async function initDb(retries = 5) {
       } catch (err) {
         console.warn("[DB] Could not ensure foreign keys:", (err as Error).message);
       }
+
+      try {
+        if (process.env.NODE_ENV !== "production") {
+          await ensureDevSeedUser(db);
+        }
+      } catch (err) {
+        console.warn("[DB] Could not ensure dev seed user:", (err as Error).message);
+      }
       
       return; // Success
     } catch (error) {
@@ -1799,6 +2124,15 @@ const createHandlers = (tableName: string) => {
       try {
         console.log(`[DB] Fetching all from ${tableName}`);
         let rows;
+
+        if (tableName === "users") {
+          [rows] = await db.query("SELECT * FROM `users` ORDER BY updateTimestamp DESC");
+          const sanitized = (rows as any[]).map((r) => {
+            const { password, ...rest } = r || {};
+            return { ...rest };
+          });
+          return res.json(sanitized);
+        }
 
         if (tableName === "items") {
           [rows] = await db.query(`
@@ -2159,6 +2493,10 @@ app.post("/api/get-pending-job-closure", async (req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
 
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!hasPermission(user, "/production")) return res.status(403).json({ error: "Forbidden" });
+
   const filters = (req.body || {}) as {
     date_from?: string;
     date_to?: string;
@@ -2397,9 +2735,34 @@ app.post("/api/get-pending-job-closure", async (req, res) => {
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;
-  app.get(route, handlers.getAll);
-  app.post(route, handlers.upsert);
-  app.delete(`${route}/:id`, handlers.delete);
+
+  const guard = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    try {
+      const user = await getRequestUser(req);
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      if (entity === "users") {
+        if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
+        return next();
+      }
+
+      const required = entityPermissionKey(entity);
+      if (!required) {
+        if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
+        return next();
+      }
+
+      if (!hasPermission(user, required)) return res.status(403).json({ error: "Forbidden" });
+      return next();
+    } catch (err) {
+      console.error("[AUTHZ] guard failed:", err);
+      return res.status(500).json({ error: "Authorization failed" });
+    }
+  };
+
+  app.get(route, guard, handlers.getAll);
+  app.post(route, guard, handlers.upsert);
+  app.delete(`${route}/:id`, guard, handlers.delete);
 });
 
 // Special handler for Material In lines (since they are stored as JSON)

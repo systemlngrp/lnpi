@@ -435,6 +435,9 @@ export interface User {
   mobile: string;
   email: string;
   password?: string;
+  role?: "Admin" | "Employee";
+  status?: "Active" | "Inactive";
+  menuAccess?: string[];
   updatedBy?: string;
   updateTimestamp?: string;
 }

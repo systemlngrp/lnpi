@@ -25,6 +25,7 @@ import {
   ChevronRight
 } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { useAuth } from "../auth/AuthContext";
 import {
   MaterialIn,
   Production,
@@ -54,8 +55,207 @@ interface SidebarProps {
   isCollapsed: boolean;
 }
 
+export type NavItem = {
+  name: string;
+  href: string;
+  icon: any;
+  countKey?: string;
+};
+
+export type NavGroup = {
+  section: string;
+  color: string;
+  items: NavItem[];
+};
+
+export const NAVIGATION: NavGroup[] = [
+  {
+    section: "Quick Access",
+    color: "bg-indigo-900",
+    items: [
+      { name: "Dashboard", href: "/", icon: LayoutDashboard },
+      { name: "Delivery Book", href: "/delivery-book", icon: BookOpenText },
+      { name: "Production Plan", href: "/production/plan", icon: ClipboardList },
+      { name: "Unified PH Approval", href: "/plant-head", icon: UserCheck, countKey: "/plant-head" },
+    ],
+  },
+  {
+    section: "Masters",
+    color: "bg-indigo-700",
+    items: [
+      { name: "Item Groups", href: "/masters/item-groups", icon: Layers },
+      { name: "Material Groups", href: "/masters/material-groups", icon: Layers },
+      { name: "Items", href: "/masters/items", icon: Boxes },
+      { name: "Material Master", href: "/masters/materials", icon: Boxes },
+      { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
+      { name: "States", href: "/masters/states", icon: Database },
+      { name: "Units", href: "/masters/units", icon: Database },
+      { name: "Colors", href: "/masters/colors", icon: Plus },
+      { name: "Companies", href: "/masters/companies", icon: Database },
+      { name: "Trucks", href: "/masters/trucks", icon: Truck },
+      { name: "Machines", href: "/masters/machines", icon: Hammer },
+      { name: "Users", href: "/masters/users", icon: Users },
+      { name: "Settings", href: "/masters/settings", icon: Database },
+    ],
+  },
+  {
+    section: "Material In",
+    color: "bg-slate-800",
+    items: [
+      { name: "Material In Form", href: "/material-in/form", icon: ClipboardList },
+      { name: "Pending PH Approval", href: "/material-in/pending-ph", icon: UserCheck, countKey: "/material-in/pending-ph" },
+      { name: "Pending Accounts Approval", href: "/material-in/pending-accounts", icon: CheckCircle, countKey: "/material-in/pending-accounts" },
+      { name: "Pending MD Approval", href: "/material-in/pending-md", icon: UserCog, countKey: "/material-in/pending-md" },
+      { name: "Pending Tally Entry", href: "/material-in/pending-tally", icon: FileText, countKey: "/material-in/pending-tally" },
+      { name: "Material In Master", href: "/material-in/master", icon: Database },
+      { name: "Item Master View", href: "/material-in/item-master", icon: BarChart3 },
+    ],
+  },
+  {
+    section: "Indent",
+    color: "bg-orange-700",
+    items: [
+      { name: "Indent Form", href: "/indent/form", icon: ClipboardList },
+      { name: "Pending", href: "/indent/pending", icon: Activity, countKey: "/indent/pending" },
+      { name: "Approved", href: "/indent/approved", icon: Database, countKey: "/indent/approved" },
+      { name: "Completed", href: "/indent/completed", icon: CheckCircle, countKey: "/indent/completed" },
+      { name: "Rejected", href: "/indent/rejected", icon: X, countKey: "/indent/rejected" },
+    ],
+  },
+  {
+    section: "Purchase Order",
+    color: "bg-cyan-700",
+    items: [
+      { name: "Pending PO", href: "/purchase-orders/pending-po", icon: Activity, countKey: "/purchase-orders/pending-po" },
+      { name: "All", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
+      { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
+      { name: "Approved", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
+      { name: "Rejected", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
+    ],
+  },
+  {
+    section: "Gate Entry",
+    color: "bg-violet-700",
+    items: [
+      { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
+      { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
+    ],
+  },
+  {
+    section: "Material Receipt",
+    color: "bg-fuchsia-700",
+    items: [
+      { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
+      { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
+    ],
+  },
+  {
+    section: "Material Movement",
+    color: "bg-lime-700",
+    items: [
+      { name: "Reel Issue/Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
+      { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
+      { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
+      { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
+      { name: "Non-Job Issue Master", href: "/material-movement/non-job-issue-master", icon: Database },
+      { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
+      { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
+    ],
+  },
+  {
+    section: "Orders",
+    color: "bg-rose-700",
+    items: [
+      { name: "Order Form", href: "/orders/form", icon: ClipboardList },
+      { name: "Pending Salesman Approval", href: "/orders/pending-ph", icon: UserCheck, countKey: "/orders/pending-ph" },
+      { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity, countKey: "/orders/pending-scheduling" },
+      { name: "Orders Master", href: "/orders/master", icon: FileText },
+      { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
+      { name: "Upcoming Scheduled Orders", href: "/orders/upcoming", icon: Activity, countKey: "/orders/upcoming" },
+      { name: "Canceled Orders", href: "/orders/canceled", icon: X },
+    ],
+  },
+  {
+    section: "Production",
+    color: "bg-emerald-700",
+    items: [
+      { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
+      { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
+      { name: "Pending FFG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
+      { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
+      { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
+      { name: "Production Master", href: "/production/master", icon: Database },
+      { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
+      { name: "Canceled Jobs", href: "/production/canceled", icon: X },
+    ],
+  },
+  {
+    section: "Production Processing",
+    color: "bg-teal-800",
+    items: [
+      { name: "Reporting Form", href: "/production-processing/form", icon: ClipboardList },
+      { name: "Reporting Master", href: "/production-processing/master", icon: Database },
+    ],
+  },
+  {
+    section: "Samples",
+    color: "bg-teal-700",
+    items: [
+      { name: "Sample Form", href: "/samples/form", icon: FlaskConical },
+      { name: "Pending Samples", href: "/samples/pending", icon: Activity, countKey: "/samples/pending" },
+      { name: "Samples Produced", href: "/samples/produced", icon: CheckCircle },
+      { name: "Sample Master", href: "/samples/master", icon: Database },
+    ],
+  },
+  {
+    section: "Dispatch",
+    color: "bg-blue-700",
+    items: [
+      { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
+      { name: "Dispatch Plans Master", href: "/dispatch/master", icon: Database },
+    ],
+  },
+  {
+    section: "Loading",
+    color: "bg-indigo-600",
+    items: [
+      { name: "Pending Loading", href: "/loading/pending", icon: Truck, countKey: "/loading/pending" },
+      { name: "Loading Master", href: "/loading/master", icon: FileText },
+    ],
+  },
+  {
+    section: "Billing",
+    color: "bg-emerald-600",
+    items: [
+      { name: "Pending Invoicing", href: "/billing/pending", icon: Receipt, countKey: "/billing/pending" },
+      { name: "Billing Master", href: "/billing/master", icon: FileText },
+    ],
+  },
+  {
+    section: "Reports",
+    color: "bg-sky-700",
+    items: [
+      { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
+      { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
+      { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
+      { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
+    ],
+  },
+  {
+    section: "Documentation",
+    color: "bg-slate-700",
+    items: [
+      { name: "Production Planning Logic", href: "/plans/production-planning", icon: BookOpenText },
+      { name: "Production", href: "/plans/production", icon: BookOpenText },
+      { name: "Items", href: "/plans/items", icon: BookOpenText },
+      { name: "Loading Plan", href: "/plans/loading", icon: BookOpenText },
+    ],
+  },
+];
+
 export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
+  const { hasAccess } = useAuth();
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
@@ -123,9 +323,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     let cancelled = false;
     (async () => {
       try {
+        const token = window.localStorage.getItem("authToken") || "";
         const response = await fetch("/api/get-pending-job-closure", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({}),
         });
         if (!response.ok) throw new Error(await response.text());
@@ -211,190 +415,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   consumptions.filter(c => isPendingPH(c.status)).length
   };
 
-  const navigation = [
-    {
-      section: "Quick Access",
-      color: "bg-indigo-900",
-      items: [
-        { name: "Dashboard", href: "/", icon: LayoutDashboard },
-        { name: "Delivery Book", href: "/delivery-book", icon: BookOpenText },
-        { name: "Production Plan", href: "/production/plan", icon: ClipboardList },
-        { name: "Unified PH Approval", href: "/plant-head", icon: UserCheck, countKey: "/plant-head" },
-      ],
-    },
-    {
-      section: "Masters",
-      color: "bg-indigo-700",
-      items: [
-        { name: "Item Groups", href: "/masters/item-groups", icon: Layers },
-        { name: "Material Groups", href: "/masters/material-groups", icon: Layers },
-        { name: "Items", href: "/masters/items", icon: Boxes },
-        { name: "Material Master", href: "/masters/materials", icon: Boxes },
-        { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
-        { name: "States", href: "/masters/states", icon: Database },
-        { name: "Units", href: "/masters/units", icon: Database },
-        { name: "Colors", href: "/masters/colors", icon: Plus },
-        { name: "Companies", href: "/masters/companies", icon: Database },
-        { name: "Trucks", href: "/masters/trucks", icon: Truck },
-        { name: "Machines", href: "/masters/machines", icon: Hammer },
-        { name: "Users", href: "/masters/users", icon: Users },
-        { name: "Settings", href: "/masters/settings", icon: Database },
-      ],
-    },
-    {
-      section: "Material In",
-      color: "bg-slate-800",
-      items: [
-        { name: "Material In Form", href: "/material-in/form", icon: ClipboardList },
-        { name: "Pending PH Approval", href: "/material-in/pending-ph", icon: UserCheck, countKey: "/material-in/pending-ph" },
-        { name: "Pending Accounts Approval", href: "/material-in/pending-accounts", icon: CheckCircle, countKey: "/material-in/pending-accounts" },
-        { name: "Pending MD Approval", href: "/material-in/pending-md", icon: UserCog, countKey: "/material-in/pending-md" },
-        { name: "Pending Tally Entry", href: "/material-in/pending-tally", icon: FileText, countKey: "/material-in/pending-tally" },
-        { name: "Material In Master", href: "/material-in/master", icon: Database },
-        { name: "Item Master View", href: "/material-in/item-master", icon: BarChart3 },
-      ],
-    },
-    {
-      section: "Indent",
-      color: "bg-orange-700",
-      items: [
-        { name: "Indent Form", href: "/indent/form", icon: ClipboardList },
-        { name: "Pending", href: "/indent/pending", icon: Activity, countKey: "/indent/pending" },
-        { name: "Approved", href: "/indent/approved", icon: Database, countKey: "/indent/approved" },
-        { name: "Completed", href: "/indent/completed", icon: CheckCircle, countKey: "/indent/completed" },
-        { name: "Rejected", href: "/indent/rejected", icon: X, countKey: "/indent/rejected" },
-      ],
-    },
-    {
-      section: "Purchase Order",
-      color: "bg-cyan-700",
-      items: [
-        { name: "Pending PO", href: "/purchase-orders/pending-po", icon: Activity, countKey: "/purchase-orders/pending-po" },
-        { name: "All", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
-        { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
-        { name: "Approved", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
-        { name: "Rejected", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
-      ],
-    },
-    {
-      section: "Gate Entry",
-      color: "bg-violet-700",
-      items: [
-        { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
-        { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
-      ],
-    },
-    {
-      section: "Material Receipt",
-      color: "bg-fuchsia-700",
-      items: [
-        { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
-        { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
-      ],
-    },
-	    {
-	      section: "Material Movement",
-	      color: "bg-lime-700",
-	      items: [
-	        { name: "Reel Issue/Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
-	        { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
-	        { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
-	        { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
-	        { name: "Non-Job Issue Master", href: "/material-movement/non-job-issue-master", icon: Database },
-	        { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
-	        { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
-	      ],
-	    },
-    {
-      section: "Orders",
-      color: "bg-rose-700",
-      items: [
-        { name: "Order Form", href: "/orders/form", icon: ClipboardList },
-        { name: "Pending Salesman Approval", href: "/orders/pending-ph", icon: UserCheck, countKey: "/orders/pending-ph" },
-        { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity, countKey: "/orders/pending-scheduling" },
-        { name: "Orders Master", href: "/orders/master", icon: FileText },
-        { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
-        { name: "Upcoming Scheduled Orders", href: "/orders/upcoming", icon: Activity, countKey: "/orders/upcoming" },
-        { name: "Canceled Orders", href: "/orders/canceled", icon: X },
-      ],
-    },
-    {
-      section: "Production",
-      color: "bg-emerald-700",
-      items: [
-        { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
-        { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
-        { name: "Pending FFG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
-        { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
-        { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
-        { name: "Production Master", href: "/production/master", icon: Database },
-        { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
-        { name: "Canceled Jobs", href: "/production/canceled", icon: X },
-      ],
-    },
-    {
-      section: "Production Processing",
-      color: "bg-teal-800",
-      items: [
-        { name: "Reporting Form", href: "/production-processing/form", icon: ClipboardList },
-        { name: "Reporting Master", href: "/production-processing/master", icon: Database },
-      ],
-    },
-    {
-      section: "Samples",
-      color: "bg-teal-700",
-      items: [
-        { name: "Sample Form", href: "/samples/form", icon: FlaskConical },
-        { name: "Pending Samples", href: "/samples/pending", icon: Activity, countKey: "/samples/pending" },
-        { name: "Samples Produced", href: "/samples/produced", icon: CheckCircle },
-        { name: "Sample Master", href: "/samples/master", icon: Database },
-      ],
-    },
-    {
-      section: "Dispatch",
-      color: "bg-blue-700",
-      items: [
-        { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
-        { name: "Dispatch Plans Master", href: "/dispatch/master", icon: Database },
-      ],
-    },
-    {
-      section: "Loading",
-      color: "bg-indigo-600",
-      items: [
-        { name: "Pending Loading", href: "/loading/pending", icon: Truck, countKey: "/loading/pending" },
-        { name: "Loading Master", href: "/loading/master", icon: FileText },
-      ],
-    },
-    {
-      section: "Billing",
-      color: "bg-emerald-600",
-      items: [
-        { name: "Pending Invoicing", href: "/billing/pending", icon: Receipt, countKey: "/billing/pending" },
-        { name: "Billing Master", href: "/billing/master", icon: FileText },
-      ],
-    },
-    {
-      section: "Reports",
-      color: "bg-sky-700",
-      items: [
-        { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
-        { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
-        { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
-        { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
-      ],
-    },
-    {
-      section: "Documentation",
-      color: "bg-slate-700",
-      items: [
-        { name: "Production Planning Logic", href: "/plans/production-planning", icon: BookOpenText },
-        { name: "Production", href: "/plans/production", icon: BookOpenText },
-        { name: "Items", href: "/plans/items", icon: BookOpenText },
-        { name: "Loading Plan", href: "/plans/loading", icon: BookOpenText },
-      ],
-    },
-  ];
+  const navigation = NAVIGATION;
 
   useEffect(() => {
     const next: Record<string, boolean> = {};
@@ -449,7 +470,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
               </button>
             ) : null}
             <div className={cn("space-y-px", !isCollapsed && collapsedSections[group.section] && "hidden")}>
-              {group.items.map((item) => {
+              {group.items.filter((item) => hasAccess(item.href)).map((item) => {
                 const isActive = (item.href === "/" && location.pathname === "/") || (item.href !== "/" && location.pathname.startsWith(item.href));
                 const count = item.countKey ? counts[item.countKey] : 0;
                 

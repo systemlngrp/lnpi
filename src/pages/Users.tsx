@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { User } from "../types";
 import { Plus, Edit, Trash2, Search } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { NAVIGATION } from "../components/Sidebar";
 
 export function Users() {
   const [users, setUsers] = useData<User>("users", []);
@@ -11,17 +12,36 @@ export function Users() {
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [formData, setFormData] = useState({
+  const allMenuItems = useMemo(() => {
+    return NAVIGATION.map((group) => ({
+      section: group.section,
+      items: group.items.map((item) => ({ name: item.name, key: item.href })),
+    }));
+  }, []);
+
+  const [formData, setFormData] = useState<{
+    userId: string;
+    name: string;
+    mobile: string;
+    email: string;
+    password: string;
+    role: "Admin" | "Employee";
+    status: "Active" | "Inactive";
+    menuAccess: string[];
+  }>({
     userId: "",
     name: "",
     mobile: "",
     email: "",
     password: "",
+    role: "Employee",
+    status: "Active",
+    menuAccess: ["/"],
   });
 
   const handleCreateNew = () => {
     setEditingId(null);
-    setFormData({ userId: "", name: "", mobile: "", email: "", password: "" });
+    setFormData({ userId: "", name: "", mobile: "", email: "", password: "", role: "Employee", status: "Active", menuAccess: ["/"] });
     setIsFormOpen(true);
   };
 
@@ -32,7 +52,10 @@ export function Users() {
       name: user.name,
       mobile: user.mobile,
       email: user.email,
-      password: user.password || "",
+      password: "",
+      role: user.role || "Employee",
+      status: user.status || "Active",
+      menuAccess: Array.isArray(user.menuAccess) ? user.menuAccess : ["/"],
     });
     setIsFormOpen(true);
   };
@@ -61,6 +84,11 @@ export function Users() {
       return;
     }
 
+    if (!editingId && !formData.password.trim()) {
+      alert("Password is required for new users.");
+      return;
+    }
+
     setIsSubmitting(true);
     setTimeout(() => {
       const audit = {
@@ -68,12 +96,17 @@ export function Users() {
         updateTimestamp: new Date().toISOString()
       };
 
+      const payload: any = { ...formData };
+      if (editingId && !String(payload.password || "").trim()) {
+        delete payload.password;
+      }
+
       if (editingId) {
-        setUsers(users.map(u => u.id === editingId ? { ...u, ...formData, ...audit } : u));
+        setUsers(users.map(u => u.id === editingId ? { ...u, ...payload, ...audit } : u));
       } else {
         const newUser: User = {
           id: crypto.randomUUID(),
-          ...formData,
+          ...payload,
           ...audit
         };
         setUsers([newUser, ...users]);
@@ -89,6 +122,15 @@ export function Users() {
     u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.mobile.includes(searchTerm)
   );
+
+  const setAllMenus = () => {
+    const keys = allMenuItems.flatMap((g) => g.items.map((i) => i.key));
+    setFormData((prev) => ({ ...prev, menuAccess: Array.from(new Set(keys)) }));
+  };
+
+  const clearAllMenus = () => {
+    setFormData((prev) => ({ ...prev, menuAccess: [] }));
+  };
 
   return (
     <div className="space-y-6">
@@ -157,15 +199,106 @@ export function Users() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col space-y-1">
+                <label className="font-bold text-black text-sm">Role *</label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                >
+                  <option value="Admin">Admin</option>
+                  <option value="Employee">Employee</option>
+                </select>
+              </div>
+              <div className="flex flex-col space-y-1">
+                <label className="font-bold text-black text-sm">Status *</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Password *</label>
+              <label className="font-bold text-black text-sm">{editingId ? "Set/Reset Password" : "Password *"}</label>
               <input
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
+                required={!editingId}
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
               />
+            </div>
+
+            <div className="border-2 border-black rounded p-3 bg-slate-50">
+              <div className="flex items-center justify-between">
+                <div className="font-black text-black text-sm uppercase">Menu Access</div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={setAllMenus} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-black hover:bg-indigo-700">
+                    Select All
+                  </button>
+                  <button type="button" onClick={clearAllMenus} className="bg-white text-black border border-black px-3 py-1 rounded text-xs font-black hover:bg-slate-100">
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-3 max-h-[260px] overflow-auto pr-1">
+                {allMenuItems.map((group) => (
+                  <div key={group.section} className="bg-white border border-black rounded p-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-black uppercase text-slate-600">{group.section}</div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const keys = group.items.map((i) => i.key);
+                            setFormData((prev) => ({ ...prev, menuAccess: Array.from(new Set([...prev.menuAccess, ...keys])) }));
+                          }}
+                          className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black hover:bg-indigo-700"
+                        >
+                          Select
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const remove = new Set(group.items.map((i) => i.key));
+                            setFormData((prev) => ({ ...prev, menuAccess: prev.menuAccess.filter((k) => !remove.has(k)) }));
+                          }}
+                          className="bg-white text-black border border-black px-2 py-0.5 rounded text-[10px] font-black hover:bg-slate-100"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {group.items.map((item) => {
+                        const checked = formData.menuAccess.includes(item.key);
+                        return (
+                          <label key={item.key} className="flex items-center gap-2 text-xs font-bold text-black">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? Array.from(new Set([...formData.menuAccess, item.key]))
+                                  : formData.menuAccess.filter((k) => k !== item.key);
+                                setFormData({ ...formData, menuAccess: next });
+                              }}
+                            />
+                            <span>{item.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="flex space-x-3 pt-2">
@@ -242,6 +375,8 @@ export function Users() {
                 <tr className="divide-x divide-black">
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">User ID</th>
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Name</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Role</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Status</th>
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Mobile</th>
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Email</th>
                   <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
@@ -250,7 +385,7 @@ export function Users() {
               <tbody className="divide-y divide-black bg-white">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-black font-medium">No users found.</td>
+                    <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No users found.</td>
                   </tr>
                 ) : (
                   filteredUsers.sort((a, b) => {
@@ -261,6 +396,8 @@ export function Users() {
                     <tr key={user.id} className="hover:bg-slate-50 divide-x divide-black">
                       <td className="px-6 py-4 text-sm font-medium text-black border border-black">{user.userId}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{user.name}</td>
+                      <td className="px-6 py-4 text-sm text-black border border-black">{user.role || "Employee"}</td>
+                      <td className="px-6 py-4 text-sm text-black border border-black">{user.status || "Active"}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{user.mobile}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{user.email}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
