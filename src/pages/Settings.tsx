@@ -283,9 +283,13 @@ export function SettingsPage() {
     reader.onload = async () => {
       try {
         const base64 = reader.result as string;
+        const token = window.localStorage.getItem("authToken");
         const response = await fetch("/api/upload-artwork", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({ base64, filename: file.name }),
         });
 
