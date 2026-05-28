@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   GateEntry,
+  Item,
   Material,
   MaterialIn,
   MaterialInPackingSlip,
@@ -40,6 +41,7 @@ export function MaterialInForm() {
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
   const [materials] = useData<Material>("materials", []);
+  const [items] = useData<Item>("items", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
   const [purchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
@@ -48,11 +50,12 @@ export function MaterialInForm() {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [invDate, setInvDate] = useState("");
   const [supplierId, setSupplierId] = useState("");
-  const [mrrType, setMrrType] = useState<"Reel" | "Others">("Others");
+  const [mrrType, setMrrType] = useState<MaterialIn["mrrType"]>("Others");
 
   const [lines, setLines] = useState<MaterialLine[]>([]);
   const [currentItemId, setCurrentItemId] = useState("");
   const [currentQty, setCurrentQty] = useState<number | "">("");
+  const [currentReceiptQty, setCurrentReceiptQty] = useState<number | "">("");
   const [currentInvoiceRate, setCurrentInvoiceRate] = useState<number | "">("");
   const [currentPoLineId, setCurrentPoLineId] = useState("");
   const [packingSlipDrafts, setPackingSlipDrafts] = useState<Record<string, PackingSlipDraft[]>>({});
@@ -67,17 +70,28 @@ export function MaterialInForm() {
 
   const linkedSupplierName = suppliers.find((supplier) => supplier.id === supplierId)?.name || "";
 
+  const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
+
   const materialOptions = useMemo(
-    () =>
-      materials
+    () => {
+      if (isFgType) {
+        return items
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((item) => ({
+            value: item.id,
+            label: `${item.name}${item.erp ? ` (${item.erp})` : ""}`,
+          }));
+      }
+      return materials
         .filter((material) => material.active !== "No")
         .filter((material) => (mrrType === "Reel" ? material.type === "Reel" : material.type !== "Reel"))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((material) => ({
           value: material.id,
           label: `${material.name}${material.erpCode ? ` (${material.erpCode})` : ""}`,
-        })),
-    [materials, mrrType]
+        }));
+    },
+    [materials, items, mrrType, isFgType]
   );
 
   const supplierOptions = useMemo(
@@ -92,6 +106,8 @@ export function MaterialInForm() {
   const mrrTypeOptions = [
     { value: "Reel", label: "Reel" },
     { value: "Others", label: "Others" },
+    { value: "Rejection In", label: "Rejection In" },
+    { value: "FG Purchase", label: "FG Purchase" },
   ];
 
   useEffect(() => {
@@ -102,9 +118,13 @@ export function MaterialInForm() {
     setSupplierId(linkedGateEntry.supplierId || "");
   }, [linkedGateEntry]);
 
-  const getMaterial = (materialId: string) => materials.find((material) => material.id === materialId);
+  const getMaterial = (materialId: string) => {
+    if (isFgType) return items.find((item) => item.id === materialId);
+    return materials.find((material) => material.id === materialId);
+  };
 
   const getApprovedPoOptionsForMaterial = (materialId: string) => {
+    if (isFgType) return [];
     const approvedOrders = purchaseOrders.filter(
       (order) =>
         order.status === "Approved" &&
@@ -184,6 +204,7 @@ export function MaterialInForm() {
   const resetLineDrafts = () => {
     setCurrentItemId("");
     setCurrentQty("");
+    setCurrentReceiptQty("");
     setCurrentInvoiceRate("");
     setCurrentPoLineId("");
   };
@@ -197,9 +218,8 @@ export function MaterialInForm() {
     setCurrentInvoiceRate(Number(poLine.rate || 0));
   };
 
-  const handleMrrTypeChange = (value: string) => {
-    const nextType = value === "Reel" ? "Reel" : "Others";
-    setMrrType(nextType);
+  const handleMrrTypeChange = (value: any) => {
+    setMrrType(value);
     setLines([]);
     setPackingSlipDrafts({});
     resetLineDrafts();
@@ -214,15 +234,21 @@ export function MaterialInForm() {
         ? Number(currentInvoiceRate)
         : Number(selectedPoLine?.rate || 0);
 
-    if (!resolvedInvoiceRate || resolvedInvoiceRate <= 0) return;
+    if (mrrType === "Others" && (!resolvedInvoiceRate || resolvedInvoiceRate <= 0)) return;
+    
     const material = getMaterial(currentItemId);
     if (!material) return;
 
     if (mrrType === "Others" && (currentQty === "" || Number(currentQty) <= 0)) return;
+    if (isFgType && (currentReceiptQty === "" || Number(currentReceiptQty) <= 0)) return;
 
-    const qty = mrrType === "Reel" ? 0 : Number(currentQty);
+    let qty = 0;
+    if (mrrType === "Others") qty = Number(currentQty);
+    else if (isFgType) qty = Number(currentReceiptQty);
+
     const invoiceRate = resolvedInvoiceRate;
     const selectedPo = selectedPoLine ? getPurchaseOrder(selectedPoLine.purchaseOrderId) : undefined;
+    
     const newLine = computeLineValues({
       id: crypto.randomUUID(),
       itemId: currentItemId,
@@ -507,25 +533,29 @@ export function MaterialInForm() {
 
         <div className="mt-6 border-t border-black pt-4">
           <h3 className="text-lg font-bold text-black mb-4 uppercase">
-            {mrrType === "Reel" ? "Reel Items" : "Line Items"}
+            {isFgType ? "FG Items" : (mrrType === "Reel" ? "Reel Items" : "Line Items")}
           </h3>
           <div className="flex flex-wrap gap-4 items-end mb-4 bg-slate-50 p-4 rounded border border-black">
             <div className="flex flex-col space-y-1 w-full md:w-80">
-              <label className="text-sm font-bold text-black">Material</label>
-              <Select options={materialOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Select Material..." />
+              <label className="text-sm font-bold text-black">{isFgType ? "FG Item" : "Material"}</label>
+              <Select options={materialOptions} value={currentItemId} onChange={setCurrentItemId} placeholder={isFgType ? "Select Item..." : "Select Material..."} />
             </div>
-            {mrrType === "Others" ? (
+            {mrrType === "Others" || isFgType ? (
               <div className="flex flex-col space-y-1 w-full md:w-24">
-                <label className="text-sm font-bold text-black">Invoice Qty</label>
+                <label className="text-sm font-bold text-black">{isFgType ? "Item Receipt" : "Invoice Qty"}</label>
                 <input
                   type="number"
-                  value={currentQty}
-                  onChange={(e) => setCurrentQty(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                  value={isFgType ? currentReceiptQty : currentQty}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? "" : parseFloat(e.target.value);
+                    if (isFgType) setCurrentReceiptQty(val);
+                    else setCurrentQty(val);
+                  }}
                   className="border-2 border-black rounded p-[6px] text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-white"
                 />
               </div>
             ) : null}
-            {mrrType === "Others" ? (
+            {!isFgType && mrrType === "Others" ? (
               <div className="flex flex-col space-y-1 w-full md:w-80">
                 <label className="text-sm font-bold text-black">Our PO No.</label>
                 <Select
@@ -556,13 +586,13 @@ export function MaterialInForm() {
                 <table className="min-w-full divide-y divide-black border-collapse border border-black">
                   <thead className="bg-slate-100 divide-x divide-black">
                     <tr className="divide-x divide-black">
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Material</th>
-                      {mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th> : null}
-                      {mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th> : null}
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Qty</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isFgType ? "Item" : "Material"}</th>
+                      {!isFgType && mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th> : null}
+                      {!isFgType && mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th> : null}
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isFgType ? "Item Receipt" : "Invoice Qty"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Rate</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Kanta Weight</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isFgType ? "Kanta Weight" : "Kanta Weight"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Actual Value</th>
                       <th className="px-4 py-3 text-right border border-black"></th>
@@ -574,7 +604,7 @@ export function MaterialInForm() {
                       return (
                         <tr key={line.id} className="divide-x divide-black">
                           <td className="px-4 py-3 text-sm text-black border border-black">{materialName}</td>
-                          {mrrType === "Others" ? (
+                          {!isFgType && mrrType === "Others" ? (
                             <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
                               <Select
                                 options={getApprovedPoOptionsForMaterial(line.itemId)}
@@ -584,7 +614,7 @@ export function MaterialInForm() {
                               />
                             </td>
                           ) : null}
-                          {mrrType === "Others" ? (
+                          {!isFgType && mrrType === "Others" ? (
                             <td className="px-4 py-3 text-sm text-black border border-black">{Number(line.poRate || 0).toFixed(2)}</td>
                           ) : null}
                           <td className="px-4 py-3 text-sm text-black border border-black">

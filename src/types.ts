@@ -403,7 +403,7 @@ export interface OrderSchedule {
 export interface MaterialIn {
   id: string;
   transactionNo: string;
-  mrrType?: "Reel" | "Others";
+  mrrType?: "Reel" | "Others" | "Rejection In" | "FG Purchase";
   gateEntryId?: string;
   gateEntryNo?: string;
   timestamp: string;

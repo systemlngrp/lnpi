@@ -141,7 +141,16 @@ export function MrrApprovals() {
 
   const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
 
-  const getItemSpecs = (line: MaterialIn["lines"][0]) => {
+  const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
+    const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
+
+    if (isFgType) {
+      const item = items.find(i => i.id === line.itemId);
+      if (!item) return line.itemId;
+      const erpStr = `ERP:${item.erp || item.id} | Qty:${Number(line.actualQty || line.qty || 0).toFixed(3)}`;
+      return `${item.name} (${erpStr})`;
+    }
+
     const material = materials.find(m => m.id === line.itemId);
     if (!material) return line.itemId;
     
@@ -249,7 +258,7 @@ export function MrrApprovals() {
                         <td className="px-4 py-4 leading-relaxed lowercase first-letter:uppercase">
                           {m.lines.map((l, i) => (
                             <div key={i} className="mb-2 last:mb-0">
-                              {i + 1}. {getItemSpecs(l)}
+                              {i + 1}. {getItemSpecs(l, m.mrrType)}
                             </div>
                           ))}
                         </td>
