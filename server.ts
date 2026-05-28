@@ -2790,7 +2790,7 @@ app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
       WHERE i.status = 'Approved'
     `);
 
-    const result = (rows as any[])
+    const base = (rows as any[])
       .map((row) => {
         const qty = Number(row.qty || 0);
         const cancelledQty = Number(row.cancelledQty || 0);
@@ -2815,10 +2815,200 @@ app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
       })
       .filter((row) => row.pendingQty > 0);
 
+    const materialIds = Array.from(new Set(base.map((r) => r.materialId))).filter(Boolean);
+    const suggestedRateByMaterial = new Map<string, number>();
+    if (materialIds.length > 0) {
+      const [rateRows] = await db.query(
+        `
+          SELECT pol.materialId, pol.rate, po.poDate
+          FROM purchase_order_lines pol
+          JOIN purchase_orders po ON po.id = pol.purchaseOrderId
+          WHERE po.status != 'Rejected' AND pol.materialId IN (${materialIds.map(() => "?").join(",")})
+          ORDER BY po.poDate DESC
+        `,
+        materialIds
+      );
+      (rateRows as any[]).forEach((r) => {
+        const mid = String(r.materialId || "");
+        if (!mid || suggestedRateByMaterial.has(mid)) return;
+        suggestedRateByMaterial.set(mid, Number(r.rate || 0));
+      });
+    }
+
+    const result = base.map((r) => ({
+      ...r,
+      suggestedRate: suggestedRateByMaterial.get(r.materialId) || 0,
+    }));
+
     res.json(result);
   } catch (error) {
     console.error("[API] pending-indent-lines failed:", error);
     res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  const { poDate, remarks, lines } = req.body || {};
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return res.status(400).json({ error: "No lines provided." });
+  }
+
+  const normalizedLines = lines.map((l: any) => ({
+    indentLineId: String(l.indentLineId || "").trim(),
+    supplierId: String(l.supplierId || "").trim(),
+    qty: Number(l.qty || 0),
+    rate: Number(l.rate || 0),
+  }));
+
+  const invalid = normalizedLines.find((l: any) => !l.indentLineId || !l.supplierId || !Number.isFinite(l.qty) || l.qty <= 0 || !Number.isFinite(l.rate) || l.rate < 0);
+  if (invalid) {
+    return res.status(400).json({ error: "Invalid line items. Supplier, qty (>0) and rate (>=0) are required." });
+  }
+
+  const dateStr = String(poDate || new Date().toISOString().slice(0, 10)).slice(0, 10);
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const lineIds = normalizedLines.map((l: any) => l.indentLineId);
+    const [dbRows] = await conn.query(
+      `
+        SELECT 
+          il.id as indentLineId,
+          il.indentId,
+          il.materialId,
+          il.uom,
+          il.qty,
+          il.cancelledQty,
+          il.targetDeliveryDate,
+          COALESCE(pol_sum.poQtyCreated, 0) as poQtyCreated
+        FROM indent_lines il
+        JOIN indents i ON i.id = il.indentId
+        LEFT JOIN (
+          SELECT pol.indentLineId, SUM(pol.qty) as poQtyCreated
+          FROM purchase_order_lines pol
+          JOIN purchase_orders po ON po.id = pol.purchaseOrderId
+          WHERE po.status != 'Rejected'
+          GROUP BY pol.indentLineId
+        ) pol_sum ON pol_sum.indentLineId = il.id
+        WHERE il.id IN (${lineIds.map(() => "?").join(",")})
+      `,
+      lineIds
+    );
+
+    const byId = new Map<string, any>((dbRows as any[]).map((r) => [String(r.indentLineId), r]));
+    for (const l of normalizedLines) {
+      const row = byId.get(l.indentLineId);
+      if (!row) {
+        return res.status(400).json({ error: `Indent line not found: ${l.indentLineId}` });
+      }
+      const pendingQty = Math.max(0, Number(row.qty || 0) - Number(row.cancelledQty || 0) - Number(row.poQtyCreated || 0));
+      if (l.qty > pendingQty + 0.0001) {
+        return res.status(400).json({ error: `Qty exceeds pending for indent line ${l.indentLineId}. Pending: ${pendingQty}` });
+      }
+    }
+
+    const groups = new Map<string, any[]>();
+    normalizedLines.forEach((l: any) => {
+      if (!groups.has(l.supplierId)) groups.set(l.supplierId, []);
+      groups.get(l.supplierId)!.push(l);
+    });
+
+    const created: Array<{ supplierId: string; poNo: string; purchaseOrderId: string }> = [];
+    const indentLinesToUpdate = new Map<string, number>();
+
+    for (const [supplierId, groupLines] of groups.entries()) {
+      const d = new Date(dateStr);
+      let fyStart = d.getFullYear();
+      if (d.getMonth() < 3) fyStart--;
+      const fyLabel = `${String(fyStart).slice(-2)}-${String(fyStart + 1).slice(-2)}`;
+      const prefix = "PO";
+      const likePattern = `${prefix}/${fyLabel}/%`;
+      const [poRows] = await conn.query(
+        "SELECT poNo FROM `purchase_orders` WHERE poNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(poNo,'/',-1) AS UNSIGNED) DESC LIMIT 1",
+        [likePattern]
+      );
+      let lastNum = 0;
+      if ((poRows as any[]).length > 0) {
+        const lastPoNo = (poRows as any[])[0].poNo;
+        const parts = String(lastPoNo || "").split("/");
+        lastNum = parseInt(parts[parts.length - 1], 10) || 0;
+      }
+      const poNo = `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
+
+      const purchaseOrderId = crypto.randomUUID();
+      let totalQty = 0;
+      let totalAmount = 0;
+
+      const poLinesToInsert: any[] = [];
+      for (const l of groupLines) {
+        const row = byId.get(l.indentLineId);
+        const qty = Number(l.qty || 0);
+        const rate = Number(l.rate || 0);
+        const amount = qty * rate;
+        totalQty += qty;
+        totalAmount += amount;
+        poLinesToInsert.push({
+          id: crypto.randomUUID(),
+          purchaseOrderId,
+          indentLineId: l.indentLineId,
+          materialId: String(row.materialId),
+          uom: String(row.uom || ""),
+          qty,
+          rate,
+          amount,
+          targetDeliveryDate: String(row.targetDeliveryDate || ""),
+        });
+        indentLinesToUpdate.set(l.indentLineId, (indentLinesToUpdate.get(l.indentLineId) || 0) + qty);
+      }
+
+      await conn.query(
+        "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [purchaseOrderId, poNo, null, supplierId, dateStr, dateStr, totalQty, totalAmount, String(remarks || "").trim(), "Pending Approval", "System User", new Date().toISOString()]
+      );
+
+      for (const line of poLinesToInsert) {
+        await conn.query(
+          "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, "System User", new Date().toISOString()]
+        );
+      }
+
+      created.push({ supplierId, poNo, purchaseOrderId });
+    }
+
+    const indentIdsToCheck = new Set<string>();
+    for (const [indentLineId, addQty] of indentLinesToUpdate.entries()) {
+      await conn.query("UPDATE `indent_lines` SET `orderedQty` = `orderedQty` + ?, `updateTimestamp` = ? WHERE id = ?", [addQty, new Date().toISOString(), indentLineId]);
+      const row = byId.get(indentLineId);
+      if (row?.indentId) indentIdsToCheck.add(String(row.indentId));
+    }
+
+    for (const indentId of indentIdsToCheck) {
+      const [linesRows] = await conn.query("SELECT qty, cancelledQty, orderedQty FROM `indent_lines` WHERE indentId = ?", [indentId]);
+      const allDone = (linesRows as any[]).every((l) => Number(l.qty) <= (Number(l.orderedQty) + Number(l.cancelledQty)));
+      if (allDone) {
+        await conn.query(
+          "UPDATE `indents` SET `status` = 'Completed', `completedBy` = 'System User', `completedTimestamp` = ?, `updateTimestamp` = ? WHERE id = ?",
+          [new Date().toISOString(), new Date().toISOString(), indentId]
+        );
+      }
+    }
+
+    await conn.commit();
+    return res.json({ success: true, created });
+  } catch (error) {
+    try {
+      await conn.rollback();
+    } catch {}
+    console.error("[API] create-from-indent-lines failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  } finally {
+    conn.release();
   }
 });
 
