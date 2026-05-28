@@ -148,12 +148,13 @@ export function Users() {
       </div>
 
       {isFormOpen ? (
-        <div className="bg-white p-6 rounded shadow-sm border border-black max-w-xl">
+        <div className="flex justify-center px-4">
+          <div className="bg-white w-full p-8 rounded shadow-md border border-black max-w-3xl">
           <h3 className="text-lg font-bold text-black mb-6 uppercase">
             {editingId ? "Edit User" : "Create User"}
           </h3>
           <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col space-y-1">
                 <label className="font-bold text-black text-sm">User ID *</label>
                 <input
@@ -161,7 +162,7 @@ export function Users() {
                   value={formData.userId}
                   onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
                   required
-                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 />
               </div>
               <div className="flex flex-col space-y-1">
@@ -171,12 +172,12 @@ export function Users() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
-                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 />
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col space-y-1">
                 <label className="font-bold text-black text-sm">Mobile *</label>
                 <input
@@ -184,7 +185,7 @@ export function Users() {
                   value={formData.mobile}
                   onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                   required
-                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 />
               </div>
               <div className="flex flex-col space-y-1">
@@ -194,18 +195,18 @@ export function Users() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
-                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col space-y-1">
                 <label className="font-bold text-black text-sm">Role *</label>
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 >
                   <option value="Admin">Admin</option>
                   <option value="Employee">Employee</option>
@@ -216,7 +217,7 @@ export function Users() {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
@@ -231,7 +232,7 @@ export function Users() {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required={!editingId}
-                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
               />
             </div>
 
@@ -248,7 +249,7 @@ export function Users() {
                 </div>
               </div>
 
-              <div className="mt-3 space-y-3 max-h-[260px] overflow-auto pr-1">
+              <div className="mt-3 space-y-3 max-h-[360px] overflow-auto pr-1">
                 {allMenuItems.map((group) => (
                   <div key={group.section} className="bg-white border border-black rounded p-2">
                     <div className="flex items-center justify-between">
@@ -419,6 +420,7 @@ export function Users() {
                 )}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       )}
