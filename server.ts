@@ -1026,7 +1026,7 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`purchase_orders\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`poNo\` VARCHAR(100) NOT NULL,
-          \`indentId\` VARCHAR(36) NOT NULL,
+          \`indentId\` VARCHAR(36),
           \`supplierId\` VARCHAR(36) NOT NULL,
           \`poDate\` VARCHAR(50) NOT NULL,
           \`requiredDate\` VARCHAR(50) NOT NULL,
@@ -1043,6 +1043,20 @@ async function initDb(retries = 5) {
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
+
+      // Migration: Make indentId nullable in purchase_orders if it exists but is NOT NULL
+      try {
+        const [columns] = await db.query(
+          "SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'purchase_orders' AND COLUMN_NAME = 'indentId'",
+          [database]
+        );
+        if ((columns as any[]).length > 0 && (columns as any[])[0].IS_NULLABLE === "NO") {
+          console.log("[DB] Making purchase_orders.indentId nullable...");
+          await db.query("ALTER TABLE `purchase_orders` MODIFY `indentId` VARCHAR(36) NULL");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not make purchase_orders.indentId nullable:", (err as Error).message);
+      }
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`purchase_order_lines\` (
@@ -1637,7 +1651,7 @@ async function initDb(retries = 5) {
         { table: "indent_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "indent_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "purchase_orders", column: "poNo", type: "VARCHAR(100) NOT NULL" },
-        { table: "purchase_orders", column: "indentId", type: "VARCHAR(36) NOT NULL" },
+        { table: "purchase_orders", column: "indentId", type: "VARCHAR(36)" },
         { table: "purchase_orders", column: "supplierId", type: "VARCHAR(36) NOT NULL" },
         { table: "purchase_orders", column: "poDate", type: "VARCHAR(50) NOT NULL" },
         { table: "purchase_orders", column: "requiredDate", type: "VARCHAR(50) NOT NULL" },
@@ -2563,6 +2577,225 @@ const createHandlers = (tableName: string) => {
 
 // Routes
 const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+
+app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        il.id as indentLineId,
+        il.indentId,
+        il.materialId,
+        il.uom,
+        il.qty,
+        il.cancelledQty,
+        il.targetDeliveryDate,
+        i.requisitionDate,
+        m.name as materialName,
+        m.erpCode as materialErpCode,
+        COALESCE(pol_sum.poQtyCreated, 0) as poQtyCreated
+      FROM indent_lines il
+      JOIN indents i ON i.id = il.indentId
+      JOIN materials m ON m.id = il.materialId
+      LEFT JOIN (
+        SELECT pol.indentLineId, SUM(pol.qty) as poQtyCreated
+        FROM purchase_order_lines pol
+        JOIN purchase_orders po ON po.id = pol.purchaseOrderId
+        WHERE po.status != 'Rejected'
+        GROUP BY pol.indentLineId
+      ) pol_sum ON pol_sum.indentLineId = il.id
+      WHERE i.status = 'Approved'
+    `);
+
+    const lines = (rows as any[]).map(row => ({
+      indentLineId: String(row.indentLineId),
+      indentId: String(row.indentId),
+      materialId: String(row.materialId),
+      uom: String(row.uom || ""),
+      qty: Number(row.qty),
+      cancelledQty: Number(row.cancelledQty),
+      poQtyCreated: Number(row.poQtyCreated),
+      targetDeliveryDate: row.targetDeliveryDate,
+      requisitionDate: row.requisitionDate,
+      materialName: row.materialName,
+      materialErpCode: row.materialErpCode,
+      pendingQty: Math.max(0, Number(row.qty) - Number(row.cancelledQty) - Number(row.poQtyCreated))
+    })).filter(row => row.pendingQty > 0);
+
+    const merged = new Map<string, any>();
+    lines.forEach(line => {
+      const key = `${line.materialId}_${line.uom}`;
+      if (!merged.has(key)) {
+        merged.set(key, {
+          materialId: line.materialId,
+          materialName: line.materialName,
+          materialErpCode: line.materialErpCode,
+          uom: line.uom,
+          totalPendingQty: 0,
+          sources: []
+        });
+      }
+      const group = merged.get(key);
+      group.totalPendingQty += line.pendingQty;
+      group.sources.push(line);
+    });
+
+    const mergedList = Array.from(merged.values());
+    if (mergedList.length > 0) {
+      const materialIds = mergedList.map(m => m.materialId);
+      const [rateRows] = await db.query(`
+        SELECT pol.materialId, pol.rate, po.poDate
+        FROM purchase_order_lines pol
+        JOIN purchase_orders po ON po.id = pol.purchaseOrderId
+        WHERE pol.materialId IN (${materialIds.map(() => "?").join(",")})
+        ORDER BY po.poDate DESC
+      `, materialIds);
+
+      const latestRates = new Map<string, number>();
+      (rateRows as any[]).forEach(row => {
+        if (!latestRates.has(row.materialId)) {
+          latestRates.set(row.materialId, Number(row.rate));
+        }
+      });
+
+      mergedList.forEach(m => {
+        m.suggestedRate = latestRates.get(m.materialId) || 0;
+      });
+    }
+
+    res.json(mergedList);
+  } catch (error) {
+    console.error("[API] pending-procurement failed:", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  const { supplierId, poDate, requiredDate, remarks, items } = req.body;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const dateStr = poDate || new Date().toISOString().slice(0, 10);
+    const d = new Date(dateStr);
+    let fyStart = d.getFullYear();
+    if (d.getMonth() < 3) fyStart--;
+    const fyLabel = `${String(fyStart).slice(-2)}-${String(fyStart + 1).slice(-2)}`;
+    
+    const prefix = "PO";
+    const likePattern = `${prefix}/${fyLabel}/%`;
+    const [poRows] = await conn.query(
+      `SELECT poNo FROM \`purchase_orders\` WHERE poNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(poNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`,
+      [likePattern]
+    );
+    
+    let lastNum = 0;
+    if ((poRows as any[]).length > 0) {
+      const lastPoNo = (poRows as any[])[0].poNo;
+      const parts = lastPoNo.split("/");
+      lastNum = parseInt(parts[parts.length - 1], 10) || 0;
+    }
+    const poNo = `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
+
+    const purchaseOrderId = crypto.randomUUID();
+    let totalQty = 0;
+    let totalAmount = 0;
+    const poLines: any[] = [];
+    const indentLinesToUpdate = new Map<string, number>();
+
+    for (const item of items) {
+      const { materialId, uom, orderQty, rate } = item;
+      let remainingToAllocate = Number(orderQty);
+
+      const [sourceRows] = await conn.query(`
+        SELECT 
+          il.id, il.qty, il.cancelledQty, il.orderedQty, il.targetDeliveryDate, i.requisitionDate,
+          COALESCE(pol_sum.poQtyCreated, 0) as poQtyCreated
+        FROM indent_lines il
+        JOIN indents i ON i.id = il.indentId
+        LEFT JOIN (
+          SELECT pol.indentLineId, SUM(pol.qty) as poQtyCreated
+          FROM purchase_order_lines pol
+          JOIN purchase_orders po ON po.id = pol.purchaseOrderId
+          WHERE po.status != 'Rejected'
+          GROUP BY pol.indentLineId
+        ) pol_sum ON pol_sum.indentLineId = il.id
+        WHERE i.status = 'Approved' 
+          AND il.materialId = ? 
+          AND il.uom = ?
+          AND (il.qty - il.cancelledQty - COALESCE(pol_sum.poQtyCreated, 0)) > 0
+        ORDER BY il.targetDeliveryDate ASC, i.requisitionDate ASC
+      `, [materialId, uom]);
+
+      for (const source of sourceRows as any[]) {
+        if (remainingToAllocate <= 0) break;
+        const pendingQty = Number(source.qty) - Number(source.cancelledQty) - Number(source.poQtyCreated || 0);
+        const allocate = Math.min(remainingToAllocate, pendingQty);
+        if (allocate > 0) {
+          poLines.push({
+            id: crypto.randomUUID(),
+            purchaseOrderId,
+            indentLineId: source.id,
+            materialId,
+            uom,
+            qty: allocate,
+            rate: Number(rate),
+            amount: allocate * Number(rate),
+            targetDeliveryDate: source.targetDeliveryDate
+          });
+          totalQty += allocate;
+          totalAmount += allocate * Number(rate);
+          remainingToAllocate -= allocate;
+          const existingAdd = indentLinesToUpdate.get(source.id) || 0;
+          indentLinesToUpdate.set(source.id, existingAdd + allocate);
+        }
+      }
+    }
+
+    if (poLines.length === 0) throw new Error("No quantities allocated to indent lines.");
+
+    await conn.query(
+      "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [purchaseOrderId, poNo, null, supplierId, poDate, requiredDate || poDate, totalQty, totalAmount, remarks, "Pending Approval", "System User", new Date().toISOString()]
+    );
+
+    for (const line of poLines) {
+      await conn.query(
+        "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, "System User", new Date().toISOString()]
+      );
+    }
+
+    const indentIdsToCheck = new Set<string>();
+    for (const [id, addQty] of indentLinesToUpdate.entries()) {
+      await conn.query("UPDATE `indent_lines` SET `orderedQty` = `orderedQty` + ?, `updateTimestamp` = ? WHERE id = ?", [addQty, new Date().toISOString(), id]);
+      const [ilRows] = await conn.query("SELECT indentId FROM `indent_lines` WHERE id = ?", [id]);
+      if ((ilRows as any[]).length) indentIdsToCheck.add((ilRows as any[])[0].indentId);
+    }
+
+    for (const indentId of indentIdsToCheck) {
+      const [lines] = await conn.query("SELECT qty, cancelledQty, orderedQty FROM `indent_lines` WHERE indentId = ?", [indentId]);
+      const allDone = (lines as any[]).every(l => Number(l.qty) <= (Number(l.orderedQty) + Number(l.cancelledQty)));
+      if (allDone) {
+        await conn.query("UPDATE `indents` SET `status` = 'Completed', `completedBy` = 'System User', `completedTimestamp` = ?, `updateTimestamp` = ? WHERE id = ?", [new Date().toISOString(), new Date().toISOString(), indentId]);
+      }
+    }
+
+    await conn.commit();
+    res.json({ success: true, poNo, purchaseOrderId });
+  } catch (error) {
+    await conn.rollback();
+    console.error("[API] create-consolidated failed:", error);
+    res.status(500).json({ error: (error as Error).message });
+  } finally {
+    conn.release();
+  }
+});
 
 app.post("/api/get-pending-job-closure", async (req, res) => {
   const db = await getPool();
