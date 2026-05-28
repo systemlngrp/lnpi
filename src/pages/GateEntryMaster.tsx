@@ -145,20 +145,37 @@ export function GateEntryMaster() {
                 </div>
               ) : (
                 selectedPhotos.map((photo) => (
-                  <div key={photo.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                    <img
-                      src={`/uploads/${photo.photo}`}
-                      alt={`Gate entry slot ${photo.slotNo}`}
-                      className="h-44 w-full object-cover"
-                    />
-                    <div className="px-4 py-3 text-sm font-semibold text-slate-600">Pic {photo.slotNo}</div>
-                  </div>
+                  <PhotoCard key={photo.id} filename={photo.photo} slotNo={photo.slotNo} />
                 ))
               )}
             </div>
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function PhotoCard({ filename, slotNo }: { filename: string; slotNo: number }) {
+  const isPdf = filename.toLowerCase().endsWith(".pdf");
+  const href = `/uploads/${filename}`;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+      {isPdf ? (
+        <div className="h-44 w-full flex flex-col items-center justify-center bg-red-50 text-red-700 gap-2 border-b border-slate-200">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span className="text-xs font-bold uppercase">PDF Document</span>
+          <a href={href} target="_blank" rel="noreferrer" className="mt-2 text-[10px] bg-red-700 text-white px-3 py-1 rounded-full uppercase tracking-wider hover:bg-red-800 transition">View PDF</a>
+        </div>
+      ) : (
+        <img
+          src={href}
+          alt={`Gate entry slot ${slotNo}`}
+          className="h-44 w-full object-cover"
+        />
+      )}
+      <div className="px-4 py-3 text-sm font-semibold text-slate-600">Pic {slotNo}</div>
     </div>
   );
 }

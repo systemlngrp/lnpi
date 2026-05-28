@@ -182,11 +182,16 @@ export function Items() {
   const [showQuickCompany, setShowQuickCompany] = useState(false);
   const [quickCompanyName, setQuickCompanyName] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const isImageFile = (filename: string) => /\.(jpe?g|png|gif|webp|bmp)$/i.test(filename);
+  const isPdfFile = (filename: string) => /\.pdf$/i.test(filename);
+
   const getUploadHref = (filename: string) => {
     const trimmed = (filename || "").trim();
     if (!trimmed) return "";
     if (/^(https?:)?\/\//i.test(trimmed) || /^blob:/i.test(trimmed)) return trimmed;
+    // Remove "uploads/" prefix if it exists (case insensitive)
     const normalized = trimmed.replace(/^\/?uploads\//i, "");
+    // Encode each part of the path, but keep slashes
     const encoded = normalized.split("/").map(encodeURIComponent).join("/");
     return `/uploads/${encoded}`;
   };
@@ -670,16 +675,30 @@ export function Items() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col space-y-1">
                       <label className="font-bold text-black text-sm uppercase text-[10px]">Artwork</label>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-2">
                         {artwork ? (
-                          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded border border-black flex-1 overflow-hidden">
-                            <span className="text-xs truncate flex-1">{artwork}</span>
-                            <button type="button" onClick={() => setArtwork("")} className="text-red-600 hover:text-red-800">
-                              <XCircle size={16} />
-                            </button>
-                            <a href={getUploadHref(artwork)} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800">
-                              <ExternalLink size={16} />
-                            </a>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 bg-slate-100 p-2 rounded border border-black overflow-hidden">
+                              <span className="text-xs truncate flex-1 font-medium">{artwork}</span>
+                              <button type="button" onClick={() => setArtwork("")} className="text-red-600 hover:text-red-800 p-1" title="Remove artwork">
+                                <XCircle size={16} />
+                              </button>
+                              <a href={getUploadHref(artwork)} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 p-1" title="Open in new tab">
+                                <ExternalLink size={16} />
+                              </a>
+                            </div>
+                            {/* Preview section */}
+                            {isImageFile(artwork) && (
+                              <div className="mt-1 border border-black rounded overflow-hidden bg-white max-w-xs">
+                                <img src={getUploadHref(artwork)} alt="Artwork preview" className="max-h-48 w-full object-contain" />
+                              </div>
+                            )}
+                            {isPdfFile(artwork) && (
+                              <div className="mt-1 p-3 border border-black rounded bg-amber-50 text-amber-900 flex items-center gap-2 text-xs font-bold uppercase">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                PDF Document Attached
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <label className="flex items-center justify-center gap-2 bg-white border-2 border-dashed border-black rounded p-2 cursor-pointer hover:bg-slate-50 transition-colors flex-1">

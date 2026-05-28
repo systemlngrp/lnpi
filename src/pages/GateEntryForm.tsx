@@ -267,16 +267,25 @@ function PhotoUploadCard({
   onUpload: (index: number, file?: File | null) => Promise<void>;
   onRemove: () => void;
 }) {
+  const isPdf = slot.filename.toLowerCase().endsWith(".pdf");
+
   return (
     <div className="relative overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-slate-50">
       <div className="flex h-40 flex-col items-center justify-center gap-3 p-4 text-center">
         {slot.filename ? (
           <>
-            <img
-              src={`/uploads/${slot.filename}`}
-              alt={`Gate entry photo ${index + 1}`}
-              className="h-24 w-full rounded-xl object-cover"
-            />
+            {isPdf ? (
+              <div className="h-24 w-full flex flex-col items-center justify-center bg-red-50 text-red-700 gap-1 rounded-xl">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                <span className="text-[10px] font-bold uppercase">PDF</span>
+              </div>
+            ) : (
+              <img
+                src={`/uploads/${slot.filename}`}
+                alt={`Gate entry photo ${index + 1}`}
+                className="h-24 w-full rounded-xl object-cover"
+              />
+            )}
             <span className="text-xs font-medium text-slate-500">Pic {index + 1}</span>
           </>
         ) : (
@@ -304,7 +313,7 @@ function PhotoUploadCard({
           <Camera size={16} />
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             className="hidden"
             onChange={(e) => void onUpload(index, e.target.files?.[0])}
           />

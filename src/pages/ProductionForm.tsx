@@ -425,11 +425,6 @@ export function ProductionForm() {
       cutting = length + breadth + idToOd17;
     }
 
-    const reelActual = Number(formData.reelActualWithTrimming) || reelAsPerCalc;
-    const sheetWeight = ups > 0 ? ((reelActual * cutting * gsm) / 1000000000) / ups : 0;
-    const totalPaperWeight = sheetWeight * qty;
-    const totalWeightOfSet = sheetWeight + plateWeight;
-    const realizationPerKg = totalWeightOfSet !== 0 ? (rate / totalWeightOfSet) * noOfParts : 0;
     const productionInMeter = ups > 0 ? ((cutting * qty) / 1000) / ups : 0;
     const plannedProductionInMeter =
       cutting > 0 && qty > 0 && ups > 0 ? parseFloat((((cutting * qty) / 1000) / ups).toFixed(2)) : "";
@@ -437,10 +432,7 @@ export function ProductionForm() {
     const prodFromFFG = Number(formData.prodFromFFG);
     const avgWeight =
       actualPaperUsed > 0 && prodFromFFG > 0 ? parseFloat((actualPaperUsed / prodFromFFG).toFixed(3)) : "";
-    const wastage =
-      prodFromFFG > 0 && sheetWeight > 0 && actualPaperUsed > 0
-        ? parseFloat((100 - ((prodFromFFG * sheetWeight) / actualPaperUsed) * 100).toFixed(2))
-        : "";
+    // Total job weight based on paperRequiredNos (not including plate weight).
     const normalizedFlute = formData.flute.toUpperCase().trim().replace(/\s+/g, "");
     const fluteBatchMap: Record<string, string> = {
       A: "1",
@@ -487,9 +479,23 @@ export function ProductionForm() {
       paperRequiredNos !== ""
         ? (reelAsPerCalc * cutting * 25.4 * 25.4 * (gsm - top) * paperRequiredNos) / 1000000000
         : "";
-    const totalJobWeight =
-      topPaperWeightKg !== "" && linerWeightKg !== ""
-        ? topPaperWeightKg + linerWeightKg
+    const totalJobWeight = topPaperWeightKg !== "" && linerWeightKg !== "" ? topPaperWeightKg + linerWeightKg : "";
+    const totalJobWeightValue = totalJobWeight === "" ? 0 : Number(totalJobWeight || 0);
+
+    // NEW requirement:
+    // Sheet weight = Total Weight / Planned Qty
+    // Total Weight = Total Job Weight
+    const plannedQty = qty;
+    const sheetWeight = plannedQty > 0 ? totalJobWeightValue / plannedQty : 0;
+    const totalPaperWeight = totalJobWeightValue;
+    const totalWeightOfSet = sheetWeight + plateWeight;
+
+    // Realization per kg = Rate / Sheet Weight
+    const realizationPerKg = sheetWeight > 0 ? rate / sheetWeight : 0;
+
+    const wastage =
+      prodFromFFG > 0 && sheetWeight > 0 && actualPaperUsed > 0
+        ? parseFloat((100 - ((prodFromFFG * sheetWeight) / actualPaperUsed) * 100).toFixed(2))
         : "";
 
     let lineRequiredNos: number | "" = "";
@@ -931,16 +937,16 @@ export function ProductionForm() {
                 helpText="If ERP Code is blank, keep blank. If PLY is 3, use the same value as Paper Required (Nos). If PLY is 5, use Paper Required (Nos) x 2. If PLY is 2 and TYPE is 2 PLY LINER, use Planned Quantity divided by (UPS x No. of ups in Cutting (For Plates))."
               /> : null}
 
-              {showField("Sheet Weight") ? <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly helpText="Formula: ((Reel Actual x Cutting Trim x GSM) / 1,000,000,000) / UPS." /> : null}
+              {showField("Sheet Weight") ? <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly helpText="Formula: Total Job Weight / Planned Qty." /> : null}
               {showField("Plate/PHP Weight") ? <FormInput label="Plate/PHP Weight" value={formData.plateWeight} readOnly type="number" step="0.00001" helpText="Auto-fetched from Item Master for the selected item." /> : null}
-              {showField("Total Paper Wt") ? <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly helpText="Formula: Sheet Weight x Quantity." /> : null}
+              {showField("Total Paper Wt") ? <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly helpText="Formula: Sheet Weight x Planned Qty (equals Total Job Weight)." /> : null}
 
               {showField("Total Wt of Set") ? <FormInput label="Total Wt of Set" value={formData.totalWeightOfSet} readOnly helpText="Formula: Sheet Weight + Plate/PHP Weight." /> : null}
               {showField("Avg Weight") ? <FormInput label="Avg Weight" value={formData.avgWeight} readOnly type="number" step="0.00001" helpText="Formula: Actual Paper Used / Production from FFG." /> : null}
               {showField("Actual Paper Used") ? <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" helpText="Workflow-managed field. It is derived from Material Issue minus Material Return against the job, and then used in Avg Weight and Wastage calculations." /> : null}
 
               {showField("Rate") ? <FormInput label="Rate" value={formData.rate} readOnly type="number" helpText="Auto-fetched from the selected order." /> : null}
-              {showField("Realization/KG") ? <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: (Rate / Total Weight of Set) x Number of Parts." /> : null}
+              {showField("Realization/KG") ? <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: Rate / Sheet Weight." /> : null}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">

@@ -215,12 +215,20 @@ app.post("/api/upload-artwork", async (req, res) => {
   }
 
   try {
-    const base64Data = base64.split(";base64,").pop();
-    const extension = path.extname(filename);
+    // Robustly extract base64 data regardless of prefix
+    const base64Data = base64.replace(/^data:.*;base64,/, "");
+    const extension = path.extname(filename) || ".bin";
     const newFilename = `${crypto.randomUUID()}${extension}`;
-    const filePath = path.join(process.cwd(), "uploads", newFilename);
+    const uploadsDir = path.join(process.cwd(), "uploads");
+    
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
 
+    const filePath = path.join(uploadsDir, newFilename);
     fs.writeFileSync(filePath, base64Data, { encoding: "base64" });
+    
+    console.log(`[UPLOAD] Saved ${filename} as ${newFilename}`);
     res.json({ filename: newFilename });
   } catch (error) {
     console.error("Upload failed:", error);
@@ -2461,7 +2469,67 @@ const createHandlers = (tableName: string) => {
         const updates = keys.map(k => `\`${k}\`=VALUES(\`${k}\`)`).join(",");
         
         const query = `INSERT INTO \`${tableName}\` (${columnNames}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`;
-        
+
+        if (tableName === "orders") {
+          const approvalStatuses = new Set(["Pending Scheduling", "Scheduled"]);
+          const now = new Date().toISOString();
+          const itemId = String(data.itemId || "").trim();
+          const rateNumber = Number(data.rate);
+          const updatedBy = String(data.approvedEmail || data.updatedBy || "System").trim() || "System";
+
+          const conn = await db.getConnection();
+          try {
+            await conn.beginTransaction();
+
+            let wasApproved = false;
+            const id = String(data.id || "").trim();
+            if (id) {
+              const [existingRows] = await conn.query(
+                "SELECT status, approvedTimestamp, approvedEmail FROM `orders` WHERE id = ? LIMIT 1",
+                [id]
+              );
+              const existing = (existingRows as any[])?.[0];
+              const existingStatus = String(existing?.status || "").trim();
+              const existingApproved =
+                hasWorkflowValue(existing?.approvedTimestamp) || hasWorkflowValue(existing?.approvedEmail);
+              wasApproved = existingApproved || approvalStatuses.has(existingStatus);
+            }
+
+            const nextStatus = String(data.status || "").trim();
+            const isNowApproved =
+              hasWorkflowValue(data.approvedTimestamp) ||
+              hasWorkflowValue(data.approvedEmail) ||
+              approvalStatuses.has(nextStatus);
+
+            const shouldUpdateItemRate =
+              !wasApproved &&
+              isNowApproved &&
+              itemId &&
+              Number.isFinite(rateNumber) &&
+              rateNumber > 0;
+
+            console.log(`[DB] Upserting to ${tableName}`, { id: data.id });
+            await conn.query(query, values);
+
+            if (shouldUpdateItemRate) {
+              await conn.query(
+                "UPDATE `items` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                [rateNumber, updatedBy, now, itemId]
+              );
+            }
+
+            await conn.commit();
+            return res.json({ success: true });
+          } catch (err) {
+            try {
+              await conn.rollback();
+            } catch {}
+            throw err;
+          } finally {
+            conn.release();
+          }
+        }
+
         console.log(`[DB] Upserting to ${tableName}`, { id: data.id });
         await db.query(query, values);
         res.json({ success: true });
