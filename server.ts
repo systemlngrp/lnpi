@@ -2757,6 +2757,71 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
   }
 });
 
+app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        il.id as indentLineId,
+        il.indentId,
+        i.indentNo,
+        i.requestedBy,
+        i.requisitionDate,
+        il.materialId,
+        m.name as materialName,
+        m.erpCode as materialErpCode,
+        il.uom,
+        il.qty,
+        il.cancelledQty,
+        il.targetDeliveryDate,
+        COALESCE(pol_sum.poQtyCreated, 0) as poQtyCreated
+      FROM indent_lines il
+      JOIN indents i ON i.id = il.indentId
+      JOIN materials m ON m.id = il.materialId
+      LEFT JOIN (
+        SELECT pol.indentLineId, SUM(pol.qty) as poQtyCreated
+        FROM purchase_order_lines pol
+        JOIN purchase_orders po ON po.id = pol.purchaseOrderId
+        WHERE po.status != 'Rejected'
+        GROUP BY pol.indentLineId
+      ) pol_sum ON pol_sum.indentLineId = il.id
+      WHERE i.status = 'Approved'
+    `);
+
+    const result = (rows as any[])
+      .map((row) => {
+        const qty = Number(row.qty || 0);
+        const cancelledQty = Number(row.cancelledQty || 0);
+        const poQtyCreated = Number(row.poQtyCreated || 0);
+        const pendingQty = Math.max(0, qty - cancelledQty - poQtyCreated);
+        return {
+          indentLineId: String(row.indentLineId),
+          indentId: String(row.indentId),
+          indentNo: String(row.indentNo || ""),
+          requestedBy: String(row.requestedBy || ""),
+          requisitionDate: String(row.requisitionDate || ""),
+          materialId: String(row.materialId),
+          materialName: String(row.materialName || ""),
+          materialErpCode: String(row.materialErpCode || ""),
+          uom: String(row.uom || ""),
+          qty,
+          cancelledQty,
+          poQtyCreated,
+          pendingQty,
+          targetDeliveryDate: String(row.targetDeliveryDate || ""),
+        };
+      })
+      .filter((row) => row.pendingQty > 0);
+
+    res.json(result);
+  } catch (error) {
+    console.error("[API] pending-indent-lines failed:", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
