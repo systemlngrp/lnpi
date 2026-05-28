@@ -337,10 +337,10 @@ export function Users() {
                         );
                       })}
                     </div>
-                  </div>
+            </div>
                 ))}
               </div>
-            </div>
+                  </div>
 
             <div className="flex space-x-3 pt-2">
               <button
@@ -400,12 +400,12 @@ export function Users() {
                                  >
                                     <Edit size={16} />
                                  </button>
-                                 <button
-                                    onClick={() => handleDelete(user.id)}
-                                    className={`${deletingId === user.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold`}
-                                 >
-                                    <Trash2 size={16} />
-                                 </button>
+                                  <button
+                                     onClick={() => handleDelete(user.id)}
+                                     className="text-red-600 hover:text-red-900 font-bold"
+                                  >
+                                     <Trash2 size={16} />
+                                  </button>
                              </div>
                         </div>
                         <div className="text-xs font-black text-slate-500 uppercase">Contact</div>
@@ -453,9 +453,9 @@ export function Users() {
                         </button>
                         <button
                           onClick={() => handleDelete(user.id)}
-                          className={`${deletingId === user.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
+                          className="text-red-600 hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end"
                         >
-                          <Trash2 size={16} className="mr-1" /> {deletingId === user.id ? "Confirm?" : "Delete"}
+                          <Trash2 size={16} className="mr-1" /> Delete
                         </button>
                       </td>
                     </tr>
