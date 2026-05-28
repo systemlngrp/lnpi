@@ -372,7 +372,7 @@ export function MrrApprovals() {
                           {selectedMrrSlips.map(s => (
                             <tr key={s.id} className="divide-x divide-black">
                               <td className="px-2 py-1.5 font-bold">{s.ourReelNo}</td>
-                              <td className="px-2 py-1.5 text-right font-mono">{s.weightKg.toFixed(2)}</td>
+                              <td className="px-2 py-1.5 text-right font-mono">{Number(s.weightKg || 0).toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
