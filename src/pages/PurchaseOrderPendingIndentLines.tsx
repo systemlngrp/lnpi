@@ -255,33 +255,34 @@ export function PurchaseOrderPendingIndentLines() {
       ) : null}
 
       <div className="rounded border border-black bg-white shadow-sm overflow-hidden">
-        <table className="min-w-full border-collapse">
-          <thead className="bg-slate-100">
-            <tr>
-              <th className="border border-black px-3 py-3 text-center text-xs font-bold uppercase text-black whitespace-nowrap">
-                <input
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={() => toggleSelectAllVisible()}
-                />
-              </th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Requisition No</th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Requisition Date</th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black">Requested By</th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">ERP</th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black min-w-[320px]">Item Name</th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">UOM</th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Supplier</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Rate</th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Date</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Order Qty</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Rate</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Qty</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Cancelled</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">PO Created</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Pending</th>
-              <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Target Delivery</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Actions</th>
+        <div className="max-h-[600px] overflow-auto">
+          <table className="min-w-full border-collapse">
+            <thead className="bg-slate-100 sticky top-0 z-10">
+              <tr>
+                <th className="border border-black bg-slate-100 px-3 py-3 text-center text-xs font-bold uppercase text-black whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={() => toggleSelectAllVisible()}
+                  />
+                </th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Requisition No</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Requisition Date</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black">Requested By</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">ERP</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black min-w-[320px]">Item Name</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">UOM</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Supplier</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Rate</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Date</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Order Qty</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Rate</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Qty</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Cancelled</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">PO Created</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Pending</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Target Delivery</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>
