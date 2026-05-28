@@ -195,11 +195,6 @@ export function MaterialIssueForm() {
     if (!date || lines.length === 0) return;
     if (issueType === "Job" && !productionId) return;
 
-    if (issueType === "Job" && generalIssuesForDate.length === 0) {
-      alert("Daily one Without Job material issue is mandatory. Please create a Without Job issue for this date first.");
-      return;
-    }
-
     for (const line of lines) {
       if (line.isReel) {
         const reelIds = selectedReels[line.id] || [];
@@ -348,47 +343,45 @@ export function MaterialIssueForm() {
               disabled={lockIssueType}
             />
           </Field>
-          <div className="md:col-span-2 rounded border border-black bg-slate-50 p-3">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div className="text-sm font-bold text-black">
-                Without Job issues on {date}: {generalIssuesForDate.length}
-              </div>
-              {issueType === "Job" && generalIssuesForDate.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIssueType("Without Job");
-                    setProductionId("");
-                    setLines([]);
-                    setSelectedReels({});
-                  }}
-                  className="rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase hover:bg-slate-100"
-                >
-                  Create Without Job Issue
-                </button>
-              ) : null}
-            </div>
-            {generalIssuesForDate.length === 0 ? (
-              <div className="mt-2 text-xs font-semibold text-slate-600">
-                No Without Job issue found for this date. Create one daily (mandatory) before issuing against jobs.
-              </div>
-            ) : (
-              <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                {generalIssuesForDate.slice(0, 6).map((issue) => (
-                  <div key={issue.id} className="rounded border border-black bg-white px-3 py-2 text-xs">
-                    <div className="font-black text-black">{issue.issueNo}</div>
-                    <div className="text-slate-600">{issue.remarks || "-"}</div>
-                    <div className="mt-1 text-[10px] font-semibold text-slate-500">
-                      {issue.updatedBy || "-"} | {new Date(issue.updateTimestamp || issue.date || "").toLocaleString()}
-                    </div>
-                  </div>
-                ))}
-                {generalIssuesForDate.length > 6 ? (
-                  <div className="text-xs font-bold text-slate-600 self-center">+{generalIssuesForDate.length - 6} more</div>
+          {!(lockIssueType && issueType === "Without Job") && (
+            <div className="md:col-span-2 rounded border border-black bg-slate-50 p-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="text-sm font-bold text-black">
+                  Without Job issues on {date}: {generalIssuesForDate.length}
+                </div>
+                {issueType === "Job" && generalIssuesForDate.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIssueType("Without Job");
+                      setProductionId("");
+                      setLines([]);
+                      setSelectedReels({});
+                    }}
+                    className="rounded border border-black bg-white px-4 py-2 text-xs font-bold uppercase hover:bg-slate-100"
+                  >
+                    Create Without Job Issue
+                  </button>
                 ) : null}
               </div>
-            )}
-          </div>
+              {generalIssuesForDate.length > 0 && (
+                <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                  {generalIssuesForDate.slice(0, 6).map((issue) => (
+                    <div key={issue.id} className="rounded border border-black bg-white px-3 py-2 text-xs">
+                      <div className="font-black text-black">{issue.issueNo}</div>
+                      <div className="text-slate-600">{issue.remarks || "-"}</div>
+                      <div className="mt-1 text-[10px] font-semibold text-slate-500">
+                        {issue.updatedBy || "-"} | {new Date(issue.updateTimestamp || issue.date || "").toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                  {generalIssuesForDate.length > 6 ? (
+                    <div className="text-xs font-bold text-slate-600 self-center">+{generalIssuesForDate.length - 6} more</div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
           {issueType === "Job" ? (
             <Field label="Job No." required>
               <Select options={jobOptions} value={productionId} onChange={setProductionId} required placeholder="Select Job..." />
@@ -418,81 +411,115 @@ export function MaterialIssueForm() {
           </div>
 
           {lines.length === 0 ? (
-            <div className="p-4 bg-slate-50 border border-dashed border-black text-center text-sm">No issue lines added yet.</div>
+            <div className="p-4 bg-slate-50 border border-dashed border-black text-center text-sm font-bold text-slate-600 uppercase">
+              No issue lines added yet.
+            </div>
           ) : (
-            <div className="space-y-4">
-              {lines.map((line) => {
-                const material = getMaterial(line.materialId);
-                const availableQty = !line.isReel ? getNonReelAvailableQty(line.materialId, materialIn, materialIssueLines, materialReturnLines) : null;
-                const availableReels = line.isReel ? getLineAvailableReels(line.id, line.materialId) : [];
-                const selectedIds = selectedReels[line.id] || [];
-	                return (
-	                  <div key={line.id} className="rounded border border-black p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-	                        <div className="font-bold">{material?.name || "Unknown Material"}</div>
-	                        <div className="text-sm text-slate-500">
-	                          {line.isReel
-	                            ? `Selected Weight: ${line.qty.toFixed(2)} KG`
-	                            : isWithoutJobIssue(issueType)
-	                              ? `Qty: ${line.qty}`
-	                              : `Issue Qty: ${line.qty} ${line.uom} | Available: ${availableQty}`}
-	                        </div>
-	                      </div>
-                      <button type="button" onClick={() => handleRemoveLine(line.id)} className="text-red-600 hover:text-red-800">
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse border border-black">
+                <thead className="bg-slate-100">
+                  <tr className="divide-x divide-black border-b border-black">
+                    <th className="px-4 py-3 text-left text-xs font-black uppercase w-16">Sl No</th>
+                    <th className="px-4 py-3 text-left text-xs font-black uppercase min-w-[200px]">Material Details</th>
+                    <th className="px-4 py-3 text-right text-xs font-black uppercase w-48">Qty / Availability</th>
+                    <th className="px-4 py-3 text-center text-xs font-black uppercase w-20">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black">
+                  {lines.map((line, index) => {
+                    const material = getMaterial(line.materialId);
+                    const availableQty = !line.isReel ? getNonReelAvailableQty(line.materialId, materialIn, materialIssueLines, materialReturnLines) : null;
+                    const availableReels = line.isReel ? getLineAvailableReels(line.id, line.materialId) : [];
+                    const selectedIds = selectedReels[line.id] || [];
 
-                    {line.isReel ? (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full border-collapse border border-black">
-                          <thead className="bg-slate-100">
-                            <tr>
-                              {["Select", "Our Reel No.", "Supplier Reel No.", "Weight KG"].map((heading) => (
-                                <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase">{heading}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {availableReels.length === 0 ? (
-                              <tr>
-                                <td colSpan={4} className="border border-black px-4 py-6 text-center text-sm text-slate-500">No available reels for this material.</td>
-                              </tr>
-                            ) : (
-                              availableReels.map((slip) => (
-                                <tr key={slip.id}>
-                                  <td className="border border-black px-3 py-2 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedIds.includes(slip.id)}
-                                      onChange={(e) => updateSelectedReels(line.id, line.materialId, slip.id, e.target.checked)}
-                                    />
-                                  </td>
-                                  <td className="border border-black px-3 py-2 text-sm">{slip.ourReelNo}</td>
-                                  <td className="border border-black px-3 py-2 text-sm">{slip.supplierReelNo || "-"}</td>
-                                  <td className="border border-black px-3 py-2 text-sm">{Number(slip.weightKg || 0).toFixed(2)}</td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+                    return (
+                      <tr key={line.id} className="divide-x divide-black align-top hover:bg-slate-50">
+                        <td className="px-4 py-4 text-sm font-black text-center">{index + 1}</td>
+                        <td className="px-4 py-4 space-y-2">
+                          <div>
+                            <div className="font-bold text-black">{material?.name || "Unknown Material"}</div>
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                              ERP: {material?.erpCode || "-"} | UOM: {line.uom}
+                            </div>
+                          </div>
+
+                          {line.isReel && (
+                            <div className="mt-2 rounded border border-black overflow-hidden bg-white">
+                              <table className="min-w-full border-collapse">
+                                <thead className="bg-slate-50 border-b border-black">
+                                  <tr>
+                                    {["", "Our Reel", "Weight"].map((h) => (
+                                      <th key={h} className="px-2 py-1.5 text-left text-[10px] font-black uppercase text-slate-600">{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200">
+                                  {availableReels.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={3} className="px-2 py-4 text-center text-[10px] font-bold text-slate-400 italic">No reels available</td>
+                                    </tr>
+                                  ) : (
+                                    availableReels.map((slip) => (
+                                      <tr key={slip.id} className="hover:bg-indigo-50/30">
+                                        <td className="px-2 py-1 text-center">
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedIds.includes(slip.id)}
+                                            onChange={(e) => updateSelectedReels(line.id, line.materialId, slip.id, e.target.checked)}
+                                            className="h-3 w-3"
+                                          />
+                                        </td>
+                                        <td className="px-2 py-1 text-[10px] font-bold">{slip.ourReelNo}</td>
+                                        <td className="px-2 py-1 text-[10px] font-black text-right">{Number(slip.weightKg || 0).toFixed(2)}</td>
+                                      </tr>
+                                    ))
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-right space-y-1">
+                          <div className="text-sm font-black text-indigo-700">
+                            {line.isReel ? `${line.qty.toFixed(2)} KG` : `${line.qty} ${line.uom}`}
+                          </div>
+                          {!line.isReel && !isWithoutJobIssue(issueType) && (
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter bg-slate-100 p-1 rounded inline-block">
+                              Avail: {availableQty} {line.uom}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLine(line.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded border border-transparent hover:border-red-200 transition"
+                            title="Remove Line"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-4 border-t border-black">
           <button
             type="submit"
-            disabled={isSubmitting || lines.length === 0 || (issueType === "Job" && generalIssuesForDate.length === 0)}
-            className="min-w-[150px] bg-indigo-600 text-white px-6 py-3 rounded font-bold hover:bg-indigo-700 disabled:opacity-50"
+            disabled={isSubmitting || lines.length === 0}
+            className="min-w-[160px] bg-black text-white px-8 py-3 rounded font-black uppercase tracking-widest text-sm hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed shadow-md transition-all active:scale-95"
           >
-            {isSubmitting ? <Spinner size={22} className="text-white" /> : "Save Issue"}
+            {isSubmitting ? (
+              <div className="flex items-center gap-2">
+                <Spinner size={16} className="text-white border-white" />
+                <span>Saving...</span>
+              </div>
+            ) : "Save Issue"}
           </button>
         </div>
       </form>
