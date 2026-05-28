@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialIssue, Production } from "../types";
+import { MaterialIssue } from "../types";
 import { TableControls } from "../components/TableControls";
 import { Trash2 } from "lucide-react";
 import { formatDate } from "../lib/serial";
@@ -12,7 +12,6 @@ function isWithoutJobIssue(issueType?: string) {
 
 export function NonJobIssueMaster() {
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
-  const [productions] = useData<Production>("productions", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -42,9 +41,6 @@ export function NonJobIssueMaster() {
     setDeletingId(null);
   };
 
-  const getJobDate = (productionId?: string) =>
-    productions.find((p) => p.id === productionId)?.date || "";
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -60,9 +56,6 @@ export function NonJobIssueMaster() {
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue Type</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Job No</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Job Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remarks</th>
                 <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th>
               </tr>
@@ -70,7 +63,7 @@ export function NonJobIssueMaster() {
             <tbody className="divide-y divide-black">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">
+                  <td colSpan={4} className="px-6 py-8 text-center text-slate-600 font-medium">
                     No “Without Job” material issues found.
                   </td>
                 </tr>
@@ -79,9 +72,6 @@ export function NonJobIssueMaster() {
                   <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
                     <td className="px-4 py-3 text-sm font-bold">{row.issueNo}</td>
                     <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
-                    <td className="px-4 py-3 text-sm">Without Job</td>
-                    <td className="px-4 py-3 text-sm">{row.jobNo || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{formatDate(getJobDate(row.productionId)) || "-"}</td>
                     <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
                     <td className="px-4 py-3 text-right">
                       <button
@@ -103,4 +93,3 @@ export function NonJobIssueMaster() {
     </div>
   );
 }
-

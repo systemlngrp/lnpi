@@ -419,12 +419,18 @@ export interface MaterialIn {
   lines: MaterialLine[];
   phTimestamp?: string;
   phEmailId?: string;
+  plant_head_remark?: string;
   accTimestamp?: string;
   accEmailId?: string;
+  accounts_remark?: string;
+  debitNote?: string;
+  debitNoteDate?: string;
+  debitNoteAmount?: number;
   mdTimestamp?: string;
   mdEmailId?: string;
+  md_approval_remark?: string;
   tallyTimestamp?: string;
-  status: "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally" | "Completed";
+  status: "Pending MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally" | "Completed";
   updatedBy?: string;
   updateTimestamp?: string;
 }

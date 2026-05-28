@@ -103,10 +103,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-slate-800",
     items: [
       { name: "Material In Form", href: "/material-in/form", icon: ClipboardList },
-      { name: "Pending PH Approval", href: "/material-in/pending-ph", icon: UserCheck, countKey: "/material-in/pending-ph" },
-      { name: "Pending Accounts Approval", href: "/material-in/pending-accounts", icon: CheckCircle, countKey: "/material-in/pending-accounts" },
-      { name: "Pending MD Approval", href: "/material-in/pending-md", icon: UserCog, countKey: "/material-in/pending-md" },
-      { name: "Pending Tally Entry", href: "/material-in/pending-tally", icon: FileText, countKey: "/material-in/pending-tally" },
+      { name: "MRR Approvals", href: "/material-in/approvals", icon: CheckCircle, countKey: "/material-in/approvals" },
       { name: "Material In Master", href: "/material-in/master", icon: Database },
       { name: "Item Master View", href: "/material-in/item-master", icon: BarChart3 },
     ],
@@ -347,10 +344,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   }, []);
 
   const counts: Record<string, number> = {
-    "/material-in/pending-ph": materialIn.filter(m => isPendingPH(m.status)).length,
-    "/material-in/pending-accounts": materialIn.filter(m => m.status === "Pending Accounts").length,
-    "/material-in/pending-md": materialIn.filter(m => m.status === "Pending MD").length,
-    "/material-in/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
+    "/material-in/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
     "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
     "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,

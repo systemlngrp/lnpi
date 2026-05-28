@@ -40,6 +40,7 @@ import { Companies } from "./pages/Companies";
 import { Trucks } from "./pages/Trucks";
 import { Machines } from "./pages/Machines";
 import { MaterialInForm } from "./pages/MaterialInForm";
+import { MrrApprovals } from "./pages/MrrApprovals";
 import { PendingPHApproval } from "./pages/PendingPHApproval";
 import { PendingAccountsApproval } from "./pages/PendingAccountsApproval";
 import { PendingMDApproval } from "./pages/PendingMDApproval";
@@ -177,10 +178,7 @@ export default function App() {
           
           {/* Material In */}
           <Route path="material-in/form" element={<MaterialInForm />} />
-          <Route path="material-in/pending-ph" element={<PendingPHApproval />} />
-          <Route path="material-in/pending-accounts" element={<PendingAccountsApproval />} />
-          <Route path="material-in/pending-md" element={<PendingMDApproval />} />
-          <Route path="material-in/pending-tally" element={<PendingTallyEntry />} />
+          <Route path="material-in/approvals" element={<MrrApprovals />} />
           <Route path="material-in/master" element={<MaterialInMaster />} />
           <Route path="material-in/item-master" element={<MaterialInItemMaster />} />
           

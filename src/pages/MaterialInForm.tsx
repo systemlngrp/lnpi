@@ -361,7 +361,7 @@ export function MaterialInForm() {
           totalActualValue,
           totalAmount,
           lines,
-          status: "Pending PH",
+          status: "Pending MRR",
           updatedBy: "System User",
           updateTimestamp: timestamp,
         };
@@ -416,9 +416,7 @@ export function MaterialInForm() {
       setCurrentPoLineId("");
       setCurrentInvoiceRate("");
       alert(`Material In created with Transaction No: ${transactionNo}`);
-      if (linkedGateEntry) {
-        navigate("/material-receipt/pending-mrr");
-      }
+      navigate("/material-in/approvals");
     } catch (err) {
       console.error("Failed to save Material In:", err);
       alert("Failed to save Material In.");
