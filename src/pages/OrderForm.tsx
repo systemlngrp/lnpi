@@ -134,6 +134,12 @@ export function OrderForm() {
       return;
     }
 
+    const rateNumber = Number(rate);
+    if (!Number.isFinite(rateNumber) || rateNumber <= 0) {
+      alert("Rate must be greater than 0.");
+      return;
+    }
+
     setIsSubmitting(true);
     setTimeout(() => {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as any;
@@ -146,7 +152,7 @@ export function OrderForm() {
         erpCode,
         itemId,
         qty: parseInt(qty,10),
-        rate: rate ? parseFloat(rate) : undefined,
+        rate: rateNumber,
         orderBy,
         poType,
         remarks,
@@ -253,7 +259,20 @@ export function OrderForm() {
 
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Rate</label>
-              <input value={rate} onChange={(e)=>setRate(e.target.value)} className="border-2 border-black rounded p-2" />
+              <input
+                value={rate}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const cleaned = raw.replace(/[^0-9.]/g, "");
+                  const parts = cleaned.split(".");
+                  const normalized = parts.length <= 2 ? cleaned : `${parts[0]}.${parts.slice(1).join("")}`;
+                  setRate(normalized);
+                }}
+                type="number"
+                min={0.01}
+                step={0.01}
+                className="border-2 border-black rounded p-2"
+              />
             </div>
 
             <div className="flex flex-col space-y-1">

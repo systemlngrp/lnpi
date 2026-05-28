@@ -2216,6 +2216,13 @@ const createHandlers = (tableName: string) => {
           delete data.balance;
         }
 
+        if (tableName === "orders") {
+          const rateNumber = Number(data.rate);
+          if (!Number.isFinite(rateNumber) || rateNumber <= 0) {
+            return res.status(400).json({ error: "Rate must be greater than 0." });
+          }
+        }
+
         if (tableName === "production_processing") {
           const missing: string[] = [];
           if (!String(data.productionId || "").trim()) missing.push("Job/Production");
