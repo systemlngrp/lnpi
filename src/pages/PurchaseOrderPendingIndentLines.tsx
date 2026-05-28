@@ -394,5 +394,6 @@ export function PurchaseOrderPendingIndentLines() {
         </table>
       </div>
     </div>
+    </div>
   );
 }
