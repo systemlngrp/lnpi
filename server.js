@@ -1128,6 +1128,20 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_visit\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`visitNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`supplierId\` VARCHAR(36),
+          \`visitorName\` VARCHAR(255) NOT NULL,
+          \`purpose\` TEXT NOT NULL,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending',
+          \`remarks\` TEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`invoices\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`invoiceNo\` VARCHAR(100) NOT NULL,
@@ -2225,7 +2239,7 @@ app.post("/api/get-pending-job-closure", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "settings"];
 app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
   const db = await getPool();
   if (!db)

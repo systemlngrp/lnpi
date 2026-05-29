@@ -139,11 +139,18 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
+    section: "Material Visit",
+    color: "bg-emerald-700",
+    items: [
+      { name: "Material Visit Master", href: "/material-visit/master", icon: Database, countKey: "/material-visit" },
+    ],
+  },
+  {
     section: "Material Receipt",
     color: "bg-fuchsia-700",
     items: [
       { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
-      { name: "MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
+      { name: "Pending MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
       { name: "Pending Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
       { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
     ],

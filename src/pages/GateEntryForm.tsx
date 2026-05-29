@@ -29,6 +29,7 @@ export function GateEntryForm() {
   const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
   const [gateEntryPhotos, setGateEntryPhotos] = useData<GateEntryPhoto>("gate-entry-photos", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
 
   const [date, setDate] = useState(toInputDate());
   const [supplierId, setSupplierId] = useState("");
@@ -39,12 +40,14 @@ export function GateEntryForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const supplierOptions = useMemo(
-    () =>
-      [...suppliers]
-        .filter((supplier) => supplier.active !== "No")
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((supplier) => ({ value: supplier.id, label: supplier.name })),
-    [suppliers]
+    () => {
+      const combined = [
+        ...suppliers.filter(s => s.active !== "No").map(s => ({ value: s.id, label: s.name })),
+        ...companies.map(c => ({ value: c.id, label: c.name }))
+      ];
+      return combined.sort((a, b) => a.label.localeCompare(b.label));
+    },
+    [suppliers, companies]
   );
 
   const hasUploadingPhoto = photoSlots.some((slot) => slot.uploading);
@@ -173,12 +176,12 @@ export function GateEntryForm() {
               />
             </Field>
 
-            <Field label="Supplier Name" required>
+            <Field label="Supplier / Customer Name" required>
               <Select
                 value={supplierId}
                 onChange={setSupplierId}
                 options={supplierOptions}
-                placeholder="Search or Select Supplier..."
+                placeholder="Search or Select Supplier / Customer..."
                 required
               />
             </Field>

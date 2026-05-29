@@ -545,7 +545,7 @@ export function MaterialInForm() {
                 <label className="text-sm font-bold text-black">{isFgType ? "Item Receipt" : "Invoice Qty"}</label>
                 <input
                   type="number"
-                  value={isFgType ? currentReceiptQty : currentQty}
+                  value={(isFgType ? currentReceiptQty : currentQty) === 0 ? "" : (isFgType ? currentReceiptQty : currentQty)}
                   onChange={(e) => {
                     const val = e.target.value === "" ? "" : parseFloat(e.target.value);
                     if (isFgType) setCurrentReceiptQty(val);
@@ -570,7 +570,7 @@ export function MaterialInForm() {
               <label className="text-sm font-bold text-black">Invoice Rate</label>
               <input
                 type="number"
-                value={currentInvoiceRate}
+                value={currentInvoiceRate === 0 ? "" : currentInvoiceRate}
                 onChange={(e) => setCurrentInvoiceRate(e.target.value === "" ? "" : parseFloat(e.target.value))}
                 className="border-2 border-black rounded p-[6px] text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-white"
               />
@@ -623,7 +623,7 @@ export function MaterialInForm() {
                                 type="number"
                                 min="0"
                                 step="0.01"
-                                value={line.invoiceQty ?? line.qty}
+                                value={(line.invoiceQty ?? line.qty) === 0 ? "" : (line.invoiceQty ?? line.qty)}
                                 onChange={(e) => updateLine(line.id, { invoiceQty: Number(e.target.value || 0) })}
                                 className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                               />
@@ -634,7 +634,7 @@ export function MaterialInForm() {
                               type="number"
                               min="0"
                               step="0.01"
-                              value={line.invoiceRate ?? line.rate}
+                              value={(line.invoiceRate ?? line.rate) === 0 ? "" : (line.invoiceRate ?? line.rate)}
                               onChange={(e) => updateLine(line.id, { invoiceRate: Number(e.target.value || 0) })}
                               className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                             />
@@ -645,7 +645,7 @@ export function MaterialInForm() {
                               type="number"
                               min="0"
                               step="0.01"
-                              value={line.actualQty ?? line.qty}
+                              value={(line.actualQty ?? line.qty) === 0 ? "" : (line.actualQty ?? line.qty)}
                               onChange={(e) => updateLine(line.id, { actualQty: Number(e.target.value || 0) })}
                               className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                             />
@@ -670,10 +670,13 @@ export function MaterialInForm() {
                     const poOptions = getApprovedPoOptionsForMaterial(line.itemId);
                     return (
                       <div key={line.id} className="rounded border border-black bg-white p-4">
-                        <div className="mb-3 flex items-center justify-between gap-4">
+                        <div className="mb-3 flex items-center justify-between gap-4 border-b border-black pb-2">
                           <div>
-                            <h4 className="font-bold text-black">{getMaterial(line.itemId)?.name || "Reel Material"}</h4>
-                            <p className="text-sm text-slate-500">Packing Slip</p>
+                            <h4 className="font-bold text-black uppercase tracking-tight">{getMaterial(line.itemId)?.name || "Reel Material"}</h4>
+                            <div className="flex gap-4 text-xs font-bold mt-1">
+                                <span className="text-indigo-600 uppercase">Invoice Rate: Rs {Number(line.invoiceRate || 0).toFixed(2)}</span>
+                                <span className="text-amber-700 uppercase">PO Rate: Rs {Number(line.poRate || 0).toFixed(2)}</span>
+                            </div>
                           </div>
                           <button
                             type="button"

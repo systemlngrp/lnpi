@@ -1,17 +1,32 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier } from "../types";
+import { Material, MaterialIn, Item, Supplier, Setting } from "../types";
 import { formatDate } from "../lib/serial";
-import { Trash2, Search } from "lucide-react";
+import { Trash2, Search, FileDown } from "lucide-react";
 import { ExcelExport } from "../components/ExcelExport";
+import { downloadMaterialInPdf } from "../lib/materialInPdf";
 
 export function MaterialInMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
   const [items] = useData<Item>("items", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [settings] = useData<Setting>("settings", []);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  const setting = settings[0];
+
+  const statusOptions = [
+    "All",
+    "Pending MRR",
+    "Pending PH",
+    "Pending Accounts",
+    "Pending MD",
+    "Pending Tally",
+    "Completed"
+  ];
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -49,17 +64,31 @@ export function MaterialInMaster() {
       const itemNames = entry.lines
         .map((line) => materials.find((item) => item.id === line.itemId)?.name || items.find((item) => item.id === line.itemId)?.name || "")
         .join(" ");
-      return (
+      
+      const matchesSearch = 
         entry.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
         supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        itemNames.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+        itemNames.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === "All" || entry.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
       const timeA = new Date(a.updateTimestamp || a.timestamp || 0).getTime();
       const timeB = new Date(b.updateTimestamp || b.timestamp || 0).getTime();
       return timeB - timeA;
     });
+
+  const handleDownloadPdf = (mrr: MaterialIn) => {
+    downloadMaterialInPdf({
+      mrr,
+      materials,
+      items,
+      suppliers,
+      setting,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -68,15 +97,24 @@ export function MaterialInMaster() {
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material In Master</h2>
           <ExcelExport data={filteredMaterialIn} fileName="Material_In_Master" />
         </div>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search transaction, supplier..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-          />
+        <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-black rounded text-sm focus:outline-none focus:ring-1 focus:ring-black bg-white font-bold uppercase"
+          >
+            {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search transaction, supplier..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            />
+          </div>
         </div>
       </div>
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
@@ -101,17 +139,22 @@ export function MaterialInMaster() {
               <div className="text-xs font-black text-slate-500 uppercase">Items</div>
               <div className="text-sm">{getLineItemsElement(entry.lines)}</div>
 
-              <div className="flex justify-between items-center mt-2">
+              <div className="flex justify-between items-center mt-2 border-t border-slate-100 pt-2">
                 <div className="text-right">
-                  <div className="font-bold text-sm">Invoice: Rs {Number(entry.totalInvoiceValue || 0).toLocaleString()}</div>
-                  <div className="font-bold text-lg">Actual: Rs {Number(entry.totalActualValue || entry.totalAmount || 0).toLocaleString()}</div>
+                  <div className="font-bold text-sm text-slate-500">Invoice: Rs {Number(entry.totalInvoiceValue || 0).toLocaleString()}</div>
+                  <div className="font-bold text-lg text-indigo-700">Actual: Rs {Number(entry.totalActualValue || entry.totalAmount || 0).toLocaleString()}</div>
                 </div>
-                <button
-                  onClick={() => handleDelete(entry.id)}
-                  className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
-                >
-                  <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleDownloadPdf(entry)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-600">
+                    <FileDown size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(entry.id)}
+                    className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
+                  >
+                    <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -158,12 +201,17 @@ export function MaterialInMaster() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
-                    <button
-                      onClick={() => handleDelete(entry.id)}
-                      className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
-                    >
-                      <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => handleDownloadPdf(entry)} title="Download PDF" className="p-2 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-600 transition-colors">
+                        <FileDown size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(entry.id)}
+                        className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
+                      >
+                        <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

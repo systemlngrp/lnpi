@@ -64,8 +64,8 @@ export function MrrApprovals() {
     if (!mrr) return;
 
     const remark = remarks[mrrId] || "";
-    if (!remark.trim()) {
-      alert("Please provide a remark.");
+    if (action === "Reject" && !remark.trim()) {
+      alert("Please provide a remark for rejection.");
       return;
     }
 
@@ -125,13 +125,6 @@ export function MrrApprovals() {
   const handleBulkApprove = async () => {
     if (selectedIds.length === 0) return;
     
-    // Validate remarks for all selected
-    const missingRemarks = selectedIds.filter(id => !remarks[id]?.trim());
-    if (missingRemarks.length > 0) {
-      alert("Please provide remarks for all selected MRRs.");
-      return;
-    }
-
     if (!confirm(`Are you sure you want to approve ${selectedIds.length} MRRs?`)) return;
 
     for (const id of selectedIds) {
@@ -147,8 +140,7 @@ export function MrrApprovals() {
     if (isFgType) {
       const item = items.find(i => i.id === line.itemId);
       if (!item) return line.itemId;
-      const erpStr = `ERP:${item.erp || item.id} | Qty:${Number(line.actualQty || line.qty || 0).toFixed(3)}`;
-      return `${item.name} (${erpStr})`;
+      return item.name;
     }
 
     const material = materials.find(m => m.id === line.itemId);
@@ -160,16 +152,15 @@ export function MrrApprovals() {
     if (material.bf) specs.push(`BF: ${material.bf}`);
     
     const specStr = specs.join(" X ");
-    const erpStr = `ERP:${material.erpCode || material.id} | Size:${material.size || "-"} | GSM:${material.gsm || "-"} | BF:${material.bf || "-"} | Wt:${Number(line.actualQty || line.qty || 0).toFixed(3)}`;
     
-    return `${material.name} - ${specStr} (${erpStr})`;
+    return specStr ? `${material.name} - ${specStr}` : material.name;
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
       {/* Top Header */}
       <div className="p-4 bg-white border-b border-black">
-        <h1 className="text-3xl font-black text-indigo-700 uppercase tracking-tighter">All Approvals (Grouped)</h1>
+        <h1 className="text-3xl font-black text-indigo-700 uppercase tracking-tighter">Pending Approvals</h1>
       </div>
 
       {/* Stage Selector Tabs */}

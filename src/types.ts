@@ -615,6 +615,19 @@ export interface LoadingSlip {
   updateTimestamp?: string;
 }
 
+export interface MaterialVisit {
+  id: string;
+  visitNo: string;
+  date: string;
+  supplierId: string;
+  visitorName: string;
+  purpose: string;
+  status: "Pending" | "In-Progress" | "Completed" | "Cancelled";
+  remarks?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNo: string;
