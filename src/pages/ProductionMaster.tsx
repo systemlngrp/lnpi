@@ -24,6 +24,30 @@ export function ProductionMaster() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
 
+  const ffgSummaries = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+    const totals = {
+      today: 0,
+      yesterday: 0,
+      total: 0
+    };
+
+    productions.forEach(p => {
+      const qty = Number(p.prodFromFFG || 0);
+      const prodDate = p.date?.split("T")[0];
+
+      if (prodDate === today) totals.today += qty;
+      if (prodDate === yesterdayStr) totals.yesterday += qty;
+      totals.total += qty;
+    });
+
+    return totals;
+  }, [productions]);
+
   const updateCloseMeta = async (id: string, patch: Partial<Pick<Production, "closeBy" | "closeDate">>) => {
     const resolvedPatch = { ...patch };
     if (resolvedPatch.closeBy === "Yes" && !resolvedPatch.closeDate) {
@@ -252,6 +276,22 @@ export function ProductionMaster() {
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Production Master</h2>
+      </div>
+
+      {/* FFG Summaries */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
+          <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">FFG Produced Today</div>
+          <div className="text-2xl font-black text-indigo-700">{ffgSummaries.today.toLocaleString()} <span className="text-sm font-bold text-slate-400">PCS</span></div>
+        </div>
+        <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
+          <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">FFG Produced Yesterday</div>
+          <div className="text-2xl font-black text-amber-700">{ffgSummaries.yesterday.toLocaleString()} <span className="text-sm font-bold text-slate-400">PCS</span></div>
+        </div>
+        <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
+          <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Total FFG Produced</div>
+          <div className="text-2xl font-black text-emerald-700">{ffgSummaries.total.toLocaleString()} <span className="text-sm font-bold text-slate-400">PCS</span></div>
+        </div>
       </div>
 
       <TableControls 

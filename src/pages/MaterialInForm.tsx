@@ -212,7 +212,6 @@ export function MaterialInForm() {
   const handleCurrentPoLineChange = (value: string) => {
     setCurrentPoLineId(value);
     if (!value) return;
-    if (currentInvoiceRate !== "" && Number(currentInvoiceRate || 0) > 0) return;
     const poLine = getPurchaseOrderLine(value);
     if (!poLine) return;
     setCurrentInvoiceRate(Number(poLine.rate || 0));

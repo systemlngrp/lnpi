@@ -139,16 +139,10 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "Material Visit",
-    color: "bg-emerald-700",
-    items: [
-      { name: "Material Visit Master", href: "/material-visit/master", icon: Database, countKey: "/material-visit" },
-    ],
-  },
-  {
     section: "Material Receipt",
     color: "bg-fuchsia-700",
     items: [
+      { name: "Material Receipt Master", href: "/material-in/master", icon: Database },
       { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
       { name: "Pending MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
       { name: "Pending Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
@@ -517,6 +511,11 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
             </div>
           </div>
         ))}
+      </nav>
+    </div>
+  );
+}
+ ))}
       </nav>
     </div>
   );
