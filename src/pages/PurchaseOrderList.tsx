@@ -26,6 +26,22 @@ interface PurchaseOrderListProps {
   mode?: Mode;
 }
 
+export function PurchaseOrderAll() {
+  return <PurchaseOrderList mode="all" />;
+}
+
+export function PurchaseOrderPendingApproval() {
+  return <PurchaseOrderList mode="pending-approval" />;
+}
+
+export function PurchaseOrderApproved() {
+  return <PurchaseOrderList mode="approved" />;
+}
+
+export function PurchaseOrderRejected() {
+  return <PurchaseOrderList mode="rejected" />;
+}
+
 export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [purchaseOrders, setPurchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
   const [orderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);

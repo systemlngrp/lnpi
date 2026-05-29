@@ -21,7 +21,6 @@ import { PurchaseOrderCreate } from "./pages/PurchaseOrderCreate";
 import { PurchaseOrderAll, PurchaseOrderApproved, PurchaseOrderPendingApproval, PurchaseOrderRejected } from "./pages/PurchaseOrderList";
 import { GateEntryForm } from "./pages/GateEntryForm";
 import { GateEntryMaster } from "./pages/GateEntryMaster";
-import { MaterialVisitMaster } from "./pages/MaterialVisitMaster";
 import { PendingMrr } from "./pages/PendingMrr";
 import { PendingTallyEntry } from "./pages/PendingTallyEntry";
 import { PendingDebitNote } from "./pages/PendingDebitNote";
