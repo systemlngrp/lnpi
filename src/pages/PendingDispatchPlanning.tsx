@@ -89,17 +89,6 @@ export function PendingDispatchPlanning() {
     return map;
   }, [productions]);
 
-  const nonClosedProductionQtyByItemId = useMemo(() => {
-    const map = new Map<string, number>();
-    productions.forEach((p) => {
-      if (!p.itemId) return;
-      if (p.status === "Cancelled" || p.cancelTimestamp) return;
-      if (p.closeDate) return; // Only count production from rows that are NOT closed
-      map.set(p.itemId, (map.get(p.itemId) || 0) + Number(p.prodFromFFG || 0));
-    });
-    return map;
-  }, [productions]);
-
   const reservedDispatchPlanQtyByItemId = useMemo(() => {
     const map = new Map<string, number>();
     dispatchPlans.forEach((plan) => {
@@ -123,10 +112,7 @@ export function PendingDispatchPlanning() {
       const opening = Number((item as any).opening || 0);
       const receipt = Number((item as any).receipt || 0);
       const production = Number((item as any).production || 0);
-      const nonClosedProd = Number(nonClosedProductionQtyByItemId.get(item.id) || 0);
-      
-      // Available base stock = (Opening + Receipt + Production - nonClosedProd)
-      const baseStock = opening + receipt + production - nonClosedProd;
+      const baseStock = opening + receipt + production;
 
       const loaded = Number(loadedQtyByItemId.get(item.id) || 0);
       const dispatchBalance = baseStock - loaded;
@@ -136,7 +122,7 @@ export function PendingDispatchPlanning() {
       map.set(item.id, Math.max(0, dispatchBalance + pendingProduction - reserved));
     });
     return map;
-  }, [items, loadedQtyByItemId, pendingProductionPlanQtyByItemId, reservedDispatchPlanQtyByItemId, nonClosedProductionQtyByItemId]);
+  }, [items, loadedQtyByItemId, pendingProductionPlanQtyByItemId, reservedDispatchPlanQtyByItemId]);
 
   const basePendingSchedules = useMemo(() => {
     return schedules.filter(s => {
@@ -288,8 +274,7 @@ export function PendingDispatchPlanning() {
         const opening = Number((item as any)?.opening || 0);
         const receipt = Number((item as any)?.receipt || 0);
         const production = Number((item as any)?.production || 0);
-        const nonClosedProd = Number(nonClosedProductionQtyByItemId.get(itemId) || 0);
-        const baseStock = opening + receipt + production - nonClosedProd;
+        const baseStock = opening + receipt + production;
         const loaded = Number(loadedQtyByItemId.get(itemId) || 0);
         const dispatchBalance = baseStock - loaded;
         const pendingProduction = Number(pendingProductionPlanQtyByItemId.get(itemId) || 0);
@@ -302,7 +287,6 @@ export function PendingDispatchPlanning() {
           opening,
           receipt,
           production,
-          nonClosedProd,
           baseStock,
           loaded,
           dispatchBalance,
@@ -321,7 +305,6 @@ export function PendingDispatchPlanning() {
     pendingProductionPlanQtyByItemId,
     plannedNowByItemId,
     reservedDispatchPlanQtyByItemId,
-    nonClosedProductionQtyByItemId
   ]);
 
   const handleSubmit = () => {
@@ -433,7 +416,7 @@ export function PendingDispatchPlanning() {
           <div className="px-4 py-3 border-b border-black bg-slate-50">
             <div className="text-sm font-black uppercase text-black">Dispatch Planning Calculation</div>
             <div className="text-[11px] font-bold text-slate-600">
-              Available = (FG Stock + Receipt + Production - Non-Closed Production − Loaded) + Pending Production (FG not filled) − Pending Loading (not loaded)
+              Available = (Opening + Receipt + Production − Loaded) + Pending Production (FG not filled) − Pending Loading (not loaded)
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -441,10 +424,9 @@ export function PendingDispatchPlanning() {
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
                   <th className="px-3 py-2 text-left text-[11px] font-black uppercase border border-black">Item</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">FG Stock</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Opening</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Receipt</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Production</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Non-Closed Prod</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Loaded</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">FG Balance</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Production</th>
@@ -461,7 +443,6 @@ export function PendingDispatchPlanning() {
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.opening.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.receipt.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.production.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right text-[11px] text-rose-600 border border-black">{row.nonClosedProd.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.loaded.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.dispatchBalance.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.pendingProduction.toLocaleString()}</td>
@@ -534,7 +515,7 @@ export function PendingDispatchPlanning() {
                         <td className="px-4 py-4 text-center border border-black">
                            <input 
                             type="checkbox" 
-                            className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600 cursor-pointer"
                             checked={selectedIds.has(s.id)}
                             onChange={() => toggleSelect(s.id)}
                           />
