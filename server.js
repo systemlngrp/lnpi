@@ -1565,6 +1565,7 @@ async function initDb(retries = 5) {
         { table: "dispatch_plans", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "dispatch_plans", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "dispatch_plans", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "dispatch_plans", column: "planNo", type: "VARCHAR(100)" },
         { table: "dispatch_plans", column: "loadedQty", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "dispatch_plans", column: "canceledQty", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "loading_slips", column: "slipNo", type: "VARCHAR(100) NOT NULL" },
