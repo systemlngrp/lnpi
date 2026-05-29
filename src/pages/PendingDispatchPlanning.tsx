@@ -94,7 +94,7 @@ export function PendingDispatchPlanning() {
     productions.forEach((p) => {
       if (!p.itemId) return;
       if (p.status === "Cancelled" || p.cancelTimestamp) return;
-      if (p.closeDate) return; // Only count NON-closed rows
+      if (p.closeDate) return; // Only count production from rows that are NOT closed
       map.set(p.itemId, (map.get(p.itemId) || 0) + Number(p.prodFromFFG || 0));
     });
     return map;
@@ -124,6 +124,8 @@ export function PendingDispatchPlanning() {
       const receipt = Number((item as any).receipt || 0);
       const production = Number((item as any).production || 0);
       const nonClosedProd = Number(nonClosedProductionQtyByItemId.get(item.id) || 0);
+      
+      // Available base stock = (Opening + Receipt + Production - nonClosedProd)
       const baseStock = opening + receipt + production - nonClosedProd;
 
       const loaded = Number(loadedQtyByItemId.get(item.id) || 0);
@@ -532,7 +534,7 @@ export function PendingDispatchPlanning() {
                         <td className="px-4 py-4 text-center border border-black">
                            <input 
                             type="checkbox" 
-                            className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600 cursor-pointer"
+                            className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                             checked={selectedIds.has(s.id)}
                             onChange={() => toggleSelect(s.id)}
                           />
