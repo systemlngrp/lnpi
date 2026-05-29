@@ -152,7 +152,7 @@ export const NAVIGATION: NavGroup[] = [
     section: "Material Movement",
     color: "bg-lime-700",
     items: [
-      { name: "Reel Issue/Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
+      { name: "Material issue and return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
       { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
       { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
       { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },

@@ -4,6 +4,7 @@ import { useData } from "../hooks/useData";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Material,
+  MaterialIn,
   MaterialInPackingSlip,
   MaterialIssue,
   MaterialIssueLine,
@@ -37,6 +38,7 @@ export function ReelIssueReturnForm() {
   const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
+  const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions, setProductions] = useData<Production>("productions", []);
 
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
@@ -64,6 +66,57 @@ export function ReelIssueReturnForm() {
   const [returnQtyDrafts, setReturnQtyDrafts] = useState<Record<string, Record<string, string>>>({});
 
   const selectedProduction = productions.find((production) => production.id === productionId) || null;
+
+  const getReelInvoiceRate = (slipId: string): number => {
+    const slip = packingSlips.find(s => s.id === slipId);
+    if (!slip) return 0;
+    const mrr = materialIn.find(m => m.id === slip.materialInId);
+    if (!mrr) return 0;
+    const line = mrr.lines.find(l => l.id === slip.materialLineId);
+    return Number(line?.invoiceRate || line?.rate || 0);
+  };
+
+  const consumptionSummary = useMemo(() => {
+    let totalIssueWt = 0;
+    let totalIssueVal = 0;
+    let totalReturnWt = 0;
+    let totalReturnVal = 0;
+
+    // Issue totals
+    Object.values(selectedIssueReels).flat().forEach(slipId => {
+      const slip = packingSlips.find(s => s.id === slipId);
+      if (slip) {
+        const wt = Number(slip.weightKg || 0);
+        const rate = getReelInvoiceRate(slipId);
+        totalIssueWt += wt;
+        totalIssueVal += wt * rate;
+      }
+    });
+
+    // Return totals
+    Object.entries(returnQtyDrafts).forEach(([lineId, drafts]) => {
+      Object.entries(drafts).forEach(([slipId, qtyStr]) => {
+        const qty = Number(qtyStr || 0);
+        if (qty > 0) {
+          const rate = getReelInvoiceRate(slipId);
+          totalReturnWt += qty;
+          totalReturnVal += qty * rate;
+        }
+      });
+    });
+
+    const netWt = totalIssueWt - totalReturnWt;
+    const netVal = totalIssueVal - totalReturnVal;
+
+    return {
+      issueWt: totalIssueWt,
+      issueVal: totalIssueVal,
+      returnWt: totalReturnWt,
+      returnVal: totalReturnVal,
+      netWt,
+      netVal
+    };
+  }, [selectedIssueReels, returnQtyDrafts, packingSlips, materialIn]);
 
   useEffect(() => {
     const slipById = new Map(packingSlips.map((slip) => [slip.id, slip]));
@@ -549,6 +602,14 @@ export function ReelIssueReturnForm() {
                       placeholder="Select reel material..."
                     />
                   </div>
+                  {line.materialId && (
+                    <div className="w-32 space-y-1">
+                      <label className="text-sm font-black uppercase text-indigo-700">Invoice Rate</label>
+                      <div className="border-2 border-indigo-700 rounded p-2 bg-indigo-50 font-black text-indigo-700 text-center">
+                        ₹{(selectedIds[0] ? getReelInvoiceRate(selectedIds[0]) : 0).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
                   <button type="button" onClick={() => removeIssueLine(line.id)} className="mt-6 text-red-600 hover:text-red-800" title="Remove line">
                     <Trash2 size={18} />
                   </button>
@@ -563,7 +624,7 @@ export function ReelIssueReturnForm() {
                       <table className="min-w-full border-collapse border border-black">
                         <thead className="bg-slate-100">
                           <tr>
-                            {["Select", "Our Reel No.", "Supplier Reel No.", "Weight KG"].map((heading) => (
+                            {["Select", "Our Reel No.", "Supplier Reel No.", "Invoice Rate", "Weight KG"].map((heading) => (
                               <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase">
                                 {heading}
                               </th>
@@ -573,7 +634,7 @@ export function ReelIssueReturnForm() {
                         <tbody>
                           {availableReels.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="border border-black px-4 py-6 text-center text-sm text-slate-500">
+                              <td colSpan={5} className="border border-black px-4 py-6 text-center text-sm text-slate-500">
                                 No available reels for this material.
                               </td>
                             </tr>
@@ -589,6 +650,7 @@ export function ReelIssueReturnForm() {
                                 </td>
                                 <td className="border border-black px-3 py-2 text-sm">{slip.ourReelNo}</td>
                                 <td className="border border-black px-3 py-2 text-sm">{slip.supplierReelNo || "-"}</td>
+                                <td className="border border-black px-3 py-2 text-sm font-bold text-indigo-700">₹{getReelInvoiceRate(slip.id).toLocaleString()}</td>
                                 <td className="border border-black px-3 py-2 text-sm">{Number(slip.weightKg || 0).toFixed(2)}</td>
                               </tr>
                             ))
@@ -628,6 +690,14 @@ export function ReelIssueReturnForm() {
 	                      disabled
 	                    />
 	                  </div>
+                    {line.materialId && (
+                      <div className="w-32 space-y-1">
+                        <label className="text-sm font-black uppercase text-indigo-700">Invoice Rate</label>
+                        <div className="border-2 border-indigo-700 rounded p-2 bg-indigo-50 font-black text-indigo-700 text-center">
+                          ₹{(returnableReels[0] ? getReelInvoiceRate(returnableReels[0].packingSlipId) : 0).toLocaleString()}
+                        </div>
+                      </div>
+                    )}
 	                </div>
 
                 {line.materialId ? (
@@ -639,7 +709,7 @@ export function ReelIssueReturnForm() {
                       <table className="min-w-full border-collapse border border-black">
                         <thead className="bg-slate-100">
                           <tr>
-                            {["Our Reel No.", "Issued Weight KG", "Return Qty KG"].map((heading) => (
+                            {["Our Reel No.", "Invoice Rate", "Issued Weight KG", "Return Qty KG"].map((heading) => (
                               <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase">
                                 {heading}
                               </th>
@@ -649,7 +719,7 @@ export function ReelIssueReturnForm() {
                         <tbody>
                           {returnableReels.length === 0 ? (
                             <tr>
-                              <td colSpan={3} className="border border-black px-4 py-6 text-center text-sm text-slate-500">
+                              <td colSpan={4} className="border border-black px-4 py-6 text-center text-sm text-slate-500">
                                 No issued reels available for return for this job.
                               </td>
                             </tr>
@@ -657,6 +727,7 @@ export function ReelIssueReturnForm() {
                             returnableReels.map((reelLine) => (
                               <tr key={reelLine.packingSlipId}>
                                 <td className="border border-black px-3 py-2 text-sm">{reelLine.ourReelNo}</td>
+                                <td className="border border-black px-3 py-2 text-sm font-bold text-indigo-700">₹{getReelInvoiceRate(reelLine.packingSlipId).toLocaleString()}</td>
                                 <td className="border border-black px-3 py-2 text-sm">{Number(reelLine.weightKg || 0).toFixed(2)}</td>
                                 <td className="border border-black px-3 py-2 text-sm">
                                   <input
@@ -682,11 +753,53 @@ export function ReelIssueReturnForm() {
 	          }))}
 	        </div>
 
+        {/* Consumption Summary Section */}
+        <div className="bg-slate-900 text-white p-6 rounded border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <h3 className="text-lg font-black uppercase tracking-tighter mb-4 border-b border-white/20 pb-2 flex items-center gap-2">
+            <BarChart3 size={20} />
+            Consumption Summary
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-4">
+              <div>
+                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Issue Weight</div>
+                <div className="text-xl font-black">{consumptionSummary.issueWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+              </div>
+              <div>
+                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Issue Value</div>
+                <div className="text-xl font-black">₹{consumptionSummary.issueVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Return Weight</div>
+                <div className="text-xl font-black text-amber-400">{consumptionSummary.returnWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+              </div>
+              <div>
+                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Return Value</div>
+                <div className="text-xl font-black text-amber-400">₹{consumptionSummary.returnVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <div className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Net Consumption Weight</div>
+                <div className="text-2xl font-black text-indigo-400">{consumptionSummary.netWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+              </div>
+              <div>
+                <div className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Net Consumption Value</div>
+                <div className="text-2xl font-black text-indigo-400">₹{consumptionSummary.netVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex justify-end">
           <button
             type="submit"
             disabled={isSubmitting || !productionId || (!hasAnyIssue && !hasAnyReturn)}
-            className="min-w-[180px] bg-indigo-600 text-white px-6 py-3 rounded font-bold hover:bg-indigo-700 disabled:opacity-50"
+            className="min-w-[180px] bg-indigo-600 text-white px-6 py-3 rounded font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[2px] transition-all uppercase tracking-widest text-sm"
           >
             {isSubmitting ? <Spinner size={22} className="text-white" /> : "Save Issue/Return"}
           </button>

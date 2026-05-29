@@ -3,6 +3,7 @@ import { useData } from "../hooks/useData";
 import { Company, Item, Order, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
+import { useNavigate } from "react-router-dom";
 
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
@@ -25,6 +26,7 @@ function parseLocalYmd(dateStr?: string) {
 }
 
 export function UpcomingScheduledOrders() {
+  const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [items] = useData<Item>("items", []);
@@ -32,6 +34,7 @@ export function UpcomingScheduledOrders() {
 
   const [cancelValues, setCancelValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [makeConfirmId, setMakeConfirmId] = useState<string | null>(null);
 
   const cutoffDate = useMemo(() => {
     const today = new Date();
@@ -95,6 +98,19 @@ export function UpcomingScheduledOrders() {
     }
   };
 
+  const handleMakeJob = async (schedule: OrderSchedule) => {
+    const pendingQty = getPendingProductionQty(schedule);
+    if (pendingQty <= 0) return;
+
+    if (makeConfirmId !== schedule.id) {
+      setMakeConfirmId(schedule.id);
+      setTimeout(() => setMakeConfirmId(null), 3000);
+      return;
+    }
+
+    navigate(`/production/form?scheduleId=${schedule.id}`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center border-b border-black pb-4">
@@ -148,13 +164,24 @@ export function UpcomingScheduledOrders() {
                     />
                   </td>
                   <td className="px-3 py-2 border border-black text-center">
-                    <button
-                      onClick={() => handleCancelQty(schedule)}
-                      disabled={savingId === schedule.id || !cancelValues[schedule.id] || Number(cancelValues[schedule.id]) <= 0}
-                      className="bg-rose-600 text-white px-4 py-1 rounded font-bold uppercase text-[10px] disabled:opacity-50 tracking-tighter"
-                    >
-                      {savingId === schedule.id ? <Spinner size={12} className="text-white" /> : "Cancel Qty"}
-                    </button>
+                    <div className="flex gap-2 justify-center">
+                      <button
+                        onClick={() => handleCancelQty(schedule)}
+                        disabled={savingId === schedule.id || !cancelValues[schedule.id] || Number(cancelValues[schedule.id]) <= 0}
+                        className="bg-rose-600 text-white px-3 py-1 rounded font-bold uppercase text-[10px] disabled:opacity-50 tracking-tighter"
+                      >
+                        {savingId === schedule.id ? <Spinner size={12} className="text-white" /> : "Cancel Qty"}
+                      </button>
+                      <button
+                        onClick={() => void handleMakeJob(schedule)}
+                        disabled={pendingQty <= 0}
+                        className={`px-3 py-1 rounded font-bold uppercase text-[10px] tracking-tighter disabled:opacity-50 ${
+                          makeConfirmId === schedule.id ? "bg-amber-500 text-black border-2 border-black animate-pulse" : "bg-yellow-400 text-black border border-black hover:bg-yellow-500 transition-colors"
+                        }`}
+                      >
+                        {makeConfirmId === schedule.id ? "Confirm?" : "Plan Job"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
