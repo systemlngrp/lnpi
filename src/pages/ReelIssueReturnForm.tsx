@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, BarChart3 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
