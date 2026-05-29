@@ -5,7 +5,6 @@ import { Edit2, Check, X, Search } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { ExcelExport } from "../components/ExcelExport";
 
 export function MaterialInItemMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
@@ -86,7 +85,6 @@ export function MaterialInItemMaster() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material In Item Master</h2>
-          <ExcelExport data={allLines} fileName="Material_In_Item_Master" />
         </div>
         <div className="relative w-full md:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />

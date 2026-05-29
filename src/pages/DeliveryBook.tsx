@@ -1,392 +1,151 @@
-import React, { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { 
-  OrderSchedule, 
-  Order, 
-  Production, 
-  DispatchPlan, 
-  LoadingSlip, 
-  Company,
-  Item
-} from "../types";
+import { LoadingSlip, DispatchPlan, Order, Company, Item, Truck } from "../types";
+import { Search, BookOpen, Calendar, MapPin, Package, User } from "lucide-react";
 import { formatDate } from "../lib/serial";
-import { Search, Calendar, Building2, Package, X, Download } from "lucide-react";
+import { cn } from "../lib/utils";
 
 export function DeliveryBook() {
-  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [items] = useData<Item>("items", []);
-  const [productions] = useData<Production>("productions", []);
-  const [plans] = useData<DispatchPlan>("dispatch_plans", []);
-  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [trucks] = useData<Truck>("trucks", []);
 
-  // Filter States
   const [searchTerm, setSearchTerm] = useState("");
-  const [companyFilter, setCompanyFilter] = useState("");
-  const [itemFilter, setItemFilter] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
 
-  const detailedSchedules = useMemo(() => {
-    return schedules.map(s => {
-      const order = orders.find(o => o.id === s.orderId);
-      const company = companies.find(c => c.id === order?.companyId);
-      const item = items.find(i => i.id === order?.itemId);
+  const processedData = useMemo(() => {
+    const list = loadingSlips.map((slip) => {
+      const truck = trucks.find((t) => t.id === slip.truckId);
+      const firstLine = slip.lines[0];
+      const plan = dispatchPlans.find((p) => p.id === firstLine?.dispatchPlanId);
+      const order = orders.find((o) => o.id === plan?.orderId);
+      const company = companies.find((c) => c.id === order?.companyId);
 
-      // 1. Produced (from productions table linked to this schedule)
-      const produced = productions
-        .filter(p => p.scheduleId === s.id && p.status !== "Cancelled")
-        .reduce((sum, p) => sum + (Number(p.qty) || 0), 0);
-
-      // 2. Loaded (from loading slips via dispatch plans)
-      const schedulePlans = plans.filter(p => p.scheduleId === s.id);
-      const planIds = new Set(schedulePlans.map(p => p.id));
-      
-      let loaded = 0;
-      let invoiced = 0;
-
-      loadingSlips.forEach(ls => {
-        if ((ls as any).status === "Cancelled") return;
-        ls.lines.forEach(line => {
-          if (planIds.has(line.dispatchPlanId)) {
-            const qty = Number(line.loadedQty) || 0;
-            loaded += qty;
-            
-            // 3. Invoiced: If the loading slip has an invoiceId, it counts as invoiced
-            if (ls.invoiceId) {
-              invoiced += qty;
-            }
-          }
-        });
-      });
+      const totalQty = slip.lines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0);
+      const itemsList = Array.from(new Set(slip.lines.map(line => {
+        const p = dispatchPlans.find(pl => pl.id === line.dispatchPlanId);
+        const o = orders.find(ord => ord.id === p?.orderId);
+        return items.find(i => i.id === o?.itemId)?.name || "Unknown";
+      })));
 
       return {
-        ...s,
-        orderNo: order?.orderNo || "-",
-        companyId: company?.id || "",
-        companyName: company?.name || "-",
-        itemId: item?.id || "",
-        itemName: item?.name || "-",
-        produced,
-        pendingPlanning: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0) - produced, 0),
-        loaded,
-        invoiced,
-        pendingInvoice: Math.max(loaded - invoiced, 0),
-        pendingOrderQty: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0) - invoiced, 0)
+        id: slip.id,
+        slipNo: slip.slipNo,
+        date: slip.date,
+        truckNo: truck?.truckNo || "-",
+        driver: truck?.driverName || "-",
+        company: company?.name || "Unknown",
+        itemsSummary: itemsList.join(", "),
+        totalQty,
+        status: slip.status,
       };
-    })
-    .filter(s => {
-      const matchSearch = s.orderNo.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.companyName.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchCompany = !companyFilter || s.companyId === companyFilter;
-      const matchItem = !itemFilter || s.itemId === itemFilter;
-      const matchFromDate = !fromDate || s.scheduledDate >= fromDate;
-      const matchToDate = !toDate || s.scheduledDate <= toDate;
-
-      return matchSearch && matchCompany && matchItem && matchFromDate && matchToDate;
-    })
-    .sort((a, b) => {
-      const dateCompare = a.scheduledDate.localeCompare(b.scheduledDate);
-      if (dateCompare !== 0) return dateCompare;
-      return a.orderNo.localeCompare(b.orderNo, undefined, { numeric: true, sensitivity: 'base' });
-    });
-  }, [schedules, orders, companies, items, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
-
-  const clearFilters = () => {
-    setSearchTerm("");
-    setCompanyFilter("");
-    setItemFilter("");
-    setFromDate("");
-    setToDate("");
-  };
-
-  const handleExportExcel = () => {
-    const exportRows = detailedSchedules.map((row, index) => ({
-      "SL No": index + 1,
-      "Sch. Date": formatDate(row.scheduledDate),
-      "Order No": row.orderNo,
-      Company: row.companyName,
-      Item: row.itemName,
-      "Sch. Qty": Number(row.qty || 0),
-      Canceled: Number(row.canceledQty || 0),
-      Produced: Number(row.produced || 0),
-      "Pending Planning": Number(row.pendingPlanning || 0),
-      Loaded: Number(row.loaded || 0),
-      Invoiced: Number(row.invoiced || 0),
-      "Pending Invoice": Number(row.pendingInvoice || 0),
-      "Pending Order Qty": Number(row.pendingOrderQty || 0),
-    }));
-
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Delivery Book");
-    XLSX.writeFile(workbook, `Delivery_Book_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
-
-  const handleExportPdf = () => {
-    const doc = new jsPDF("l", "mm", "a4");
-    doc.setFontSize(16);
-    doc.text("Delivery Book", 14, 14);
-    doc.setFontSize(9);
-    doc.text(`Generated on ${new Date().toLocaleString("en-GB")}`, 14, 20);
-
-    autoTable(doc, {
-      startY: 25,
-      head: [[
-        "SL",
-        "Sch. Date",
-        "Order No",
-        "Company",
-        "Item",
-        "Sch Qty",
-        "Canceled",
-        "Produced",
-        "Pending Planning",
-        "Loaded",
-        "Invoiced",
-        "Pending Invoice",
-        "Pending Order Qty",
-      ]],
-      body: detailedSchedules.map((row, index) => [
-        index + 1,
-        formatDate(row.scheduledDate),
-        row.orderNo,
-        row.companyName,
-        row.itemName,
-        Number(row.qty || 0).toFixed(2),
-        Number(row.canceledQty || 0).toFixed(2),
-        Number(row.produced || 0).toFixed(2),
-        Number(row.pendingPlanning || 0).toFixed(2),
-        Number(row.loaded || 0).toFixed(2),
-        Number(row.invoiced || 0).toFixed(2),
-        Number(row.pendingInvoice || 0).toFixed(2),
-        Number(row.pendingOrderQty || 0).toFixed(2),
-      ]),
-      theme: "grid",
-      headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: "bold" },
-      styles: { fontSize: 7, cellPadding: 1.6, textColor: 0 },
     });
 
-    doc.save(`Delivery_Book_${new Date().toISOString().slice(0, 10)}.pdf`);
-  };
+    return list
+      .filter((row) => {
+        const matchesDate = !dateFilter || row.date.startsWith(dateFilter);
+        const search = searchTerm.toLowerCase();
+        const matchesSearch =
+          row.slipNo.toLowerCase().includes(search) ||
+          row.truckNo.toLowerCase().includes(search) ||
+          row.company.toLowerCase().includes(search) ||
+          row.itemsSummary.toLowerCase().includes(search);
+        return matchesDate && matchesSearch;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [loadingSlips, dispatchPlans, orders, companies, items, trucks, searchTerm, dateFilter]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Delivery Book</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
-          >
-            <Download size={14} /> PDF
-          </button>
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
-          >
-            <Download size={14} /> Excel
-          </button>
-          <button 
-            type="button"
-            onClick={clearFilters}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
-          >
-            <X size={14} /> Clear Filters
-          </button>
+        <div className="flex items-center gap-3 text-indigo-700">
+          <BookOpen size={24} />
+          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Delivery Book</h2>
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-3 py-2 border border-black rounded text-sm focus:outline-none focus:ring-1 focus:ring-black bg-white font-bold"
+          />
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search slip, truck, company..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 bg-white p-4 border border-black rounded shadow-sm">
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input 
-            type="text"
-            placeholder="Search Order No..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none"
-          />
-        </div>
-
-        {/* Company Filter */}
-        <div className="relative">
-          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <select 
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none appearance-none bg-white"
-          >
-            <option value="">All Companies</option>
-            {companies.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Item Filter */}
-        <div className="relative">
-          <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <select 
-            value={itemFilter}
-            onChange={(e) => setItemFilter(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none appearance-none bg-white"
-          >
-            <option value="">All Items</option>
-            {items.map(i => (
-              <option key={i.id} value={i.id}>{i.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* From Date */}
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input 
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none"
-          />
-        </div>
-
-        {/* To Date */}
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input 
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none"
-          />
-        </div>
-      </div>
-
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-black border-collapse border border-black text-xs">
-            <thead className="bg-slate-100">
-              <tr className="divide-x divide-black">
-                <th className="px-2 py-2 border border-black text-left leading-tight">S.No</th>
-                <th className="px-2 py-2 border border-black text-left leading-tight">
-                  <span className="block">Sch.</span>
-                  <span className="block">Date</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-left leading-tight">
-                  <span className="block">Order</span>
-                  <span className="block">No</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-left leading-tight">Company</th>
-                <th className="px-2 py-2 border border-black text-left leading-tight">
-                  <span className="block">Item</span>
-                  <span className="block">Name</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-right bg-indigo-50 leading-tight">
-                  <span className="block">Sch.</span>
-                  <span className="block">Qty</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-right bg-red-50 text-red-700 leading-tight">
-                  <span className="block">Canceled</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-right bg-emerald-50 leading-tight">
-                  <span className="block">Production</span>
-                  <span className="block">Planned</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-right bg-cyan-50 text-cyan-800 leading-tight">
-                  <span className="block">Pending</span>
-                  <span className="block">Production</span>
-                  <span className="block">Planning</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-right bg-amber-50 leading-tight">
-                  <span className="block">Loaded</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-right bg-purple-50 leading-tight">
-                  <span className="block">Invoiced</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-right font-bold text-orange-700 leading-tight">
-                  <span className="block">Pend.</span>
-                  <span className="block">Inv</span>
-                </th>
-                <th className="px-2 py-2 border border-black text-right bg-sky-50 text-sky-800 leading-tight">
-                  <span className="block">Pend.</span>
-                  <span className="block">Order</span>
-                  <span className="block">Qty</span>
-                </th>
+      <div className="bg-white rounded border border-black shadow-sm overflow-hidden">
+        <table className="min-w-full divide-y divide-black border-collapse">
+          <thead className="bg-slate-100">
+            <tr className="divide-x divide-black">
+              <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider">Date</th>
+              <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider">Slip Info</th>
+              <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider">Consignee</th>
+              <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider">Vehicle Details</th>
+              <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider">Items Summary</th>
+              <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-wider">Qty</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-black bg-white">
+            {processedData.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">No records found for selected criteria.</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-black bg-white">
-              {detailedSchedules.map((s, idx) => (
-                <tr key={s.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
-                  <td className="px-3 py-2 border border-black text-slate-500">{idx + 1}</td>
-                  <td className="px-3 py-2 border border-black whitespace-nowrap font-medium">{formatDate(s.scheduledDate)}</td>
-                  <td className="px-3 py-2 border border-black font-bold text-black">{s.orderNo}</td>
-                  <td className="px-3 py-2 border border-black truncate max-w-[150px]" title={s.companyName}>{s.companyName}</td>
-                  <td className="px-3 py-2 border border-black min-w-[150px]">{s.itemName}</td>
-                  <td className="px-3 py-2 border border-black text-right font-medium bg-indigo-50/30">{(Number(s.qty) || 0).toLocaleString()}</td>
-                  <td className="px-3 py-2 border border-black text-right font-medium text-red-600 bg-red-50/30">{(Number(s.canceledQty) || 0).toLocaleString()}</td>
-                  <td className="px-3 py-2 border border-black text-right font-medium text-emerald-700 bg-emerald-50/30">{s.produced.toLocaleString()}</td>
-                  <td className={`px-3 py-2 border border-black text-right font-medium ${s.pendingPlanning > 0 ? 'text-cyan-800 bg-cyan-50/40' : 'text-slate-400 bg-cyan-50/20'}`}>
-                    {s.pendingPlanning.toLocaleString()}
+            ) : (
+              processedData.map((row) => (
+                <tr key={row.id} className={cn("hover:bg-slate-50 transition-colors divide-x divide-black text-[11px] font-bold uppercase", row.status === "Cancelled" && "opacity-50 line-through")}>
+                  <td className="px-4 py-4 whitespace-nowrap text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar size={12} />
+                      {formatDate(row.date)}
+                    </div>
                   </td>
-                  <td className="px-3 py-2 border border-black text-right font-medium text-amber-700 bg-amber-50/30">{s.loaded.toLocaleString()}</td>
-                  <td className="px-3 py-2 border border-black text-right font-medium text-purple-700 bg-purple-50/30">{s.invoiced.toLocaleString()}</td>
-                  <td className={`px-3 py-2 border border-black text-right font-black ${s.pendingInvoice > 0 ? 'text-orange-600 bg-orange-50/50' : 'text-slate-400'}`}>
-                    {s.pendingInvoice.toLocaleString()}
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <span className="text-indigo-700">{row.slipNo}</span>
                   </td>
-                  <td className={`px-3 py-2 border border-black text-right font-medium ${s.pendingOrderQty > 0 ? 'text-sky-800 bg-sky-50/40' : 'text-slate-400 bg-sky-50/20'}`}>
-                    {s.pendingOrderQty.toLocaleString()}
+                  <td className="px-4 py-4">
+                    <div className="flex items-start gap-1.5">
+                      <MapPin size={12} className="mt-0.5 text-slate-400" />
+                      <span className="max-w-[150px]">{row.company}</span>
+                    </div>
                   </td>
-                </tr>
-              ))}
-              {detailedSchedules.length === 0 && (
-                <tr>
-                  <td colSpan={13} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
-                    No schedules found matching your criteria
+                  <td className="px-4 py-4">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5 text-black">
+                        <Package size={12} className="text-slate-400" />
+                        {row.truckNo}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-500 font-normal">
+                        <User size={12} className="text-slate-400" />
+                        {row.driver}
+                      </div>
+                    </div>
                   </td>
-                </tr>
-              )}
-            </tbody>
-            {detailedSchedules.length > 0 && (
-              <tfoot className="bg-slate-100 font-bold border-t border-black">
-                <tr className="divide-x divide-black">
-                  <td colSpan={5} className="px-3 py-2 text-right uppercase">Filtered Totals</td>
-                  <td className="px-3 py-2 text-right bg-indigo-50">
-                    {detailedSchedules.reduce((sum, s) => sum + (Number(s.qty) || 0), 0).toLocaleString()}
+                  <td className="px-4 py-4">
+                    <div className="text-slate-600 font-medium truncate max-w-[250px]" title={row.itemsSummary}>
+                      {row.itemsSummary}
+                    </div>
                   </td>
-                  <td className="px-3 py-2 text-right bg-red-50 text-red-700">
-                    {detailedSchedules.reduce((sum, s) => sum + (Number(s.canceledQty) || 0), 0).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right bg-emerald-50 text-emerald-700">
-                    {detailedSchedules.reduce((sum, s) => sum + s.produced, 0).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right bg-cyan-50 text-cyan-800">
-                    {detailedSchedules.reduce((sum, s) => sum + s.pendingPlanning, 0).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right bg-amber-50 text-amber-700">
-                    {detailedSchedules.reduce((sum, s) => sum + s.loaded, 0).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right bg-purple-50 text-purple-700">
-                    {detailedSchedules.reduce((sum, s) => sum + s.invoiced, 0).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right bg-orange-50 text-orange-700">
-                    {detailedSchedules.reduce((sum, s) => sum + s.pendingInvoice, 0).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right bg-sky-50 text-sky-800">
-                    {detailedSchedules.reduce((sum, s) => sum + s.pendingOrderQty, 0).toLocaleString()}
+                  <td className="px-4 py-4 text-right text-black font-black whitespace-nowrap">
+                    {row.totalQty.toLocaleString()}
                   </td>
                 </tr>
-              </tfoot>
+              ))
             )}
-          </table>
-        </div>
+          </tbody>
+        </table>
       </div>
     </div>
   );

@@ -56,10 +56,13 @@ export function OrderForm() {
     .sort((a,b) => (a.name||"").localeCompare(b.name||""))
     .map(c => ({ value: c.id, label: c.name }));
 
-  const itemOptions = items
-    .slice()
-    .sort((a,b) => (a.name||"").localeCompare(b.name||""))
-    .map(i => ({ value: i.id, label: i.name }));
+  const itemOptions = useMemo(() => {
+    return items
+      .filter(i => !companyId || i.customer === companies.find(c => c.id === companyId)?.name)
+      .slice()
+      .sort((a,b) => (a.name||"").localeCompare(b.name||""))
+      .map(i => ({ value: i.id, label: i.name }));
+  }, [items, companyId, companies]);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const location = useLocation();
@@ -220,8 +223,8 @@ export function OrderForm() {
       </div>
 
       {isFormOpen && (
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-sm border border-black space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Order Date</label>
               <input type="date" value={orderDate} onChange={(e)=>setOrderDate(e.target.value)} className="border-2 border-black rounded p-2" />
@@ -280,7 +283,7 @@ export function OrderForm() {
               <Select value={orderBy} onChange={setOrderBy} options={userOptions} placeholder="Select user..." required />
             </div>
 
-            <div className="flex flex-col space-y-1 md:col-span-3">
+            <div className="flex flex-col space-y-1 md:col-span-3 lg:col-span-1">
               <label className="font-bold text-black">Remarks</label>
               <input value={remarks} onChange={(e)=>setRemarks(e.target.value)} className="border-2 border-black rounded p-2" />
             </div>

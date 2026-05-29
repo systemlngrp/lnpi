@@ -52,6 +52,7 @@ import { ProductionMaster } from "./pages/ProductionMaster";
 import { ProductionPendingConsumption, ProductionPendingFFG } from "./pages/ProductionStageQueue";
 import { ProductionPlan } from "./pages/ProductionPlan";
 import { PendingJobClosure } from "./pages/PendingJobClosure";
+import { MachinePendingProcessing } from "./pages/MachinePendingProcessing";
 import { ProductionProcessingForm } from "./pages/ProductionProcessingForm";
 import { ProductionProcessingMaster } from "./pages/ProductionProcessingMaster";
 import { ItemwiseLeastCost } from "./pages/ItemwiseLeastCost";
@@ -150,9 +151,6 @@ export default function App() {
           <Route path="gate-entry/form" element={<GateEntryForm />} />
           <Route path="gate-entry/master" element={<GateEntryMaster />} />
 
-          {/* Material Visit */}
-          <Route path="material-visit/master" element={<MaterialVisitMaster />} />
-
           {/* Material Receipt */}
           <Route path="material-receipt/pending-mrr" element={<PendingMrr />} />
           <Route path="material-receipt/approvals" element={<MrrApprovals />} />
@@ -176,7 +174,6 @@ export default function App() {
           <Route path="orders/pending-scheduling" element={<OrdersPendingScheduling />} />
           <Route path="orders/master" element={<OrdersMaster />} />
           <Route path="orders/scheduled" element={<ScheduledOrdersMaster />} />
-          <Route path="orders/upcoming" element={<UpcomingScheduledOrders />} />
           <Route path="orders/canceled" element={<CanceledOrders />} />
           
           {/* Material In */}
@@ -187,10 +184,12 @@ export default function App() {
           {/* Production */}
           <Route path="production/form" element={<ProductionForm />} />
           <Route path="production/pending" element={<PendingProduction />} />
+          <Route path="production/upcoming" element={<UpcomingScheduledOrders />} />
           <Route path="production/pending-consumption" element={<ProductionPendingConsumption />} />
           <Route path="production/pending-ffg" element={<ProductionPendingFFG />} />
           <Route path="production/pending-tally" element={<ProductionPendingTally />} />
           <Route path="production/pending-job-closure" element={<PendingJobClosure />} />
+          <Route path="production/pending-machine-processing" element={<MachinePendingProcessing />} />
           <Route path="production/master" element={<ProductionMaster />} />
           <Route path="production/plan" element={<ProductionPlan />} />
           <Route path="production-processing/form" element={<ProductionProcessingForm />} />

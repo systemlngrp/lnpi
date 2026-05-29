@@ -3,7 +3,6 @@ import { useData } from "../hooks/useData";
 import { DispatchPlan, Truck, Order, Company, Item, OrderSchedule } from "../types";
 import { formatDate } from "../lib/serial";
 import { Trash2 } from "lucide-react";
-import { ExcelExport } from "../components/ExcelExport";
 
 export function DispatchPlansMaster() {
   const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
@@ -25,33 +24,10 @@ export function DispatchPlansMaster() {
     setDeletingId(null);
   };
 
-  const exportData = plans.map(p => {
-    const truck = trucks.find(t => t.id === p.truckId);
-    const order = orders.find(o => o.id === p.orderId);
-    const company = companies.find(c => c.id === order?.companyId);
-    const item = items.find(i => i.id === order?.itemId);
-    const schedule = schedules.find(s => s.id === p.scheduleId);
-
-    return {
-      "Plan Date": formatDate(p.date),
-      "Truck No": truck?.truckNo || "-",
-      "Driver": truck?.driverName || "-",
-      "Company": company?.name || "-",
-      "Order No": order?.orderNo || "-",
-      "Item": item?.name || "-",
-      "Planned Qty": Number(p.plannedQty || 0),
-      "Loaded Qty": Number(p.loadedQty || 0),
-      "Canceled Qty": Number(p.canceledQty || 0),
-      "Pending Loading": Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0),
-      "Status": p.status
-    };
-  });
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Dispatch Plans Master</h2>
-        <ExcelExport data={exportData} fileName="Dispatch_Plans_Master" />
       </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">

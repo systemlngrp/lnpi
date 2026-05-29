@@ -170,7 +170,6 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity, countKey: "/orders/pending-scheduling" },
       { name: "Orders Master", href: "/orders/master", icon: FileText },
       { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
-      { name: "Upcoming Scheduled Orders", href: "/orders/upcoming", icon: Activity, countKey: "/orders/upcoming" },
       { name: "Canceled Orders", href: "/orders/canceled", icon: X },
     ],
   },
@@ -179,10 +178,12 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-emerald-700",
     items: [
       { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
+      { name: "Upcoming Scheduled Orders", href: "/production/upcoming", icon: Activity, countKey: "/orders/upcoming" },
       { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
       { name: "Pending FFG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
       { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
       { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
+      { name: "Machine Pending Proc.", href: "/production/pending-machine-processing", icon: Hammer },
       { name: "Production Master", href: "/production/master", icon: Database },
       { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
       { name: "Canceled Jobs", href: "/production/canceled", icon: X },
@@ -469,7 +470,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
             ) : null}
             <div className={cn("space-y-px", !isCollapsed && collapsedSections[group.section] && "hidden")}>
               {group.items.filter((item) => hasAccess(item.href)).map((item) => {
-                const isActive = (item.href === "/" && location.pathname === "/") || (item.href !== "/" && location.pathname.startsWith(item.href));
+                const isActive = (item.href === "/" && location.pathname === "/") || 
+                                 (item.href !== "/" && (location.pathname === item.href || (location.pathname.startsWith(item.href) && location.pathname[item.href.length] === "/")));
                 const count = item.countKey ? counts[item.countKey] : 0;
                 
                 return (

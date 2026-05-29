@@ -148,7 +148,21 @@ export function PendingLoading() {
       });
     });
 
-    return Array.from(truckMap.values()).sort((a, b) => a.truckNo.localeCompare(b.truckNo));
+    return Array.from(truckMap.values())
+      .sort((a, b) => {
+        // Sort by earliest planNo across all items and plans in the truck
+        const minPlanNoA = a.items.flatMap(i => i.plans).map(p => p.planNo || "").sort()[0] || "";
+        const minPlanNoB = b.items.flatMap(i => i.plans).map(p => p.planNo || "").sort()[0] || "";
+        return minPlanNoA.localeCompare(minPlanNoB, undefined, { numeric: true, sensitivity: 'base' });
+      })
+      .map(group => ({
+        ...group,
+        items: group.items.sort((a, b) => {
+          const minPlanNoA = a.plans.map(p => p.planNo || "").sort()[0] || "";
+          const minPlanNoB = b.plans.map(p => p.planNo || "").sort()[0] || "";
+          return minPlanNoA.localeCompare(minPlanNoB, undefined, { numeric: true, sensitivity: 'base' });
+        })
+      }));
   }, [companies, items, orders, plans, searchTerm, trucks]);
 
   useEffect(() => {
@@ -171,7 +185,13 @@ export function PendingLoading() {
 
   const getJobOptionsForPlan = (plan: DispatchPlan, itemId: string): JobOption[] => {
     const jobOptionsForSchedule = productions
-      .filter((production) => production.scheduleId === plan.scheduleId && production.status !== "Cancelled" && !production.cancelTimestamp)
+      .filter((production) => 
+        production.scheduleId === plan.scheduleId && 
+        production.status !== "Cancelled" && 
+        !production.cancelTimestamp &&
+        !production.closeDate &&
+        Number(production.prodFromFFG || 0) > 0
+      )
       .map((production) => ({
         jobId: production.id,
         jobNo: String(production.transactionNo || "").trim(),
@@ -180,7 +200,13 @@ export function PendingLoading() {
       .filter((option) => option.jobNo);
 
     const jobOptionsForItem = productions
-      .filter((production) => production.itemId === itemId && production.status !== "Cancelled" && !production.cancelTimestamp)
+      .filter((production) => 
+        production.itemId === itemId && 
+        production.status !== "Cancelled" && 
+        !production.cancelTimestamp &&
+        !production.closeDate &&
+        Number(production.prodFromFFG || 0) > 0
+      )
       .map((production) => ({
         jobId: production.id,
         jobNo: String(production.transactionNo || "").trim(),
@@ -253,7 +279,13 @@ export function PendingLoading() {
     const totalPending = itemPlans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
     const eligibleJobs = productions
-      .filter((p) => p.itemId === itemId && p.status !== "Cancelled" && !p.cancelTimestamp)
+      .filter((p) => 
+        p.itemId === itemId && 
+        p.status !== "Cancelled" && 
+        !p.cancelTimestamp &&
+        !p.closeDate &&
+        Number(p.prodFromFFG || 0) > 0
+      )
       .map((p) => {
         const ffg = Number(p.prodFromFFG || 0);
         const alreadyLoaded = getAlreadyLoadedForJob(p.id);
@@ -307,7 +339,7 @@ export function PendingLoading() {
     }
 
     const sortedPlans = [...loadingModal.plans].sort((a, b) =>
-      String(a.orderNo || "").localeCompare(String(b.orderNo || ""), undefined, { numeric: true, sensitivity: "base" })
+      (a.planNo || "").localeCompare(b.planNo || "", undefined, { numeric: true, sensitivity: "base" })
     );
 
     const consumeFromPool = (need: number) => {
@@ -368,9 +400,12 @@ export function PendingLoading() {
         prev.map((plan) => {
           const line = lines.find((row) => row.dispatchPlanId === plan.id);
           if (!line) return plan;
+          const nextLoaded = Number(plan.loadedQty || 0) + line.loadedQty;
+          const remaining = Math.max(0, Number(plan.plannedQty || 0) - nextLoaded - Number(plan.canceledQty || 0));
           return {
             ...plan,
-            loadedQty: Number(plan.loadedQty || 0) + line.loadedQty,
+            loadedQty: nextLoaded,
+            canceledQty: Number(plan.canceledQty || 0) + remaining, // Auto-cancel remaining
           };
         })
       );
@@ -483,9 +518,9 @@ export function PendingLoading() {
                             <tr className="divide-x divide-black">
                               <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider">Company</th>
                               <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider">Order No</th>
+                              <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider">Plan No</th>
                               <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-wider">Planned</th>
                               <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-wider">Loaded</th>
-                              <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-wider">Canceled</th>
                               <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-indigo-700">Pending</th>
                               <th className="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wider">Actions</th>
                             </tr>
@@ -497,9 +532,9 @@ export function PendingLoading() {
                                   {plan.companyName}
                                 </td>
                                 <td className="px-3 py-2 text-xs font-medium">{plan.orderNo}</td>
+                                <td className="px-3 py-2 text-xs font-bold text-slate-500">{plan.planNo || "-"}</td>
                                 <td className="px-3 py-2 text-xs text-right">{Number(plan.plannedQty || 0).toLocaleString()}</td>
                                 <td className="px-3 py-2 text-xs text-right text-emerald-700 font-medium">{Number(plan.loadedQty || 0).toLocaleString()}</td>
-                                <td className="px-3 py-2 text-xs text-right text-red-600">{Number(plan.canceledQty || 0).toLocaleString()}</td>
                                 <td className="px-3 py-2 text-xs text-right font-bold text-indigo-700 bg-indigo-50/30">{plan.pendingQty.toLocaleString()}</td>
                                 <td className="px-3 py-2 text-center">
                                   {cancelingPlanId === plan.id ? (
@@ -585,7 +620,13 @@ export function PendingLoading() {
                   const validation = getModalValidation(loadingModal);
 
                   const jobs = productions
-                    .filter((p) => p.itemId === loadingModal.itemId && p.status !== "Cancelled" && !p.cancelTimestamp)
+                    .filter((p) => 
+                      p.itemId === loadingModal.itemId && 
+                      p.status !== "Cancelled" && 
+                      !p.cancelTimestamp &&
+                      !p.closeDate &&
+                      Number(p.prodFromFFG || 0) > 0
+                    )
                     .map((p) => {
                       const ffg = Number(p.prodFromFFG || 0);
                       const alreadyLoaded = getAlreadyLoadedForJob(p.id);

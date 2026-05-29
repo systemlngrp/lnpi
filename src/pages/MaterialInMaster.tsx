@@ -2,9 +2,7 @@ import React, { useState } from "react";
 import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier, Setting } from "../types";
 import { formatDate } from "../lib/serial";
-import { Trash2, Search, FileDown } from "lucide-react";
-import { ExcelExport } from "../components/ExcelExport";
-import { downloadMaterialInPdf } from "../lib/materialInPdf";
+import { Trash2, Search } from "lucide-react";
 
 export function MaterialInMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
@@ -80,22 +78,11 @@ export function MaterialInMaster() {
       return timeB - timeA;
     });
 
-  const handleDownloadPdf = (mrr: MaterialIn) => {
-    downloadMaterialInPdf({
-      mrr,
-      materials,
-      items,
-      suppliers,
-      setting,
-    });
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material In Master</h2>
-          <ExcelExport data={filteredMaterialIn} fileName="Material_In_Master" />
         </div>
         <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
           <select
@@ -145,9 +132,6 @@ export function MaterialInMaster() {
                   <div className="font-bold text-lg text-indigo-700">Actual: Rs {Number(entry.totalActualValue || entry.totalAmount || 0).toLocaleString()}</div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleDownloadPdf(entry)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-600">
-                    <FileDown size={18} />
-                  </button>
                   <button
                     onClick={() => handleDelete(entry.id)}
                     className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
@@ -202,9 +186,6 @@ export function MaterialInMaster() {
                   </td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => handleDownloadPdf(entry)} title="Download PDF" className="p-2 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-600 transition-colors">
-                        <FileDown size={18} />
-                      </button>
                       <button
                         onClick={() => handleDelete(entry.id)}
                         className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}

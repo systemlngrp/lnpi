@@ -22,8 +22,6 @@ import {
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
-import { ExcelExport } from "../components/ExcelExport";
-import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
 
 export function LoadingMaster() {
   const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -287,7 +285,6 @@ export function LoadingMaster() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Loading Master</h2>
-          <ExcelExport data={processedSlips} fileName="Loading_Master" />
         </div>
         <div className="relative w-full md:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -371,24 +368,6 @@ export function LoadingMaster() {
                         Open
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        downloadLoadingSlipPdf({
-                          slip,
-                          setting: settings[0],
-                          trucks,
-                          plans,
-                          orders,
-                          items,
-                          companies,
-                        })
-                      }
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
-                      title="Download PDF"
-                    >
-                      <Download size={14} /> PDF
-                    </button>
                     <button 
                       type="button"
                       onClick={() => toggleSlip(slip.id)}

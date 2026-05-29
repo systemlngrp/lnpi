@@ -2,8 +2,11 @@ import React from "react";
 import { useData } from "../hooks/useData";
 import { Order } from "../types";
 import { formatDate } from "../lib/utils";
+import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 
 export function OrdersMaster() {
+  const navigate = useNavigate();
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData("companies", []);
   const [items] = useData("items", []);
@@ -11,7 +14,15 @@ export function OrdersMaster() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-black uppercase">Orders Master</h2>
+      <div className="flex justify-between items-center pb-4 border-b border-black">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Orders Master</h2>
+        <button 
+          onClick={() => navigate("/orders/form")} 
+          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 transition shadow"
+        >
+          <Plus size={18} /> New Order
+        </button>
+      </div>
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">

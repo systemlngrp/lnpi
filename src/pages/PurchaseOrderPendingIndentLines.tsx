@@ -224,9 +224,8 @@ export function PurchaseOrderPendingIndentLines() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 border-b border-black pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Indent Lines (PO)</h2>
-          <ExcelExport data={filteredRows} fileName="Pending_Indent_Lines_PO" />
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Indent Lines for PO</h2>
         </div>
         <div className="flex items-center gap-3">
           <button

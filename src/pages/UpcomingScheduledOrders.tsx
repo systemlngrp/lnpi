@@ -1,9 +1,15 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { OrderSchedule, Order, Company, Item, Truck, DispatchPlan } from "../types";
+import { Company, Item, Order, OrderSchedule } from "../types";
+import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
-import { cn } from "../lib/utils";
-import { Search, Save } from "lucide-react";
+
+function getPendingProductionQty(schedule: OrderSchedule) {
+  return Math.max(
+    Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
+    0
+  );
+}
 
 function parseLocalYmd(dateStr?: string) {
   if (!dateStr) return null;
@@ -19,17 +25,13 @@ function parseLocalYmd(dateStr?: string) {
 }
 
 export function UpcomingScheduledOrders() {
-  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
-  const [companies] = useData<Company>("companies", []);
   const [items] = useData<Item>("items", []);
-  const [trucks] = useData<Truck>("trucks", []);
-  const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [companies] = useData<Company>("companies", []);
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [rowTrucks, setRowTrucks] = useState<Record<string, string>>({});
-  const [rowPlannedQty, setRowPlannedQty] = useState<Record<string, number>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cancelValues, setCancelValues] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const cutoffDate = useMemo(() => {
     const today = new Date();
@@ -40,234 +42,125 @@ export function UpcomingScheduledOrders() {
     return cutoff;
   }, []);
 
-  // Filter schedules that are pending and beyond Today + 2 days
-  const filteredSchedules = useMemo(() => {
-    return schedules.filter(s => {
-      const scheduledDate = parseLocalYmd(s.scheduledDate);
-      if (!scheduledDate) return false;
-      
-      // Calculate already planned quantity from dispatch_plans table
-      const alreadyPlanned = dispatchPlans
-        .filter(plan => plan.scheduleId === s.id)
-        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
-      
-      const balance = Number(s.qty || 0) - alreadyPlanned;
-      return scheduledDate.getTime() > cutoffDate.getTime() && balance > 0;
-    }).sort((a, b) => {
-      const timeA = parseLocalYmd(a.scheduledDate)?.getTime() ?? 0;
-      const timeB = parseLocalYmd(b.scheduledDate)?.getTime() ?? 0;
-      return timeA - timeB;
-    });
-  }, [schedules, cutoffDate, dispatchPlans]);
+  const upcomingRows = useMemo(
+    () =>
+      schedules
+        .filter((schedule) => {
+          if (getPendingProductionQty(schedule) <= 0) return false;
+          const scheduledDate = parseLocalYmd(schedule.scheduledDate);
+          if (!scheduledDate) return false;
+          return scheduledDate.getTime() > cutoffDate.getTime();
+        })
+        .map((schedule) => {
+          const order = orders.find((row) => row.id === schedule.orderId);
+          const item = items.find((row) => row.id === order?.itemId);
+          const company = companies.find((row) => row.id === order?.companyId);
+          return { schedule, order, item, company, pendingQty: getPendingProductionQty(schedule) };
+        })
+        .sort((a, b) => {
+          const timeA = new Date(a.schedule.scheduledDate || 0).getTime();
+          const timeB = new Date(b.schedule.scheduledDate || 0).getTime();
+          return timeA - timeB; // Ascending by date
+        }),
+    [companies, cutoffDate, items, orders, schedules]
+  );
 
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(new Set(filteredSchedules.map(s => s.id)));
-    } else {
-      setSelectedIds(new Set());
+  const handleCancelQty = async (schedule: OrderSchedule) => {
+    const rawValue = cancelValues[schedule.id];
+    const qtyToCancel = Number(rawValue || 0);
+    const pendingQty = getPendingProductionQty(schedule);
+
+    if (!qtyToCancel || qtyToCancel <= 0 || qtyToCancel > pendingQty) return;
+
+    setSavingId(schedule.id);
+    try {
+      const timestamp = new Date().toISOString();
+      await setSchedules((prev) =>
+        prev.map((row) =>
+          row.id === schedule.id
+            ? {
+                ...row,
+                canceledQty: Number(row.canceledQty || 0) + qtyToCancel,
+                updateTimestamp: timestamp,
+                updatedBy: "System User",
+              }
+            : row
+        )
+      );
+      setCancelValues((prev) => ({ ...prev, [schedule.id]: "" }));
+    } catch (err) {
+      console.error("Failed to cancel scheduled quantity:", err);
+    } finally {
+      setSavingId(null);
     }
-  };
-
-  const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-  };
-
-  const sortedTrucks = useMemo(() => {
-    return [...trucks].sort((a, b) => a.truckNo.localeCompare(b.truckNo));
-  }, [trucks]);
-
-  // Calculate total planned quantity for current session
-  const totalSessionPlannedQty = useMemo(() => {
-    return Array.from(selectedIds).reduce((sum, id) => {
-      const schedule = schedules.find(s => s.id === id);
-      if (!schedule) return sum;
-      
-      const alreadyPlanned = dispatchPlans
-        .filter(plan => plan.scheduleId === id)
-        .reduce((pSum, plan) => pSum + Number(plan.plannedQty || 0), 0);
-      const balance = Number(schedule.qty || 0) - alreadyPlanned;
-      
-      const currentPlanned = rowPlannedQty[id] !== undefined ? rowPlannedQty[id] : balance;
-      return sum + Number(currentPlanned || 0);
-    }, 0);
-  }, [selectedIds, rowPlannedQty, schedules, dispatchPlans]);
-
-  const handleSubmit = () => {
-    if (selectedIds.size === 0) {
-      alert("Please select at least one order to plan.");
-      return;
-    }
-
-    const missingTruck = Array.from(selectedIds).some(id => !rowTrucks[id]);
-    if (missingTruck) {
-      alert("Please select a Truck for all selected orders.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setTimeout(() => {
-      const newPlans: DispatchPlan[] = Array.from(selectedIds).map(id => {
-        const schedule = schedules.find(s => s.id === id)!;
-        const alreadyPlanned = dispatchPlans
-          .filter(plan => plan.scheduleId === id)
-          .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
-        const balance = Number(schedule.qty || 0) - alreadyPlanned;
-        
-        return {
-          id: crypto.randomUUID(),
-          scheduleId: id,
-          orderId: schedule.orderId,
-          truckId: rowTrucks[id],
-          plannedQty: rowPlannedQty[id] !== undefined ? rowPlannedQty[id] : balance,
-          status: "Planned",
-          date: new Date().toISOString(),
-          updateTimestamp: new Date().toISOString(),
-          updatedBy: "System User"
-        };
-      });
-
-      setDispatchPlans([...dispatchPlans, ...newPlans]);
-      
-      // Cleanup
-      setSelectedIds(new Set());
-      setRowTrucks({});
-      setRowPlannedQty({});
-      setIsSubmitting(false);
-      alert("Dispatch plans submitted successfully!");
-    }, 800);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
-        <div>
-          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Upcoming Scheduled Orders</h2>
-          <p className="text-xs text-slate-500 mt-1 font-bold">Future orders scheduled beyond tomorrow</p>
-        </div>
-        
-        <div className="flex items-center gap-6">
-          {selectedIds.size > 0 && (
-            <div className="bg-amber-50 border-2 border-amber-500 px-4 py-1.5 rounded-lg flex items-center gap-3 shadow-[2px_2px_0px_0px_rgba(245,158,11,1)]">
-              <span className="text-[10px] font-black uppercase text-amber-700">Total Planned:</span>
-              <span className="text-lg font-black text-amber-900">{totalSessionPlannedQty.toLocaleString()}</span>
-            </div>
-          )}
-
-          {selectedIds.size > 0 && (
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="bg-emerald-600 text-white px-6 py-2 rounded font-bold hover:bg-emerald-700 transition flex items-center h-[42px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[2px]"
-            >
-              <Save size={18} className="mr-2" />
-              {isSubmitting ? "Saving..." : `Submit Plan (${selectedIds.size})`}
-            </button>
-          )}
-        </div>
+      <div className="flex justify-between items-center border-b border-black pb-4">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Upcoming Scheduled Orders</h2>
       </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-black border-collapse border border-black">
-            <thead className="bg-slate-100 divide-x divide-black">
-              <tr className="divide-x divide-black">
-                <th className="px-4 py-3 text-center border border-black w-10">
-                  <input 
-                    type="checkbox" 
-                    className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600"
-                    onChange={handleSelectAll}
-                    checked={filteredSchedules.length > 0 && selectedIds.size === filteredSchedules.length}
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Scheduled Date</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Order No</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Company</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Item Name</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Pending Qty</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black min-w-[150px]">Truck No</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black w-32">Planned Qty</th>
+        <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="px-3 py-2 border border-black">Order No</th>
+              <th className="px-3 py-2 border border-black">Schedule Date</th>
+              <th className="px-3 py-2 border border-black">Company</th>
+              <th className="px-3 py-2 border border-black">Item</th>
+              <th className="px-3 py-2 border border-black">Scheduled Qty</th>
+              <th className="px-3 py-2 border border-black">Produced Qty</th>
+              <th className="px-3 py-2 border border-black">Canceled Qty</th>
+              <th className="px-3 py-2 border border-black text-indigo-700">Pending Qty</th>
+              <th className="px-3 py-2 border border-black w-40">Cancel Qty</th>
+              <th className="px-3 py-2 border border-black">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {upcomingRows.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium italic">
+                  No upcoming production schedules (beyond today + 2 days).
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-black bg-white">
-              {filteredSchedules.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-black font-medium">No upcoming scheduled orders found.</td>
-                </tr>
-              ) : (
-                filteredSchedules.map((s) => {
-                  const order = orders.find(o => o.id === s.orderId);
-                  const company = companies.find(c => c.id === order?.companyId);
-                  const item = items.find(i => i.id === order?.itemId);
-                  
-                  // Calculate balance correctly: Scheduled - Already Planned
-                  const alreadyPlanned = dispatchPlans
-                    .filter(plan => plan.scheduleId === s.id)
-                    .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
-                  const balance = Number(s.qty || 0) - alreadyPlanned;
-                  
-                  return (
-                    <tr key={s.id} className={cn(
-                      "hover:bg-slate-50 divide-x divide-black", 
-                      selectedIds.has(s.id) && "bg-indigo-50/50"
-                    )}>
-                      <td className="px-4 py-4 text-center border border-black">
-                         <input 
-                          type="checkbox" 
-                          className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600 cursor-pointer"
-                          checked={selectedIds.has(s.id)}
-                          onChange={() => toggleSelect(s.id)}
-                        />
-                      </td>
-                      <td className="px-4 py-4 text-xs font-bold border border-black whitespace-nowrap text-black">
-                        {formatDate(s.scheduledDate)}
-                      </td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black">{company?.name || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black">{item?.name || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">{balance}</td>
-                      <td className="px-2 py-2 border border-black">
-                        <select
-                          value={rowTrucks[s.id] || ""}
-                          onChange={(e) => setRowTrucks({...rowTrucks, [s.id]: e.target.value})}
-                          className="w-full border border-slate-300 rounded p-1 text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
-                        >
-                          <option value="">Select Truck</option>
-                          {sortedTrucks.map(t => (
-                            <option key={t.id} value={t.id}>{t.truckNo} ({t.driverName})</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-2 py-2 border border-black">
-                        <input
-                          type="number"
-                          value={rowPlannedQty[s.id] !== undefined ? rowPlannedQty[s.id] : balance}
-                          onChange={(e) => setRowPlannedQty({...rowPlannedQty, [s.id]: Number(e.target.value)})}
-                          className="w-full border border-slate-300 rounded p-1 text-right text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-            {selectedIds.size > 0 && (
-              <tfoot className="bg-slate-100 border-t-2 border-black">
-                <tr className="divide-x divide-black font-black">
-                  <td colSpan={7} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
-                  <td className="px-4 py-3 text-right text-sm text-indigo-700 bg-indigo-50 border border-black">
-                    {totalSessionPlannedQty.toLocaleString()}
+            ) : (
+              upcomingRows.map(({ schedule, order, item, company, pendingQty }) => (
+                <tr key={schedule.id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 border border-black font-medium">{order?.orderNo || "-"}</td>
+                  <td className="px-3 py-2 border border-black whitespace-nowrap font-bold text-indigo-700">{formatDate(schedule.scheduledDate)}</td>
+                  <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>
+                  <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
+                  <td className="px-3 py-2 border border-black text-right">{schedule.qty || 0}</td>
+                  <td className="px-3 py-2 border border-black text-right">{schedule.producedQty || 0}</td>
+                  <td className="px-3 py-2 border border-black text-right">{schedule.canceledQty || 0}</td>
+                  <td className="px-3 py-2 border border-black text-right font-bold bg-indigo-50/30">{pendingQty}</td>
+                  <td className="px-3 py-2 border border-black">
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      max={pendingQty}
+                      value={cancelValues[schedule.id] || ""}
+                      onChange={(e) => setCancelValues((prev) => ({ ...prev, [schedule.id]: e.target.value }))}
+                      className="w-full border-2 border-black rounded px-2 py-1 text-right font-bold"
+                      placeholder="0"
+                    />
+                  </td>
+                  <td className="px-3 py-2 border border-black text-center">
+                    <button
+                      onClick={() => handleCancelQty(schedule)}
+                      disabled={savingId === schedule.id || !cancelValues[schedule.id] || Number(cancelValues[schedule.id]) <= 0}
+                      className="bg-rose-600 text-white px-4 py-1 rounded font-bold uppercase text-[10px] disabled:opacity-50 tracking-tighter"
+                    >
+                      {savingId === schedule.id ? <Spinner size={12} className="text-white" /> : "Cancel Qty"}
+                    </button>
                   </td>
                 </tr>
-              </tfoot>
+              ))
             )}
-          </table>
-        </div>
+          </tbody>
+        </table>
       </div>
     </div>
   );

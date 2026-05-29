@@ -366,6 +366,12 @@ export function PendingDispatchPlanning() {
 
     setIsSubmitting(true);
     setTimeout(() => {
+      const timestamp = new Date().toISOString();
+      let nextPlanNo = Math.max(0, ...dispatchPlans.map(p => {
+        const match = p.planNo?.match(/DP-(\d+)/);
+        return match ? parseInt(match[1], 10) : 0;
+      })) + 1;
+
       const newPlans: DispatchPlan[] = Array.from(selectedIds).map(id => {
         const schedule = schedules.find(s => s.id === id)!;
         const alreadyPlanned = dispatchPlans
@@ -375,13 +381,14 @@ export function PendingDispatchPlanning() {
         
         return {
           id: crypto.randomUUID(),
+          planNo: `DP-${String(nextPlanNo++).padStart(5, '0')}`,
           scheduleId: id,
           orderId: schedule.orderId,
           truckId: rowTrucks[id],
           plannedQty: rowPlannedQty[id] !== undefined ? rowPlannedQty[id] : balance,
           status: "Planned",
-          date: new Date().toISOString(),
-          updateTimestamp: new Date().toISOString(),
+          date: timestamp,
+          updateTimestamp: timestamp,
           updatedBy: "System User"
         };
       });
@@ -460,7 +467,7 @@ export function PendingDispatchPlanning() {
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Receipt</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Production</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Loaded</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Dispatch Balance</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">FG Balance</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Production</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Loading</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Available</th>

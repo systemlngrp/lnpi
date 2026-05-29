@@ -16,7 +16,9 @@ export function OrdersPendingScheduling() {
   const totalScheduled = (orderId: string) => rowsFor(orderId).reduce((sum, r) => sum + (Number((r as any).qty) || 0), 0);
 
   const today = new Date().toISOString().slice(0, 10);
-  const pending = orders.filter(o => o.status === "Pending Scheduling" && o.status !== "Cancelled" && (o.qty || 0) > totalScheduled(o.id));
+  const pending = orders
+    .filter(o => o.status === "Pending Scheduling" && o.status !== "Cancelled" && (o.qty || 0) > totalScheduled(o.id))
+    .sort((a, b) => (a.orderNo || "").localeCompare(b.orderNo || "", undefined, { numeric: true, sensitivity: "base" }));
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalOrderId, setModalOrderId] = useState<string | null>(null);
@@ -164,25 +166,31 @@ export function OrdersPendingScheduling() {
                 <th className="px-3 py-2 border border-black">Order No</th>
                 <th className="px-3 py-2 border border-black">Company</th>
                 <th className="px-3 py-2 border border-black">Item</th>
-                <th className="px-3 py-2 border border-black">Qty</th>
-                <th className="px-3 py-2 border border-black">Unit</th>
+                <th className="px-3 py-2 border border-black">Order Quantity</th>
                 <th className="px-3 py-2 border border-black">Scheduled Qty</th>
+                <th className="px-3 py-2 border border-black">Pending Scheduling</th>
+                <th className="px-3 py-2 border border-black">Unit</th>
                 <th className="px-3 py-2 border border-black">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {pending.map((o, idx) => (
-                <tr key={o.id} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 border border-black">{idx + 1}</td>
-                  <td className="px-3 py-2 border border-black">{o.orderNo}</td>
-                  <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
-                  <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.name}</td>
-                  <td className="px-3 py-2 border border-black">{o.qty}</td>
-                  <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.uom}</td>
-                  <td className="px-3 py-2 border border-black">{totalScheduled(o.id)}</td>
-                  <td className="px-3 py-2 border border-black"><button onClick={() => { setModalOrderId(o.id); setModalOpen(true); }} className="bg-indigo-600 text-white px-3 py-1 rounded">Schedule</button></td>
-                </tr>
-              ))}
+              {pending.map((o, idx) => {
+                const sched = totalScheduled(o.id);
+                const pendingSched = Number(o.qty || 0) - sched;
+                return (
+                  <tr key={o.id} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 border border-black">{idx + 1}</td>
+                    <td className="px-3 py-2 border border-black">{o.orderNo}</td>
+                    <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
+                    <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.name}</td>
+                    <td className="px-3 py-2 border border-black">{o.qty}</td>
+                    <td className="px-3 py-2 border border-black">{sched}</td>
+                    <td className="px-3 py-2 border border-black font-bold text-indigo-700">{pendingSched}</td>
+                    <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.uom}</td>
+                    <td className="px-3 py-2 border border-black"><button onClick={() => { setModalOrderId(o.id); setModalOpen(true); }} className="bg-indigo-600 text-white px-3 py-1 rounded">Schedule</button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

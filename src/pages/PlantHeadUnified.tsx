@@ -6,7 +6,6 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, Truck, Activity, XCircle, ClipboardList, Package } from "lucide-react";
-import { ExcelExport } from "../components/ExcelExport";
 import { isProductionPendingPH } from "../lib/productionStageFilters";
 
 type Tab = "all" | "material-in" | "production" | "orders" | "consumption";
@@ -332,7 +331,6 @@ export function PlantHeadUnified() {
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Material In ({counts["material-in"]})</span>
-              <ExcelExport data={pendingMaterialIn} fileName="Pending_PH_MaterialIn" />
             </div>
             
             {/* Mobile View - Cards */}
@@ -434,7 +432,6 @@ export function PlantHeadUnified() {
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Production ({counts["production"]})</span>
-              <ExcelExport data={pendingProductions} fileName="Pending_PH_Production" />
             </div>
             
             {/* Mobile View - Cards */}
@@ -585,7 +582,6 @@ export function PlantHeadUnified() {
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Orders ({counts["orders"]})</span>
-              <ExcelExport data={pendingOrders} fileName="Pending_PH_Orders" />
             </div>
 
             <div className="block md:hidden space-y-4 p-2">
@@ -682,7 +678,6 @@ export function PlantHeadUnified() {
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Consumption ({counts["consumption"]})</span>
-              <ExcelExport data={pendingConsumptions} fileName="Pending_PH_Consumption" />
             </div>
 
             <div className="block md:hidden space-y-4 p-2">

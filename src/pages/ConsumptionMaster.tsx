@@ -4,7 +4,6 @@ import { Consumption, Item } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Trash2 } from "lucide-react";
-import { ExcelExport } from "../components/ExcelExport";
 
 export function ConsumptionMaster() {
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
@@ -35,9 +34,8 @@ export function ConsumptionMaster() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center pb-4 border-b border-black">
+      <div className="flex justify-between items-center border-b border-black pb-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Consumption Master</h2>
-        <ExcelExport data={filteredList} fileName="Consumption_Master" />
       </div>
 
       <TableControls 

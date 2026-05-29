@@ -568,6 +568,7 @@ export interface Truck {
 
 export interface DispatchPlan {
   id: string;
+  planNo?: string;
   scheduleId: string;
   orderId: string;
   truckId: string;

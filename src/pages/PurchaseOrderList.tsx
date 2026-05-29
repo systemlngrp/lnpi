@@ -1,147 +1,93 @@
-import { useMemo, useState } from "react";
-import { CheckCircle, Download, ThumbsUp, X } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Indent, IndentLine, Material, PurchaseOrder, PurchaseOrderLine, Setting, Supplier } from "../types";
+import { 
+  PurchaseOrder, 
+  PurchaseOrderLine, 
+  Material, 
+  Supplier, 
+  Indent,
+  Setting
+} from "../types";
+import { 
+  ChevronRight, 
+  ChevronDown, 
+  Check, 
+  X,
+  Search,
+  Download
+} from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
-import { summarizeIndentLines } from "../lib/indentTotals";
-import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
+import { cn } from "../lib/utils";
 
-type PurchaseOrderMode = "all" | "pending-approval" | "approved" | "rejected";
+type Mode = "pending-approval" | "approved" | "rejected" | "all";
 
-function getTitle(mode: PurchaseOrderMode) {
-  if (mode === "pending-approval") return "Purchase Order: Pending Approval";
-  if (mode === "approved") return "Purchase Order: Approved";
-  if (mode === "rejected") return "Purchase Order: Rejected";
-  return "Purchase Order: All";
+interface PurchaseOrderListProps {
+  mode?: Mode;
 }
 
-function getFilteredOrders(orders: PurchaseOrder[], mode: PurchaseOrderMode) {
-  if (mode === "all") return orders;
-  if (mode === "pending-approval") return orders.filter((order) => order.status === "Pending Approval");
-  if (mode === "approved") return orders.filter((order) => order.status === "Approved");
-  return orders.filter((order) => order.status === "Rejected");
-}
-
-async function downloadPurchaseOrderPdf({
-  order,
-  indent,
-  supplierName,
-  lines,
-  materialMap,
-  setting,
-}: {
-  order: PurchaseOrder;
-  indent?: Indent;
-  supplierName: string;
-  lines: PurchaseOrderLine[];
-  materialMap: Map<string, string>;
-  setting?: Setting | null;
-}) {
-  const doc = new jsPDF("p", "mm", "a4");
-
-  let titleY = 14;
-  let detailsStartY = 24;
-
-  const header = await renderOrganizationHeader(doc, setting, { startY: 16, requireAnyContent: true });
-  if (header.hasAnyContent) {
-    titleY = header.currentY;
-    detailsStartY = titleY + 10;
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("PURCHASE ORDER", 105, titleY, { align: "center" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  const details: Array<[string, string]> = [
-    ["PO No", order.poNo],
-    ["PO Date", formatDate(order.poDate)],
-    ["Supplier", supplierName],
-    ["Indent", indent ? `${indent.requestedBy} (${formatDate(indent.requisitionDate)})` : "-"],
-    ["Status", order.status],
-  ];
-
-  let y = detailsStartY;
-  details.forEach(([label, value], index) => {
-    const x = index % 2 === 0 ? 14 : 110;
-    const rowY = y + Math.floor(index / 2) * 7;
-    doc.setFont("helvetica", "bold");
-    doc.text(`${label}:`, x, rowY);
-    doc.setFont("helvetica", "normal");
-    doc.text(String(value || "-"), x + 28, rowY);
-  });
-  y += 24;
-
-  const rows = lines.map((line, idx) => [
-    idx + 1,
-    line.erpCode || "",
-    materialMap.get(line.materialId) || "Unknown Material",
-    Number(line.qty || 0).toLocaleString(),
-    line.uom || "",
-    Number(line.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    Number(line.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : indent?.requiredDate ? formatDate(indent.requiredDate) : "-",
-  ]);
-
-  autoTable(doc, {
-    startY: y,
-    head: [["SL", "ERP", "Material", "Qty", "UOM", "Rate", "Amount", "Delivery Date"]],
-    body: rows,
-    theme: "grid",
-    styles: { fontSize: 8.5, cellPadding: 2.2, textColor: 0 },
-    headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold" },
-    columnStyles: {
-      0: { halign: "center", cellWidth: 10 },
-      3: { halign: "right" },
-      5: { halign: "right" },
-      6: { halign: "right" },
-    },
-  });
-
-  const safePoNo = String(order.poNo || "PO").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
-  doc.save(`PO_${safePoNo}.pdf`);
-}
-
-export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
+export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [purchaseOrders, setPurchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
-  const [purchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
+  const [orderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
   const [materials] = useData<Material>("materials", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
-  const [indents, setIndents] = useData<Indent>("indents", []);
-  const [indentLines, setIndentLines] = useData<IndentLine>("indent-lines", []);
+  const [indents] = useData<Indent>("indents", []);
   const [settings] = useData<Setting>("settings", []);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [remarks, setRemarks] = useState("");
+
   const currentSetting = settings[0];
+  const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
+  const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.name])), [suppliers]);
 
-  const visibleOrders = useMemo(
-    () =>
-      getFilteredOrders(purchaseOrders, mode).sort((a, b) => {
-        const timeA = new Date(a.updateTimestamp || a.poDate || 0).getTime();
-        const timeB = new Date(b.updateTimestamp || b.poDate || 0).getTime();
-        return timeB - timeA;
-      }),
-    [mode, purchaseOrders]
-  );
+  const filteredOrders = useMemo(() => {
+    return purchaseOrders
+      .filter((po) => {
+        if (mode === "pending-approval") return po.status === "Pending Approval";
+        if (mode === "approved") return po.status === "Approved";
+        if (mode === "rejected") return po.status === "Rejected";
+        return true;
+      })
+      .filter((po) => {
+        const supplierName = (supplierMap.get(po.supplierId) || "").toLowerCase();
+        const poNo = (po.poNo || "").toLowerCase();
+        const search = searchTerm.toLowerCase();
+        return supplierName.includes(search) || poNo.includes(search);
+      })
+      .sort((a, b) => new Date(b.updateTimestamp || b.timestamp || 0).getTime() - new Date(a.updateTimestamp || a.timestamp || 0).getTime());
+  }, [purchaseOrders, mode, supplierMap, searchTerm]);
 
-  const supplierMap = useMemo(() => new Map(suppliers.map((supplier) => [supplier.id, supplier.name])), [suppliers]);
-  const materialMap = useMemo(() => new Map(materials.map((material) => [material.id, material.name])), [materials]);
-  const indentMap = useMemo(() => new Map(indents.map((indent) => [indent.id, indent])), [indents]);
+  const handleToggleRow = (id: string) => {
+    const next = new Set(expandedRows);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExpandedRows(next);
+  };
 
-  const updateOrder = async (order: PurchaseOrder, patch: Partial<PurchaseOrder>) => {
+  const handleApprove = async (order: PurchaseOrder) => {
+    if (confirmId !== order.id) {
+      setConfirmId(order.id);
+      setRejectingId(null);
+      setTimeout(() => setConfirmId(null), 3000);
+      return;
+    }
+
     setSubmittingId(order.id);
-    const timestamp = new Date().toISOString();
     try {
-      await setPurchaseOrders(
-        purchaseOrders.map((row) =>
+      const timestamp = new Date().toISOString();
+      await setPurchaseOrders((prev) =>
+        prev.map((row) =>
           row.id === order.id
             ? {
                 ...row,
-                ...patch,
+                status: "Approved",
+                approvedBy: "System User",
+                approvedTimestamp: timestamp,
                 updatedBy: "System User",
                 updateTimestamp: timestamp,
               }
@@ -150,74 +96,31 @@ export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
       );
       setConfirmId(null);
     } catch (error) {
-      console.error("Failed to update purchase order:", error);
-      alert("Failed to update purchase order.");
+      console.error("Failed to approve purchase order:", error);
+      alert("Failed to approve purchase order.");
     } finally {
       setSubmittingId(null);
     }
   };
 
-  const handleApprove = async (order: PurchaseOrder) => {
-    if (confirmId !== order.id) {
-      setConfirmId(order.id);
-      setTimeout(() => setConfirmId(null), 3000);
-      return;
-    }
-    await updateOrder(order, {
-      status: "Approved",
-      approvedBy: "System User",
-      approvedTimestamp: new Date().toISOString(),
-    });
-  };
-
   const handleReject = async (order: PurchaseOrder) => {
-    const remarks = window.prompt("Enter rejection remarks");
-    if (remarks === null) return;
-    if (!remarks.trim()) {
-      alert("Rejection remarks are required.");
+    if (rejectingId !== order.id) {
+      setRejectingId(order.id);
+      setConfirmId(null);
+      setRemarks("");
       return;
     }
+
+    if (!remarks.trim()) {
+      alert("Please enter rejection remarks.");
+      return;
+    }
+
     setSubmittingId(order.id);
-    const timestamp = new Date().toISOString();
     try {
-      const affectedPoLines = purchaseOrderLines.filter((line) => line.purchaseOrderId === order.id);
-      const nextIndentLines = indentLines.map((line) => {
-        const poLine = affectedPoLines.find((row) => row.indentLineId === line.id);
-        if (!poLine) return line;
-        const orderedQty = Math.max(0, Number(line.orderedQty || 0) - Number(poLine.qty || 0));
-        const cancelledQty = Number(line.cancelledQty || 0);
-        const balanceQty = Math.max(0, Number(line.qty || 0) - orderedQty - cancelledQty);
-        return {
-          ...line,
-          orderedQty,
-          balanceQty,
-          updatedBy: "System User",
-          updateTimestamp: timestamp,
-        };
-      });
-
-      const nextIndents = indents.map((indent) => {
-        if (indent.id !== order.indentId) return indent;
-        const summary = summarizeIndentLines(nextIndentLines.filter((line) => line.indentId === indent.id));
-        const nextStatus: Indent["status"] = summary.totalBalanceQty <= 0 ? "Completed" : "Approved";
-        return {
-          ...indent,
-          status: nextStatus,
-          totalIndentQty: summary.totalIndentQty,
-          totalOrderedQty: summary.totalOrderedQty,
-          totalCancelledQty: summary.totalCancelledQty,
-          totalBalanceQty: summary.totalBalanceQty,
-          completedTimestamp: nextStatus === "Completed" ? indent.completedTimestamp : undefined,
-          completedBy: nextStatus === "Completed" ? indent.completedBy : undefined,
-          updatedBy: "System User",
-          updateTimestamp: timestamp,
-        };
-      });
-
-      await setIndentLines(nextIndentLines);
-      await setIndents(nextIndents);
-      await setPurchaseOrders(
-        purchaseOrders.map((row) =>
+      const timestamp = new Date().toISOString();
+      await setPurchaseOrders((prev) =>
+        prev.map((row) =>
           row.id === order.id
             ? {
                 ...row,
@@ -240,120 +143,207 @@ export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
     }
   };
 
+  const getTitle = (m: Mode) => {
+    switch (m) {
+      case "pending-approval": return "Pending PO Approvals";
+      case "approved": return "Approved Purchase Orders";
+      case "rejected": return "Rejected Purchase Orders";
+      default: return "Purchase Orders Master";
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 border-b border-black pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">{getTitle(mode)}</h2>
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input 
+            type="text"
+            placeholder="Search PO, supplier..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+          />
+        </div>
       </div>
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
-          <thead>
-            <tr className="bg-slate-100">
-              <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">PO No.</th>
-              <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">PO Date</th>
-              <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Supplier</th>
-              <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Indent</th>
-              <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Items</th>
-              <th className="border border-black px-4 py-3 text-right text-sm font-bold uppercase text-black">Qty</th>
-              <th className="border border-black px-4 py-3 text-right text-sm font-bold uppercase text-black">Amount</th>
+          <thead className="bg-slate-100">
+            <tr className="divide-x divide-black border-b border-black">
+              <th className="w-10 px-4 py-3"></th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">PO Info</th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">Supplier</th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">Items Summary</th>
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Qty</th>
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Amount</th>
               {mode === "rejected" ? (
-                <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Remarks</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">Rejection Reason</th>
               ) : null}
-              {(mode === "pending-approval" || mode === "all" || mode === "approved" || mode === "rejected") ? (
-                <th className="border border-black px-4 py-3 text-right text-sm font-bold uppercase text-black">Actions</th>
-              ) : null}
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Actions</th>
             </tr>
           </thead>
-          <tbody>
-            {visibleOrders.length === 0 ? (
+          <tbody className="divide-y divide-black">
+            {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={mode === "rejected" ? 9 : 8} className="border border-black px-6 py-10 text-center font-medium text-black">
+                <td colSpan={mode === "rejected" ? 8 : 7} className="px-4 py-12 text-center text-slate-500 italic">
                   No purchase orders found.
                 </td>
               </tr>
             ) : (
-              visibleOrders.map((order) => {
-                const lines = purchaseOrderLines.filter((line) => line.purchaseOrderId === order.id);
-                const indent = indentMap.get(order.indentId);
+              filteredOrders.map((order) => {
+                const isExpanded = expandedRows.has(order.id);
+                const lines = orderLines.filter((l) => l.purchaseOrderId === order.id);
+                const indent = indents.find((i) => i.id === order.indentId);
+                
                 return (
-                  <tr key={order.id} className="hover:bg-slate-50">
-                    <td className="border border-black px-4 py-4 text-sm font-bold text-black">{order.poNo}</td>
-                    <td className="border border-black px-4 py-4 text-sm text-black whitespace-nowrap">{formatDate(order.poDate)}</td>
-                    <td className="border border-black px-4 py-4 text-sm text-black">{supplierMap.get(order.supplierId) || "Unknown Supplier"}</td>
-                    <td className="border border-black px-4 py-4 text-sm text-black">
-                      <div className="font-medium">{indent?.requestedBy || "Unknown Indent"}</div>
-                      <div className="text-xs text-slate-500">{indent ? formatDate(indent.requiredDate) : ""}</div>
-                    </td>
-                    <td className="border border-black px-4 py-4 text-sm text-black min-w-[280px]">
-                      <ul className="space-y-1">
-                        {lines.map((line) => (
-                          <li key={line.id}>
-                            <span className="font-medium">{materialMap.get(line.materialId) || line.erpCode || "Unknown Material"}</span>
-                            <span className="ml-2">[{Number(line.qty).toLocaleString()} {line.uom || ""}]</span>
-                            {(line.targetDeliveryDate || indent?.requiredDate) ? (
-                              <span className="ml-2 text-xs text-slate-500 whitespace-nowrap">
-                                (Delivery: {formatDate(line.targetDeliveryDate || indent?.requiredDate || "")})
-                              </span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td className="border border-black px-4 py-4 text-sm text-black text-right">{Number(order.totalQty || 0).toLocaleString()}</td>
-                    <td className="border border-black px-4 py-4 text-sm text-black text-right">{Number(order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    {mode === "rejected" ? (
-                      <td className="border border-black px-4 py-4 text-sm text-black">{order.rejectedRemarks || ""}</td>
-                    ) : null}
-                    <td className="border border-black px-4 py-4">
-                      <div className="flex justify-end gap-2">
+                  <React.Fragment key={order.id}>
+                    <tr className={cn("hover:bg-slate-50 transition-colors divide-x divide-black", isExpanded && "bg-slate-50/50")}>
+                      <td className="px-4 py-4 text-center">
                         <button
-                          type="button"
-                          onClick={() =>
-                            void downloadPurchaseOrderPdf({
-                              order,
-                              indent,
-                              supplierName: supplierMap.get(order.supplierId) || "Unknown Supplier",
-                              lines,
-                              materialMap,
-                              setting: currentSetting,
-                            })
-                          }
-                          title="Download PDF"
-                          className="inline-flex h-9 w-9 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-50 transition"
+                          onClick={() => handleToggleRow(order.id)}
+                          className="p-1 hover:bg-slate-200 rounded transition"
                         >
-                          <Download size={16} />
+                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </button>
-                        {mode === "pending-approval" ? (
-                          <>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-bold text-sm text-black uppercase">{order.poNo || "DRAFT"}</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase">{formatDate(order.date)}</div>
+                        <div className={cn(
+                          "mt-1 inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase",
+                          order.status === "Approved" ? "border-emerald-700 bg-emerald-100 text-emerald-800" :
+                          order.status === "Rejected" ? "border-red-700 bg-red-100 text-red-800" :
+                          "border-amber-700 bg-amber-100 text-amber-800"
+                        )}>
+                          {order.status}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-black font-medium">{supplierMap.get(order.supplierId) || "Unknown"}</td>
+                      <td className="px-4 py-4">
+                        <ul className="list-none space-y-0.5">
+                          {lines.slice(0, 2).map((l, idx) => (
+                            <li key={idx} className="text-[10px] text-slate-700 font-bold uppercase truncate max-w-[200px]">
+                              • {materialMap.get(l.materialId)?.name || "Unknown"}
+                            </li>
+                          ))}
+                          {lines.length > 2 && (
+                            <li className="text-[9px] text-indigo-600 font-black uppercase">
+                              + {lines.length - 2} MORE ITEMS
+                            </li>
+                          )}
+                        </ul>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-black text-right font-bold">{Number(order.totalQty || 0).toLocaleString()}</td>
+                      <td className="px-4 py-4 text-sm text-black text-right font-mono font-bold">₹{Number(order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      {mode === "rejected" ? (
+                        <td className="px-4 py-4 text-sm text-red-700 italic">{order.rejectedRemarks || ""}</td>
+                      ) : null}
+                      <td className="px-4 py-4">
+                        <div className="flex justify-end gap-2">
+                          {mode === "pending-approval" ? (
+                            <>
+                              {rejectingId === order.id ? (
+                                <div className="flex flex-col gap-2 min-w-[200px]">
+                                  <textarea
+                                    value={remarks}
+                                    onChange={(e) => setRemarks(e.target.value)}
+                                    placeholder="Enter reason for rejection..."
+                                    className="w-full rounded border-2 border-red-600 p-2 text-xs focus:outline-none"
+                                    rows={2}
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => void handleReject(order)}
+                                      disabled={submittingId === order.id}
+                                      className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded text-[10px] font-black uppercase"
+                                    >
+                                      Confirm Reject
+                                    </button>
+                                    <button
+                                      onClick={() => setRejectingId(null)}
+                                      className="bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-[10px] font-black uppercase"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => void handleApprove(order)}
+                                    disabled={submittingId === order.id}
+                                    className={cn(
+                                      "flex items-center gap-1.5 px-3 py-1.5 rounded border-2 font-black text-[10px] uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
+                                      confirmId === order.id ? "bg-emerald-600 text-white border-black animate-pulse" : "bg-emerald-50 text-emerald-700 border-emerald-700 hover:bg-emerald-100"
+                                    )}
+                                  >
+                                    {submittingId === order.id ? <Spinner size={12} /> : (
+                                      <>
+                                        <Check size={14} />
+                                        {confirmId === order.id ? "Confirm Approve?" : "Approve"}
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => void handleReject(order)}
+                                    disabled={submittingId === order.id}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-red-700 bg-red-50 text-red-700 font-black text-[10px] uppercase hover:bg-red-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                  >
+                                    <X size={14} /> Reject
+                                  </button>
+                                </>
+                              )}
+                            </>
+                          ) : (
                             <button
-                              type="button"
-                              onClick={() => handleApprove(order)}
-                              disabled={submittingId === order.id}
-                              title={confirmId === order.id ? "Confirm Approve" : "Approve"}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded border border-sky-800 bg-sky-100 text-sky-800 hover:bg-sky-200 transition disabled:opacity-50"
+                              onClick={() => void handleToggleRow(order.id)}
+                              className="text-indigo-600 hover:text-indigo-900 font-bold uppercase flex items-center gap-1 text-[11px]"
                             >
-                              {submittingId === order.id ? <Spinner size={16} /> : <ThumbsUp size={16} />}
+                              {isExpanded ? "Hide" : "Details"}{" "}
+                              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleReject(order)}
-                              disabled={submittingId === order.id}
-                              title="Reject"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded border border-red-700 bg-red-100 text-red-800 hover:bg-red-200 transition disabled:opacity-50"
-                            >
-                              <X size={16} />
-                            </button>
-                          </>
-                        ) : null}
-                        {mode === "approved" ? (
-                          <span className="inline-flex h-9 w-9 items-center justify-center rounded border border-emerald-700 bg-emerald-100 text-emerald-800">
-                            <CheckCircle size={16} />
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-slate-50/50">
+                        <td colSpan={mode === "rejected" ? 8 : 7} className="px-12 py-4">
+                          <div className="border-2 border-black rounded overflow-hidden shadow-sm">
+                            <div className="bg-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-wider flex justify-between border-b border-black">
+                              <span>PO Items Details</span>
+                              {indent && <span>Indent Ref: {indent.indentNo}</span>}
+                            </div>
+                            <table className="min-w-full divide-y divide-black">
+                              <thead className="bg-slate-100">
+                                <tr className="divide-x divide-black text-[9px] font-black uppercase text-slate-500">
+                                  <th className="px-3 py-2 text-left">Item Name</th>
+                                  <th className="px-3 py-2 text-right">Qty</th>
+                                  <th className="px-3 py-2 text-center">UOM</th>
+                                  <th className="px-3 py-2 text-right">Rate</th>
+                                  <th className="px-3 py-2 text-right">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-black">
+                                {lines.map((l, lidx) => (
+                                  <tr key={lidx} className="divide-x divide-black text-[10px] font-bold">
+                                    <td className="px-3 py-2 text-black uppercase">{materialMap.get(l.materialId)?.name || "Unknown"}</td>
+                                    <td className="px-3 py-2 text-right">{l.qty.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-center">{l.uom}</td>
+                                    <td className="px-3 py-2 text-right">₹{l.rate.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right">₹{(l.qty * l.rate).toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })
             )}
@@ -362,20 +352,4 @@ export function PurchaseOrderList({ mode }: { mode: PurchaseOrderMode }) {
       </div>
     </div>
   );
-}
-
-export function PurchaseOrderAll() {
-  return <PurchaseOrderList mode="all" />;
-}
-
-export function PurchaseOrderPendingApproval() {
-  return <PurchaseOrderList mode="pending-approval" />;
-}
-
-export function PurchaseOrderApproved() {
-  return <PurchaseOrderList mode="approved" />;
-}
-
-export function PurchaseOrderRejected() {
-  return <PurchaseOrderList mode="rejected" />;
 }

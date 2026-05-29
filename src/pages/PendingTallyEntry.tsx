@@ -5,7 +5,6 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, ArrowLeft } from "lucide-react";
-import { ExcelExport } from "../components/ExcelExport";
 import { useNavigate } from "react-router-dom";
 
 export function PendingTallyEntry() {
@@ -103,10 +102,6 @@ export function PendingTallyEntry() {
     <div className="flex flex-col min-h-screen bg-slate-50 pb-20">
       <div className="p-4 bg-white border-b border-black flex justify-between items-center">
         <h1 className="text-3xl font-black text-fuchsia-700 uppercase tracking-tighter">Pending Tally Posting</h1>
-        <ExcelExport 
-          data={pendingList} 
-          fileName="Pending_Tally_MaterialIn" 
-        />
       </div>
 
       <div className="p-4">

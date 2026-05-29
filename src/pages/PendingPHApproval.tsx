@@ -5,7 +5,6 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle } from "lucide-react";
-import { ExcelExport } from "../components/ExcelExport";
 
 export function PendingPHApproval() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
@@ -108,10 +107,6 @@ export function PendingPHApproval() {
     <div className="space-y-6">
       <div className={cn("flex justify-between items-center border-b border-black pb-4 transition-opacity", (isBulkApproving || submittingId) && "opacity-50 pointer-events-none")}>
         <h2 className="text-xl font-bold text-black uppercase">Pending PH Approval</h2>
-        <ExcelExport 
-          data={materialIn.filter(m => isPendingPH(m.status))} 
-          fileName="Pending_PH_Approvals" 
-        />
       </div>
       <div className={cn("bg-white rounded shadow-sm overflow-hidden border border-black transition-opacity", (isBulkApproving || submittingId) && "opacity-50 pointer-events-none")}>
         {selectedIds.size > 0 && (
