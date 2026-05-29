@@ -144,6 +144,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
       { name: "MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
+      { name: "Pending Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
       { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
     ],
   },
@@ -345,6 +346,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
 
   const counts: Record<string, number> = {
     "/material-receipt/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
+    "/material-receipt/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
     "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
     "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
