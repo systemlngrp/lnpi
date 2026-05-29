@@ -544,7 +544,7 @@ export function MaterialInForm() {
                 <label className="text-sm font-bold text-black">{isFgType ? "Item Receipt" : "Invoice Qty"}</label>
                 <input
                   type="number"
-                  value={(isFgType ? currentReceiptQty : currentQty) === 0 ? "" : (isFgType ? currentReceiptQty : currentQty)}
+                  value={(isFgType ? currentReceiptQty : currentQty) || ""}
                   onChange={(e) => {
                     const val = e.target.value === "" ? "" : parseFloat(e.target.value);
                     if (isFgType) setCurrentReceiptQty(val);
@@ -569,7 +569,7 @@ export function MaterialInForm() {
               <label className="text-sm font-bold text-black">Invoice Rate</label>
               <input
                 type="number"
-                value={currentInvoiceRate === 0 ? "" : currentInvoiceRate}
+                value={currentInvoiceRate || ""}
                 onChange={(e) => setCurrentInvoiceRate(e.target.value === "" ? "" : parseFloat(e.target.value))}
                 className="border-2 border-black rounded p-[6px] text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-white"
               />

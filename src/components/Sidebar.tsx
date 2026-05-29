@@ -103,7 +103,6 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-slate-800",
     items: [
       { name: "Material In Form", href: "/material-in/form", icon: ClipboardList },
-      { name: "Material In Master", href: "/material-in/master", icon: Database },
       { name: "Item Master View", href: "/material-in/item-master", icon: BarChart3 },
     ],
   },
@@ -511,11 +510,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
             </div>
           </div>
         ))}
-      </nav>
-    </div>
-  );
-}
- ))}
       </nav>
     </div>
   );
