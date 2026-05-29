@@ -2235,12 +2235,12 @@ const createHandlers = (tableName: string) => {
             SELECT
               i.*,
               CAST(COALESCE(i.opening, 0) AS DECIMAL(15,2)) AS opening,
-              CAST(CASE WHEN i.itemType = 'FG' THEN COALESCE(r.receipt, 0) ELSE 0 END AS DECIMAL(15,2)) AS receipt,
+              CAST(COALESCE(r.receipt, 0) AS DECIMAL(15,2)) AS receipt,
               CAST(COALESCE(p.production, 0) AS DECIMAL(15,2)) AS production,
               CAST(COALESCE(inv.invoiced, 0) AS DECIMAL(15,2)) AS invoiced,
               CAST(
                 COALESCE(i.opening, 0)
-                + (CASE WHEN i.itemType = 'FG' THEN COALESCE(r.receipt, 0) ELSE 0 END)
+                + COALESCE(r.receipt, 0)
                 + COALESCE(p.production, 0)
                 - COALESCE(inv.invoiced, 0)
               AS DECIMAL(15,2)) AS balance
@@ -2248,15 +2248,17 @@ const createHandlers = (tableName: string) => {
             LEFT JOIN (
               SELECT
                 jt.itemId,
-                SUM(COALESCE(jt.qty, 0)) AS receipt
+                SUM(COALESCE(jt.invoiceQty, jt.qty, 0)) AS receipt
               FROM \`material_in\` mi
               JOIN JSON_TABLE(
                 mi.lines,
                 '$[*]' COLUMNS (
                   itemId VARCHAR(36) PATH '$.itemId',
-                  qty DECIMAL(15,2) PATH '$.qty'
+                  qty DECIMAL(15,2) PATH '$.qty',
+                  invoiceQty DECIMAL(15,2) PATH '$.invoiceQty'
                 )
               ) jt
+              WHERE mi.status = 'Completed' AND mi.mrrType IN ('Rejection In', 'FG Purchase')
               GROUP BY jt.itemId
             ) r ON r.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
             LEFT JOIN (

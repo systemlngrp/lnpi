@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, ExternalLink, FileUp, XCircle } from "lucide-react";
-import { ColorMaster, Company, Item, ItemGroup, Production, Setting } from "../types";
+import { ColorMaster, Company, Item, ItemGroup, Production, Setting, MaterialIn } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { TableControls } from "../components/TableControls";
@@ -14,6 +14,7 @@ export function Items() {
   const [companies, setCompanies] = useData<Company>("companies", []);
   const [settings] = useData<Setting>("settings", []);
   const [productions] = useData<Production>("productions", []);
+  const [materialIn] = useData<MaterialIn>("material-in", []);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -294,6 +295,14 @@ export function Items() {
         .map((production) => production.itemId)
     );
   }, [productions]);
+
+  const calculateItemReceipt = (itemId: string): number => {
+    return materialIn
+      .filter((mrr) => (mrr.mrrType === "Rejection In" || mrr.mrrType === "FG Purchase") && mrr.status === "Completed")
+      .flatMap((mrr) => mrr.lines || [])
+      .filter((line) => line.itemId === itemId)
+      .reduce((sum, line) => sum + Number(line.invoiceQty || line.qty || 0), 0);
+  };
 
   const handleDelete = (id: string) => {
     if (producedItemIds.has(id)) {
@@ -970,7 +979,7 @@ export function Items() {
                             </div>
                             <div>
                                 <div className="text-xs font-black text-slate-500 uppercase">Receipt</div>
-                                <div className="text-sm">{Number(item.receipt || 0).toLocaleString()}</div>
+                                <div className="text-sm">{calculateItemReceipt(item.id).toLocaleString()}</div>
                             </div>
                             <div>
                                 <div className="text-xs font-black text-slate-500 uppercase">Production</div>
@@ -1121,7 +1130,7 @@ export function Items() {
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.spec ?? ""}</td>
                       {/* Remaining fields */}
                       <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.opening || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.receipt || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black text-right">{calculateItemReceipt(item.id).toLocaleString()}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.production || 0).toLocaleString()}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black text-right">{Number(item.invoiced || 0).toLocaleString()}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black text-right font-medium">{Number(item.balance || 0).toLocaleString()}</td>
