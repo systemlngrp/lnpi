@@ -149,6 +149,60 @@ export async function downloadLoadingSlipPdf({
     },
   });
 
+  currentY = (doc as any).lastAutoTable.finalY + 10;
+
+  if (slip.packingDetails && slip.packingDetails.length > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("PACKING DETAILS", 14, currentY);
+    currentY += 6;
+
+    const packingRows = slip.packingDetails.map((pd, idx) => [
+      idx + 1,
+      pd.bundles.toLocaleString(),
+      pd.packSize.toLocaleString(),
+      pd.quantity.toLocaleString()
+    ]);
+
+    if (slip.extraItemsQty) {
+      packingRows.push(["", "Extra Items (Loose)", "", slip.extraItemsQty.toLocaleString()]);
+    }
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [["SL", "Bundles", "Pack Size", "Quantity"]],
+      body: packingRows,
+      theme: "grid",
+      styles: { fontSize: 8.5, cellPadding: 2, textColor: 0 },
+      headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 10 },
+        1: { halign: "right" },
+        2: { halign: "right" },
+        3: { halign: "right", fontStyle: "bold" },
+      },
+    });
+    
+    currentY = (doc as any).lastAutoTable.finalY + 15;
+  }
+
+  // Highlight Balance in bottom left
+  const totalLoaded = slip.lines.reduce((sum, l) => sum + Number(l.loadedQty || 0), 0);
+  const totalPlanned = slip.lines.reduce((sum, l) => {
+    const plan = plans.find(p => p.id === l.dispatchPlanId);
+    return sum + Number(plan?.plannedQty || 0);
+  }, 0);
+  const remainingBalance = Math.max(0, totalPlanned - totalLoaded);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text(`BALANCE: ${remainingBalance.toLocaleString()}`, 14, currentY);
+  
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139); // slate-500
+  doc.text("(Total Planned - Total Loaded in this slip)", 14, currentY + 5);
+
   const safeSlipNo = String(slip.slipNo || "LoadingSlip").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
   doc.save(`LoadingSlip_${safeSlipNo}_${String(slip.date || "").slice(0, 10)}.pdf`);
 }

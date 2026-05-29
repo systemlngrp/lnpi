@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { OrderSchedule, Order, Company, Item, Truck, DispatchPlan, LoadingSlip, Production } from "../types";
+import { OrderSchedule, Order, Company, Item, DispatchPlan, LoadingSlip, Production } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { ArrowUpDown, Save } from "lucide-react";
@@ -12,14 +12,12 @@ export function PendingDispatchPlanning() {
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [items] = useData<Item>("items", []);
-  const [trucks] = useData<Truck>("trucks", []);
   const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [productions] = useData<Production>("productions", []);
 
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [rowTrucks, setRowTrucks] = useState<Record<string, string>>({});
   const [rowPlannedQty, setRowPlannedQty] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("scheduledDate");
@@ -91,6 +89,17 @@ export function PendingDispatchPlanning() {
     return map;
   }, [productions]);
 
+  const nonClosedProductionQtyByItemId = useMemo(() => {
+    const map = new Map<string, number>();
+    productions.forEach((p) => {
+      if (!p.itemId) return;
+      if (p.status === "Cancelled" || p.cancelTimestamp) return;
+      if (p.closeDate) return; // Only count NON-closed rows
+      map.set(p.itemId, (map.get(p.itemId) || 0) + Number(p.prodFromFFG || 0));
+    });
+    return map;
+  }, [productions]);
+
   const reservedDispatchPlanQtyByItemId = useMemo(() => {
     const map = new Map<string, number>();
     dispatchPlans.forEach((plan) => {
@@ -114,7 +123,8 @@ export function PendingDispatchPlanning() {
       const opening = Number((item as any).opening || 0);
       const receipt = Number((item as any).receipt || 0);
       const production = Number((item as any).production || 0);
-      const baseStock = opening + receipt + production;
+      const nonClosedProd = Number(nonClosedProductionQtyByItemId.get(item.id) || 0);
+      const baseStock = opening + receipt + production - nonClosedProd;
 
       const loaded = Number(loadedQtyByItemId.get(item.id) || 0);
       const dispatchBalance = baseStock - loaded;
@@ -124,15 +134,13 @@ export function PendingDispatchPlanning() {
       map.set(item.id, Math.max(0, dispatchBalance + pendingProduction - reserved));
     });
     return map;
-  }, [items, loadedQtyByItemId, pendingProductionPlanQtyByItemId, reservedDispatchPlanQtyByItemId]);
+  }, [items, loadedQtyByItemId, pendingProductionPlanQtyByItemId, reservedDispatchPlanQtyByItemId, nonClosedProductionQtyByItemId]);
 
-  // Filter schedules that are pending and within time range
   const basePendingSchedules = useMemo(() => {
     return schedules.filter(s => {
       const scheduledDate = new Date(s.scheduledDate);
       if (isNaN(scheduledDate.getTime())) return false;
       
-      // Calculate already planned quantity from dispatch_plans table
       const alreadyPlanned = dispatchPlans
         .filter(plan => plan.scheduleId === s.id)
         .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
@@ -142,7 +150,6 @@ export function PendingDispatchPlanning() {
     }).sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
   }, [schedules, tomorrow, dispatchPlans]);
 
-  // Companies that actually have pending schedules
   const availableCompanies = useMemo(() => {
     const compIds = new Set(basePendingSchedules.map(s => {
       const order = orders.find(o => o.id === s.orderId);
@@ -152,7 +159,6 @@ export function PendingDispatchPlanning() {
     return companies.filter(c => compIds.has(c.id)).sort((a, b) => a.name.localeCompare(b.name));
   }, [basePendingSchedules, orders, companies]);
 
-  // Final filtered list based on company selection
   const filteredSchedules = useMemo(() => {
     const rows = !selectedCompanyId ? basePendingSchedules : basePendingSchedules.filter(s => {
       const order = orders.find(o => o.id === s.orderId);
@@ -239,11 +245,6 @@ export function PendingDispatchPlanning() {
     setSelectedIds(newSelected);
   };
 
-  const sortedTrucks = useMemo(() => {
-    return [...trucks].sort((a, b) => a.truckNo.localeCompare(b.truckNo));
-  }, [trucks]);
-
-  // Calculate total planned quantity for current session
   const totalSessionPlannedQty = useMemo(() => {
     return Array.from(selectedIds).reduce((sum, id) => {
       const schedule = schedules.find(s => s.id === id);
@@ -285,7 +286,8 @@ export function PendingDispatchPlanning() {
         const opening = Number((item as any)?.opening || 0);
         const receipt = Number((item as any)?.receipt || 0);
         const production = Number((item as any)?.production || 0);
-        const baseStock = opening + receipt + production;
+        const nonClosedProd = Number(nonClosedProductionQtyByItemId.get(itemId) || 0);
+        const baseStock = opening + receipt + production - nonClosedProd;
         const loaded = Number(loadedQtyByItemId.get(itemId) || 0);
         const dispatchBalance = baseStock - loaded;
         const pendingProduction = Number(pendingProductionPlanQtyByItemId.get(itemId) || 0);
@@ -298,6 +300,7 @@ export function PendingDispatchPlanning() {
           opening,
           receipt,
           production,
+          nonClosedProd,
           baseStock,
           loaded,
           dispatchBalance,
@@ -316,6 +319,7 @@ export function PendingDispatchPlanning() {
     pendingProductionPlanQtyByItemId,
     plannedNowByItemId,
     reservedDispatchPlanQtyByItemId,
+    nonClosedProductionQtyByItemId
   ]);
 
   const handleSubmit = () => {
@@ -323,32 +327,6 @@ export function PendingDispatchPlanning() {
       alert("Please select at least one order to plan.");
       return;
     }
-
-    const missingTruck = Array.from(selectedIds).some(id => !rowTrucks[id]);
-    if (missingTruck) {
-      alert("Please select a Truck for all selected orders.");
-      return;
-    }
-
-    // Cross-row validation: for each item, total planned in this submission must not exceed availability.
-    const plannedNowByItemId = new Map<string, number>();
-    const scheduleBalanceById = new Map<string, number>();
-
-    Array.from(selectedIds).forEach((id) => {
-      const schedule = schedules.find((s) => s.id === id);
-      if (!schedule) return;
-      const alreadyPlanned = dispatchPlans
-        .filter((plan) => plan.scheduleId === id)
-        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
-      const scheduleBalance = Math.max(0, Number(schedule.qty || 0) - alreadyPlanned);
-      scheduleBalanceById.set(id, scheduleBalance);
-
-      // derived from schedule -> order -> item
-      const itemId = itemIdByScheduleId.get(id) || "";
-      if (!itemId) return;
-      const plannedQty = rowPlannedQty[id] !== undefined ? rowPlannedQty[id] : scheduleBalance;
-      plannedNowByItemId.set(itemId, (plannedNowByItemId.get(itemId) || 0) + Number(plannedQty || 0));
-    });
 
     const violations: string[] = [];
     plannedNowByItemId.forEach((plannedNow, itemId) => {
@@ -384,7 +362,7 @@ export function PendingDispatchPlanning() {
           planNo: `DP-${String(nextPlanNo++).padStart(5, '0')}`,
           scheduleId: id,
           orderId: schedule.orderId,
-          truckId: rowTrucks[id],
+          truckId: "",
           plannedQty: rowPlannedQty[id] !== undefined ? rowPlannedQty[id] : balance,
           status: "Planned",
           date: timestamp,
@@ -395,9 +373,7 @@ export function PendingDispatchPlanning() {
 
       setDispatchPlans([...dispatchPlans, ...newPlans]);
       
-      // Cleanup
       setSelectedIds(new Set());
-      setRowTrucks({});
       setRowPlannedQty({});
       setIsSubmitting(false);
       alert("Dispatch plans submitted successfully!");
@@ -426,7 +402,7 @@ export function PendingDispatchPlanning() {
               value={selectedCompanyId}
               onChange={(e) => {
                 setSelectedCompanyId(e.target.value);
-                setSelectedIds(new Set()); // Reset selection when filter changes
+                setSelectedIds(new Set());
               }}
               className="border-2 border-black rounded p-2 text-sm focus:outline-none focus:border-indigo-600 font-bold min-w-[200px]"
             >
@@ -455,7 +431,7 @@ export function PendingDispatchPlanning() {
           <div className="px-4 py-3 border-b border-black bg-slate-50">
             <div className="text-sm font-black uppercase text-black">Dispatch Planning Calculation</div>
             <div className="text-[11px] font-bold text-slate-600">
-              Available = (Opening + Receipt + Production − Loaded) + Pending Production (FG not filled) − Pending Loading (not loaded)
+              Available = (FG Stock + Receipt + Production - Non-Closed Production − Loaded) + Pending Production (FG not filled) − Pending Loading (not loaded)
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -463,9 +439,10 @@ export function PendingDispatchPlanning() {
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
                   <th className="px-3 py-2 text-left text-[11px] font-black uppercase border border-black">Item</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Opening</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">FG Stock</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Receipt</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Production</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Non-Closed Prod</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Loaded</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">FG Balance</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Production</th>
@@ -482,6 +459,7 @@ export function PendingDispatchPlanning() {
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.opening.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.receipt.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.production.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-rose-600 border border-black">{row.nonClosedProd.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.loaded.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.dispatchBalance.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-[11px] text-black border border-black">{row.pendingProduction.toLocaleString()}</td>
@@ -521,17 +499,14 @@ export function PendingDispatchPlanning() {
                 <th className="px-4 py-3 text-right text-xs text-black uppercase border border-black">{renderSortHeader("Pending Qty", "pendingQty", "right")}</th>
                 
                 {selectedCompanyId && (
-                  <>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black min-w-[150px]">Truck No</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black w-32">Planned Qty</th>
-                  </>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black w-32">Planned Qty</th>
                 )}
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {filteredSchedules.length === 0 ? (
                 <tr>
-                  <td colSpan={selectedCompanyId ? 8 : 5} className="px-6 py-8 text-center text-black font-medium">No pending dispatch plans found.</td>
+                  <td colSpan={selectedCompanyId ? 7 : 5} className="px-6 py-8 text-center text-black font-medium">No pending dispatch plans found.</td>
                 </tr>
               ) : (
                 filteredSchedules.map((s) => {
@@ -542,7 +517,6 @@ export function PendingDispatchPlanning() {
                   const schedDate = new Date(s.scheduledDate);
                   const isOverdue = schedDate < today;
                   
-                  // Calculate balance correctly: Scheduled - Already Planned
                   const alreadyPlanned = dispatchPlans
                     .filter(plan => plan.scheduleId === s.id)
                     .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
@@ -574,28 +548,14 @@ export function PendingDispatchPlanning() {
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">{balance}</td>
                       
                       {selectedCompanyId && (
-                        <>
-                          <td className="px-2 py-2 border border-black">
-                            <select
-                              value={rowTrucks[s.id] || ""}
-                              onChange={(e) => setRowTrucks({...rowTrucks, [s.id]: e.target.value})}
-                              className="w-full border border-slate-300 rounded p-1 text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
-                            >
-                              <option value="">Select Truck</option>
-                              {sortedTrucks.map(t => (
-                                <option key={t.id} value={t.id}>{t.truckNo} ({t.driverName})</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-2 py-2 border border-black">
-                            <input
-                              type="number"
-                              value={rowPlannedQty[s.id] !== undefined ? rowPlannedQty[s.id] : balance}
-                              onChange={(e) => setRowPlannedQty({...rowPlannedQty, [s.id]: Number(e.target.value)})}
-                              className="w-full border border-slate-300 rounded p-1 text-right text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
-                            />
-                          </td>
-                        </>
+                        <td className="px-2 py-2 border border-black">
+                          <input
+                            type="number"
+                            value={rowPlannedQty[s.id] !== undefined ? rowPlannedQty[s.id] : balance}
+                            onChange={(e) => setRowPlannedQty({...rowPlannedQty, [s.id]: Number(e.target.value)})}
+                            className="w-full border border-slate-300 rounded p-1 text-right text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
+                          />
+                        </td>
                       )}
                     </tr>
                   );
@@ -605,7 +565,7 @@ export function PendingDispatchPlanning() {
             {selectedIds.size > 0 && (
               <tfoot className="bg-slate-100 border-t-2 border-black">
                 <tr className="divide-x divide-black font-black">
-                  <td colSpan={selectedCompanyId ? 7 : 5} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
+                  <td colSpan={selectedCompanyId ? 6 : 5} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
                   <td className="px-4 py-3 text-right text-sm text-indigo-700 bg-indigo-50 border border-black">
                     {totalSessionPlannedQty.toLocaleString()}
                   </td>

@@ -180,7 +180,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
       { name: "Upcoming Scheduled Orders", href: "/production/upcoming", icon: Activity, countKey: "/orders/upcoming" },
       { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
-      { name: "Pending FFG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
+      { name: "Pending FG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
       { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
       { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
       { name: "Machine Pending Proc.", href: "/production/pending-machine-processing", icon: Hammer },

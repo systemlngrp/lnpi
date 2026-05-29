@@ -40,8 +40,8 @@ const CONFIG: Record<QueueMode, { title: string; empty: string }> = {
     empty: "No pending consumption rows.",
   },
   ffg: {
-    title: "Production: Pending FFG",
-    empty: "No pending FFG rows.",
+    title: "Production: Pending FG",
+    empty: "No pending FG rows.",
   },
 };
 
@@ -349,10 +349,10 @@ export function ProductionStageQueue({
                     Actual Paper Used <SortIcon column="actualPaperUsed" />
                   </button>
                 </th>
-                {!hideProdFfgColumn ? (
+                                {!hideProdFfgColumn ? (
                   <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
                     <button type="button" onClick={() => toggleSort("prodFfg")} className="inline-flex items-center gap-1">
-                      Prod (FFG) <SortIcon column="prodFfg" />
+                      Prod (FG) <SortIcon column="prodFfg" />
                     </button>
                   </th>
                 ) : null}
@@ -437,7 +437,7 @@ export function ProductionStageQueue({
                             min={0}
                             value={ffgValues[production.id] || ""}
                             onChange={(e) => setFfgValues((prev) => ({ ...prev, [production.id]: e.target.value }))}
-                            placeholder="Enter FFG"
+                            placeholder="Enter FG"
                             className="w-28 border-2 border-black rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-600"
                           />
                           <button

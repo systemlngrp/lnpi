@@ -588,7 +588,7 @@ export interface LoadingSlipLine {
   allocations?: LoadingSlipAllocation[];
 }
 
-export type LoadingSlipAllocation =
+export interface LoadingSlipAllocation =
   | {
       sourceType: "job";
       jobId: string;
@@ -597,9 +597,15 @@ export type LoadingSlipAllocation =
     }
   | {
       sourceType: "opening_stock";
-      sourceRef: "Opening Stock";
+      sourceRef: "FG Stock";
       qty: number;
     };
+
+export interface PackingDetail {
+  bundles: number;
+  packSize: number;
+  quantity: number;
+}
 
 export interface LoadingSlip {
   id: string;
@@ -612,6 +618,8 @@ export interface LoadingSlip {
   cancelledAt?: string;
   cancelledBy?: string;
   invoiceId?: string;
+  packingDetails?: PackingDetail[];
+  extraItemsQty?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }
