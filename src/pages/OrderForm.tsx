@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { Order, Company, Item } from "../types";
