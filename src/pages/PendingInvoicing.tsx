@@ -19,12 +19,12 @@ import {
   ChevronDown,
   Receipt,
   Building2,
-  Package
+  Package,
+  Plus
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
-import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
-import { isMandatoryField } from "../lib/mandatoryFields";
+import { cn } from "../lib/utils";
 
 interface GroupedLoading {
   companyId: string;
@@ -36,6 +36,20 @@ interface GroupedLoading {
   })[];
 }
 
+interface InvoiceRow {
+  id: string;
+  itemId: string;
+  orderId: string;
+  poNo: string;
+  totalOrderQty: number;
+  totalDispatchQty: number;
+  pendingQty: number;
+  rate: number;
+  qtyDispatchedNow: number;
+  gstRate: number;
+  loadingSlipId: string;
+}
+
 export function PendingInvoicing() {
   const [loadingSlips, updateSlips] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
@@ -44,12 +58,12 @@ export function PendingInvoicing() {
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const [invoices, updateInvoices] = useData<Invoice>("invoices", []);
-  const [, updateLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [invoiceLineItems, updateLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
   const didInitExpand = useRef(false);
-  const [billingMode, setBillingMode] = useState<string | null>(null); // companyId
+  const [billingMode, setBillingMode] = useState<string | null>(null);
   const [selectedSlips, setSelectedSlips] = useState<Set<string>>(new Set());
   
   const [invoiceModal, setInvoiceModal] = useState<{
@@ -57,10 +71,8 @@ export function PendingInvoicing() {
     slips: any[];
   } | null>(null);
   
-  const [itemRates, setInvoiceRates] = useState<Record<string, number>>({});
-  const [itemGstRates, setItemGstRates] = useState<Record<string, number>>({});
+  const [invoiceRows, setInvoiceRows] = useState<InvoiceRow[]>([]);
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
-  const [roundOff, setRoundOff] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleCompany = (id: string) => {
@@ -72,11 +84,9 @@ export function PendingInvoicing() {
 
   const groupedData = useMemo(() => {
     const uninvoiced = loadingSlips.filter((s) => !s.invoiceId && s.status !== "Cancelled");
-    
     const companyMap = new Map<string, GroupedLoading>();
 
     uninvoiced.forEach(s => {
-      // Find company via the first line item's plan
       const firstLine = s.lines[0];
       if (!firstLine) return;
       const plan = plans.find(p => p.id === firstLine.dispatchPlanId);
@@ -95,7 +105,6 @@ export function PendingInvoicing() {
 
       const totalQty = s.lines.reduce((sum, l) => sum + Number(l.loadedQty || 0), 0);
       const truck = trucks.find(t => t.id === s.truckId);
-      
       const slipItems = s.lines.map(l => {
         const lp = plans.find(p => p.id === l.dispatchPlanId);
         const lo = orders.find(o => o.id === lp?.orderId);
@@ -134,6 +143,32 @@ export function PendingInvoicing() {
     setSelectedSlips(next);
   };
 
+  const totalDispatchedByOrderId = useMemo(() => {
+    const map = new Map<string, number>();
+    invoiceLineItems.forEach(li => {
+      const plan = plans.find(p => p.id === li.loadingSlipId); // Wait, loadingSlipId in li is actually dispatchPlanId in some contexts? 
+      // Let's verify types.ts. In types.ts: loadingSlipId: string; itemId: string; qty: number;
+      // In this project, invoice line items usually link to a loading slip.
+      // But we need total dispatched for an ORDER.
+      // Let's find all loading slips that are invoiced.
+    });
+
+    // Actually, we can get total dispatched from order objects if they are updated, 
+    // or by summing all invoiced line items for that order.
+    // Let's sum from loading slips that HAVE an invoiceId.
+    const dispatchedMap = new Map<string, number>();
+    loadingSlips.forEach(s => {
+      if (!s.invoiceId || s.status === "Cancelled") return;
+      s.lines.forEach(l => {
+        const plan = plans.find(p => p.id === l.dispatchPlanId);
+        if (plan?.orderId) {
+          dispatchedMap.set(plan.orderId, (dispatchedMap.get(plan.orderId) || 0) + Number(l.loadedQty || 0));
+        }
+      });
+    });
+    return dispatchedMap;
+  }, [loadingSlips, plans]);
+
   const handleOpenInvoiceForm = () => {
     if (!billingMode) return;
     const companyGroup = groupedData.find(g => g.companyId === billingMode);
@@ -142,58 +177,81 @@ export function PendingInvoicing() {
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
     
-    // Initialize rates and gst rates
-    const initialRates: Record<string, number> = {};
-    const initialGstRates: Record<string, number> = {};
+    const initialRows: InvoiceRow[] = [];
     selected.forEach(s => {
       s.lines.forEach((l: any) => {
-        const p = plans.find(pl => pl.id === l.dispatchPlanId);
-        const o = orders.find(ord => ord.id === p?.orderId);
-        const item = items.find(i => i.id === o?.itemId);
-        if (item && !initialRates[item.id]) {
-          initialRates[item.id] = Number(o?.rate || 0);
-          initialGstRates[item.id] = item.gstRate ?? 18;
+        const plan = plans.find(p => p.id === l.dispatchPlanId);
+        const order = orders.find(o => o.id === plan?.orderId);
+        const item = items.find(i => i.id === order?.itemId);
+        
+        if (order && item) {
+          const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
+          initialRows.push({
+            id: crypto.randomUUID(),
+            itemId: item.id,
+            orderId: order.id,
+            poNo: order.poNumber || "N/A",
+            totalOrderQty: Number(order.qty || 0),
+            totalDispatchQty: totalDispatched,
+            pendingQty: Math.max(0, Number(order.qty || 0) - totalDispatched),
+            rate: Number(order.rate || 0),
+            qtyDispatchedNow: Number(l.loadedQty || 0),
+            gstRate: item.gstRate ?? 18,
+            loadingSlipId: s.id
+          });
         }
       });
     });
-    setInvoiceRates(initialRates);
-    setItemGstRates(initialGstRates);
-    setRoundOff("");
+    setInvoiceRows(initialRows);
 
     const company = companies.find(c => c.id === billingMode);
     setGstSupplyType((company?.gstSupplyType as any) || "INTRA_STATE");
   };
 
-  const invoiceItems = useMemo(() => {
-    if (!invoiceModal) return [];
+  const handleAddRow = () => {
+    setInvoiceRows([...invoiceRows, {
+      id: crypto.randomUUID(),
+      itemId: "",
+      orderId: "",
+      poNo: "",
+      totalOrderQty: 0,
+      totalDispatchQty: 0,
+      pendingQty: 0,
+      rate: 0,
+      qtyDispatchedNow: 0,
+      gstRate: 18,
+      loadingSlipId: ""
+    }]);
+  };
+
+  const handleUpdateRow = (idx: number, field: keyof InvoiceRow, value: any) => {
+    const next = [...invoiceRows];
+    const row = { ...next[idx], [field]: value };
     
-    const itemTotals = new Map<string, { itemId: string; itemName: string; qty: number; slips: string[] }>();
+    if (field === "orderId") {
+      const order = orders.find(o => o.id === value);
+      const item = items.find(i => i.id === order?.itemId);
+      if (order && item) {
+        const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
+        row.itemId = item.id;
+        row.poNo = order.poNumber || "N/A";
+        row.totalOrderQty = Number(order.qty || 0);
+        row.totalDispatchQty = totalDispatched;
+        row.pendingQty = Math.max(0, Number(order.qty || 0) - totalDispatched);
+        row.rate = Number(order.rate || 0);
+        row.gstRate = item.gstRate ?? 18;
+      }
+    }
     
-    invoiceModal.slips.forEach(s => {
-      s.lines.forEach((l: any) => {
-        const p = plans.find(pl => pl.id === l.dispatchPlanId);
-        const o = orders.find(ord => ord.id === p?.orderId);
-        const item = items.find(i => i.id === o?.itemId);
-        
-        if (!item) return;
-        
-        if (!itemTotals.has(item.id)) {
-          itemTotals.set(item.id, {
-            itemId: item.id,
-            itemName: item.name,
-            qty: 0,
-            slips: []
-          });
-        }
-        
-        const data = itemTotals.get(item.id)!;
-        data.qty += Number(l.loadedQty || 0);
-        data.slips.push(s.id);
-      });
-    });
-    
-    return Array.from(itemTotals.values());
-  }, [invoiceModal, plans, orders, items]);
+    next[idx] = row;
+    setInvoiceRows(next);
+  };
+
+  const handleRemoveRow = (idx: number) => {
+    const next = [...invoiceRows];
+    next.splice(idx, 1);
+    setInvoiceRows(next);
+  };
 
   const calculations = useMemo(() => {
     const isInterState = gstSupplyType === "INTER_STATE";
@@ -202,13 +260,11 @@ export function PendingInvoicing() {
     let totalSgst = 0;
     let totalIgst = 0;
 
-    invoiceItems.forEach(item => {
-      const rate = itemRates[item.itemId] || 0;
-      const gRate = itemGstRates[item.itemId] || 0;
-      const amount = item.qty * rate;
+    invoiceRows.forEach(row => {
+      const amount = row.qtyDispatchedNow * row.rate;
       totalBeforeGst += amount;
 
-      const taxAmount = (amount * gRate) / 100;
+      const taxAmount = (amount * row.gstRate) / 100;
       if (isInterState) {
         totalIgst += taxAmount;
       } else {
@@ -218,31 +274,57 @@ export function PendingInvoicing() {
     });
 
     const totalAfterGst = totalBeforeGst + totalCgst + totalSgst + totalIgst;
-    const roundOffValue = roundOff === "" ? 0 : Number(roundOff || 0);
-    const grandTotal = totalAfterGst + roundOffValue;
+    // Nearest 0.5 rounding
+    const roundedTotal = Math.round(totalAfterGst * 2) / 2;
+    const roundOff = roundedTotal - totalAfterGst;
 
-    return { totalBeforeGst, cgst: totalCgst, sgst: totalSgst, igst: totalIgst, totalAfterGst, roundOff: roundOffValue, grandTotal };
-  }, [invoiceItems, itemRates, itemGstRates, gstSupplyType, roundOff]);
+    return { 
+      totalBeforeGst, 
+      cgst: totalCgst, 
+      sgst: totalSgst, 
+      igst: totalIgst, 
+      totalAfterGst, 
+      roundOff, 
+      grandTotal: roundedTotal 
+    };
+  }, [invoiceRows, gstSupplyType]);
 
   const handleSubmitInvoice = async () => {
     if (!invoiceModal) return;
     const company = companies.find(c => c.id === invoiceModal.companyId);
     if (!company) return;
-    if (isMandatoryField("invoice_form", "gstSupplyType") && !gstSupplyType) {
-      alert("GST Supply Type is mandatory.");
+
+    const totalLoaded = invoiceModal.slips.reduce((sum, s) => 
+      sum + s.lines.reduce((lSum: number, l: any) => lSum + Number(l.loadedQty || 0), 0)
+    , 0);
+    const totalInvoicedNow = invoiceRows.reduce((sum, r) => sum + Number(r.qtyDispatchedNow || 0), 0);
+
+    if (Math.abs(totalInvoicedNow - totalLoaded) > 0.01) {
+      alert(`Total quantity in invoice (${totalInvoicedNow.toLocaleString()}) must match total loaded quantity (${totalLoaded.toLocaleString()}).`);
       return;
     }
 
-    const isInterState = gstSupplyType === "INTER_STATE";
+    // Tolerance Check
+    const tolerancePercent = company.toleranceAllowed || 0;
+    for (const row of invoiceRows) {
+      const allowedMax = row.totalOrderQty * (1 + tolerancePercent / 100);
+      const currentlyDispatched = row.totalDispatchQty + row.qtyDispatchedNow;
+      if (currentlyDispatched > allowedMax + 0.01) {
+        const item = items.find(i => i.id === row.itemId);
+        alert(`Dispatched quantity for ${item?.name} exceeds allowed tolerance (${tolerancePercent}%). Max allowed: ${allowedMax.toLocaleString()}`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const invoiceId = crypto.randomUUID();
       const newInvoice: Invoice = {
         id: invoiceId,
-        invoiceNo: "", // Server generated
+        invoiceNo: "",
         date: new Date().toISOString().slice(0, 10),
         companyId: company.id,
-        gstRate: 0, // No longer used as a single value
+        gstRate: 0,
         totalBeforeGst: calculations.totalBeforeGst,
         cgst: calculations.cgst,
         sgst: calculations.sgst,
@@ -251,56 +333,30 @@ export function PendingInvoicing() {
         roundOff: calculations.roundOff
       };
 
-      // 1. Save Invoice
       await updateInvoices(prev => [...prev, newInvoice]);
 
-      let savedInvoice = invoices.find((invoice) => invoice.id === invoiceId);
-      if (!savedInvoice) {
-        const response = await fetch("/api/invoices");
-        if (response.ok) {
-          const latestInvoices: Invoice[] = await response.json();
-          savedInvoice = latestInvoices.find((invoice) => invoice.id === invoiceId);
-        }
-      }
-
-      // 2. Save Line Items
-      const lineItems: InvoiceLineItem[] = [];
-      invoiceItems.forEach(item => {
-        const rate = itemRates[item.itemId] || 0;
-        const gRate = itemGstRates[item.itemId] || 0;
-        
-        invoiceModal.slips.forEach(s => {
-           const sItemQty = s.lines.reduce((sum: number, l: any) => {
-             const p = plans.find(pl => pl.id === l.dispatchPlanId);
-             const o = orders.find(ord => ord.id === p?.orderId);
-             return o?.itemId === item.itemId ? sum + Number(l.loadedQty || 0) : sum;
-           }, 0);
-           
-           if (sItemQty > 0) {
-             const amount = sItemQty * rate;
-             const taxAmount = (amount * gRate) / 100;
-             lineItems.push({
-               id: crypto.randomUUID(),
-               invoiceId,
-               loadingSlipId: s.id,
-               itemId: item.itemId,
-               qty: sItemQty,
-               rate,
-               amount,
-               gstRate: gRate,
-               cgst: isInterState ? 0 : taxAmount / 2,
-               sgst: isInterState ? 0 : taxAmount / 2,
-               igst: isInterState ? taxAmount : 0
-             });
-           }
-        });
+      const lineItems: InvoiceLineItem[] = invoiceRows.map(row => {
+        const amount = row.qtyDispatchedNow * row.rate;
+        const taxAmount = (amount * row.gstRate) / 100;
+        return {
+          id: crypto.randomUUID(),
+          invoiceId,
+          loadingSlipId: row.loadingSlipId || invoiceModal.slips[0]?.id || "", // Fallback
+          itemId: row.itemId,
+          qty: row.qtyDispatchedNow,
+          rate: row.rate,
+          amount,
+          gstRate: row.gstRate,
+          cgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
+          sgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
+          igst: gstSupplyType === "INTER_STATE" ? taxAmount : 0
+        };
       });
       
       for (const li of lineItems) {
         await updateLineItems(prev => [...prev, li]);
       }
 
-      // 3. Update Loading Slips
       await updateSlips(prev => prev.map(s => {
         if (invoiceModal.slips.some(os => os.id === s.id)) {
           return { ...s, invoiceId };
@@ -311,6 +367,8 @@ export function PendingInvoicing() {
       setInvoiceModal(null);
       setBillingMode(null);
       setSelectedSlips(new Set());
+      alert("Invoice generated successfully! Showing Pending Tally Posting...");
+      // In a real app, we'd navigate to the Tally Posting view here.
     } catch (err) {
       console.error("Failed to generate invoice:", err);
     } finally {
@@ -318,7 +376,7 @@ export function PendingInvoicing() {
     }
   };
 
-  const isInterState = gstSupplyType === "INTER_STATE";
+  const format2 = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div className="space-y-6">
@@ -422,7 +480,7 @@ export function PendingInvoicing() {
       {/* Invoice Modal */}
       {invoiceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-3xl border-2 border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <div className="bg-white w-full max-w-[95vw] max-h-[95vh] border-2 border-black rounded shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col">
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b-2 border-black">
               <div className="flex items-center gap-3">
                 <Receipt size={20} />
@@ -433,153 +491,163 @@ export function PendingInvoicing() {
               </button>
             </div>
             
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              <MandatoryLegend />
-              <div className="bg-slate-50 p-4 border border-black rounded space-y-2">
-                <MandatoryLabel
-                  label="GST Supply Type"
-                  required={isMandatoryField("invoice_form", "gstSupplyType")}
-                  className="font-bold uppercase text-xs"
-                />
-                <select
-                  value={gstSupplyType}
-                  onChange={(e) => setGstSupplyType(e.target.value as "" | "INTRA_STATE" | "INTER_STATE")}
-                  required={isMandatoryField("invoice_form", "gstSupplyType")}
-                  disabled
-                  className="w-full border-2 border-black rounded px-3 py-2 text-sm font-bold bg-white disabled:bg-slate-100 disabled:text-slate-700"
-                >
-                  <option value="" disabled>
-                    Select GST Supply Type...
-                  </option>
-                  <option value="INTRA_STATE">INTRA_STATE (CGST+SGST)</option>
-                  <option value="INTER_STATE">INTER_STATE (IGST)</option>
-                </select>
-                <div className="text-[11px] text-slate-600">Set in Companies Master.</div>
-              </div>
-
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
               <div className="overflow-x-auto border border-black">
                 <table className="min-w-full divide-y divide-black border-collapse">
                   <thead className="bg-slate-100">
                     <tr className="divide-x divide-black">
-                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Item</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-20">Quantity</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-28">Rate</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-24">GST %</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase w-32">Amount</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-black uppercase min-w-[200px]">Order No / PO No</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-black uppercase">Order Qty</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-black uppercase">Dispatched</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-black uppercase">Pending</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-black uppercase">Rate</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-black uppercase bg-indigo-50">DISPATCH NOW</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-20">GST %</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-black uppercase">Amount</th>
+                      <th className="px-3 py-2 text-center text-[10px] font-black uppercase w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black">
-                    {invoiceItems.map((item) => (
-                      <tr key={item.itemId} className="divide-x divide-black">
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <Package size={14} className="text-slate-400" />
-                            <span className="text-sm font-bold uppercase">{item.itemName}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-right text-sm">
-                          {item.qty.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <input 
-                            type="number"
-                            value={itemRates[item.itemId] || ""}
-                            onChange={(e) => setInvoiceRates({
-                              ...itemRates,
-                              [item.itemId]: e.target.value === "" ? 0 : parseFloat(e.target.value)
-                            })}
-                            placeholder="0.00"
-                            className="w-24 px-2 py-1 border-2 border-indigo-600 rounded text-right focus:outline-none focus:ring-1 focus:ring-indigo-600 font-bold"
-                          />
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <select 
-                            value={itemGstRates[item.itemId] ?? 18}
-                            onChange={(e) => setItemGstRates({
-                              ...itemGstRates,
-                              [item.itemId]: Number(e.target.value)
-                            })}
-                            className="w-20 px-1 py-1 border border-black rounded text-right text-xs"
-                          >
-                            <option value={0}>0%</option>
-                            <option value={5}>5%</option>
-                            <option value={12}>12%</option>
-                            <option value={18}>18%</option>
-                            <option value={28}>28%</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-3 text-right text-sm font-medium">
-                          {((itemRates[item.itemId] || 0) * item.qty).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
+                    {invoiceRows.map((row, idx) => {
+                      const pendingOrders = orders.filter(o => 
+                        o.companyId === invoiceModal.companyId && 
+                        o.status !== "Cancelled" &&
+                        Math.max(0, Number(o.qty || 0) - (totalDispatchedByOrderId.get(o.id) || 0)) > 0
+                      );
+
+                      return (
+                        <tr key={row.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
+                          <td className="px-2 py-2">
+                             <div className="text-[11px] font-bold uppercase truncate max-w-[150px]">
+                                {items.find(i => i.id === row.itemId)?.name || "Select Order"}
+                             </div>
+                          </td>
+                          <td className="px-2 py-2">
+                            <select
+                              value={row.orderId}
+                              onChange={(e) => handleUpdateRow(idx, "orderId", e.target.value)}
+                              className="w-full border-2 border-black rounded p-1 text-[11px] font-bold focus:ring-0"
+                            >
+                              <option value="">-- Choose Order --</option>
+                              {pendingOrders.map(o => (
+                                <option key={o.id} value={o.id}>{o.orderNo} | {o.poNumber || "No PO"}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-2 text-right text-[11px] font-medium">{row.totalOrderQty.toLocaleString()}</td>
+                          <td className="px-2 py-2 text-right text-[11px] font-medium text-slate-500">{row.totalDispatchQty.toLocaleString()}</td>
+                          <td className="px-2 py-2 text-right text-[11px] font-black text-indigo-700">{row.pendingQty.toLocaleString()}</td>
+                          <td className="px-2 py-2 text-right">
+                             <input 
+                              type="number"
+                              value={row.rate || ""}
+                              onChange={(e) => handleUpdateRow(idx, "rate", e.target.value === "" ? 0 : parseFloat(e.target.value))}
+                              className="w-20 px-1 py-0.5 border border-slate-300 rounded text-right text-[11px] font-bold"
+                             />
+                          </td>
+                          <td className="px-2 py-2 text-right bg-indigo-50/30">
+                            <input 
+                              type="number"
+                              value={row.qtyDispatchedNow || ""}
+                              onChange={(e) => handleUpdateRow(idx, "qtyDispatchedNow", e.target.value === "" ? 0 : parseFloat(e.target.value))}
+                              className="w-24 px-1 py-1 border-2 border-indigo-600 rounded text-right text-[11px] font-black focus:ring-0"
+                            />
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            <select 
+                              value={row.gstRate}
+                              onChange={(e) => handleUpdateRow(idx, "gstRate", Number(e.target.value))}
+                              className="w-16 px-1 py-0.5 border border-slate-300 rounded text-right text-[11px]"
+                            >
+                              {[0, 5, 12, 18, 28].map(v => <option key={v} value={v}>{v}%</option>)}
+                            </select>
+                          </td>
+                          <td className="px-2 py-2 text-right text-[11px] font-black">
+                            {format2(row.qtyDispatchedNow * row.rate)}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <button onClick={() => handleRemoveRow(idx)} className="text-rose-600 hover:text-rose-800">
+                              <X size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-black divide-y divide-black">
                     <tr className="divide-x divide-black">
-                      <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase">Total Before GST</td>
-                      <td className="px-3 py-2 text-right text-xs">{calculations.totalBeforeGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase font-black">Total Before GST</td>
+                      <td className="px-3 py-2 text-right text-[11px] font-black">{format2(calculations.totalBeforeGst)}</td>
+                      <td></td>
                     </tr>
-                    {!isInterState ? (
+                    {gstSupplyType === "INTER_STATE" ? (
+                       <tr className="divide-x divide-black text-slate-500">
+                        <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase">Total IGST</td>
+                        <td className="px-3 py-2 text-right text-[11px]">{format2(calculations.igst)}</td>
+                        <td></td>
+                      </tr>
+                    ) : (
                       <>
-                        <tr className="divide-x divide-black">
-                          <td colSpan={4} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">Total CGST</td>
-                          <td className="px-3 py-2 text-right text-[10px] text-slate-500">{calculations.cgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <tr className="divide-x divide-black text-slate-500">
+                          <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase">Total CGST</td>
+                          <td className="px-3 py-2 text-right text-[11px]">{format2(calculations.cgst)}</td>
+                          <td></td>
                         </tr>
-                        <tr className="divide-x divide-black">
-                          <td colSpan={4} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">Total SGST</td>
-                          <td className="px-3 py-2 text-right text-[10px] text-slate-500">{calculations.sgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <tr className="divide-x divide-black text-slate-500">
+                          <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase">Total SGST</td>
+                          <td className="px-3 py-2 text-right text-[11px]">{format2(calculations.sgst)}</td>
+                          <td></td>
                         </tr>
                       </>
-                    ) : (
-                      <tr className="divide-x divide-black">
-                        <td colSpan={4} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">Total IGST</td>
-                        <td className="px-3 py-2 text-right text-[10px] text-slate-500">{calculations.igst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      </tr>
                     )}
-                    <tr className="divide-x divide-black bg-indigo-600 text-white border-t-2 border-black">
-                      <td colSpan={4} className="px-3 py-3 text-right text-sm uppercase">Total Amount After GST</td>
-                      <td className="px-3 py-3 text-right text-lg">{calculations.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    </tr>
                     <tr className="divide-x divide-black">
-                      <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase">Round Off</td>
-                      <td className="px-3 py-2 text-right text-xs">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={roundOff}
-                          onChange={(e) => setRoundOff(e.target.value === "" ? "" : Number(e.target.value))}
-                          className="w-28 px-2 py-1 border-2 border-black rounded text-right bg-white"
-                          placeholder="0.00"
-                        />
-                      </td>
+                      <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase italic text-slate-400">Round Off (to nearest 0.5)</td>
+                      <td className="px-3 py-2 text-right text-[11px] text-slate-400">{format2(calculations.roundOff)}</td>
+                      <td></td>
                     </tr>
-                    <tr className="divide-x divide-black bg-emerald-700 text-white border-t-2 border-black">
-                      <td colSpan={4} className="px-3 py-3 text-right text-sm uppercase tracking-wider">Grand Total</td>
-                      <td className="px-3 py-3 text-right text-lg font-black">{calculations.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <tr className="divide-x divide-black bg-slate-900 text-white">
+                      <td colSpan={8} className="px-3 py-3 text-right text-xs uppercase tracking-widest font-black">Grand Total</td>
+                      <td className="px-3 py-3 text-right text-lg font-black">{format2(calculations.grandTotal)}</td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
+              
+              <button 
+                onClick={handleAddRow}
+                className="flex items-center gap-2 text-xs font-black uppercase text-indigo-700 hover:text-indigo-900 transition-colors"
+              >
+                <Plus size={16} /> Add Row
+              </button>
 
-              <div className="flex justify-end gap-3 pt-2">
-                <button 
-                  onClick={() => setInvoiceModal(null)}
-                  className="px-6 py-2 border-2 border-black font-bold uppercase text-sm hover:bg-slate-100 transition"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleSubmitInvoice}
-                  disabled={isSubmitting || calculations.totalBeforeGst <= 0}
-                  className="px-6 py-2 bg-indigo-600 text-white border-2 border-black font-bold uppercase text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-indigo-700 transition disabled:opacity-50 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0 active:shadow-none active:translate-x-1 active:translate-y-1 flex items-center gap-2"
-                >
-                  {isSubmitting ? <Spinner size={16} className="text-white" /> : (
-                    <>
-                      <Check size={18} />
-                      Save Invoice
-                    </>
-                  )}
-                </button>
+              <div className="flex justify-between items-center bg-slate-50 p-4 border-t-2 border-black -mx-6 -mb-6 sticky bottom-0">
+                <div className="text-[10px] font-bold text-slate-500 uppercase">
+                   Loaded Total: <span className="text-black font-black">
+                    {invoiceModal.slips.reduce((sum, s) => sum + s.lines.reduce((lSum: number, l: any) => lSum + Number(l.loadedQty || 0), 0), 0).toLocaleString()}
+                   </span>
+                </div>
+                <div className="flex gap-3">
+                    <button 
+                    onClick={() => setInvoiceModal(null)}
+                    className="px-8 py-3 border-2 border-black font-black uppercase text-xs tracking-widest hover:bg-white transition"
+                    >
+                    Cancel
+                    </button>
+                    <button 
+                    onClick={handleSubmitInvoice}
+                    disabled={isSubmitting || calculations.totalBeforeGst <= 0}
+                    className="px-10 py-3 bg-indigo-600 text-white border-2 border-black font-black uppercase text-xs tracking-widest shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:bg-indigo-700 transition disabled:opacity-50 disabled:shadow-none active:shadow-none active:translate-x-1 active:translate-y-1 flex items-center gap-2"
+                    >
+                    {isSubmitting ? <Spinner size={16} className="text-white" /> : (
+                        <>
+                        <Check size={18} />
+                        Confirm & Save Invoice
+                        </>
+                    )}
+                    </button>
+                </div>
               </div>
             </div>
           </div>

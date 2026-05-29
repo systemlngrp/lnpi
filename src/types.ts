@@ -363,6 +363,7 @@ export interface Company {
   gstNo?: string;
   gstSupplyType?: "INTRA_STATE" | "INTER_STATE";
   deviationAllowed?: number;
+  toleranceAllowed?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

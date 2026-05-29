@@ -206,7 +206,6 @@ export function MrrApprovals() {
                   <th className="px-4 py-3 text-left">GE No</th>
                   <th className="px-4 py-3 text-left">MRR No</th>
                   <th className="px-4 py-3 text-left">Supplier</th>
-                  <th className="px-4 py-3 text-left">Total Qty</th>
                   <th className="px-4 py-3 text-left min-w-[300px]">Items</th>
                   <th className="px-4 py-3 text-right">MRR Weight</th>
                   <th className="px-4 py-3 text-right">Invoice Weight</th>
@@ -220,7 +219,7 @@ export function MrrApprovals() {
               <tbody className="divide-y divide-black bg-white">
                 {filteredList.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
+                    <td colSpan={12} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
                       No records found in this stage
                     </td>
                   </tr>
@@ -245,7 +244,6 @@ export function MrrApprovals() {
                         <td className="px-4 py-4">{m.gateEntryNo || "-"}</td>
                         <td className="px-4 py-4">{m.transactionNo}</td>
                         <td className="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{getSupplierName(m.supplierId)}</td>
-                        <td className="px-4 py-4 text-center">-</td>
                         <td className="px-4 py-4 leading-relaxed lowercase first-letter:uppercase">
                           {m.lines.map((l, i) => (
                             <div key={i} className="mb-2 last:mb-0">

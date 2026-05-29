@@ -1,10 +1,10 @@
 import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier } from "../types";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Edit2, X, Save } from "lucide-react";
 
 export function PendingAccountsApproval() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
@@ -14,6 +14,8 @@ export function PendingAccountsApproval() {
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<MaterialIn | null>(null);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -35,6 +37,53 @@ export function PendingAccountsApproval() {
       newSelected.add(id);
     }
     setSelectedIds(newSelected);
+  };
+
+  const handleEdit = (m: MaterialIn) => {
+    setEditingId(m.id);
+    setEditForm(JSON.parse(JSON.stringify(m)));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditForm(null);
+  };
+
+  const handleUpdateLine = (idx: number, field: string, value: any) => {
+    if (!editForm) return;
+    const next = { ...editForm };
+    next.lines[idx] = { ...next.lines[idx], [field]: value };
+    
+    // Recalculate amounts
+    const line = next.lines[idx];
+    const qty = Number(line.qty || 0);
+    const rate = Number(line.rate || 0);
+    const gstRate = Number(line.gstRate || 0);
+    
+    const taxable = qty * rate;
+    const gstAmount = (taxable * gstRate) / 100;
+    
+    line.taxableAmount = taxable;
+    line.gstAmount = gstAmount;
+    line.totalAmount = taxable + gstAmount;
+    
+    // Recalculate header totals
+    next.totalAmount = next.lines.reduce((sum, l) => sum + Number(l.totalAmount || 0), 0);
+    
+    setEditForm(next);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm || !editingId) return;
+    setSubmittingId(editingId);
+    try {
+      await setMaterialIn(prev => prev.map(m => m.id === editingId ? editForm : m));
+      handleCancelEdit();
+    } catch (err) {
+      console.error("Failed to save MRR edit:", err);
+    } finally {
+      setSubmittingId(null);
+    }
   };
 
   const handleBulkApprove = async () => {
@@ -86,6 +135,7 @@ export function PendingAccountsApproval() {
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>
               <span className="ml-2 text-black">[{l.qty} {l.uom} @ ₹{l.rate}]</span>
+              {l.gstRate !== undefined && <span className="ml-1 text-[10px] text-slate-500">GST {l.gstRate}%</span>}
             </li>
           );
         })}
@@ -115,63 +165,7 @@ export function PendingAccountsApproval() {
           </div>
         )}
         
-        {/* Mobile View - Cards */}
-        <div className="block md:hidden p-4 space-y-4">
-          {materialIn.filter((m) => m.status === "Pending Accounts").length === 0 ? (
-            <div className="p-6 text-center text-black font-bold border-2 border-dashed border-black">No pending approvals.</div>
-          ) : materialIn
-              .filter((m) => m.status === "Pending Accounts")
-              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .map((m) => (
-                <div key={m.id} className={cn("bg-white border-2 border-black p-4 space-y-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]", selectedIds.has(m.id) && "bg-indigo-50")}>
-                  <div className="flex justify-between items-start gap-2">
-                    <input 
-                      type="checkbox" 
-                      className="rounded border-black text-indigo-600 focus:ring-indigo-500 w-5 h-5 cursor-pointer mt-1"
-                      checked={selectedIds.has(m.id)}
-                      onChange={() => toggleSelect(m.id)}
-                    />
-                    <div className="text-right">
-                        <div className="text-xs font-black text-slate-500 uppercase">Trx No</div>
-                        <div className="text-sm font-bold">{m.transactionNo}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase">Date</div>
-                    <div className="text-sm font-bold">{formatDate(m.date)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase">Supplier</div>
-                    <div className="text-sm font-bold">{getSupplierName(m.supplierId)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase">Items</div>
-                    <div className="text-sm font-bold">{getLineItemsElement(m.lines)}</div>
-                  </div>
-                  <div className="text-right font-mono font-bold text-lg">₹{m.totalAmount.toLocaleString()}</div>
-                  <button
-                    onClick={() => handleApprove(m.id)}
-                    disabled={submittingId === m.id}
-                    className={cn(
-                      "w-full flex items-center justify-center py-3 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
-                      confirmId === m.id 
-                        ? "bg-amber-600 text-white border-black animate-pulse" 
-                        : "bg-black text-white border-black hover:bg-slate-800"
-                    )}
-                  >
-                    {submittingId === m.id ? (
-                      <Spinner size={16} />
-                    ) : (
-                      <>
-                        <CheckCircle size={16} />
-                        {confirmId === m.id ? "Confirm?" : "Approve"}
-                      </>
-                    )}
-                  </button>
-                </div>
-              ))}
-        </div>
-
+        {/* Table View */}
         <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
@@ -199,46 +193,117 @@ export function PendingAccountsApproval() {
             ) : materialIn
               .filter((m) => m.status === "Pending Accounts")
               .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .map((m) => (
-                <tr key={m.id} className={cn("hover:bg-slate-50 divide-x divide-black transition-colors", selectedIds.has(m.id) && "bg-indigo-50/50")}>
-                  <td className="px-6 py-4 w-10 text-center border border-black">
-                    <input 
-                      type="checkbox" 
-                      className="rounded border-black text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                      checked={selectedIds.has(m.id)}
-                      onChange={() => toggleSelect(m.id)}
-                    />
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-black border border-black">{m.transactionNo}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(m.date)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{getSupplierName(m.supplierId)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">
-                    {getLineItemsElement(m.lines)}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black whitespace-nowrap font-mono">₹{m.totalAmount.toLocaleString()}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium border border-black">
-                    <button
-                      onClick={() => handleApprove(m.id)}
-                      disabled={submittingId === m.id}
-                      className={cn(
-                        "inline-flex items-center justify-center min-w-[120px] px-4 py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
-                        confirmId === m.id 
-                          ? "bg-amber-600 text-white border-black animate-pulse" 
-                          : "bg-indigo-100 text-indigo-800 border-indigo-800 hover:bg-indigo-200"
-                      )}
-                    >
-                      {submittingId === m.id ? (
-                        <Spinner size={16} />
-                      ) : (
-                        <>
-                          <CheckCircle size={16} />
-                          {confirmId === m.id ? "Confirm?" : "Approve"}
-                        </>
-                      )}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              .map((m) => {
+                const isEditing = editingId === m.id;
+                return (
+                  <tr key={m.id} className={cn("hover:bg-slate-50 divide-x divide-black transition-colors", selectedIds.has(m.id) && "bg-indigo-50/50")}>
+                    <td className="px-6 py-4 w-10 text-center border border-black">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-black text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                        checked={selectedIds.has(m.id)}
+                        onChange={() => toggleSelect(m.id)}
+                      />
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-black border border-black">{m.transactionNo}</td>
+                    <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(m.date)}</td>
+                    <td className="px-6 py-4 text-sm text-black border border-black">{getSupplierName(m.supplierId)}</td>
+                    <td className="px-6 py-4 text-sm text-black border border-black">
+                      {isEditing && editForm ? (
+                        <div className="space-y-2">
+                           {editForm.lines.map((l, idx) => {
+                             const itemName = materials.find(i => i.id === l.itemId)?.name || items.find(i => i.id === l.itemId)?.name;
+                             return (
+                               <div key={idx} className="flex flex-wrap items-center gap-2 p-2 border border-slate-200 rounded bg-slate-50">
+                                  <div className="text-xs font-bold w-full">{itemName}</div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500">Qty:</span>
+                                    <input 
+                                      type="number" 
+                                      value={l.qty} 
+                                      onChange={(e) => handleUpdateLine(idx, "qty", e.target.value)}
+                                      className="w-16 border border-black rounded px-1 text-xs"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500">Rate:</span>
+                                    <input 
+                                      type="number" 
+                                      value={l.rate} 
+                                      onChange={(e) => handleUpdateLine(idx, "rate", e.target.value)}
+                                      className="w-20 border border-black rounded px-1 text-xs"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500">GST %:</span>
+                                    <select 
+                                      value={l.gstRate || 0}
+                                      onChange={(e) => handleUpdateLine(idx, "gstRate", Number(e.target.value))}
+                                      className="border border-black rounded text-[10px]"
+                                    >
+                                      {[0, 5, 12, 18, 28].map(v => <option key={v} value={v}>{v}%</option>)}
+                                    </select>
+                                  </div>
+                               </div>
+                             );
+                           })}
+                        </div>
+                      ) : getLineItemsElement(m.lines)}
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black whitespace-nowrap font-mono">
+                      ₹{(isEditing && editForm ? editForm.totalAmount : m.totalAmount).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm font-medium border border-black">
+                      <div className="flex items-center justify-end gap-2">
+                        {isEditing ? (
+                          <>
+                            <button
+                              onClick={handleSaveEdit}
+                              className="p-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                            >
+                              <Save size={16} />
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="p-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                            >
+                              <X size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEdit(m)}
+                              className="p-2 bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleApprove(m.id)}
+                              disabled={submittingId === m.id}
+                              className={cn(
+                                "inline-flex items-center justify-center min-w-[120px] px-4 py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
+                                confirmId === m.id 
+                                  ? "bg-amber-600 text-white border-black animate-pulse" 
+                                  : "bg-indigo-100 text-indigo-800 border-indigo-800 hover:bg-indigo-200"
+                              )}
+                            >
+                              {submittingId === m.id ? (
+                                <Spinner size={16} />
+                              ) : (
+                                <>
+                                  <CheckCircle size={16} />
+                                  {confirmId === m.id ? "Confirm?" : "Approve"}
+                                </>
+                              )}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>

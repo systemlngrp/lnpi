@@ -23,6 +23,7 @@ export function Companies() {
   const [gstNo, setGstNo] = useState("");
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("INTRA_STATE");
   const [deviationAllowed, setDeviationAllowed] = useState<number | "">("");
+  const [toleranceAllowed, setToleranceAllowed] = useState<number | "">("");
 
   const resetForm = () => {
     setName("");
@@ -35,6 +36,7 @@ export function Companies() {
     setGstNo("");
     setGstSupplyType("INTRA_STATE");
     setDeviationAllowed("");
+    setToleranceAllowed("");
     setEditingId(null);
   };
 
@@ -69,6 +71,7 @@ export function Companies() {
         gstNo: gstNo.trim() || undefined,
         gstSupplyType: gstSupplyType || undefined,
         deviationAllowed: deviationAllowed === "" ? undefined : Number(deviationAllowed),
+        toleranceAllowed: toleranceAllowed === "" ? undefined : Number(toleranceAllowed),
         ...audit,
       };
 
@@ -107,6 +110,7 @@ export function Companies() {
     setGstNo(company.gstNo || "");
     setGstSupplyType((company.gstSupplyType as any) || "INTRA_STATE");
     setDeviationAllowed(company.deviationAllowed ?? "");
+    setToleranceAllowed(company.toleranceAllowed ?? "");
     setEditingId(company.id);
     setIsFormOpen(true);
   };
@@ -203,6 +207,18 @@ export function Companies() {
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
               />
             </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Tolerance Allowed (%)</label>
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={toleranceAllowed}
+                onChange={(e) => setToleranceAllowed(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
+              />
+            </div>
           </div>
 
           <div className="flex space-x-3 pt-2 items-center">
@@ -226,6 +242,7 @@ export function Companies() {
                   <div className="text-xs text-slate-700">{c.district} {c.state ? `| ${c.state}` : ""}</div>
                   <div className="text-xs text-slate-700">GST Supply Type: {c.gstSupplyType || "INTRA_STATE"}</div>
                   <div className="text-xs text-slate-700">Deviation Allowed: {c.deviationAllowed ?? "-"}%</div>
+                  <div className="text-xs text-slate-700">Tolerance Allowed: {c.toleranceAllowed ?? "-"}%</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => handleEdit(c)} disabled={isSubmitting} className="text-indigo-600 hover:text-indigo-900 flex items-center disabled:opacity-50 font-bold"><Edit size={16} /></button>
@@ -250,6 +267,7 @@ export function Companies() {
               <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">GST NO</th>
               <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">GST Supply Type</th>
               <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Deviation Allowed</th>
+              <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Tolerance Allowed</th>
               <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
             </tr>
           </thead>
@@ -273,6 +291,7 @@ export function Companies() {
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.gstNo}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.gstSupplyType || "INTRA_STATE"}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.deviationAllowed ?? "-"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.toleranceAllowed ?? "-"}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium border border-black">
                     <button
                       title="Edit"

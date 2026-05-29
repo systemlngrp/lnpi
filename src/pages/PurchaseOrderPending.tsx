@@ -239,9 +239,9 @@ export function PurchaseOrderPending() {
                 </button>
               </th>
               <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black">Item Details</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Pending</th>
+              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">Indent Quantity</th>
               <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black">UOM</th>
-              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">Order Qty</th>
+              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black text-indigo-700">Pending Indent</th>
               <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">Rate</th>
               <th className="border border-black px-4 py-3 text-center text-xs font-bold uppercase text-black">Details</th>
             </tr>
@@ -273,7 +273,7 @@ export function PurchaseOrderPending() {
                         <div className="text-xs text-slate-500 uppercase">{row.materialErpCode}</div>
                       </td>
                       <td className="border border-black px-4 py-4 text-right font-medium text-black">
-                        {row.totalPendingQty.toLocaleString()}
+                        {row.sources.reduce((sum, s) => sum + Number(s.qty || 0), 0).toLocaleString()}
                       </td>
                       <td className="border border-black px-4 py-4 text-sm text-black">
                         {row.uom}
@@ -284,7 +284,7 @@ export function PurchaseOrderPending() {
                           value={inputs.orderQty}
                           onChange={(e) => handleInputChange(key, "orderQty", e.target.value)}
                           max={row.totalPendingQty}
-                          className="w-24 rounded border border-black bg-white px-2 py-1 text-right text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="w-24 rounded border-2 border-indigo-600 bg-white px-2 py-1 text-right text-sm font-black focus:outline-none"
                         />
                       </td>
                       <td className="border border-black px-4 py-2 text-right">
@@ -320,7 +320,7 @@ export function PurchaseOrderPending() {
                               <tbody>
                                 {row.sources.sort((a,b) => new Date(a.targetDeliveryDate).getTime() - new Date(b.targetDeliveryDate).getTime()).map((src, i) => (
                                   <tr key={i} className="hover:bg-slate-50">
-                                    <td className="border border-slate-300 px-2 py-1">{src.indentId.split('-')[0]}...</td>
+                                    <td className="border border-slate-300 px-2 py-1 font-bold text-slate-700">{src.indentId.substring(0, 13)}...</td>
                                     <td className="border border-slate-300 px-2 py-1">{formatDate(src.requisitionDate)}</td>
                                     <td className="border border-slate-300 px-2 py-1 font-medium text-blue-700">{formatDate(src.targetDeliveryDate)}</td>
                                     <td className="border border-slate-300 px-2 py-1 text-right">{src.qty}</td>

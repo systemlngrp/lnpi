@@ -1027,7 +1027,6 @@ export function Items() {
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP CODE</th>
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">CUSTOMER</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">TYPE</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Open Length</th>
@@ -1078,7 +1077,7 @@ export function Items() {
               </thead>
               <tbody className="divide-y divide-black bg-white">
                     {filteredItems.length === 0 ? (
-                      <tr><td colSpan={47} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
+                      <tr><td colSpan={46} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
                     ) : (
                   filteredItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
