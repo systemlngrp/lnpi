@@ -1355,8 +1355,9 @@ async function initDb(retries = 5) {
           \`state\` VARCHAR(255),
           \`gstNo\` VARCHAR(100),
           \`gstSupplyType\` VARCHAR(20) DEFAULT 'INTRA_STATE',
-          \`deviationAllowed\` DECIMAL(10,2),
-          \`updatedBy\` VARCHAR(255),
+          `deviationAllowed` DECIMAL(10,2),
+          `toleranceAllowed` DECIMAL(10,2),
+          `updatedBy` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
@@ -1908,6 +1909,7 @@ async function initDb(retries = 5) {
         { table: "users", column: "email", type: "VARCHAR(255)" },
         { table: "users", column: "password", type: "VARCHAR(255)" },
         { table: "companies", column: "deviationAllowed", type: "DECIMAL(10,2)" },
+        { table: "companies", column: "toleranceAllowed", type: "DECIMAL(10,2)" },
         { table: "companies", column: "gstSupplyType", type: "VARCHAR(20) DEFAULT 'INTRA_STATE'" },
         { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },

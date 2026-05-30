@@ -70,7 +70,7 @@ export function Companies() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const bstr = event.target?.result;
         const wb = XLSX.read(bstr, { type: "binary" });
@@ -83,6 +83,7 @@ export function Companies() {
           return;
         }
 
+        setIsSubmitting(true);
         const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
         const newCompanies: Company[] = data.map((row: any) => ({
           id: crypto.randomUUID(),
@@ -102,26 +103,28 @@ export function Companies() {
 
         if (newCompanies.length === 0) {
           alert("No valid companies found in the file. Ensure 'Company Name' column is filled.");
+          setIsSubmitting(false);
           return;
         }
 
-        // Check for duplicates within existing companies
         const existingNames = new Set(companies.map(c => c.name.toLowerCase()));
         const uniqueNewCompanies = newCompanies.filter(c => !existingNames.has(c.name.toLowerCase()));
         
         const skippedCount = newCompanies.length - uniqueNewCompanies.length;
 
         if (uniqueNewCompanies.length > 0) {
-          setCompanies([...companies, ...uniqueNewCompanies]);
+          await setCompanies([...companies, ...uniqueNewCompanies]);
           alert(`Successfully uploaded ${uniqueNewCompanies.length} companies.${skippedCount > 0 ? ` Skipped ${skippedCount} duplicates.` : ""}`);
         } else {
           alert("All companies in the file already exist.");
         }
       } catch (error) {
         console.error("Bulk upload error:", error);
-        alert("Failed to parse the Excel file. Please use the provided template.");
+        alert("Failed to parse or upload the Excel file.");
+      } finally {
+        setIsSubmitting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
-      if (fileInputRef.current) fileInputRef.current.value = "";
     };
     reader.readAsBinaryString(file);
   };
@@ -147,7 +150,7 @@ export function Companies() {
     XLSX.writeFile(wb, "Companies_Master_Export.xlsx");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     if (isMandatoryField("company_form", "gstSupplyType") && !gstSupplyType) {
@@ -164,7 +167,7 @@ export function Companies() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as Partial<Company>;
       const payload: Company = {
         id: editingId || crypto.randomUUID(),
@@ -183,27 +186,37 @@ export function Companies() {
       };
 
       if (editingId) {
-        setCompanies(companies.map((c) => (c.id === editingId ? { ...c, ...payload } : c)));
+        await setCompanies(companies.map((c) => (c.id === editingId ? { ...c, ...payload } : c)));
       } else {
-        setCompanies([...companies, payload]);
+        await setCompanies([...companies, payload]);
       }
 
       resetForm();
       setIsFormOpen(false);
+    } catch (err) {
+      console.error("Failed to save company:", err);
+      alert("Failed to save company. Please check the console for details.");
+    } finally {
       setIsSubmitting(false);
-    }, 500);
+    }
   };
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (deletingId !== id) {
       setDeletingId(id);
       setTimeout(() => setDeletingId(null), 3000);
       return;
     }
-    setCompanies(companies.filter((c) => c.id !== id));
-    setDeletingId(null);
+    try {
+      await setCompanies(companies.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error("Failed to delete company:", err);
+      alert("Failed to delete company.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleEdit = (company: Company) => {
@@ -415,7 +428,7 @@ export function Companies() {
             {sortedCompanies.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-6 py-8 text-center text-black font-medium tracking-wide">
-                  {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found. Click "Add New Company" to create one.'}
+                  {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found. Click "Add New" to create one.'}
                 </td>
               </tr>
             ) : (
