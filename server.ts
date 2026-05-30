@@ -1615,14 +1615,14 @@ async function initDb(retries = 5) {
           \`cgst\` DECIMAL(15,2) NOT NULL,
           \`sgst\` DECIMAL(15,2) NOT NULL,
           \`igst\` DECIMAL(15,2) NOT NULL,
-          `totalAfterGst` DECIMAL(15,2) NOT NULL,
-          `roundOff` DECIMAL(15,2) NOT NULL DEFAULT 0,
-          `tallyTimestamp` VARCHAR(255),
-          `tallyBy` VARCHAR(255),
-          `updatedBy` VARCHAR(255),
-          `updateTimestamp` VARCHAR(255)
-          )
-          `);
+          \`totalAfterGst\` DECIMAL(15,2) NOT NULL,
+          \`roundOff\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyBy\` VARCHAR(255),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      \`);
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`invoice_line_items\` (
