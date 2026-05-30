@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { useData } from "../hooks/useData";
-import { Plus, Edit, Trash2, ExternalLink, FileUp, XCircle } from "lucide-react";
+import { Plus, Edit, Trash2, ExternalLink, FileUp, XCircle, Upload, Download, FileSpreadsheet } from "lucide-react";
 import { ColorMaster, Company, Item, ItemGroup, Production, Setting, MaterialIn } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { TableControls } from "../components/TableControls";
 import CreatableSelect from "react-select/creatable";
+import * as XLSX from "xlsx";
 
 export function Items() {
   const [items, setItems] = useData<Item>("items", []);
@@ -15,6 +16,7 @@ export function Items() {
   const [settings] = useData<Setting>("settings", []);
   const [productions] = useData<Production>("productions", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -66,6 +68,247 @@ export function Items() {
   const [spec, setSpec] = useState<string>("");
 
   const [searchTerm, setSearchTerm] = useState("");
+
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        "Item Name": "Sample FG Item",
+        "Item Group": "FG",
+        "UOM": "PCs",
+        "ERP Code": "",
+        "Customer": "Sample Company",
+        "Item Type": "FG",
+        "Business Type": "RSC",
+        "Length": 300,
+        "Breadth": 200,
+        "Height": 150,
+        "Ups": 1,
+        "PLY": 3,
+        "FLUTE": "B",
+        "Opening Balance": 0,
+        "GST Rate (%)": 18,
+        "Rate": 25.50,
+        "TOP GSM": 120,
+        "Top Shade": "Brown",
+        "A-Flute GSM": 100,
+        "A-Backing GSM": 100,
+        "B-Flute GSM": 0,
+        "B-Backing GSM": 0,
+        "F3 GSM": 0,
+        "B3 GSM": 0,
+        "Backing Shade": "Brown",
+        "Printing Colour 1": "Black",
+        "Printing Colour 2": "",
+        "Die Cut Ups": "",
+        "Plate Weight": "",
+        "GSM Least Cost": "",
+        "Open Length": "",
+        "Open Width": "",
+        "Spec": "Handle with care"
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "Items_Bulk_Upload_Template.xlsx");
+  };
+
+  const calculateFieldsForBulk = (item: Partial<Item>) => {
+    const round2 = (value: number) => Math.round(value * 100) / 100;
+    const typeName = (item.typeName || "").trim().toUpperCase();
+    const ply = Number(item.ply || 0);
+    const length = Number(item.length || 0);
+    const breadth = Number(item.breadth || 0);
+    const height = Number(item.height || 0);
+    const ups = Number(item.ups || 0);
+    const openWidth = Number(item.openWidth || 0);
+    const flapFormulaMode = settings[0]?.flapAsPerCalculation || "current-logic";
+    
+    const flute = (item.flute || "").toUpperCase().trim().replace(/\s+/g, "");
+    const takeUpFactorMap: Record<string, number> = { A: 1.5, B: 1.35, C: 1.42, E: 1.26, "B+C": 1.38, "B+E": 1.3 };
+    const takeUpFactor = takeUpFactorMap[flute] || undefined;
+
+    const lOd = length > 0 ? round2(typeName === "RSC" && ply > 0 ? length + ply : length) : undefined;
+    const wOd = breadth > 0 ? round2(typeName === "RSC" && ply > 0 ? breadth + ply : breadth) : undefined;
+    const hOd = height > 0 ? round2(typeName === "RSC" && ply > 0 ? height + ply : height) : undefined;
+
+    let flap: number | undefined;
+    if (wOd !== undefined) {
+      if (flapFormulaMode === "type-based") {
+        if (["VERTICAL PLATE", "HORIZONTAL PLATE", "DIE CUT SHEET"].includes(typeName)) {
+          flap = undefined;
+        } else if (ply === 3) {
+          flap = round2(wOd / 2);
+        } else if (ply === 5) {
+          flap = round2(wOd / 2 + 1);
+        } else if (ply === 7) {
+          flap = round2(wOd / 2 + 2);
+        } else if (ply === 9) {
+          flap = round2(wOd / 2 + 3);
+        }
+      } else {
+        flap = round2(ply === 3 ? wOd / 2 : wOd / 2 + 1);
+      }
+    }
+
+    let deckleSize: number | undefined;
+    if (typeName && ups > 0) {
+      if (typeName === "RSC" && flap !== undefined && hOd !== undefined) {
+        deckleSize = round2((((flap + hOd + flap) * ups) + 20) / 25.4);
+      } else if (typeName === "TRAY" && openWidth > 0) {
+        deckleSize = round2(((openWidth * ups) + 20) / 25.4);
+      } else if (hOd !== undefined) {
+        deckleSize = round2(((hOd * ups) + 20) / 25.4);
+      }
+    }
+
+    const cuttingSize = flap !== undefined && flap > 1 && lOd !== undefined && wOd !== undefined
+      ? round2((((lOd + wOd) * 2) + 50) / 25.4)
+      : undefined;
+
+    const noOfParts = cuttingSize === undefined ? undefined : (cuttingSize * 25.4 < 1905 ? 1 : 2);
+
+    return { lOd, wOd, hOd, flap, deckleSize, cuttingSize, noOfParts, takeUpFactor };
+  };
+
+  const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const bstr = event.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+          alert("The file is empty.");
+          return;
+        }
+
+        setIsSubmitting(true);
+        const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
+        
+        const groupMap = new Map<string, string>();
+        groups.forEach(g => groupMap.set(g.name.toLowerCase(), g.id));
+
+        let maxErp = items.reduce((max, item) => (item.erp && item.erp > max ? item.erp : max), 0);
+
+        const newItems: Item[] = data.map((row: any) => {
+          const groupName = String(row["Item Group"] || "").trim().toLowerCase();
+          const gId = groupMap.get(groupName);
+          
+          if (!gId) {
+            console.warn(`Group not found: ${row["Item Group"]}`);
+          }
+
+          const rawItem: Partial<Item> = {
+            name: String(row["Item Name"] || "").trim(),
+            groupId: gId || "",
+            uom: String(row["UOM"] || "PCs").trim(),
+            erp: row["ERP Code"] ? parseInt(row["ERP Code"], 10) : ++maxErp,
+            customer: String(row["Customer"] || "").trim() || undefined,
+            itemType: (row["Item Type"] || "FG") as any,
+            typeName: String(row["Business Type"] || "").trim() || undefined,
+            length: row["Length"] ? Number(row["Length"]) : undefined,
+            breadth: row["Breadth"] ? Number(row["Breadth"]) : undefined,
+            height: row["Height"] ? Number(row["Height"]) : undefined,
+            ups: row["Ups"] ? Number(row["Ups"]) : undefined,
+            ply: row["PLY"] ? Number(row["PLY"]) : undefined,
+            flute: String(row["FLUTE"] || "").trim() || undefined,
+            opening: row["Opening Balance"] ? Number(row["Opening Balance"]) : 0,
+            gstRate: row["GST Rate (%)"] ? Number(row["GST Rate (%)"]) : 18,
+            rate: row["Rate"] ? Number(row["Rate"]) : undefined,
+            l1: row["TOP GSM"] ? Number(row["TOP GSM"]) : undefined,
+            topPaperShade: String(row["Top Shade"] || "").trim() || undefined,
+            f1: row["A-Flute GSM"] ? Number(row["A-Flute GSM"]) : undefined,
+            l2: row["A-Backing GSM"] ? Number(row["A-Backing GSM"]) : undefined,
+            f2: row["B-Flute GSM"] ? Number(row["B-Flute GSM"]) : undefined,
+            l3: row["B-Backing GSM"] ? Number(row["B-Backing GSM"]) : undefined,
+            f3: row["F3 GSM"] ? Number(row["F3 GSM"]) : undefined,
+            b3: row["B3 GSM"] ? Number(row["B3 GSM"]) : undefined,
+            backingPaperShade: String(row["Backing Shade"] || "").trim() || undefined,
+            printingColour1: String(row["Printing Colour 1"] || "").trim() || undefined,
+            printingColour2: String(row["Printing Colour 2"] || "").trim() || undefined,
+            dieCutUps: row["Die Cut Ups"] ? Number(row["Die Cut Ups"]) : undefined,
+            plateWeight: row["Plate Weight"] ? Number(row["Plate Weight"]) : undefined,
+            gsmLeastCost: row["GSM Least Cost"] ? Number(row["GSM Least Cost"]) : undefined,
+            openLength: row["Open Length"] ? Number(row["Open Length"]) : undefined,
+            openWidth: row["Open Width"] ? Number(row["Open Width"]) : undefined,
+            spec: String(row["Spec"] || "").trim() || undefined,
+          };
+
+          const calcs = calculateFieldsForBulk(rawItem);
+          return {
+            id: crypto.randomUUID(),
+            ...rawItem,
+            ...calcs,
+            ...audit,
+          } as Item;
+        }).filter(item => item.name && item.groupId);
+
+        if (newItems.length === 0) {
+          alert("No valid items found in the file. Ensure 'Item Name' and 'Item Group' columns are filled.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const existingNames = new Set(items.map(i => i.name.toLowerCase()));
+        const uniqueNewItems = newItems.filter(i => !existingNames.has(i.name.toLowerCase()));
+        
+        const skippedCount = newItems.length - uniqueNewItems.length;
+
+        if (uniqueNewItems.length > 0) {
+          await setItems([...items, ...uniqueNewItems]);
+          alert(`Successfully uploaded ${uniqueNewItems.length} items.${skippedCount > 0 ? ` Skipped ${skippedCount} duplicates.` : ""}`);
+        } else {
+          alert("All items in the file already exist.");
+        }
+      } catch (error) {
+        console.error("Bulk upload error:", error);
+        alert("Failed to parse or upload the Excel file.");
+      } finally {
+        setIsSubmitting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const exportToExcel = () => {
+    const dataToExport = filteredItems.map(item => ({
+      "ERP CODE": item.erp || "",
+      "Customer": item.customer || "",
+      "Item Name": item.name,
+      "Business Type": item.typeName || "",
+      "Length": item.length || "",
+      "Breadth": item.breadth || "",
+      "Height": item.height || "",
+      "Ups": item.ups || "",
+      "PLY": item.ply || "",
+      "FLUTE": item.flute || "",
+      "L (OD)": item.lOd || "",
+      "W (OD)": item.wOd || "",
+      "H (OD)": item.hOd || "",
+      "Flap": item.flap || "",
+      "Deckle Size": item.deckleSize || "",
+      "Cutting Size": item.cuttingSize || "",
+      "Rate": item.rate || "",
+      "Opening Balance": item.opening || 0,
+      "UOM": item.uom,
+      "GST Rate (%)": item.gstRate || 18,
+      "Item Type": item.itemType || "Others"
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Items");
+    XLSX.writeFile(wb, "Items_Master_Export.xlsx");
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -517,13 +760,51 @@ export function Items() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center pb-4 border-b border-black">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-black pb-4 gap-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Items Master</h2>
-        {!isFormOpen && (
-          <button onClick={() => setIsFormOpen(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 transition shadow">
-            <Plus size={18} /> Add New Item
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {!isFormOpen && (
+            <>
+              <button
+                onClick={downloadTemplate}
+                className="bg-white text-black border-2 border-black px-3 py-2 rounded font-bold hover:bg-slate-100 transition flex items-center text-sm"
+                title="Download Excel Template"
+              >
+                <Download size={18} className="mr-2" /> Template
+              </button>
+              
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-white text-black border-2 border-black px-3 py-2 rounded font-bold hover:bg-slate-100 transition flex items-center text-sm"
+                title="Upload Bulk Data"
+              >
+                <Upload size={18} className="mr-2" /> Bulk Upload
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleBulkUpload}
+                accept=".xlsx, .xls"
+                className="hidden"
+              />
+
+              <button
+                onClick={exportToExcel}
+                className="bg-emerald-50 text-emerald-700 border-2 border-emerald-700 px-3 py-2 rounded font-bold hover:bg-emerald-100 transition flex items-center text-sm"
+                title="Export to Excel"
+              >
+                <FileSpreadsheet size={18} className="mr-2" /> Export
+              </button>
+
+              <button 
+                onClick={() => setIsFormOpen(true)} 
+                className="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 transition flex items-center text-sm shadow"
+              >
+                <Plus size={20} className="mr-2" /> Add New Item
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {showQuickGroup && (
