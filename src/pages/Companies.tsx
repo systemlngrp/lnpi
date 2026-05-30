@@ -1,13 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useData } from "../hooks/useData";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, Download, FileSpreadsheet } from "lucide-react";
 import { Company } from "../types";
 import { Spinner } from "../components/Spinner";
 import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
 import { isMandatoryField } from "../lib/mandatoryFields";
+import * as XLSX from "xlsx";
 
 export function Companies() {
   const [companies, setCompanies, isLoading] = useData<Company>("companies", []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -38,6 +40,111 @@ export function Companies() {
     setDeviationAllowed("");
     setToleranceAllowed("");
     setEditingId(null);
+  };
+
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        "Company Name": "Example Company Ltd",
+        "Contact Person": "John Doe",
+        "Contact Number": "9876543210",
+        "Email Id": "john@example.com",
+        "Address": "123 Business Park",
+        "District": "Mumbai",
+        "State": "Maharashtra",
+        "GST NO": "27AAAAA0000A1Z5",
+        "GST Supply Type": "INTRA_STATE",
+        "Deviation Allowed (%)": 5,
+        "Tolerance Allowed (%)": 2
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "Companies_Bulk_Upload_Template.xlsx");
+  };
+
+  const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const bstr = event.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+          alert("The file is empty.");
+          return;
+        }
+
+        const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
+        const newCompanies: Company[] = data.map((row: any) => ({
+          id: crypto.randomUUID(),
+          name: String(row["Company Name"] || "").trim(),
+          contactPerson: String(row["Contact Person"] || "").trim() || undefined,
+          contactNumber: String(row["Contact Number"] || "").trim() || undefined,
+          email: String(row["Email Id"] || "").trim() || undefined,
+          address: String(row["Address"] || "").trim() || undefined,
+          district: String(row["District"] || "").trim() || undefined,
+          state: String(row["State"] || "").trim() || undefined,
+          gstNo: String(row["GST NO"] || "").trim() || undefined,
+          gstSupplyType: (row["GST Supply Type"] === "INTER_STATE" ? "INTER_STATE" : "INTRA_STATE") as any,
+          deviationAllowed: row["Deviation Allowed (%)"] ? Number(row["Deviation Allowed (%)"]) : undefined,
+          toleranceAllowed: row["Tolerance Allowed (%)"] ? Number(row["Tolerance Allowed (%)"]) : undefined,
+          ...audit,
+        })).filter(c => c.name);
+
+        if (newCompanies.length === 0) {
+          alert("No valid companies found in the file. Ensure 'Company Name' column is filled.");
+          return;
+        }
+
+        // Check for duplicates within existing companies
+        const existingNames = new Set(companies.map(c => c.name.toLowerCase()));
+        const uniqueNewCompanies = newCompanies.filter(c => !existingNames.has(c.name.toLowerCase()));
+        
+        const skippedCount = newCompanies.length - uniqueNewCompanies.length;
+
+        if (uniqueNewCompanies.length > 0) {
+          setCompanies([...companies, ...uniqueNewCompanies]);
+          alert(`Successfully uploaded ${uniqueNewCompanies.length} companies.${skippedCount > 0 ? ` Skipped ${skippedCount} duplicates.` : ""}`);
+        } else {
+          alert("All companies in the file already exist.");
+        }
+      } catch (error) {
+        console.error("Bulk upload error:", error);
+        alert("Failed to parse the Excel file. Please use the provided template.");
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const exportToExcel = () => {
+    const dataToExport = sortedCompanies.map(c => ({
+      "Company Name": c.name,
+      "Contact Person": c.contactPerson || "",
+      "Contact Number": c.contactNumber || "",
+      "Email Id": c.email || "",
+      "Address": c.address || "",
+      "District": c.district || "",
+      "State": c.state || "",
+      "GST NO": c.gstNo || "",
+      "GST Supply Type": c.gstSupplyType || "INTRA_STATE",
+      "Deviation Allowed (%)": c.deviationAllowed ?? "",
+      "Tolerance Allowed (%)": c.toleranceAllowed ?? ""
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Companies");
+    XLSX.writeFile(wb, "Companies_Master_Export.xlsx");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -123,17 +230,50 @@ export function Companies() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center border-b border-black pb-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-black pb-4 gap-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Companies Master</h2>
-        <button
-          onClick={() => {
-            setIsFormOpen(!isFormOpen);
-            if (isFormOpen) resetForm();
-          }}
-          className="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 transition flex items-center"
-        >
-          {isFormOpen ? "Close Form" : <><Plus size={20} className="mr-2" /> Add New Company</>}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={downloadTemplate}
+            className="bg-white text-black border-2 border-black px-3 py-2 rounded font-bold hover:bg-slate-100 transition flex items-center text-sm"
+            title="Download Excel Template"
+          >
+            <Download size={18} className="mr-2" /> Template
+          </button>
+          
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-white text-black border-2 border-black px-3 py-2 rounded font-bold hover:bg-slate-100 transition flex items-center text-sm"
+            title="Upload Bulk Data"
+          >
+            <Upload size={18} className="mr-2" /> Bulk Upload
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleBulkUpload}
+            accept=".xlsx, .xls"
+            className="hidden"
+          />
+
+          <button
+            onClick={exportToExcel}
+            className="bg-emerald-50 text-emerald-700 border-2 border-emerald-700 px-3 py-2 rounded font-bold hover:bg-emerald-100 transition flex items-center text-sm"
+            title="Export to Excel"
+          >
+            <FileSpreadsheet size={18} className="mr-2" /> Export
+          </button>
+
+          <button
+            onClick={() => {
+              setIsFormOpen(!isFormOpen);
+              if (isFormOpen) resetForm();
+            }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 transition flex items-center text-sm"
+          >
+            {isFormOpen ? "Close Form" : <><Plus size={20} className="mr-2" /> Add New</>}
+          </button>
+        </div>
       </div>
 
       {isFormOpen && (
