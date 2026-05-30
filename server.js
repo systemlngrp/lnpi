@@ -908,7 +908,7 @@ async function initDb(retries = 5) {
           \`district\` VARCHAR(255),
           \`state\` VARCHAR(255),
           \`gstNo\` VARCHAR(100),
-          `gstSupplyType` VARCHAR(20) DEFAULT 'INTRA_STATE',
+          \`gstSupplyType\` VARCHAR(20) DEFAULT 'INTRA_STATE',
           \`deviationAllowed\` DECIMAL(10,2),
           \`toleranceAllowed\` DECIMAL(10,2),
           \`updatedBy\` VARCHAR(255),
