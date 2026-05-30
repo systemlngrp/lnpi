@@ -1108,7 +1108,10 @@ async function initDb(retries = 5) {
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Planned',
           \`date\` VARCHAR(50) NOT NULL,
           \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
+          \`updateTimestamp\` VARCHAR(255),
+          \`planNo\` VARCHAR(100),
+          \`loadedQty\` DECIMAL(15,2) DEFAULT 0,
+          \`canceledQty\` DECIMAL(15,2) DEFAULT 0
         )
       `);
       await db.query(`

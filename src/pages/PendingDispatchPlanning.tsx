@@ -307,7 +307,7 @@ export function PendingDispatchPlanning() {
     reservedDispatchPlanQtyByItemId,
   ]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (selectedIds.size === 0) {
       alert("Please select at least one order to plan.");
       return;
@@ -328,7 +328,7 @@ export function PendingDispatchPlanning() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
       const timestamp = new Date().toISOString();
       let nextPlanNo = Math.max(0, ...dispatchPlans.map(p => {
         const match = p.planNo?.match(/DP-(\d+)/);
@@ -356,13 +356,17 @@ export function PendingDispatchPlanning() {
         };
       });
 
-      setDispatchPlans([...dispatchPlans, ...newPlans]);
+      await setDispatchPlans([...dispatchPlans, ...newPlans]);
       
       setSelectedIds(new Set());
       setRowPlannedQty({});
-      setIsSubmitting(false);
       alert("Dispatch plans submitted successfully!");
-    }, 800);
+    } catch (err) {
+      console.error("Failed to submit dispatch plans:", err);
+      alert("Failed to submit dispatch plans. Please check the console for details.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
