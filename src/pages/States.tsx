@@ -77,6 +77,46 @@ export function States() {
     }
   };
 
+  const handleAutoPopulate = async () => {
+    const indianStates = [
+      "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
+      "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+      "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+      "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+      "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
+      "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+    ];
+
+    const existingNames = new Set(states.map(s => s.name.toLowerCase()));
+    const newStates: StateMaster[] = indianStates
+      .filter(name => !existingNames.has(name.toLowerCase()))
+      .map(name => ({
+        id: crypto.randomUUID(),
+        name,
+        active: "Yes",
+        updatedBy: "System User",
+        updateTimestamp: new Date().toISOString()
+      }));
+
+    if (newStates.length === 0) {
+      alert("All states and UTs are already present.");
+      return;
+    }
+
+    if (!confirm(`Add ${newStates.length} new states/UTs?`)) return;
+
+    setIsSubmitting(true);
+    try {
+      await setStates([...states, ...newStates]);
+      alert(`Successfully added ${newStates.length} states/UTs.`);
+    } catch (error) {
+      console.error("Auto-populate failed:", error);
+      alert("Failed to auto-populate states.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {isFormOpen ? (
@@ -138,8 +178,16 @@ export function States() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search state"
-                className="w-[320px] max-w-full rounded-full border border-slate-300 px-6 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-[280px] max-w-full rounded-full border border-slate-300 px-6 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
+              <button
+                type="button"
+                onClick={handleAutoPopulate}
+                disabled={isSubmitting}
+                className="px-6 py-3 rounded-2xl border-2 border-emerald-600 text-emerald-700 font-bold hover:bg-emerald-50 transition"
+              >
+                Auto-Populate All
+              </button>
               <button
                 type="button"
                 onClick={() => navigate(-1)}

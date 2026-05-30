@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Upload, Download } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   GateEntry,
@@ -16,6 +16,7 @@ import {
 import { generateTransactionNo } from "../lib/serial";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
+import * as XLSX from "xlsx";
 
 type PackingSlipDraft = {
   id: string;
@@ -302,6 +303,97 @@ export function MaterialInForm() {
       delete next[lineId];
       return next;
     });
+  };
+
+  const downloadReelTemplate = (materialName: string) => {
+    const templateData = [
+      {
+        "Supplier Reel No.": "SR-001",
+        "Weight (KG)": 250.50,
+        "Supplier PO No.": "VPO-12345",
+        "Our PO No.": "",
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reels");
+    XLSX.writeFile(wb, `Reel_Template_${materialName.replace(/\s+/g, '_')}.xlsx`);
+  };
+
+  const handleReelBulkUpload = (e: React.ChangeEvent<HTMLInputElement>, line: MaterialLine) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const bstr = event.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+          alert("The file is empty.");
+          return;
+        }
+
+        let nextReelNo = packingSlips
+          .map((row) => row.ourReelNo)
+          .map((value) => Number(String(value).replace(/\D/g, "")))
+          .filter((value) => Number.isFinite(value));
+        const draftNumbers = getAllDraftSlips()
+          .map((row) => Number(String(row.ourReelNo).replace(/\D/g, "")))
+          .filter((value) => Number.isFinite(value));
+        
+        let currentMax = Math.max(0, ...nextReelNo, ...draftNumbers);
+
+        const poOptions = getApprovedPoOptionsForMaterial(line.itemId);
+
+        const newDrafts: PackingSlipDraft[] = data.map((row: any) => {
+          const supplierPoNo = String(row["Supplier PO No."] || "").trim();
+          const ourPoNoSearch = String(row["Our PO No."] || "").trim().toLowerCase();
+          
+          let matchedPoId = "";
+          let matchedPoNo = "";
+
+          if (ourPoNoSearch) {
+             const matched = poOptions.find(opt => opt.label.toLowerCase().includes(ourPoNoSearch));
+             if (matched) {
+               matchedPoId = matched.value;
+               matchedPoNo = matched.label;
+             }
+          }
+
+          return {
+            id: crypto.randomUUID(),
+            materialLineId: line.id,
+            materialId: line.itemId,
+            supplierReelNo: String(row["Supplier Reel No."] || "").trim(),
+            ourReelNo: formatReelNo(++currentMax),
+            weightKg: String(row["Weight (KG)"] || "0"),
+            supplierPoNo,
+            ourPoId: matchedPoId,
+            ourPoNo: matchedPoNo,
+          };
+        });
+
+        setPackingSlipDrafts((prev) => {
+          const nextDrafts = [...(prev[line.id] || []), ...newDrafts];
+          const next = { ...prev, [line.id]: nextDrafts };
+          syncReelLineTotals(line.id, nextDrafts);
+          return next;
+        });
+
+        alert(`Successfully uploaded ${newDrafts.length} reels.`);
+      } catch (error) {
+        console.error("Bulk upload error:", error);
+        alert("Failed to parse the Excel file.");
+      }
+      e.target.value = "";
+    };
+    reader.readAsBinaryString(file);
   };
 
   const handleAddPackingSlip = (line: MaterialLine) => {
@@ -677,13 +769,31 @@ export function MaterialInForm() {
                                 <span className="text-amber-700 uppercase">PO Rate: Rs {Number(line.poRate || 0).toFixed(2)}</span>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleAddPackingSlip(line)}
-                            className="inline-flex items-center gap-2 rounded bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700 transition"
-                          >
-                            <Plus size={16} /> Add Reel
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => downloadReelTemplate(getMaterial(line.itemId)?.name || "Reel")}
+                              className="inline-flex items-center gap-2 rounded border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50 transition"
+                            >
+                              <Download size={16} /> Template
+                            </button>
+                            <label className="inline-flex items-center gap-2 rounded border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50 transition cursor-pointer">
+                              <Upload size={16} /> Bulk Upload
+                              <input
+                                type="file"
+                                accept=".xlsx, .xls"
+                                className="hidden"
+                                onChange={(e) => handleReelBulkUpload(e, line)}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleAddPackingSlip(line)}
+                              className="inline-flex items-center gap-2 rounded bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700 transition"
+                            >
+                              <Plus size={16} /> Add Reel
+                            </button>
+                          </div>
                         </div>
 
                         <div className="overflow-x-auto">
