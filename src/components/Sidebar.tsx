@@ -198,6 +198,11 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
+    section: "Machine-wise Entry",
+    color: "bg-teal-900",
+    items: [], // Will be populated dynamically in the component
+  },
+  {
     section: "Samples",
     color: "bg-teal-700",
     items: [
@@ -274,6 +279,58 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [machines] = useData<Machine>("machines", []);
+  const [settings] = useData<Setting>("settings", []);
+  const [items] = useData<Item>("items", []);
+  const [processing] = useData<ProductionProcessing>("production_processing", []);
+
+  const mandatoryMachinesMapping = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
+
+  const machineWiseCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const activeProductions = productions.filter(p => 
+      p.status !== "Completed" && p.status !== "Cancelled" && !p.cancelTimestamp && !p.tallyTimestamp
+    );
+
+    activeProductions.forEach(p => {
+      const item = items.find(i => i.id === p.itemId);
+      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesMapping, item?.typeName);
+      
+      requiredMachines.forEach(machineName => {
+        const machine = machines.find(m => m.name.trim().toLowerCase() === machineName.trim().toLowerCase());
+        if (!machine) return;
+
+        const reportedQty = processing
+          .filter(pr => pr.productionId === p.id && pr.machineId === machine.id)
+          .reduce((sum, pr) => sum + Number(pr.qty || 0), 0);
+        
+        if (Number(p.qty || 0) > reportedQty) {
+          counts[machine.id] = (counts[machine.id] || 0) + 1;
+        }
+      });
+    });
+    return counts;
+  }, [productions, items, machines, processing, mandatoryMachinesMapping]);
+
+  const dynamicNavigation = useMemo(() => {
+    return NAVIGATION.map(group => {
+      if (group.section === "Machine-wise Entry") {
+        return {
+          ...group,
+          items: machines
+            .filter(m => (machineWiseCounts[m.id] || 0) > 0)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(m => ({
+              name: m.name,
+              href: `/production/pending-machine-processing?machineId=${m.id}`,
+              icon: Hammer,
+              count: machineWiseCounts[m.id]
+            }))
+        };
+      }
+      return group;
+    });
+  }, [machines, machineWiseCounts]);
 
   const normalizedIndents = indents.map((indent) =>
     withIndentTotals(indent, indentLines.filter((line) => line.indentId === indent.id))
@@ -416,13 +473,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   consumptions.filter(c => isPendingPH(c.status)).length
   };
 
-  const navigation = NAVIGATION;
+  const navigation = dynamicNavigation;
 
   useEffect(() => {
     const next: Record<string, boolean> = {};
     for (const group of navigation) next[group.section] = true;
     setCollapsedSections(next);
-  }, []);
+  }, [navigation]);
 
   const toggleSection = (section: string) => {
     setCollapsedSections((prev) => {
@@ -457,63 +514,72 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
             <X size={20} />
         </button>
       </div>
-      <nav className="flex-1 space-y-3 px-2 py-4 overflow-y-auto">
-        {navigation.map((group) => (
-          <div key={group.section} className={cn("p-1 rounded flex flex-col border border-white/10", group.color)}>
-            {!isCollapsed ? (
-              <button
-                type="button"
-                onClick={() => toggleSection(group.section)}
-                className="mb-1 flex w-full items-center justify-between rounded px-1 pt-0.5 pb-1 text-left text-[10px] font-bold uppercase tracking-wider text-white/70 hover:bg-black/10"
-              >
-                <span className="whitespace-nowrap">{group.section}</span>
-                {collapsedSections[group.section] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-              </button>
-            ) : null}
-            <div className={cn("space-y-px", !isCollapsed && collapsedSections[group.section] && "hidden")}>
-              {group.items.filter((item) => hasAccess(item.href)).map((item) => {
-                const isActive = (item.href === "/" && location.pathname === "/") || 
-                                 (item.href !== "/" && (location.pathname === item.href || (location.pathname.startsWith(item.href) && location.pathname[item.href.length] === "/")));
-                const count = item.countKey ? counts[item.countKey] : 0;
-                
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    onClick={onClose}
-                    title={item.name}
-                    className={cn(
-                      isActive
-                        ? "bg-white text-black font-bold shadow-inner"
-                        : "text-white hover:bg-black/20 hover:text-white font-medium",
-                      "group flex items-center justify-between rounded-sm py-1.5 text-[11px] transition-all whitespace-nowrap",
-                      isCollapsed ? "px-2" : "px-2"
-                    )}
-                  >
-                    <div className="flex items-center">
-                      <item.icon
-                        className={cn(
-                          isActive ? "text-black" : "text-white",
-                          "mr-2 h-4 w-4 shrink-0"
-                        )}
-                        aria-hidden="true"
-                      />
-                      {!isCollapsed && <span>{item.name}</span>}
-                    </div>
-                    {count > 0 && !isCollapsed && (
-                      <span className={cn(
-                        "flex items-center justify-center min-w-[18px] h-4.5 px-1 rounded-full text-[10px] font-black tracking-tighter shrink-0 ml-3",
-                        isActive ? "bg-black text-white" : "bg-white text-black"
-                      )}>
-                        {count}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+      <nav className="flex-1 space-y-3 px-2 py-4 overflow-y-auto border-r border-white/5">
+        {navigation.map((group) => {
+          const visibleItems = group.items.filter((item) => hasAccess(item.href));
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={group.section} className={cn("p-1 rounded flex flex-col border border-white/10", group.color)}>
+              {!isCollapsed ? (
+                <button
+                  type="button"
+                  onClick={() => toggleSection(group.section)}
+                  className="mb-1 flex w-full items-center justify-between rounded px-1 pt-0.5 pb-1 text-left text-[10px] font-bold uppercase tracking-wider text-white/70 hover:bg-black/10"
+                >
+                  <span className="whitespace-nowrap">{group.section}</span>
+                  {collapsedSections[group.section] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                </button>
+              ) : null}
+              <div className={cn("space-y-px", !isCollapsed && collapsedSections[group.section] && "hidden")}>
+                {visibleItems.map((item) => {
+                  const itemUrl = new URL(item.href, window.location.origin);
+                  const isActive = (item.href === "/" && location.pathname === "/") || 
+                                   (item.href !== "/" && (
+                                     location.pathname === itemUrl.pathname && 
+                                     (!itemUrl.search || location.search === itemUrl.search)
+                                   ));
+                  const count = item.countKey ? counts[item.countKey] : (item as any).count || 0;
+                  
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      onClick={onClose}
+                      title={item.name}
+                      className={cn(
+                        isActive
+                          ? "bg-white text-black font-bold shadow-inner"
+                          : "text-white hover:bg-black/20 hover:text-white font-medium",
+                        "group flex items-center justify-between rounded-sm py-1.5 text-[11px] transition-all whitespace-nowrap",
+                        isCollapsed ? "px-2" : "px-2"
+                      )}
+                    >
+                      <div className="flex items-center">
+                        <item.icon
+                          className={cn(
+                            isActive ? "text-black" : "text-white",
+                            "mr-2 h-4 w-4 shrink-0"
+                          )}
+                          aria-hidden="true"
+                        />
+                        {!isCollapsed && <span className="truncate max-w-[160px]">{item.name}</span>}
+                      </div>
+                      {count > 0 && !isCollapsed && (
+                        <span className={cn(
+                          "flex items-center justify-center min-w-[18px] h-4.5 px-1 rounded-full text-[10px] font-black tracking-tighter shrink-0 ml-3",
+                          isActive ? "bg-black text-white" : "bg-white text-black"
+                        )}>
+                          {count}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
     </div>
   );
