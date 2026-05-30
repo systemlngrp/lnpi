@@ -1622,7 +1622,7 @@ async function initDb(retries = 5) {
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
-      \`);
+      `);
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`invoice_line_items\` (

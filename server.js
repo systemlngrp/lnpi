@@ -32,6 +32,154 @@ app.get("/uploads/:filename", async (req, res, next) => {
   }
 });
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";
+const AUTH_TTL_SECONDS = Number(process.env.AUTH_TTL_SECONDS || 60 * 60 * 24);
+function base64UrlEncode(input) {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
+  return buf.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+function base64UrlDecodeToString(input) {
+  const pad = input.length % 4 === 0 ? "" : "=".repeat(4 - input.length % 4);
+  const b64 = input.replace(/-/g, "+").replace(/_/g, "/") + pad;
+  return Buffer.from(b64, "base64").toString("utf8");
+}
+function signToken(payload) {
+  const header = { alg: "HS256", typ: "JWT" };
+  const now = Math.floor(Date.now() / 1e3);
+  const body = { ...payload, iat: now, exp: now + AUTH_TTL_SECONDS };
+  const headerPart = base64UrlEncode(JSON.stringify(header));
+  const bodyPart = base64UrlEncode(JSON.stringify(body));
+  const data = `${headerPart}.${bodyPart}`;
+  const sig = crypto.createHmac("sha256", AUTH_SECRET).update(data).digest();
+  return `${data}.${base64UrlEncode(sig)}`;
+}
+function verifyToken(token) {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [headerPart, bodyPart, sigPart] = parts;
+  const data = `${headerPart}.${bodyPart}`;
+  const expected = crypto.createHmac("sha256", AUTH_SECRET).update(data).digest();
+  const expectedPart = base64UrlEncode(expected);
+  if (sigPart.length !== expectedPart.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sigPart), Buffer.from(expectedPart))) return null;
+  try {
+    const body = JSON.parse(base64UrlDecodeToString(bodyPart));
+    const exp = Number(body?.exp || 0);
+    const now = Math.floor(Date.now() / 1e3);
+    if (!exp || exp < now) return null;
+    return body;
+  } catch {
+    return null;
+  }
+}
+function normalizeMenuAccess(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((v) => String(v)).filter(Boolean);
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map((v) => String(v)).filter(Boolean);
+    } catch {
+    }
+  }
+  return [];
+}
+function hasPermission(user, required) {
+  if (user.role === "Admin") return true;
+  if (user.status !== "Active") return false;
+  const list = user.menuAccess || [];
+  if (list.includes("*")) return true;
+  if (!required) return false;
+  return list.some((entry) => {
+    if (!entry) return false;
+    if (entry === required) return true;
+    if (required.startsWith(entry)) return true;
+    if (entry.startsWith(required)) return true;
+    if (entry.endsWith("/*") && required.startsWith(entry.slice(0, -1))) return true;
+    return false;
+  });
+}
+function requireAuth(req, res, next) {
+  const auth = String(req.headers.authorization || "");
+  const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "Unauthorized" });
+  const uid = String(payload.uid || "");
+  if (!uid) return res.status(401).json({ error: "Unauthorized" });
+  req.authUserId = uid;
+  next();
+}
+app.post("/api/auth/login", async (req, res) => {
+  const identifier = String(req.body?.identifier || req.body?.userId || req.body?.email || "").trim();
+  const password = String(req.body?.password || "").trim();
+  if (!identifier || !password) {
+    return res.status(400).json({ error: "Missing credentials" });
+  }
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM `users` WHERE userId = ? OR email = ? LIMIT 1",
+      [identifier, identifier]
+    );
+    const row = rows[0];
+    if (!row) return res.status(401).json({ error: "Invalid credentials" });
+    const status = String(row.status || "Active") === "Inactive" ? "Inactive" : "Active";
+    if (status !== "Active") return res.status(403).json({ error: "User is inactive" });
+    const storedPassword = String(row.password || "");
+    if (!storedPassword || storedPassword !== password) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    const user = {
+      id: String(row.id),
+      userId: String(row.userId || ""),
+      name: String(row.name || ""),
+      email: row.email ? String(row.email) : null,
+      role: String(row.role || "Employee") === "Admin" ? "Admin" : "Employee",
+      status,
+      menuAccess: normalizeMenuAccess(row.menuAccess)
+    };
+    const token = signToken({ uid: user.id });
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        menuAccess: user.menuAccess
+      }
+    });
+  } catch (error) {
+    console.error("[AUTH] login failed:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+app.get("/api/auth/me", requireAuth, async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  res.json({
+    id: user.id,
+    userId: user.userId,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    menuAccess: user.menuAccess
+  });
+});
+app.post("/api/auth/logout", requireAuth, async (_req, res) => {
+  res.json({ success: true });
+});
+app.use("/api", (req, res, next) => {
+  if (req.path.startsWith("/auth/") || req.path === "/db-status") return next();
+  return requireAuth(req, res, next);
+});
 if (!fs.existsSync(path.join(process.cwd(), "uploads"))) {
   fs.mkdirSync(path.join(process.cwd(), "uploads"));
 }
@@ -154,7 +302,7 @@ async function getDeleteBlockers(db, tableName, id) {
   for (const ref of refs) {
     try {
       const [rows] = await db.query(`SELECT COUNT(*) as cnt FROM \`${ref.table}\` WHERE \`${ref.column}\` = ?`, [id]);
-      const count = Number((rows == null ? void 0 : rows[0])?.cnt || 0);
+      const count = Number(rows?.[0]?.cnt || 0);
       if (count > 0) blockers.push({ label: ref.label, count });
     } catch (err) {
       console.warn(`[DB] Delete reference check failed: ${tableName} -> ${ref.table}.${ref.column}`, err.message);
@@ -486,6 +634,127 @@ async function getPool() {
   });
   return pool;
 }
+async function loadAuthUserById(userId) {
+  const db = await getPool();
+  if (!db) return null;
+  const [rows] = await db.query("SELECT * FROM `users` WHERE id = ? LIMIT 1", [userId]);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    userId: String(row.userId || ""),
+    name: String(row.name || ""),
+    email: row.email ? String(row.email) : null,
+    role: String(row.role || "Employee") === "Admin" ? "Admin" : "Employee",
+    status: String(row.status || "Active") === "Inactive" ? "Inactive" : "Active",
+    menuAccess: normalizeMenuAccess(row.menuAccess)
+  };
+}
+async function ensureDevSeedUser(db) {
+  const userId = "system@lngrp.in";
+  const password = "abcd";
+  const [rows] = await db.query("SELECT id FROM `users` WHERE userId = ? OR email = ? LIMIT 1", [userId, userId]);
+  const existing = rows[0];
+  if (existing?.id) return;
+  const id = crypto.randomUUID();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const seed = {
+    id,
+    userId,
+    name: "System Admin",
+    mobile: "",
+    email: userId,
+    password,
+    role: "Admin",
+    status: "Active",
+    menuAccess: JSON.stringify(["*"]),
+    updatedBy: "System",
+    updateTimestamp: now
+  };
+  const keys = Object.keys(seed);
+  const values = Object.values(seed);
+  const placeholders = keys.map(() => "?").join(",");
+  const columnNames = keys.map((k) => `\`${k}\``).join(",");
+  await db.query(`INSERT INTO \`users\` (${columnNames}) VALUES (${placeholders})`, values);
+  console.log("[DB] Seeded dev admin user:", userId);
+}
+async function getRequestUser(req) {
+  const id = String(req.authUserId || "");
+  if (!id) return null;
+  return await loadAuthUserById(id);
+}
+function entityPermissionKey(entity) {
+  switch (entity) {
+    case "users":
+      return "/masters/users";
+    case "item_groups":
+      return "/masters/item-groups";
+    case "material_groups":
+      return "/masters/material-groups";
+    case "items":
+      return "/masters/items";
+    case "materials":
+      return "/masters/materials";
+    case "suppliers":
+      return "/masters/suppliers";
+    case "states":
+      return "/masters/states";
+    case "units":
+      return "/masters/units";
+    case "color_masters":
+      return "/masters/colors";
+    case "companies":
+      return "/masters/companies";
+    case "trucks":
+      return "/masters/trucks";
+    case "machines":
+      return "/masters/machines";
+    case "settings":
+      return "/masters/settings";
+    case "material_in":
+    case "material_in_packing_slips":
+      return "/material-in";
+    case "indent_lines":
+    case "indents":
+      return "/indent";
+    case "purchase_orders":
+    case "purchase_order_lines":
+      return "/purchase-orders";
+    case "gate_entries":
+    case "gate_entry_photos":
+      return "/gate-entry";
+    case "material_issues":
+    case "material_issue_lines":
+    case "material_issue_reel_lines":
+    case "material_returns":
+    case "material_return_lines":
+    case "material_return_reel_lines":
+    case "consumptions":
+      return "/material-movement";
+    case "orders":
+    case "orders_schedule":
+      return "/orders";
+    case "productions":
+      return "/production";
+    case "production_processing":
+      return "/production-processing";
+    case "sample_requests":
+      return "/samples";
+    case "dispatch_plans":
+      return "/dispatch";
+    case "loading_slips":
+      return "/loading";
+    case "material_visit":
+      return "/material-visit";
+    case "invoices":
+    case "invoice_line_items":
+      return "/billing";
+    case "realization_rate_chart":
+      return "/reports";
+    default:
+      return "";
+  }
+}
 app.get("/api/db-status", async (req, res) => {
   const db = await getPool();
   if (!db) {
@@ -657,7 +926,7 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`purchase_orders\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`poNo\` VARCHAR(100) NOT NULL,
-          \`indentId\` VARCHAR(36) NOT NULL,
+          \`indentId\` VARCHAR(36),
           \`supplierId\` VARCHAR(36) NOT NULL,
           \`poDate\` VARCHAR(50) NOT NULL,
           \`requiredDate\` VARCHAR(50) NOT NULL,
@@ -674,6 +943,18 @@ async function initDb(retries = 5) {
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
+      try {
+        const [columns] = await db.query(
+          "SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'purchase_orders' AND COLUMN_NAME = 'indentId'",
+          [database]
+        );
+        if (columns.length > 0 && columns[0].IS_NULLABLE === "NO") {
+          console.log("[DB] Making purchase_orders.indentId nullable...");
+          await db.query("ALTER TABLE `purchase_orders` MODIFY `indentId` VARCHAR(36) NULL");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not make purchase_orders.indentId nullable:", err.message);
+      }
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`purchase_order_lines\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
@@ -948,6 +1229,9 @@ async function initDb(retries = 5) {
           \`accTimestamp\` VARCHAR(255),
           \`accEmailId\` VARCHAR(255),
           \`accounts_remark\` TEXT,
+          \`debitNote\` VARCHAR(255),
+          \`debitNoteDate\` VARCHAR(50),
+          \`debitNoteAmount\` DECIMAL(15,2),
           \`mdTimestamp\` VARCHAR(255),
           \`mdEmailId\` VARCHAR(255),
           \`md_approval_remark\` TEXT,
@@ -968,6 +1252,9 @@ async function initDb(retries = 5) {
           \`mobile\` VARCHAR(20),
           \`email\` VARCHAR(255),
           \`password\` VARCHAR(255),
+          \`role\` VARCHAR(20) NOT NULL DEFAULT 'Employee',
+          \`status\` VARCHAR(20) NOT NULL DEFAULT 'Active',
+          \`menuAccess\` JSON,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -1142,20 +1429,6 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
-        CREATE TABLE IF NOT EXISTS \`material_visit\` (
-          \`id\` VARCHAR(36) PRIMARY KEY,
-          \`visitNo\` VARCHAR(100) NOT NULL,
-          \`date\` VARCHAR(50) NOT NULL,
-          \`supplierId\` VARCHAR(36),
-          \`visitorName\` VARCHAR(255) NOT NULL,
-          \`purpose\` TEXT NOT NULL,
-          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending',
-          \`remarks\` TEXT,
-          \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
-        )
-      `);
-      await db.query(`
         CREATE TABLE IF NOT EXISTS \`invoices\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`invoiceNo\` VARCHAR(100) NOT NULL,
@@ -1214,6 +1487,20 @@ async function initDb(retries = 5) {
           \`createdAt\` DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`material_visit\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`visitNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`supplierId\` VARCHAR(36),
+          \`visitorName\` VARCHAR(255) NOT NULL,
+          \`purpose\` TEXT NOT NULL,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending',
+          \`remarks\` TEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
       console.log("[DB] Database tables initialized successfully.");
       const migrations = [
         { table: "items", column: "groupId", type: "VARCHAR(36) NOT NULL" },
@@ -1270,7 +1557,7 @@ async function initDb(retries = 5) {
         { table: "indent_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "indent_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "purchase_orders", column: "poNo", type: "VARCHAR(100) NOT NULL" },
-        { table: "purchase_orders", column: "indentId", type: "VARCHAR(36) NOT NULL" },
+        { table: "purchase_orders", column: "indentId", type: "VARCHAR(36)" },
         { table: "purchase_orders", column: "supplierId", type: "VARCHAR(36) NOT NULL" },
         { table: "purchase_orders", column: "poDate", type: "VARCHAR(50) NOT NULL" },
         { table: "purchase_orders", column: "requiredDate", type: "VARCHAR(50) NOT NULL" },
@@ -1445,6 +1732,7 @@ async function initDb(retries = 5) {
         { table: "users", column: "password", type: "VARCHAR(255)" },
         { table: "companies", column: "deviationAllowed", type: "DECIMAL(10,2)" },
         { table: "companies", column: "toleranceAllowed", type: "DECIMAL(10,2)" },
+        { table: "companies", column: "gstSupplyType", type: "VARCHAR(20) DEFAULT 'INTRA_STATE'" },
         { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },
         { table: "orders", column: "approvedTimestamp", type: "VARCHAR(255)" },
@@ -1526,7 +1814,6 @@ async function initDb(retries = 5) {
         { table: "companies", column: "district", type: "VARCHAR(255)" },
         { table: "companies", column: "state", type: "VARCHAR(255)" },
         { table: "companies", column: "gstNo", type: "VARCHAR(100)" },
-        { table: "companies", column: "gstSupplyType", type: "VARCHAR(20) DEFAULT 'INTRA_STATE'" },
         { table: "machines", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "machines", column: "maxOutputPerHour", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "machines", column: "updatedBy", type: "VARCHAR(255)" },
@@ -1587,11 +1874,13 @@ async function initDb(retries = 5) {
         { table: "dispatch_plans", column: "canceledQty", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "loading_slips", column: "slipNo", type: "VARCHAR(100) NOT NULL" },
         { table: "loading_slips", column: "date", type: "VARCHAR(50) NOT NULL" },
-        { table: "loading_slips", column: "truckId", type: "VARCHAR(36) NOT NULL" },
+        { table: "loading_slips", column: "truckId", type: "VARCHAR(36)" },
         { table: "loading_slips", column: "lines", type: "JSON NOT NULL" },
         { table: "loading_slips", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "loading_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "loading_slips", column: "invoiceId", type: "VARCHAR(36)" },
+        { table: "loading_slips", column: "packingDetails", type: "JSON" },
+        { table: "loading_slips", column: "extraItemsQty", type: "DECIMAL(15,2)" },
         { table: "invoices", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
         { table: "invoices", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "invoices", column: "companyId", type: "VARCHAR(36) NOT NULL" },
@@ -1602,8 +1891,6 @@ async function initDb(retries = 5) {
         { table: "invoices", column: "igst", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoices", column: "totalAfterGst", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoices", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
-        { table: "invoices", column: "tallyTimestamp", type: "VARCHAR(255)" },
-        { table: "invoices", column: "tallyBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "invoice_line_items", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
@@ -1653,8 +1940,6 @@ async function initDb(retries = 5) {
         { table: "loading_slips", column: "cancelReason", type: "TEXT" },
         { table: "loading_slips", column: "cancelledAt", type: "VARCHAR(255)" },
         { table: "loading_slips", column: "cancelledBy", type: "VARCHAR(255)" },
-        { table: "loading_slips", column: "packingDetails", type: "JSON" },
-        { table: "loading_slips", column: "extraItemsQty", type: "DECIMAL(15,2)" },
         { table: "settings", column: "reelAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "flapAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "cuttingSizeAsPerCalculation", type: "TEXT" },
@@ -1668,18 +1953,21 @@ async function initDb(retries = 5) {
         { table: "settings", column: "organizationLogo", type: "VARCHAR(255)" },
         { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" },
-        { table: "material_in", column: "plant_head_remark", type: "TEXT" },
-        { table: "material_in", column: "accounts_remark", type: "TEXT" },
-        { table: "material_in", column: "md_approval_remark", type: "TEXT" },
+        { table: "users", column: "role", type: "VARCHAR(20) NOT NULL DEFAULT 'Employee'" },
+        { table: "users", column: "status", type: "VARCHAR(20) NOT NULL DEFAULT 'Active'" },
+        { table: "users", column: "menuAccess", type: "JSON" },
         { table: "material_in", column: "phTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "phEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "plant_head_remark", type: "TEXT" },
         { table: "material_in", column: "accTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "accEmailId", type: "VARCHAR(255)" },
-        { table: "material_in", column: "mdTimestamp", type: "VARCHAR(255)" },
-        { table: "material_in", column: "mdEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "accounts_remark", type: "TEXT" },
         { table: "material_in", column: "debitNote", type: "VARCHAR(255)" },
         { table: "material_in", column: "debitNoteDate", type: "VARCHAR(50)" },
         { table: "material_in", column: "debitNoteAmount", type: "DECIMAL(15,2)" },
+        { table: "material_in", column: "mdTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "mdEmailId", type: "VARCHAR(255)" },
+        { table: "material_in", column: "md_approval_remark", type: "TEXT" },
         { table: "material_in", column: "tallyTimestamp", type: "VARCHAR(255)" }
       ];
       for (const m of migrations) {
@@ -1740,6 +2028,13 @@ async function initDb(retries = 5) {
       } catch (err) {
         console.warn("[DB] Could not ensure foreign keys:", err.message);
       }
+      try {
+        if (process.env.NODE_ENV !== "production") {
+          await ensureDevSeedUser(db);
+        }
+      } catch (err) {
+        console.warn("[DB] Could not ensure dev seed user:", err.message);
+      }
       return;
     } catch (error) {
       console.error(`[DB] Initialization attempt ${i + 1} failed:`, error.message);
@@ -1760,6 +2055,14 @@ const createHandlers = (tableName) => {
       try {
         console.log(`[DB] Fetching all from ${tableName}`);
         let rows;
+        if (tableName === "users") {
+          [rows] = await db.query("SELECT * FROM `users` ORDER BY updateTimestamp DESC");
+          const sanitized = rows.map((r) => {
+            const { password, ...rest } = r || {};
+            return { ...rest };
+          });
+          return res.json(sanitized);
+        }
         if (tableName === "items") {
           [rows] = await db.query(`
             SELECT
@@ -1840,6 +2143,12 @@ const createHandlers = (tableName) => {
           delete data.invoiced;
           delete data.balance;
         }
+        if (tableName === "orders") {
+          const rateNumber = Number(data.rate);
+          if (!Number.isFinite(rateNumber) || rateNumber <= 0) {
+            return res.status(400).json({ error: "Rate must be greater than 0." });
+          }
+        }
         if (tableName === "production_processing") {
           const missing = [];
           if (!String(data.productionId || "").trim()) missing.push("Job/Production");
@@ -1855,7 +2164,9 @@ const createHandlers = (tableName) => {
           data.machineName = normalizeMachineName(String(data.machineName || ""));
           const normalizedMachineNameLower = String(data.machineName || "").trim().toLowerCase();
           const isCorrugationLiner = normalizedMachineNameLower === "corrugation liner";
-          const [prodRows] = await db.query("SELECT qty FROM `productions` WHERE id = ? LIMIT 1", [String(data.productionId)]);
+          const [prodRows] = await db.query("SELECT qty FROM `productions` WHERE id = ? LIMIT 1", [
+            String(data.productionId)
+          ]);
           const plannedQty = Number(prodRows[0]?.qty || 0);
           if (!isCorrugationLiner && plannedQty > 0) {
             const [sumRows] = await db.query(
@@ -1866,7 +2177,11 @@ const createHandlers = (tableName) => {
             const nextTotal = alreadyReported + qtyNumber;
             if (nextTotal > plannedQty) {
               return res.status(400).json({
-                error: `Cannot report more than planned qty for ${data.machineName}.\nPlan: ${plannedQty}\nAlready reported: ${alreadyReported}\nNow: ${qtyNumber}\nExceeds by: ${nextTotal - plannedQty}`
+                error: `Cannot report more than planned qty for ${data.machineName}.
+Plan: ${plannedQty}
+Already reported: ${alreadyReported}
+Now: ${qtyNumber}
+Exceeds by: ${nextTotal - plannedQty}`
               });
             }
           }
@@ -2070,6 +2385,50 @@ const createHandlers = (tableName) => {
         const columnNames = keys.map((k) => `\`${k}\``).join(",");
         const updates = keys.map((k) => `\`${k}\`=VALUES(\`${k}\`)`).join(",");
         const query = `INSERT INTO \`${tableName}\` (${columnNames}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`;
+        if (tableName === "orders") {
+          const approvalStatuses = /* @__PURE__ */ new Set(["Pending Scheduling", "Scheduled"]);
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          const itemId = String(data.itemId || "").trim();
+          const rateNumber = Number(data.rate);
+          const updatedBy = String(data.approvedEmail || data.updatedBy || "System").trim() || "System";
+          const conn = await db.getConnection();
+          try {
+            await conn.beginTransaction();
+            let wasApproved = false;
+            const id = String(data.id || "").trim();
+            if (id) {
+              const [existingRows] = await conn.query(
+                "SELECT status, approvedTimestamp, approvedEmail FROM `orders` WHERE id = ? LIMIT 1",
+                [id]
+              );
+              const existing = existingRows?.[0];
+              const existingStatus = String(existing?.status || "").trim();
+              const existingApproved = hasWorkflowValue(existing?.approvedTimestamp) || hasWorkflowValue(existing?.approvedEmail);
+              wasApproved = existingApproved || approvalStatuses.has(existingStatus);
+            }
+            const nextStatus = String(data.status || "").trim();
+            const isNowApproved = hasWorkflowValue(data.approvedTimestamp) || hasWorkflowValue(data.approvedEmail) || approvalStatuses.has(nextStatus);
+            const shouldUpdateItemRate = !wasApproved && isNowApproved && itemId && Number.isFinite(rateNumber) && rateNumber > 0;
+            console.log(`[DB] Upserting to ${tableName}`, { id: data.id });
+            await conn.query(query, values);
+            if (shouldUpdateItemRate) {
+              await conn.query(
+                "UPDATE `items` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                [rateNumber, updatedBy, now, itemId]
+              );
+            }
+            await conn.commit();
+            return res.json({ success: true });
+          } catch (err) {
+            try {
+              await conn.rollback();
+            } catch {
+            }
+            throw err;
+          } finally {
+            conn.release();
+          }
+        }
         console.log(`[DB] Upserting to ${tableName}`, { id: data.id });
         await db.query(query, values);
         res.json({ success: true });
@@ -2085,7 +2444,7 @@ const createHandlers = (tableName) => {
       try {
         console.log(`[DB] Deleting from ${tableName}`, { id });
         const blockers = await getDeleteBlockers(db, tableName, id);
-        if (blockers.length > 0) {
+        if (blockers.length) {
           const details = blockers.map((b) => `${b.label} (${b.count})`).join(", ");
           return res.status(409).json({ error: `Cannot delete ${tableName}: used in ${details}.` });
         }
@@ -2098,171 +2457,7 @@ const createHandlers = (tableName) => {
     }
   };
 };
-app.post("/api/get-pending-job-closure", async (req, res) => {
-  const db = await getPool();
-  if (!db) return res.status(500).json({ error: "DB connection not available" });
-  const filters = req.body || {};
-  try {
-    const [settingsRows] = await db.query("SELECT * FROM `settings` LIMIT 1");
-    const setting = settingsRows[0];
-    const mandatoryByType = parseMandatoryMachinesByType(setting);
-    const [machinesRows] = await db.query("SELECT id, name FROM `machines`");
-    const machines = machinesRows.map((m) => ({
-      id: String(m.id),
-      name: normalizeMachineName(String(m.name || ""))
-    }));
-    const machineIdByName = new Map(machines.map((m) => [m.name.toLowerCase(), m.id]));
-    const where = ["(status IS NULL OR status NOT IN ('Completed','Cancelled'))"];
-    const params = [];
-    if (filters.date_from) {
-      where.push("STR_TO_DATE(`date`, '%Y-%m-%d') >= STR_TO_DATE(?, '%Y-%m-%d')");
-      params.push(filters.date_from);
-    }
-    if (filters.date_to) {
-      where.push("STR_TO_DATE(`date`, '%Y-%m-%d') <= STR_TO_DATE(?, '%Y-%m-%d')");
-      params.push(filters.date_to);
-    }
-    if (filters.job_no) {
-      where.push("LOWER(`transactionNo`) LIKE LOWER(?)");
-      params.push(`%${filters.job_no}%`);
-    }
-    const [productionRows] = await db.query(
-      `SELECT * FROM \`productions\` ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY transactionNo DESC`,
-      params
-    );
-    const productions = productionRows;
-    const productionIds = productions.map((p) => String(p.id));
-    const scheduleIds = productions.map((p) => String(p.scheduleId || "")).filter(Boolean);
-    const itemIds = productions.map((p) => String(p.itemId || "")).filter(Boolean);
-    const [itemsRows] = itemIds.length ? await db.query(`SELECT id, name, typeName FROM \`items\` WHERE id IN (${itemIds.map(() => "?").join(",")})`, itemIds) : [[]];
-    const itemsById = new Map(itemsRows.map((row) => [String(row.id), row]));
-    const [schedulesRows] = scheduleIds.length ? await db.query(`SELECT id, orderId FROM \`orders_schedule\` WHERE id IN (${scheduleIds.map(() => "?").join(",")})`, scheduleIds) : [[]];
-    const schedulesById = new Map(schedulesRows.map((row) => [String(row.id), row]));
-    const orderIds = schedulesRows.map((s) => String(s.orderId || "")).filter(Boolean);
-    const [ordersRows] = orderIds.length ? await db.query(`SELECT id, orderNo, companyId FROM \`orders\` WHERE id IN (${orderIds.map(() => "?").join(",")})`, orderIds) : [[]];
-    const ordersById = new Map(ordersRows.map((row) => [String(row.id), row]));
-    const companyIds = ordersRows.map((o) => String(o.companyId || "")).filter(Boolean);
-    const [companiesRows] = companyIds.length ? await db.query(`SELECT id, name FROM \`companies\` WHERE id IN (${companyIds.map(() => "?").join(",")})`, companyIds) : [[]];
-    const companiesById = new Map(companiesRows.map((row) => [String(row.id), row]));
-    const [processingRows] = productionIds.length ? await db.query(
-      `SELECT productionId, machineId, machineName, shift, qty, operatorId, date FROM \`production_processing\` WHERE productionId IN (${productionIds.map(() => "?").join(",")})`,
-      productionIds
-    ) : [[]];
-    const processingByProductionId = new Map();
-    processingRows.forEach((row) => {
-      const key = String(row.productionId);
-      const list = processingByProductionId.get(key) || [];
-      list.push({ ...row, machineName: normalizeMachineName(String(row.machineName || "")) });
-      processingByProductionId.set(key, list);
-    });
-    const isCorrugationLiner = (machineName) => String(machineName || "").trim().toLowerCase() === "corrugation liner";
-    const requiredFieldsByStep = {
-      machineId: "Machine",
-      operatorId: "Operator",
-      shift: "Shift",
-      date: "Date",
-      qty: "Quantity"
-    };
-    const rows = productions.map((p) => {
-      const productionId = String(p.id);
-      const planQty = Number(p.qty || 0);
-      const planDate = String(p.date || "");
-      const item = itemsById.get(String(p.itemId));
-      const typeName = String(item?.typeName || "").trim();
-      const itemName = String(item?.name || "").trim();
-      const schedule = schedulesById.get(String(p.scheduleId || ""));
-      const order = schedule ? ordersById.get(String(schedule.orderId || "")) : void 0;
-      const orderNo = String(order?.orderNo || "").trim();
-      const company = order ? companiesById.get(String(order.companyId || "")) : void 0;
-      const companyName = String(company?.name || "").trim();
-      if (filters.company && companyName && !companyName.toLowerCase().includes(String(filters.company).toLowerCase())) return null;
-      if (filters.type && typeName && typeName.toLowerCase() !== String(filters.type).toLowerCase()) return null;
-      const requiredSteps = (mandatoryByType[typeName] || []).map((name) => normalizeMachineName(name));
-      const records = processingByProductionId.get(productionId) || [];
-      const normalizedRecords = records.map((r) => ({ ...r, machineName: normalizeMachineName(String(r.machineName || "")) }));
-      const missingSteps = [];
-      const missingFields = [];
-      const blockingReasons = [];
-      if (requiredSteps.length === 0) {
-        blockingReasons.push(`No required process steps configured for Type: ${typeName || "-"}`);
-      }
-      requiredSteps.forEach((stepMachineName) => {
-        const stepKey = stepMachineName;
-        const normalizedStep = normalizeMachineName(stepMachineName);
-        const machineId = machineIdByName.get(normalizedStep.toLowerCase());
-        const stepRecords = normalizedRecords.filter((r) => normalizeMachineName(String(r.machineName || "")) === normalizedStep);
-        if (stepRecords.length === 0) {
-          missingSteps.push({ stepKey, machineName: normalizedStep, machineId });
-          return;
-        }
-        const completedRecord = stepRecords.find((r) => {
-          const qtyValue = Number(r.qty || 0);
-          if (!Number.isFinite(qtyValue) || qtyValue <= 0) return false;
-          if (!String(r.machineId || "").trim()) return false;
-          if (!String(r.operatorId || "").trim()) return false;
-          if (!String(r.shift || "").trim()) return false;
-          if (!String(r.date || "").trim()) return false;
-          return true;
-        });
-        if (!completedRecord) {
-          const fields = /* @__PURE__ */ new Set();
-          stepRecords.forEach((r) => {
-            Object.entries(requiredFieldsByStep).forEach(([key, label]) => {
-              const value = r[key];
-              if (key === "qty") {
-                const qtyValue = Number(value || 0);
-                if (!Number.isFinite(qtyValue) || qtyValue <= 0) fields.add(label);
-                return;
-              }
-              if (!String(value || "").trim()) fields.add(label);
-            });
-          });
-          missingFields.push({ stepKey, machineName: normalizedStep, machineId, fields: Array.from(fields) });
-        }
-        if (!isCorrugationLiner(normalizedStep) && planQty > 0) {
-          const stepQty = stepRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
-          if (stepQty > planQty) {
-            blockingReasons.push(`Qty exceeds Plan Qty for ${normalizedStep} (Plan ${planQty}, Reported ${stepQty})`);
-          }
-        }
-      });
-      if (missingSteps.length) blockingReasons.push(`Missing processing steps: ${missingSteps.map((s) => s.machineName).join(", ")}`);
-      if (missingFields.length) blockingReasons.push(`Incomplete processing entries: ${missingFields.map((s) => s.machineName).join(", ")}`);
-      if (!blockingReasons.length) return null;
-      const machineSet = /* @__PURE__ */ new Set();
-      [...missingSteps, ...missingFields].forEach((s) => {
-        if (s.machineName) machineSet.add(s.machineName);
-      });
-      const groupMachineName = machineSet.size === 0 ? "Unassigned" : machineSet.size === 1 ? [...machineSet][0] : "Multiple/Various";
-      const groupMachineId = groupMachineName && groupMachineName !== "Multiple/Various" && groupMachineName !== "Unassigned" ? machineIdByName.get(groupMachineName.toLowerCase()) : void 0;
-      if (filters.machine_id && groupMachineId !== filters.machine_id) return null;
-      const processedQty = normalizedRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
-      const exceededBy = planQty > 0 ? Math.max(0, processedQty - planQty) : 0;
-      return {
-        productionId,
-        jobNo: String(p.transactionNo || ""),
-        orderNo,
-        itemName,
-        companyName,
-        typeName,
-        planQty,
-        planDate,
-        blockingReasons,
-        missingSteps,
-        missingFields,
-        qtyStatus: { planQty, processedQty, exceededBy },
-        groupMachineName,
-        groupMachineId
-      };
-    }).filter(Boolean);
-    res.json(rows);
-  } catch (error) {
-    console.error("[API] get-pending-job-closure failed:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
 const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "settings"];
-
 app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
@@ -2293,7 +2488,7 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
       ) pol_sum ON pol_sum.indentLineId = il.id
       WHERE i.status = 'Approved'
     `);
-    const lines = rows.map(row => ({
+    const lines = rows.map((row) => ({
       indentLineId: String(row.indentLineId),
       indentId: String(row.indentId),
       indentNo: String(row.indentNo || ""),
@@ -2307,10 +2502,9 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
       materialName: row.materialName,
       materialErpCode: row.materialErpCode,
       pendingQty: Math.max(0, Number(row.qty) - Number(row.cancelledQty) - Number(row.poQtyCreated))
-    })).filter(row => row.pendingQty > 0);
-
-    const merged = new Map();
-    lines.forEach(line => {
+    })).filter((row) => row.pendingQty > 0);
+    const merged = /* @__PURE__ */ new Map();
+    lines.forEach((line) => {
       const key = `${line.materialId}_${line.uom}`;
       if (!merged.has(key)) {
         merged.set(key, {
@@ -2326,10 +2520,9 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
       group.totalPendingQty += line.pendingQty;
       group.sources.push(line);
     });
-
     const mergedList = Array.from(merged.values());
     if (mergedList.length > 0) {
-      const materialIds = mergedList.map(m => m.materialId);
+      const materialIds = mergedList.map((m) => m.materialId);
       const [rateRows] = await db.query(`
         SELECT pol.materialId, pol.rate, po.poDate
         FROM purchase_order_lines pol
@@ -2337,13 +2530,13 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
         WHERE pol.materialId IN (${materialIds.map(() => "?").join(",")})
         ORDER BY po.poDate DESC
       `, materialIds);
-      const latestRates = new Map();
-      rateRows.forEach(row => {
+      const latestRates = /* @__PURE__ */ new Map();
+      rateRows.forEach((row) => {
         if (!latestRates.has(row.materialId)) {
           latestRates.set(row.materialId, Number(row.rate));
         }
       });
-      mergedList.forEach(m => {
+      mergedList.forEach((m) => {
         m.suggestedRate = latestRates.get(m.materialId) || 0;
       });
     }
@@ -2353,11 +2546,9 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
   const db = await getPool();
-  if (!db)
-    return res.status(500).json({ error: "DB connection not available" });
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
   try {
     const [rows] = await db.query(`
       SELECT 
@@ -2408,17 +2599,15 @@ app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
         targetDeliveryDate: String(row.targetDeliveryDate || "")
       };
     }).filter((row) => row.pendingQty > 0);
-
     const materialIds = Array.from(new Set(base.map((r) => r.materialId))).filter(Boolean);
     const lastPoInfoByMaterial = /* @__PURE__ */ new Map();
     if (materialIds.length > 0) {
-      const placeholders = materialIds.map(() => "?").join(",");
       const [rateRows] = await db.query(
         `
           SELECT pol.materialId, pol.rate, po.poDate
           FROM purchase_order_lines pol
           JOIN purchase_orders po ON po.id = pol.purchaseOrderId
-          WHERE po.status != 'Rejected' AND pol.materialId IN (${placeholders})
+          WHERE po.status != 'Rejected' AND pol.materialId IN (${materialIds.map(() => "?").join(",")})
           ORDER BY po.poDate DESC
         `,
         materialIds
@@ -2426,20 +2615,19 @@ app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
       rateRows.forEach((r) => {
         const mid = String(r.materialId || "");
         if (!mid || lastPoInfoByMaterial.has(mid)) return;
-        lastPoInfoByMaterial.set(mid, { 
-          rate: Number(r.rate || 0), 
-          date: r.poDate ? String(r.poDate) : "" 
+        lastPoInfoByMaterial.set(mid, {
+          rate: Number(r.rate || 0),
+          date: r.poDate ? String(r.poDate) : ""
         });
       });
     }
-
     const result = base.map((r) => {
       const info = lastPoInfoByMaterial.get(r.materialId);
       return {
         ...r,
         suggestedRate: info?.rate || 0,
         lastPoRate: info?.rate || 0,
-        lastPoDate: info?.date || "",
+        lastPoDate: info?.date || ""
       };
     });
     res.json(result);
@@ -2450,8 +2638,7 @@ app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
 });
 app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
   const db = await getPool();
-  if (!db)
-    return res.status(500).json({ error: "DB connection not available" });
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
   const { poDate, remarks, lines } = req.body || {};
   if (!Array.isArray(lines) || lines.length === 0) {
     return res.status(400).json({ error: "No lines provided." });
@@ -2462,9 +2649,7 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
     qty: Number(l.qty || 0),
     rate: Number(l.rate || 0)
   }));
-  const invalid = normalizedLines.find(
-    (l) => !l.indentLineId || !l.supplierId || !Number.isFinite(l.qty) || l.qty <= 0 || !Number.isFinite(l.rate) || l.rate < 0
-  );
+  const invalid = normalizedLines.find((l) => !l.indentLineId || !l.supplierId || !Number.isFinite(l.qty) || l.qty <= 0 || !Number.isFinite(l.rate) || l.rate < 0);
   if (invalid) {
     return res.status(400).json({ error: "Invalid line items. Supplier, qty (>0) and rate (>=0) are required." });
   }
@@ -2497,7 +2682,7 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
       `,
       lineIds
     );
-    const byId = /* @__PURE__ */ new Map(dbRows.map((r) => [String(r.indentLineId), r]));
+    const byId = new Map(dbRows.map((r) => [String(r.indentLineId), r]));
     for (const l of normalizedLines) {
       const row = byId.get(l.indentLineId);
       if (!row) {
@@ -2598,48 +2783,40 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
     conn.release();
   }
 });
-
 app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
-
   const { supplierId, poDate, requiredDate, remarks, items } = req.body;
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
-
-    const dateStr = poDate || new Date().toISOString().slice(0, 10);
+    const dateStr = poDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const d = new Date(dateStr);
     let fyStart = d.getFullYear();
     if (d.getMonth() < 3) fyStart--;
     const fyLabel = `${String(fyStart).slice(-2)}-${String(fyStart + 1).slice(-2)}`;
-    
     const prefix = "PO";
     const likePattern = `${prefix}/${fyLabel}/%`;
     const [poRows] = await conn.query(
-      \`SELECT poNo FROM \\\`purchase_orders\\\` WHERE poNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(poNo,'/',-1) AS UNSIGNED) DESC LIMIT 1\`,
+      `SELECT poNo FROM \`purchase_orders\` WHERE poNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(poNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`,
       [likePattern]
     );
-    
     let lastNum = 0;
-    if ((poRows).length > 0) {
+    if (poRows.length > 0) {
       const lastPoNo = poRows[0].poNo;
       const parts = lastPoNo.split("/");
       lastNum = parseInt(parts[parts.length - 1], 10) || 0;
     }
-    const poNo = \`\${prefix}/\${fyLabel}/\${String(lastNum + 1).padStart(5, "0")}\`;
-
+    const poNo = `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
     const purchaseOrderId = crypto.randomUUID();
     let totalQty = 0;
     let totalAmount = 0;
     const poLines = [];
-    const indentLinesToUpdate = new Map();
-
+    const indentLinesToUpdate = /* @__PURE__ */ new Map();
     for (const item of items) {
       const { materialId, uom, orderQty, rate } = item;
       let remainingToAllocate = Number(orderQty);
-
-      const [sourceRows] = await conn.query(\`
+      const [sourceRows] = await conn.query(`
         SELECT 
           il.id, il.qty, il.cancelledQty, il.orderedQty, il.targetDeliveryDate, i.requisitionDate,
           COALESCE(pol_sum.poQtyCreated, 0) as poQtyCreated
@@ -2657,8 +2834,7 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
           AND il.uom = ?
           AND (il.qty - il.cancelledQty - COALESCE(pol_sum.poQtyCreated, 0)) > 0
         ORDER BY il.targetDeliveryDate ASC, i.requisitionDate ASC
-      \`, [materialId, uom]);
-
+      `, [materialId, uom]);
       for (const source of sourceRows) {
         if (remainingToAllocate <= 0) break;
         const pendingQty = Number(source.qty) - Number(source.cancelledQty) - Number(source.poQtyCreated || 0);
@@ -2683,52 +2859,246 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
         }
       }
     }
-
     if (poLines.length === 0) throw new Error("No quantities allocated to indent lines.");
-
     await conn.query(
       "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [purchaseOrderId, poNo, null, supplierId, poDate, requiredDate || poDate, totalQty, totalAmount, remarks, "Pending Approval", "System User", new Date().toISOString()]
+      [purchaseOrderId, poNo, null, supplierId, poDate, requiredDate || poDate, totalQty, totalAmount, remarks, "Pending Approval", "System User", (/* @__PURE__ */ new Date()).toISOString()]
     );
-
     for (const line of poLines) {
       await conn.query(
         "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, "System User", new Date().toISOString()]
+        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, "System User", (/* @__PURE__ */ new Date()).toISOString()]
       );
     }
-
-    const indentIdsToCheck = new Set();
+    const indentIdsToCheck = /* @__PURE__ */ new Set();
     for (const [id, addQty] of indentLinesToUpdate.entries()) {
-      await conn.query("UPDATE `indent_lines` SET `orderedQty` = `orderedQty` + ?, `updateTimestamp` = ? WHERE id = ?", [addQty, new Date().toISOString(), id]);
+      await conn.query("UPDATE `indent_lines` SET `orderedQty` = `orderedQty` + ?, `updateTimestamp` = ? WHERE id = ?", [addQty, (/* @__PURE__ */ new Date()).toISOString(), id]);
       const [ilRows] = await conn.query("SELECT indentId FROM `indent_lines` WHERE id = ?", [id]);
       if (ilRows.length) indentIdsToCheck.add(ilRows[0].indentId);
     }
-
     for (const indentId of indentIdsToCheck) {
       const [lines] = await conn.query("SELECT qty, cancelledQty, orderedQty FROM `indent_lines` WHERE indentId = ?", [indentId]);
-      const allDone = lines.every(l => Number(l.qty) <= (Number(l.orderedQty) + Number(l.cancelledQty)));
+      const allDone = lines.every((l) => Number(l.qty) <= Number(l.orderedQty) + Number(l.cancelledQty));
       if (allDone) {
-        await conn.query("UPDATE `indents` SET `status` = 'Completed', `completedBy` = 'System User', `completedTimestamp` = ?, `updateTimestamp` = ? WHERE id = ?", [new Date().toISOString(), new Date().toISOString(), indentId]);
+        await conn.query("UPDATE `indents` SET `status` = 'Completed', `completedBy` = 'System User', `completedTimestamp` = ?, `updateTimestamp` = ? WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), (/* @__PURE__ */ new Date()).toISOString(), indentId]);
       }
     }
-
     await conn.commit();
     res.json({ success: true, poNo, purchaseOrderId });
   } catch (error) {
     await conn.rollback();
     console.error("[API] create-consolidated failed:", error);
-    res.status(500).json({ error: (error as Error).message });
+    res.status(500).json({ error: error.message });
   } finally {
     conn.release();
+  }
+});
+app.post("/api/get-pending-job-closure", async (req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!hasPermission(user, "/production")) return res.status(403).json({ error: "Forbidden" });
+  const filters = req.body || {};
+  try {
+    const [settingsRows] = await db.query("SELECT * FROM `settings` LIMIT 1");
+    const setting = settingsRows[0];
+    const mandatoryByType = parseMandatoryMachinesByType(setting);
+    const [machinesRows] = await db.query("SELECT id, name FROM `machines`");
+    const machines = machinesRows.map((m) => ({
+      id: String(m.id),
+      name: normalizeMachineName(String(m.name || ""))
+    }));
+    const machineIdByName = new Map(machines.map((m) => [m.name.toLowerCase(), m.id]));
+    const where = ["(status IS NULL OR status NOT IN ('Completed','Cancelled'))"];
+    const params = [];
+    if (filters.date_from) {
+      where.push("STR_TO_DATE(`date`, '%Y-%m-%d') >= STR_TO_DATE(?, '%Y-%m-%d')");
+      params.push(filters.date_from);
+    }
+    if (filters.date_to) {
+      where.push("STR_TO_DATE(`date`, '%Y-%m-%d') <= STR_TO_DATE(?, '%Y-%m-%d')");
+      params.push(filters.date_to);
+    }
+    if (filters.job_no) {
+      where.push("LOWER(`transactionNo`) LIKE LOWER(?)");
+      params.push(`%${filters.job_no}%`);
+    }
+    const [productionRows] = await db.query(
+      `SELECT * FROM \`productions\` ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY transactionNo DESC`,
+      params
+    );
+    const productions = productionRows;
+    const productionIds = productions.map((p) => String(p.id));
+    const scheduleIds = productions.map((p) => String(p.scheduleId || "")).filter(Boolean);
+    const itemIds = productions.map((p) => String(p.itemId || "")).filter(Boolean);
+    const [itemsRows] = itemIds.length ? await db.query(`SELECT id, name, typeName FROM \`items\` WHERE id IN (${itemIds.map(() => "?").join(",")})`, itemIds) : [[]];
+    const itemsById = new Map(itemsRows.map((row) => [String(row.id), row]));
+    const [schedulesRows] = scheduleIds.length ? await db.query(`SELECT id, orderId FROM \`orders_schedule\` WHERE id IN (${scheduleIds.map(() => "?").join(",")})`, scheduleIds) : [[]];
+    const schedulesById = new Map(schedulesRows.map((row) => [String(row.id), row]));
+    const orderIds = schedulesRows.map((s) => String(s.orderId || "")).filter(Boolean);
+    const [ordersRows] = orderIds.length ? await db.query(`SELECT id, orderNo, companyId FROM \`orders\` WHERE id IN (${orderIds.map(() => "?").join(",")})`, orderIds) : [[]];
+    const ordersById = new Map(ordersRows.map((row) => [String(row.id), row]));
+    const companyIds = ordersRows.map((o) => String(o.companyId || "")).filter(Boolean);
+    const [companiesRows] = companyIds.length ? await db.query(`SELECT id, name FROM \`companies\` WHERE id IN (${companyIds.map(() => "?").join(",")})`, companyIds) : [[]];
+    const companiesById = new Map(companiesRows.map((row) => [String(row.id), row]));
+    const [processingRows] = productionIds.length ? await db.query(
+      `SELECT productionId, machineId, machineName, shift, qty, operatorId, date FROM \`production_processing\` WHERE productionId IN (${productionIds.map(() => "?").join(",")})`,
+      productionIds
+    ) : [[]];
+    const processingByProductionId = /* @__PURE__ */ new Map();
+    processingRows.forEach((row) => {
+      const key = String(row.productionId);
+      const list = processingByProductionId.get(key) || [];
+      list.push({
+        ...row,
+        machineName: normalizeMachineName(String(row.machineName || ""))
+      });
+      processingByProductionId.set(key, list);
+    });
+    const isCorrugationLiner = (machineName) => String(machineName || "").trim().toLowerCase() === "corrugation liner";
+    const requiredFieldsByStep = {
+      machineId: "Machine",
+      operatorId: "Operator",
+      shift: "Shift",
+      date: "Date",
+      qty: "Quantity"
+    };
+    const rows = productions.map((p) => {
+      const productionId = String(p.id);
+      const planQty = Number(p.qty || 0);
+      const planDate = String(p.date || "");
+      const item = itemsById.get(String(p.itemId));
+      const typeName = String(item?.typeName || "").trim();
+      const itemName = String(item?.name || "").trim();
+      const schedule = schedulesById.get(String(p.scheduleId || ""));
+      const order = schedule ? ordersById.get(String(schedule.orderId || "")) : void 0;
+      const orderNo = String(order?.orderNo || "").trim();
+      const company = order ? companiesById.get(String(order.companyId || "")) : void 0;
+      const companyName = String(company?.name || "").trim();
+      if (filters.company && companyName && !companyName.toLowerCase().includes(String(filters.company).toLowerCase())) {
+        return null;
+      }
+      if (filters.type && typeName && typeName.toLowerCase() !== String(filters.type).toLowerCase()) {
+        return null;
+      }
+      const requiredSteps = (mandatoryByType[typeName] || []).map((name) => normalizeMachineName(name));
+      const records = processingByProductionId.get(productionId) || [];
+      const normalizedRecords = records.map((r) => ({
+        ...r,
+        machineName: normalizeMachineName(String(r.machineName || ""))
+      }));
+      const missingSteps = [];
+      const missingFields = [];
+      const blockingReasons = [];
+      if (requiredSteps.length === 0) {
+        blockingReasons.push(`No required process steps configured for Type: ${typeName || "-"}`);
+      }
+      requiredSteps.forEach((stepMachineName) => {
+        const stepKey = stepMachineName;
+        const normalizedStep = normalizeMachineName(stepMachineName);
+        const machineId = machineIdByName.get(normalizedStep.toLowerCase());
+        const stepRecords = normalizedRecords.filter(
+          (r) => normalizeMachineName(String(r.machineName || "")) === normalizedStep
+        );
+        if (stepRecords.length === 0) {
+          missingSteps.push({ stepKey, machineName: normalizedStep, machineId });
+          return;
+        }
+        const completedRecord = stepRecords.find((r) => {
+          const qtyValue = Number(r.qty || 0);
+          if (!Number.isFinite(qtyValue) || qtyValue <= 0) return false;
+          if (!String(r.machineId || "").trim()) return false;
+          if (!String(r.operatorId || "").trim()) return false;
+          if (!String(r.shift || "").trim()) return false;
+          if (!String(r.date || "").trim()) return false;
+          return true;
+        });
+        if (!completedRecord) {
+          const fields = /* @__PURE__ */ new Set();
+          stepRecords.forEach((r) => {
+            Object.entries(requiredFieldsByStep).forEach(([key, label]) => {
+              const value = r[key];
+              if (key === "qty") {
+                const qtyValue = Number(value || 0);
+                if (!Number.isFinite(qtyValue) || qtyValue <= 0) fields.add(label);
+                return;
+              }
+              if (!String(value || "").trim()) fields.add(label);
+            });
+          });
+          missingFields.push({ stepKey, machineName: normalizedStep, machineId, fields: Array.from(fields) });
+        }
+        if (!isCorrugationLiner(normalizedStep) && planQty > 0) {
+          const stepQty = stepRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+          if (stepQty > planQty) {
+            blockingReasons.push(`Qty exceeds Plan Qty for ${normalizedStep} (Plan ${planQty}, Reported ${stepQty})`);
+          }
+        }
+      });
+      if (missingSteps.length) blockingReasons.push(`Missing processing steps: ${missingSteps.map((s) => s.machineName).join(", ")}`);
+      if (missingFields.length) blockingReasons.push(`Incomplete processing entries: ${missingFields.map((s) => s.machineName).join(", ")}`);
+      if (!blockingReasons.length) return null;
+      const machineSet = /* @__PURE__ */ new Set();
+      [...missingSteps, ...missingFields].forEach((s) => {
+        if (s.machineName) machineSet.add(s.machineName);
+      });
+      const groupMachineName = machineSet.size === 0 ? "Unassigned" : machineSet.size === 1 ? [...machineSet][0] : "Multiple/Various";
+      const groupMachineId = groupMachineName && groupMachineName !== "Multiple/Various" && groupMachineName !== "Unassigned" ? machineIdByName.get(groupMachineName.toLowerCase()) : void 0;
+      if (filters.machine_id && groupMachineId !== filters.machine_id) {
+        return null;
+      }
+      const processedQty = normalizedRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+      const exceededBy = planQty > 0 ? Math.max(0, processedQty - planQty) : 0;
+      return {
+        productionId,
+        jobNo: String(p.transactionNo || ""),
+        orderNo,
+        itemName,
+        companyName,
+        typeName,
+        planQty,
+        planDate,
+        blockingReasons,
+        missingSteps,
+        missingFields,
+        qtyStatus: { planQty, processedQty, exceededBy },
+        groupMachineName,
+        groupMachineId
+      };
+    }).filter(Boolean);
+    res.json(rows);
+  } catch (error) {
+    console.error("[API] get-pending-job-closure failed:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 entities.forEach((entity) => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;
-  app.get(route, handlers.getAll);
-  app.post(route, handlers.upsert);
-  app.delete(`${route}/:id`, handlers.delete);
+  const guard = async (req, res, next) => {
+    try {
+      const user = await getRequestUser(req);
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+      if (entity === "users") {
+        if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
+        return next();
+      }
+      const required = entityPermissionKey(entity);
+      if (!required) {
+        if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
+        return next();
+      }
+      if (!hasPermission(user, required)) return res.status(403).json({ error: "Forbidden" });
+      return next();
+    } catch (err) {
+      console.error("[AUTHZ] guard failed:", err);
+      return res.status(500).json({ error: "Authorization failed" });
+    }
+  };
+  app.get(route, guard, handlers.getAll);
+  app.post(route, guard, handlers.upsert);
+  app.delete(`${route}/:id`, guard, handlers.delete);
 });
 async function startServer() {
   await initDb();
