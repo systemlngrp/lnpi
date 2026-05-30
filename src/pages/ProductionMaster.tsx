@@ -3,14 +3,16 @@ import { useData } from "../hooks/useData";
 import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
-import { Trash2, ClipboardList, CheckCircle } from "lucide-react";
+import { ClipboardList, CheckCircle, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 
 export function ProductionMaster() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [productions, setProductions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -21,7 +23,7 @@ export function ProductionMaster() {
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
 
   const ffgSummaries = useMemo(() => {
@@ -189,14 +191,42 @@ export function ProductionMaster() {
     return map;
   }, [loadingSlips]);
 
-  const handleDelete = (id: string) => {
-    if (deletingId !== id) {
-      setDeletingId(id);
-      setTimeout(() => setDeletingId(null), 3000);
+  const handleCancelJob = async (id: string) => {
+    const target = productions.find((p) => p.id === id);
+    if (!target || target.status === "Cancelled") return;
+
+    if (cancelingId !== id) {
+      setCancelingId(id);
+      setTimeout(() => setCancelingId(null), 3000);
       return;
     }
-    setProductions(productions.filter(p => p.id !== id));
-    setDeletingId(null);
+
+    const reason = window.prompt("Reason for cancellation (optional):") || "";
+    const timestamp = new Date().toISOString();
+
+    try {
+      await setProductions((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: "Cancelled",
+                cancelTimestamp: timestamp,
+                cancelEmailId: user?.email || "System User",
+                cancelRemarks: reason,
+                updateTimestamp: timestamp,
+                updatedBy: user?.name || "System User",
+              }
+            : p
+        )
+      );
+      alert("Job cancelled successfully.");
+    } catch (err) {
+      console.error("Failed to cancel job:", err);
+      alert("Failed to cancel job. Please try again.");
+    } finally {
+      setCancelingId(null);
+    }
   };
 
   const handleCloseJob = async (id: string) => {
@@ -397,12 +427,14 @@ export function ProductionMaster() {
                             <CheckCircle size={14} className="mr-1" /> {closingId === p.id ? "Confirm?" : "Close Job"}
                           </button>
                         ) : null}
-                        <button 
-                          onClick={() => handleDelete(p.id)} 
-                          className={`${deletingId === p.id ? "text-amber-600 animate-pulse bg-amber-50" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-center p-2 border border-black text-xs min-w-[80px]`}
-                        >
-                          <Trash2 size={14} className="mr-1" /> {deletingId === p.id ? "Confirm?" : "Delete"}
-                        </button>
+                        {p.status !== "Completed" && p.status !== "Cancelled" && (
+                          <button 
+                            onClick={() => handleCancelJob(p.id)} 
+                            className={`${cancelingId === p.id ? "text-amber-600 animate-pulse bg-amber-50" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-center p-2 border border-black text-xs min-w-[80px]`}
+                          >
+                            <XCircle size={14} className="mr-1" /> {cancelingId === p.id ? "Confirm?" : "Cancel Job"}
+                          </button>
+                        )}
                       </div>
                   </div>
                 );
@@ -461,19 +493,19 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Wastage</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Real/KG</th>
                 
-	                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Processing Status</th>
-	                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
-	                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job Closer</th>
-	                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close Date</th>
-	                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
-	              </tr>
-	            </thead>
-	            <tbody className="divide-y divide-black bg-white">
-	              {filteredList.length === 0 ? (
-	                <tr>
-	                  <td colSpan={45} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
-	                </tr>
-	              ) : (
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Processing Status</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job Closer</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close Date</th>
+                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black bg-white">
+              {filteredList.length === 0 ? (
+                <tr>
+                  <td colSpan={45} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                </tr>
+              ) : (
                 filteredList.map((p) => {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
@@ -553,11 +585,11 @@ export function ProductionMaster() {
                         {Number(p.realizationPerKg || 0) ? Number(p.realizationPerKg || 0).toFixed(2) : "-"}
                       </td>
 
-	                      <td className="px-4 py-4 text-xs text-indigo-600 font-bold border border-black max-w-[200px] truncate" title={getProcessingSummary(p.id)}>
-	                        {getProcessingSummary(p.id)}
-	                      </td>
+                      <td className="px-4 py-4 text-xs text-indigo-600 font-bold border border-black max-w-[200px] truncate" title={getProcessingSummary(p.id)}>
+                        {getProcessingSummary(p.id)}
+                      </td>
 
-	                      <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
+                      <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
                           p.status === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
                           p.status === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
@@ -568,48 +600,48 @@ export function ProductionMaster() {
                         {p.status === 'Cancelled' && p.cancelRemarks && (
                           <div className="text-[9px] text-red-600 font-bold mt-1 max-w-[120px] truncate" title={p.cancelRemarks}>
                             {p.cancelRemarks}
-	                          </div>
-	                        )}
-	                      </td>
-	                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-	                        <select
-	                          value={p.closeBy || ""}
-	                          onChange={(e) => {
-	                            const nextValue = e.target.value;
-	                            const today = new Date().toISOString().split("T")[0];
-	                            void setProductions((prev) =>
-	                              prev.map((row) =>
-	                                row.id === p.id
-	                                  ? {
-	                                      ...row,
-	                                      closeBy: nextValue,
-	                                      closeDate: nextValue === "Yes" ? row.closeDate || today : row.closeDate,
-	                                    }
-	                                  : row
-	                              )
-	                            );
-	                          }}
-	                          onBlur={(e) => void updateCloseMeta(p.id, { closeBy: e.target.value, closeDate: p.closeDate })}
-	                          className="w-24 border border-black rounded px-2 py-1 text-xs bg-white"
-	                        >
-	                          <option value=""></option>
-	                          <option value="Yes">Yes</option>
-	                          <option value="No">No</option>
-	                        </select>
-	                      </td>
-	                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-	                        <input
-	                          type="date"
-	                          value={(p.closeDate || "").split("T")[0]}
-	                          onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeDate: e.target.value } : row)))}
-	                          onBlur={(e) => void updateCloseMeta(p.id, { closeDate: e.target.value, closeBy: p.closeBy })}
-	                          className={`w-36 border rounded px-2 py-1 text-xs ${p.closeBy === "Yes" && !p.closeDate ? "border-red-600" : "border-black"}`}
-	                          required={p.closeBy === "Yes"}
-	                        />
-	                      </td>
-	                      <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
-	                        <div className="flex items-center justify-center gap-3">
-	                          <button 
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
+                        <select
+                          value={p.closeBy || ""}
+                          onChange={(e) => {
+                            const nextValue = e.target.value;
+                            const today = new Date().toISOString().split("T")[0];
+                            void setProductions((prev) =>
+                              prev.map((row) =>
+                                row.id === p.id
+                                  ? {
+                                      ...row,
+                                      closeBy: nextValue,
+                                      closeDate: nextValue === "Yes" ? row.closeDate || today : row.closeDate,
+                                    }
+                                  : row
+                              )
+                            );
+                          }}
+                          onBlur={(e) => void updateCloseMeta(p.id, { closeBy: e.target.value, closeDate: p.closeDate })}
+                          className="w-24 border border-black rounded px-2 py-1 text-xs bg-white"
+                        >
+                          <option value=""></option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
+                        <input
+                          type="date"
+                          value={(p.closeDate || "").split("T")[0]}
+                          onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeDate: e.target.value } : row)))}
+                          onBlur={(e) => void updateCloseMeta(p.id, { closeDate: e.target.value, closeBy: p.closeBy })}
+                          className={`w-36 border rounded px-2 py-1 text-xs ${p.closeBy === "Yes" && !p.closeDate ? "border-red-600" : "border-black"}`}
+                          required={p.closeBy === "Yes"}
+                        />
+                      </td>
+                      <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-3">
+                          <button 
                             onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
                             title="Report Processing"
                             className="text-indigo-600 hover:text-indigo-900 transition-all p-1"
@@ -629,13 +661,15 @@ export function ProductionMaster() {
                               <CheckCircle size={16} />
                             </button>
                           ) : null}
-                          <button 
-                            onClick={() => handleDelete(p.id)} 
-                            title={deletingId === p.id ? "Click to confirm delete" : "Delete production entry"}
-                            className={`${deletingId === p.id ? "text-amber-600 animate-pulse scale-110" : "text-red-600"} hover:text-red-900 transition-all p-1`}
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {p.status !== "Completed" && p.status !== "Cancelled" && (
+                            <button 
+                              onClick={() => handleCancelJob(p.id)} 
+                              title={cancelingId === p.id ? "Click to confirm cancel" : "Cancel job"}
+                              className={`${cancelingId === p.id ? "text-amber-600 animate-pulse scale-110" : "text-red-600"} hover:text-red-900 transition-all p-1`}
+                            >
+                              <XCircle size={16} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
