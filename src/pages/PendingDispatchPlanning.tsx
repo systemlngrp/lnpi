@@ -431,7 +431,7 @@ export function PendingDispatchPlanning() {
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Opening</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Receipt</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Production</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Loaded</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Invoice Qty</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">FG Balance</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Production</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Pending Loading</th>

@@ -305,7 +305,7 @@ export function PendingInvoicing() {
     }
 
     // Tolerance Check
-    const tolerancePercent = company.toleranceAllowed || 0;
+    const tolerancePercent = Math.min(company.toleranceAllowed || 0, 10);
     for (const row of invoiceRows) {
       const allowedMax = row.totalOrderQty * (1 + tolerancePercent / 100);
       const currentlyDispatched = row.totalDispatchQty + row.qtyDispatchedNow;

@@ -40,7 +40,7 @@ export function DispatchPlansMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Company</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Order / Item</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Planned</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black text-emerald-700">Loaded</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black text-emerald-700">Invoice Qty</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black text-red-700">Cancl</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black text-indigo-700">Pending</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black">Status</th>

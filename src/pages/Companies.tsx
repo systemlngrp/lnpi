@@ -97,7 +97,7 @@ export function Companies() {
           gstNo: String(row["GST NO"] || "").trim() || undefined,
           gstSupplyType: (row["GST Supply Type"] === "INTER_STATE" ? "INTER_STATE" : "INTRA_STATE") as any,
           deviationAllowed: row["Deviation Allowed (%)"] ? Number(row["Deviation Allowed (%)"]) : undefined,
-          toleranceAllowed: row["Tolerance Allowed (%)"] ? Number(row["Tolerance Allowed (%)"]) : undefined,
+          toleranceAllowed: row["Tolerance Allowed (%)"] ? Math.max(0, Math.min(10, Number(row["Tolerance Allowed (%)"]))) : undefined,
           ...audit,
         })).filter(c => c.name);
 
@@ -366,9 +366,16 @@ export function Companies() {
               <input
                 type="number"
                 min={0}
+                max={10}
                 step="any"
                 value={toleranceAllowed}
-                onChange={(e) => setToleranceAllowed(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                onChange={(e) => {
+                  let val = e.target.value === "" ? "" : parseFloat(e.target.value);
+                  if (typeof val === "number") {
+                    val = Math.max(0, Math.min(10, val));
+                  }
+                  setToleranceAllowed(val);
+                }}
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
               />
             </div>
