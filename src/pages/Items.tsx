@@ -72,10 +72,10 @@ export function Items() {
   const downloadTemplate = () => {
     const templateData = [
       {
+        "ERP": "",
         "Item Name": "Sample FG Item",
         "Item Group": "FG",
         "UOM": "PCs",
-        "ERP Code": "",
         "Customer": "Sample Company",
         "Item Type": "FG",
         "Business Type": "RSC",
@@ -210,7 +210,7 @@ export function Items() {
             name: String(row["Item Name"] || "").trim(),
             groupId: gId || "",
             uom: String(row["UOM"] || "PCs").trim(),
-            erp: row["ERP Code"] ? parseInt(row["ERP Code"], 10) : ++maxErp,
+            erp: (row["ERP"] || row["ERP Code"]) ? parseInt(row["ERP"] || row["ERP Code"], 10) : ++maxErp,
             customer: String(row["Customer"] || "").trim() || undefined,
             itemType: (row["Item Type"] || "FG") as any,
             typeName: String(row["Business Type"] || "").trim() || undefined,
@@ -281,7 +281,7 @@ export function Items() {
 
   const exportToExcel = () => {
     const dataToExport = filteredItems.map(item => ({
-      "ERP CODE": item.erp || "",
+      "ERP": item.erp || "",
       "Customer": item.customer || "",
       "Item Name": item.name,
       "Business Type": item.typeName || "",
@@ -866,7 +866,7 @@ export function Items() {
               <div className="space-y-4">
                 <h4 className="font-black text-xs uppercase text-indigo-600 border-b border-indigo-100 pb-1">Primary Details</h4>
                 <div className="flex flex-col space-y-1">
-                  <label className="font-bold text-black text-sm">ERP CODE (auto-calculated)</label>
+                  <label className="font-bold text-black text-sm">ERP (auto-calculated)</label>
                   <input
                     type="text"
                     readOnly
@@ -1307,7 +1307,7 @@ export function Items() {
               <table className="hidden md:table min-w-max divide-y divide-black border-collapse border border-black">
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
-                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP CODE</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">TYPE</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Open Length</th>
