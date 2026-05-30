@@ -1,0 +1,246 @@
+import React, { useState, useMemo } from "react";
+import { useData } from "../hooks/useData";
+import { 
+  Invoice, 
+  InvoiceLineItem,
+  Company,
+  Item,
+  LoadingSlip,
+  DispatchPlan,
+  Order
+} from "../types";
+import { 
+  Search, 
+  Receipt, 
+  Calendar, 
+  Building2,
+  ChevronRight,
+  ChevronDown,
+  FileText,
+  CheckCircle,
+  Hash
+} from "lucide-react";
+import { Spinner } from "../components/Spinner";
+import { formatDate } from "../lib/serial";
+import { TableControls } from "../components/TableControls";
+
+export function BillingPendingTally() {
+  const [invoices, setInvoices, isLoading] = useData<Invoice>("invoices", []);
+  const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [companies] = useData<Company>("companies", []);
+  const [items] = useData<Item>("items", []);
+  const [slips] = useData<LoadingSlip>("loading_slips", []);
+  const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [orders] = useData<Order>("orders", []);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRow = (id: string) => {
+    const next = new Set(expandedRows);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExpandedRows(next);
+  };
+
+  const getPoNumbers = (invoiceId: string) => {
+    const invLines = lineItems.filter(li => li.invoiceId === invoiceId);
+    const poNums = new Set<string>();
+    
+    invLines.forEach(li => {
+      const slip = slips.find(s => s.id === li.loadingSlipId);
+      if (slip) {
+        slip.lines.forEach(slipLine => {
+          // In loading slips, lines often reference dispatch plans
+          // If we have dispatchPlanId in loading slip lines (based on previous edits)
+          // or we can match via jobId/productionId if it's derived.
+          // Let's assume loading slip lines have dispatchPlanId or we match via orders.
+          
+          // Try to find the dispatch plan that corresponds to this slip line
+          // Often loading slips are created from dispatch plans
+          const plan = dispatchPlans.find(dp => dp.id === slipLine.dispatchPlanId);
+          if (plan) {
+            const order = orders.find(o => o.id === plan.orderId);
+            if (order?.poNumber) poNums.add(order.poNumber);
+          }
+        });
+      }
+    });
+
+    return Array.from(poNums);
+  };
+
+  const processedInvoices = useMemo(() => {
+    return invoices
+      .filter(inv => !inv.tallyTimestamp)
+      .map(inv => {
+        const company = companies.find(c => c.id === inv.companyId);
+        const invLines = lineItems.filter(li => li.invoiceId === inv.id);
+        const poNumbers = getPoNumbers(inv.id);
+        
+        return {
+          ...inv,
+          companyName: company?.name || "Unknown",
+          poNumbers,
+          grandTotal: Number(inv.totalAfterGst || 0) + Number(inv.roundOff || 0),
+          details: invLines.map(li => ({
+            ...li,
+            itemName: items.find(i => i.id === li.itemId)?.name || "Unknown",
+            slipNo: slips.find(s => s.id === li.loadingSlipId)?.slipNo || "N/A"
+          }))
+        };
+      })
+      .filter(inv => {
+        const searchStr = `${inv.invoiceNo} ${inv.companyName} ${inv.poNumbers.join(" ")}`.toLowerCase();
+        return searchStr.includes(searchTerm.toLowerCase());
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [invoices, companies, lineItems, items, slips, dispatchPlans, orders, searchTerm]);
+
+  const handleMarkPosted = async (id: string) => {
+    if (!confirm("Mark this invoice as Posted to Tally?")) return;
+
+    setProcessingId(id);
+    try {
+      const timestamp = new Date().toISOString();
+      await setInvoices(prev => prev.map(inv => inv.id === id ? {
+        ...inv,
+        tallyTimestamp: timestamp,
+        tallyBy: "System User",
+        updateTimestamp: timestamp,
+        updatedBy: "System User"
+      } : inv));
+    } catch (err) {
+      alert("Failed to update invoice status.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center border-b border-black pb-4">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Tally Posting</h2>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
+          <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Total Pending Invoices</div>
+          <div className="text-2xl font-black text-indigo-700">{processedInvoices.length}</div>
+        </div>
+      </div>
+
+      <TableControls 
+        searchTerm={searchTerm} 
+        onSearchChange={setSearchTerm} 
+        placeholder="Search invoice, company, PO number..." 
+      />
+
+      <div className="bg-white border border-black rounded shadow-sm overflow-hidden">
+        <table className="min-w-full divide-y divide-black border-collapse">
+          <thead className="bg-slate-100">
+            <tr className="divide-x divide-black">
+              <th className="w-10 px-4 py-3 text-center"></th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Invoice Details</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Company</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">PO Numbers</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase">Total Amount</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase">Action</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-black">
+            {processedInvoices.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">
+                  {isLoading ? <Spinner /> : "No pending invoices for Tally posting."}
+                </td>
+              </tr>
+            ) : (
+              processedInvoices.map((inv) => (
+                <React.Fragment key={inv.id}>
+                  <tr className="hover:bg-slate-50 transition-colors divide-x divide-black">
+                    <td className="px-4 py-4 text-center">
+                      <button 
+                        onClick={() => toggleRow(inv.id)}
+                        className="p-1 hover:bg-slate-200 rounded transition"
+                      >
+                        {expandedRows.has(inv.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                      </button>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="font-bold text-sm flex items-center gap-2">
+                        <Receipt size={14} className="text-indigo-600" />
+                        {inv.invoiceNo}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-1">{formatDate(inv.date)}</div>
+                    </td>
+                    <td className="px-4 py-4 text-sm font-medium">{inv.companyName}</td>
+                    <td className="px-4 py-4">
+                      {inv.poNumbers.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {inv.poNumbers.map((po, idx) => (
+                            <span key={idx} className="bg-slate-100 border border-slate-300 px-2 py-0.5 rounded text-[10px] font-bold text-slate-700">
+                              {po}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-xs">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-right font-black text-indigo-700">
+                      ₹{inv.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <button 
+                        disabled={!!processingId}
+                        onClick={() => handleMarkPosted(inv.id)}
+                        className="bg-emerald-600 text-white px-4 py-1.5 rounded text-xs font-black uppercase hover:bg-emerald-700 flex items-center gap-2 mx-auto disabled:opacity-50"
+                      >
+                        {processingId === inv.id ? <Spinner size={12} /> : <><CheckCircle size={14} /> Mark Posted</>}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedRows.has(inv.id) && (
+                    <tr className="bg-slate-50">
+                      <td colSpan={6} className="px-12 py-4">
+                        <div className="border border-black rounded overflow-hidden">
+                          <table className="min-w-full divide-y divide-black">
+                            <thead className="bg-slate-200">
+                              <tr className="divide-x divide-black text-[10px] font-black uppercase">
+                                <th className="px-3 py-2 text-left">Item Name</th>
+                                <th className="px-3 py-2 text-left">Slip No</th>
+                                <th className="px-3 py-2 text-right">Qty</th>
+                                <th className="px-3 py-2 text-right">Rate</th>
+                                <th className="px-3 py-2 text-right">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-black">
+                              {inv.details.map((line: any, idx: number) => {
+                                const tax = (Number(line.cgst) || 0) + (Number(line.sgst) || 0) + (Number(line.igst) || 0);
+                                return (
+                                  <tr key={idx} className="divide-x divide-black text-[11px]">
+                                    <td className="px-3 py-2 font-bold uppercase">{line.itemName}</td>
+                                    <td className="px-3 py-2">{line.slipNo}</td>
+                                    <td className="px-3 py-2 text-right">{line.qty.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right">{Number(line.rate || 0).toFixed(2)}</td>
+                                    <td className="px-3 py-2 text-right font-bold">₹{(line.amount + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

@@ -102,6 +102,10 @@ export interface MaterialLine {
   actualValue?: number;
   rate: number;
   value: number;
+  gstRate?: number;
+  taxableAmount?: number;
+  gstAmount?: number;
+  totalAmount?: number;
 }
 
 export interface MaterialInPackingSlip {
@@ -649,7 +653,9 @@ export interface Invoice {
   sgst: number;
   igst: number;
   totalAfterGst: number;
-  roundOff?: number;
+  roundOff: number;
+  tallyTimestamp?: string;
+  tallyBy?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

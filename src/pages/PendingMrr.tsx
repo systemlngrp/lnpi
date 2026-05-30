@@ -57,7 +57,7 @@ export function PendingMrr() {
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search gate entry no, supplier, invoice no, truck no..."
+          placeholder="Search gate entry no, supplier/customer, invoice no, truck no..."
           className="w-full max-w-xl rounded-xl border-2 border-black px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-600"
         />
       </div>
@@ -66,7 +66,7 @@ export function PendingMrr() {
         <table className="min-w-full border-collapse border border-black">
           <thead className="bg-slate-100">
             <tr>
-              {["Gate Entry No", "Date", "Supplier Name", "Invoice No", "Invoice Value", "Truck No", "Photos", "MRR Status", "Action"].map((heading) => (
+              {["Gate Entry No", "Date", "Supplier/Customer", "Invoice No", "Invoice Value", "Truck No", "Photos", "MRR Status", "Action"].map((heading) => (
                 <th key={heading} className="whitespace-nowrap border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">
                   {heading}
                 </th>

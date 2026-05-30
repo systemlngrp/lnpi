@@ -75,6 +75,7 @@ import { DispatchPlansMaster } from "./pages/DispatchPlansMaster";
 import { PendingLoading } from "./pages/PendingLoading";
 import { LoadingMaster } from "./pages/LoadingMaster";
 import { PendingInvoicing } from "./pages/PendingInvoicing";
+import { BillingPendingTally } from "./pages/BillingPendingTally";
 import { InvoicesMaster } from "./pages/InvoicesMaster";
 import { CanceledOrders } from "./pages/CanceledOrders";
 import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
@@ -212,6 +213,7 @@ export default function App() {
 
           {/* Billing */}
           <Route path="billing/pending" element={<PendingInvoicing />} />
+          <Route path="billing/pending-tally" element={<BillingPendingTally />} />
           <Route path="billing/master" element={<InvoicesMaster />} />
 
           {/* Reports */}

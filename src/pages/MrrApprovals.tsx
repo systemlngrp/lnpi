@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip } from "../types";
+import { Material, MaterialIn, Item, Supplier, MaterialLine } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft } from "lucide-react";
+import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Save, Download } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 type Stage = "Pending PH" | "Pending Accounts" | "Pending MD";
 
@@ -20,7 +22,11 @@ export function MrrApprovals() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState<string | null>(null); // MRR ID being processed
+  const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
+
+  // Accounts Edit State
+  const [editingMrrId, setEditingMrrId] = useState<string | null>(null);
+  const [editLines, setEditLines] = useState<MaterialLine[]>([]);
 
   const stages: { label: string; value: Stage }[] = [
     { label: "Plant Head", value: "Pending PH" },
@@ -90,6 +96,20 @@ export function MrrApprovals() {
         patch.accTimestamp = timestamp;
         patch.accEmailId = email;
         patch.accounts_remark = remark;
+
+        // Auto Debit Note Logic
+        const totalMrrWeight = mrr.lines.reduce((s, l) => s + (l.actualQty || l.qty || 0), 0);
+        const totalInvWeight = mrr.lines.reduce((s, l) => s + (l.invoiceQty || 0), 0);
+        
+        if (Math.abs(totalMrrWeight - totalInvWeight) > 0.01) {
+           patch.debitNote = `DN-${mrr.transactionNo.split('-').pop()}`;
+           patch.debitNoteDate = timestamp.split('T')[0];
+           const weightDiff = totalInvWeight - totalMrrWeight;
+           if (weightDiff > 0) {
+             const avgRate = mrr.lines.reduce((s, l) => s + (l.invoiceRate || 0), 0) / mrr.lines.length;
+             patch.debitNoteAmount = Number((weightDiff * avgRate).toFixed(2));
+           }
+        }
       }
       else if (activeStage === "Pending MD") {
         nextStatus = "Pending Tally";
@@ -113,7 +133,7 @@ export function MrrApprovals() {
         delete next[mrrId];
         return next;
       });
-      setSelectedIds(prev => prev.filter(i => i !== mrrId));
+      setSelectedIds(prev => prev.filter(i => i !== id));
     } catch (err) {
       console.error("Action failed:", err);
       alert("Failed to update MRR status.");
@@ -124,46 +144,110 @@ export function MrrApprovals() {
 
   const handleBulkApprove = async () => {
     if (selectedIds.length === 0) return;
-    
     if (!confirm(`Are you sure you want to approve ${selectedIds.length} MRRs?`)) return;
-
     for (const id of selectedIds) {
       await handleAction(id, "Approve");
     }
+  };
+
+  const startEditing = (mrr: MaterialIn) => {
+    setEditingMrrId(mrr.id);
+    setEditLines(JSON.parse(JSON.stringify(mrr.lines)));
+  };
+
+  const updateEditLine = (index: number, patch: Partial<MaterialLine>) => {
+    const next = [...editLines];
+    const line = { ...next[index], ...patch };
+    
+    // Recalculate
+    const taxable = Number(((line.actualQty || line.qty || 0) * (line.invoiceRate || line.rate || 0)).toFixed(2));
+    const gst = Number((taxable * (line.gstRate || 0) / 100).toFixed(2));
+    
+    line.taxableAmount = taxable;
+    line.gstAmount = gst;
+    line.totalAmount = taxable + gst;
+    line.actualValue = taxable;
+    
+    next[index] = line;
+    setEditLines(next);
+  };
+
+  const saveEdit = async (mrrId: string) => {
+    const totalActualValue = editLines.reduce((s, l) => s + (l.actualValue || 0), 0);
+    const totalAmount = editLines.reduce((s, l) => s + (l.totalAmount || l.actualValue || 0), 0);
+
+    try {
+      await setMaterialIn(prev => prev.map(m => m.id === mrrId ? { 
+        ...m, 
+        lines: editLines,
+        totalActualValue,
+        totalAmount,
+        updateTimestamp: new Date().toISOString(),
+        updatedBy: "accounts@lngrp.in"
+      } : m));
+      setEditingMrrId(null);
+    } catch (err) {
+      alert("Failed to save changes.");
+    }
+  };
+
+  const downloadPdf = (mrr: MaterialIn) => {
+    const doc = new jsPDF();
+    const supplier = suppliers.find(s => s.id === mrr.supplierId);
+    
+    doc.setFontSize(18);
+    doc.text("MATERIAL RECEIPT REPORT (MRR)", 105, 15, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.text(`MRR No: ${mrr.transactionNo}`, 14, 25);
+    doc.text(`Date: ${formatDate(mrr.date)}`, 14, 30);
+    doc.text(`Supplier: ${supplier?.name || "N/A"}`, 14, 35);
+    doc.text(`Invoice No: ${mrr.invoiceNo}`, 14, 40);
+    
+    const tableData = mrr.lines.map((l, i) => [
+      i + 1,
+      getItemSpecs(l, mrr.mrrType),
+      l.actualQty || l.qty,
+      l.uom,
+      l.invoiceRate || l.rate,
+      l.actualValue || l.value
+    ]);
+
+    autoTable(doc, {
+      startY: 45,
+      head: [["S.No", "Item Description", "Qty", "UOM", "Rate", "Amount"]],
+      body: tableData,
+      theme: "grid",
+      headStyles: { fillStyle: "black", textColor: "white" }
+    });
+
+    doc.save(`MRR_${mrr.transactionNo}.pdf`);
   };
 
   const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
 
   const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
     const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
-
     if (isFgType) {
       const item = items.find(i => i.id === line.itemId);
-      if (!item) return line.itemId;
-      return item.name;
+      return item ? item.name : line.itemId;
     }
-
     const material = materials.find(m => m.id === line.itemId);
     if (!material) return line.itemId;
-    
     const specs = [];
     if (material.size) specs.push(`Size: ${material.size} CM`);
     if (material.gsm) specs.push(`GSM: ${material.gsm}`);
     if (material.bf) specs.push(`BF: ${material.bf}`);
-    
     const specStr = specs.join(" X ");
-    
     return specStr ? `${material.name} - ${specStr}` : material.name;
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
-      {/* Top Header */}
       <div className="p-4 bg-white border-b border-black">
         <h1 className="text-3xl font-black text-indigo-700 uppercase tracking-tighter">Pending Approvals</h1>
       </div>
 
-      {/* Stage Selector Tabs */}
       <div className="flex justify-center gap-4 my-6">
         {stages.map((s) => (
           <button
@@ -171,6 +255,7 @@ export function MrrApprovals() {
             onClick={() => {
               setActiveStage(s.value);
               setSelectedIds([]);
+              setEditingMrrId(null);
             }}
             className={cn(
               "px-6 py-2 rounded font-bold text-sm uppercase transition-all border border-black",
@@ -184,11 +269,19 @@ export function MrrApprovals() {
         ))}
       </div>
 
-      {/* Table Container */}
       <div className="flex-1 px-4 pb-20">
         <div className="bg-white border border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-          <div className="bg-indigo-600 px-4 py-2 text-white font-black uppercase text-sm border-b border-black">
-            {activeStage} ({filteredList.length})
+          <div className="bg-indigo-600 px-4 py-2 text-white font-black uppercase text-sm border-b border-black flex justify-between items-center">
+            <span>{activeStage} ({filteredList.length})</span>
+            <div className="flex items-center gap-2">
+              <Search size={14} />
+              <input 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Search..."
+                className="bg-white/10 border border-white/20 rounded px-2 py-0.5 text-xs text-white placeholder:text-white/50 focus:outline-none focus:bg-white/20"
+              />
+            </div>
           </div>
           
           <div className="overflow-x-auto">
@@ -205,15 +298,15 @@ export function MrrApprovals() {
                   </th>
                   <th className="px-4 py-3 text-left">GE No</th>
                   <th className="px-4 py-3 text-left">MRR No</th>
-                  <th className="px-4 py-3 text-left">Supplier</th>
+                  <th className="px-4 py-3 text-left">Supplier/Customer</th>
                   <th className="px-4 py-3 text-left min-w-[300px]">Items</th>
-                  <th className="px-4 py-3 text-right">MRR Weight</th>
-                  <th className="px-4 py-3 text-right">Invoice Weight</th>
-                  <th className="px-4 py-3 text-right">Difference</th>
+                  <th className="px-4 py-3 text-right">MRR Qty</th>
+                  <th className="px-4 py-3 text-right">Inv Qty</th>
                   <th className="px-4 py-3 text-right">PO Rate</th>
-                  <th className="px-4 py-3 text-right">Invoice Rate</th>
-                  <th className="px-4 py-3 text-right">Basic Value</th>
-                  <th className="px-4 py-3 text-center min-w-[200px]">Action</th>
+                  <th className="px-4 py-3 text-right">Inv Rate</th>
+                  <th className="px-4 py-3 text-right">GST%</th>
+                  <th className="px-4 py-3 text-right">Basic Val</th>
+                  <th className="px-4 py-3 text-center min-w-[220px]">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black bg-white">
@@ -225,11 +318,13 @@ export function MrrApprovals() {
                   </tr>
                 ) : (
                   filteredList.map((m) => {
-                    const mrrWeight = m.lines.reduce((s, l) => s + (l.actualQty || l.qty || 0), 0);
-                    const invWeight = m.lines.reduce((s, l) => s + (l.invoiceQty || 0), 0);
-                    const diff = mrrWeight - invWeight;
-                    const firstLine = m.lines[0] || {};
-                    const basicValue = mrrWeight * (firstLine.invoiceRate || 0);
+                    const isEditing = editingMrrId === m.id;
+                    const linesToDisplay = isEditing ? editLines : m.lines;
+                    
+                    const mrrWeight = linesToDisplay.reduce((s, l) => s + (l.actualQty || l.qty || 0), 0);
+                    const invWeight = linesToDisplay.reduce((s, l) => s + (l.invoiceQty || 0), 0);
+                    const firstLine = linesToDisplay[0] || {};
+                    const basicValue = linesToDisplay.reduce((s, l) => s + (l.actualValue || l.value || 0), 0);
 
                     return (
                       <tr key={m.id} className="divide-x divide-black hover:bg-slate-50 transition-colors text-[11px] text-black font-medium uppercase">
@@ -244,50 +339,94 @@ export function MrrApprovals() {
                         <td className="px-4 py-4">{m.gateEntryNo || "-"}</td>
                         <td className="px-4 py-4">{m.transactionNo}</td>
                         <td className="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{getSupplierName(m.supplierId)}</td>
-                        <td className="px-4 py-4 leading-relaxed lowercase first-letter:uppercase">
-                          {m.lines.map((l, i) => (
-                            <div key={i} className="mb-2 last:mb-0">
-                              {i + 1}. {getItemSpecs(l, m.mrrType)}
+                        <td className="px-4 py-4 leading-relaxed">
+                          {linesToDisplay.map((l, i) => (
+                            <div key={i} className="mb-2 last:mb-0 border-b border-black/5 pb-1 last:border-0">
+                              <div className="font-bold lowercase first-letter:uppercase">{getItemSpecs(l, m.mrrType)}</div>
+                              {isEditing && (
+                                <div className="flex gap-2 mt-1">
+                                  <input 
+                                    type="number" 
+                                    value={l.actualQty || 0}
+                                    onChange={e => updateEditLine(i, { actualQty: parseFloat(e.target.value) })}
+                                    className="w-16 border border-black rounded px-1 text-[10px]"
+                                    placeholder="Qty"
+                                  />
+                                  <input 
+                                    type="number" 
+                                    value={l.invoiceRate || 0}
+                                    onChange={e => updateEditLine(i, { invoiceRate: parseFloat(e.target.value) })}
+                                    className="w-16 border border-black rounded px-1 text-[10px]"
+                                    placeholder="Rate"
+                                  />
+                                  <input 
+                                    type="number" 
+                                    value={l.gstRate || 0}
+                                    onChange={e => updateEditLine(i, { gstRate: parseFloat(e.target.value) })}
+                                    className="w-12 border border-black rounded px-1 text-[10px]"
+                                    placeholder="GST%"
+                                  />
+                                </div>
+                              )}
                             </div>
                           ))}
                         </td>
                         <td className="px-4 py-4 text-right font-bold">{mrrWeight.toFixed(2)}</td>
                         <td className="px-4 py-4 text-right font-bold">{invWeight.toFixed(2)}</td>
-                        <td className={cn("px-4 py-4 text-right font-bold", Math.abs(diff) > 40 ? "text-red-600" : "text-emerald-600")}>
-                          {diff.toFixed(2)}
-                        </td>
                         <td className="px-4 py-4 text-right">{Number(firstLine.poRate || 0).toFixed(2)}</td>
                         <td className="px-4 py-4 text-right">{Number(firstLine.invoiceRate || 0).toFixed(2)}</td>
+                        <td className="px-4 py-4 text-right">{Number(firstLine.gstRate || 0)}%</td>
                         <td className="px-4 py-4 text-right font-black">{basicValue.toFixed(2)}</td>
-                        <td className="px-4 py-4 flex flex-col gap-2 min-w-[200px]">
-                          <div className="grid grid-cols-1 gap-1">
-                            <button 
-                              onClick={() => navigate(`/material-in/master?search=${m.transactionNo}`)}
-                              className="w-full border border-indigo-600 text-indigo-600 py-1 rounded text-[10px] font-black hover:bg-indigo-50"
-                            >
-                              OPEN
-                            </button>
-                            <button 
-                              disabled={!!isSubmitting}
-                              onClick={() => handleAction(m.id, "Approve")}
-                              className="w-full border border-black text-black py-1 rounded text-[10px] font-black hover:bg-slate-100"
-                            >
-                              {isSubmitting === m.id ? <Spinner size={12} /> : "APPROVE"}
-                            </button>
-                            <button 
-                              disabled={!!isSubmitting}
-                              onClick={() => handleAction(m.id, "Reject")}
-                              className="w-full bg-red-600 text-white py-1 rounded text-[10px] font-black hover:bg-red-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                            >
-                              REJECT
-                            </button>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col gap-1">
+                            <div className="grid grid-cols-2 gap-1">
+                              <button 
+                                onClick={() => downloadPdf(m)}
+                                className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100 flex items-center justify-center gap-1"
+                              >
+                                <Download size={10} /> PDF
+                              </button>
+                              {activeStage === "Pending Accounts" && (
+                                isEditing ? (
+                                  <button 
+                                    onClick={() => saveEdit(m.id)}
+                                    className="bg-emerald-600 text-white py-1 rounded text-[9px] font-black hover:bg-emerald-700 flex items-center justify-center gap-1"
+                                  >
+                                    <Save size={10} /> SAVE
+                                  </button>
+                                ) : (
+                                  <button 
+                                    onClick={() => startEditing(m)}
+                                    className="border border-indigo-600 text-indigo-600 py-1 rounded text-[9px] font-black hover:bg-indigo-50 flex items-center justify-center gap-1"
+                                  >
+                                    <Edit2 size={10} /> EDIT
+                                  </button>
+                                )
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-1">
+                              <button 
+                                disabled={!!isSubmitting}
+                                onClick={() => handleAction(m.id, "Approve")}
+                                className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100"
+                              >
+                                {isSubmitting === m.id ? <Spinner size={10} /> : "APPROVE"}
+                              </button>
+                              <button 
+                                disabled={!!isSubmitting}
+                                onClick={() => handleAction(m.id, "Reject")}
+                                className="bg-red-600 text-white py-1 rounded text-[9px] font-black hover:bg-red-700"
+                              >
+                                REJECT
+                              </button>
+                            </div>
+                            <textarea
+                              value={remarks[m.id] || ""}
+                              onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
+                              placeholder="Remark *"
+                              className="w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
+                            />
                           </div>
-                          <textarea
-                            value={remarks[m.id] || ""}
-                            onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
-                            placeholder={`${activeStage.replace("Pending ", "")} Remark *`}
-                            className="w-full border border-black rounded p-1 text-[10px] uppercase outline-none focus:ring-1 focus:ring-indigo-600 min-h-[40px]"
-                          />
                         </td>
                       </tr>
                     );
@@ -299,7 +438,6 @@ export function MrrApprovals() {
         </div>
       </div>
 
-      {/* Footer / Bulk Actions */}
       <div className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t-2 border-black flex items-center justify-between px-8 shadow-[0_-4px_10px_rgba(0,0,0,0.1)] z-40">
         <button 
           onClick={() => navigate(-1)}
@@ -316,7 +454,7 @@ export function MrrApprovals() {
               onChange={toggleSelectAll}
               className="accent-indigo-600 h-4 w-4"
             />
-            Select All Visible
+            Select All
           </label>
 
           <button

@@ -1401,8 +1401,11 @@ async function initDb(retries = 5) {
           \`debitNoteAmount\` DECIMAL(15,2),
           \`mdTimestamp\` VARCHAR(255),
           \`mdEmailId\` VARCHAR(255),
-          \`md_approval_remark\` TEXT,
-          \`tallyTimestamp\` VARCHAR(255),
+          `md_approval_remark` TEXT,
+          `debitNote` VARCHAR(100),
+          `debitNoteDate` VARCHAR(50),
+          `debitNoteAmount` DECIMAL(15,2),
+          `tallyTimestamp` VARCHAR(255),
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending PH',
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
@@ -1612,12 +1615,14 @@ async function initDb(retries = 5) {
           \`cgst\` DECIMAL(15,2) NOT NULL,
           \`sgst\` DECIMAL(15,2) NOT NULL,
           \`igst\` DECIMAL(15,2) NOT NULL,
-          \`totalAfterGst\` DECIMAL(15,2) NOT NULL,
-          \`roundOff\` DECIMAL(15,2) NOT NULL DEFAULT 0,
-          \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
-        )
-      `);
+          `totalAfterGst` DECIMAL(15,2) NOT NULL,
+          `roundOff` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          `tallyTimestamp` VARCHAR(255),
+          `tallyBy` VARCHAR(255),
+          `updatedBy` VARCHAR(255),
+          `updateTimestamp` VARCHAR(255)
+          )
+          `);
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`invoice_line_items\` (
@@ -2722,6 +2727,7 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
       SELECT 
         il.id as indentLineId,
         il.indentId,
+        i.indentNo,
         il.materialId,
         il.uom,
         il.qty,
@@ -2747,6 +2753,7 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
     const lines = (rows as any[]).map(row => ({
       indentLineId: String(row.indentLineId),
       indentId: String(row.indentId),
+      indentNo: String(row.indentNo || ""),
       materialId: String(row.materialId),
       uom: String(row.uom || ""),
       qty: Number(row.qty),

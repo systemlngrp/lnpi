@@ -228,6 +228,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-emerald-600",
     items: [
       { name: "Pending Invoicing", href: "/billing/pending", icon: Receipt, countKey: "/billing/pending" },
+      { name: "Pending Tally Posting", href: "/billing/pending-tally", icon: CheckCircle, countKey: "/billing/pending-tally" },
       { name: "Billing Master", href: "/billing/master", icon: FileText },
     ],
   },
@@ -391,6 +392,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       return pending > 0;
     }).length,
     "/billing/pending": loadingSlips.filter(s => !s.invoiceId).length,
+    "/billing/pending-tally": invoices.filter(inv => !inv.tallyTimestamp).length,
     "/orders/upcoming": schedules.filter(s => {
       if (!s?.scheduledDate) return false;
       const today = new Date();
