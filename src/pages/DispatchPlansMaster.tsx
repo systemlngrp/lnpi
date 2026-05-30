@@ -35,8 +35,8 @@ export function DispatchPlansMaster() {
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Plan No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Plan Date</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Truck / Driver</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Company</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Order / Item</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Planned</th>
@@ -54,7 +54,6 @@ export function DispatchPlansMaster() {
                 </tr>
               ) : (
                 plans.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((p) => {
-                  const truck = trucks.find(t => t.id === p.truckId);
                   const order = orders.find(o => o.id === p.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = items.find(i => i.id === order?.itemId);
@@ -62,11 +61,8 @@ export function DispatchPlansMaster() {
 
                   return (
                     <tr key={p.id} className="hover:bg-slate-50 divide-x divide-black">
+                      <td className="px-4 py-4 text-xs font-bold text-slate-500 border border-black">{p.planNo || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black">
-                        <div className="font-bold">{truck?.truckNo || "-"}</div>
-                        <div className="text-[10px] text-slate-500 uppercase">{truck?.driverName || "-"}</div>
-                      </td>
                       <td className="px-4 py-4 text-xs text-black border border-black">{company?.name || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black">
                         <div className="font-bold">{order?.orderNo || "-"}</div>

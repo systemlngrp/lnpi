@@ -221,8 +221,6 @@ export function PendingLoading() {
     if (allocatedTotal <= 0) errors.push("At least one positive adjustment is required.");
     if (Math.abs(allocatedTotal - rowLoadedQty) > 0.0001) errors.push("Job/FG Stock total must exactly match Loaded qty.");
 
-    if (!modalTruckId) errors.push("Please select a Truck.");
-
     const packingTotal = packingDetails.reduce((sum, d) => sum + Number(d.quantity || 0), 0) + Number(extraItemsQty || 0);
     if (Math.abs(packingTotal - rowLoadedQty) > 0.0001) {
       errors.push(`Packing Details total (${packingTotal.toLocaleString()}) must match Loaded qty (${rowLoadedQty.toLocaleString()}).`);
@@ -589,20 +587,6 @@ export function PendingLoading() {
                   <div className="font-bold text-black text-sm">{items.find((item) => item.id === loadingModal.itemId)?.name}</div>
                 </div>
                 
-                <div className="bg-slate-50 p-4 border border-black rounded shadow-inner">
-                  <div className="text-[10px] text-slate-500 uppercase font-black mb-1">Select Truck</div>
-                  <select
-                    value={modalTruckId}
-                    onChange={(e) => setModalTruckId(e.target.value)}
-                    className="w-full border-2 border-black rounded px-2 py-1 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                  >
-                    <option value="">-- Choose Vehicle --</option>
-                    {[...trucks].sort((a,b)=>a.truckNo.localeCompare(b.truckNo)).map(t => (
-                      <option key={t.id} value={t.id}>{t.truckNo} ({t.driverName})</option>
-                    ))}
-                  </select>
-                </div>
-
                 <div className="bg-slate-50 p-4 border border-black rounded shadow-inner">
                   <div className="text-[10px] text-slate-500 uppercase font-black mb-1">Loading Date</div>
                   <div className="font-bold text-black text-sm">{formatDate(new Date().toISOString())}</div>

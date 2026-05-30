@@ -46,14 +46,12 @@ export function LoadingMaster() {
       const totalQty = slip.lines.reduce((sum, line) => sum + line.loadedQty, 0);
       return {
         ...slip,
-        truckNo: getTruckNo(slip.truckId),
         totalQty
       };
     }).filter(slip => {
-      return slip.slipNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             slip.truckNo.toLowerCase().includes(searchTerm.toLowerCase());
+      return slip.slipNo.toLowerCase().includes(searchTerm.toLowerCase());
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [loadingSlips, trucks, searchTerm]);
+  }, [loadingSlips, searchTerm]);
 
   const getSlipLines = (slip: LoadingSlip) =>
     slip.lines.map((line) => {
@@ -290,7 +288,7 @@ export function LoadingMaster() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text"
-            placeholder="Search slip no, truck..."
+            placeholder="Search slip no..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
@@ -304,7 +302,6 @@ export function LoadingMaster() {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Slip No</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Truck No</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border-b border-black">Total Qty</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border-b border-black">Actions</th>
             </tr>
@@ -312,7 +309,7 @@ export function LoadingMaster() {
           <tbody className="bg-white divide-y divide-slate-200">
             {processedSlips.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
+                <td colSpan={4} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
               </tr>
             ) : processedSlips.map((slip) => (
               <tr key={slip.id} className="hover:bg-slate-50 transition-colors">
@@ -337,12 +334,6 @@ export function LoadingMaster() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   {formatDate(slip.date)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center text-sm font-medium">
-                    <TruckIcon size={14} className="text-slate-400 mr-2" />
-                    {slip.truckNo}
-                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-600">
                   {slip.totalQty.toLocaleString()}
@@ -388,11 +379,11 @@ export function LoadingMaster() {
               const lines = getSlipLines(draft);
               return (
                 <tr key={`${slip.id}-details`} className="bg-white">
-                  <td colSpan={5} className="px-6 pb-6 pt-2 border-t border-black">
+                  <td colSpan={4} className="px-6 pb-6 pt-2 border-t border-black">
                     <div className="rounded border border-black overflow-hidden">
                       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3 border-b border-black">
                         <div className="text-sm font-bold text-black">
-                          Slip {slip.slipNo} - Truck {slip.truckNo} - Date {formatDate(slip.date)}
+                          Slip {slip.slipNo} - Date {formatDate(slip.date)}
                         </div>
                         <div className="flex items-center gap-2">
                           {slip.status !== "Cancelled" ? (
