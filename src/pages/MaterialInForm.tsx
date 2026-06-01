@@ -553,7 +553,7 @@ export function MaterialInForm() {
               <input type="text" value={linkedGateEntry.gateEntryNo || "Syncing..."} disabled className="border-2 border-emerald-700 rounded p-2 text-black bg-white font-semibold" />
             </div>
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Supplier</label>
+              <label className="font-bold text-black text-sm">Supplier/Company</label>
               <input type="text" value={linkedSupplierName} disabled className="border-2 border-emerald-700 rounded p-2 text-black bg-white font-semibold" />
             </div>
             <div className="flex flex-col space-y-1">

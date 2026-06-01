@@ -15,6 +15,13 @@ export function OrdersPendingScheduling() {
 
   const totalScheduled = (orderId: string) => rowsFor(orderId).reduce((sum, r) => sum + (Number((r as any).qty) || 0), 0);
 
+  const formatQty = (value: unknown) => {
+    const n = Number(value ?? 0);
+    if (!Number.isFinite(n)) return String(value ?? "");
+    const rounded = Math.round(n);
+    return Math.abs(n - rounded) < 1e-9 ? String(rounded) : String(n);
+  };
+
   const today = new Date().toISOString().slice(0, 10);
   const pending = orders
     .filter(o => o.status === "Pending Scheduling" && o.status !== "Cancelled" && (o.qty || 0) > totalScheduled(o.id))
@@ -183,9 +190,9 @@ export function OrdersPendingScheduling() {
                     <td className="px-3 py-2 border border-black">{o.orderNo}</td>
                     <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
                     <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.name}</td>
-                    <td className="px-3 py-2 border border-black">{o.qty}</td>
-                    <td className="px-3 py-2 border border-black">{sched}</td>
-                    <td className="px-3 py-2 border border-black font-bold text-indigo-700">{pendingSched}</td>
+                    <td className="px-3 py-2 border border-black">{formatQty(o.qty)}</td>
+                    <td className="px-3 py-2 border border-black">{formatQty(sched)}</td>
+                    <td className="px-3 py-2 border border-black font-bold text-indigo-700">{formatQty(pendingSched)}</td>
                     <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.uom}</td>
                     <td className="px-3 py-2 border border-black"><button onClick={() => { setModalOrderId(o.id); setModalOpen(true); }} className="bg-indigo-600 text-white px-3 py-1 rounded">Schedule</button></td>
                   </tr>
@@ -210,15 +217,15 @@ export function OrdersPendingScheduling() {
               <div className="grid grid-cols-3 gap-4 mb-3">
                 <div className="bg-slate-50 p-2 border border-black rounded">
                   <div className="text-xs text-slate-600">Total Order Qty</div>
-                  <div className="font-bold text-lg">{orders.find(o=>o.id===modalOrderId)?.qty ?? 0}</div>
+                  <div className="font-bold text-lg">{formatQty(orders.find(o=>o.id===modalOrderId)?.qty ?? 0)}</div>
                 </div>
                 <div className="bg-slate-50 p-2 border border-black rounded">
                   <div className="text-xs text-slate-600">Total Scheduled Qty</div>
-                  <div className="font-bold text-lg">{displayedTotalScheduled(modalOrderId)}</div>
+                  <div className="font-bold text-lg">{formatQty(displayedTotalScheduled(modalOrderId))}</div>
                 </div>
                 <div className="bg-slate-50 p-2 border border-black rounded">
                   <div className="text-xs text-slate-600">Yet To Schedule</div>
-                  <div className="font-bold text-lg">{(orders.find(o=>o.id===modalOrderId)?.qty ?? 0) - displayedTotalScheduled(modalOrderId)}</div>
+                  <div className="font-bold text-lg">{formatQty((orders.find(o=>o.id===modalOrderId)?.qty ?? 0) - displayedTotalScheduled(modalOrderId))}</div>
                 </div>
               </div>
 
