@@ -4,6 +4,8 @@ import { useData } from "../hooks/useData";
 import type {
   Company,
   Item,
+  LoadingSlip,
+  LoadingSlipLine,
   MaterialIssue,
   MaterialIssueLine,
   MaterialReturn,
@@ -11,41 +13,79 @@ import type {
   Order,
   OrderSchedule,
   Production,
+  ProductionProcessing,
+  Setting,
 } from "../types";
 import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
-import { formatDate } from "../lib/serial";
 import { exportsAllowed } from "../lib/exportPolicy";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
+import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
+import { normalizeMachineName } from "../lib/productionMachineNames";
+import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 
 type ColumnId =
-  | "status"
-  | "lotNo"
-  | "partyName"
-  | "itemName"
+  | "jobNo"
+  | "orderNo"
   | "erpCode"
+  | "company"
+  | "planDate"
+  | "itemName"
   | "type"
-  | "planQuantity"
-  | "part"
-  | "printingColour"
+  | "mandatory"
+  | "plannedQty"
+  | "loadedQty"
+  | "paper"
+  | "liner"
+  | "print"
+  | "paste"
+  | "stitch"
+  | "punch"
+  | "glue"
   | "l"
-  | "w"
+  | "b"
   | "h"
-  | "ply"
-  | "lengthOD"
-  | "widthOD"
-  | "heightOD"
+  | "lOd"
+  | "wOd"
+  | "hOd"
   | "flap"
-  | "outs"
-  | "upsForPlates"
-  | "paperRequired"
-  | "linerRequired"
-  | "topPaperWeight"
-  | "linerWeight"
-  | "totalJobWeight"
+  | "deckle"
+  | "cutting"
+  | "ply"
+  | "flute"
+  | "top"
+  | "gsm"
+  | "leastGsm"
+  | "color1"
+  | "color2"
+  | "printingColor"
+  | "paperReq"
+  | "topPaperWtKg"
+  | "linerWtKg"
+  | "totalJobWt"
+  | "lineReq"
+  | "totalWt"
+  | "avgWt"
+  | "wastage"
+  | "realPerKg"
+  | "processingStatus"
+  | "status"
+  | "jobCloser"
+  | "closeDate"
   | "actualPaperUsed"
   | "wastagePct";
+
+type ProcessingTotals = {
+  paper: number;
+  liner: number;
+  printing: number;
+  pasting: number;
+  stitching: number;
+  punching: number;
+  gluing: number;
+};
 
 type OperationRow = {
   production: Production;
@@ -53,6 +93,11 @@ type OperationRow = {
   schedule?: OrderSchedule;
   order?: Order;
   company?: Company;
+  mandatoryCell: React.ReactNode;
+  processingStatusText: string;
+  processingTotals: ProcessingTotals;
+  loadedQty: number;
+  leastGsm: number | null;
   actualPaperUsed: number;
   planPaper: number;
   wastagePct: number | null;
@@ -66,8 +111,8 @@ type ColumnDef = {
   render: (row: OperationRow) => React.ReactNode;
 };
 
-const STORAGE_HIDDEN_KEY = "lnpi.operationDashboard.columns.hidden.v1";
-const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v1";
+const STORAGE_HIDDEN_KEY = "lnpi.operationDashboard.columns.hidden.v2";
+const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
 
 function safeJsonParse<T>(raw: string | null): T | null {
   if (!raw) return null;
@@ -82,11 +127,13 @@ function toLocalDateInputValue(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function normalizeDate(dStr: string) {
-  if (!dStr) return "";
-  const d = new Date(dStr);
-  if (Number.isNaN(d.getTime())) return dStr;
-  return toLocalDateInputValue(d);
+function getPlanPaper(p: Production) {
+  const total = Number(p.totalJobWeight || 0);
+  if (total > 0) return total;
+  const top = Number(p.topPaperWeightKg || 0);
+  const liner = Number(p.linerWeightKg || 0);
+  const sum = top + liner;
+  return sum > 0 ? sum : 0;
 }
 
 export function OperationDashboard() {
@@ -95,52 +142,98 @@ export function OperationDashboard() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [processing] = useData<ProductionProcessing>("production_processing", []);
+  const [settings] = useData<Setting>("settings", []);
+  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
 
   const allowExports = exportsAllowed();
-
-  const todayStr = useMemo(() => toLocalDateInputValue(new Date()), []);
-  const [selectedDate, setSelectedDate] = useState(todayStr);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
   const columnsPanelRef = useRef<HTMLDivElement | null>(null);
+
+  const columns: ColumnDef[] = useMemo(() => ([
+    { id: "jobNo", label: "Job No.", className: "font-bold", render: (r) => r.production.transactionNo },
+    { id: "orderNo", label: "Order No.", render: (r) => r.order?.orderNo || "-" },
+    { id: "erpCode", label: "ERP Code", render: (r) => r.production.erpCode || "-" },
+    { id: "company", label: "Company", render: (r) => r.company?.name || "-" },
+    { id: "planDate", label: "Plan Date", render: (r) => formatDate(r.production.date) },
+    { id: "itemName", label: "Item Name", className: "min-w-[150px]", render: (r) => r.item?.name || "Unknown" },
+    { id: "type", label: "Type", render: (r) => r.item?.typeName || "-" },
+    { id: "mandatory", label: "Mandatory", render: (r) => r.mandatoryCell },
+    { id: "plannedQty", label: "Planned Qty", align: "right", className: "font-medium text-emerald-700", render: (r) => `${r.production.qty ?? "-"} ${r.production.uom || ""}`.trim() },
+    { id: "loadedQty", label: "Loaded Qty", align: "right", className: "font-bold text-amber-700 bg-amber-50/40", render: (r) => Number(r.loadedQty || 0).toLocaleString() },
+    { id: "paper", label: "Paper", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.paper || 0).toLocaleString() },
+    { id: "liner", label: "Liner", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.liner || 0).toLocaleString() },
+    { id: "print", label: "Print", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.printing || 0).toLocaleString() },
+    { id: "paste", label: "Paste", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.pasting || 0).toLocaleString() },
+    { id: "stitch", label: "Stitch", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.stitching || 0).toLocaleString() },
+    { id: "punch", label: "Punch", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.punching || 0).toLocaleString() },
+    { id: "glue", label: "Glue", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.gluing || 0).toLocaleString() },
+    { id: "l", label: "L", align: "right", render: (r) => r.production.length || "-" },
+    { id: "b", label: "B", align: "right", render: (r) => r.production.breadth || "-" },
+    { id: "h", label: "H", align: "right", render: (r) => r.production.height || "-" },
+    { id: "lOd", label: "L (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.lOd || "-" },
+    { id: "wOd", label: "W (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.wOd || "-" },
+    { id: "hOd", label: "H (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.hOd || "-" },
+    { id: "flap", label: "Flap", align: "right", render: (r) => r.item?.flap || "-" },
+    { id: "deckle", label: "Deckle", align: "right", render: (r) => r.item?.deckleSize || "-" },
+    { id: "cutting", label: "Cutting", align: "right", render: (r) => r.item?.cuttingSize || "-" },
+    { id: "ply", label: "Ply", align: "center", render: (r) => r.production.ply || "-" },
+    { id: "flute", label: "Flute", render: (r) => r.production.flute || "-" },
+    { id: "top", label: "Top", align: "right", render: (r) => r.production.top || "-" },
+    { id: "gsm", label: "GSM", align: "right", className: "font-medium text-indigo-700", render: (r) => r.production.gsm || "-" },
+    { id: "leastGsm", label: "Least GSM", align: "right", className: "font-black text-emerald-700", render: (r) => (r.leastGsm === null ? "-" : r.leastGsm) },
+    { id: "color1", label: "Color 1", render: (r) => r.production.color1 || "-" },
+    { id: "color2", label: "Color 2", render: (r) => r.production.color2 || "-" },
+    { id: "printingColor", label: "Printing Color", render: (r) => r.production.printingColor || "-" },
+    { id: "paperReq", label: "Paper Req.", align: "right", render: (r) => r.production.paperRequiredNos || "-" },
+    { id: "topPaperWtKg", label: "Top Paper Wt (KG)", align: "right", render: (r) => r.production.topPaperWeightKg || "-" },
+    { id: "linerWtKg", label: "Liner Wt (KG)", align: "right", render: (r) => r.production.linerWeightKg || "-" },
+    { id: "totalJobWt", label: "Total Job Wt", align: "right", render: (r) => r.production.totalJobWeight || "-" },
+    { id: "lineReq", label: "Line Req.", align: "right", render: (r) => r.production.lineRequiredNos || "-" },
+    { id: "totalWt", label: "Total Wt", align: "right", render: (r) => r.production.totalPaperWeight || "-" },
+    { id: "avgWt", label: "Avg Wt", align: "right", render: (r) => r.production.avgWeight || "-" },
+    { id: "wastage", label: "Wastage", align: "right", render: (r) => r.production.wastage || "-" },
+    { id: "realPerKg", label: "Real/KG", align: "right", className: "font-bold text-indigo-700", render: (r) => (Number(r.production.realizationPerKg || 0) ? Number(r.production.realizationPerKg || 0).toFixed(2) : "-") },
+    { id: "processingStatus", label: "Processing Status", className: "text-indigo-600 font-bold max-w-[200px] truncate", render: (r) => r.processingStatusText },
+    {
+      id: "status",
+      label: "Status",
+      render: (r) => (
+        <span
+          className={cn(
+            "px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider",
+            r.production.status === "Completed"
+              ? "bg-emerald-100 text-emerald-900 border-emerald-900"
+              : r.production.status === "Cancelled"
+                ? "bg-red-100 text-red-900 border-red-900"
+                : "bg-amber-100 text-amber-900 border-amber-900"
+          )}
+        >
+          {r.production.status || "-"}
+        </span>
+      ),
+    },
+    { id: "jobCloser", label: "Job Closer", render: (r) => r.production.closeBy || "-" },
+    { id: "closeDate", label: "Close Date", render: (r) => r.production.closeDate || "-" },
+    { id: "actualPaperUsed", label: "Actual Paper Used", align: "right", className: "font-bold text-indigo-700", render: (r) => r.actualPaperUsed.toFixed(2) },
+    { id: "wastagePct", label: "Wastage %", align: "right", className: "font-bold", render: (r) => (r.wastagePct === null ? "-" : `${r.wastagePct.toFixed(2)}%`) },
+  ]), []);
+
+  const defaultOrder: ColumnId[] = useMemo(
+    () => columns.map((c) => c.id),
+    [columns]
+  );
+
   const [hiddenColumns, setHiddenColumns] = useState<Set<ColumnId>>(() => {
     const saved = safeJsonParse<ColumnId[]>(window.localStorage.getItem(STORAGE_HIDDEN_KEY));
     return new Set(Array.isArray(saved) ? saved : []);
   });
-
-  const defaultOrder: ColumnId[] = useMemo(() => ([
-    "status",
-    "lotNo",
-    "partyName",
-    "itemName",
-    "erpCode",
-    "type",
-    "planQuantity",
-    "part",
-    "printingColour",
-    "l",
-    "w",
-    "h",
-    "ply",
-    "lengthOD",
-    "widthOD",
-    "heightOD",
-    "flap",
-    "outs",
-    "upsForPlates",
-    "paperRequired",
-    "linerRequired",
-    "topPaperWeight",
-    "linerWeight",
-    "totalJobWeight",
-    "actualPaperUsed",
-    "wastagePct",
-  ]), []);
 
   const [columnOrder, setColumnOrder] = useState<ColumnId[]>(() => {
     const saved = safeJsonParse<ColumnId[]>(window.localStorage.getItem(STORAGE_ORDER_KEY));
@@ -171,39 +264,132 @@ export function OperationDashboard() {
     return () => window.removeEventListener("mousedown", onDown);
   }, [isColumnsOpen]);
 
+  const processingTotalsMap = useMemo(() => {
+    const map = new Map<string, ProcessingTotals>();
+    processing.forEach((row) => {
+      const totals = map.get(row.productionId) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
+      const machineColumn = PROCESSING_MACHINE_COLUMNS.find((col) =>
+        (col.machineNames as readonly string[]).includes(row.machineName)
+      );
+      if (machineColumn) totals[machineColumn.key] += Number(row.qty || 0);
+      map.set(row.productionId, totals);
+    });
+    return map;
+  }, [processing]);
+
+  const processingMachinesMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    processing.forEach((row) => {
+      const set = map.get(row.productionId) || new Set<string>();
+      set.add(normalizeMachineName(row.machineName));
+      map.set(row.productionId, set);
+    });
+    return map;
+  }, [processing]);
+
+  const mandatoryMachinesByType = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
+
+  const loadedQtyByProductionId = useMemo(() => {
+    const map = new Map<string, number>();
+    const getJobAllocations = (line: LoadingSlipLine) =>
+      Array.isArray(line.allocations)
+        ? line.allocations.filter((allocation) => allocation.sourceType === "job")
+        : [];
+
+    loadingSlips.forEach((slip) => {
+      slip.lines.forEach((line) => {
+        getJobAllocations(line).forEach((allocation) => {
+          map.set(allocation.jobId, (map.get(allocation.jobId) || 0) + Number(allocation.qty || 0));
+        });
+      });
+    });
+    return map;
+  }, [loadingSlips]);
+
+  const erpLeastGsmMap = useMemo(() => {
+    const map = new Map<string, number>();
+    productions.forEach((p) => {
+      if (p.status === "Cancelled" || p.cancelTimestamp) return;
+      const erp = String(p.erpCode || "").trim();
+      const gsm = Number(p.gsm || 0);
+      if (erp && gsm > 0) {
+        if (!map.has(erp) || gsm < map.get(erp)!) map.set(erp, gsm);
+      }
+    });
+    return map;
+  }, [productions]);
+
   const productionUsageMap = useMemo(() => {
     return buildProductionMaterialUsageMap(materialIssues, materialIssueLines, materialReturns, materialReturnLines);
   }, [materialIssues, materialIssueLines, materialReturns, materialReturnLines]);
 
-  const getPrintingColour = (item?: Item) => {
-    const c1 = String(item?.printingColour1 || "").trim();
-    const c2 = String(item?.printingColour2 || "").trim();
-    if (c1 && c2) return `${c1} / ${c2}`;
-    return c1 || c2 || "-";
+  const getProcessingSummary = (productionId: string) => {
+    const records = processing.filter((p) => p.productionId === productionId);
+    if (records.length === 0) return "Pending";
+    const machines = Array.from(new Set(records.map((r) => r.machineName))).join(", ");
+    const totalQty = records.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+    return `${machines} (${totalQty})`;
   };
 
-  const getPlanPaper = (p: Production) => {
-    const total = Number(p.totalJobWeight || 0);
-    if (total > 0) return total;
-    const top = Number(p.topPaperWeightKg || 0);
-    const liner = Number(p.linerWeightKg || 0);
-    const sum = top + liner;
-    return sum > 0 ? sum : 0;
+  const getMandatoryStatus = (productionId: string, typeName?: string) => {
+    const required = getRequiredMachinesForType(mandatoryMachinesByType, typeName);
+    if (required.length === 0) return { required, done: 0, missing: [] as string[] };
+    const doneSet = processingMachinesMap.get(productionId) || new Set<string>();
+    const missing = required.filter((name) => !doneSet.has(normalizeMachineName(name)));
+    return { required, done: required.length - missing.length, missing };
   };
 
   const rows: OperationRow[] = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
+
     return productions
-      .filter((p) => normalizeDate(p.date) === selectedDate)
       .map((p) => {
         const schedule = schedules.find((s) => s.id === p.scheduleId);
         const order = orders.find((o) => o.id === schedule?.orderId);
         const company = companies.find((c) => c.id === order?.companyId);
         const item = items.find((i) => i.id === p.itemId);
+
+        const mandatory = getMandatoryStatus(p.id, item?.typeName);
+        const mandatoryCell =
+          mandatory.required.length === 0
+            ? "-"
+            : mandatory.missing.length === 0
+              ? <span className="font-black text-emerald-700">Done {mandatory.done}/{mandatory.required.length}</span>
+              : (
+                <div className="space-y-1">
+                  <div className="font-black text-amber-700">Pending {mandatory.done}/{mandatory.required.length}</div>
+                  <div className="text-[10px] font-semibold text-slate-600 whitespace-normal max-w-[240px]">
+                    Missing: {mandatory.missing.join(", ")}
+                  </div>
+                </div>
+              );
+
+        const processingTotals =
+          processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
+        const processingStatusText = getProcessingSummary(p.id);
+        const loadedQty = Number(loadedQtyByProductionId.get(p.id) || 0);
+        const erp = String(p.erpCode || "").trim();
+        const leastGsm = erp ? (erpLeastGsmMap.get(erp) ?? null) : null;
+
         const actualPaperUsed = getProductionActualPaperUsed(p, productionUsageMap);
         const planPaper = getPlanPaper(p);
         const wastagePct = planPaper > 0 ? ((actualPaperUsed - planPaper) / planPaper) * 100 : null;
-        return { production: p, schedule, order, company, item, actualPaperUsed, planPaper, wastagePct };
+
+        return {
+          production: p,
+          item,
+          schedule,
+          order,
+          company,
+          mandatoryCell,
+          processingStatusText,
+          processingTotals,
+          loadedQty,
+          leastGsm,
+          actualPaperUsed,
+          planPaper,
+          wastagePct,
+        };
       })
       .filter((row) => {
         if (!q) return true;
@@ -217,10 +403,22 @@ export function OperationDashboard() {
           .toLowerCase();
         return blob.includes(q);
       })
-      .sort((a, b) =>
-        a.production.transactionNo.localeCompare(b.production.transactionNo, undefined, { numeric: true, sensitivity: "base" })
-      );
-  }, [productions, selectedDate, searchTerm, items, schedules, orders, companies, productionUsageMap]);
+      .sort((a, b) => b.production.transactionNo.localeCompare(a.production.transactionNo, undefined, { numeric: true, sensitivity: "base" }));
+  }, [
+    productions,
+    items,
+    schedules,
+    orders,
+    companies,
+    processingTotalsMap,
+    loadedQtyByProductionId,
+    erpLeastGsmMap,
+    processingMachinesMap,
+    mandatoryMachinesByType,
+    processing,
+    productionUsageMap,
+    searchTerm,
+  ]);
 
   const totals = useMemo(() => {
     const sumActual = rows.reduce((sum, row) => sum + Number(row.actualPaperUsed || 0), 0);
@@ -228,41 +426,6 @@ export function OperationDashboard() {
     const overallWastagePct = sumPlan > 0 ? ((sumActual - sumPlan) / sumPlan) * 100 : null;
     return { sumActual, sumPlan, overallWastagePct };
   }, [rows]);
-
-  const columns: ColumnDef[] = useMemo(() => ([
-    { id: "status", label: "Status", render: (r) => r.production.status || "-" },
-    { id: "lotNo", label: "Lot No", className: "font-bold", render: (r) => r.production.transactionNo },
-    { id: "partyName", label: "Party Name", render: (r) => r.company?.name || "-" },
-    { id: "itemName", label: "Item Name", render: (r) => r.item?.name || "-" },
-    { id: "erpCode", label: "ERP Code", render: (r) => r.production.erpCode || "-" },
-    { id: "type", label: "TYPE", render: (r) => r.item?.typeName || "-" },
-    { id: "planQuantity", label: "Plan Quantity", align: "right", className: "font-bold text-emerald-700", render: (r) => r.production.qty ?? "-" },
-    { id: "part", label: "PART", render: (r) => r.item?.part || "-" },
-    { id: "printingColour", label: "Printing Colour", render: (r) => getPrintingColour(r.item) },
-    { id: "l", label: "L", align: "right", render: (r) => r.production.length ?? "-" },
-    { id: "w", label: "W", align: "right", render: (r) => r.production.breadth ?? "-" },
-    { id: "h", label: "H", align: "right", render: (r) => r.production.height ?? "-" },
-    { id: "ply", label: "Ply", align: "center", render: (r) => r.production.ply ?? "-" },
-    { id: "lengthOD", label: "Length (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.lOd ?? "-" },
-    { id: "widthOD", label: "Width (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.wOd ?? "-" },
-    { id: "heightOD", label: "Height (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.hOd ?? "-" },
-    { id: "flap", label: "FLAP", align: "right", render: (r) => r.item?.flap ?? "-" },
-    { id: "outs", label: "No. of Outs (Reel Size)", align: "right", render: (r) => r.production.ups ?? "-" },
-    { id: "upsForPlates", label: "No. of ups in Cutting (For Plates)", align: "right", render: (r) => r.production.noOfUpsInCuttingForPlates ?? "-" },
-    { id: "paperRequired", label: "Paper Required", align: "right", render: (r) => r.production.paperRequiredNos ?? "-" },
-    { id: "linerRequired", label: "Liner Required", align: "right", render: (r) => r.production.lineRequiredNos ?? "-" },
-    { id: "topPaperWeight", label: "Top Paper Weight (KG)", align: "right", render: (r) => r.production.topPaperWeightKg ?? "-" },
-    { id: "linerWeight", label: "Liner Weight (KG)", align: "right", render: (r) => r.production.linerWeightKg ?? "-" },
-    { id: "totalJobWeight", label: "Total Job Weight", align: "right", className: "font-bold", render: (r) => r.production.totalJobWeight ?? "-" },
-    { id: "actualPaperUsed", label: "Actual Paper Used", align: "right", className: "font-bold text-indigo-700", render: (r) => r.actualPaperUsed.toFixed(2) },
-    {
-      id: "wastagePct",
-      label: "Wastage %",
-      align: "right",
-      className: "font-bold",
-      render: (r) => (r.wastagePct === null ? "-" : `${r.wastagePct.toFixed(2)}%`),
-    },
-  ]), []);
 
   const columnById = useMemo(() => {
     const map = new Map<ColumnId, ColumnDef>();
@@ -280,37 +443,56 @@ export function OperationDashboard() {
   }, [visibleColumnIds, columnById]);
 
   const exportData = useMemo(() => {
-    return rows.map((r) => {
-      const base: Record<string, string | number> = {
-        Status: r.production.status || "-",
-        "Lot No": r.production.transactionNo || "-",
-        "Party Name": r.company?.name || "-",
-        "Item Name": r.item?.name || "-",
-        "ERP Code": r.production.erpCode || "-",
-        TYPE: r.item?.typeName || "-",
-        "Plan Quantity": r.production.qty ?? "-",
-        PART: r.item?.part || "-",
-        "Printing Colour": getPrintingColour(r.item),
-        L: r.production.length ?? "-",
-        W: r.production.breadth ?? "-",
-        H: r.production.height ?? "-",
-        Ply: r.production.ply ?? "-",
-        "Length (OD)": r.item?.lOd ?? "-",
-        "Width (OD)": r.item?.wOd ?? "-",
-        "Height (OD)": r.item?.hOd ?? "-",
-        FLAP: r.item?.flap ?? "-",
-        "No. of Outs (Reel Size)": r.production.ups ?? "-",
-        "No. of ups in Cutting (For Plates)": r.production.noOfUpsInCuttingForPlates ?? "-",
-        "Paper Required": r.production.paperRequiredNos ?? "-",
-        "Liner Required": r.production.lineRequiredNos ?? "-",
-        "Top Paper Weight (KG)": r.production.topPaperWeightKg ?? "-",
-        "Liner Weight (KG)": r.production.linerWeightKg ?? "-",
-        "Total Job Weight": r.production.totalJobWeight ?? "-",
-        "Actual Paper Used": Number(r.actualPaperUsed.toFixed(5)),
-        "Wastage %": r.wastagePct === null ? "-" : Number(r.wastagePct.toFixed(5)),
-      };
-      return base;
-    });
+    return rows.map((r) => ({
+      "Job No.": r.production.transactionNo || "-",
+      "Order No.": r.order?.orderNo || "-",
+      "ERP Code": r.production.erpCode || "-",
+      Company: r.company?.name || "-",
+      "Plan Date": formatDate(r.production.date),
+      "Item Name": r.item?.name || "-",
+      Type: r.item?.typeName || "-",
+      "Planned Qty": `${r.production.qty ?? "-"} ${r.production.uom || ""}`.trim(),
+      "Loaded Qty": r.loadedQty,
+      Paper: r.processingTotals.paper,
+      Liner: r.processingTotals.liner,
+      Print: r.processingTotals.printing,
+      Paste: r.processingTotals.pasting,
+      Stitch: r.processingTotals.stitching,
+      Punch: r.processingTotals.punching,
+      Glue: r.processingTotals.gluing,
+      L: r.production.length ?? "-",
+      B: r.production.breadth ?? "-",
+      H: r.production.height ?? "-",
+      "L (OD)": r.item?.lOd ?? "-",
+      "W (OD)": r.item?.wOd ?? "-",
+      "H (OD)": r.item?.hOd ?? "-",
+      Flap: r.item?.flap ?? "-",
+      Deckle: r.item?.deckleSize ?? "-",
+      Cutting: r.item?.cuttingSize ?? "-",
+      Ply: r.production.ply ?? "-",
+      Flute: r.production.flute ?? "-",
+      Top: r.production.top ?? "-",
+      GSM: r.production.gsm ?? "-",
+      "Least GSM": r.leastGsm === null ? "-" : r.leastGsm,
+      "Color 1": r.production.color1 ?? "-",
+      "Color 2": r.production.color2 ?? "-",
+      "Printing Color": r.production.printingColor ?? "-",
+      "Paper Req.": r.production.paperRequiredNos ?? "-",
+      "Top Paper Wt (KG)": r.production.topPaperWeightKg ?? "-",
+      "Liner Wt (KG)": r.production.linerWeightKg ?? "-",
+      "Total Job Wt": r.production.totalJobWeight ?? "-",
+      "Line Req.": r.production.lineRequiredNos ?? "-",
+      "Total Wt": r.production.totalPaperWeight ?? "-",
+      "Avg Wt": r.production.avgWeight ?? "-",
+      Wastage: r.production.wastage ?? "-",
+      "Real/KG": Number(r.production.realizationPerKg || 0) ? Number(r.production.realizationPerKg || 0).toFixed(2) : "-",
+      "Processing Status": r.processingStatusText,
+      Status: r.production.status || "-",
+      "Job Closer": r.production.closeBy || "-",
+      "Close Date": r.production.closeDate || "-",
+      "Actual Paper Used": Number(r.actualPaperUsed.toFixed(5)),
+      "Wastage %": r.wastagePct === null ? "-" : Number(r.wastagePct.toFixed(5)),
+    }));
   }, [rows]);
 
   const onToggleColumn = (id: ColumnId) => {
@@ -357,20 +539,8 @@ export function OperationDashboard() {
       <div className="flex justify-between items-center border-b border-black pb-3">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Operation Dashboard</h2>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase text-slate-600">Date</span>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="border-2 border-black rounded px-3 py-1 text-xs font-bold"
-            />
-          </div>
           {allowExports ? (
-            <ExcelExport
-              data={exportData}
-              fileName={`Operation_Dashboard_${selectedDate}`}
-            />
+            <ExcelExport data={exportData} fileName={`Operation_Dashboard_${toLocalDateInputValue(new Date())}`} />
           ) : null}
           <button
             type="button"
@@ -394,13 +564,18 @@ export function OperationDashboard() {
         </div>
         <div className="bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
           <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Overall Wastage %</div>
-          <div className={cn("text-2xl font-black tabular-nums", totals.overallWastagePct !== null && totals.overallWastagePct > 0 ? "text-red-600" : "text-emerald-700")}>
+          <div
+            className={cn(
+              "text-2xl font-black tabular-nums",
+              totals.overallWastagePct !== null && totals.overallWastagePct > 0 ? "text-red-600" : "text-emerald-700"
+            )}
+          >
             {totals.overallWastagePct === null ? "-" : `${totals.overallWastagePct.toFixed(2)}%`}
           </div>
         </div>
       </div>
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search lot, item, party..." />
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs, items, parties..." />
 
       {isColumnsOpen ? (
         <div ref={columnsPanelRef} className="bg-white border-2 border-black rounded p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
@@ -430,20 +605,18 @@ export function OperationDashboard() {
               );
             })}
           </div>
-          <div className="mt-3 text-[11px] font-bold text-slate-600">
-            Tip: drag table headers to reorder columns.
-          </div>
+          <div className="mt-3 text-[11px] font-bold text-slate-600">Tip: drag table headers to reorder columns.</div>
         </div>
       ) : null}
 
       <div className="bg-white border border-black rounded shadow-sm overflow-hidden">
         <div className="flex justify-between items-center px-4 py-3 bg-slate-100 border-b border-black">
-          <h3 className="font-bold text-sm uppercase tracking-tight text-black">Operation Jobs</h3>
+          <h3 className="font-bold text-sm uppercase tracking-tight text-black">Production Master View</h3>
           <div className="text-xs font-bold text-slate-600">{rows.length} records</div>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-black">
-            <thead className="bg-white">
+          <table className="min-w-max w-full divide-y divide-black border-collapse border border-black">
+            <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
                 {visibleColumns.map((c) => (
                   <th
@@ -453,7 +626,7 @@ export function OperationDashboard() {
                     onDragOver={onDragOver}
                     onDrop={onDrop(c.id)}
                     className={cn(
-                      "px-4 py-3 text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap select-none cursor-move",
+                      "px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap select-none cursor-move",
                       c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left"
                     )}
                     title="Drag to reorder"
@@ -467,23 +640,24 @@ export function OperationDashboard() {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={visibleColumns.length || 1} className="px-6 py-8 text-center text-black font-medium">
-                    No productions found for this date.
+                    No productions found.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.production.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
+                  <tr key={row.production.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
                     {visibleColumns.map((c) => {
                       const value = c.render(row);
+                      const title = typeof value === "string" ? value : c.id === "processingStatus" ? row.processingStatusText : undefined;
                       return (
                         <td
                           key={c.id}
                           className={cn(
-                            "px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap",
+                            "px-4 py-4 text-xs text-black border border-black whitespace-nowrap",
                             c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
                             c.className
                           )}
-                          title={typeof value === "string" ? value : undefined}
+                          title={title}
                         >
                           {value}
                         </td>
@@ -499,3 +673,4 @@ export function OperationDashboard() {
     </div>
   );
 }
+
