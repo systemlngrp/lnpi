@@ -236,7 +236,13 @@ export function PendingInvoicing() {
   const addAllocationRow = (itemRowId: string) => {
     setInvoiceRows((prev) =>
       prev.map((row) =>
-        row.id === itemRowId ? { ...row, allocations: [...row.allocations, { id: crypto.randomUUID(), orderId: "", qty: 0 }] } : row
+        row.id === itemRowId
+          ? (() => {
+              const allocated = row.allocations.reduce((sum, a) => sum + Number(a.qty || 0), 0);
+              const remaining = Math.max(0, Number(row.totalQty || 0) - allocated);
+              return { ...row, allocations: [...row.allocations, { id: crypto.randomUUID(), orderId: "", qty: remaining }] };
+            })()
+          : row
       )
     );
   };
@@ -251,11 +257,30 @@ export function PendingInvoicing() {
     );
   };
 
-  const updateAllocation = (itemRowId: string, allocationId: string, patch: Partial<Pick<InvoiceAllocationRow, "orderId" | "qty">>) => {
+  const updateAllocation = (
+    itemRowId: string,
+    allocationId: string,
+    patch: Partial<Pick<InvoiceAllocationRow, "orderId" | "qty">>
+  ) => {
     setInvoiceRows((prev) =>
       prev.map((row) => {
         if (row.id !== itemRowId) return row;
-        return { ...row, allocations: row.allocations.map((a) => (a.id === allocationId ? { ...a, ...patch } : a)) };
+
+        const nextAllocations = row.allocations.map((a) => (a.id === allocationId ? { ...a, ...patch } : a));
+
+        // Clamp qty so that per-item allocated total never exceeds totalQty
+        const totalQty = Number(row.totalQty || 0);
+        const current = nextAllocations.find((a) => a.id === allocationId);
+        if (current && patch.qty !== undefined) {
+          const othersTotal = nextAllocations
+            .filter((a) => a.id !== allocationId)
+            .reduce((sum, a) => sum + Number(a.qty || 0), 0);
+          const maxAllowed = Math.max(0, totalQty - othersTotal);
+          const desired = Number(current.qty || 0);
+          current.qty = Math.min(Math.max(0, desired), maxAllowed);
+        }
+
+        return { ...row, allocations: nextAllocations };
       })
     );
   };
@@ -608,9 +633,21 @@ export function PendingInvoicing() {
                         <tr key={itemRow.id} className="bg-slate-50 border-t-2 border-black">
                           <td colSpan={10} className="px-3 py-2">
                             <div className="flex flex-wrap items-center justify-between gap-3">
+                              {(() => {
+                                const allocatedTotal = itemRow.allocations.reduce((s, a) => s + Number(a.qty || 0), 0);
+                                const remaining = Number(itemRow.totalQty || 0) - allocatedTotal;
+                                return (
                               <div className="text-[11px] font-black uppercase">
-                                {itemName} <span className="text-slate-500 font-bold">| Total Qty: {Number(itemRow.totalQty || 0).toLocaleString()}</span>
+                                {itemName}{" "}
+                                <span className="text-slate-500 font-bold">
+                                  | Total: {Number(itemRow.totalQty || 0).toLocaleString()} | Allocated: {allocatedTotal.toLocaleString()} | Remaining:{" "}
+                                  <span className={cn("font-black", remaining < -0.001 ? "text-rose-700" : remaining > 0.001 ? "text-amber-700" : "text-emerald-700")}>
+                                    {remaining.toLocaleString()}
+                                  </span>
+                                </span>
                               </div>
+                                );
+                              })()}
                               <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
                                   <div className="text-[10px] font-black uppercase text-slate-500">GST</div>
@@ -646,6 +683,10 @@ export function PendingInvoicing() {
                         const pending = order ? Math.max(0, orderQty - dispatched) : 0;
                         const rate = order ? Number(order.rate || 0) : 0;
                         const amount = Number(alloc.qty || 0) * rate;
+                        const otherAllocated = itemRow.allocations
+                          .filter((a) => a.id !== alloc.id)
+                          .reduce((s, a) => s + Number(a.qty || 0), 0);
+                        const maxAllowed = Math.max(0, Number(itemRow.totalQty || 0) - otherAllocated);
 
                         return (
                           <tr key={alloc.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
@@ -675,6 +716,7 @@ export function PendingInvoicing() {
                                 type="number"
                                 value={Number(alloc.qty || 0) || ""}
                                 min={0}
+                                max={maxAllowed}
                                 onChange={(e) => updateAllocation(itemRow.id, alloc.id, { qty: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
                                 className="w-24 px-1 py-1 border-2 border-indigo-600 rounded text-right text-[11px] font-black focus:ring-0"
                               />
