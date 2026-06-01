@@ -14,6 +14,7 @@ export function ProductionProcessingForm() {
   const [searchParams] = useSearchParams();
   const initialProductionId = searchParams.get("productionId") || "";
   const initialMachineId = searchParams.get("machineId") || "";
+  const lockMachine = searchParams.get("lockMachine") === "1";
   
   const [productions] = useData<Production>("productions", []);
   const [machines] = useData<Machine>("machines", []);
@@ -166,7 +167,11 @@ export function ProductionProcessingForm() {
                 options={machineOptions} 
                 placeholder="Select Machine..." 
                 required 
+                disabled={lockMachine && !!initialMachineId}
               />
+              {lockMachine && !!initialMachineId ? (
+                <div className="text-[11px] font-bold text-slate-600">Machine is locked for this report.</div>
+              ) : null}
             </div>
 
             <div className="flex flex-col space-y-1">

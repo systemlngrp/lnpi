@@ -189,7 +189,6 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Pending FG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
       { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
       { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
-      { name: "Machine Pending Proc.", href: "/production/pending-machine-processing", icon: Hammer },
       { name: "Production Master", href: "/production/master", icon: Database },
       { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
       { name: "Canceled Jobs", href: "/production/canceled", icon: X },
@@ -201,12 +200,8 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { name: "Reporting Form", href: "/production-processing/form", icon: ClipboardList },
       { name: "Reporting Master", href: "/production-processing/master", icon: Database },
+      { name: "Machine-wise Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
     ],
-  },
-  {
-    section: "Machine-wise Entry",
-    color: "bg-teal-900",
-    items: [], // Will be populated dynamically in the component
   },
   {
     section: "Samples",
@@ -321,18 +316,21 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
 
   const dynamicNavigation = useMemo(() => {
     return NAVIGATION.map(group => {
-      if (group.section === "Machine-wise Entry") {
+      if (group.section === "Production Processing") {
         return {
           ...group,
-          items: machines
-            .filter(m => (machineWiseCounts[m.id] || 0) > 0)
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map(m => ({
-              name: m.name,
-              href: `/production/pending-machine-processing?machineId=${m.id}`,
-              icon: Hammer,
-              count: machineWiseCounts[m.id]
-            }))
+          items: [
+            ...group.items,
+            ...machines
+              .filter(m => (machineWiseCounts[m.id] || 0) > 0)
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(m => ({
+                name: m.name,
+                href: `/production/pending-machine-processing?machineId=${m.id}`,
+                icon: Hammer,
+                count: machineWiseCounts[m.id]
+              }))
+          ]
         };
       }
       return group;
