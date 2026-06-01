@@ -53,6 +53,7 @@ import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { withIndentTotals } from "../lib/indentTotals";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 
 interface SidebarProps {
   isOpen: boolean;
