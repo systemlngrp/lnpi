@@ -306,14 +306,41 @@ export function PendingInvoicing() {
     const company = companies.find(c => c.id === invoiceModal.companyId);
     if (!company) return;
 
+    const loadedByItemId = new Map<string, number>();
     const totalLoaded = invoiceModal.slips.reduce((sum, s) => 
-      sum + s.lines.reduce((lSum: number, l: any) => lSum + Number(l.loadedQty || 0), 0)
+      sum + s.lines.reduce((lSum: number, l: any) => {
+        const qty = Number(l.loadedQty || 0);
+        const plan = plans.find(p => p.id === l.dispatchPlanId);
+        const order = orders.find(o => o.id === plan?.orderId);
+        const itemId = String(order?.itemId || "").trim();
+        if (itemId) loadedByItemId.set(itemId, (loadedByItemId.get(itemId) || 0) + qty);
+        return lSum + qty;
+      }, 0)
     , 0);
     const totalInvoicedNow = invoiceRows.reduce((sum, r) => sum + Number(r.qtyDispatchedNow || 0), 0);
 
     if (Math.abs(totalInvoicedNow - totalLoaded) > 0.01) {
       alert(`Total quantity in invoice (${totalInvoicedNow.toLocaleString()}) must match total loaded quantity (${totalLoaded.toLocaleString()}).`);
       return;
+    }
+
+    // Item-wise validation: total dispatched now must match loaded totals per item
+    const invoicedByItemId = new Map<string, number>();
+    invoiceRows.forEach((row) => {
+      const itemId = String(row.itemId || "").trim();
+      if (!itemId) return;
+      invoicedByItemId.set(itemId, (invoicedByItemId.get(itemId) || 0) + Number(row.qtyDispatchedNow || 0));
+    });
+
+    for (const [itemId, loadedQty] of loadedByItemId.entries()) {
+      const invoicedQty = Number(invoicedByItemId.get(itemId) || 0);
+      if (Math.abs(invoicedQty - loadedQty) > 0.01) {
+        const itemName = items.find((i) => i.id === itemId)?.name || "Item";
+        alert(
+          `Item-wise quantity mismatch for ${itemName}.\nLoaded: ${loadedQty.toLocaleString()}\nInvoice: ${invoicedQty.toLocaleString()}`
+        );
+        return;
+      }
     }
 
     // Tolerance Check
