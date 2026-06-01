@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Boxes,
@@ -43,6 +43,11 @@ import {
   MaterialIssueLine,
   MaterialReturn,
   MaterialReturnLine,
+  Machine,
+  Setting,
+  Item,
+  ProductionProcessing,
+  Invoice,
 } from "../types";
 import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
@@ -283,6 +288,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [settings] = useData<Setting>("settings", []);
   const [items] = useData<Item>("items", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
+  const [invoices] = useData<Invoice>("invoices", []);
 
   const mandatoryMachinesMapping = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
 
