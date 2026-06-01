@@ -56,6 +56,7 @@ export function getAvailableReelPackingSlips(
   const openCounts = buildOpenReelCounts(issueReelLines, returnReelLines);
   return packingSlips.filter((slip) => {
     if (slip.materialId !== materialId) return false;
+    if (Number(slip.weightKg || 0) <= 0) return false;
     const issuedOpenCount = Array.from(openCounts.entries())
       .filter(([key, count]) => key.startsWith(`${slip.id}::`) && count > 0)
       .reduce((sum, [, count]) => sum + count, 0);
