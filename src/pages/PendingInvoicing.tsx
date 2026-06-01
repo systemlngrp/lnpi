@@ -47,7 +47,7 @@ interface InvoiceRow {
   rate: number;
   qtyDispatchedNow: number;
   gstRate: number;
-  loadingSlipId: string;
+  sources: Array<{ loadingSlipId: string; qty: number }>;
 }
 
 export function PendingInvoicing() {
@@ -177,16 +177,27 @@ export function PendingInvoicing() {
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
     
-    const initialRows: InvoiceRow[] = [];
-    selected.forEach(s => {
-      s.lines.forEach((l: any) => {
-        const plan = plans.find(p => p.id === l.dispatchPlanId);
-        const order = orders.find(o => o.id === plan?.orderId);
-        const item = items.find(i => i.id === order?.itemId);
-        
-        if (order && item) {
-          const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
-          initialRows.push({
+    const grouped = new Map<string, InvoiceRow>();
+
+    selected.forEach((slip) => {
+      slip.lines.forEach((line: any) => {
+        const plan = plans.find((p) => p.id === line.dispatchPlanId);
+        const order = orders.find((o) => o.id === plan?.orderId);
+        const item = items.find((i) => i.id === order?.itemId);
+        if (!order || !item) return;
+
+        const rate = Number(order.rate || 0);
+        const gstRate = item.gstRate ?? 18;
+        const key = `${item.id}::${order.id}::${rate}::${gstRate}`;
+        const qty = Number(line.loadedQty || 0);
+        const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
+
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.qtyDispatchedNow += qty;
+          existing.sources.push({ loadingSlipId: slip.id, qty });
+        } else {
+          grouped.set(key, {
             id: crypto.randomUUID(),
             itemId: item.id,
             orderId: order.id,
@@ -194,15 +205,16 @@ export function PendingInvoicing() {
             totalOrderQty: Number(order.qty || 0),
             totalDispatchQty: totalDispatched,
             pendingQty: Math.max(0, Number(order.qty || 0) - totalDispatched),
-            rate: Number(order.rate || 0),
-            qtyDispatchedNow: Number(l.loadedQty || 0),
-            gstRate: item.gstRate ?? 18,
-            loadingSlipId: s.id
+            rate,
+            qtyDispatchedNow: qty,
+            gstRate,
+            sources: [{ loadingSlipId: slip.id, qty }],
           });
         }
       });
     });
-    setInvoiceRows(initialRows);
+
+    setInvoiceRows(Array.from(grouped.values()));
 
     const company = companies.find(c => c.id === billingMode);
     setGstSupplyType((company?.gstSupplyType as any) || "INTRA_STATE");
@@ -220,7 +232,7 @@ export function PendingInvoicing() {
       rate: 0,
       qtyDispatchedNow: 0,
       gstRate: 18,
-      loadingSlipId: ""
+      sources: []
     }]);
   };
 
@@ -335,22 +347,46 @@ export function PendingInvoicing() {
 
       await updateInvoices(prev => [...prev, newInvoice]);
 
-      const lineItems: InvoiceLineItem[] = invoiceRows.map(row => {
-        const amount = row.qtyDispatchedNow * row.rate;
-        const taxAmount = (amount * row.gstRate) / 100;
-        return {
-          id: crypto.randomUUID(),
-          invoiceId,
-          loadingSlipId: row.loadingSlipId || invoiceModal.slips[0]?.id || "", // Fallback
-          itemId: row.itemId,
-          qty: row.qtyDispatchedNow,
-          rate: row.rate,
-          amount,
-          gstRate: row.gstRate,
-          cgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
-          sgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
-          igst: gstSupplyType === "INTER_STATE" ? taxAmount : 0
-        };
+      const distributeQty = (qty: number, sources: Array<{ loadingSlipId: string; qty: number }>) => {
+        const result: Array<{ loadingSlipId: string; qty: number }> = [];
+        let remaining = Number(qty || 0);
+        const pool = sources.length > 0 ? sources : [{ loadingSlipId: invoiceModal.slips[0]?.id || "", qty: remaining }];
+        for (const src of pool) {
+          if (!src.loadingSlipId) continue;
+          if (remaining <= 0.0001) break;
+          const cap = Math.max(0, Number(src.qty || 0));
+          const take = sources.length > 0 ? Math.min(cap, remaining) : remaining;
+          if (take <= 0.0001) continue;
+          result.push({ loadingSlipId: src.loadingSlipId, qty: take });
+          remaining -= take;
+        }
+        if (remaining > 0.0001) {
+          // fallback: assign any leftover to first slip to avoid dropping qty
+          const firstSlipId = invoiceModal.slips[0]?.id || "";
+          if (firstSlipId) result.push({ loadingSlipId: firstSlipId, qty: remaining });
+        }
+        return result;
+      };
+
+      const lineItems: InvoiceLineItem[] = invoiceRows.flatMap((row) => {
+        const parts = distributeQty(Number(row.qtyDispatchedNow || 0), row.sources || []);
+        return parts.map((part) => {
+          const amount = part.qty * row.rate;
+          const taxAmount = (amount * row.gstRate) / 100;
+          return {
+            id: crypto.randomUUID(),
+            invoiceId,
+            loadingSlipId: part.loadingSlipId,
+            itemId: row.itemId,
+            qty: part.qty,
+            rate: row.rate,
+            amount,
+            gstRate: row.gstRate,
+            cgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
+            sgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
+            igst: gstSupplyType === "INTER_STATE" ? taxAmount : 0
+          };
+        });
       });
       
       for (const li of lineItems) {
