@@ -36,18 +36,19 @@ interface GroupedLoading {
   })[];
 }
 
-interface InvoiceRow {
+interface InvoiceAllocationRow {
+  id: string;
+  orderId: string;
+  qty: number;
+}
+
+interface InvoiceItemRow {
   id: string;
   itemId: string;
-  orderId: string;
-  poNo: string;
-  totalOrderQty: number;
-  totalDispatchQty: number;
-  pendingQty: number;
-  rate: number;
-  qtyDispatchedNow: number;
   gstRate: number;
+  totalQty: number; // total qty from selected loading slips for this item
   sources: Array<{ loadingSlipId: string; qty: number }>;
+  allocations: InvoiceAllocationRow[];
 }
 
 export function PendingInvoicing() {
@@ -71,7 +72,7 @@ export function PendingInvoicing() {
     slips: any[];
   } | null>(null);
   
-  const [invoiceRows, setInvoiceRows] = useState<InvoiceRow[]>([]);
+  const [invoiceRows, setInvoiceRows] = useState<InvoiceItemRow[]>([]);
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -177,7 +178,8 @@ export function PendingInvoicing() {
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
     
-    const grouped = new Map<string, InvoiceRow>();
+    const itemMap = new Map<string, InvoiceItemRow>();
+    const itemOrderQtyMap = new Map<string, Map<string, number>>(); // itemId -> orderId -> qty
 
     selected.forEach((slip) => {
       slip.lines.forEach((line: any) => {
@@ -186,83 +188,80 @@ export function PendingInvoicing() {
         const item = items.find((i) => i.id === order?.itemId);
         if (!order || !item) return;
 
-        const rate = Number(order.rate || 0);
-        const gstRate = item.gstRate ?? 18;
-        const key = `${item.id}::${order.id}::${rate}::${gstRate}`;
         const qty = Number(line.loadedQty || 0);
-        const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
+        const gstRate = item.gstRate ?? 18;
 
-        const existing = grouped.get(key);
+        const existing = itemMap.get(item.id);
         if (existing) {
-          existing.qtyDispatchedNow += qty;
+          existing.totalQty += qty;
           existing.sources.push({ loadingSlipId: slip.id, qty });
         } else {
-          grouped.set(key, {
+          itemMap.set(item.id, {
             id: crypto.randomUUID(),
             itemId: item.id,
-            orderId: order.id,
-            poNo: order.poNumber || "N/A",
-            totalOrderQty: Number(order.qty || 0),
-            totalDispatchQty: totalDispatched,
-            pendingQty: Math.max(0, Number(order.qty || 0) - totalDispatched),
-            rate,
-            qtyDispatchedNow: qty,
             gstRate,
+            totalQty: qty,
             sources: [{ loadingSlipId: slip.id, qty }],
+            allocations: [],
           });
         }
+
+        const byOrder = itemOrderQtyMap.get(item.id) || new Map<string, number>();
+        byOrder.set(order.id, (byOrder.get(order.id) || 0) + qty);
+        itemOrderQtyMap.set(item.id, byOrder);
       });
     });
 
-    setInvoiceRows(Array.from(grouped.values()));
+    // Seed allocations from slips' original orders
+    itemMap.forEach((row, itemId) => {
+      const byOrder = itemOrderQtyMap.get(itemId) || new Map<string, number>();
+      const allocations: InvoiceAllocationRow[] = Array.from(byOrder.entries()).map(([orderId, qty]) => ({
+        id: crypto.randomUUID(),
+        orderId,
+        qty,
+      }));
+      row.allocations = allocations.length ? allocations : [{ id: crypto.randomUUID(), orderId: "", qty: row.totalQty }];
+    });
+
+    setInvoiceRows(Array.from(itemMap.values()));
 
     const company = companies.find(c => c.id === billingMode);
     setGstSupplyType((company?.gstSupplyType as any) || "INTRA_STATE");
   };
 
   const handleAddRow = () => {
-    setInvoiceRows([...invoiceRows, {
-      id: crypto.randomUUID(),
-      itemId: "",
-      orderId: "",
-      poNo: "",
-      totalOrderQty: 0,
-      totalDispatchQty: 0,
-      pendingQty: 0,
-      rate: 0,
-      qtyDispatchedNow: 0,
-      gstRate: 18,
-      sources: []
-    }]);
+    alert("Rows are created from selected Loading Slips. Use 'Add Order' under an item to split quantities.");
   };
 
-  const handleUpdateRow = (idx: number, field: keyof InvoiceRow, value: any) => {
-    const next = [...invoiceRows];
-    const row = { ...next[idx], [field]: value };
-    
-    if (field === "orderId") {
-      const order = orders.find(o => o.id === value);
-      const item = items.find(i => i.id === order?.itemId);
-      if (order && item) {
-        const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
-        row.itemId = item.id;
-        row.poNo = order.poNumber || "N/A";
-        row.totalOrderQty = Number(order.qty || 0);
-        row.totalDispatchQty = totalDispatched;
-        row.pendingQty = Math.max(0, Number(order.qty || 0) - totalDispatched);
-        row.rate = Number(order.rate || 0);
-        row.gstRate = item.gstRate ?? 18;
-      }
-    }
-    
-    next[idx] = row;
-    setInvoiceRows(next);
+  const addAllocationRow = (itemRowId: string) => {
+    setInvoiceRows((prev) =>
+      prev.map((row) =>
+        row.id === itemRowId ? { ...row, allocations: [...row.allocations, { id: crypto.randomUUID(), orderId: "", qty: 0 }] } : row
+      )
+    );
   };
 
-  const handleRemoveRow = (idx: number) => {
-    const next = [...invoiceRows];
-    next.splice(idx, 1);
-    setInvoiceRows(next);
+  const removeAllocationRow = (itemRowId: string, allocationId: string) => {
+    setInvoiceRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== itemRowId) return row;
+        const next = row.allocations.length === 1 ? row.allocations : row.allocations.filter((a) => a.id !== allocationId);
+        return { ...row, allocations: next };
+      })
+    );
+  };
+
+  const updateAllocation = (itemRowId: string, allocationId: string, patch: Partial<Pick<InvoiceAllocationRow, "orderId" | "qty">>) => {
+    setInvoiceRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== itemRowId) return row;
+        return { ...row, allocations: row.allocations.map((a) => (a.id === allocationId ? { ...a, ...patch } : a)) };
+      })
+    );
+  };
+
+  const updateItemGstRate = (itemRowId: string, gstRate: number) => {
+    setInvoiceRows((prev) => prev.map((row) => (row.id === itemRowId ? { ...row, gstRate } : row)));
   };
 
   const calculations = useMemo(() => {
@@ -272,17 +271,22 @@ export function PendingInvoicing() {
     let totalSgst = 0;
     let totalIgst = 0;
 
-    invoiceRows.forEach(row => {
-      const amount = row.qtyDispatchedNow * row.rate;
-      totalBeforeGst += amount;
+    invoiceRows.forEach((itemRow) => {
+      itemRow.allocations.forEach((alloc) => {
+        const order = orders.find((o) => o.id === alloc.orderId);
+        if (!order) return;
+        const rate = Number(order.rate || 0);
+        const qty = Number(alloc.qty || 0);
+        const amount = qty * rate;
+        totalBeforeGst += amount;
 
-      const taxAmount = (amount * row.gstRate) / 100;
-      if (isInterState) {
-        totalIgst += taxAmount;
-      } else {
-        totalCgst += taxAmount / 2;
-        totalSgst += taxAmount / 2;
-      }
+        const taxAmount = (amount * itemRow.gstRate) / 100;
+        if (isInterState) totalIgst += taxAmount;
+        else {
+          totalCgst += taxAmount / 2;
+          totalSgst += taxAmount / 2;
+        }
+      });
     });
 
     const totalAfterGst = totalBeforeGst + totalCgst + totalSgst + totalIgst;
@@ -299,7 +303,7 @@ export function PendingInvoicing() {
       roundOff, 
       grandTotal: roundedTotal 
     };
-  }, [invoiceRows, gstSupplyType]);
+  }, [invoiceRows, gstSupplyType, orders]);
 
   const handleSubmitInvoice = async () => {
     if (!invoiceModal) return;
@@ -317,41 +321,47 @@ export function PendingInvoicing() {
         return lSum + qty;
       }, 0)
     , 0);
-    const totalInvoicedNow = invoiceRows.reduce((sum, r) => sum + Number(r.qtyDispatchedNow || 0), 0);
+    const totalInvoicedNow = invoiceRows.reduce(
+      (sum, itemRow) => sum + itemRow.allocations.reduce((s, a) => s + Number(a.qty || 0), 0),
+      0
+    );
 
     if (Math.abs(totalInvoicedNow - totalLoaded) > 0.01) {
       alert(`Total quantity in invoice (${totalInvoicedNow.toLocaleString()}) must match total loaded quantity (${totalLoaded.toLocaleString()}).`);
       return;
     }
 
-    // Item-wise validation: total dispatched now must match loaded totals per item
-    const invoicedByItemId = new Map<string, number>();
-    invoiceRows.forEach((row) => {
-      const itemId = String(row.itemId || "").trim();
-      if (!itemId) return;
-      invoicedByItemId.set(itemId, (invoicedByItemId.get(itemId) || 0) + Number(row.qtyDispatchedNow || 0));
-    });
-
-    for (const [itemId, loadedQty] of loadedByItemId.entries()) {
-      const invoicedQty = Number(invoicedByItemId.get(itemId) || 0);
-      if (Math.abs(invoicedQty - loadedQty) > 0.01) {
-        const itemName = items.find((i) => i.id === itemId)?.name || "Item";
+    // Item-wise validation: allocations must match item total
+    for (const itemRow of invoiceRows) {
+      const allocTotal = itemRow.allocations.reduce((s, a) => s + Number(a.qty || 0), 0);
+      if (Math.abs(allocTotal - Number(itemRow.totalQty || 0)) > 0.01) {
+        const itemName = items.find((i) => i.id === itemRow.itemId)?.name || "Item";
         alert(
-          `Item-wise quantity mismatch for ${itemName}.\nLoaded: ${loadedQty.toLocaleString()}\nInvoice: ${invoicedQty.toLocaleString()}`
+          `Item-wise quantity mismatch for ${itemName}.\nLoaded: ${Number(itemRow.totalQty || 0).toLocaleString()}\nAllocated: ${allocTotal.toLocaleString()}`
         );
+        return;
+      }
+      if (itemRow.allocations.some((a) => !String(a.orderId || "").trim())) {
+        const itemName = items.find((i) => i.id === itemRow.itemId)?.name || "Item";
+        alert(`Please select Order for all allocation rows of ${itemName}.`);
         return;
       }
     }
 
-    // Tolerance Check
+    // Tolerance Check (per allocation row)
     const tolerancePercent = Math.min(company.toleranceAllowed || 0, 10);
-    for (const row of invoiceRows) {
-      const allowedMax = row.totalOrderQty * (1 + tolerancePercent / 100);
-      const currentlyDispatched = row.totalDispatchQty + row.qtyDispatchedNow;
-      if (currentlyDispatched > allowedMax + 0.01) {
-        const item = items.find(i => i.id === row.itemId);
-        alert(`Dispatched quantity for ${item?.name} exceeds allowed tolerance (${tolerancePercent}%). Max allowed: ${allowedMax.toLocaleString()}`);
-        return;
+    for (const itemRow of invoiceRows) {
+      for (const alloc of itemRow.allocations) {
+        const order = orders.find((o) => o.id === alloc.orderId);
+        if (!order) continue;
+        const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
+        const allowedMax = Number(order.qty || 0) * (1 + tolerancePercent / 100);
+        const currentlyDispatched = totalDispatched + Number(alloc.qty || 0);
+        if (currentlyDispatched > allowedMax + 0.01) {
+          const itemName = items.find((i) => i.id === itemRow.itemId)?.name || "Item";
+          alert(`Dispatched quantity for ${itemName} exceeds allowed tolerance (${tolerancePercent}%). Max allowed: ${allowedMax.toLocaleString()}`);
+          return;
+        }
       }
     }
 
@@ -374,47 +384,59 @@ export function PendingInvoicing() {
 
       await updateInvoices(prev => [...prev, newInvoice]);
 
-      const distributeQty = (qty: number, sources: Array<{ loadingSlipId: string; qty: number }>) => {
-        const result: Array<{ loadingSlipId: string; qty: number }> = [];
-        let remaining = Number(qty || 0);
-        const pool = sources.length > 0 ? sources : [{ loadingSlipId: invoiceModal.slips[0]?.id || "", qty: remaining }];
+      const buildPool = (sources: Array<{ loadingSlipId: string; qty: number }>) =>
+        sources.map((s) => ({ loadingSlipId: s.loadingSlipId, remaining: Number(s.qty || 0) }));
+
+      const consumeFromPool = (pool: Array<{ loadingSlipId: string; remaining: number }>, need: number) => {
+        const parts: Array<{ loadingSlipId: string; qty: number }> = [];
+        let remainingNeed = Number(need || 0);
         for (const src of pool) {
+          if (remainingNeed <= 0.0001) break;
           if (!src.loadingSlipId) continue;
-          if (remaining <= 0.0001) break;
-          const cap = Math.max(0, Number(src.qty || 0));
-          const take = sources.length > 0 ? Math.min(cap, remaining) : remaining;
+          const take = Math.min(Math.max(0, src.remaining), remainingNeed);
           if (take <= 0.0001) continue;
-          result.push({ loadingSlipId: src.loadingSlipId, qty: take });
-          remaining -= take;
+          parts.push({ loadingSlipId: src.loadingSlipId, qty: take });
+          src.remaining -= take;
+          remainingNeed -= take;
         }
-        if (remaining > 0.0001) {
-          // fallback: assign any leftover to first slip to avoid dropping qty
+        if (remainingNeed > 0.0001) {
           const firstSlipId = invoiceModal.slips[0]?.id || "";
-          if (firstSlipId) result.push({ loadingSlipId: firstSlipId, qty: remaining });
+          if (firstSlipId) parts.push({ loadingSlipId: firstSlipId, qty: remainingNeed });
         }
-        return result;
+        return parts;
       };
 
-      const lineItems: InvoiceLineItem[] = invoiceRows.flatMap((row) => {
-        const parts = distributeQty(Number(row.qtyDispatchedNow || 0), row.sources || []);
-        return parts.map((part) => {
-          const amount = part.qty * row.rate;
-          const taxAmount = (amount * row.gstRate) / 100;
-          return {
-            id: crypto.randomUUID(),
-            invoiceId,
-            loadingSlipId: part.loadingSlipId,
-            itemId: row.itemId,
-            qty: part.qty,
-            rate: row.rate,
-            amount,
-            gstRate: row.gstRate,
-            cgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
-            sgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
-            igst: gstSupplyType === "INTER_STATE" ? taxAmount : 0
-          };
-        });
-      });
+      const poolsByItemId = new Map<string, Array<{ loadingSlipId: string; remaining: number }>>();
+      invoiceRows.forEach((row) => poolsByItemId.set(row.itemId, buildPool(row.sources || [])));
+
+      const lineItems: InvoiceLineItem[] = [];
+      for (const itemRow of invoiceRows) {
+        const pool = poolsByItemId.get(itemRow.itemId) || buildPool(itemRow.sources || []);
+        for (const alloc of itemRow.allocations) {
+          const order = orders.find((o) => o.id === alloc.orderId);
+          if (!order) continue;
+          if (order.itemId !== itemRow.itemId) continue;
+          const rate = Number(order.rate || 0);
+          const parts = consumeFromPool(pool, Number(alloc.qty || 0));
+          for (const part of parts) {
+            const amount = part.qty * rate;
+            const taxAmount = (amount * itemRow.gstRate) / 100;
+            lineItems.push({
+              id: crypto.randomUUID(),
+              invoiceId,
+              loadingSlipId: part.loadingSlipId,
+              itemId: itemRow.itemId,
+              qty: part.qty,
+              rate,
+              amount,
+              gstRate: itemRow.gstRate,
+              cgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
+              sgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
+              igst: gstSupplyType === "INTER_STATE" ? taxAmount : 0
+            });
+          }
+        }
+      }
       
       for (const li of lineItems) {
         await updateLineItems(prev => [...prev, li]);
@@ -572,70 +594,103 @@ export function PendingInvoicing() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black">
-                    {invoiceRows.map((row, idx) => {
-                      const pendingOrders = orders.filter(o => 
-                        o.companyId === invoiceModal.companyId && 
-                        o.status !== "Cancelled" &&
-                        Math.max(0, Number(o.qty || 0) - (totalDispatchedByOrderId.get(o.id) || 0)) > 0
-                      );
+                    {invoiceRows.flatMap((itemRow) => {
+                      const itemName = items.find((i) => i.id === itemRow.itemId)?.name || "Item";
+                      const pendingOrdersForItem = orders.filter((o) => {
+                        if (o.companyId !== invoiceModal.companyId) return false;
+                        if (o.status === "Cancelled") return false;
+                        if (o.itemId !== itemRow.itemId) return false;
+                        const dispatched = totalDispatchedByOrderId.get(o.id) || 0;
+                        return Math.max(0, Number(o.qty || 0) - dispatched) > 0;
+                      });
 
-                      return (
-                        <tr key={row.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
-                          <td className="px-2 py-2">
-                             <div className="text-[11px] font-bold uppercase truncate max-w-[150px]">
-                                {items.find(i => i.id === row.itemId)?.name || "Select Order"}
-                             </div>
-                          </td>
-                          <td className="px-2 py-2">
-                            <select
-                              value={row.orderId}
-                              onChange={(e) => handleUpdateRow(idx, "orderId", e.target.value)}
-                              className="w-full border-2 border-black rounded p-1 text-[11px] font-bold focus:ring-0"
-                            >
-                              <option value="">-- Choose Order --</option>
-                              {pendingOrders.map(o => (
-                                <option key={o.id} value={o.id}>{o.orderNo} | {o.poNumber || "No PO"}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-2 py-2 text-right text-[11px] font-medium">{row.totalOrderQty.toLocaleString()}</td>
-                          <td className="px-2 py-2 text-right text-[11px] font-medium text-slate-500">{row.totalDispatchQty.toLocaleString()}</td>
-                          <td className="px-2 py-2 text-right text-[11px] font-black text-indigo-700">{row.pendingQty.toLocaleString()}</td>
-                          <td className="px-2 py-2 text-right">
-                             <input 
-                              type="number"
-                              value={row.rate || ""}
-                              onChange={(e) => handleUpdateRow(idx, "rate", e.target.value === "" ? 0 : parseFloat(e.target.value))}
-                              className="w-20 px-1 py-0.5 border border-slate-300 rounded text-right text-[11px] font-bold"
-                             />
-                          </td>
-                          <td className="px-2 py-2 text-right bg-indigo-50/30">
-                            <input 
-                              type="number"
-                              value={row.qtyDispatchedNow || ""}
-                              onChange={(e) => handleUpdateRow(idx, "qtyDispatchedNow", e.target.value === "" ? 0 : parseFloat(e.target.value))}
-                              className="w-24 px-1 py-1 border-2 border-indigo-600 rounded text-right text-[11px] font-black focus:ring-0"
-                            />
-                          </td>
-                          <td className="px-2 py-2 text-right">
-                            <select 
-                              value={row.gstRate}
-                              onChange={(e) => handleUpdateRow(idx, "gstRate", Number(e.target.value))}
-                              className="w-16 px-1 py-0.5 border border-slate-300 rounded text-right text-[11px]"
-                            >
-                              {[0, 5, 12, 18, 28].map(v => <option key={v} value={v}>{v}%</option>)}
-                            </select>
-                          </td>
-                          <td className="px-2 py-2 text-right text-[11px] font-black">
-                            {format2(row.qtyDispatchedNow * row.rate)}
-                          </td>
-                          <td className="px-2 py-2 text-center">
-                            <button onClick={() => handleRemoveRow(idx)} className="text-rose-600 hover:text-rose-800">
-                              <X size={14} />
-                            </button>
+                      const parentRow = (
+                        <tr key={itemRow.id} className="bg-slate-50 border-t-2 border-black">
+                          <td colSpan={10} className="px-3 py-2">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="text-[11px] font-black uppercase">
+                                {itemName} <span className="text-slate-500 font-bold">| Total Qty: {Number(itemRow.totalQty || 0).toLocaleString()}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="text-[10px] font-black uppercase text-slate-500">GST</div>
+                                  <select
+                                    value={itemRow.gstRate}
+                                    onChange={(e) => updateItemGstRate(itemRow.id, Number(e.target.value))}
+                                    className="w-20 px-2 py-1 border-2 border-black rounded text-[11px] font-bold"
+                                  >
+                                    {[0, 5, 12, 18, 28].map((v) => (
+                                      <option key={v} value={v}>
+                                        {v}%
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => addAllocationRow(itemRow.id)}
+                                  className="px-3 py-1.5 bg-white border-2 border-black text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-px hover:translate-y-px hover:shadow-none transition"
+                                >
+                                  + Add Order
+                                </button>
+                              </div>
+                            </div>
                           </td>
                         </tr>
                       );
+
+                      const childRows = itemRow.allocations.map((alloc) => {
+                        const order = orders.find((o) => o.id === alloc.orderId);
+                        const dispatched = order ? (totalDispatchedByOrderId.get(order.id) || 0) : 0;
+                        const orderQty = order ? Number(order.qty || 0) : 0;
+                        const pending = order ? Math.max(0, orderQty - dispatched) : 0;
+                        const rate = order ? Number(order.rate || 0) : 0;
+                        const amount = Number(alloc.qty || 0) * rate;
+
+                        return (
+                          <tr key={alloc.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
+                            <td className="px-2 py-2">
+                              <div className="text-[11px] font-bold uppercase truncate max-w-[220px]">{itemName}</div>
+                            </td>
+                            <td className="px-2 py-2">
+                              <select
+                                value={alloc.orderId}
+                                onChange={(e) => updateAllocation(itemRow.id, alloc.id, { orderId: e.target.value })}
+                                className="w-full border-2 border-black rounded p-1 text-[11px] font-bold focus:ring-0"
+                              >
+                                <option value="">-- Choose Order --</option>
+                                {pendingOrdersForItem.map((o) => (
+                                  <option key={o.id} value={o.id}>
+                                    {o.orderNo} | {o.poNumber || "No PO"}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-2 py-2 text-right text-[11px] font-medium">{order ? orderQty.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-medium text-slate-500">{order ? dispatched.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-black text-indigo-700">{order ? pending.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-bold">{order ? rate : "-"}</td>
+                            <td className="px-2 py-2 text-right bg-indigo-50/30">
+                              <input
+                                type="number"
+                                value={Number(alloc.qty || 0) || ""}
+                                min={0}
+                                onChange={(e) => updateAllocation(itemRow.id, alloc.id, { qty: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
+                                className="w-24 px-1 py-1 border-2 border-indigo-600 rounded text-right text-[11px] font-black focus:ring-0"
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right text-[11px]">{itemRow.gstRate}%</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-black">{format2(amount)}</td>
+                            <td className="px-2 py-2 text-center">
+                              <button onClick={() => removeAllocationRow(itemRow.id, alloc.id)} className="text-rose-600 hover:text-rose-800">
+                                <X size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      });
+
+                      return [parentRow, ...childRows];
                     })}
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-black divide-y divide-black">
@@ -678,12 +733,9 @@ export function PendingInvoicing() {
                 </table>
               </div>
               
-              <button 
-                onClick={handleAddRow}
-                className="flex items-center gap-2 text-xs font-black uppercase text-indigo-700 hover:text-indigo-900 transition-colors"
-              >
-                <Plus size={16} /> Add Row
-              </button>
+              <div className="text-[11px] font-bold text-slate-600">
+                Use <span className="font-black text-black">Add Order</span> on an item to split quantities across orders.
+              </div>
 
               <div className="flex justify-between items-center bg-slate-50 p-4 border-t-2 border-black -mx-6 -mb-6 sticky bottom-0">
                 <div className="text-[10px] font-bold text-slate-500 uppercase">
