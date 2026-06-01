@@ -93,6 +93,15 @@ export function PendingLoading() {
 
   const productionMap = useMemo(() => new Map(productions.map((production) => [production.id, production])), [productions]);
 
+  const isOpenJob = (production?: Production | null) => {
+    if (!production) return false;
+    if (production.status === "Cancelled" || production.cancelTimestamp) return false;
+    if (production.status === "Completed" || production.tallyTimestamp) return false;
+    if (production.closeDate) return false;
+    if (String(production.closeBy || "").trim().toLowerCase() === "yes") return false;
+    return true;
+  };
+
   const existingLoadedByJobId = useMemo(() => {
     const map = new Map<string, number>();
     loadingSlips.forEach((slip) => {
@@ -242,9 +251,7 @@ export function PendingLoading() {
     const eligibleJobs = productions
       .filter((p) => 
         p.itemId === itemId && 
-        p.status !== "Cancelled" && 
-        !p.cancelTimestamp &&
-        !p.closeDate &&
+        isOpenJob(p) &&
         Number(p.prodFromFFG || 0) > 0
       )
       .map((p) => {
@@ -606,9 +613,7 @@ export function PendingLoading() {
                   const jobs = productions
                     .filter((p) => 
                       p.itemId === loadingModal.itemId && 
-                      p.status !== "Cancelled" && 
-                      !p.cancelTimestamp &&
-                      !p.closeDate &&
+                      isOpenJob(p) &&
                       Number(p.prodFromFFG || 0) > 0
                     )
                     .map((p) => {

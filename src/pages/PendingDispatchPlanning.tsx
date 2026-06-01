@@ -402,7 +402,7 @@ export function PendingDispatchPlanning() {
             </select>
           </div>
           
-          {selectedCompanyId && selectedIds.size > 0 && (
+          {selectedIds.size > 0 && (
             <button
               onClick={handleSubmit}
               disabled={isSubmitting}
@@ -469,31 +469,26 @@ export function PendingDispatchPlanning() {
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
-                {selectedCompanyId && (
-                  <th className="px-4 py-3 text-center border border-black w-10">
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600"
-                      onChange={handleSelectAll}
-                      checked={filteredSchedules.length > 0 && selectedIds.size === filteredSchedules.length}
-                    />
-                  </th>
-                )}
+                <th className="px-4 py-3 text-center border border-black w-10">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600"
+                    onChange={handleSelectAll}
+                    checked={filteredSchedules.length > 0 && selectedIds.size === filteredSchedules.length}
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Scheduled Date", "scheduledDate")}</th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Order No", "orderNo")}</th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Company", "companyName")}</th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Item Name", "itemName")}</th>
                 <th className="px-4 py-3 text-right text-xs text-black uppercase border border-black">{renderSortHeader("Pending Qty", "pendingQty", "right")}</th>
-                
-                {selectedCompanyId && (
-                  <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black w-32">Planned Qty</th>
-                )}
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black w-32">Planned Qty</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {filteredSchedules.length === 0 ? (
                 <tr>
-                  <td colSpan={selectedCompanyId ? 7 : 5} className="px-6 py-8 text-center text-black font-medium">No pending dispatch plans found.</td>
+                  <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No pending dispatch plans found.</td>
                 </tr>
               ) : (
                 filteredSchedules.map((s) => {
@@ -515,16 +510,14 @@ export function PendingDispatchPlanning() {
                       isOverdue && "bg-red-50",
                       selectedIds.has(s.id) && "bg-indigo-50/50"
                     )}>
-                      {selectedCompanyId && (
-                        <td className="px-4 py-4 text-center border border-black">
-                           <input 
-                            type="checkbox" 
-                            className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600 cursor-pointer"
-                            checked={selectedIds.has(s.id)}
-                            onChange={() => toggleSelect(s.id)}
-                          />
-                        </td>
-                      )}
+                      <td className="px-4 py-4 text-center border border-black">
+                         <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600 cursor-pointer"
+                          checked={selectedIds.has(s.id)}
+                          onChange={() => toggleSelect(s.id)}
+                        />
+                      </td>
                       <td className={cn("px-4 py-4 text-xs font-bold border border-black whitespace-nowrap", isOverdue ? "text-red-600" : "text-black")}>
                         {formatDate(s.scheduledDate)}
                         {isOverdue && <div className="text-[8px] uppercase px-1 border border-red-600 rounded inline-block ml-1">Overdue</div>}
@@ -534,16 +527,14 @@ export function PendingDispatchPlanning() {
                       <td className="px-4 py-4 text-xs text-black border border-black">{item?.name || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">{balance}</td>
                       
-                      {selectedCompanyId && (
-                        <td className="px-2 py-2 border border-black">
-                          <input
-                            type="number"
-                            value={rowPlannedQty[s.id] !== undefined ? rowPlannedQty[s.id] : balance}
-                            onChange={(e) => setRowPlannedQty({...rowPlannedQty, [s.id]: Number(e.target.value)})}
-                            className="w-full border border-slate-300 rounded p-1 text-right text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
-                          />
-                        </td>
-                      )}
+                      <td className="px-2 py-2 border border-black">
+                        <input
+                          type="number"
+                          value={rowPlannedQty[s.id] !== undefined ? rowPlannedQty[s.id] : balance}
+                          onChange={(e) => setRowPlannedQty({...rowPlannedQty, [s.id]: Number(e.target.value)})}
+                          className="w-full border border-slate-300 rounded p-1 text-right text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
+                        />
+                      </td>
                     </tr>
                   );
                 })
@@ -552,7 +543,7 @@ export function PendingDispatchPlanning() {
             {selectedIds.size > 0 && (
               <tfoot className="bg-slate-100 border-t-2 border-black">
                 <tr className="divide-x divide-black font-black">
-                  <td colSpan={selectedCompanyId ? 6 : 5} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
+                  <td colSpan={6} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
                   <td className="px-4 py-3 text-right text-sm text-indigo-700 bg-indigo-50 border border-black">
                     {totalSessionPlannedQty.toLocaleString()}
                   </td>
