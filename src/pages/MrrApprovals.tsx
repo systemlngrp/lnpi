@@ -196,7 +196,7 @@ export function MrrApprovals() {
     const supplier = suppliers.find(s => s.id === mrr.supplierId);
     
     doc.setFontSize(18);
-    doc.text("MATERIAL RECEIPT REPORT (MRR)", 105, 15, { align: "center" });
+    doc.text("MATERIAL RECEIPT", 105, 15, { align: "center" });
     
     doc.setFontSize(10);
     doc.text(`MRR No: ${mrr.transactionNo}`, 14, 25);

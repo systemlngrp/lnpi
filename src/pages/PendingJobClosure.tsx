@@ -33,9 +33,13 @@ export function PendingJobClosure() {
     setIsLoading(true);
     setError(null);
     try {
+      const token = window.localStorage.getItem("authToken") || "";
       const response = await fetch("/api/get-pending-job-closure", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({}),
       });
       if (!response.ok) throw new Error(await response.text());
@@ -227,4 +231,3 @@ export function PendingJobClosure() {
     </div>
   );
 }
-

@@ -22,7 +22,7 @@ export async function downloadMaterialInPdf({
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text("MATERIAL RECEIPT REPORT (MRR)", 105, currentY, { align: "center" });
+  doc.text("MATERIAL RECEIPT", 105, currentY, { align: "center" });
   currentY += 10;
 
   const supplier = suppliers.find(s => s.id === mrr.supplierId);
