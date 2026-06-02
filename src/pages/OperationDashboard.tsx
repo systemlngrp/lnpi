@@ -742,7 +742,16 @@ export function OperationDashboard() {
                       {groupConfig.cards.map((cardConfig) => {
                         const card = getSummaryCard(summary, cardConfig.id);
                         if (!card) return null;
-                        return <SummaryMetricCard key={card.id} card={card} config={cardConfig} />;
+                        return (
+                          <SummaryMetricCard
+                            key={card.id}
+                            card={card}
+                            config={cardConfig}
+                            index={groupConfig.cards.findIndex((entry) => entry.id === cardConfig.id)}
+                            total={groupConfig.cards.length}
+                            columns={3}
+                          />
+                        );
                       })}
                     </div>
                   </section>
@@ -888,9 +897,35 @@ function DateInput({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
-function SummaryMetricCard({ card, config }: { card: OperationDashboardMetricCard; config: SummaryCardConfig }) {
+function SummaryMetricCard({
+  card,
+  config,
+  index,
+  total,
+  columns,
+}: {
+  card: OperationDashboardMetricCard;
+  config: SummaryCardConfig;
+  index: number;
+  total: number;
+  columns: number;
+}) {
+  const colIndex = index % columns;
+  const rowIndex = Math.floor(index / columns);
+  const totalRows = Math.ceil(total / columns);
+  const isLastColumn = colIndex === columns - 1;
+  const isLastRow = rowIndex === totalRows - 1;
+
   return (
-    <div className={cn("min-h-[110px] border-t-2 border-black first:border-t-0 md:border-l-2 md:[&:nth-child(odd)]:border-l-0 xl:border-l-2 px-4 py-4", config.tone, config.className)}>
+    <div
+      className={cn(
+        "min-h-[110px] px-4 py-4",
+        !isLastColumn && "border-r border-black",
+        !isLastRow && "border-b border-black",
+        config.tone,
+        config.className
+      )}
+    >
       <div className="text-[11px] font-black uppercase tracking-tight text-current">{card.label}</div>
       <div className={cn("mt-3 text-3xl font-black leading-none tracking-tight", config.valueTone)}>{formatMetricValue(card)}</div>
       <div className="mt-2 text-[10px] font-bold uppercase tracking-wide text-current/70">

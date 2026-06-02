@@ -210,7 +210,7 @@ function getWastagePercent(rows: Production[], usageMap: Map<string, number>) {
   );
   return totalActualPaperUsed > 0
     ? Math.max(0, 100 - (totalUsefulWeight / totalActualPaperUsed) * 100)
-    : null;
+    : 0;
 }
 
 function getActualPaperUsed(rows: Production[], usageMap: Map<string, number>) {
