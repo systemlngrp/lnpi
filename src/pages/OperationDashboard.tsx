@@ -149,7 +149,7 @@ const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
 const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   {
     groupId: "headline",
-    className: "min-w-[760px]",
+    className: "xl:col-span-6",
     gridClassName: "grid-cols-4",
     columns: 4,
     cards: [
@@ -165,7 +165,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "dispatch",
-    className: "min-w-[760px]",
+    className: "xl:col-span-6",
     gridClassName: "grid-cols-4",
     columns: 4,
     cards: [
@@ -180,7 +180,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "workflow",
-    className: "min-w-[560px]",
+    className: "xl:col-span-4",
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
@@ -193,7 +193,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "operations",
-    className: "min-w-[560px]",
+    className: "xl:col-span-4",
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
@@ -207,7 +207,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "stock",
-    className: "min-w-[560px]",
+    className: "xl:col-span-4",
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
@@ -737,15 +737,14 @@ export function OperationDashboard() {
             </div>
           </div>
 
-          <div className="mt-3 overflow-x-auto pb-2">
-            <div className="flex min-w-max items-start gap-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-12">
               {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
                 const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
                 if (!group) return null;
                 return (
                   <section
                     key={group.id}
-                    className={cn("shrink-0 overflow-hidden rounded-md border-2 border-black bg-white shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
+                    className={cn("overflow-hidden rounded-md border-2 border-black bg-white shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
                   >
                     <div className="bg-slate-900 px-3 py-2 text-[12px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
                     <div className={cn("grid gap-0", groupConfig.gridClassName)}>
@@ -767,7 +766,6 @@ export function OperationDashboard() {
                   </section>
                 );
               })}
-            </div>
           </div>
         </div>
       </div>
