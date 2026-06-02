@@ -6,7 +6,6 @@ import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { TableControls } from "../components/TableControls";
 import CreatableSelect from "react-select/creatable";
-import { components, MenuListProps } from "react-select";
 import * as XLSX from "xlsx";
 
 export function Items() {
@@ -1534,7 +1533,7 @@ function CreatableDropdown({
   placeholder,
   numericOnly = false,
   onCreateOption,
-  addMenuLabel = "Add New",
+  addButtonLabel = "Add New",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -1542,7 +1541,7 @@ function CreatableDropdown({
   placeholder: string;
   numericOnly?: boolean;
   onCreateOption?: (value: string) => void;
-  addMenuLabel?: string;
+  addButtonLabel?: string;
 }) {
   const selectedOption = options.find((opt) => opt.value === value) || (value ? { value, label: value } : null);
 
@@ -1554,97 +1553,92 @@ function CreatableDropdown({
     onChange(cleaned);
   };
 
-  const MenuList = (props: MenuListProps<{ value: string; label: string }, false>) => (
-    <components.MenuList {...props}>
-      {props.children}
+  return (
+    <div className="flex items-start gap-2">
+      <div className="min-w-[200px] flex-1">
+        <CreatableSelect
+          value={selectedOption}
+          onChange={(newValue) => onChange(newValue?.value || "")}
+          onCreateOption={handleCreateValue}
+          options={options}
+          isClearable
+          isSearchable
+          placeholder={placeholder}
+          formatCreateLabel={(inputValue) => `Add "${inputValue}"`}
+          isValidNewOption={(inputValue, _value, selectOptions) => {
+            const cleaned = inputValue.trim();
+            if (!cleaned) return false;
+            if (numericOnly && Number.isNaN(Number(cleaned))) return false;
+            return !selectOptions.some((opt: any) => opt.value?.toLowerCase() === cleaned.toLowerCase());
+          }}
+          menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+          menuPosition="fixed"
+          menuPlacement="auto"
+          styles={{
+            control: (base, state) => ({
+              ...base,
+              borderWidth: "2px",
+              borderColor: state.isFocused ? "#4f46e5" : "#000000",
+              boxShadow: state.isFocused ? "0 0 0 1px #4f46e5" : "none",
+              "&:hover": {
+                borderColor: state.isFocused ? "#4f46e5" : "#000000",
+              },
+              padding: "2px",
+              borderRadius: "0.25rem",
+              color: "#000000",
+              backgroundColor: "#ffffff",
+              minHeight: "42px",
+            }),
+            option: (base, state) => ({
+              ...base,
+              backgroundColor: state.isSelected ? "#4f46e5" : state.isFocused ? "#f0f0ff" : "white",
+              color: state.isSelected ? "white" : "black",
+              fontSize: "14px",
+              fontWeight: state.isSelected ? "700" : "500",
+              padding: "10px 12px",
+              cursor: "pointer",
+            }),
+            menu: (base) => ({
+              ...base,
+              zIndex: 9999,
+              border: "2px solid black",
+              boxShadow: "4px 4px 0px 0px rgba(0,0,0,1)",
+            }),
+            menuPortal: (base) => ({
+              ...base,
+              zIndex: 9999,
+            }),
+            singleValue: (base) => ({
+              ...base,
+              color: "#000000",
+              fontWeight: "700",
+              fontSize: "14px",
+            }),
+            placeholder: (base) => ({
+              ...base,
+              color: "#64748b",
+              fontSize: "14px",
+              fontWeight: "600",
+            }),
+            input: (base) => ({
+              ...base,
+              color: "#000000",
+            }),
+          }}
+        />
+      </div>
       <button
         type="button"
-        onMouseDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const nextValue = window.prompt(`Enter ${addMenuLabel.toLowerCase()}`);
+        onClick={() => {
+          const nextValue = window.prompt(`Enter ${addButtonLabel.toLowerCase()}`);
           if (!nextValue) return;
           handleCreateValue(nextValue);
         }}
-        className="flex w-full items-center justify-center gap-2 border-t-2 border-black bg-indigo-50 px-3 py-2 text-sm font-black uppercase text-indigo-700 hover:bg-indigo-100"
+        title={addButtonLabel}
+        className="mt-[2px] flex h-[42px] w-[42px] items-center justify-center rounded border-2 border-indigo-700 bg-indigo-600 text-white shadow transition hover:bg-indigo-700"
       >
-        <Plus size={16} strokeWidth={3} />
-        {addMenuLabel}
+        <Plus size={18} strokeWidth={3} />
       </button>
-    </components.MenuList>
-  );
-
-  return (
-    <CreatableSelect
-      value={selectedOption}
-      onChange={(newValue) => onChange(newValue?.value || "")}
-      onCreateOption={handleCreateValue}
-      options={options}
-      isClearable
-      isSearchable
-      placeholder={placeholder}
-      components={{ MenuList }}
-      formatCreateLabel={(inputValue) => `Add "${inputValue}"`}
-      isValidNewOption={(inputValue, _value, selectOptions) => {
-        const cleaned = inputValue.trim();
-        if (!cleaned) return false;
-        if (numericOnly && Number.isNaN(Number(cleaned))) return false;
-        return !selectOptions.some((opt: any) => opt.value?.toLowerCase() === cleaned.toLowerCase());
-      }}
-      menuPortalTarget={typeof document !== "undefined" ? document.body : null}
-      menuPosition="fixed"
-      menuPlacement="auto"
-      styles={{
-        control: (base, state) => ({
-          ...base,
-          borderWidth: "2px",
-          borderColor: state.isFocused ? "#4f46e5" : "#000000",
-          boxShadow: state.isFocused ? "0 0 0 1px #4f46e5" : "none",
-          "&:hover": {
-            borderColor: state.isFocused ? "#4f46e5" : "#000000",
-          },
-          padding: "2px",
-          borderRadius: "0.25rem",
-          color: "#000000",
-          backgroundColor: "#ffffff",
-          minHeight: "42px",
-        }),
-        option: (base, state) => ({
-          ...base,
-          backgroundColor: state.isSelected ? "#4f46e5" : state.isFocused ? "#f0f0ff" : "white",
-          color: state.isSelected ? "white" : "black",
-          fontSize: "14px",
-          fontWeight: state.isSelected ? "700" : "500",
-          padding: "10px 12px",
-          cursor: "pointer",
-        }),
-        menu: (base) => ({
-          ...base,
-          zIndex: 9999,
-          border: "2px solid black",
-          boxShadow: "4px 4px 0px 0px rgba(0,0,0,1)",
-        }),
-        menuPortal: (base) => ({
-          ...base,
-          zIndex: 9999,
-        }),
-        singleValue: (base) => ({
-          ...base,
-          color: "#000000",
-          fontWeight: "700",
-          fontSize: "14px",
-        }),
-        placeholder: (base) => ({
-          ...base,
-          color: "#64748b",
-          fontSize: "14px",
-          fontWeight: "600",
-        }),
-        input: (base) => ({
-          ...base,
-          color: "#000000",
-        }),
-      }}
-    />
+    </div>
   );
 }

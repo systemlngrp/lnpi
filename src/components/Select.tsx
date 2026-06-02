@@ -1,5 +1,5 @@
 import React from 'react';
-import ReactSelect, { ActionMeta, SingleValue, components, MenuListProps } from 'react-select';
+import ReactSelect, { ActionMeta, SingleValue } from 'react-select';
 
 import { Plus } from 'lucide-react';
 
@@ -30,97 +30,88 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
     }
   };
 
-  const MenuList = (props: MenuListProps<OptionType, false>) => (
-    <components.MenuList {...props}>
-      {props.children}
+  return (
+    <div className="flex items-start gap-2">
+      <div className="min-w-[200px] flex-1">
+        <ReactSelect
+          inputId={id}
+          value={selectedOption}
+          onChange={handleChange}
+          options={options}
+          getOptionLabel={(option: OptionType) => option.label}
+          getOptionValue={(option: OptionType) => option.value}
+          noOptionsMessage={() => "No items found"}
+          isClearable
+          isSearchable
+          isDisabled={disabled}
+          placeholder={placeholder}
+          required={required}
+          menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+          menuPosition="fixed"
+          menuPlacement="auto"
+          styles={{
+            control: (base, state) => ({
+              ...base,
+              borderWidth: '2px',
+              borderColor: state.isFocused ? '#4f46e5' : '#000000',
+              boxShadow: state.isFocused ? '0 0 0 1px #4f46e5' : 'none',
+              '&:hover': {
+                borderColor: state.isFocused ? '#4f46e5' : '#000000'
+              },
+              padding: '2px',
+              borderRadius: '0.25rem',
+              color: '#000000',
+              backgroundColor: '#ffffff',
+              minHeight: '42px'
+            }),
+            option: (base, state) => ({
+              ...base,
+              backgroundColor: state.isSelected ? '#4f46e5' : state.isFocused ? '#f0f0ff' : 'white',
+              color: state.isSelected ? 'white' : 'black',
+              fontSize: '14px',
+              fontWeight: state.isSelected ? '700' : '500',
+              padding: '10px 12px',
+              cursor: 'pointer'
+            }),
+            menu: (base) => ({
+              ...base,
+              zIndex: 9999,
+              border: '2px solid black',
+              boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)'
+            }),
+            menuPortal: (base) => ({
+              ...base,
+              zIndex: 9999
+            }),
+            singleValue: (base) => ({
+              ...base,
+              color: '#000000',
+              fontWeight: '700',
+              fontSize: '14px'
+            }),
+            placeholder: (base) => ({
+              ...base,
+              color: '#64748b',
+              fontSize: '14px',
+              fontWeight: '600'
+            }),
+            input: (base) => ({
+              ...base,
+              color: '#000000'
+            })
+          }}
+        />
+      </div>
       {onAdd ? (
         <button
           type="button"
-          onMouseDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onAdd();
-          }}
-          className="flex w-full items-center justify-center gap-2 border-t-2 border-black bg-indigo-50 px-3 py-2 text-sm font-black uppercase text-indigo-700 hover:bg-indigo-100"
+          onClick={onAdd}
+          title="Add New"
+          className="mt-[2px] flex h-[42px] w-[42px] items-center justify-center rounded border-2 border-indigo-700 bg-indigo-600 text-white shadow transition hover:bg-indigo-700"
         >
-          <Plus size={16} strokeWidth={3} />
-          Add New
+          <Plus size={18} strokeWidth={3} />
         </button>
       ) : null}
-    </components.MenuList>
-  );
-
-  return (
-    <div className="min-w-[200px]">
-      <ReactSelect
-        inputId={id}
-        value={selectedOption}
-        onChange={handleChange}
-        options={options}
-        getOptionLabel={(option: OptionType) => option.label}
-        getOptionValue={(option: OptionType) => option.value}
-        noOptionsMessage={() => "No items found"}
-        isClearable
-        isSearchable
-        isDisabled={disabled}
-        placeholder={placeholder}
-        required={required}
-        components={{ MenuList }}
-        menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-        menuPosition="fixed"
-        menuPlacement="auto"
-        styles={{
-          control: (base, state) => ({
-            ...base,
-            borderWidth: '2px',
-            borderColor: state.isFocused ? '#4f46e5' : '#000000',
-            boxShadow: state.isFocused ? '0 0 0 1px #4f46e5' : 'none',
-            '&:hover': {
-              borderColor: state.isFocused ? '#4f46e5' : '#000000'
-            },
-            padding: '2px',
-            borderRadius: '0.25rem',
-            color: '#000000',
-            backgroundColor: '#ffffff',
-            minHeight: '42px'
-          }),
-          option: (base, state) => ({
-            ...base,
-            backgroundColor: state.isSelected ? '#4f46e5' : state.isFocused ? '#f0f0ff' : 'white',
-            color: state.isSelected ? 'white' : 'black',
-            fontSize: '14px',
-            fontWeight: state.isSelected ? '700' : '500',
-            padding: '10px 12px',
-            cursor: 'pointer'
-          }),
-          menu: (base) => ({
-            ...base,
-            zIndex: 9999,
-            border: '2px solid black',
-            boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)'
-          }),
-          menuPortal: (base) => ({
-            ...base,
-            zIndex: 9999
-          }),
-          singleValue: (base) => ({
-            ...base,
-            color: '#000000',
-            fontWeight: '700',
-            fontSize: '14px'
-          }),
-          placeholder: (base) => ({
-            ...base,
-            color: '#64748b',
-            fontSize: '14px',
-            fontWeight: '600'
-          }),
-          input: (base) => ({
-            ...base,
-            color: '#000000'
-          })
-        }}
-      />
     </div>
   );
 }
