@@ -719,7 +719,6 @@ export function OperationDashboard() {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h2 className="text-3xl font-black uppercase tracking-tight text-black">Operation Dashboard</h2>
-              <p className="mt-1 text-sm font-medium text-slate-600">Daily operations snapshot with planning, sales, stock, and production progress.</p>
             </div>
             <div className="flex flex-wrap items-stretch justify-end gap-3">
               <DateInput label="From" value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
