@@ -593,7 +593,7 @@ export interface LoadingSlipLine {
   allocations?: LoadingSlipAllocation[];
 }
 
-export interface LoadingSlipAllocation =
+export type LoadingSlipAllocation =
   | {
       sourceType: "job";
       jobId: string;
@@ -689,4 +689,26 @@ export interface Setting {
   organizationLogo?: string;
   updatedBy?: string;
   updateTimestamp?: string;
+}
+
+export interface OperationDashboardMetricCard {
+  id: string;
+  label: string;
+  value: number | null;
+  format?: "number" | "currency" | "percent";
+  unit?: string;
+  note?: string;
+  status?: "ready" | "unavailable";
+}
+
+export interface OperationDashboardMetricGroup {
+  id: string;
+  title: string;
+  cards: OperationDashboardMetricCard[];
+}
+
+export interface OperationDashboardSummary {
+  rangeLabel: string;
+  comparisonLabel: string;
+  groups: OperationDashboardMetricGroup[];
 }

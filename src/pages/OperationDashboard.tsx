@@ -3,6 +3,8 @@ import { SlidersHorizontal } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type {
   Company,
+  DispatchPlan,
+  Invoice,
   Item,
   LoadingSlip,
   LoadingSlipLine,
@@ -10,6 +12,8 @@ import type {
   MaterialIssueLine,
   MaterialReturn,
   MaterialReturnLine,
+  OperationDashboardMetricCard,
+  OperationDashboardSummary,
   Order,
   OrderSchedule,
   Production,
@@ -24,7 +28,14 @@ import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { formatDate } from "../lib/serial";
-import { cn } from "../lib/utils";
+import { cn, formatCurrency, formatNumber } from "../lib/utils";
+import {
+  buildOperationDashboardSummary,
+  formatDisplayDate,
+  getLocalDateInputValue,
+  getSafeRange,
+  isDateWithinRange,
+} from "../lib/operationDashboard";
 
 type ColumnId =
   | "jobNo"
@@ -111,8 +122,90 @@ type ColumnDef = {
   render: (row: OperationRow) => React.ReactNode;
 };
 
+type SummaryCardConfig = {
+  id: string;
+  className?: string;
+  tone: string;
+  valueTone?: string;
+};
+
+type SummaryGroupConfig = {
+  groupId: string;
+  className?: string;
+  gridClassName: string;
+  cards: SummaryCardConfig[];
+};
+
 const STORAGE_HIDDEN_KEY = "lnpi.operationDashboard.columns.hidden.v2";
 const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
+
+const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
+  {
+    groupId: "headline",
+    className: "lg:col-span-2",
+    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
+    cards: [
+      { id: "production", tone: "bg-[#00d4ff]" },
+      { id: "previousProduction", tone: "bg-[#c8f7ff]" },
+      { id: "planValue", tone: "bg-[#ffe8a3]" },
+      { id: "nextPlanValue", tone: "bg-[#f5d6ff]" },
+      { id: "linearMeter", tone: "bg-[#8f7cc9] text-white", valueTone: "text-white" },
+      { id: "wastage", tone: "bg-[#ff1e1e] text-white", valueTone: "text-white" },
+    ],
+  },
+  {
+    groupId: "dispatch",
+    className: "lg:col-span-2",
+    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
+    cards: [
+      { id: "rangeSale", tone: "bg-[#16e0eb]" },
+      { id: "previousSale", tone: "bg-[#efc3c3]" },
+      { id: "dispatchPlannedQty", tone: "bg-[#ff6b6b] text-white", valueTone: "text-white" },
+      { id: "dispatchLoadedQty", tone: "bg-[#294f92] text-white", valueTone: "text-white" },
+      { id: "loadingQty", tone: "bg-[#6a54b6] text-white", valueTone: "text-white" },
+      { id: "invoiceCount", tone: "bg-[#fff38f]" },
+    ],
+  },
+  {
+    groupId: "workflow",
+    className: "lg:col-span-2",
+    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
+    cards: [
+      { id: "pendingPlanningCount", tone: "bg-[#ffffff]" },
+      { id: "pendingPlanningValue", tone: "bg-[#ff8b8b] text-white", valueTone: "text-white" },
+      { id: "wipQty", tone: "bg-[#00e5ef]" },
+      { id: "activeJobs", tone: "bg-[#b08a00] text-white", valueTone: "text-white" },
+      { id: "cancelledJobs", tone: "bg-[#f4f4f4]" },
+      { id: "pendingTally", tone: "bg-[#d7f7c8]" },
+    ],
+  },
+  {
+    groupId: "operations",
+    className: "lg:col-span-1",
+    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-2",
+    cards: [
+      { id: "paper", tone: "bg-[#1f1fff] text-white", valueTone: "text-white" },
+      { id: "liner", tone: "bg-[#0014ff] text-white", valueTone: "text-white" },
+      { id: "printing", tone: "bg-[#f9ef00]" },
+      { id: "pasting", tone: "bg-[#f9ef00]" },
+      { id: "stitching", tone: "bg-[#f9ef00]" },
+      { id: "processingEntries", tone: "bg-[#ffffff]" },
+    ],
+  },
+  {
+    groupId: "stock",
+    className: "lg:col-span-1",
+    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-2",
+    cards: [
+      { id: "actualPaperUsed", tone: "bg-[#ffffff]" },
+      { id: "planPaper", tone: "bg-[#ffffff]" },
+      { id: "pendingConsumption", tone: "bg-[#fff38f]" },
+      { id: "fgStock", tone: "bg-[#f8f8f8]" },
+      { id: "starch", tone: "bg-[#f8f8f8]" },
+      { id: "reelStock", tone: "bg-[#f8f8f8]" },
+    ],
+  },
+];
 
 function safeJsonParse<T>(raw: string | null): T | null {
   if (!raw) return null;
@@ -121,10 +214,6 @@ function safeJsonParse<T>(raw: string | null): T | null {
   } catch {
     return null;
   }
-}
-
-function toLocalDateInputValue(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function getPlanPaper(p: Production) {
@@ -136,12 +225,30 @@ function getPlanPaper(p: Production) {
   return sum > 0 ? sum : 0;
 }
 
+function formatMetricValue(card: OperationDashboardMetricCard) {
+  if (card.status === "unavailable" || card.value === null) return "Pending";
+  if (card.format === "currency") return formatCurrency(card.value);
+  if (card.format === "percent") return `${Number(card.value || 0).toFixed(2)}%`;
+  const text = formatNumber(card.value, false);
+  return card.unit ? `${text} ${card.unit}` : text;
+}
+
+function getDefaultRange() {
+  const today = getLocalDateInputValue(new Date());
+  return { from: today, to: today };
+}
+
+function getSummaryCard(summary: OperationDashboardSummary, cardId: string) {
+  return summary.groups.flatMap((group) => group.cards).find((card) => card.id === cardId) || null;
+}
+
 export function OperationDashboard() {
   const [productions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -149,9 +256,11 @@ export function OperationDashboard() {
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
+  const [invoices] = useData<Invoice>("invoices", []);
 
   const allowExports = exportsAllowed();
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState(getDefaultRange);
 
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
   const columnsPanelRef = useRef<HTMLDivElement | null>(null);
@@ -264,6 +373,13 @@ export function OperationDashboard() {
     return () => window.removeEventListener("mousedown", onDown);
   }, [isColumnsOpen]);
 
+  const safeRange = useMemo(() => getSafeRange(dateRange), [dateRange]);
+
+  const filteredProductions = useMemo(
+    () => productions.filter((entry) => isDateWithinRange(entry.date, safeRange)),
+    [productions, safeRange]
+  );
+
   const processingTotalsMap = useMemo(() => {
     const map = new Map<string, ProcessingTotals>();
     processing.forEach((row) => {
@@ -296,13 +412,15 @@ export function OperationDashboard() {
         ? line.allocations.filter((allocation) => allocation.sourceType === "job")
         : [];
 
-    loadingSlips.forEach((slip) => {
-      slip.lines.forEach((line) => {
-        getJobAllocations(line).forEach((allocation) => {
-          map.set(allocation.jobId, (map.get(allocation.jobId) || 0) + Number(allocation.qty || 0));
+    loadingSlips
+      .filter((slip) => slip.status !== "Cancelled")
+      .forEach((slip) => {
+        slip.lines.forEach((line) => {
+          getJobAllocations(line).forEach((allocation) => {
+            map.set(allocation.jobId, (map.get(allocation.jobId) || 0) + Number(allocation.qty || 0));
+          });
         });
       });
-    });
     return map;
   }, [loadingSlips]);
 
@@ -319,9 +437,18 @@ export function OperationDashboard() {
     return map;
   }, [productions]);
 
+  const filteredMaterialIssues = useMemo(
+    () => materialIssues.filter((entry) => isDateWithinRange(entry.date, safeRange)),
+    [materialIssues, safeRange]
+  );
+  const filteredMaterialReturns = useMemo(
+    () => materialReturns.filter((entry) => isDateWithinRange(entry.date, safeRange)),
+    [materialReturns, safeRange]
+  );
+
   const productionUsageMap = useMemo(() => {
-    return buildProductionMaterialUsageMap(materialIssues, materialIssueLines, materialReturns, materialReturnLines);
-  }, [materialIssues, materialIssueLines, materialReturns, materialReturnLines]);
+    return buildProductionMaterialUsageMap(filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines);
+  }, [filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines]);
 
   const getProcessingSummary = (productionId: string) => {
     const records = processing.filter((p) => p.productionId === productionId);
@@ -342,7 +469,7 @@ export function OperationDashboard() {
   const rows: OperationRow[] = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
 
-    return productions
+    return filteredProductions
       .map((p) => {
         const schedule = schedules.find((s) => s.id === p.scheduleId);
         const order = orders.find((o) => o.id === schedule?.orderId);
@@ -405,11 +532,11 @@ export function OperationDashboard() {
       })
       .sort((a, b) => b.production.transactionNo.localeCompare(a.production.transactionNo, undefined, { numeric: true, sensitivity: "base" }));
   }, [
-    productions,
-    items,
+    filteredProductions,
     schedules,
     orders,
     companies,
+    items,
     processingTotalsMap,
     loadedQtyByProductionId,
     erpLeastGsmMap,
@@ -426,6 +553,38 @@ export function OperationDashboard() {
     const overallWastagePct = sumPlan > 0 ? ((sumActual - sumPlan) / sumPlan) * 100 : null;
     return { sumActual, sumPlan, overallWastagePct };
   }, [rows]);
+
+  const summary = useMemo(
+    () =>
+      buildOperationDashboardSummary({
+        dateRange,
+        productions,
+        schedules,
+        orders,
+        dispatchPlans,
+        loadingSlips,
+        invoices,
+        processing,
+        materialIssues,
+        materialIssueLines,
+        materialReturns,
+        materialReturnLines,
+      }),
+    [
+      dateRange,
+      productions,
+      schedules,
+      orders,
+      dispatchPlans,
+      loadingSlips,
+      invoices,
+      processing,
+      materialIssues,
+      materialIssueLines,
+      materialReturns,
+      materialReturnLines,
+    ]
+  );
 
   const columnById = useMemo(() => {
     const map = new Map<ColumnId, ColumnDef>();
@@ -535,21 +694,53 @@ export function OperationDashboard() {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex justify-between items-center border-b border-black pb-3">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Operation Dashboard</h2>
-        <div className="flex items-center gap-2">
-          {allowExports ? (
-            <ExcelExport data={exportData} fileName={`Operation_Dashboard_${toLocalDateInputValue(new Date())}`} />
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setIsColumnsOpen((v) => !v)}
-            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-black rounded text-[11px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-px hover:translate-y-px hover:shadow-none transition"
-          >
-            <SlidersHorizontal size={14} strokeWidth={3} />
-            Columns
-          </button>
+    <div className="space-y-4">
+      <div className="border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+        <div className="bg-cyan-400 px-4 py-2 text-center text-xl font-black tracking-tight text-red-700">|| श्री गणेशाय नमः ||</div>
+        <div className="border-t-2 border-black px-4 py-4 bg-[linear-gradient(180deg,#fffdf5_0%,#eef6ff_55%,#f8f6ff_100%)]">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-black uppercase tracking-tight">Operation Dashboard</h2>
+              <div className="mt-1 text-xs font-bold text-slate-600">Range snapshot for {summary.rangeLabel}</div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <DateInput label="From" value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
+              <DateInput label="To" value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
+              {allowExports ? (
+                <ExcelExport data={exportData} fileName={`Operation_Dashboard_${dateRange.from}_${dateRange.to}`} />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setIsColumnsOpen((v) => !v)}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-white border-2 border-black rounded text-[11px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-px hover:translate-y-px hover:shadow-none transition"
+              >
+                <SlidersHorizontal size={14} strokeWidth={3} />
+                Columns
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
+              const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
+              if (!group) return null;
+              return (
+                <section
+                  key={group.id}
+                  className={cn("rounded border-2 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
+                >
+                  <div className="bg-slate-900 px-3 py-2 text-sm font-black uppercase tracking-widest text-white">{group.title}</div>
+                  <div className={cn("grid gap-0", groupConfig.gridClassName)}>
+                    {groupConfig.cards.map((cardConfig) => {
+                      const card = getSummaryCard(summary, cardConfig.id);
+                      if (!card) return null;
+                      return <SummaryMetricCard key={card.id} card={card} config={cardConfig} />;
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -674,3 +865,31 @@ export function OperationDashboard() {
   );
 }
 
+function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+      <div className="flex flex-col">
+        <span className="text-[10px] font-black text-black uppercase tracking-tighter leading-none mb-1.5 opacity-60">{label}</span>
+        <input
+          type="date"
+          className="text-sm font-black bg-transparent border-none p-0 focus:ring-0 leading-tight uppercase cursor-pointer"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <span className="mt-1 text-[10px] font-black text-slate-500 tracking-wide">{formatDisplayDate(value)}</span>
+      </div>
+    </div>
+  );
+}
+
+function SummaryMetricCard({ card, config }: { card: OperationDashboardMetricCard; config: SummaryCardConfig }) {
+  return (
+    <div className={cn("min-h-[110px] border-t-2 border-black first:border-t-0 md:border-l-2 md:[&:nth-child(odd)]:border-l-0 xl:border-l-2 px-4 py-4", config.tone, config.className)}>
+      <div className="text-[11px] font-black uppercase tracking-tight text-current">{card.label}</div>
+      <div className={cn("mt-3 text-3xl font-black leading-none tracking-tight", config.valueTone)}>{formatMetricValue(card)}</div>
+      <div className="mt-2 text-[10px] font-bold uppercase tracking-wide text-current/70">
+        {card.note || (card.status === "unavailable" ? "Pending data source" : "")}
+      </div>
+    </div>
+  );
+}
