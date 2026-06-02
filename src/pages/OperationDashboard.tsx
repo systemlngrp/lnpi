@@ -715,12 +715,12 @@ export function OperationDashboard() {
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[5px_5px_0px_0px_rgba(15,23,42,1)]">
-        <div className="bg-white px-2.5 py-2 md:px-3">
-          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+        <div className="bg-white px-1.5 py-1.5 md:px-2">
+          <div className="flex flex-col gap-1.5 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h2 className="text-[22px] font-black uppercase tracking-tight text-slate-950 md:text-[24px]">Operation Dashboard</h2>
             </div>
-            <div className="flex flex-wrap items-stretch justify-end gap-1.5">
+            <div className="flex flex-wrap items-stretch justify-end gap-1">
               <DateInput value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
               <DateInput value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
               <button
@@ -759,7 +759,7 @@ export function OperationDashboard() {
             </div>
           </div>
 
-          <div className="mt-2 grid grid-cols-1 gap-2 xl:grid-cols-12">
+          <div className="mt-1.5 grid grid-cols-1 gap-1.5 xl:grid-cols-12">
               {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
                 const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
                 if (!group) return null;
