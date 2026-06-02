@@ -31,8 +31,8 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
   };
 
   return (
-    <div className="flex items-start gap-2">
-      <div className="min-w-[200px] flex-1">
+    <div className="grid w-full grid-cols-[minmax(0,1fr)_42px] items-start gap-2">
+      <div className="min-w-0">
         <ReactSelect
           inputId={id}
           value={selectedOption}

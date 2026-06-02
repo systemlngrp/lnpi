@@ -429,6 +429,11 @@ export function Items() {
   const [quickGroupName, setQuickGroupName] = useState("");
   const [showQuickCompany, setShowQuickCompany] = useState(false);
   const [quickCompanyName, setQuickCompanyName] = useState("");
+  const [showDropdownAddModal, setShowDropdownAddModal] = useState(false);
+  const [dropdownAddLabel, setDropdownAddLabel] = useState("Add New");
+  const [dropdownAddValue, setDropdownAddValue] = useState("");
+  const [dropdownAddNumericOnly, setDropdownAddNumericOnly] = useState(false);
+  const dropdownAddHandlerRef = useRef<((value: string) => void) | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const isImageFile = (filename: string) => /\.(jpe?g|png|gif|webp|bmp)$/i.test(filename);
   const isPdfFile = (filename: string) => /\.pdf$/i.test(filename);
@@ -571,16 +576,40 @@ export function Items() {
   };
 
   const handleCreateNewUom = () => {
-    const nextUom = window.prompt("Enter new UOM");
-    const cleaned = String(nextUom || "").trim();
+    openDropdownAddModal("UOM", false, (cleaned) => {
+      const exists = uomOptions.some((option) => option.value.toLowerCase() === cleaned.toLowerCase());
+      if (exists) {
+        setUom(uomOptions.find((option) => option.value.toLowerCase() === cleaned.toLowerCase())?.value || cleaned);
+        return;
+      }
+      setCustomUoms((prev) => [...prev, cleaned]);
+      setUom(cleaned);
+    });
+  };
+
+  const openDropdownAddModal = (label: string, numericOnly: boolean, onConfirm: (value: string) => void) => {
+    setDropdownAddLabel(label);
+    setDropdownAddNumericOnly(numericOnly);
+    setDropdownAddValue("");
+    dropdownAddHandlerRef.current = onConfirm;
+    setShowDropdownAddModal(true);
+  };
+
+  const closeDropdownAddModal = () => {
+    setShowDropdownAddModal(false);
+    setDropdownAddLabel("Add New");
+    setDropdownAddValue("");
+    setDropdownAddNumericOnly(false);
+    dropdownAddHandlerRef.current = null;
+  };
+
+  const handleDropdownAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleaned = dropdownAddValue.trim();
     if (!cleaned) return;
-    const exists = uomOptions.some((option) => option.value.toLowerCase() === cleaned.toLowerCase());
-    if (exists) {
-      setUom(uomOptions.find((option) => option.value.toLowerCase() === cleaned.toLowerCase())?.value || cleaned);
-      return;
-    }
-    setCustomUoms((prev) => [...prev, cleaned]);
-    setUom(cleaned);
+    if (dropdownAddNumericOnly && Number.isNaN(Number(cleaned))) return;
+    dropdownAddHandlerRef.current?.(cleaned);
+    closeDropdownAddModal();
   };
 
   const handleQuickGroupSubmit = (e: React.FormEvent) => {
@@ -872,6 +901,39 @@ export function Items() {
         </div>
       )}
 
+      {showDropdownAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-2xl border-2 border-black bg-white p-5 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
+            <div className="mb-4 text-xl font-black text-black">Enter {dropdownAddLabel}</div>
+            <form onSubmit={handleDropdownAddSubmit} className="space-y-4">
+              <input
+                autoFocus
+                type={dropdownAddNumericOnly ? "number" : "text"}
+                value={dropdownAddValue}
+                onChange={(e) => setDropdownAddValue(e.target.value)}
+                className="w-full rounded-xl border-2 border-indigo-500 px-4 py-3 text-black outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                placeholder={`Enter ${dropdownAddLabel.toLowerCase()}`}
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeDropdownAddModal}
+                  className="rounded-full bg-fuchsia-100 px-5 py-2 font-bold text-fuchsia-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-full bg-indigo-600 px-6 py-2 font-bold text-white"
+                >
+                  OK
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isFormOpen ? (
         <div className="bg-white p-6 rounded shadow-sm border border-black max-w-4xl">
           <h3 className="text-lg font-bold text-black mb-6 uppercase">{editingId ? "Edit Item" : "Create Item"}</h3>
@@ -898,7 +960,7 @@ export function Items() {
                 </div>
                 <div className="flex flex-col space-y-1">
                   <label className="font-bold text-black text-sm">TYPE</label>
-                  <CreatableDropdown value={typeName} onChange={setTypeName} options={businessTypeOptions} placeholder="Select or add type..." />
+                  <CreatableDropdown value={typeName} onChange={setTypeName} options={businessTypeOptions} placeholder="Select or add type..." addButtonLabel="Type" onAddClick={openDropdownAddModal} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <FormItem label="Open Length" value={openLength} onChange={setOpenLength} type="number" />
@@ -917,13 +979,13 @@ export function Items() {
                   <FormItem label="Ups" value={ups} onChange={setUps} type="number" />
                   <div className="flex flex-col space-y-1">
                     <label className="font-bold text-black text-sm uppercase text-[10px]">PLY</label>
-                    <CreatableDropdown value={ply} onChange={setPly} options={plyDropdownOptions} placeholder="Select or add ply..." numericOnly />
+                    <CreatableDropdown value={ply} onChange={setPly} options={plyDropdownOptions} placeholder="Select or add ply..." numericOnly addButtonLabel="Ply" onAddClick={openDropdownAddModal} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col space-y-1">
                     <label className="font-bold text-black text-sm uppercase text-[10px]">Flute</label>
-                    <CreatableDropdown value={flute} onChange={setFlute} options={fluteDropdownOptions} placeholder="Select or add flute..." />
+                    <CreatableDropdown value={flute} onChange={setFlute} options={fluteDropdownOptions} placeholder="Select or add flute..." addButtonLabel="Flute" onAddClick={openDropdownAddModal} />
                   </div>
                   <FormItem label="Take Up Factor" value={String(takeUpFactorCalculated)} onChange={() => {}} type="number" readOnly />
                 </div>
@@ -939,7 +1001,7 @@ export function Items() {
                     <FormItem label="TOP" value={l1} onChange={setL1} type="number" />
                     <div className="flex flex-col space-y-1">
                       <label className="font-bold text-black text-sm uppercase text-[10px]">Top Paper Shade</label>
-                      <CreatableDropdown value={topPaperShade} onChange={setTopPaperShade} options={colorOptions} placeholder="Select or add shade..." onCreateOption={ensureColorMasterValue} />
+                      <CreatableDropdown value={topPaperShade} onChange={setTopPaperShade} options={colorOptions} placeholder="Select or add shade..." onCreateOption={ensureColorMasterValue} addButtonLabel="Top Paper Shade" onAddClick={openDropdownAddModal} />
                     </div>
                     <FormItem label="A-Flute" value={f1} onChange={setF1} type="number" />
                     <FormItem label="A-Backing" value={l2} onChange={setL2} type="number" />
@@ -949,7 +1011,7 @@ export function Items() {
                     <FormItem label="B3" value={b3} onChange={setB3} type="number" />
                     <div className="flex flex-col space-y-1">
                       <label className="font-bold text-black text-sm uppercase text-[10px]">Backing Paper Shade</label>
-                      <CreatableDropdown value={backingPaperShade} onChange={setBackingPaperShade} options={colorOptions} placeholder="Select or add shade..." onCreateOption={ensureColorMasterValue} />
+                      <CreatableDropdown value={backingPaperShade} onChange={setBackingPaperShade} options={colorOptions} placeholder="Select or add shade..." onCreateOption={ensureColorMasterValue} addButtonLabel="Backing Paper Shade" onAddClick={openDropdownAddModal} />
                     </div>
                 </div>
             </div>
@@ -959,11 +1021,11 @@ export function Items() {
                 <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                     <div className="flex flex-col space-y-1">
                       <label className="font-bold text-black text-sm uppercase text-[10px]">Printing Colour 1</label>
-                      <CreatableDropdown value={printingColour1} onChange={setPrintingColour1} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} />
+                      <CreatableDropdown value={printingColour1} onChange={setPrintingColour1} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} addButtonLabel="Printing Colour 1" onAddClick={openDropdownAddModal} />
                     </div>
                     <div className="flex flex-col space-y-1">
                       <label className="font-bold text-black text-sm uppercase text-[10px]">Printing Colour 2</label>
-                      <CreatableDropdown value={printingColour2} onChange={setPrintingColour2} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} />
+                      <CreatableDropdown value={printingColour2} onChange={setPrintingColour2} options={colorOptions} placeholder="Select or add colour..." onCreateOption={ensureColorMasterValue} addButtonLabel="Printing Colour 2" onAddClick={openDropdownAddModal} />
                     </div>
                 </div>
             </div>
@@ -1534,6 +1596,7 @@ function CreatableDropdown({
   numericOnly = false,
   onCreateOption,
   addButtonLabel = "Add New",
+  onAddClick,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -1542,6 +1605,7 @@ function CreatableDropdown({
   numericOnly?: boolean;
   onCreateOption?: (value: string) => void;
   addButtonLabel?: string;
+  onAddClick?: (label: string, numericOnly: boolean, onConfirm: (value: string) => void) => void;
 }) {
   const selectedOption = options.find((opt) => opt.value === value) || (value ? { value, label: value } : null);
 
@@ -1554,8 +1618,8 @@ function CreatableDropdown({
   };
 
   return (
-    <div className="flex items-start gap-2">
-      <div className="min-w-[200px] flex-1">
+    <div className="grid w-full grid-cols-[minmax(0,1fr)_42px] items-start gap-2">
+      <div className="min-w-0">
         <CreatableSelect
           value={selectedOption}
           onChange={(newValue) => onChange(newValue?.value || "")}
@@ -1630,9 +1694,7 @@ function CreatableDropdown({
       <button
         type="button"
         onClick={() => {
-          const nextValue = window.prompt(`Enter ${addButtonLabel.toLowerCase()}`);
-          if (!nextValue) return;
-          handleCreateValue(nextValue);
+          onAddClick?.(addButtonLabel, numericOnly, handleCreateValue);
         }}
         title={addButtonLabel}
         className="mt-[2px] flex h-[42px] w-[42px] items-center justify-center rounded border-2 border-indigo-700 bg-indigo-600 text-white shadow transition hover:bg-indigo-700"
