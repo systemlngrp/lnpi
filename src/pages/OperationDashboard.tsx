@@ -281,7 +281,7 @@ export function OperationDashboard() {
   const allowExports = exportsAllowed();
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState(getDefaultRange);
-  const [closedJobFilter, setClosedJobFilter] = useState<ClosedJobFilter>("all");
+  const [closedJobFilter, setClosedJobFilter] = useState<ClosedJobFilter>("no");
 
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
   const columnsPanelRef = useRef<HTMLDivElement | null>(null);
@@ -379,7 +379,7 @@ export function OperationDashboard() {
   const safeRange = useMemo(() => getSafeRange(dateRange), [dateRange]);
 
   const filteredProductions = useMemo(
-    () => productions.filter((entry) => isDateWithinRange(entry.date, safeRange)),
+    () => (safeRange ? productions.filter((entry) => isDateWithinRange(entry.date, safeRange)) : productions),
     [productions, safeRange]
   );
 
@@ -441,11 +441,11 @@ export function OperationDashboard() {
   }, [productions]);
 
   const filteredMaterialIssues = useMemo(
-    () => materialIssues.filter((entry) => isDateWithinRange(entry.date, safeRange)),
+    () => (safeRange ? materialIssues.filter((entry) => isDateWithinRange(entry.date, safeRange)) : materialIssues),
     [materialIssues, safeRange]
   );
   const filteredMaterialReturns = useMemo(
-    () => materialReturns.filter((entry) => isDateWithinRange(entry.date, safeRange)),
+    () => (safeRange ? materialReturns.filter((entry) => isDateWithinRange(entry.date, safeRange)) : materialReturns),
     [materialReturns, safeRange]
   );
 
@@ -723,6 +723,28 @@ export function OperationDashboard() {
             <div className="flex flex-wrap items-stretch justify-end gap-2">
               <DateInput value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
               <DateInput value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
+              <button
+                type="button"
+                onClick={() => setDateRange({ from: "", to: "" })}
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md border-2 border-slate-900 bg-rose-50 px-3 py-1.5 text-[10px] font-black uppercase text-rose-700 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+              >
+                Clear
+              </button>
+              <div className="flex items-center gap-2 rounded-md border-2 border-slate-900 bg-white px-3 py-1.5 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
+                <label htmlFor="closed-job-filter-top" className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">
+                  Closed Job
+                </label>
+                <select
+                  id="closed-job-filter-top"
+                  value={closedJobFilter}
+                  onChange={(event) => setClosedJobFilter(event.target.value as ClosedJobFilter)}
+                  className="rounded border border-slate-900 bg-white px-2 py-1 text-xs font-bold outline-none"
+                >
+                  <option value="all">All</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
               {allowExports ? (
                 <ExcelExport data={exportData} fileName={`Operation_Dashboard_${dateRange.from}_${dateRange.to}`} />
               ) : null}
@@ -773,21 +795,6 @@ export function OperationDashboard() {
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <div className="flex-1 rounded-lg border-2 border-slate-900 bg-white p-1.5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
           <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs, items, parties..." />
-        </div>
-        <div className="flex items-center gap-2 rounded-lg border-2 border-slate-900 bg-white px-3 py-1.5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-          <label htmlFor="closed-job-filter" className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">
-            Closed Job
-          </label>
-          <select
-            id="closed-job-filter"
-            value={closedJobFilter}
-            onChange={(event) => setClosedJobFilter(event.target.value as ClosedJobFilter)}
-            className="rounded border border-slate-900 bg-white px-2 py-1 text-xs font-bold outline-none"
-          >
-            <option value="all">All</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
         </div>
       </div>
 

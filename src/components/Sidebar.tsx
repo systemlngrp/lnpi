@@ -43,17 +43,12 @@ import {
   MaterialIssueLine,
   MaterialReturn,
   MaterialReturnLine,
-  Machine,
-  Setting,
-  Item,
-  ProductionProcessing,
   Invoice,
 } from "../types";
 import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { withIndentTotals } from "../lib/indentTotals";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
-import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -99,7 +94,6 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Colors", href: "/masters/colors", icon: Plus },
       { name: "Companies", href: "/masters/companies", icon: Database },
       { name: "Trucks", href: "/masters/trucks", icon: Truck },
-      { name: "Machines", href: "/masters/machines", icon: Hammer },
       { name: "Users", href: "/masters/users", icon: Users },
       { name: "Settings", href: "/masters/settings", icon: Database },
     ],
@@ -200,7 +194,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { name: "Reporting Form", href: "/production-processing/form", icon: ClipboardList },
       { name: "Reporting Master", href: "/production-processing/master", icon: Database },
-      { name: "Machine-wise Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
+      { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
     ],
   },
   {
@@ -280,62 +274,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const [machines] = useData<Machine>("machines", []);
-  const [settings] = useData<Setting>("settings", []);
-  const [items] = useData<Item>("items", []);
-  const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [invoices] = useData<Invoice>("invoices", []);
-
-  const mandatoryMachinesMapping = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
-
-  const machineWiseCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    const activeProductions = productions.filter(p => 
-      p.status !== "Completed" && p.status !== "Cancelled" && !p.cancelTimestamp && !p.tallyTimestamp
-    );
-
-    activeProductions.forEach(p => {
-      const item = items.find(i => i.id === p.itemId);
-      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesMapping, item?.typeName);
-      
-      requiredMachines.forEach(machineName => {
-        const machine = machines.find(m => m.name.trim().toLowerCase() === machineName.trim().toLowerCase());
-        if (!machine) return;
-
-        const reportedQty = processing
-          .filter(pr => pr.productionId === p.id && pr.machineId === machine.id)
-          .reduce((sum, pr) => sum + Number(pr.qty || 0), 0);
-        
-        if (Number(p.qty || 0) > reportedQty) {
-          counts[machine.id] = (counts[machine.id] || 0) + 1;
-        }
-      });
-    });
-    return counts;
-  }, [productions, items, machines, processing, mandatoryMachinesMapping]);
-
-  const dynamicNavigation = useMemo(() => {
-    return NAVIGATION.map(group => {
-      if (group.section === "Production Processing") {
-        return {
-          ...group,
-          items: [
-            ...group.items,
-            ...machines
-              .filter(m => (machineWiseCounts[m.id] || 0) > 0)
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map(m => ({
-                name: m.name,
-                href: `/production/pending-machine-processing?machineId=${m.id}`,
-                icon: Hammer,
-                count: machineWiseCounts[m.id]
-              }))
-          ]
-        };
-      }
-      return group;
-    });
-  }, [machines, machineWiseCounts]);
 
   const normalizedIndents = indents.map((indent) =>
     withIndentTotals(indent, indentLines.filter((line) => line.indentId === indent.id))
@@ -478,7 +417,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   consumptions.filter(c => isPendingPH(c.status)).length
   };
 
-  const navigation = dynamicNavigation;
+  const navigation = NAVIGATION;
 
   useEffect(() => {
     const next: Record<string, boolean> = {};

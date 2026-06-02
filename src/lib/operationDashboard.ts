@@ -114,7 +114,8 @@ export function getSafeRange(dateRange: OperationDashboardDateRange) {
 
 export function isDateWithinRange(dateStr: string | undefined, safeRange: ReturnType<typeof getSafeRange>) {
   const parsed = parseAppDate(dateStr);
-  if (!parsed || !safeRange) return false;
+  if (!parsed) return false;
+  if (!safeRange) return true;
   const target = normalizeDateValue(parsed);
   return target >= safeRange.fromTime && target <= safeRange.toTime;
 }
@@ -353,20 +354,42 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const previousSafeRange = getSafeRange(previousRange);
   const nextSafeRange = getSafeRange(nextRange);
 
-  const filteredProductions = args.productions.filter((entry) => isDateWithinRange(entry.date, safeRange));
-  const previousProductions = args.productions.filter((entry) => isDateWithinRange(entry.date, previousSafeRange));
-  const filteredSchedules = args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, safeRange));
+  const filteredProductions = safeRange
+    ? args.productions.filter((entry) => isDateWithinRange(entry.date, safeRange))
+    : args.productions;
+  const previousProductions = previousSafeRange
+    ? args.productions.filter((entry) => isDateWithinRange(entry.date, previousSafeRange))
+    : [];
+  const filteredSchedules = safeRange
+    ? args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, safeRange))
+    : args.schedules;
   const todayProductions = args.productions.filter((entry) => entry.date === today);
   const tomorrowProductions = args.productions.filter((entry) => entry.date === tomorrow);
-  const nextSchedules = args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, nextSafeRange));
-  const filteredDispatchPlans = args.dispatchPlans.filter((entry) => isDateWithinRange(entry.date, safeRange));
-  const filteredLoadingSlips = args.loadingSlips.filter((entry) => isDateWithinRange(entry.date, safeRange));
-  const filteredInvoices = args.invoices.filter((entry) => isDateWithinRange(entry.date, safeRange));
+  const nextSchedules = nextSafeRange
+    ? args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, nextSafeRange))
+    : [];
+  const filteredDispatchPlans = safeRange
+    ? args.dispatchPlans.filter((entry) => isDateWithinRange(entry.date, safeRange))
+    : args.dispatchPlans;
+  const filteredLoadingSlips = safeRange
+    ? args.loadingSlips.filter((entry) => isDateWithinRange(entry.date, safeRange))
+    : args.loadingSlips;
+  const filteredInvoices = safeRange
+    ? args.invoices.filter((entry) => isDateWithinRange(entry.date, safeRange))
+    : args.invoices;
   const todayInvoices = args.invoices.filter((entry) => entry.date === today);
-  const previousInvoices = args.invoices.filter((entry) => isDateWithinRange(entry.date, previousSafeRange));
-  const filteredProcessing = args.processing.filter((entry) => isDateWithinRange(entry.date, safeRange));
-  const filteredMaterialIssues = args.materialIssues.filter((entry) => isDateWithinRange(entry.date, safeRange));
-  const filteredMaterialReturns = args.materialReturns.filter((entry) => isDateWithinRange(entry.date, safeRange));
+  const previousInvoices = previousSafeRange
+    ? args.invoices.filter((entry) => isDateWithinRange(entry.date, previousSafeRange))
+    : [];
+  const filteredProcessing = safeRange
+    ? args.processing.filter((entry) => isDateWithinRange(entry.date, safeRange))
+    : args.processing;
+  const filteredMaterialIssues = safeRange
+    ? args.materialIssues.filter((entry) => isDateWithinRange(entry.date, safeRange))
+    : args.materialIssues;
+  const filteredMaterialReturns = safeRange
+    ? args.materialReturns.filter((entry) => isDateWithinRange(entry.date, safeRange))
+    : args.materialReturns;
   const usageMap = buildProductionMaterialUsageMap(
     filteredMaterialIssues,
     args.materialIssueLines,
