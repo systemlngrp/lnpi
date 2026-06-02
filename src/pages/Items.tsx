@@ -6,6 +6,7 @@ import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { TableControls } from "../components/TableControls";
 import CreatableSelect from "react-select/creatable";
+import { components, MenuListProps } from "react-select";
 import * as XLSX from "xlsx";
 
 export function Items() {
@@ -348,12 +349,7 @@ export function Items() {
     reader.readAsDataURL(file);
   };
 
-  const uomOptions = [
-    { value: "KG", label: "KG" },
-    { value: "PCs", label: "PCs" },
-    { value: "Metre", label: "Metre" },
-    { value: "Liter", label: "Liter" },
-  ];
+  const [customUoms, setCustomUoms] = useState<string[]>([]);
 
   const fluteOptions = [
     { value: "A", label: "A" },
@@ -396,6 +392,11 @@ export function Items() {
     )
       .sort((a, b) => Number(a) - Number(b))
       .map((value) => ({ value, label: value }));
+
+  const uomOptions = buildStringOptions(
+    [...items.map((item) => item.uom), ...customUoms],
+    ["KG", "PCs", "Metre", "Liter"]
+  );
 
   const groupOptions = groups.map(g => ({ value: g.id, label: g.name }));
   const companyOptions = companies.map(c => ({ value: c.name, label: c.name }));
@@ -568,6 +569,19 @@ export function Items() {
 
   const handleCreateNewCompany = () => {
     setShowQuickCompany(true);
+  };
+
+  const handleCreateNewUom = () => {
+    const nextUom = window.prompt("Enter new UOM");
+    const cleaned = String(nextUom || "").trim();
+    if (!cleaned) return;
+    const exists = uomOptions.some((option) => option.value.toLowerCase() === cleaned.toLowerCase());
+    if (exists) {
+      setUom(uomOptions.find((option) => option.value.toLowerCase() === cleaned.toLowerCase())?.value || cleaned);
+      return;
+    }
+    setCustomUoms((prev) => [...prev, cleaned]);
+    setUom(cleaned);
   };
 
   const handleQuickGroupSubmit = (e: React.FormEvent) => {
@@ -1016,7 +1030,7 @@ export function Items() {
                   </div>
                   <div className="flex flex-col space-y-1">
                     <label className="font-bold text-black text-sm">UOM *</label>
-                    <Select value={uom} onChange={setUom} options={uomOptions} placeholder="Select UOM..." required />
+                    <Select value={uom} onChange={setUom} onAdd={handleCreateNewUom} options={uomOptions} placeholder="Select UOM..." required />
                   </div>
                   <div className="flex flex-col space-y-1">
                     <label className="font-bold text-black text-sm">GST Rate (%) *</label>
@@ -1520,6 +1534,7 @@ function CreatableDropdown({
   placeholder,
   numericOnly = false,
   onCreateOption,
+  addMenuLabel = "Add New",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -1527,24 +1542,48 @@ function CreatableDropdown({
   placeholder: string;
   numericOnly?: boolean;
   onCreateOption?: (value: string) => void;
+  addMenuLabel?: string;
 }) {
   const selectedOption = options.find((opt) => opt.value === value) || (value ? { value, label: value } : null);
+
+  const handleCreateValue = (rawValue: string) => {
+    const cleaned = rawValue.trim();
+    if (!cleaned) return;
+    if (numericOnly && Number.isNaN(Number(cleaned))) return;
+    onCreateOption?.(cleaned);
+    onChange(cleaned);
+  };
+
+  const MenuList = (props: MenuListProps<{ value: string; label: string }, false>) => (
+    <components.MenuList {...props}>
+      {props.children}
+      <button
+        type="button"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const nextValue = window.prompt(`Enter ${addMenuLabel.toLowerCase()}`);
+          if (!nextValue) return;
+          handleCreateValue(nextValue);
+        }}
+        className="flex w-full items-center justify-center gap-2 border-t-2 border-black bg-indigo-50 px-3 py-2 text-sm font-black uppercase text-indigo-700 hover:bg-indigo-100"
+      >
+        <Plus size={16} strokeWidth={3} />
+        {addMenuLabel}
+      </button>
+    </components.MenuList>
+  );
 
   return (
     <CreatableSelect
       value={selectedOption}
       onChange={(newValue) => onChange(newValue?.value || "")}
-      onCreateOption={(inputValue) => {
-        const cleaned = inputValue.trim();
-        if (!cleaned) return;
-        if (numericOnly && Number.isNaN(Number(cleaned))) return;
-        onCreateOption?.(cleaned);
-        onChange(cleaned);
-      }}
+      onCreateOption={handleCreateValue}
       options={options}
       isClearable
       isSearchable
       placeholder={placeholder}
+      components={{ MenuList }}
       formatCreateLabel={(inputValue) => `Add "${inputValue}"`}
       isValidNewOption={(inputValue, _value, selectOptions) => {
         const cleaned = inputValue.trim();
