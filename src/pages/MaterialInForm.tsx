@@ -30,6 +30,17 @@ type PackingSlipDraft = {
   ourPoNo: string;
 };
 
+type ReelUploadRow = {
+  materialId: string;
+  materialName: string;
+  supplierReelNo: string;
+  weightKg: number;
+  supplierPoNo: string;
+  ourPoId: string;
+  ourPoNo: string;
+  invoiceRate?: number;
+};
+
 function formatReelNo(value: number) {
   return `R${String(value).padStart(5, "0")}`;
 }
@@ -60,6 +71,7 @@ export function MaterialInForm() {
   const [currentInvoiceRate, setCurrentInvoiceRate] = useState<number | "">("");
   const [currentPoLineId, setCurrentPoLineId] = useState("");
   const [packingSlipDrafts, setPackingSlipDrafts] = useState<Record<string, PackingSlipDraft[]>>({});
+  const reelBulkInputRef = useRef<HTMLInputElement>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -141,6 +153,32 @@ export function MaterialInForm() {
             label: `${order.poNo} | Qty ${Number(line.qty || 0)} @ ${Number(line.rate || 0).toFixed(2)}`,
           }))
       );
+  };
+
+  const getResolvedPoForMaterial = (materialId: string, ourPoNoRaw: string) => {
+    const search = String(ourPoNoRaw || "").trim().toLowerCase();
+    if (!search) return null;
+
+    const approvedOrders = purchaseOrders.filter(
+      (order) => order.status === "Approved" && (!supplierId || order.supplierId === supplierId)
+    );
+
+    for (const order of approvedOrders) {
+      if (!String(order.poNo || "").trim().toLowerCase().includes(search)) continue;
+      const matchingLine = purchaseOrderLines.find(
+        (line) => line.purchaseOrderId === order.id && line.materialId === materialId
+      );
+      if (matchingLine) {
+        return {
+          poId: order.id,
+          poNo: order.poNo || "",
+          poLineId: matchingLine.id,
+          poRate: Number(matchingLine.rate || 0),
+        };
+      }
+    }
+
+    return null;
   };
 
   const getPurchaseOrderLine = (poLineId: string) =>
@@ -303,6 +341,229 @@ export function MaterialInForm() {
       delete next[lineId];
       return next;
     });
+  };
+
+  const downloadWholeFormReelTemplate = () => {
+    const templateData = [
+      {
+        "Material ERP": "R001",
+        "Material Name": "KRAFT REEL 120 GSM",
+        "Supplier Reel No.": "SR-001",
+        "Weight (KG)": 250.5,
+        "Supplier PO No.": "VPO-12345",
+        "Our PO No.": "PO-26-00001",
+        "Invoice Rate": 52.75,
+      },
+      {
+        "Material ERP": "R001",
+        "Material Name": "KRAFT REEL 120 GSM",
+        "Supplier Reel No.": "SR-002",
+        "Weight (KG)": 248.25,
+        "Supplier PO No.": "VPO-12345",
+        "Our PO No.": "PO-26-00001",
+        "Invoice Rate": 52.75,
+      },
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reel Material In");
+    XLSX.writeFile(wb, "Material_In_Reel_Bulk_Template.xlsx");
+  };
+
+  const parseReelBulkUploadRows = (data: any[]) => {
+    const activeReelMaterials = materials.filter((material) => material.active !== "No" && material.type === "Reel");
+    const materialByErp = new Map(
+      activeReelMaterials.map((material) => [String(material.erpCode || "").trim().toLowerCase(), material])
+    );
+    const materialByName = new Map(
+      activeReelMaterials.map((material) => [String(material.name || "").trim().toLowerCase(), material])
+    );
+
+    const rows: ReelUploadRow[] = [];
+    const duplicateKeys = new Set<string>();
+    const seenKeys = new Set<string>();
+
+    data.forEach((row: any, index) => {
+      const materialErp = String(row["Material ERP"] || "").trim();
+      const materialNameInput = String(row["Material Name"] || "").trim();
+      const supplierReelNo = String(row["Supplier Reel No."] || "").trim();
+      const supplierPoNo = String(row["Supplier PO No."] || "").trim();
+      const ourPoSearch = String(row["Our PO No."] || "").trim();
+      const weightKg = Number(row["Weight (KG)"] || 0);
+      const invoiceRateRaw = String(row["Invoice Rate"] ?? "").trim();
+      const invoiceRate = invoiceRateRaw === "" ? undefined : Number(invoiceRateRaw);
+
+      const material =
+        (materialErp ? materialByErp.get(materialErp.toLowerCase()) : null) ||
+        (materialNameInput ? materialByName.get(materialNameInput.toLowerCase()) : null);
+
+      if (!material) {
+        throw new Error(`Row ${index + 2}: reel material not found.`);
+      }
+      if (Number.isNaN(weightKg) || weightKg <= 0) {
+        throw new Error(`Row ${index + 2}: Weight (KG) must be greater than 0.`);
+      }
+      if (invoiceRateRaw !== "" && (Number.isNaN(invoiceRate) || Number(invoiceRate) < 0)) {
+        throw new Error(`Row ${index + 2}: Invoice Rate must be a valid number.`);
+      }
+
+      const resolvedPo = ourPoSearch ? getResolvedPoForMaterial(material.id, ourPoSearch) : null;
+      if (ourPoSearch && !resolvedPo) {
+        throw new Error(`Row ${index + 2}: Our PO No. not matched for ${material.name}.`);
+      }
+
+      const duplicateKey = `${material.id}::${supplierReelNo.toLowerCase()}`;
+      if (supplierReelNo) {
+        if (seenKeys.has(duplicateKey)) duplicateKeys.add(duplicateKey);
+        seenKeys.add(duplicateKey);
+      }
+
+      rows.push({
+        materialId: material.id,
+        materialName: material.name,
+        supplierReelNo,
+        weightKg: Number(weightKg.toFixed(2)),
+        supplierPoNo,
+        ourPoId: resolvedPo?.poLineId || "",
+        ourPoNo: resolvedPo?.poNo || "",
+        invoiceRate: invoiceRateRaw === "" ? undefined : Number(invoiceRate),
+      });
+    });
+
+    if (duplicateKeys.size > 0) {
+      throw new Error("Duplicate Supplier Reel No. found for the same material in the upload file.");
+    }
+
+    return rows;
+  };
+
+  const mergeWholeFormReelUpload = (rows: ReelUploadRow[]) => {
+    const groupedByMaterial = new Map<string, ReelUploadRow[]>();
+    rows.forEach((row) => {
+      const current = groupedByMaterial.get(row.materialId) || [];
+      current.push(row);
+      groupedByMaterial.set(row.materialId, current);
+    });
+
+    const newLineIdsByMaterial = new Map<string, string>();
+    const nextPackingSlipDrafts: Record<string, PackingSlipDraft[]> = {};
+    const persistedNumbers = packingSlips
+      .map((row) => Number(String(row.ourReelNo).replace(/\D/g, "")))
+      .filter((value) => Number.isFinite(value));
+    const existingDraftNumbers = Object.values(packingSlipDrafts)
+      .flat()
+      .map((row) => Number(String(row.ourReelNo).replace(/\D/g, "")))
+      .filter((value) => Number.isFinite(value));
+    let nextReelNumber = Math.max(0, ...persistedNumbers, ...existingDraftNumbers);
+
+    const nextLines = [...lines];
+
+    groupedByMaterial.forEach((materialRows, materialId) => {
+      const existingLine = nextLines.find((line) => line.itemId === materialId);
+      const resolvedRates = Array.from(
+        new Set(
+          materialRows
+            .map((row) => (row.invoiceRate === undefined ? "" : Number(row.invoiceRate).toFixed(5)))
+            .filter((value) => value !== "")
+        )
+      );
+
+      if (resolvedRates.length > 1) {
+        throw new Error(`Multiple invoice rates found for ${materialRows[0].materialName}. Use one rate per material.`);
+      }
+
+      const poIds = Array.from(new Set(materialRows.map((row) => row.ourPoId).filter(Boolean)));
+      if (poIds.length > 1) {
+        throw new Error(`Multiple PO lines found for ${materialRows[0].materialName}. Use one PO per material group.`);
+      }
+
+      const firstRow = materialRows[0];
+      const totalWeight = Number(materialRows.reduce((sum, row) => sum + row.weightKg, 0).toFixed(2));
+      const poLine = firstRow.ourPoId ? getPurchaseOrderLine(firstRow.ourPoId) : undefined;
+      const po = poLine ? getPurchaseOrder(poLine.purchaseOrderId) : undefined;
+      const invoiceRate =
+        resolvedRates.length === 1
+          ? Number(resolvedRates[0])
+          : existingLine
+            ? Number(existingLine.invoiceRate ?? existingLine.rate ?? 0)
+            : Number(poLine?.rate || 0);
+
+      const lineId = existingLine?.id || crypto.randomUUID();
+      const computedLine = computeLineValues({
+        id: lineId,
+        itemId: materialId,
+        qty: totalWeight,
+        uom: "KG",
+        poId: po?.id,
+        poNo: po?.poNo,
+        poLineId: poLine?.id,
+        poRate: Number(poLine?.rate || 0),
+        invoiceQty: totalWeight,
+        invoiceRate,
+        actualQty: totalWeight,
+        rate: invoiceRate,
+        value: totalWeight * invoiceRate,
+      });
+
+      if (existingLine) {
+        const targetIndex = nextLines.findIndex((line) => line.id === existingLine.id);
+        nextLines[targetIndex] = computedLine;
+      } else {
+        nextLines.push(computedLine);
+      }
+
+      newLineIdsByMaterial.set(materialId, lineId);
+      nextPackingSlipDrafts[lineId] = materialRows.map((row) => ({
+        id: crypto.randomUUID(),
+        materialLineId: lineId,
+        materialId,
+        supplierReelNo: row.supplierReelNo,
+        ourReelNo: formatReelNo(++nextReelNumber),
+        weightKg: String(row.weightKg),
+        supplierPoNo: row.supplierPoNo,
+        ourPoId: row.ourPoId,
+        ourPoNo: row.ourPoNo,
+      }));
+    });
+
+    const mergedPackingSlipDrafts: Record<string, PackingSlipDraft[]> = {};
+    nextLines.forEach((line) => {
+      mergedPackingSlipDrafts[line.id] = nextPackingSlipDrafts[line.id] || packingSlipDrafts[line.id] || [];
+    });
+
+    setLines(nextLines);
+    setPackingSlipDrafts(mergedPackingSlipDrafts);
+  };
+
+  const handleWholeFormReelBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const bstr = event.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+          alert("The file is empty.");
+          return;
+        }
+
+        const parsedRows = parseReelBulkUploadRows(data);
+        mergeWholeFormReelUpload(parsedRows);
+        alert(`Successfully uploaded ${parsedRows.length} reel rows.`);
+      } catch (error) {
+        console.error("Whole-form reel upload error:", error);
+        alert(error instanceof Error ? error.message : "Failed to parse the reel upload file.");
+      }
+      e.target.value = "";
+    };
+    reader.readAsBinaryString(file);
   };
 
   const downloadReelTemplate = (materialName: string) => {
@@ -626,6 +887,30 @@ export function MaterialInForm() {
           <h3 className="text-lg font-bold text-black mb-4 uppercase">
             {isFgType ? "FG Items" : (mrrType === "Reel" ? "Reel Items" : "Line Items")}
           </h3>
+          {mrrType === "Reel" ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded border border-black bg-indigo-50 px-4 py-3">
+              <button
+                type="button"
+                onClick={downloadWholeFormReelTemplate}
+                className="inline-flex items-center gap-2 rounded border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50 transition"
+              >
+                <Download size={16} /> Reel Bulk Template
+              </button>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50 transition">
+                <Upload size={16} /> Reel Bulk Upload
+                <input
+                  ref={reelBulkInputRef}
+                  type="file"
+                  accept=".xlsx, .xls"
+                  className="hidden"
+                  onChange={handleWholeFormReelBulkUpload}
+                />
+              </label>
+              <div className="text-xs font-semibold text-slate-600">
+                One row = one reel. Upload creates grouped reel lines and reel stock rows together.
+              </div>
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-4 items-end mb-4 bg-slate-50 p-4 rounded border border-black">
             <div className="flex flex-col space-y-1 w-full md:w-80">
               <label className="text-sm font-bold text-black">{isFgType ? "FG Item" : "Material"}</label>
