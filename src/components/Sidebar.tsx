@@ -81,7 +81,6 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Operation Dashboard", href: "/operations-dashboard", icon: BarChart3 },
-      { name: "Delivery Book", href: "/delivery-book", icon: BookOpenText },
       { name: "Production Plan", href: "/production/plan", icon: ClipboardList },
       { name: "Unified PH Approval", href: "/plant-head", icon: UserCheck, countKey: "/plant-head" },
     ],

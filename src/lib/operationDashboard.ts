@@ -419,7 +419,6 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       cards: [
         makeCard({ id: "totalSales", label: "Total Sales", value: totalSale, format: "currency" }),
         makeCard({ id: "todaySalesValue", label: "Today Sales Value", value: todaySalesValue, format: "currency" }),
-        makeCard({ id: "previousSale", label: "Previous Range Sale", value: previousSale, format: "currency" }),
         makeCard({ id: "dispatchPlannedQty", label: "Dispatch Planned Qty", value: dispatchPlannedQty, format: "number" }),
         makeCard({ id: "dispatchLoadedQty", label: "Dispatch Loaded Qty", value: dispatchLoadedQty, format: "number" }),
         makeCard({ id: "loadingQty", label: "Loading Slip Qty", value: loadingSlipQty, format: "number" }),
@@ -436,7 +435,6 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
         makeCard({ id: "activeJobs", label: "Active Jobs", value: activeJobs, format: "number" }),
         makeCard({ id: "cancelledJobs", label: "Cancelled Jobs", value: cancelledJobs, format: "number" }),
         makeCard({ id: "pendingTally", label: "Pending Tally Jobs", value: pendingTallyJobs, format: "number" }),
-        makeCard({ id: "previousProduction", label: "Previous Range Production", value: previousProduction, format: "number" }),
       ],
     },
     {
@@ -458,7 +456,6 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
         makeCard({ id: "planPaper", label: "Plan Paper", value: totalPlanPaper, format: "number" }),
         makeCard({ id: "pendingConsumption", label: "Pending Consumption", value: pendingConsumptionJobs, format: "number" }),
         makeCard({ id: "fgStock", label: "FG Stock", value: fgStockTotal, format: "number" }),
-        { id: "starch", label: "Starch / Consumables", value: null, status: "unavailable", note: "Pending consumable inventory model" },
         makeCard({
           id: "reelStock",
           label: "Reel Stock Buckets",

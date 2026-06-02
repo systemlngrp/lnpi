@@ -63,7 +63,6 @@ import { SamplesProduced } from "./pages/SamplesProduced";
 import { SampleMaster } from "./pages/SampleMaster";
 import { Users } from "./pages/Users";
 import { Dashboard } from "./pages/Dashboard";
-import { DeliveryBook } from "./pages/DeliveryBook";
 import { PlantHeadUnified } from "./pages/PlantHeadUnified";
 import { OrderForm } from "./pages/OrderForm";
 import { OrdersPendingPH } from "./pages/OrdersPendingPH";
@@ -113,7 +112,6 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="delivery-book" element={<DeliveryBook />} />
           <Route path="plant-head" element={<PlantHeadUnified />} />
           
           {/* Masters */}
