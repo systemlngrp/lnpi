@@ -142,8 +142,8 @@ const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
 const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   {
     groupId: "headline",
-    className: "lg:col-span-2",
-    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
+    className: "min-w-[720px]",
+    gridClassName: "grid-cols-3",
     cards: [
       { id: "production", tone: "bg-[#00d4ff]" },
       { id: "previousProduction", tone: "bg-[#c8f7ff]" },
@@ -155,8 +155,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "dispatch",
-    className: "lg:col-span-2",
-    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
+    className: "min-w-[720px]",
+    gridClassName: "grid-cols-3",
     cards: [
       { id: "rangeSale", tone: "bg-[#16e0eb]" },
       { id: "previousSale", tone: "bg-[#efc3c3]" },
@@ -168,8 +168,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "workflow",
-    className: "lg:col-span-2",
-    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
+    className: "min-w-[720px]",
+    gridClassName: "grid-cols-3",
     cards: [
       { id: "pendingPlanningCount", tone: "bg-[#ffffff]" },
       { id: "pendingPlanningValue", tone: "bg-[#ff8b8b] text-white", valueTone: "text-white" },
@@ -181,8 +181,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "operations",
-    className: "lg:col-span-1",
-    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-2",
+    className: "min-w-[480px]",
+    gridClassName: "grid-cols-2",
     cards: [
       { id: "paper", tone: "bg-[#1f1fff] text-white", valueTone: "text-white" },
       { id: "liner", tone: "bg-[#0014ff] text-white", valueTone: "text-white" },
@@ -194,8 +194,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "stock",
-    className: "lg:col-span-1",
-    gridClassName: "grid-cols-1 md:grid-cols-2 xl:grid-cols-2",
+    className: "min-w-[480px]",
+    gridClassName: "grid-cols-2",
     cards: [
       { id: "actualPaperUsed", tone: "bg-[#ffffff]" },
       { id: "planPaper", tone: "bg-[#ffffff]" },
@@ -703,7 +703,7 @@ export function OperationDashboard() {
               <h2 className="text-2xl font-black text-black uppercase tracking-tight">Operation Dashboard</h2>
               <div className="mt-1 text-xs font-bold text-slate-600">Range snapshot for {summary.rangeLabel}</div>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
               <DateInput label="From" value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
               <DateInput label="To" value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
               {allowExports ? (
@@ -720,40 +720,43 @@ export function OperationDashboard() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
-              const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
-              if (!group) return null;
-              return (
-                <section
-                  key={group.id}
-                  className={cn("rounded border-2 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
-                >
-                  <div className="bg-slate-900 px-3 py-2 text-sm font-black uppercase tracking-widest text-white">{group.title}</div>
-                  <div className={cn("grid gap-0", groupConfig.gridClassName)}>
-                    {groupConfig.cards.map((cardConfig) => {
-                      const card = getSummaryCard(summary, cardConfig.id);
-                      if (!card) return null;
-                      return <SummaryMetricCard key={card.id} card={card} config={cardConfig} />;
-                    })}
-                  </div>
-                </section>
-              );
-            })}
+          <div className="mt-4 overflow-x-auto pb-3">
+            <div className="flex min-w-max items-start gap-4">
+              {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
+                const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
+                if (!group) return null;
+                return (
+                  <section
+                    key={group.id}
+                    className={cn("shrink-0 rounded border-2 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
+                  >
+                    <div className="bg-slate-900 px-3 py-2 text-sm font-black uppercase tracking-widest text-white">{group.title}</div>
+                    <div className={cn("grid gap-0", groupConfig.gridClassName)}>
+                      {groupConfig.cards.map((cardConfig) => {
+                        const card = getSummaryCard(summary, cardConfig.id);
+                        if (!card) return null;
+                        return <SummaryMetricCard key={card.id} card={card} config={cardConfig} />;
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+      <div className="overflow-x-auto pb-2">
+        <div className="flex min-w-max gap-3">
+        <div className="min-w-[320px] bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
           <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Actual Paper Used</div>
           <div className="text-2xl font-black text-indigo-700 tabular-nums">{totals.sumActual.toFixed(2)}</div>
         </div>
-        <div className="bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        <div className="min-w-[320px] bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
           <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Plan Paper</div>
           <div className="text-2xl font-black tabular-nums">{totals.sumPlan.toFixed(2)}</div>
         </div>
-        <div className="bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        <div className="min-w-[320px] bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
           <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Overall Wastage %</div>
           <div
             className={cn(
@@ -763,6 +766,7 @@ export function OperationDashboard() {
           >
             {totals.overallWastagePct === null ? "-" : `${totals.overallWastagePct.toFixed(2)}%`}
           </div>
+        </div>
         </div>
       </div>
 
