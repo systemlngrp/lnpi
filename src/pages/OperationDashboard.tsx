@@ -142,67 +142,67 @@ const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
 const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   {
     groupId: "headline",
-    className: "min-w-[520px]",
+    className: "w-full",
     gridClassName: "grid-cols-2",
     cards: [
-      { id: "production", tone: "bg-[#00d4ff]" },
-      { id: "previousProduction", tone: "bg-[#c8f7ff]" },
-      { id: "planValue", tone: "bg-[#ffe8a3]" },
-      { id: "nextPlanValue", tone: "bg-[#f5d6ff]" },
-      { id: "linearMeter", tone: "bg-[#8f7cc9] text-white", valueTone: "text-white" },
-      { id: "wastage", tone: "bg-[#ff1e1e] text-white", valueTone: "text-white" },
+      { id: "production", tone: "bg-white" },
+      { id: "previousProduction", tone: "bg-white" },
+      { id: "planValue", tone: "bg-white" },
+      { id: "nextPlanValue", tone: "bg-white" },
+      { id: "linearMeter", tone: "bg-white" },
+      { id: "wastage", tone: "bg-white" },
     ],
   },
   {
     groupId: "dispatch",
-    className: "min-w-[520px]",
+    className: "w-full",
     gridClassName: "grid-cols-2",
     cards: [
-      { id: "rangeSale", tone: "bg-[#16e0eb]" },
-      { id: "previousSale", tone: "bg-[#efc3c3]" },
-      { id: "dispatchPlannedQty", tone: "bg-[#ff6b6b] text-white", valueTone: "text-white" },
-      { id: "dispatchLoadedQty", tone: "bg-[#294f92] text-white", valueTone: "text-white" },
-      { id: "loadingQty", tone: "bg-[#6a54b6] text-white", valueTone: "text-white" },
-      { id: "invoiceCount", tone: "bg-[#fff38f]" },
+      { id: "rangeSale", tone: "bg-white" },
+      { id: "previousSale", tone: "bg-white" },
+      { id: "dispatchPlannedQty", tone: "bg-white" },
+      { id: "dispatchLoadedQty", tone: "bg-white" },
+      { id: "loadingQty", tone: "bg-white" },
+      { id: "invoiceCount", tone: "bg-white" },
     ],
   },
   {
     groupId: "workflow",
-    className: "min-w-[520px]",
+    className: "w-full",
     gridClassName: "grid-cols-2",
     cards: [
-      { id: "pendingPlanningCount", tone: "bg-[#ffffff]" },
-      { id: "pendingPlanningValue", tone: "bg-[#ff8b8b] text-white", valueTone: "text-white" },
-      { id: "wipQty", tone: "bg-[#00e5ef]" },
-      { id: "activeJobs", tone: "bg-[#b08a00] text-white", valueTone: "text-white" },
-      { id: "cancelledJobs", tone: "bg-[#f4f4f4]" },
-      { id: "pendingTally", tone: "bg-[#d7f7c8]" },
+      { id: "pendingPlanningCount", tone: "bg-white" },
+      { id: "pendingPlanningValue", tone: "bg-white" },
+      { id: "wipQty", tone: "bg-white" },
+      { id: "activeJobs", tone: "bg-white" },
+      { id: "cancelledJobs", tone: "bg-white" },
+      { id: "pendingTally", tone: "bg-white" },
     ],
   },
   {
     groupId: "operations",
-    className: "min-w-[480px]",
+    className: "w-full",
     gridClassName: "grid-cols-2",
     cards: [
-      { id: "paper", tone: "bg-[#1f1fff] text-white", valueTone: "text-white" },
-      { id: "liner", tone: "bg-[#0014ff] text-white", valueTone: "text-white" },
-      { id: "printing", tone: "bg-[#f9ef00]" },
-      { id: "pasting", tone: "bg-[#f9ef00]" },
-      { id: "stitching", tone: "bg-[#f9ef00]" },
-      { id: "processingEntries", tone: "bg-[#ffffff]" },
+      { id: "paper", tone: "bg-white" },
+      { id: "liner", tone: "bg-white" },
+      { id: "printing", tone: "bg-white" },
+      { id: "pasting", tone: "bg-white" },
+      { id: "stitching", tone: "bg-white" },
+      { id: "processingEntries", tone: "bg-white" },
     ],
   },
   {
     groupId: "stock",
-    className: "min-w-[480px]",
+    className: "w-full",
     gridClassName: "grid-cols-2",
     cards: [
-      { id: "actualPaperUsed", tone: "bg-[#ffffff]" },
-      { id: "planPaper", tone: "bg-[#ffffff]" },
-      { id: "pendingConsumption", tone: "bg-[#fff38f]" },
-      { id: "fgStock", tone: "bg-[#f8f8f8]" },
-      { id: "starch", tone: "bg-[#f8f8f8]" },
-      { id: "reelStock", tone: "bg-[#f8f8f8]" },
+      { id: "actualPaperUsed", tone: "bg-white" },
+      { id: "planPaper", tone: "bg-white" },
+      { id: "pendingConsumption", tone: "bg-white" },
+      { id: "fgStock", tone: "bg-white" },
+      { id: "starch", tone: "bg-white" },
+      { id: "reelStock", tone: "bg-white" },
     ],
   },
 ];
@@ -696,8 +696,7 @@ export function OperationDashboard() {
   return (
     <div className="space-y-4">
       <div className="border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-        <div className="bg-cyan-400 px-4 py-2 text-center text-xl font-black tracking-tight text-red-700">|| श्री गणेशाय नमः ||</div>
-        <div className="border-t-2 border-black px-4 py-4 bg-[linear-gradient(180deg,#fffdf5_0%,#eef6ff_55%,#f8f6ff_100%)]">
+        <div className="px-4 py-4 bg-white">
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-black text-black uppercase tracking-tight">Operation Dashboard</h2>
@@ -720,15 +719,14 @@ export function OperationDashboard() {
             </div>
           </div>
 
-          <div className="mt-4 overflow-x-auto pb-3">
-            <div className="flex min-w-max items-start gap-4">
+          <div className="mt-4 grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
               {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
                 const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
                 if (!group) return null;
                 return (
                   <section
                     key={group.id}
-                    className={cn("shrink-0 rounded border-2 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
+                    className={cn("rounded border-2 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] min-w-0", groupConfig.className)}
                   >
                     <div className="bg-slate-900 px-3 py-2 text-sm font-black uppercase tracking-widest text-white">{group.title}</div>
                     <div className={cn("grid gap-0", groupConfig.gridClassName)}>
@@ -741,32 +739,7 @@ export function OperationDashboard() {
                   </section>
                 );
               })}
-            </div>
           </div>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto pb-2">
-        <div className="flex min-w-max gap-3">
-        <div className="min-w-[320px] bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-          <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Actual Paper Used</div>
-          <div className="text-2xl font-black text-indigo-700 tabular-nums">{totals.sumActual.toFixed(2)}</div>
-        </div>
-        <div className="min-w-[320px] bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-          <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Plan Paper</div>
-          <div className="text-2xl font-black tabular-nums">{totals.sumPlan.toFixed(2)}</div>
-        </div>
-        <div className="min-w-[320px] bg-white border-2 border-black rounded p-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-          <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Overall Wastage %</div>
-          <div
-            className={cn(
-              "text-2xl font-black tabular-nums",
-              totals.overallWastagePct !== null && totals.overallWastagePct > 0 ? "text-red-600" : "text-emerald-700"
-            )}
-          >
-            {totals.overallWastagePct === null ? "-" : `${totals.overallWastagePct.toFixed(2)}%`}
-          </div>
-        </div>
         </div>
       </div>
 
