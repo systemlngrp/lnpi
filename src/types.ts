@@ -698,6 +698,7 @@ export interface OperationDashboardMetricCard {
   format?: "number" | "currency" | "percent";
   unit?: string;
   note?: string;
+  decimals?: number;
   status?: "ready" | "unavailable";
 }
 

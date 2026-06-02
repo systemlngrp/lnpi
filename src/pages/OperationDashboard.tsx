@@ -8,10 +8,15 @@ import type {
   Item,
   LoadingSlip,
   LoadingSlipLine,
+  Material,
+  MaterialIn,
+  MaterialInPackingSlip,
   MaterialIssue,
   MaterialIssueLine,
+  MaterialIssueReelLine,
   MaterialReturn,
   MaterialReturnLine,
+  MaterialReturnReelLine,
   OperationDashboardMetricCard,
   OperationDashboardSummary,
   Order,
@@ -231,7 +236,10 @@ function formatMetricValue(card: OperationDashboardMetricCard) {
   if (card.status === "unavailable" || card.value === null) return "Pending";
   if (card.format === "currency") return formatCurrency(card.value);
   if (card.format === "percent") return `${Number(card.value || 0).toFixed(2)}%`;
-  const text = formatNumber(card.value, false);
+  const text =
+    typeof card.decimals === "number"
+      ? Number(card.value || 0).toLocaleString("en-IN", { minimumFractionDigits: card.decimals, maximumFractionDigits: card.decimals })
+      : formatNumber(card.value, false);
   return card.unit ? `${text} ${card.unit}` : text;
 }
 
@@ -247,6 +255,9 @@ function getSummaryCard(summary: OperationDashboardSummary, cardId: string) {
 export function OperationDashboard() {
   const [productions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
+  const [materials] = useData<Material>("materials", []);
+  const [materialIn] = useData<MaterialIn>("material-in", []);
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -256,8 +267,10 @@ export function OperationDashboard() {
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
+  const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [invoices] = useData<Invoice>("invoices", []);
 
   const allowExports = exportsAllowed();
@@ -572,11 +585,17 @@ export function OperationDashboard() {
         dispatchPlans,
         loadingSlips,
         invoices,
+        items,
+        materials,
+        materialIn,
+        packingSlips,
         processing,
         materialIssues,
         materialIssueLines,
+        issueReelLines,
         materialReturns,
         materialReturnLines,
+        returnReelLines,
       }),
     [
       dateRange,
@@ -586,11 +605,17 @@ export function OperationDashboard() {
       dispatchPlans,
       loadingSlips,
       invoices,
+      items,
+      materials,
+      materialIn,
+      packingSlips,
       processing,
       materialIssues,
       materialIssueLines,
+      issueReelLines,
       materialReturns,
       materialReturnLines,
+      returnReelLines,
     ]
   );
 

@@ -1,11 +1,17 @@
 import type {
   DispatchPlan,
   Invoice,
+  Item,
   LoadingSlip,
+  Material,
+  MaterialIn,
+  MaterialInPackingSlip,
   MaterialIssue,
   MaterialIssueLine,
+  MaterialIssueReelLine,
   MaterialReturn,
   MaterialReturnLine,
+  MaterialReturnReelLine,
   OperationDashboardMetricCard,
   OperationDashboardMetricGroup,
   OperationDashboardSummary,
@@ -17,6 +23,7 @@ import type {
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "./productionMaterialUsage";
 import { PROCESSING_MACHINE_COLUMNS } from "./productionProcessingSummary";
 import { isProductionReadyForTally } from "./productionStageFilters";
+import { getAvailableReelPackingSlips } from "./materialMovement";
 
 export type OperationDashboardDateRange = {
   from: string;
@@ -31,11 +38,17 @@ type BuildOperationDashboardSummaryArgs = {
   dispatchPlans: DispatchPlan[];
   loadingSlips: LoadingSlip[];
   invoices: Invoice[];
+  items: Item[];
+  materials: Material[];
+  materialIn: MaterialIn[];
+  packingSlips: MaterialInPackingSlip[];
   processing: ProductionProcessing[];
   materialIssues: MaterialIssue[];
   materialIssueLines: MaterialIssueLine[];
+  issueReelLines: MaterialIssueReelLine[];
   materialReturns: MaterialReturn[];
   materialReturnLines: MaterialReturnLine[];
+  returnReelLines: MaterialReturnReelLine[];
 };
 
 function makeCard(card: OperationDashboardMetricCard): OperationDashboardMetricCard {
@@ -261,6 +274,53 @@ function getProcessingTotals(rows: ProductionProcessing[]) {
   return totals;
 }
 
+function getFgStockTotal(items: Item[]) {
+  return items
+    .filter((item) => item.itemType === "FG")
+    .reduce((sum, item) => sum + Number(item.balance || 0), 0);
+}
+
+function getReelStockTotals(
+  materials: Material[],
+  materialIn: MaterialIn[],
+  packingSlips: MaterialInPackingSlip[],
+  issueReelLines: MaterialIssueReelLine[],
+  returnReelLines: MaterialReturnReelLine[]
+) {
+  const latestMaterialIn = [...materialIn].sort((a, b) => {
+    const timeA = new Date(a.updateTimestamp || a.timestamp || a.date || 0).getTime();
+    const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
+    return timeB - timeA;
+  });
+
+  return materials
+    .filter((material) => material.type === "Reel")
+    .reduce(
+      (acc, material) => {
+        const openingStock = Number(material.openingQty || 0);
+        const issued = issueReelLines
+          .filter((line) => line.materialId === material.id)
+          .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
+        const returned = returnReelLines
+          .filter((line) => line.materialId === material.id)
+          .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
+        const received = latestMaterialIn.reduce((sum, entry) => {
+          const line = entry.lines.find((row) => row.itemId === material.id);
+          if (!line) return sum;
+          return sum + Number(line.actualQty ?? line.qty ?? 0);
+        }, 0);
+
+        const availableWeight = Math.max(0, Number((openingStock + received + returned - issued).toFixed(2)));
+        const availableReelCount = getAvailableReelPackingSlips(material.id, packingSlips, issueReelLines, returnReelLines).length;
+
+        acc.availableWeight += availableWeight;
+        acc.noOfReels += availableReelCount;
+        return acc;
+      },
+      { availableWeight: 0, noOfReels: 0 }
+    );
+}
+
 export function buildOperationDashboardSummary(args: BuildOperationDashboardSummaryArgs): OperationDashboardSummary {
   const safeRange = getSafeRange(args.dateRange);
   const rangeLabel = getRangeLabel(args.dateRange);
@@ -306,6 +366,14 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const dispatchLoadedQty = sumDispatchLoadedQty(filteredDispatchPlans);
   const loadingSlipQty = sumLoadingQty(filteredLoadingSlips);
   const processingTotals = getProcessingTotals(filteredProcessing);
+  const fgStockTotal = getFgStockTotal(args.items);
+  const reelStockTotals = getReelStockTotals(
+    args.materials,
+    args.materialIn,
+    args.packingSlips,
+    args.issueReelLines,
+    args.returnReelLines
+  );
   const activeJobs = filteredProductions.filter((row) => row.status !== "Cancelled" && !row.cancelTimestamp).length;
   const cancelledJobs = filteredProductions.filter((row) => row.status === "Cancelled" || !!row.cancelTimestamp).length;
   const pendingTallyJobs = filteredProductions.filter((row) =>
@@ -370,9 +438,17 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
         makeCard({ id: "actualPaperUsed", label: "Actual Paper Used", value: totalActualPaperUsed, format: "number" }),
         makeCard({ id: "planPaper", label: "Plan Paper", value: totalPlanPaper, format: "number" }),
         makeCard({ id: "pendingConsumption", label: "Pending Consumption", value: pendingConsumptionJobs, format: "number" }),
-        { id: "fgStock", label: "FG Stock", value: null, status: "unavailable", note: "Pending stock formula/data source" },
+        makeCard({ id: "fgStock", label: "FG Stock", value: fgStockTotal, format: "number" }),
         { id: "starch", label: "Starch / Consumables", value: null, status: "unavailable", note: "Pending consumable inventory model" },
-        { id: "reelStock", label: "Reel Stock Buckets", value: null, status: "unavailable", note: "Use dedicated stock reports for now" },
+        makeCard({
+          id: "reelStock",
+          label: "Reel Stock Buckets",
+          value: reelStockTotals.availableWeight,
+          format: "number",
+          unit: "kg",
+          decimals: 2,
+          note: `${reelStockTotals.noOfReels} reels available`,
+        }),
       ],
     },
   ];
