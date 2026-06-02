@@ -53,11 +53,11 @@ export function ProductionProcessingMaster() {
         </button>
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-        <div className="flex-1">
+      <div className="flex flex-nowrap items-center gap-3 overflow-x-auto">
+        <div className="min-w-0 flex-1">
           <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search by Job No, Machine, or Operator..." />
         </div>
-        <div className="flex flex-wrap items-end gap-3 rounded border border-black bg-white px-3 py-2">
+        <div className="flex shrink-0 items-end gap-3 rounded border border-black bg-white px-3 py-2">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-600">From</label>
             <input

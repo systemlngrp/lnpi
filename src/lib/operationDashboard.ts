@@ -120,6 +120,13 @@ export function isDateWithinRange(dateStr: string | undefined, safeRange: Return
   return target >= safeRange.fromTime && target <= safeRange.toTime;
 }
 
+function isSameAppDate(dateStr: string | undefined, compareValue: string) {
+  const parsed = parseAppDate(dateStr);
+  const compareDate = parseAppDate(compareValue);
+  if (!parsed || !compareDate) return false;
+  return normalizeDateValue(parsed) === normalizeDateValue(compareDate);
+}
+
 function getRangeLabel(dateRange: OperationDashboardDateRange) {
   return `${formatDisplayDate(dateRange.from)} to ${formatDisplayDate(dateRange.to)}`;
 }
@@ -363,8 +370,8 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const filteredSchedules = safeRange
     ? args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, safeRange))
     : args.schedules;
-  const todayProductions = args.productions.filter((entry) => entry.date === today);
-  const tomorrowProductions = args.productions.filter((entry) => entry.date === tomorrow);
+  const todayProductions = args.productions.filter((entry) => isSameAppDate(entry.date, today));
+  const tomorrowProductions = args.productions.filter((entry) => isSameAppDate(entry.date, tomorrow));
   const nextSchedules = nextSafeRange
     ? args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, nextSafeRange))
     : [];
@@ -377,7 +384,7 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const filteredInvoices = safeRange
     ? args.invoices.filter((entry) => isDateWithinRange(entry.date, safeRange))
     : args.invoices;
-  const todayInvoices = args.invoices.filter((entry) => entry.date === today);
+  const todayInvoices = args.invoices.filter((entry) => isSameAppDate(entry.date, today));
   const previousInvoices = previousSafeRange
     ? args.invoices.filter((entry) => isDateWithinRange(entry.date, previousSafeRange))
     : [];
