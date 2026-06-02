@@ -153,14 +153,14 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
     gridClassName: "grid-cols-4",
     columns: 4,
     cards: [
-      { id: "production", tone: "bg-white" },
-      { id: "actualPaperUsed", tone: "bg-white" },
-      { id: "todayPlanQty", tone: "bg-white" },
-      { id: "todayPlanValue", tone: "bg-white" },
-      { id: "tomorrowPlanQty", tone: "bg-white" },
-      { id: "tomorrowPlanValue", tone: "bg-white" },
-      { id: "linearMeter", tone: "bg-white" },
-      { id: "wastage", tone: "bg-white" },
+      { id: "production", tone: "bg-cyan-50", valueTone: "text-cyan-800" },
+      { id: "actualPaperUsed", tone: "bg-violet-50", valueTone: "text-violet-800" },
+      { id: "todayPlanQty", tone: "bg-amber-50", valueTone: "text-amber-800" },
+      { id: "todayPlanValue", tone: "bg-rose-50", valueTone: "text-rose-800" },
+      { id: "tomorrowPlanQty", tone: "bg-sky-50", valueTone: "text-sky-800" },
+      { id: "tomorrowPlanValue", tone: "bg-fuchsia-50", valueTone: "text-fuchsia-800" },
+      { id: "linearMeter", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
+      { id: "wastage", tone: "bg-orange-50", valueTone: "text-orange-800" },
     ],
   },
   {
@@ -169,13 +169,13 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
     gridClassName: "grid-cols-4",
     columns: 4,
     cards: [
-      { id: "totalSales", tone: "bg-white" },
-      { id: "todaySalesValue", tone: "bg-white" },
-      { id: "dispatchPlannedQty", tone: "bg-white" },
-      { id: "dispatchLoadedQty", tone: "bg-white" },
-      { id: "loadingQty", tone: "bg-white" },
-      { id: "invoiceCount", tone: "bg-white" },
-      { id: "pendingPlanningValue", tone: "bg-white" },
+      { id: "totalSales", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
+      { id: "todaySalesValue", tone: "bg-teal-50", valueTone: "text-teal-800" },
+      { id: "dispatchPlannedQty", tone: "bg-indigo-50", valueTone: "text-indigo-800" },
+      { id: "dispatchLoadedQty", tone: "bg-blue-50", valueTone: "text-blue-800" },
+      { id: "loadingQty", tone: "bg-violet-50", valueTone: "text-violet-800" },
+      { id: "invoiceCount", tone: "bg-yellow-50", valueTone: "text-yellow-800" },
+      { id: "pendingPlanningValue", tone: "bg-pink-50", valueTone: "text-pink-800" },
     ],
   },
   {
@@ -184,11 +184,11 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
-      { id: "pendingPlanningCount", tone: "bg-white" },
-      { id: "wipQty", tone: "bg-white" },
-      { id: "activeJobs", tone: "bg-white" },
-      { id: "cancelledJobs", tone: "bg-white" },
-      { id: "pendingTally", tone: "bg-white" },
+      { id: "pendingPlanningCount", tone: "bg-amber-50", valueTone: "text-amber-800" },
+      { id: "wipQty", tone: "bg-cyan-50", valueTone: "text-cyan-800" },
+      { id: "activeJobs", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
+      { id: "cancelledJobs", tone: "bg-rose-50", valueTone: "text-rose-800" },
+      { id: "pendingTally", tone: "bg-lime-50", valueTone: "text-lime-800" },
     ],
   },
   {
@@ -197,12 +197,12 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
-      { id: "paper", tone: "bg-white" },
-      { id: "liner", tone: "bg-white" },
-      { id: "printing", tone: "bg-white" },
-      { id: "pasting", tone: "bg-white" },
-      { id: "stitching", tone: "bg-white" },
-      { id: "processingEntries", tone: "bg-white" },
+      { id: "paper", tone: "bg-indigo-50", valueTone: "text-indigo-800" },
+      { id: "liner", tone: "bg-blue-50", valueTone: "text-blue-800" },
+      { id: "printing", tone: "bg-yellow-50", valueTone: "text-yellow-800" },
+      { id: "pasting", tone: "bg-orange-50", valueTone: "text-orange-800" },
+      { id: "stitching", tone: "bg-fuchsia-50", valueTone: "text-fuchsia-800" },
+      { id: "processingEntries", tone: "bg-slate-100", valueTone: "text-slate-800" },
     ],
   },
   {
@@ -211,10 +211,10 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
-      { id: "planPaper", tone: "bg-white" },
-      { id: "pendingConsumption", tone: "bg-white" },
-      { id: "fgStock", tone: "bg-white" },
-      { id: "reelStock", tone: "bg-white" },
+      { id: "planPaper", tone: "bg-cyan-50", valueTone: "text-cyan-800" },
+      { id: "pendingConsumption", tone: "bg-amber-50", valueTone: "text-amber-800" },
+      { id: "fgStock", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
+      { id: "reelStock", tone: "bg-violet-50", valueTone: "text-violet-800" },
     ],
   },
 ];
@@ -713,14 +713,14 @@ export function OperationDashboard() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-hidden rounded-lg border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-        <div className="bg-white px-4 py-4 md:px-5">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+    <div className="space-y-3">
+      <div className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[5px_5px_0px_0px_rgba(15,23,42,1)]">
+        <div className="bg-white px-3 py-3 md:px-4">
+          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h2 className="text-[28px] font-black uppercase tracking-tight text-black">Operation Dashboard</h2>
+              <h2 className="text-[22px] font-black uppercase tracking-tight text-slate-950 md:text-[24px]">Operation Dashboard</h2>
             </div>
-            <div className="flex flex-wrap items-stretch justify-end gap-3">
+            <div className="flex flex-wrap items-stretch justify-end gap-2">
               <DateInput value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
               <DateInput value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
               {allowExports ? (
@@ -729,7 +729,7 @@ export function OperationDashboard() {
               <button
                 type="button"
                 onClick={() => setIsColumnsOpen((v) => !v)}
-                className="inline-flex min-h-[46px] items-center gap-2 rounded-md border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md border-2 border-slate-900 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
               >
                 <SlidersHorizontal size={14} strokeWidth={3} />
                 Columns
@@ -737,16 +737,16 @@ export function OperationDashboard() {
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-12">
+          <div className="mt-2.5 grid grid-cols-1 gap-2.5 xl:grid-cols-12">
               {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
                 const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
                 if (!group) return null;
                 return (
                   <section
                     key={group.id}
-                    className={cn("overflow-hidden rounded-md border-2 border-black bg-white shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
+                    className={cn("overflow-hidden rounded-lg border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]", groupConfig.className)}
                   >
-                    <div className="bg-slate-900 px-3 py-2 text-[12px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
+                    <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
                     <div className={cn("grid gap-0", groupConfig.gridClassName)}>
                       {groupConfig.cards.map((cardConfig) => {
                         const card = getSummaryCard(summary, cardConfig.id);
@@ -771,18 +771,18 @@ export function OperationDashboard() {
       </div>
 
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <div className="flex-1 rounded-md border-2 border-black bg-white p-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <div className="flex-1 rounded-lg border-2 border-slate-900 bg-white p-1.5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
           <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs, items, parties..." />
         </div>
-        <div className="flex items-center gap-2 rounded-md border-2 border-black bg-white px-3 py-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <label htmlFor="closed-job-filter" className="text-[11px] font-black uppercase tracking-widest text-slate-700">
+        <div className="flex items-center gap-2 rounded-lg border-2 border-slate-900 bg-white px-3 py-1.5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+          <label htmlFor="closed-job-filter" className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">
             Closed Job
           </label>
           <select
             id="closed-job-filter"
             value={closedJobFilter}
             onChange={(event) => setClosedJobFilter(event.target.value as ClosedJobFilter)}
-            className="rounded border border-black bg-white px-2.5 py-1.5 text-sm font-bold outline-none"
+            className="rounded border border-slate-900 bg-white px-2 py-1 text-xs font-bold outline-none"
           >
             <option value="all">All</option>
             <option value="yes">Yes</option>
@@ -823,10 +823,10 @@ export function OperationDashboard() {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-md border-2 border-black bg-white shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]">
-        <div className="flex items-center justify-between border-b border-black bg-slate-100 px-4 py-2.5">
-          <h3 className="text-sm font-black uppercase tracking-[0.12em] text-black">Production Master View</h3>
-          <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600">{rows.length} records</div>
+      <div className="overflow-hidden rounded-lg border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+        <div className="flex items-center justify-between border-b border-slate-900 bg-slate-100 px-3 py-2">
+          <h3 className="text-[12px] font-black uppercase tracking-[0.14em] text-black">Production Master View</h3>
+          <div className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-black text-indigo-700">{rows.length} records</div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-max w-full border-collapse">
@@ -840,7 +840,7 @@ export function OperationDashboard() {
                     onDragOver={onDragOver}
                     onDrop={onDrop(c.id)}
                     className={cn(
-                      "px-2.5 py-2.5 text-left text-[10px] font-black uppercase text-black border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
+                      "px-2 py-1.5 text-left text-[9px] font-black uppercase text-slate-900 border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
                       c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left"
                     )}
                     title="Drag to reorder"
@@ -853,7 +853,7 @@ export function OperationDashboard() {
             <tbody className="bg-white">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleColumns.length || 1} className="px-6 py-8 text-center text-sm font-medium text-black">
+                  <td colSpan={visibleColumns.length || 1} className="px-6 py-7 text-center text-sm font-medium text-black">
                     No productions found.
                   </td>
                 </tr>
@@ -867,9 +867,9 @@ export function OperationDashboard() {
                         <td
                           key={c.id}
                           className={cn(
-                            "px-2.5 py-2.5 text-[10px] text-black border-r border-black/90 align-top",
+                            "px-2 py-1.5 text-[9.5px] text-black border-r border-black/90 align-top",
                             c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
-                            c.id === "itemName" || c.id === "processingStatus" ? "whitespace-normal min-w-[180px]" : "whitespace-nowrap",
+                            c.id === "itemName" || c.id === "processingStatus" ? "whitespace-normal min-w-[150px]" : "whitespace-nowrap",
                             c.className
                           )}
                           title={title}
@@ -891,10 +891,10 @@ export function OperationDashboard() {
 
 function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <div className="flex min-h-[46px] items-center rounded-md border-2 border-black bg-white px-3 py-1.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+    <div className="flex min-h-[38px] items-center rounded-md border-2 border-slate-900 bg-slate-50 px-2.5 py-1 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
       <input
         type="date"
-        className="cursor-pointer border-none bg-transparent p-0 text-sm font-black leading-tight uppercase focus:ring-0"
+        className="cursor-pointer border-none bg-transparent p-0 text-[13px] font-black leading-tight uppercase text-slate-900 focus:ring-0"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -924,16 +924,16 @@ function SummaryMetricCard({
   return (
     <div
       className={cn(
-        "flex min-h-[78px] flex-col justify-between px-3 py-2.5",
+        "flex min-h-[64px] flex-col justify-between px-2.5 py-2",
         !isLastColumn && "border-r border-black",
         !isLastRow && "border-b border-black",
         config.tone,
         config.className
       )}
     >
-      <div className="text-[9px] font-black uppercase tracking-[0.06em] text-slate-700">{card.label}</div>
-      <div className={cn("mt-1 text-[22px] font-black leading-none tracking-tight text-black", config.valueTone)}>{formatMetricValue(card)}</div>
-      <div className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="text-[8px] font-black uppercase tracking-[0.08em] text-slate-700">{card.label}</div>
+      <div className={cn("mt-0.5 text-[18px] font-black leading-none tracking-tight text-black", config.valueTone)}>{formatMetricValue(card)}</div>
+      <div className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
         {card.note || (card.status === "unavailable" ? "Pending data source" : "")}
       </div>
     </div>
