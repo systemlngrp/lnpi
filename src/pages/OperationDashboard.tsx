@@ -136,14 +136,16 @@ type SummaryGroupConfig = {
   cards: SummaryCardConfig[];
 };
 
+type ClosedJobFilter = "all" | "yes" | "no";
+
 const STORAGE_HIDDEN_KEY = "lnpi.operationDashboard.columns.hidden.v2";
 const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
 
 const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   {
     groupId: "headline",
-    className: "w-full",
-    gridClassName: "grid-cols-2",
+    className: "min-w-[720px]",
+    gridClassName: "grid-cols-3",
     cards: [
       { id: "production", tone: "bg-white" },
       { id: "previousProduction", tone: "bg-white" },
@@ -155,8 +157,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "dispatch",
-    className: "w-full",
-    gridClassName: "grid-cols-2",
+    className: "min-w-[720px]",
+    gridClassName: "grid-cols-3",
     cards: [
       { id: "rangeSale", tone: "bg-white" },
       { id: "previousSale", tone: "bg-white" },
@@ -168,8 +170,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "workflow",
-    className: "w-full",
-    gridClassName: "grid-cols-2",
+    className: "min-w-[720px]",
+    gridClassName: "grid-cols-3",
     cards: [
       { id: "pendingPlanningCount", tone: "bg-white" },
       { id: "pendingPlanningValue", tone: "bg-white" },
@@ -181,8 +183,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "operations",
-    className: "w-full",
-    gridClassName: "grid-cols-2",
+    className: "min-w-[720px]",
+    gridClassName: "grid-cols-3",
     cards: [
       { id: "paper", tone: "bg-white" },
       { id: "liner", tone: "bg-white" },
@@ -194,8 +196,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "stock",
-    className: "w-full",
-    gridClassName: "grid-cols-2",
+    className: "min-w-[720px]",
+    gridClassName: "grid-cols-3",
     cards: [
       { id: "actualPaperUsed", tone: "bg-white" },
       { id: "planPaper", tone: "bg-white" },
@@ -261,6 +263,7 @@ export function OperationDashboard() {
   const allowExports = exportsAllowed();
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState(getDefaultRange);
+  const [closedJobFilter, setClosedJobFilter] = useState<ClosedJobFilter>("all");
 
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
   const columnsPanelRef = useRef<HTMLDivElement | null>(null);
@@ -519,6 +522,10 @@ export function OperationDashboard() {
         };
       })
       .filter((row) => {
+        const isClosedJob = Boolean(row.production.closeDate || row.production.closeBy || row.production.status === "Completed");
+        if (closedJobFilter === "yes" && !isClosedJob) return false;
+        if (closedJobFilter === "no" && isClosedJob) return false;
+
         if (!q) return true;
         const blob = [
           row.production.transactionNo,
@@ -545,6 +552,7 @@ export function OperationDashboard() {
     processing,
     productionUsageMap,
     searchTerm,
+    closedJobFilter,
   ]);
 
   const totals = useMemo(() => {
@@ -719,14 +727,15 @@ export function OperationDashboard() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+          <div className="mt-4 overflow-x-auto pb-3">
+            <div className="flex min-w-max items-start gap-4">
               {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
                 const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
                 if (!group) return null;
                 return (
                   <section
                     key={group.id}
-                    className={cn("rounded border-2 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] min-w-0", groupConfig.className)}
+                    className={cn("shrink-0 rounded border-2 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
                   >
                     <div className="bg-slate-900 px-3 py-2 text-sm font-black uppercase tracking-widest text-white">{group.title}</div>
                     <div className={cn("grid gap-0", groupConfig.gridClassName)}>
@@ -739,11 +748,31 @@ export function OperationDashboard() {
                   </section>
                 );
               })}
+            </div>
           </div>
         </div>
       </div>
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs, items, parties..." />
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="flex-1">
+          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs, items, parties..." />
+        </div>
+        <div className="flex items-center gap-3 bg-white border-2 border-black rounded px-4 py-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <label htmlFor="closed-job-filter" className="text-[11px] font-black uppercase tracking-widest text-slate-700">
+            Closed Job
+          </label>
+          <select
+            id="closed-job-filter"
+            value={closedJobFilter}
+            onChange={(event) => setClosedJobFilter(event.target.value as ClosedJobFilter)}
+            className="border border-black bg-white px-3 py-2 text-sm font-bold outline-none"
+          >
+            <option value="all">All</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+      </div>
 
       {isColumnsOpen ? (
         <div ref={columnsPanelRef} className="bg-white border-2 border-black rounded p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
