@@ -138,6 +138,7 @@ type SummaryGroupConfig = {
   groupId: string;
   className?: string;
   gridClassName: string;
+  columns: number;
   cards: SummaryCardConfig[];
 };
 
@@ -149,47 +150,55 @@ const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
 const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   {
     groupId: "headline",
-    className: "min-w-[720px]",
-    gridClassName: "grid-cols-3",
+    className: "min-w-[960px]",
+    gridClassName: "grid-cols-4",
+    columns: 4,
     cards: [
       { id: "production", tone: "bg-white" },
-      { id: "previousProduction", tone: "bg-white" },
-      { id: "planValue", tone: "bg-white" },
-      { id: "nextPlanValue", tone: "bg-white" },
+      { id: "actualPaperUsed", tone: "bg-white" },
+      { id: "todayPlanQty", tone: "bg-white" },
+      { id: "todayPlanValue", tone: "bg-white" },
+      { id: "tomorrowPlanQty", tone: "bg-white" },
+      { id: "tomorrowPlanValue", tone: "bg-white" },
       { id: "linearMeter", tone: "bg-white" },
       { id: "wastage", tone: "bg-white" },
     ],
   },
   {
     groupId: "dispatch",
-    className: "min-w-[720px]",
-    gridClassName: "grid-cols-3",
+    className: "min-w-[960px]",
+    gridClassName: "grid-cols-4",
+    columns: 4,
     cards: [
-      { id: "rangeSale", tone: "bg-white" },
+      { id: "totalSales", tone: "bg-white" },
+      { id: "todaySalesValue", tone: "bg-white" },
       { id: "previousSale", tone: "bg-white" },
       { id: "dispatchPlannedQty", tone: "bg-white" },
       { id: "dispatchLoadedQty", tone: "bg-white" },
       { id: "loadingQty", tone: "bg-white" },
       { id: "invoiceCount", tone: "bg-white" },
+      { id: "pendingPlanningValue", tone: "bg-white" },
     ],
   },
   {
     groupId: "workflow",
     className: "min-w-[720px]",
     gridClassName: "grid-cols-3",
+    columns: 3,
     cards: [
       { id: "pendingPlanningCount", tone: "bg-white" },
-      { id: "pendingPlanningValue", tone: "bg-white" },
       { id: "wipQty", tone: "bg-white" },
       { id: "activeJobs", tone: "bg-white" },
       { id: "cancelledJobs", tone: "bg-white" },
       { id: "pendingTally", tone: "bg-white" },
+      { id: "previousProduction", tone: "bg-white" },
     ],
   },
   {
     groupId: "operations",
     className: "min-w-[720px]",
     gridClassName: "grid-cols-3",
+    columns: 3,
     cards: [
       { id: "paper", tone: "bg-white" },
       { id: "liner", tone: "bg-white" },
@@ -203,8 +212,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
     groupId: "stock",
     className: "min-w-[720px]",
     gridClassName: "grid-cols-3",
+    columns: 3,
     cards: [
-      { id: "actualPaperUsed", tone: "bg-white" },
       { id: "planPaper", tone: "bg-white" },
       { id: "pendingConsumption", tone: "bg-white" },
       { id: "fgStock", tone: "bg-white" },
@@ -774,7 +783,7 @@ export function OperationDashboard() {
                             config={cardConfig}
                             index={groupConfig.cards.findIndex((entry) => entry.id === cardConfig.id)}
                             total={groupConfig.cards.length}
-                            columns={3}
+                            columns={groupConfig.columns}
                           />
                         );
                       })}

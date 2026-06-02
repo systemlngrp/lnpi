@@ -170,6 +170,10 @@ function sumPlanValue(rows: OrderSchedule[], orders: Order[]) {
   }, 0);
 }
 
+function sumPlanQty(rows: OrderSchedule[]) {
+  return rows.reduce((sum, schedule) => sum + Number(schedule.qty || 0), 0);
+}
+
 function getPendingPlanningRows(rows: OrderSchedule[], dispatchPlans: DispatchPlan[]) {
   return rows.filter((schedule) => {
     const plannedQty = dispatchPlans
@@ -324,6 +328,10 @@ function getReelStockTotals(
 export function buildOperationDashboardSummary(args: BuildOperationDashboardSummaryArgs): OperationDashboardSummary {
   const safeRange = getSafeRange(args.dateRange);
   const rangeLabel = getRangeLabel(args.dateRange);
+  const today = getLocalDateInputValue(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = getLocalDateInputValue(tomorrowDate);
   const { previousRange, nextRange, comparisonLabel, nextLabel } = getComparisonCards(
     args.dateRange,
     args.invoices,
@@ -335,10 +343,13 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const filteredProductions = args.productions.filter((entry) => isDateWithinRange(entry.date, safeRange));
   const previousProductions = args.productions.filter((entry) => isDateWithinRange(entry.date, previousSafeRange));
   const filteredSchedules = args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, safeRange));
+  const todaySchedules = args.schedules.filter((entry) => entry.scheduledDate === today);
+  const tomorrowSchedules = args.schedules.filter((entry) => entry.scheduledDate === tomorrow);
   const nextSchedules = args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, nextSafeRange));
   const filteredDispatchPlans = args.dispatchPlans.filter((entry) => isDateWithinRange(entry.date, safeRange));
   const filteredLoadingSlips = args.loadingSlips.filter((entry) => isDateWithinRange(entry.date, safeRange));
   const filteredInvoices = args.invoices.filter((entry) => isDateWithinRange(entry.date, safeRange));
+  const todayInvoices = args.invoices.filter((entry) => entry.date === today);
   const previousInvoices = args.invoices.filter((entry) => isDateWithinRange(entry.date, previousSafeRange));
   const filteredProcessing = args.processing.filter((entry) => isDateWithinRange(entry.date, safeRange));
   const filteredMaterialIssues = args.materialIssues.filter((entry) => isDateWithinRange(entry.date, safeRange));
@@ -354,11 +365,16 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const previousProduction = sumProductionQty(previousProductions);
   const totalProductionMeter = sumProductionMeter(filteredProductions);
   const totalPlanValue = sumPlanValue(filteredSchedules, args.orders);
+  const todayPlanQty = sumPlanQty(todaySchedules);
+  const todayPlanValue = sumPlanValue(todaySchedules, args.orders);
+  const tomorrowPlanQty = sumPlanQty(tomorrowSchedules);
+  const tomorrowPlanValue = sumPlanValue(tomorrowSchedules, args.orders);
   const nextPlanValue = sumPlanValue(nextSchedules, args.orders);
   const totalWastage = getWastagePercent(filteredProductions, usageMap);
   const totalActualPaperUsed = getActualPaperUsed(filteredProductions, usageMap);
   const totalPlanPaper = getPlanPaperTotal(filteredProductions);
   const totalSale = filteredInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);
+  const todaySalesValue = todayInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);
   const previousSale = previousInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);
   const pendingPlanningRows = getPendingPlanningRows(filteredSchedules, args.dispatchPlans);
   const pendingPlanningValue = sumPendingPlanningValue(filteredSchedules, args.dispatchPlans, args.orders);
@@ -388,9 +404,11 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       title: "Production Planning",
       cards: [
         makeCard({ id: "production", label: "Range Production", value: totalProduction, format: "number" }),
-        makeCard({ id: "previousProduction", label: "Previous Range Production", value: previousProduction, format: "number" }),
-        makeCard({ id: "planValue", label: "Range Plan Value", value: totalPlanValue, format: "currency" }),
-        makeCard({ id: "nextPlanValue", label: "Next Range Plan Value", value: nextPlanValue, format: "currency" }),
+        makeCard({ id: "actualPaperUsed", label: "Actual Paper Used", value: totalActualPaperUsed, format: "number", decimals: 2 }),
+        makeCard({ id: "todayPlanQty", label: "Today Production Plan", value: todayPlanQty, format: "number" }),
+        makeCard({ id: "todayPlanValue", label: "Today Production Plan Value", value: todayPlanValue, format: "currency" }),
+        makeCard({ id: "tomorrowPlanQty", label: "Tomorrow Production Plan", value: tomorrowPlanQty, format: "number" }),
+        makeCard({ id: "tomorrowPlanValue", label: "Tomorrow Production Plan Value", value: tomorrowPlanValue, format: "currency" }),
         makeCard({ id: "linearMeter", label: "Range Linear Meter", value: totalProductionMeter, format: "number" }),
         makeCard({ id: "wastage", label: "Total Wastage", value: totalWastage, format: "percent" }),
       ],
@@ -399,12 +417,14 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       id: "dispatch",
       title: "Dispatch & Sales",
       cards: [
-        makeCard({ id: "rangeSale", label: "Range Sale", value: totalSale, format: "currency" }),
+        makeCard({ id: "totalSales", label: "Total Sales", value: totalSale, format: "currency" }),
+        makeCard({ id: "todaySalesValue", label: "Today Sales Value", value: todaySalesValue, format: "currency" }),
         makeCard({ id: "previousSale", label: "Previous Range Sale", value: previousSale, format: "currency" }),
         makeCard({ id: "dispatchPlannedQty", label: "Dispatch Planned Qty", value: dispatchPlannedQty, format: "number" }),
         makeCard({ id: "dispatchLoadedQty", label: "Dispatch Loaded Qty", value: dispatchLoadedQty, format: "number" }),
         makeCard({ id: "loadingQty", label: "Loading Slip Qty", value: loadingSlipQty, format: "number" }),
         makeCard({ id: "invoiceCount", label: "Invoices", value: filteredInvoices.length, format: "number" }),
+        makeCard({ id: "pendingPlanningValue", label: "Pending Dispatch Value", value: pendingPlanningValue, format: "currency" }),
       ],
     },
     {
@@ -412,11 +432,11 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       title: "Workflow & Due",
       cards: [
         makeCard({ id: "pendingPlanningCount", label: "Pending Dispatch Plans", value: pendingPlanningRows.length, format: "number" }),
-        makeCard({ id: "pendingPlanningValue", label: "Pending Dispatch Value", value: pendingPlanningValue, format: "currency" }),
         makeCard({ id: "wipQty", label: "WIP Qty", value: wipQty, format: "number", note: "Production minus active loading qty" }),
         makeCard({ id: "activeJobs", label: "Active Jobs", value: activeJobs, format: "number" }),
         makeCard({ id: "cancelledJobs", label: "Cancelled Jobs", value: cancelledJobs, format: "number" }),
         makeCard({ id: "pendingTally", label: "Pending Tally Jobs", value: pendingTallyJobs, format: "number" }),
+        makeCard({ id: "previousProduction", label: "Previous Range Production", value: previousProduction, format: "number" }),
       ],
     },
     {
@@ -435,7 +455,6 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       id: "stock",
       title: "Stock & Materials",
       cards: [
-        makeCard({ id: "actualPaperUsed", label: "Actual Paper Used", value: totalActualPaperUsed, format: "number" }),
         makeCard({ id: "planPaper", label: "Plan Paper", value: totalPlanPaper, format: "number" }),
         makeCard({ id: "pendingConsumption", label: "Pending Consumption", value: pendingConsumptionJobs, format: "number" }),
         makeCard({ id: "fgStock", label: "FG Stock", value: fgStockTotal, format: "number" }),
