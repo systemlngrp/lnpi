@@ -394,6 +394,7 @@ export function Materials() {
         const groupMap = new Map(nextGroups.map((group) => [normalizeText(group.name), group]));
         const supplierMap = new Map(suppliers.map((supplier) => [normalizeText(supplier.name), supplier]));
         let nextMaterials = [...materials];
+        const reelOpeningQtyByErp = new Map<string, number>();
         const reelReceiptRows: Array<{
           materialId: string;
           ourReelNo: string;
@@ -402,6 +403,18 @@ export function Materials() {
           mrrDate: string;
           supplierId: string;
         }> = [];
+
+        data.forEach((row: any) => {
+          const rawType = String(row["Type"] || "").trim();
+          if (rawType !== "Reel") return;
+          const erpCode = String(row["ERP Code"] || "").trim();
+          const reelQtyValue = parseNumericInput(String(row["Reel Qty"] ?? ""));
+          if (!erpCode || reelQtyValue === "") return;
+          reelOpeningQtyByErp.set(
+            erpCode,
+            Number((reelOpeningQtyByErp.get(erpCode) || 0) + Number(reelQtyValue || 0))
+          );
+        });
 
         data.forEach((row: any, index) => {
           const rawType = String(row["Type"] || "").trim();
@@ -485,9 +498,19 @@ export function Materials() {
             size: type === "Reel" && sizeValue !== "" ? Number(sizeValue) : undefined,
             gsm: type === "Reel" && gsmValue !== "" ? Number(gsmValue) : undefined,
             bf: type === "Reel" && bfValue !== "" ? Number(bfValue) : undefined,
-            openingQty: openingQtyValue === "" ? undefined : Number(openingQtyValue),
+            openingQty:
+              type === "Reel"
+                ? Number(reelOpeningQtyByErp.get(erpCode) || 0) || undefined
+                : openingQtyValue === "" ? undefined : Number(openingQtyValue),
             openingRate: openingRateValue === "" ? undefined : Number(openingRateValue),
-            openingValue,
+            openingValue:
+              type === "Reel"
+                ? (
+                    openingValueInput !== ""
+                      ? Number(openingValueInput)
+                      : (Number(reelOpeningQtyByErp.get(erpCode) || 0) || 0) * Number(openingRateValue || 0)
+                  ) || undefined
+                : openingValue,
             active: activeValue,
             updatedBy: "System User",
             updateTimestamp: timestamp,
