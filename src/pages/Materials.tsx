@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Edit, Plus, Trash2, Search, Upload, Download } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialGroup } from "../types";
+import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, Supplier } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
@@ -70,6 +70,9 @@ export function Materials() {
   const navigate = useNavigate();
   const [materials, setMaterials] = useData<Material>("materials", []);
   const [materialGroups, setMaterialGroups] = useData<MaterialGroup>("material-groups", []);
+  const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
+  const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
+  const [suppliers] = useData<Supplier>("suppliers", []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reelGroup = useMemo(
@@ -311,6 +314,9 @@ export function Materials() {
         "ERP Code": "1001",
         "Item Name": "",
         "Item Group": "Reel",
+        "MRR No.": "MI/26-27/00001",
+        "MRR Date": "2026-06-02",
+        "Supplier Name": "Bizskill",
         "Our Reel No.": "R00001",
         "Reel Qty": 250.5,
         "Unit": "CM",
@@ -327,6 +333,9 @@ export function Materials() {
         "ERP Code": "2001",
         "Item Name": "Service",
         "Item Group": "Consumable",
+        "MRR No.": "",
+        "MRR Date": "",
+        "Supplier Name": "",
         "Our Reel No.": "",
         "Reel Qty": "",
         "Unit": "CM",
@@ -368,6 +377,8 @@ export function Materials() {
         const timestamp = new Date().toISOString();
         const nextGroups = [...materialGroups];
         let reelGroupId = reelGroup?.id || "";
+        let nextMaterialIn = [...materialIn];
+        let nextPackingSlips = [...packingSlips];
 
         if (!reelGroupId) {
           const nextReelGroup: MaterialGroup = {
@@ -381,7 +392,16 @@ export function Materials() {
         }
 
         const groupMap = new Map(nextGroups.map((group) => [normalizeText(group.name), group]));
+        const supplierMap = new Map(suppliers.map((supplier) => [normalizeText(supplier.name), supplier]));
         let nextMaterials = [...materials];
+        const reelReceiptRows: Array<{
+          materialId: string;
+          ourReelNo: string;
+          reelQty: number;
+          mrrNo: string;
+          mrrDate: string;
+          supplierId: string;
+        }> = [];
 
         data.forEach((row: any, index) => {
           const rawType = String(row["Type"] || "").trim();
@@ -392,6 +412,11 @@ export function Materials() {
           const itemName = String(row["Item Name"] || "").trim();
           const groupName = String(row["Item Group"] || "").trim();
           const unit = String(row["Unit"] || "CM").trim() || "CM";
+          const mrrNo = String(row["MRR No."] || "").trim();
+          const mrrDate = String(row["MRR Date"] || "").trim();
+          const supplierName = String(row["Supplier Name"] || "").trim();
+          const ourReelNo = String(row["Our Reel No."] || "").trim();
+          const reelQtyValue = parseNumericInput(String(row["Reel Qty"] ?? ""));
           const sizeValue = parseNumericInput(String(row["Size"] ?? ""));
           const gsmValue = parseNumericInput(String(row["GSM"] ?? ""));
           const bfValue = parseNumericInput(String(row["BF"] ?? ""));
@@ -402,6 +427,11 @@ export function Materials() {
 
           if (type === "Reel" && (sizeValue === "" || gsmValue === "" || bfValue === "")) {
             throw new Error(`Row ${index + 2}: Reel rows require Size, GSM, and BF.`);
+          }
+          if (type === "Reel") {
+            if (!mrrNo || !mrrDate || !supplierName || !ourReelNo || reelQtyValue === "") {
+              throw new Error(`Row ${index + 2}: Reel rows require MRR No., MRR Date, Supplier Name, Our Reel No., and Reel Qty.`);
+            }
           }
           if (type === "Other" && !itemName) {
             throw new Error(`Row ${index + 2}: Other rows require Item Name.`);
@@ -468,10 +498,141 @@ export function Materials() {
           } else {
             nextMaterials = [nextMaterial, ...nextMaterials];
           }
+
+          if (type === "Reel") {
+            const matchedSupplier = supplierMap.get(normalizeText(supplierName));
+            if (!matchedSupplier) {
+              throw new Error(`Row ${index + 2}: Supplier Name not found.`);
+            }
+            if (Number(reelQtyValue) <= 0) {
+              throw new Error(`Row ${index + 2}: Reel Qty must be greater than 0.`);
+            }
+            reelReceiptRows.push({
+              materialId: nextMaterial.id,
+              ourReelNo,
+              reelQty: Number(reelQtyValue),
+              mrrNo,
+              mrrDate,
+              supplierId: matchedSupplier.id,
+            });
+          }
+        });
+
+        const receiptGroups = new Map<string, typeof reelReceiptRows>();
+        reelReceiptRows.forEach((row) => {
+          const key = `${row.mrrNo}__${row.mrrDate}__${row.supplierId}`;
+          const current = receiptGroups.get(key) || [];
+          current.push(row);
+          receiptGroups.set(key, current);
+        });
+
+        receiptGroups.forEach((rowsForReceipt) => {
+          const sample = rowsForReceipt[0];
+          const existingReceipt = nextMaterialIn.find(
+            (entry) => entry.transactionNo === sample.mrrNo && entry.supplierId === sample.supplierId
+          );
+
+          const packingSlipsForReceipt = nextPackingSlips.filter((slip) => slip.materialInId === existingReceipt?.id);
+          const existingLineByMaterial = new Map((existingReceipt?.lines || []).map((line) => [line.itemId, line]));
+          const existingSlipByReelNo = new Map(packingSlipsForReceipt.map((slip) => [normalizeText(slip.ourReelNo), slip]));
+          const mergedSlipMap = new Map(
+            packingSlipsForReceipt.map((slip) => [
+              normalizeText(slip.ourReelNo),
+              {
+                materialId: slip.materialId,
+                ourReelNo: slip.ourReelNo,
+                weightKg: Number(slip.weightKg || 0),
+                existingSlip: slip,
+              },
+            ])
+          );
+
+          rowsForReceipt.forEach((row) => {
+            mergedSlipMap.set(normalizeText(row.ourReelNo), {
+              materialId: row.materialId,
+              ourReelNo: row.ourReelNo,
+              weightKg: Number(row.reelQty || 0),
+              existingSlip: existingSlipByReelNo.get(normalizeText(row.ourReelNo)),
+            });
+          });
+
+          const aggregatedWeightByMaterial = new Map<string, number>();
+          Array.from(mergedSlipMap.values()).forEach((slip) => {
+            aggregatedWeightByMaterial.set(
+              slip.materialId,
+              Number((aggregatedWeightByMaterial.get(slip.materialId) || 0) + Number(slip.weightKg || 0))
+            );
+          });
+
+          const nextLines = Array.from(aggregatedWeightByMaterial.entries()).map(([materialId, totalQty]) => {
+            const existingLine = existingLineByMaterial.get(materialId);
+            return {
+              id: existingLine?.id || crypto.randomUUID(),
+              itemId: materialId,
+              qty: totalQty,
+              uom: "KG",
+              invoiceQty: totalQty,
+              invoiceRate: Number(existingLine?.invoiceRate ?? existingLine?.rate ?? 0),
+              invoiceValue: 0,
+              actualQty: totalQty,
+              actualValue: 0,
+              rate: Number(existingLine?.rate || 0),
+              value: 0,
+            };
+          });
+
+          const nextReceiptId = existingReceipt?.id || crypto.randomUUID();
+          const nextReceipt: MaterialIn = {
+            id: nextReceiptId,
+            transactionNo: sample.mrrNo,
+            mrrType: "Reel",
+            timestamp: existingReceipt?.timestamp || timestamp,
+            entryEmailId: existingReceipt?.entryEmailId || "system@lngrp.in",
+            date: sample.mrrDate,
+            invoiceNo: existingReceipt?.invoiceNo || sample.mrrNo,
+            invDate: sample.mrrDate,
+            supplierId: sample.supplierId,
+            totalAmount: 0,
+            totalInvoiceValue: 0,
+            totalActualValue: 0,
+            lines: nextLines,
+            status: existingReceipt?.status || "Completed",
+            updatedBy: "System User",
+            updateTimestamp: timestamp,
+          };
+
+          if (existingReceipt) {
+            nextMaterialIn = nextMaterialIn.map((entry) => (entry.id === existingReceipt.id ? nextReceipt : entry));
+          } else {
+            nextMaterialIn = [...nextMaterialIn, nextReceipt];
+          }
+
+          Array.from(mergedSlipMap.values()).forEach((row) => {
+            const matchingLine = nextLines.find((line) => line.itemId === row.materialId);
+            const existingSlip = row.existingSlip;
+            const nextSlip: MaterialInPackingSlip = {
+              id: existingSlip?.id || crypto.randomUUID(),
+              materialInId: nextReceiptId,
+              materialLineId: matchingLine?.id || crypto.randomUUID(),
+              materialId: row.materialId,
+              ourReelNo: row.ourReelNo,
+              weightKg: Number(row.weightKg),
+              updatedBy: "System User",
+              updateTimestamp: timestamp,
+            };
+
+            if (existingSlip) {
+              nextPackingSlips = nextPackingSlips.map((slip) => (slip.id === existingSlip.id ? nextSlip : slip));
+            } else {
+              nextPackingSlips = [...nextPackingSlips, nextSlip];
+            }
+          });
         });
 
         await setMaterialGroups(nextGroups);
         await setMaterials(nextMaterials);
+        await setMaterialIn(nextMaterialIn);
+        await setPackingSlips(nextPackingSlips);
         alert(`Successfully uploaded ${data.length} material rows.`);
       } catch (error) {
         console.error("Material bulk upload error:", error);
