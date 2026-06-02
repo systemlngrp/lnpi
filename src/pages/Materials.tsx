@@ -395,6 +395,7 @@ export function Materials() {
         const supplierMap = new Map(suppliers.map((supplier) => [normalizeText(supplier.name), supplier]));
         let nextMaterials = [...materials];
         const reelOpeningQtyByErp = new Map<string, number>();
+        const reelOpeningBalanceByErp = new Map<string, number>();
         const reelReceiptRows: Array<{
           materialId: string;
           ourReelNo: string;
@@ -409,11 +410,19 @@ export function Materials() {
           if (rawType !== "Reel") return;
           const erpCode = String(row["ERP Code"] || "").trim();
           const reelQtyValue = parseNumericInput(String(row["Reel Qty"] ?? ""));
+          const openingQtyValue = parseNumericInput(String(row["Opening Qty"] ?? ""));
           if (!erpCode || reelQtyValue === "") return;
           reelOpeningQtyByErp.set(
             erpCode,
             Number((reelOpeningQtyByErp.get(erpCode) || 0) + Number(reelQtyValue || 0))
           );
+          if (openingQtyValue !== "") {
+            const numericOpeningQty = Number(openingQtyValue || 0);
+            if (reelOpeningBalanceByErp.has(erpCode) && reelOpeningBalanceByErp.get(erpCode) !== numericOpeningQty) {
+              throw new Error(`Reel rows for ERP ${erpCode} must use the same Opening Qty balance.`);
+            }
+            reelOpeningBalanceByErp.set(erpCode, numericOpeningQty);
+          }
         });
 
         data.forEach((row: any, index) => {
@@ -500,7 +509,7 @@ export function Materials() {
             bf: type === "Reel" && bfValue !== "" ? Number(bfValue) : undefined,
             openingQty:
               type === "Reel"
-                ? Number(reelOpeningQtyByErp.get(erpCode) || 0) || undefined
+                ? Number((reelOpeningQtyByErp.get(erpCode) || 0) + (reelOpeningBalanceByErp.get(erpCode) || 0)) || undefined
                 : openingQtyValue === "" ? undefined : Number(openingQtyValue),
             openingRate: openingRateValue === "" ? undefined : Number(openingRateValue),
             openingValue:
@@ -508,7 +517,10 @@ export function Materials() {
                 ? (
                     openingValueInput !== ""
                       ? Number(openingValueInput)
-                      : (Number(reelOpeningQtyByErp.get(erpCode) || 0) || 0) * Number(openingRateValue || 0)
+                      : Number(
+                          (Number(reelOpeningQtyByErp.get(erpCode) || 0) + (reelOpeningBalanceByErp.get(erpCode) || 0)) *
+                            Number(openingRateValue || 0)
+                        )
                   ) || undefined
                 : openingValue,
             active: activeValue,
