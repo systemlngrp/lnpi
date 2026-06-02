@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Edit, Plus, Trash2, Search } from "lucide-react";
+import { Edit, Plus, Trash2, Search, Upload, Download } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Material, MaterialGroup } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
+import * as XLSX from "xlsx";
 
 type MaterialType = Material["type"];
 type ActiveValue = NonNullable<Material["active"]>;
@@ -69,6 +70,7 @@ export function Materials() {
   const navigate = useNavigate();
   const [materials, setMaterials] = useData<Material>("materials", []);
   const [materialGroups, setMaterialGroups] = useData<MaterialGroup>("material-groups", []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reelGroup = useMemo(
     () => materialGroups.find((group) => group.name.trim().toLowerCase() === "reel") || null,
@@ -85,6 +87,7 @@ export function Materials() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [savingGroup, setSavingGroup] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [formData, setFormData] = useState(() => createInitialFormState(materials, reelGroup?.id || ""));
 
@@ -300,6 +303,182 @@ export function Materials() {
   }, [gsmFilter, materials, searchTerm, sizeFilter, typeFilter]);
 
   const handleExport = () => {};
+
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        "Type": "Reel",
+        "ERP Code": "1001",
+        "Item Name": "",
+        "Item Group": "Reel",
+        "Unit": "CM",
+        "Size": 120,
+        "GSM": 150,
+        "BF": 18,
+        "Opening Qty": 0,
+        "Opening Rate": 0,
+        "Opening Value": 0,
+        "Active": "Yes",
+      },
+      {
+        "Type": "Other",
+        "ERP Code": "2001",
+        "Item Name": "Service",
+        "Item Group": "Consumable",
+        "Unit": "CM",
+        "Size": "",
+        "GSM": "",
+        "BF": "",
+        "Opening Qty": 0,
+        "Opening Rate": 0,
+        "Opening Value": 0,
+        "Active": "Yes",
+      },
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Materials");
+    XLSX.writeFile(wb, "Material_Master_Bulk_Template.xlsx");
+  };
+
+  const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const bstr = event.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+          alert("The file is empty.");
+          return;
+        }
+
+        setIsUploading(true);
+        const timestamp = new Date().toISOString();
+        const nextGroups = [...materialGroups];
+        let reelGroupId = reelGroup?.id || "";
+
+        if (!reelGroupId) {
+          const nextReelGroup: MaterialGroup = {
+            id: crypto.randomUUID(),
+            name: "Reel",
+            updatedBy: "System User",
+            updateTimestamp: timestamp,
+          };
+          nextGroups.push(nextReelGroup);
+          reelGroupId = nextReelGroup.id;
+        }
+
+        const groupMap = new Map(nextGroups.map((group) => [normalizeText(group.name), group]));
+        let nextMaterials = [...materials];
+
+        data.forEach((row: any, index) => {
+          const rawType = String(row["Type"] || "").trim();
+          const type = rawType === "Reel" ? "Reel" : rawType === "Other" ? "Other" : "";
+          if (!type) throw new Error(`Row ${index + 2}: Type must be Reel or Other.`);
+
+          const erpCode = String(row["ERP Code"] || "").trim() || (type === "Reel" ? getNextNumericErpCode(nextMaterials) : "");
+          const itemName = String(row["Item Name"] || "").trim();
+          const groupName = String(row["Item Group"] || "").trim();
+          const unit = String(row["Unit"] || "CM").trim() || "CM";
+          const sizeValue = parseNumericInput(String(row["Size"] ?? ""));
+          const gsmValue = parseNumericInput(String(row["GSM"] ?? ""));
+          const bfValue = parseNumericInput(String(row["BF"] ?? ""));
+          const openingQtyValue = parseNumericInput(String(row["Opening Qty"] ?? ""));
+          const openingRateValue = parseNumericInput(String(row["Opening Rate"] ?? ""));
+          const openingValueInput = parseNumericInput(String(row["Opening Value"] ?? ""));
+          const activeValue = String(row["Active"] || "Yes").trim() === "No" ? "No" : "Yes";
+
+          if (type === "Reel" && (sizeValue === "" || gsmValue === "" || bfValue === "")) {
+            throw new Error(`Row ${index + 2}: Reel rows require Size, GSM, and BF.`);
+          }
+          if (type === "Other" && !itemName) {
+            throw new Error(`Row ${index + 2}: Other rows require Item Name.`);
+          }
+
+          let materialGroupId: string | undefined = undefined;
+          if (type === "Reel") {
+            materialGroupId = reelGroupId;
+          } else {
+            if (!groupName) throw new Error(`Row ${index + 2}: Other rows require Item Group.`);
+            const normalizedGroupName = normalizeText(groupName);
+            let matchedGroup = groupMap.get(normalizedGroupName);
+            if (!matchedGroup) {
+              matchedGroup = {
+                id: crypto.randomUUID(),
+                name: groupName,
+                updatedBy: "System User",
+                updateTimestamp: timestamp,
+              };
+              nextGroups.push(matchedGroup);
+              groupMap.set(normalizedGroupName, matchedGroup);
+            }
+            materialGroupId = matchedGroup.id;
+          }
+
+          const openingValue =
+            openingValueInput !== ""
+              ? Number(openingValueInput)
+              : openingQtyValue !== "" && openingRateValue !== ""
+                ? Number(openingQtyValue) * Number(openingRateValue)
+                : undefined;
+
+          const generatedName =
+            type === "Reel"
+              ? getReelDisplayName(erpCode, Number(sizeValue), unit, Number(gsmValue), Number(bfValue))
+              : itemName;
+
+          const existing = nextMaterials.find((material) =>
+            type === "Reel"
+              ? normalizeText(material.erpCode) === normalizeText(erpCode)
+              : normalizeText(material.name) === normalizeText(generatedName)
+          );
+
+          const nextMaterial: Material = {
+            id: existing?.id || crypto.randomUUID(),
+            type,
+            erpCode: erpCode || undefined,
+            name: generatedName,
+            uom: unit,
+            materialGroupId,
+            size: type === "Reel" && sizeValue !== "" ? Number(sizeValue) : undefined,
+            gsm: type === "Reel" && gsmValue !== "" ? Number(gsmValue) : undefined,
+            bf: type === "Reel" && bfValue !== "" ? Number(bfValue) : undefined,
+            openingQty: openingQtyValue === "" ? undefined : Number(openingQtyValue),
+            openingRate: openingRateValue === "" ? undefined : Number(openingRateValue),
+            openingValue,
+            active: activeValue,
+            updatedBy: "System User",
+            updateTimestamp: timestamp,
+          };
+
+          if (existing) {
+            nextMaterials = nextMaterials.map((material) => (material.id === existing.id ? nextMaterial : material));
+          } else {
+            nextMaterials = [nextMaterial, ...nextMaterials];
+          }
+        });
+
+        await setMaterialGroups(nextGroups);
+        await setMaterials(nextMaterials);
+        alert(`Successfully uploaded ${data.length} material rows.`);
+      } catch (error) {
+        console.error("Material bulk upload error:", error);
+        alert(error instanceof Error ? error.message : "Failed to parse the Excel file.");
+      } finally {
+        setIsUploading(false);
+        e.target.value = "";
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -559,13 +738,33 @@ export function Materials() {
                     Showing {filteredMaterials.length} {filteredMaterials.length === 1 ? "material" : "materials"}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleOpenNew}
-                  className="inline-flex items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 whitespace-nowrap border border-black shadow"
-                >
-                  <Plus size={16} /> New Item
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={downloadTemplate}
+                    className="inline-flex items-center justify-center gap-2 rounded border border-black bg-white px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap shadow"
+                  >
+                    <Download size={16} /> Template
+                  </button>
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded border border-black bg-white px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap shadow">
+                    {isUploading ? <Spinner size={16} /> : <Upload size={16} />}
+                    Bulk Upload
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".xlsx, .xls"
+                      className="hidden"
+                      onChange={handleBulkUpload}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleOpenNew}
+                    className="inline-flex items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 whitespace-nowrap border border-black shadow"
+                  >
+                    <Plus size={16} /> New Item
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
