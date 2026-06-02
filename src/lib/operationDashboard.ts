@@ -174,6 +174,19 @@ function sumPlanQty(rows: OrderSchedule[]) {
   return rows.reduce((sum, schedule) => sum + Number(schedule.qty || 0), 0);
 }
 
+function sumProductionPlanQty(rows: Production[]) {
+  return rows.reduce((sum, production) => sum + Number(production.qty || 0), 0);
+}
+
+function sumProductionPlanValue(rows: Production[], schedules: OrderSchedule[], orders: Order[]) {
+  return rows.reduce((sum, production) => {
+    const schedule = schedules.find((entry) => entry.id === production.scheduleId);
+    const order = orders.find((entry) => entry.id === schedule?.orderId);
+    const rate = Number(production.rate || order?.rate || 0);
+    return sum + Number(production.qty || 0) * rate;
+  }, 0);
+}
+
 function getPendingPlanningRows(rows: OrderSchedule[], dispatchPlans: DispatchPlan[]) {
   return rows.filter((schedule) => {
     const plannedQty = dispatchPlans
@@ -343,8 +356,8 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const filteredProductions = args.productions.filter((entry) => isDateWithinRange(entry.date, safeRange));
   const previousProductions = args.productions.filter((entry) => isDateWithinRange(entry.date, previousSafeRange));
   const filteredSchedules = args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, safeRange));
-  const todaySchedules = args.schedules.filter((entry) => entry.scheduledDate === today);
-  const tomorrowSchedules = args.schedules.filter((entry) => entry.scheduledDate === tomorrow);
+  const todayProductions = args.productions.filter((entry) => entry.date === today);
+  const tomorrowProductions = args.productions.filter((entry) => entry.date === tomorrow);
   const nextSchedules = args.schedules.filter((entry) => isDateWithinRange(entry.scheduledDate, nextSafeRange));
   const filteredDispatchPlans = args.dispatchPlans.filter((entry) => isDateWithinRange(entry.date, safeRange));
   const filteredLoadingSlips = args.loadingSlips.filter((entry) => isDateWithinRange(entry.date, safeRange));
@@ -365,10 +378,10 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const previousProduction = sumProductionQty(previousProductions);
   const totalProductionMeter = sumProductionMeter(filteredProductions);
   const totalPlanValue = sumPlanValue(filteredSchedules, args.orders);
-  const todayPlanQty = sumPlanQty(todaySchedules);
-  const todayPlanValue = sumPlanValue(todaySchedules, args.orders);
-  const tomorrowPlanQty = sumPlanQty(tomorrowSchedules);
-  const tomorrowPlanValue = sumPlanValue(tomorrowSchedules, args.orders);
+  const todayPlanQty = sumProductionPlanQty(todayProductions);
+  const todayPlanValue = sumProductionPlanValue(todayProductions, args.schedules, args.orders);
+  const tomorrowPlanQty = sumProductionPlanQty(tomorrowProductions);
+  const tomorrowPlanValue = sumProductionPlanValue(tomorrowProductions, args.schedules, args.orders);
   const nextPlanValue = sumPlanValue(nextSchedules, args.orders);
   const totalWastage = getWastagePercent(filteredProductions, usageMap);
   const totalActualPaperUsed = getActualPaperUsed(filteredProductions, usageMap);
