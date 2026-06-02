@@ -832,8 +832,8 @@ export function OperationDashboard() {
 
       <div className="overflow-hidden rounded-lg border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
         <div className="flex items-center justify-between border-b border-slate-900 bg-slate-100 px-3 py-2">
-          <h3 className="text-[12px] font-black uppercase tracking-[0.14em] text-black">Production Master View</h3>
-          <div className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-black text-indigo-700">{rows.length} records</div>
+          <h3 className="text-[13px] font-black uppercase tracking-[0.14em] text-black">Production Master View</h3>
+          <div className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-black text-indigo-700">{rows.length} records</div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-max w-full border-collapse">
@@ -847,7 +847,7 @@ export function OperationDashboard() {
                     onDragOver={onDragOver}
                     onDrop={onDrop(c.id)}
                     className={cn(
-                      "px-2 py-1.5 text-left text-[9px] font-black uppercase text-slate-900 border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
+                      "px-2 py-1.5 text-left text-[10px] font-black uppercase text-slate-900 border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
                       c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left"
                     )}
                     title="Drag to reorder"
@@ -874,7 +874,7 @@ export function OperationDashboard() {
                         <td
                           key={c.id}
                           className={cn(
-                            "px-2 py-1.5 text-[9.5px] text-black border-r border-black/90 align-top",
+                            "px-2 py-1.5 text-[10.5px] text-black border-r border-black/90 align-top",
                             c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
                             c.id === "itemName" || c.id === "processingStatus" ? "whitespace-normal min-w-[150px]" : "whitespace-nowrap",
                             c.className
