@@ -87,7 +87,6 @@ type ColumnId =
   | "wastage"
   | "realPerKg"
   | "processingStatus"
-  | "status"
   | "jobCloser"
   | "closeDate"
   | "actualPaperUsed"
@@ -335,24 +334,6 @@ export function OperationDashboard() {
     { id: "wastage", label: "Wastage", align: "right", render: (r) => r.production.wastage || "-" },
     { id: "realPerKg", label: "Real/KG", align: "right", className: "font-bold text-indigo-700", render: (r) => (Number(r.production.realizationPerKg || 0) ? Number(r.production.realizationPerKg || 0).toFixed(2) : "-") },
     { id: "processingStatus", label: "Processing Status", className: "text-indigo-600 font-bold max-w-[200px] truncate", render: (r) => r.processingStatusText },
-    {
-      id: "status",
-      label: "Status",
-      render: (r) => (
-        <span
-          className={cn(
-            "px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider",
-            r.production.status === "Completed"
-              ? "bg-emerald-100 text-emerald-900 border-emerald-900"
-              : r.production.status === "Cancelled"
-                ? "bg-red-100 text-red-900 border-red-900"
-                : "bg-amber-100 text-amber-900 border-amber-900"
-          )}
-        >
-          {r.production.status || "-"}
-        </span>
-      ),
-    },
     { id: "jobCloser", label: "Job Closer", render: (r) => r.production.closeBy || "-" },
     { id: "closeDate", label: "Close Date", render: (r) => r.production.closeDate || "-" },
     { id: "actualPaperUsed", label: "Actual Paper Used", align: "right", className: "font-bold text-indigo-700", render: (r) => r.actualPaperUsed.toFixed(2) },
@@ -688,7 +669,6 @@ export function OperationDashboard() {
       Wastage: r.production.wastage ?? "-",
       "Real/KG": Number(r.production.realizationPerKg || 0) ? Number(r.production.realizationPerKg || 0).toFixed(2) : "-",
       "Processing Status": r.processingStatusText,
-      Status: r.production.status || "-",
       "Job Closer": r.production.closeBy || "-",
       "Close Date": r.production.closeDate || "-",
       "Actual Paper Used": Number(r.actualPaperUsed.toFixed(5)),
