@@ -468,7 +468,7 @@ export function LoadingMaster() {
                                             return { ...prev, [slip.id]: nextSlip };
                                           });
                                         }}
-                                        className="w-24 rounded border border-black px-2 py-1 text-xs text-right"
+                                        className="w-24 rounded border border-black bg-yellow-200 px-2 py-1 text-xs text-right font-bold"
                                       />
                                     ) : (
                                       <span className="font-bold text-indigo-700">{loadedValue.toLocaleString()}</span>
@@ -499,7 +499,7 @@ export function LoadingMaster() {
                                                     return { ...prev, [slip.id]: nextSlip };
                                                   });
                                                 }}
-                                                className="w-20 rounded border border-black px-2 py-1 text-xs text-right"
+                                                className="w-20 rounded border border-black bg-yellow-200 px-2 py-1 text-xs text-right font-bold"
                                               />
                                             ) : (
                                               <span className="text-slate-700">{Number(a.qty || 0).toLocaleString()}</span>

@@ -10,6 +10,8 @@ export function ProductionProcessingMaster() {
   const navigate = useNavigate();
   const [processing, setProcessing] = useData<ProductionProcessing>("production_processing", []);
   const [searchTerm, setSearchTerm] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = (id: string) => {
@@ -26,15 +28,18 @@ export function ProductionProcessingMaster() {
     return processing
       .filter((p) => {
         const query = searchTerm.toLowerCase();
-        return (
+        const matchesSearch = (
           String(p.jobNo || "").toLowerCase().includes(query) ||
           (p.machineName || "").toLowerCase().includes(query) ||
           (p.operatorName || "").toLowerCase().includes(query) ||
           String(p.shift || "Day").toLowerCase().includes(query)
         );
+        const matchesFrom = !fromDate || String(p.date || "") >= fromDate;
+        const matchesTo = !toDate || String(p.date || "") <= toDate;
+        return matchesSearch && matchesFrom && matchesTo;
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [processing, searchTerm]);
+  }, [processing, searchTerm, fromDate, toDate]);
 
   return (
     <div className="space-y-6">
@@ -48,7 +53,41 @@ export function ProductionProcessingMaster() {
         </button>
       </div>
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search by Job No, Machine, or Operator..." />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <div className="flex-1">
+          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search by Job No, Machine, or Operator..." />
+        </div>
+        <div className="flex flex-wrap items-end gap-3 rounded border border-black bg-white px-3 py-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-600">From</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="rounded border border-black bg-white px-2 py-1.5 text-sm font-semibold outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-600">To</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="rounded border border-black bg-white px-2 py-1.5 text-sm font-semibold outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFromDate("");
+              setToDate("");
+            }}
+            className="rounded border border-black bg-slate-100 px-3 py-1.5 text-xs font-bold uppercase hover:bg-slate-200"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">

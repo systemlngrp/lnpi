@@ -116,6 +116,11 @@ export function MachinePendingProcessing() {
     return machines.find(m => m.id === filterMachineId)?.name || "";
   }, [filterMachineId, machines]);
 
+  useEffect(() => {
+    if (filterMachineId) return;
+    setExpandedMachines(new Set(machineGroups.map((group) => group.machineId)));
+  }, [filterMachineId, machineGroups]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
@@ -129,7 +134,7 @@ export function MachinePendingProcessing() {
             </button>
           )}
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">
-            {filterMachineId ? `${selectedMachineName} - Pending Jobs` : "Machine-wise Pending Processing"}
+            {filterMachineId ? `${selectedMachineName} - Pending Jobs` : "Pending Processing"}
           </h2>
         </div>
         <div className="relative w-full md:w-64">
