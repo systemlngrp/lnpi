@@ -10,6 +10,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 interface PendingMachineJob {
   production: Production;
   item?: Item;
+  companyName: string;
+  erpCode: string;
+  itemName: string;
   requiredQty: number;
   reportedQty: number;
   pendingQty: number;
@@ -81,6 +84,9 @@ export function MachinePendingProcessing() {
             group.jobs.push({
               production: p,
               item,
+              companyName: item?.customer || "",
+              erpCode: String(item?.erp || ""),
+              itemName: item?.name || "",
               requiredQty: Number(p.qty || 0),
               reportedQty: reportedForThisMachine,
               pendingQty: pending
@@ -96,9 +102,9 @@ export function MachinePendingProcessing() {
         ...g,
         jobs: g.jobs.filter(j => {
           const search = searchTerm.toLowerCase();
-          const blob = `${j.production.transactionNo} ${j.item?.name || ""} ${j.item?.customer || ""}`.toLowerCase();
+          const blob = `${j.production.transactionNo} ${j.itemName} ${j.companyName} ${j.erpCode}`.toLowerCase();
           return blob.includes(search);
-        })
+        }).sort((a, b) => b.production.transactionNo.localeCompare(a.production.transactionNo, undefined, { numeric: true, sensitivity: "base" }))
       }))
       .filter(g => g.jobs.length > 0)
       .sort((a, b) => a.machineName.localeCompare(b.machineName));
@@ -181,8 +187,10 @@ export function MachinePendingProcessing() {
                         <tr className="divide-x divide-black">
                           <th className="px-3 py-2 text-left">Job No</th>
                           <th className="px-3 py-2 text-left">Date</th>
-                          <th className="px-3 py-2 text-left">Company / Item</th>
-                          <th className="px-3 py-2 text-right">Target Qty</th>
+                          <th className="px-3 py-2 text-left">ERP</th>
+                          <th className="px-3 py-2 text-left">Company</th>
+                          <th className="px-3 py-2 text-left">Item</th>
+                          <th className="px-3 py-2 text-right">Plan Qty</th>
                           <th className="px-3 py-2 text-right">Reported</th>
                           <th className="px-3 py-2 text-right text-indigo-700">Pending</th>
                           <th className="px-3 py-2 text-center">Action</th>
@@ -193,10 +201,9 @@ export function MachinePendingProcessing() {
                           <tr key={`${job.production.id}-${idx}`} className="divide-x divide-black hover:bg-slate-50">
                             <td className="px-3 py-2 whitespace-nowrap">{job.production.transactionNo}</td>
                             <td className="px-3 py-2 whitespace-nowrap">{formatDate(job.production.date)}</td>
-                            <td className="px-3 py-2">
-                              <div className="text-indigo-700 uppercase truncate max-w-[200px]" title={job.item?.customer}>{job.item?.customer || "-"}</div>
-                              <div className="text-slate-500 font-medium truncate max-w-[250px]" title={job.item?.name}>{job.item?.name || "-"}</div>
-                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap">{job.erpCode || "-"}</td>
+                            <td className="px-3 py-2 max-w-[220px] truncate" title={job.companyName}>{job.companyName || "-"}</td>
+                            <td className="px-3 py-2 max-w-[280px] truncate text-slate-600" title={job.itemName}>{job.itemName || "-"}</td>
                             <td className="px-3 py-2 text-right">{job.requiredQty.toLocaleString()}</td>
                             <td className="px-3 py-2 text-right text-emerald-700">{job.reportedQty.toLocaleString()}</td>
                             <td className="px-3 py-2 text-right text-indigo-700 bg-indigo-50/30 font-black">{job.pendingQty.toLocaleString()}</td>

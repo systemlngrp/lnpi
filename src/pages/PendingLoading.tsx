@@ -651,7 +651,7 @@ export function PendingLoading() {
                               }}
                               max={totalPending}
                               min={0}
-                              className="mt-1 w-full bg-transparent border-b-2 border-indigo-400 text-xl font-black focus:outline-none"
+                              className="mt-1 w-full rounded bg-yellow-100 px-2 py-1 border-2 border-yellow-400 text-xl font-black focus:outline-none"
                             />
                           </div>
                           <div className="px-4 py-3">
@@ -695,7 +695,7 @@ export function PendingLoading() {
                                             [modalKey]: { ...(prev[modalKey] || {}), [job.jobId]: next },
                                           }));
                                         }}
-                                        className="w-28 border-2 border-indigo-600 rounded px-2 py-1.5 text-right font-black text-xs focus:ring-0"
+                                        className="w-28 rounded border-2 border-yellow-500 bg-yellow-100 px-2 py-1.5 text-right font-black text-xs focus:ring-0"
                                       />
                                     </td>
                                   </tr>
@@ -717,7 +717,7 @@ export function PendingLoading() {
                                         [modalKey]: e.target.value === "" ? "" : parseFloat(e.target.value),
                                       }))
                                     }
-                                    className="w-28 border-2 border-emerald-600 rounded px-2 py-1.5 text-right font-black text-xs focus:ring-0"
+                                    className="w-28 rounded border-2 border-yellow-500 bg-yellow-100 px-2 py-1.5 text-right font-black text-xs focus:ring-0"
                                   />
                                 </td>
                               </tr>
@@ -762,7 +762,7 @@ export function PendingLoading() {
                                                     type="number"
                                                     value={detail.bundles || ""}
                                                     onChange={(e) => handleUpdatePackingRow(idx, "bundles", parseFloat(e.target.value) || 0)}
-                                                    className="w-full border border-slate-300 rounded px-2 py-1 text-xs font-bold focus:border-black focus:outline-none"
+                                                    className="w-full rounded border-2 border-yellow-400 bg-yellow-100 px-2 py-1 text-xs font-bold focus:border-black focus:outline-none"
                                                 />
                                             </td>
                                             <td className="px-4 py-2">
@@ -770,7 +770,7 @@ export function PendingLoading() {
                                                     type="number"
                                                     value={detail.packSize || ""}
                                                     onChange={(e) => handleUpdatePackingRow(idx, "packSize", parseFloat(e.target.value) || 0)}
-                                                    className="w-full border border-slate-300 rounded px-2 py-1 text-xs font-bold focus:border-black focus:outline-none"
+                                                    className="w-full rounded border-2 border-yellow-400 bg-yellow-100 px-2 py-1 text-xs font-bold focus:border-black focus:outline-none"
                                                 />
                                             </td>
                                             <td className="px-4 py-2 text-right text-xs font-black bg-slate-50">
@@ -794,7 +794,7 @@ export function PendingLoading() {
                                                 type="number"
                                                 value={extraItemsQty ?? ""}
                                                 onChange={(e) => setExtraItemsQty(e.target.value === "" ? "" : parseFloat(e.target.value))}
-                                                className="w-full border-2 border-emerald-600 rounded px-2 py-1.5 text-right font-black text-xs focus:ring-0"
+                                                className="w-full rounded border-2 border-yellow-500 bg-yellow-100 px-2 py-1.5 text-right font-black text-xs focus:ring-0"
                                                 placeholder="Enter Extra Qty"
                                             />
                                         </td>

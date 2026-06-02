@@ -715,22 +715,22 @@ export function OperationDashboard() {
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[5px_5px_0px_0px_rgba(15,23,42,1)]">
-        <div className="bg-white px-3 py-3 md:px-4">
-          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="bg-white px-2.5 py-2 md:px-3">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h2 className="text-[22px] font-black uppercase tracking-tight text-slate-950 md:text-[24px]">Operation Dashboard</h2>
             </div>
-            <div className="flex flex-wrap items-stretch justify-end gap-2">
+            <div className="flex flex-wrap items-stretch justify-end gap-1.5">
               <DateInput value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
               <DateInput value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
               <button
                 type="button"
                 onClick={() => setDateRange({ from: "", to: "" })}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md border-2 border-slate-900 bg-rose-50 px-3 py-1.5 text-[10px] font-black uppercase text-rose-700 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-rose-50 px-2.5 py-1 text-[10px] font-black uppercase text-rose-700 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
               >
                 Clear
               </button>
-              <div className="flex items-center gap-2 rounded-md border-2 border-slate-900 bg-white px-3 py-1.5 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
+              <div className="flex items-center gap-1.5 rounded-md border-2 border-slate-900 bg-white px-2.5 py-1 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
                 <label htmlFor="closed-job-filter-top" className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">
                   Closed Job
                 </label>
@@ -738,7 +738,7 @@ export function OperationDashboard() {
                   id="closed-job-filter-top"
                   value={closedJobFilter}
                   onChange={(event) => setClosedJobFilter(event.target.value as ClosedJobFilter)}
-                  className="rounded border border-slate-900 bg-white px-2 py-1 text-xs font-bold outline-none"
+                    className="rounded border border-slate-900 bg-white px-1.5 py-0.5 text-xs font-bold outline-none"
                 >
                   <option value="all">All</option>
                   <option value="yes">Yes</option>
@@ -751,7 +751,7 @@ export function OperationDashboard() {
               <button
                 type="button"
                 onClick={() => setIsColumnsOpen((v) => !v)}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md border-2 border-slate-900 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
               >
                 <SlidersHorizontal size={14} strokeWidth={3} />
                 Columns
@@ -759,7 +759,7 @@ export function OperationDashboard() {
             </div>
           </div>
 
-          <div className="mt-2.5 grid grid-cols-1 gap-2.5 xl:grid-cols-12">
+          <div className="mt-2 grid grid-cols-1 gap-2 xl:grid-cols-12">
               {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
                 const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
                 if (!group) return null;
@@ -768,7 +768,7 @@ export function OperationDashboard() {
                     key={group.id}
                     className={cn("overflow-hidden rounded-lg border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]", groupConfig.className)}
                   >
-                    <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
+                    <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
                     <div className={cn("grid gap-0", groupConfig.gridClassName)}>
                       {groupConfig.cards.map((cardConfig) => {
                         const card = getSummaryCard(summary, cardConfig.id);
@@ -792,8 +792,8 @@ export function OperationDashboard() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <div className="flex-1 rounded-lg border-2 border-slate-900 bg-white p-1.5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+      <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center">
+        <div className="flex-1 rounded-lg border-2 border-slate-900 bg-white p-1 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
           <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs, items, parties..." />
         </div>
       </div>
@@ -898,10 +898,10 @@ export function OperationDashboard() {
 
 function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <div className="flex min-h-[38px] items-center rounded-md border-2 border-slate-900 bg-slate-50 px-2.5 py-1 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
+    <div className="flex min-h-[34px] items-center rounded-md border-2 border-slate-900 bg-slate-50 px-2 py-0.5 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
       <input
         type="date"
-        className="cursor-pointer border-none bg-transparent p-0 text-[13px] font-black leading-tight uppercase text-slate-900 focus:ring-0"
+        className="cursor-pointer border-none bg-transparent p-0 text-[12px] font-black leading-tight uppercase text-slate-900 focus:ring-0"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -931,16 +931,16 @@ function SummaryMetricCard({
   return (
     <div
       className={cn(
-        "flex min-h-[64px] flex-col justify-between px-2.5 py-2",
+        "flex min-h-[56px] flex-col justify-between px-2 py-1.5",
         !isLastColumn && "border-r border-black",
         !isLastRow && "border-b border-black",
         config.tone,
         config.className
       )}
     >
-      <div className="text-[8px] font-black uppercase tracking-[0.08em] text-slate-700">{card.label}</div>
-      <div className={cn("mt-0.5 text-[18px] font-black leading-none tracking-tight text-black", config.valueTone)}>{formatMetricValue(card)}</div>
-      <div className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="text-[7px] font-black uppercase tracking-[0.08em] text-slate-700">{card.label}</div>
+      <div className={cn("mt-0.5 text-[16px] font-black leading-none tracking-tight text-black", config.valueTone)}>{formatMetricValue(card)}</div>
+      <div className="mt-0.5 text-[7px] font-semibold uppercase tracking-wide text-slate-500">
         {card.note || (card.status === "unavailable" ? "Pending data source" : "")}
       </div>
     </div>
