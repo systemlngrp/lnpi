@@ -149,7 +149,7 @@ const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
 const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   {
     groupId: "headline",
-    className: "min-w-[860px]",
+    className: "min-w-[760px]",
     gridClassName: "grid-cols-4",
     columns: 4,
     cards: [
@@ -165,7 +165,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "dispatch",
-    className: "min-w-[860px]",
+    className: "min-w-[760px]",
     gridClassName: "grid-cols-4",
     columns: 4,
     cards: [
@@ -180,7 +180,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "workflow",
-    className: "min-w-[640px]",
+    className: "min-w-[560px]",
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
@@ -193,7 +193,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "operations",
-    className: "min-w-[640px]",
+    className: "min-w-[560px]",
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
@@ -207,7 +207,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "stock",
-    className: "min-w-[640px]",
+    className: "min-w-[560px]",
     gridClassName: "grid-cols-3",
     columns: 3,
     cards: [
@@ -713,23 +713,23 @@ export function OperationDashboard() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="overflow-hidden rounded-lg border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-        <div className="bg-white px-5 py-5 md:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="bg-white px-4 py-4 md:px-5">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h2 className="text-3xl font-black uppercase tracking-tight text-black">Operation Dashboard</h2>
+              <h2 className="text-[28px] font-black uppercase tracking-tight text-black">Operation Dashboard</h2>
             </div>
             <div className="flex flex-wrap items-stretch justify-end gap-3">
-              <DateInput label="From" value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
-              <DateInput label="To" value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
+              <DateInput value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
+              <DateInput value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
               {allowExports ? (
                 <ExcelExport data={exportData} fileName={`Operation_Dashboard_${dateRange.from}_${dateRange.to}`} />
               ) : null}
               <button
                 type="button"
                 onClick={() => setIsColumnsOpen((v) => !v)}
-                className="inline-flex min-h-[58px] items-center gap-2 rounded-md border-2 border-black bg-white px-4 py-2 text-[11px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+                className="inline-flex min-h-[46px] items-center gap-2 rounded-md border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
               >
                 <SlidersHorizontal size={14} strokeWidth={3} />
                 Columns
@@ -737,17 +737,17 @@ export function OperationDashboard() {
             </div>
           </div>
 
-          <div className="mt-5 overflow-x-auto pb-3">
-            <div className="flex min-w-max items-start gap-5">
+          <div className="mt-3 overflow-x-auto pb-2">
+            <div className="flex min-w-max items-start gap-3">
               {SUMMARY_GROUP_CONFIGS.map((groupConfig) => {
                 const group = summary.groups.find((entry) => entry.id === groupConfig.groupId);
                 if (!group) return null;
                 return (
                   <section
                     key={group.id}
-                    className={cn("shrink-0 overflow-hidden rounded-lg border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
+                    className={cn("shrink-0 overflow-hidden rounded-md border-2 border-black bg-white shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]", groupConfig.className)}
                   >
-                    <div className="bg-slate-900 px-4 py-2.5 text-sm font-black uppercase tracking-[0.18em] text-white">{group.title}</div>
+                    <div className="bg-slate-900 px-3 py-2 text-[12px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
                     <div className={cn("grid gap-0", groupConfig.gridClassName)}>
                       {groupConfig.cards.map((cardConfig) => {
                         const card = getSummaryCard(summary, cardConfig.id);
@@ -772,11 +772,11 @@ export function OperationDashboard() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="flex-1 rounded-lg border-2 border-black bg-white p-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="flex-1 rounded-md border-2 border-black bg-white p-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs, items, parties..." />
         </div>
-        <div className="flex items-center gap-3 rounded-lg border-2 border-black bg-white px-4 py-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <div className="flex items-center gap-2 rounded-md border-2 border-black bg-white px-3 py-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <label htmlFor="closed-job-filter" className="text-[11px] font-black uppercase tracking-widest text-slate-700">
             Closed Job
           </label>
@@ -784,7 +784,7 @@ export function OperationDashboard() {
             id="closed-job-filter"
             value={closedJobFilter}
             onChange={(event) => setClosedJobFilter(event.target.value as ClosedJobFilter)}
-            className="rounded border border-black bg-white px-3 py-2 text-sm font-bold outline-none"
+            className="rounded border border-black bg-white px-2.5 py-1.5 text-sm font-bold outline-none"
           >
             <option value="all">All</option>
             <option value="yes">Yes</option>
@@ -794,7 +794,7 @@ export function OperationDashboard() {
       </div>
 
       {isColumnsOpen ? (
-        <div ref={columnsPanelRef} className="rounded-lg border-2 border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+        <div ref={columnsPanelRef} className="rounded-md border-2 border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="flex items-center justify-between gap-3 border-b border-black pb-2 mb-3">
             <div className="text-xs font-black uppercase tracking-widest">Show / Hide Columns</div>
             <button
@@ -825,8 +825,8 @@ export function OperationDashboard() {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-        <div className="flex items-center justify-between border-b border-black bg-slate-100 px-4 py-3">
+      <div className="overflow-hidden rounded-md border-2 border-black bg-white shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]">
+        <div className="flex items-center justify-between border-b border-black bg-slate-100 px-4 py-2.5">
           <h3 className="text-sm font-black uppercase tracking-[0.12em] text-black">Production Master View</h3>
           <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600">{rows.length} records</div>
         </div>
@@ -842,7 +842,7 @@ export function OperationDashboard() {
                     onDragOver={onDragOver}
                     onDrop={onDrop(c.id)}
                     className={cn(
-                      "px-3 py-3 text-left text-[11px] font-black uppercase text-black border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
+                      "px-2.5 py-2.5 text-left text-[10px] font-black uppercase text-black border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
                       c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left"
                     )}
                     title="Drag to reorder"
@@ -855,7 +855,7 @@ export function OperationDashboard() {
             <tbody className="bg-white">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleColumns.length || 1} className="px-6 py-10 text-center text-sm font-medium text-black">
+                  <td colSpan={visibleColumns.length || 1} className="px-6 py-8 text-center text-sm font-medium text-black">
                     No productions found.
                   </td>
                 </tr>
@@ -869,9 +869,9 @@ export function OperationDashboard() {
                         <td
                           key={c.id}
                           className={cn(
-                            "px-3 py-3 text-[11px] text-black border-r border-black/90 align-top",
+                            "px-2.5 py-2.5 text-[10px] text-black border-r border-black/90 align-top",
                             c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
-                            c.id === "itemName" || c.id === "processingStatus" ? "whitespace-normal min-w-[220px]" : "whitespace-nowrap",
+                            c.id === "itemName" || c.id === "processingStatus" ? "whitespace-normal min-w-[180px]" : "whitespace-nowrap",
                             c.className
                           )}
                           title={title}
@@ -891,19 +891,15 @@ export function OperationDashboard() {
   );
 }
 
-function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <div className="flex min-h-[58px] items-center gap-4 rounded-md border-2 border-black bg-white px-4 py-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-      <div className="flex flex-col">
-        <span className="mb-1 text-[10px] font-black uppercase leading-none tracking-[0.12em] text-black/60">{label}</span>
-        <input
-          type="date"
-          className="cursor-pointer border-none bg-transparent p-0 text-sm font-black leading-tight uppercase focus:ring-0"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <span className="mt-1 text-[10px] font-bold tracking-wide text-slate-500">{formatDisplayDate(value)}</span>
-      </div>
+    <div className="flex min-h-[46px] items-center rounded-md border-2 border-black bg-white px-3 py-1.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+      <input
+        type="date"
+        className="cursor-pointer border-none bg-transparent p-0 text-sm font-black leading-tight uppercase focus:ring-0"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }
@@ -930,16 +926,16 @@ function SummaryMetricCard({
   return (
     <div
       className={cn(
-        "flex min-h-[96px] flex-col justify-between px-4 py-3.5",
+        "flex min-h-[78px] flex-col justify-between px-3 py-2.5",
         !isLastColumn && "border-r border-black",
         !isLastRow && "border-b border-black",
         config.tone,
         config.className
       )}
     >
-      <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-700">{card.label}</div>
-      <div className={cn("mt-2 text-[30px] font-black leading-none tracking-tight text-black", config.valueTone)}>{formatMetricValue(card)}</div>
-      <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="text-[9px] font-black uppercase tracking-[0.06em] text-slate-700">{card.label}</div>
+      <div className={cn("mt-1 text-[22px] font-black leading-none tracking-tight text-black", config.valueTone)}>{formatMetricValue(card)}</div>
+      <div className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
         {card.note || (card.status === "unavailable" ? "Pending data source" : "")}
       </div>
     </div>
