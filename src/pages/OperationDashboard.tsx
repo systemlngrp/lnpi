@@ -931,16 +931,16 @@ function SummaryMetricCard({
   return (
     <div
       className={cn(
-        "flex min-h-[56px] flex-col justify-between px-2 py-1.5",
+        "flex min-h-[50px] flex-col justify-between px-1.5 py-1",
         !isLastColumn && "border-r border-black",
         !isLastRow && "border-b border-black",
         config.tone,
         config.className
       )}
     >
-      <div className="text-[7px] font-black uppercase tracking-[0.08em] text-slate-700">{card.label}</div>
-      <div className={cn("mt-0.5 text-[16px] font-black leading-none tracking-tight text-black", config.valueTone)}>{formatMetricValue(card)}</div>
-      <div className="mt-0.5 text-[7px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="text-[6px] font-black uppercase tracking-[0.06em] text-slate-700">{card.label}</div>
+      <div className={cn("mt-0 text-[15px] font-black leading-none tracking-tight text-black", config.valueTone)}>{formatMetricValue(card)}</div>
+      <div className="mt-0 text-[6px] font-semibold uppercase tracking-[0.04em] text-slate-500">
         {card.note || (card.status === "unavailable" ? "Pending data source" : "")}
       </div>
     </div>
