@@ -320,9 +320,9 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       title: "Production Planning",
       cards: [
         makeCard({ id: "production", label: "Range Production", value: totalProduction, format: "number" }),
-        makeCard({ id: "previousProduction", label: "Previous Range Production", value: previousProduction, format: "number", note: comparisonLabel }),
+        makeCard({ id: "previousProduction", label: "Previous Range Production", value: previousProduction, format: "number" }),
         makeCard({ id: "planValue", label: "Range Plan Value", value: totalPlanValue, format: "currency" }),
-        makeCard({ id: "nextPlanValue", label: "Next Range Plan Value", value: nextPlanValue, format: "currency", note: nextLabel }),
+        makeCard({ id: "nextPlanValue", label: "Next Range Plan Value", value: nextPlanValue, format: "currency" }),
         makeCard({ id: "linearMeter", label: "Range Linear Meter", value: totalProductionMeter, format: "number" }),
         makeCard({ id: "wastage", label: "Total Wastage", value: totalWastage, format: "percent" }),
       ],
@@ -332,7 +332,7 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       title: "Dispatch & Sales",
       cards: [
         makeCard({ id: "rangeSale", label: "Range Sale", value: totalSale, format: "currency" }),
-        makeCard({ id: "previousSale", label: "Previous Range Sale", value: previousSale, format: "currency", note: comparisonLabel }),
+        makeCard({ id: "previousSale", label: "Previous Range Sale", value: previousSale, format: "currency" }),
         makeCard({ id: "dispatchPlannedQty", label: "Dispatch Planned Qty", value: dispatchPlannedQty, format: "number" }),
         makeCard({ id: "dispatchLoadedQty", label: "Dispatch Loaded Qty", value: dispatchLoadedQty, format: "number" }),
         makeCard({ id: "loadingQty", label: "Loading Slip Qty", value: loadingSlipQty, format: "number" }),

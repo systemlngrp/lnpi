@@ -142,8 +142,8 @@ const STORAGE_ORDER_KEY = "lnpi.operationDashboard.columns.order.v2";
 const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   {
     groupId: "headline",
-    className: "min-w-[720px]",
-    gridClassName: "grid-cols-3",
+    className: "min-w-[520px]",
+    gridClassName: "grid-cols-2",
     cards: [
       { id: "production", tone: "bg-[#00d4ff]" },
       { id: "previousProduction", tone: "bg-[#c8f7ff]" },
@@ -155,8 +155,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "dispatch",
-    className: "min-w-[720px]",
-    gridClassName: "grid-cols-3",
+    className: "min-w-[520px]",
+    gridClassName: "grid-cols-2",
     cards: [
       { id: "rangeSale", tone: "bg-[#16e0eb]" },
       { id: "previousSale", tone: "bg-[#efc3c3]" },
@@ -168,8 +168,8 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   },
   {
     groupId: "workflow",
-    className: "min-w-[720px]",
-    gridClassName: "grid-cols-3",
+    className: "min-w-[520px]",
+    gridClassName: "grid-cols-2",
     cards: [
       { id: "pendingPlanningCount", tone: "bg-[#ffffff]" },
       { id: "pendingPlanningValue", tone: "bg-[#ff8b8b] text-white", valueTone: "text-white" },
