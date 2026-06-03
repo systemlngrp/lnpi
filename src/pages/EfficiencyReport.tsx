@@ -207,166 +207,229 @@ export function EfficiencyReport() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">
-              <Filter size={14} />
-              Reports
+      <div className="overflow-hidden rounded-[32px] border border-slate-200/90 bg-white shadow-[0_24px_60px_-28px_rgba(15,23,42,0.28)]">
+        <div className="relative px-5 py-5 md:px-7 md:py-6">
+          <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.14),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.10),_transparent_38%),linear-gradient(180deg,_rgba(248,250,252,0.95),_rgba(255,255,255,0))]" />
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-2xl space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">
+                <Filter size={14} />
+                Reports
+              </div>
+              <div>
+                <h2 className="text-3xl font-black tracking-tight text-slate-950 md:text-[2rem]">Efficiency Report</h2>
+                <p className="mt-2 text-sm font-medium leading-6 text-slate-600 md:text-[15px]">
+                  Review machine and operator output with shift-aware expected quantity tracking and a cleaner operational filter console.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                  Shift based
+                </div>
+                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                  Machine view
+                </div>
+                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                  Operator view
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-black tracking-tight text-slate-900">Efficiency Report</h2>
+
+            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[560px]">
+              <div className="rounded-[24px] border border-teal-200 bg-[linear-gradient(135deg,rgba(240,253,250,1),rgba(236,254,255,0.86))] px-4 py-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">Overall Efficiency</div>
+                <div className="mt-3 text-4xl font-black tracking-tight text-teal-950">
+                  {overallEfficiency == null ? "-" : `${overallEfficiency.toFixed(2)}%`}
+                </div>
+                <div className="mt-1 text-xs font-semibold text-teal-700">Current filtered output</div>
+              </div>
+              <div className="rounded-[24px] border border-sky-200 bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(240,249,255,0.9))] px-4 py-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Total Qty</div>
+                <div className="mt-3 text-4xl font-black tracking-tight text-sky-950">{summary.qty.toFixed(2)}</div>
+                <div className="mt-1 text-xs font-semibold text-sky-700">Reported quantity</div>
+              </div>
+              <div className="rounded-[24px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-4 py-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">Expected Qty</div>
+                <div className="mt-3 text-4xl font-black tracking-tight text-violet-950">{summary.expected.toFixed(2)}</div>
+                <div className="mt-1 text-xs font-semibold text-violet-700">Shift based target</div>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Downloads removed (only shown in Delivery Book) */}
-          </div>
-        </div>
+          <div className="relative mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 md:p-5">
+            <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">Filter Console</div>
+                <div className="mt-1 text-sm font-semibold text-slate-700">Narrow the report by date, view mode, shift, machine, and operator.</div>
+              </div>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+              >
+                Clear Filters
+              </button>
+            </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-12">
-          <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-4">
-            <Search size={16} className="text-slate-400" />
-            <input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search job, machine, operator..."
-              className="ml-3 w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-            />
-          </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
+              <label className="space-y-2 xl:col-span-4">
+                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                  <Search size={14} />
+                  Search
+                </span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                  <Search size={16} className="text-teal-500" />
+                  <input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search job, machine, operator..."
+                    className="ml-3 w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+                  />
+                </div>
+              </label>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">From</div>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="text-sm font-semibold text-slate-800 outline-none"
-            />
-          </div>
+              <label className="space-y-2 xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">From</span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
+                  />
+                </div>
+              </label>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">To</div>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="text-sm font-semibold text-slate-800 outline-none"
-            />
-          </div>
+              <label className="space-y-2 xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">To</span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
+                  />
+                </div>
+              </label>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Day hrs</div>
-            <input
-              type="number"
-              value={dayShiftHoursInput}
-              onChange={(e) => setDayShiftHoursInput(e.target.value)}
-              className="w-20 text-right text-sm font-semibold text-slate-800 outline-none"
-              min={0}
-              step={0.5}
-            />
-          </div>
+              <label className="space-y-2 xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Day hrs</span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                  <input
+                    type="number"
+                    value={dayShiftHoursInput}
+                    onChange={(e) => setDayShiftHoursInput(e.target.value)}
+                    className="w-full bg-transparent text-right text-sm font-semibold text-slate-800 outline-none"
+                    min={0}
+                    step={0.5}
+                  />
+                </div>
+              </label>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-2">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Night hrs</div>
-            <input
-              type="number"
-              value={nightShiftHoursInput}
-              onChange={(e) => setNightShiftHoursInput(e.target.value)}
-              className="w-20 text-right text-sm font-semibold text-slate-800 outline-none"
-              min={0}
-              step={0.5}
-            />
-          </div>
+              <label className="space-y-2 xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Night hrs</span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                  <input
+                    type="number"
+                    value={nightShiftHoursInput}
+                    onChange={(e) => setNightShiftHoursInput(e.target.value)}
+                    className="w-full bg-transparent text-right text-sm font-semibold text-slate-800 outline-none"
+                    min={0}
+                    step={0.5}
+                  />
+                </div>
+              </label>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-3">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">View</div>
-            <select
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as ViewMode)}
-              className="text-sm font-semibold text-slate-800 outline-none"
-            >
-              <option value="machineDaily">Daily by machine+shift</option>
-              <option value="operatorMachineDaily">Daily by operator+machine+shift</option>
-              <option value="detailed">Detailed</option>
-            </select>
-          </div>
+              <label className="space-y-2 xl:col-span-3">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">View</span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                  <select
+                    value={viewMode}
+                    onChange={(e) => setViewMode(e.target.value as ViewMode)}
+                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
+                  >
+                    <option value="machineDaily">Daily by machine+shift</option>
+                    <option value="operatorMachineDaily">Daily by operator+machine+shift</option>
+                    <option value="detailed">Detailed</option>
+                  </select>
+                </div>
+              </label>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm xl:col-span-3">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Shift</div>
-            <select
-              value={shift}
-              onChange={(e) => setShift(e.target.value as "" | Shift)}
-              className="text-sm font-semibold text-slate-800 outline-none"
-            >
-              <option value="">All</option>
-              <option value="Day">Day</option>
-              <option value="Night">Night</option>
-            </select>
-          </div>
+              <label className="space-y-2 xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Shift</span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                  <select
+                    value={shift}
+                    onChange={(e) => setShift(e.target.value as "" | Shift)}
+                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
+                  >
+                    <option value="">All</option>
+                    <option value="Day">Day</option>
+                    <option value="Night">Night</option>
+                  </select>
+                </div>
+              </label>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm md:col-span-1 xl:col-span-2">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Machine</div>
-            <select
-              value={machineId}
-              onChange={(e) => setMachineId(e.target.value)}
-              className="max-w-[220px] truncate text-right text-sm font-semibold text-slate-800 outline-none"
-            >
-              <option value="">All</option>
-              {machineOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+              <label className="space-y-2 xl:col-span-3">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Machine</span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                  <select
+                    value={machineId}
+                    onChange={(e) => setMachineId(e.target.value)}
+                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
+                  >
+                    <option value="">All</option>
+                    {machineOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </label>
 
-          <div className="flex h-[52px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm md:col-span-1 xl:col-span-2">
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Operator</div>
-            <select
-              value={operatorId}
-              onChange={(e) => setOperatorId(e.target.value)}
-              className="max-w-[220px] truncate text-right text-sm font-semibold text-slate-800 outline-none"
-            >
-              <option value="">All</option>
-              {operatorOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-3 md:col-span-2 xl:col-span-2">
-            <button
-              type="button"
-              onClick={handleClear}
-              className="inline-flex h-[52px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
-            >
-              Clear
-            </button>
+              <label className="space-y-2 xl:col-span-3">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Operator</span>
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                  <select
+                    value={operatorId}
+                    onChange={(e) => setOperatorId(e.target.value)}
+                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
+                  >
+                    <option value="">All</option>
+                    {operatorOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <div className="text-sm font-bold text-slate-900">{rows.length} rows</div>
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-                Overall efficiency: {overallEfficiency == null ? "-" : `${overallEfficiency.toFixed(2)}%`}
-              </div>
+      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.34)]">
+        <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="text-sm font-bold text-slate-900">{rows.length} rows</div>
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+              Efficiency view: {viewMode === "machineDaily" ? "Machine + shift daily" : viewMode === "operatorMachineDaily" ? "Operator + machine + shift daily" : "Detailed"}
             </div>
-            <div className="flex gap-4 text-right text-sm font-semibold text-slate-700">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Total Qty</div>
-                <div className="text-slate-900">{summary.qty.toFixed(2)}</div>
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Expected Qty</div>
-                <div className="text-slate-900">{summary.expected.toFixed(2)}</div>
-              </div>
+          </div>
+          <div className="flex gap-6 text-right text-sm font-semibold text-slate-700">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Overall Eff%</div>
+              <div className="text-slate-900">{overallEfficiency == null ? "-" : overallEfficiency.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Total Qty</div>
+              <div className="text-slate-900">{summary.qty.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Expected Qty</div>
+              <div className="text-slate-900">{summary.expected.toFixed(2)}</div>
             </div>
           </div>
         </div>
@@ -374,7 +437,7 @@ export function EfficiencyReport() {
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
             <thead>
-              <tr className="bg-teal-950 text-white">
+              <tr className="bg-[linear-gradient(90deg,#042f2e,#0f766e,#134e4a)] text-white">
                 {["Date", "Job No.", "Machine", "Shift", "Operator", "Qty", "Max/Hr", "Expected", "Eff%"].map((label) => (
                   <th
                     key={label}
@@ -394,7 +457,7 @@ export function EfficiencyReport() {
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.id} className="border-t border-slate-200 hover:bg-slate-50">
+                  <tr key={row.id} className="border-t border-slate-200 transition hover:bg-teal-50/45">
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-slate-900">
                       {formatDate(row.date)}
                     </td>
