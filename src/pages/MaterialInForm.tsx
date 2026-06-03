@@ -76,9 +76,14 @@ export function MaterialInForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const gateEntryId = searchParams.get("gateEntryId") || "";
+  const editId = searchParams.get("edit") || "";
   const linkedGateEntry = useMemo(
     () => gateEntries.find((entry) => entry.id === gateEntryId),
     [gateEntries, gateEntryId]
+  );
+  const editingEntry = useMemo(
+    () => materialIn.find((entry) => entry.id === editId) || null,
+    [editId, materialIn]
   );
 
   const linkedSupplierName = suppliers.find((supplier) => supplier.id === supplierId)?.name || "";
@@ -124,12 +129,44 @@ export function MaterialInForm() {
   ];
 
   useEffect(() => {
+    if (editingEntry) return;
     if (!linkedGateEntry) return;
     setDate(linkedGateEntry.date || new Date().toISOString().split("T")[0]);
     setInvoiceNo(linkedGateEntry.invoiceNo || "");
     setInvDate(linkedGateEntry.date || "");
     setSupplierId(linkedGateEntry.supplierId || "");
-  }, [linkedGateEntry]);
+  }, [editingEntry, linkedGateEntry]);
+
+  useEffect(() => {
+    if (!editingEntry) return;
+
+    setDate(editingEntry.date || new Date().toISOString().split("T")[0]);
+    setInvoiceNo(editingEntry.invoiceNo || "");
+    setInvDate(editingEntry.invDate || "");
+    setSupplierId(editingEntry.supplierId || "");
+    setMrrType(editingEntry.mrrType || "Others");
+    setLines((editingEntry.lines || []).map((line) => computeLineValues({ ...line })));
+
+    const existingPackingSlips = packingSlips.filter((row) => row.materialInId === editingEntry.id);
+    const nextDrafts = existingPackingSlips.reduce<Record<string, PackingSlipDraft[]>>((acc, row) => {
+      const current = acc[row.materialLineId] || [];
+      current.push({
+        id: row.id,
+        materialLineId: row.materialLineId,
+        materialId: row.materialId,
+        supplierReelNo: row.supplierReelNo || "",
+        ourReelNo: row.ourReelNo,
+        weightKg: String(row.weightKg || ""),
+        supplierPoNo: row.supplierPoNo || "",
+        ourPoId: row.ourPoId || "",
+        ourPoNo: row.ourPoNo || "",
+      });
+      acc[row.materialLineId] = current;
+      return acc;
+    }, {});
+    setPackingSlipDrafts(nextDrafts);
+    resetLineDrafts();
+  }, [editingEntry, packingSlips]);
 
   const getMaterial = (materialId: string) => {
     if (isFgType) return items.find((item) => item.id === materialId);
@@ -716,21 +753,23 @@ export function MaterialInForm() {
 
     setIsSubmitting(true);
     try {
-      let transactionNo = "";
-      const materialInId = crypto.randomUUID();
+      let transactionNo = editingEntry?.transactionNo || "";
+      const materialInId = editingEntry?.id || crypto.randomUUID();
       const timestamp = new Date().toISOString();
 
       await setMaterialIn((prev) => {
-        transactionNo = generateTransactionNo("MI", prev, date);
+        if (!editingEntry) {
+          transactionNo = generateTransactionNo("MI", prev, date);
+        }
 
-        const newEntry: MaterialIn = {
+        const nextEntry: MaterialIn = {
           id: materialInId,
           transactionNo,
           mrrType,
-          gateEntryId: linkedGateEntry?.id,
-          gateEntryNo: linkedGateEntry?.gateEntryNo,
-          timestamp,
-          entryEmailId: "system@lngrp.in",
+          gateEntryId: editingEntry?.gateEntryId || linkedGateEntry?.id,
+          gateEntryNo: editingEntry?.gateEntryNo || linkedGateEntry?.gateEntryNo,
+          timestamp: editingEntry?.timestamp || timestamp,
+          entryEmailId: editingEntry?.entryEmailId || "system@lngrp.in",
           date,
           invoiceNo,
           invDate,
@@ -739,12 +778,27 @@ export function MaterialInForm() {
           totalActualValue,
           totalAmount,
           lines,
-          status: "Pending MRR",
+          status: editingEntry?.status || "Pending MRR",
           updatedBy: "System User",
           updateTimestamp: timestamp,
+          phTimestamp: editingEntry?.phTimestamp,
+          phEmailId: editingEntry?.phEmailId,
+          plant_head_remark: editingEntry?.plant_head_remark,
+          accTimestamp: editingEntry?.accTimestamp,
+          accEmailId: editingEntry?.accEmailId,
+          accounts_remark: editingEntry?.accounts_remark,
+          debitNote: editingEntry?.debitNote,
+          debitNoteDate: editingEntry?.debitNoteDate,
+          debitNoteAmount: editingEntry?.debitNoteAmount,
+          mdTimestamp: editingEntry?.mdTimestamp,
+          mdEmailId: editingEntry?.mdEmailId,
+          md_approval_remark: editingEntry?.md_approval_remark,
+          tallyTimestamp: editingEntry?.tallyTimestamp,
         };
 
-        return [...prev, newEntry];
+        return editingEntry
+          ? prev.map((entry) => (entry.id === editingEntry.id ? nextEntry : entry))
+          : [...prev, nextEntry];
       });
 
       if (mrrType === "Reel") {
@@ -766,11 +820,16 @@ export function MaterialInForm() {
           }));
 
         if (newPackingSlips.length > 0) {
-          await setPackingSlips([...packingSlips, ...newPackingSlips]);
+          await setPackingSlips((prev) => [
+            ...prev.filter((row) => row.materialInId !== materialInId),
+            ...newPackingSlips,
+          ]);
         }
+      } else if (editingEntry) {
+        await setPackingSlips((prev) => prev.filter((row) => row.materialInId !== materialInId));
       }
 
-      if (linkedGateEntry) {
+      if (!editingEntry && linkedGateEntry) {
         await setGateEntries(
           gateEntries.map((entry) =>
             entry.id === linkedGateEntry.id
@@ -793,7 +852,11 @@ export function MaterialInForm() {
       setPackingSlipDrafts({});
       setCurrentPoLineId("");
       setCurrentInvoiceRate("");
-      alert(`Material In created with Transaction No: ${transactionNo}`);
+      alert(
+        editingEntry
+          ? `Material In updated: ${transactionNo}`
+          : `Material In created with Transaction No: ${transactionNo}`
+      );
       navigate("/material-receipt/approvals");
     } catch (err) {
       console.error("Failed to save Material In:", err);
@@ -805,7 +868,9 @@ export function MaterialInForm() {
 
   return (
     <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
-      <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">Material In Form</h2>
+      <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">
+        {editingEntry ? "Edit Material In" : "Material In Form"}
+      </h2>
       <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
         {linkedGateEntry ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded border border-emerald-700 bg-emerald-50 p-4">
@@ -838,8 +903,13 @@ export function MaterialInForm() {
             />
           </div>
           <div className="flex flex-col space-y-1">
-            <label className="font-bold text-black">Transaction No (Auto)</label>
-            <input type="text" value="Generated on Submit" disabled className="border-2 border-black rounded p-2 text-black bg-slate-50 w-full font-mono text-sm opacity-70" />
+            <label className="font-bold text-black">Transaction No</label>
+            <input
+              type="text"
+              value={editingEntry?.transactionNo || "Generated on Submit"}
+              disabled
+              className="border-2 border-black rounded p-2 text-black bg-slate-50 w-full font-mono text-sm opacity-70"
+            />
           </div>
           <div className="flex flex-col space-y-1">
             <label className="font-bold text-black">
@@ -1180,7 +1250,7 @@ export function MaterialInForm() {
             disabled={isSubmitting || lines.length === 0}
             className="flex items-center justify-center min-w-[150px] bg-indigo-600 text-white px-6 py-3 rounded font-bold hover:bg-indigo-700 transition disabled:opacity-50"
           >
-            {isSubmitting ? <Spinner size={24} className="text-white" /> : "Submit Form"}
+            {isSubmitting ? <Spinner size={24} className="text-white" /> : editingEntry ? "Update Form" : "Submit Form"}
           </button>
         </div>
       </form>

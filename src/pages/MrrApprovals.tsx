@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier, MaterialLine } from "../types";
+import { Material, MaterialIn, Item, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Save, Download } from "lucide-react";
+import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Download } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -23,10 +23,6 @@ export function MrrApprovals() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
-
-  // Accounts Edit State
-  const [editingMrrId, setEditingMrrId] = useState<string | null>(null);
-  const [editLines, setEditLines] = useState<MaterialLine[]>([]);
 
   const stages: { label: string; value: Stage }[] = [
     { label: "Plant Head", value: "Pending PH" },
@@ -133,7 +129,7 @@ export function MrrApprovals() {
         delete next[mrrId];
         return next;
       });
-      setSelectedIds(prev => prev.filter(i => i !== id));
+      setSelectedIds(prev => prev.filter(i => i !== mrrId));
     } catch (err) {
       console.error("Action failed:", err);
       alert("Failed to update MRR status.");
@@ -147,47 +143,6 @@ export function MrrApprovals() {
     if (!confirm(`Are you sure you want to approve ${selectedIds.length} MRRs?`)) return;
     for (const id of selectedIds) {
       await handleAction(id, "Approve");
-    }
-  };
-
-  const startEditing = (mrr: MaterialIn) => {
-    setEditingMrrId(mrr.id);
-    setEditLines(JSON.parse(JSON.stringify(mrr.lines)));
-  };
-
-  const updateEditLine = (index: number, patch: Partial<MaterialLine>) => {
-    const next = [...editLines];
-    const line = { ...next[index], ...patch };
-    
-    // Recalculate
-    const taxable = Number(((line.actualQty || line.qty || 0) * (line.invoiceRate || line.rate || 0)).toFixed(2));
-    const gst = Number((taxable * (line.gstRate || 0) / 100).toFixed(2));
-    
-    line.taxableAmount = taxable;
-    line.gstAmount = gst;
-    line.totalAmount = taxable + gst;
-    line.actualValue = taxable;
-    
-    next[index] = line;
-    setEditLines(next);
-  };
-
-  const saveEdit = async (mrrId: string) => {
-    const totalActualValue = editLines.reduce((s, l) => s + (l.actualValue || 0), 0);
-    const totalAmount = editLines.reduce((s, l) => s + (l.totalAmount || l.actualValue || 0), 0);
-
-    try {
-      await setMaterialIn(prev => prev.map(m => m.id === mrrId ? { 
-        ...m, 
-        lines: editLines,
-        totalActualValue,
-        totalAmount,
-        updateTimestamp: new Date().toISOString(),
-        updatedBy: "accounts@lngrp.in"
-      } : m));
-      setEditingMrrId(null);
-    } catch (err) {
-      alert("Failed to save changes.");
     }
   };
 
@@ -255,7 +210,6 @@ export function MrrApprovals() {
             onClick={() => {
               setActiveStage(s.value);
               setSelectedIds([]);
-              setEditingMrrId(null);
             }}
             className={cn(
               "px-6 py-2 rounded font-bold text-sm uppercase transition-all border border-black",
@@ -318,8 +272,7 @@ export function MrrApprovals() {
                   </tr>
                 ) : (
                   filteredList.map((m) => {
-                    const isEditing = editingMrrId === m.id;
-                    const linesToDisplay = isEditing ? editLines : m.lines;
+                    const linesToDisplay = m.lines;
                     
                     const mrrWeight = linesToDisplay.reduce((s, l) => s + (l.actualQty || l.qty || 0), 0);
                     const invWeight = linesToDisplay.reduce((s, l) => s + (l.invoiceQty || 0), 0);
@@ -343,31 +296,6 @@ export function MrrApprovals() {
                           {linesToDisplay.map((l, i) => (
                             <div key={i} className="mb-2 last:mb-0 border-b border-black/5 pb-1 last:border-0">
                               <div className="font-bold lowercase first-letter:uppercase">{getItemSpecs(l, m.mrrType)}</div>
-                              {isEditing && (
-                                <div className="flex gap-2 mt-1">
-                                  <input 
-                                    type="number" 
-                                    value={l.actualQty || 0}
-                                    onChange={e => updateEditLine(i, { actualQty: parseFloat(e.target.value) })}
-                                    className="w-16 border border-black rounded px-1 text-[10px]"
-                                    placeholder="Qty"
-                                  />
-                                  <input 
-                                    type="number" 
-                                    value={l.invoiceRate || 0}
-                                    onChange={e => updateEditLine(i, { invoiceRate: parseFloat(e.target.value) })}
-                                    className="w-16 border border-black rounded px-1 text-[10px]"
-                                    placeholder="Rate"
-                                  />
-                                  <input 
-                                    type="number" 
-                                    value={l.gstRate || 0}
-                                    onChange={e => updateEditLine(i, { gstRate: parseFloat(e.target.value) })}
-                                    className="w-12 border border-black rounded px-1 text-[10px]"
-                                    placeholder="GST%"
-                                  />
-                                </div>
-                              )}
                             </div>
                           ))}
                         </td>
@@ -387,21 +315,12 @@ export function MrrApprovals() {
                                 <Download size={10} /> PDF
                               </button>
                               {activeStage === "Pending Accounts" && (
-                                isEditing ? (
-                                  <button 
-                                    onClick={() => saveEdit(m.id)}
-                                    className="bg-emerald-600 text-white py-1 rounded text-[9px] font-black hover:bg-emerald-700 flex items-center justify-center gap-1"
-                                  >
-                                    <Save size={10} /> SAVE
-                                  </button>
-                                ) : (
-                                  <button 
-                                    onClick={() => startEditing(m)}
-                                    className="border border-indigo-600 text-indigo-600 py-1 rounded text-[9px] font-black hover:bg-indigo-50 flex items-center justify-center gap-1"
-                                  >
-                                    <Edit2 size={10} /> EDIT
-                                  </button>
-                                )
+                                <button 
+                                  onClick={() => navigate(`/material-in/form?edit=${m.id}`)}
+                                  className="border border-indigo-600 text-indigo-600 py-1 rounded text-[9px] font-black hover:bg-indigo-50 flex items-center justify-center gap-1"
+                                >
+                                  <Edit2 size={10} /> EDIT
+                                </button>
                               )}
                             </div>
                             <div className="grid grid-cols-2 gap-1">
@@ -472,3 +391,5 @@ export function MrrApprovals() {
     </div>
   );
 }
+
+
