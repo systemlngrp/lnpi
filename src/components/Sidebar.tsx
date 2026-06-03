@@ -95,6 +95,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Companies", href: "/masters/companies", icon: Database },
       { name: "Trucks", href: "/masters/trucks", icon: Truck },
       { name: "Machine Master", href: "/masters/machines", icon: Hammer },
+      { name: "RAPC Range Master", href: "/masters/rapc-ranges", icon: Database },
       { name: "Users", href: "/masters/users", icon: Users },
       { name: "Settings", href: "/masters/settings", icon: Database },
     ],

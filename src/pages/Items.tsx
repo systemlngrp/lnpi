@@ -1,12 +1,13 @@
 import React, { useMemo, useState, useRef } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, ExternalLink, FileUp, XCircle, Upload, Download, FileSpreadsheet } from "lucide-react";
-import { ColorMaster, Company, Item, ItemGroup, Production, Setting, MaterialIn } from "../types";
+import { ColorMaster, Company, Item, ItemGroup, Production, Setting, MaterialIn, RapcRange } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { TableControls } from "../components/TableControls";
 import CreatableSelect from "react-select/creatable";
 import * as XLSX from "xlsx";
+import { resolveRapcRange } from "../lib/rapcRanges";
 
 export function Items() {
   const [items, setItems] = useData<Item>("items", []);
@@ -16,6 +17,7 @@ export function Items() {
   const [settings] = useData<Setting>("settings", []);
   const [productions] = useData<Production>("productions", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
+  const [rapcRanges] = useData<RapcRange>("rapc-ranges", []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -34,6 +36,7 @@ export function Items() {
   const [openWidth, setOpenWidth] = useState<string>("");
   const [opening, setOpening] = useState<string>("0");
   const [gstRate, setGstRate] = useState<string>("18");
+  const [rapc, setRapc] = useState<string>("");
   
   // Technical Specifications State
   const [noOfParts, setNoOfParts] = useState<string>("");
@@ -86,6 +89,7 @@ export function Items() {
         "PLY": 3,
         "FLUTE": "B",
         "Opening Balance": 0,
+        "RAPC": "",
         "GST Rate (%)": 18,
         "Rate": 25.50,
         "TOP GSM": 120,
@@ -221,6 +225,7 @@ export function Items() {
             ply: row["PLY"] ? Number(row["PLY"]) : undefined,
             flute: String(row["FLUTE"] || "").trim() || undefined,
             opening: row["Opening Balance"] ? Number(row["Opening Balance"]) : 0,
+            rapc: row["RAPC"] ? Number(row["RAPC"]) : undefined,
             gstRate: row["GST Rate (%)"] ? Number(row["GST Rate (%)"]) : 18,
             rate: row["Rate"] ? Number(row["Rate"]) : undefined,
             l1: row["TOP GSM"] ? Number(row["TOP GSM"]) : undefined,
@@ -299,6 +304,8 @@ export function Items() {
       "Cutting Size": item.cuttingSize || "",
       "Rate": item.rate || "",
       "Opening Balance": item.opening || 0,
+      "RAPC": item.rapc || "",
+      "RAPC Range": resolveRapcRange(item.rapc, rapcRanges) || "",
       "UOM": item.uom,
       "GST Rate (%)": item.gstRate || 18,
       "Item Type": item.itemType || "Others"
@@ -666,6 +673,7 @@ export function Items() {
     setOpenWidth("");
     setOpening("0");
     setGstRate("18");
+    setRapc("");
     setNoOfParts("");
     setUps("");
     setLength("");
@@ -697,6 +705,53 @@ export function Items() {
     setArtwork("");
     setSpec("");
     setEditingId(null);
+  };
+
+  const populateItemForm = (item: Item) => {
+    setName(item.name);
+    setGroupId(item.groupId);
+    setUom(item.uom);
+    setErp(item.erp?.toString() || "");
+    setItemType(item.itemType || "Others");
+    setTypeName(item.typeName || "");
+    setCustomer(item.customer || "");
+    setOpenLength(item.openLength?.toString() || "");
+    setOpenWidth(item.openWidth?.toString() || "");
+    setOpening((item.opening ?? 0).toString());
+    setGstRate((item.gstRate ?? 18).toString());
+    setRapc(item.rapc?.toString() || "");
+    setNoOfParts(item.noOfParts?.toString() || "");
+    setUps(item.ups?.toString() || "");
+    setLength(item.length?.toString() || "");
+    setBreadth(item.breadth?.toString() || "");
+    setHeight(item.height?.toString() || "");
+    setPly(item.ply?.toString() || "");
+    setFlute(item.flute || "");
+    setDieCutUps(item.dieCutUps?.toString() || "");
+    setTopPaperShade(item.topPaperShade || "");
+    setPlateWeight(item.plateWeight?.toString() || "");
+    setGsmLeastCost(item.gsmLeastCost?.toString() || "");
+    setL1(item.l1?.toString() || "");
+    setF1(item.f1?.toString() || "");
+    setL2(item.l2?.toString() || "");
+    setF2(item.f2?.toString() || "");
+    setL3(item.l3?.toString() || "");
+    setF3(item.f3?.toString() || "");
+    setB3(item.b3?.toString() || "");
+    setBackingPaperShade(item.backingPaperShade || "");
+    setPrintingColour1(item.printingColour1 || "");
+    setPrintingColour2(item.printingColour2 || "");
+    setLOd(item.lOd?.toString() || "");
+    setWOd(item.wOd?.toString() || "");
+    setHOd(item.hOd?.toString() || "");
+    setFlap(item.flap?.toString() || "");
+    setDeckleSize(item.deckleSize?.toString() || "");
+    setCuttingSize(item.cuttingSize?.toString() || "");
+    setItemRate(item.rate?.toString() || "");
+    setArtwork(item.artwork || "");
+    setSpec(item.spec || "");
+    setEditingId(item.id);
+    setIsFormOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -743,6 +798,7 @@ export function Items() {
         openWidth: parseFloat(openWidth) || undefined,
         opening: parseFloat(opening) || 0,
         gstRate: parseFloat(gstRate) || 0,
+        rapc: parseFloat(rapc) || undefined,
         noOfParts: calculatedItemFields.noOfPartsCalculated ? parseInt(calculatedItemFields.noOfPartsCalculated, 10) : undefined,
         ups: parseInt(ups) || undefined,
         length: parseFloat(length) || undefined,
@@ -1123,6 +1179,26 @@ export function Items() {
                       className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                     />
                   </div>
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm">RAPC</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rapc}
+                      onChange={(e) => setRapc(e.target.value)}
+                      placeholder="Enter RAPC"
+                      className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                    />
+                  </div>
+                  <div className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm">RAPC Range</label>
+                    <input
+                      type="text"
+                      value={rapc ? String(resolveRapcRange(rapc, rapcRanges) || "") : ""}
+                      readOnly
+                      className="border-2 border-black rounded p-2 text-black bg-slate-100 focus:outline-none"
+                    />
+                  </div>
                   <FormItem label="Plate Wt" value={plateWeight} onChange={setPlateWeight} type="number" step="0.00001" />
                   <FormItem label="GSM (Least Cost)" value={gsmLeastCost} onChange={setGsmLeastCost} type="number" />
                 </div>
@@ -1152,53 +1228,7 @@ export function Items() {
                                 <div className="text-sm font-bold">{item.name}</div>
                              </div>
                              <div className="flex items-center gap-2">
-                                 <button onClick={() => { 
-                                     setName(item.name); 
-                                     setGroupId(item.groupId); 
-                                     setUom(item.uom); 
-                                     setErp(item.erp?.toString() || ""); 
-                                     setItemType(item.itemType || "Others");
-                                     setTypeName(item.typeName || "");
-                                     setCustomer(item.customer || "");
-                                     setOpenLength(item.openLength?.toString() || "");
-                                     setOpenWidth(item.openWidth?.toString() || "");
-                                     setOpening((item.opening ?? 0).toString());
-                                     setGstRate((item.gstRate ?? 18).toString()); 
-                                     
-                                     setNoOfParts(item.noOfParts?.toString() || "");
-                                     setUps(item.ups?.toString() || "");
-                                     setLength(item.length?.toString() || "");
-                                     setBreadth(item.breadth?.toString() || "");
-                                     setHeight(item.height?.toString() || "");
-                                     setPly(item.ply?.toString() || "");
-                                     setFlute(item.flute || "");
-                                     setDieCutUps(item.dieCutUps?.toString() || "");
-                                     setTopPaperShade(item.topPaperShade || "");
-                                     setPlateWeight(item.plateWeight?.toString() || "");
-                                     setGsmLeastCost(item.gsmLeastCost?.toString() || "");
-                                     setL1(item.l1?.toString() || "");
-                                     setF1(item.f1?.toString() || "");
-                                     setL2(item.l2?.toString() || "");
-                                     setF2(item.f2?.toString() || "");
-                                     setL3(item.l3?.toString() || "");
-                                     setF3(item.f3?.toString() || "");
-                                     setB3(item.b3?.toString() || "");
-                                     setBackingPaperShade(item.backingPaperShade || "");
-                                     setPrintingColour1(item.printingColour1 || "");
-                                     setPrintingColour2(item.printingColour2 || "");
-                                     setLOd(item.lOd?.toString() || "");
-                                     setWOd(item.wOd?.toString() || "");
-                                     setHOd(item.hOd?.toString() || "");
-                                     setFlap(item.flap?.toString() || "");
-                                     setDeckleSize(item.deckleSize?.toString() || "");
-                                     setCuttingSize(item.cuttingSize?.toString() || "");
-                                     setItemRate(item.rate?.toString() || "");
-                                     setArtwork(item.artwork || "");
-                                     setSpec(item.spec || "");
-                                     
-                                     setEditingId(item.id); 
-                                     setIsFormOpen(true); 
-                                 }} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
+                                 <button onClick={() => populateItemForm(item)} className="text-indigo-600 hover:text-indigo-900 font-bold"><Edit size={16} /></button>
                                   <button
                                     onClick={() => handleDelete(item.id)}
                                     disabled={producedItemIds.has(item.id)}
@@ -1217,6 +1247,14 @@ export function Items() {
                              <div>
                               <div className="text-xs font-black text-slate-500 uppercase">ERP</div>
                               <div className="text-sm">{item.erp ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">RAPC</div>
+                              <div className="text-sm">{item.rapc ?? ""}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-500 uppercase">RAPC Range</div>
+                              <div className="text-sm">{resolveRapcRange(item.rapc, rapcRanges) || ""}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">Customer</div>
@@ -1384,6 +1422,8 @@ export function Items() {
                 <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">RAPC</th>
+                      <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">RAPC Range</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">TYPE</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Open Length</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Open Width</th>
@@ -1433,13 +1473,15 @@ export function Items() {
               </thead>
               <tbody className="divide-y divide-black bg-white">
                     {filteredItems.length === 0 ? (
-                      <tr><td colSpan={46} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
+                      <tr><td colSpan={48} className="px-6 py-8 text-center text-black font-medium">No items found.</td></tr>
                     ) : (
                   filteredItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.erp ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.customer ?? ""}</td>
                       <td className="px-4 py-3 text-sm font-medium text-black border border-black">{item.name}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{item.rapc ?? ""}</td>
+                      <td className="px-4 py-3 text-sm text-black border border-black">{resolveRapcRange(item.rapc, rapcRanges) || ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.typeName ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.openLength ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.openWidth ?? ""}</td>
@@ -1496,53 +1538,7 @@ export function Items() {
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.plateWeight ?? ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black">{item.gsmLeastCost ?? ""}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
-                            <button onClick={() => { 
-                                setName(item.name); 
-                                setGroupId(item.groupId); 
-                                setUom(item.uom); 
-                                setErp(item.erp?.toString() || ""); 
-                                setItemType(item.itemType || "Others");
-                                setTypeName(item.typeName || "");
-                                setCustomer(item.customer || "");
-                                setOpenLength(item.openLength?.toString() || "");
-                                setOpenWidth(item.openWidth?.toString() || "");
-                                setOpening((item.opening ?? 0).toString());
-                                setGstRate((item.gstRate ?? 18).toString()); 
-                                
-                                setNoOfParts(item.noOfParts?.toString() || "");
-                                setUps(item.ups?.toString() || "");
-                                setLength(item.length?.toString() || "");
-                                setBreadth(item.breadth?.toString() || "");
-                                setHeight(item.height?.toString() || "");
-                                setPly(item.ply?.toString() || "");
-                                setFlute(item.flute || "");
-                                setDieCutUps(item.dieCutUps?.toString() || "");
-                                setTopPaperShade(item.topPaperShade || "");
-                                setPlateWeight(item.plateWeight?.toString() || "");
-                                setGsmLeastCost(item.gsmLeastCost?.toString() || "");
-                                setL1(item.l1?.toString() || "");
-                                setF1(item.f1?.toString() || "");
-                                setL2(item.l2?.toString() || "");
-                                setF2(item.f2?.toString() || "");
-                                setL3(item.l3?.toString() || "");
-                                setF3(item.f3?.toString() || "");
-                                setB3(item.b3?.toString() || "");
-                                setBackingPaperShade(item.backingPaperShade || "");
-                                setPrintingColour1(item.printingColour1 || "");
-                                setPrintingColour2(item.printingColour2 || "");
-                                setLOd(item.lOd?.toString() || "");
-                                setWOd(item.wOd?.toString() || "");
-                                setHOd(item.hOd?.toString() || "");
-                                setFlap(item.flap?.toString() || "");
-                                setDeckleSize(item.deckleSize?.toString() || "");
-                                setCuttingSize(item.cuttingSize?.toString() || "");
-                                setItemRate(item.rate?.toString() || "");
-                                setArtwork(item.artwork || "");
-                                setSpec(item.spec || "");
-
-                                setEditingId(item.id); 
-                                setIsFormOpen(true); 
-                            }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
+                            <button onClick={() => populateItemForm(item)} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"><Edit size={16} className="mr-1" /> Edit</button>
                         <button
                           onClick={() => handleDelete(item.id)}
                           disabled={producedItemIds.has(item.id)}

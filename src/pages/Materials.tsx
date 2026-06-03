@@ -2,10 +2,11 @@ import React, { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Edit, Plus, Trash2, Search, Upload, Download } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, Supplier } from "../types";
+import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, RapcRange, Supplier } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
+import { resolveRapcRange } from "../lib/rapcRanges";
 
 type MaterialType = Material["type"];
 type ActiveValue = NonNullable<Material["active"]>;
@@ -33,11 +34,6 @@ function formatOptionalNumber(value?: number) {
 
 function getReelDisplayName(erpCode: string | number, size: number, uom: string, gsm: number, bf: number) {
   return `${erpCode} - Size: ${size} ${uom} X GSM: ${gsm} X BF: ${bf}`;
-}
-
-function getRapcValue(size?: number) {
-  const numericSize = Number(size || 0);
-  return numericSize > 0 ? numericSize * 10 : 0;
 }
 
 function getNextNumericErpCode(materials: Material[]) {
@@ -73,6 +69,7 @@ export function Materials() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [rapcRanges] = useData<RapcRange>("rapc-ranges", []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reelGroup = useMemo(
@@ -894,7 +891,7 @@ export function Materials() {
               <div className="space-y-2">
                 <label className="text-blue-700 font-bold">RAPC</label>
                 <input
-                  value={formData.type === "Reel" ? String(getRapcValue(Number(formData.size || 0)) || "") : ""}
+                  value={formData.type === "Reel" ? String(resolveRapcRange(Number(formData.size || 0), rapcRanges) || "") : ""}
                   readOnly
                   className="w-full rounded border-2 border-black bg-slate-100 px-4 py-3 text-black focus:outline-none"
                 />
@@ -1044,7 +1041,7 @@ export function Materials() {
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingQty ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingRate ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingValue ?? ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.type === "Reel" ? getRapcValue(material.size) : ""}</td>
+                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.type === "Reel" ? resolveRapcRange(material.size, rapcRanges) : ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.uom || ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.active || "Yes"}</td>
                         <td className="px-4 py-4 border-2 border-black">

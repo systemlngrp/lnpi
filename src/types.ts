@@ -30,6 +30,15 @@ export interface Material {
   updateTimestamp?: string;
 }
 
+export interface RapcRange {
+  id: string;
+  from: number;
+  to: number;
+  rapcRange: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Item {
   id: string;
   groupId: string;
@@ -47,6 +56,7 @@ export interface Item {
   invoiced?: number;
   balance?: number;
   gstRate?: number;
+  rapc?: number;
   
   // Technical Specifications
   noOfParts?: number;
