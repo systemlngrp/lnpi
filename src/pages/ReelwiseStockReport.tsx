@@ -204,9 +204,6 @@ export function ReelwiseStockReport() {
               </div>
               <div className="space-y-2">
                 <h2 className="text-3xl font-black tracking-tight text-slate-950 md:text-[2rem]">Reelwise Stock Report</h2>
-                <p className="max-w-2xl text-sm font-medium leading-6 text-slate-600 md:text-[15px]">
-                  Track reel-by-reel stock with a cleaner operational view across receipts, issues, returns, and ageing so dispatch and stores teams can act faster.
-                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
@@ -354,9 +351,6 @@ export function ReelwiseStockReport() {
         <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-sm font-bold text-slate-900">{rows.length} reel rows</div>
-            <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-            Reel-level receipt, issue, return, and ageing position
-            </div>
           </div>
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
             Available: {summary.reelNotIssuedWeight.toFixed(2)} | Issued: {summary.reelIssuedWeight.toFixed(2)}
