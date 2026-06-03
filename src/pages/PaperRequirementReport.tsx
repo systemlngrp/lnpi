@@ -24,8 +24,6 @@ import { getEffectiveRapcRanges } from "../lib/rapcRanges";
 
 type GroupTypeFilter = "All" | "Top" | "A-Flute" | "A-Backing" | "B-Flute" | "B-Backing";
 type NetFilter = "All" | "Need To Order" | "Surplus";
-type BarsFilter = "Top-10" | "Top-20" | "Top-30" | "Top-50";
-
 type RequirementGroup = {
   rapcRange: number;
   gsm: number;
@@ -43,13 +41,8 @@ type ReportRow = {
   netPaperToOrder: number;
 };
 
-type ChartRow = ReportRow & {
-  label: string;
-};
-
 const GROUP_TYPE_OPTIONS: GroupTypeFilter[] = ["All", "Top", "A-Flute", "A-Backing", "B-Flute", "B-Backing"];
 const NET_FILTER_OPTIONS: NetFilter[] = ["All", "Need To Order", "Surplus"];
-const BARS_OPTIONS: BarsFilter[] = ["Top-10", "Top-20", "Top-30", "Top-50"];
 
 function parseAppDate(value?: string | null) {
   if (!value) return null;
@@ -75,11 +68,6 @@ function toDateInput(date: Date) {
 
 function round2(value: number) {
   return Number(value.toFixed(2));
-}
-
-function parseTopN(value: BarsFilter) {
-  const numeric = Number(String(value).split("-")[1] || 30);
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : 30;
 }
 
 function makeKey(rapcRange: number, gsm: number) {
@@ -108,7 +96,6 @@ export function PaperRequirementReport() {
 
   const [selectedRangeGsm, setSelectedRangeGsm] = useState("All");
   const [uptoDate, setUptoDate] = useState(() => toDateInput(new Date()));
-  const [bars, setBars] = useState<BarsFilter>("Top-30");
   const [netFilter, setNetFilter] = useState<NetFilter>("All");
   const [groupType, setGroupType] = useState<GroupTypeFilter>("All");
 
@@ -341,21 +328,6 @@ export function PaperRequirementReport() {
     );
   }, [filteredRows]);
 
-  const chartRows = useMemo<ChartRow[]>(() => {
-    return [...filteredRows]
-      .sort((a, b) => Math.abs(b.netPaperToOrder) - Math.abs(a.netPaperToOrder))
-      .slice(0, parseTopN(bars))
-      .map((row) => ({
-        ...row,
-        label: `${row.rapcRange} – ${row.gsm}`,
-      }));
-  }, [bars, filteredRows]);
-
-  const maxAbsNet = useMemo(
-    () => Math.max(1, ...chartRows.map((row) => Math.abs(row.netPaperToOrder))),
-    [chartRows]
-  );
-
   const exportRows = useMemo(
     () =>
       filteredRows.map((row) => ({
@@ -373,7 +345,6 @@ export function PaperRequirementReport() {
   const handleClear = () => {
     setSelectedRangeGsm("All");
     setUptoDate(toDateInput(new Date()));
-    setBars("Top-30");
     setNetFilter("All");
     setGroupType("All");
   };
@@ -515,7 +486,7 @@ export function PaperRequirementReport() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.35fr)_minmax(170px,0.8fr)_minmax(200px,0.9fr)_minmax(170px,0.8fr)_minmax(180px,0.9fr)]">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(320px,1.5fr)_minmax(200px,0.9fr)_minmax(180px,0.85fr)_minmax(180px,0.85fr)]">
               <label className="space-y-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">RAPC Range + GSM</span>
                 <select
@@ -542,21 +513,6 @@ export function PaperRequirementReport() {
                   onChange={(e) => setUptoDate(e.target.value)}
                   className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 />
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Bars</span>
-                <select
-                  value={bars}
-                  onChange={(e) => setBars(e.target.value as BarsFilter)}
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                >
-                  {BARS_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
               </label>
 
               <label className="space-y-2">
@@ -589,55 +545,6 @@ export function PaperRequirementReport() {
                 </select>
               </label>
             </div>
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-black text-slate-900">Net Paper Position</div>
-                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{filteredRows.length} Total Range</div>
-              </div>
-            </div>
-
-            {chartRows.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-10 text-center text-sm font-medium text-slate-500">
-                No paper requirement rows match the current filters.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {chartRows.map((row) => {
-                  const widthPercent = `${(Math.abs(row.netPaperToOrder) / maxAbsNet) * 100}%`;
-                  const isNeedToOrder = row.netPaperToOrder >= 0;
-                  return (
-                    <div key={`${row.rapcRange}-${row.gsm}`} className="grid grid-cols-[110px_1fr] items-center gap-3">
-                      <div className="text-xs font-bold text-slate-600">{row.label}</div>
-                      <div className="flex items-center">
-                        <div className="flex w-1/2 justify-end pr-2">
-                          {!isNeedToOrder ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-emerald-600">{row.netPaperToOrder.toLocaleString()}</span>
-                              <div className="h-4 rounded-full border border-emerald-400 bg-emerald-100" style={{ width: widthPercent }} />
-                            </div>
-                          ) : (
-                            <div className="h-4 w-full border-r border-slate-200" />
-                          )}
-                        </div>
-                        <div className="flex w-1/2 items-center pl-2">
-                          {isNeedToOrder ? (
-                            <div className="flex items-center gap-2">
-                              <div className="h-4 rounded-full border border-rose-400 bg-rose-100" style={{ width: widthPercent }} />
-                              <span className="text-xs font-bold text-rose-600">{row.netPaperToOrder.toLocaleString()}</span>
-                            </div>
-                          ) : (
-                            <div className="h-4 w-full border-l border-slate-200" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
