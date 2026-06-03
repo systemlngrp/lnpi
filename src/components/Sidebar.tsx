@@ -240,6 +240,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
       { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
       { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
+      { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
     ],
   },
   {
