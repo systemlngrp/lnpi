@@ -20,7 +20,7 @@ export function CanceledProductions() {
     const prod = productions.find(p => p.id === id);
     if (!prod) return;
 
-    if (!window.confirm("Are you sure you want to activate this canceled job? It will return to Pending PH Approval.")) return;
+    if (!window.confirm("Are you sure you want to activate this canceled job? It will return to Pending Consumption.")) return;
 
     setActivatingId(id);
     try {
@@ -30,7 +30,7 @@ export function CanceledProductions() {
       await setProductions(prev => prev.map(p => 
         p.id === id ? { 
           ...p, 
-          status: "Pending PH", 
+          status: "Pending Consumption", 
           cancelTimestamp: null as any, 
           cancelEmailId: null as any, 
           cancelRemarks: null as any,

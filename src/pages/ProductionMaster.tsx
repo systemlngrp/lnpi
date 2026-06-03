@@ -9,6 +9,7 @@ import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { normalizeMachineName } from "../lib/productionMachineNames";
+import { getProductionDisplayStatus } from "../lib/productionStageFilters";
 
 export function ProductionMaster() {
   const navigate = useNavigate();
@@ -343,21 +344,22 @@ export function ProductionMaster() {
                 const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                 const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
                 const mandatory = getMandatoryStatus(p.id, item?.typeName);
+                const displayStatus = getProductionDisplayStatus(p);
                 
                 return (
                   <div key={p.id} className={`${isHighGsm ? "bg-amber-50" : "bg-white"} border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative`}>
                        <div className="flex justify-between items-center">
                           <div className="font-bold text-sm">Job: {p.transactionNo}</div>
                            <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
-                              p.status === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
-                              p.status === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
+                              displayStatus === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
+                              displayStatus === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
                               'bg-amber-100 text-amber-900 border-amber-900'
                           }`}>
-                              {p.status}
+                              {displayStatus}
                           </span>
                       </div>
 	                      <div className="text-xs text-slate-500">Prod Date: {formatDate(p.date)}</div>
-	                      {p.status === "Completed" ? (
+	                      {displayStatus === "Completed" ? (
 	                        <div className="text-xs text-slate-500">
 	                          Closed: {formatDate(p.closeDate || p.tallyTimestamp || p.updateTimestamp || "") || "-"}
 	                        </div>
@@ -591,11 +593,11 @@ export function ProductionMaster() {
 
                       <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
-                          p.status === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
-                          p.status === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
+                          getProductionDisplayStatus(p) === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
+                          getProductionDisplayStatus(p) === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
                           'bg-amber-100 text-amber-900 border-amber-900'
                         }`}>
-                          {p.status}
+                          {getProductionDisplayStatus(p)}
                         </span>
                         {p.status === 'Cancelled' && p.cancelRemarks && (
                           <div className="text-[9px] text-red-600 font-bold mt-1 max-w-[120px] truncate" title={p.cancelRemarks}>

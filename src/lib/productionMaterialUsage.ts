@@ -74,15 +74,6 @@ export function syncProductionWorkflowFromUsage(
     return { ...production, actualPaperUsed };
   }
 
-  if (!production.phTimestamp) {
-    return {
-      ...production,
-      actualPaperUsed,
-      updatedBy: "System User",
-      updateTimestamp: timestamp,
-    };
-  }
-
   const normalizedUsage = Math.max(0, Number(actualPaperUsed || 0));
   let status: Production["status"] = "Pending Consumption";
 

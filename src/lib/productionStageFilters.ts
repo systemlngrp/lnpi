@@ -2,7 +2,14 @@ import { Production } from "../types";
 import { hasWorkflowValue } from "./productionMaterialUsage";
 
 export function isProductionPendingPH(production: Production) {
-  return !production.cancelTimestamp && !production.tallyTimestamp && !production.phTimestamp;
+  return false;
+}
+
+export function getProductionDisplayStatus(production: Production) {
+  if (production.status === "Pending PH") {
+    return "Pending Consumption";
+  }
+  return production.status;
 }
 
 export function isProductionPendingConsumption(production: Production, actualPaperUsed = production.actualPaperUsed) {

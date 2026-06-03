@@ -617,7 +617,7 @@ export function ProductionForm() {
           qty,
           uom: selectedItem.uom || "",
           remarks: formData.remarks,
-          status: "Pending PH",
+          status: "Pending Consumption",
           updatedBy: "System User",
           updateTimestamp: timestamp,
           ...Object.fromEntries(
