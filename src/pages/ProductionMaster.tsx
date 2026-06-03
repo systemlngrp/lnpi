@@ -16,7 +16,7 @@ export function ProductionMaster() {
   const { user } = useAuth();
   const [productions, setProductions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
-  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
@@ -24,8 +24,11 @@ export function ProductionMaster() {
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [cancelModalJobId, setCancelModalJobId] = useState<string | null>(null);
+  const [cancelRemarks, setCancelRemarks] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelSubmittingId, setCancelSubmittingId] = useState<string | null>(null);
 
   const ffgSummaries = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
@@ -192,18 +195,36 @@ export function ProductionMaster() {
     return map;
   }, [loadingSlips]);
 
-  const handleCancelJob = async (id: string) => {
+  const openCancelModal = (id: string) => {
+    const target = productions.find((p) => p.id === id);
+    if (!target || target.status === "Cancelled") return;
+    setCancelModalJobId(id);
+    setCancelRemarks("");
+    setCancelError("");
+  };
+
+  const closeCancelModal = () => {
+    if (cancelSubmittingId) return;
+    setCancelModalJobId(null);
+    setCancelRemarks("");
+    setCancelError("");
+  };
+
+  const handleCancelJob = async () => {
+    const id = cancelModalJobId;
+    if (!id) return;
+
     const target = productions.find((p) => p.id === id);
     if (!target || target.status === "Cancelled") return;
 
-    if (cancelingId !== id) {
-      setCancelingId(id);
-      setTimeout(() => setCancelingId(null), 3000);
+    const reason = cancelRemarks.trim();
+    if (!reason) {
+      setCancelError("Cancel reason is mandatory.");
       return;
     }
 
-    const reason = window.prompt("Reason for cancellation (optional):") || "";
     const timestamp = new Date().toISOString();
+    setCancelSubmittingId(id);
 
     try {
       await setProductions((prev) =>
@@ -221,12 +242,31 @@ export function ProductionMaster() {
             : p
         )
       );
+
+      if (target.scheduleId) {
+        await setSchedules((prev) =>
+          prev.map((schedule) =>
+            schedule.id === target.scheduleId
+              ? {
+                  ...schedule,
+                  producedQty: Math.max(0, Number(schedule.producedQty || 0) - Number(target.qty || 0)),
+                  updateTimestamp: timestamp,
+                  updatedBy: user?.name || "System User",
+                }
+              : schedule
+          )
+        );
+      }
+
       alert("Job cancelled successfully.");
+      setCancelModalJobId(null);
+      setCancelRemarks("");
+      setCancelError("");
     } catch (err) {
       console.error("Failed to cancel job:", err);
       alert("Failed to cancel job. Please try again.");
     } finally {
-      setCancelingId(null);
+      setCancelSubmittingId(null);
     }
   };
 
@@ -302,6 +342,11 @@ export function ProductionMaster() {
     const missing = required.filter((name) => !doneSet.has(normalizeMachineName(name)));
     return { required, done: required.length - missing.length, missing };
   };
+
+  const cancelTarget = cancelModalJobId ? productions.find((p) => p.id === cancelModalJobId) : null;
+  const cancelTargetSchedule = cancelTarget?.scheduleId ? schedules.find((schedule) => schedule.id === cancelTarget.scheduleId) : null;
+  const cancelTargetOrder = cancelTargetSchedule ? orders.find((order) => order.id === cancelTargetSchedule.orderId) : null;
+  const cancelTargetItem = cancelTarget ? items.find((item) => item.id === cancelTarget.itemId) : null;
 
   return (
     <div className="space-y-6">
@@ -431,10 +476,10 @@ export function ProductionMaster() {
                         ) : null}
                         {p.status !== "Completed" && p.status !== "Cancelled" && (
                           <button 
-                            onClick={() => handleCancelJob(p.id)} 
-                            className={`${cancelingId === p.id ? "text-amber-600 animate-pulse bg-amber-50" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-center p-2 border border-black text-xs min-w-[80px]`}
+                            onClick={() => openCancelModal(p.id)} 
+                            className="text-red-600 hover:text-red-900 font-bold inline-flex items-center justify-center p-2 border border-black text-xs min-w-[80px]"
                           >
-                            <XCircle size={14} className="mr-1" /> {cancelingId === p.id ? "Confirm?" : "Cancel Job"}
+                            <XCircle size={14} className="mr-1" /> Cancel Job
                           </button>
                         )}
                       </div>
@@ -665,9 +710,9 @@ export function ProductionMaster() {
                           ) : null}
                           {p.status !== "Completed" && p.status !== "Cancelled" && (
                             <button 
-                              onClick={() => handleCancelJob(p.id)} 
-                              title={cancelingId === p.id ? "Click to confirm cancel" : "Cancel job"}
-                              className={`${cancelingId === p.id ? "text-amber-600 animate-pulse scale-110" : "text-red-600"} hover:text-red-900 transition-all p-1`}
+                              onClick={() => openCancelModal(p.id)} 
+                              title="Cancel job"
+                              className="text-red-600 hover:text-red-900 transition-all p-1"
                             >
                               <XCircle size={16} />
                             </button>
@@ -682,6 +727,61 @@ export function ProductionMaster() {
           </table>
         </div>
       </div>
+
+      {cancelTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeCancelModal}>
+          <div className="w-full max-w-lg rounded border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-black px-5 py-4">
+              <h3 className="text-lg font-black uppercase tracking-tight text-black">Cancel Job</h3>
+              <div className="mt-2 text-xs font-bold text-slate-600">
+                Job: {cancelTarget.transactionNo} | Order: {cancelTargetOrder?.orderNo || "-"} | Item: {cancelTargetItem?.name || "Unknown"}
+              </div>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <div className="text-sm font-medium text-slate-700">
+                This will return{" "}
+                <span className="font-black text-red-700">
+                  {Number(cancelTarget.qty || 0).toLocaleString()} {cancelTarget.uom || ""}
+                </span>{" "}
+                to Pending Production Plan.
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-black uppercase tracking-wider text-black">
+                  Cancel Reason <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={cancelRemarks}
+                  onChange={(e) => {
+                    setCancelRemarks(e.target.value);
+                    if (cancelError) setCancelError("");
+                  }}
+                  placeholder="Enter cancellation reason"
+                  className={`w-full rounded border-2 px-3 py-2 text-sm text-black outline-none ${cancelError ? "border-red-600" : "border-black"}`}
+                />
+                {cancelError ? <div className="text-xs font-bold text-red-600">{cancelError}</div> : null}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-black px-5 py-4">
+              <button
+                onClick={closeCancelModal}
+                disabled={Boolean(cancelSubmittingId)}
+                className="rounded border border-black px-4 py-2 text-sm font-bold text-black hover:bg-slate-50 disabled:opacity-50"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => void handleCancelJob()}
+                disabled={Boolean(cancelSubmittingId)}
+                className="rounded border border-black bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {cancelSubmittingId === cancelTarget.id ? "Cancelling..." : "Confirm Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
