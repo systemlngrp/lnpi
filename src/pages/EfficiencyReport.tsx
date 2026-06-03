@@ -222,7 +222,7 @@ export function EfficiencyReport() {
       <div className="overflow-hidden rounded-[28px] border border-slate-200/90 bg-white shadow-[0_18px_45px_-28px_rgba(15,23,42,0.24)]">
         <div className="relative px-4 py-4 md:px-5 md:py-5">
           <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.12),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.08),_transparent_38%),linear-gradient(180deg,_rgba(248,250,252,0.9),_rgba(255,255,255,0))]" />
-          <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="relative flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-2xl space-y-2">
               <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">
                 <Filter size={14} />
@@ -230,9 +230,6 @@ export function EfficiencyReport() {
               </div>
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-slate-950 md:text-[1.75rem]">Efficiency Report</h2>
-                <p className="mt-1 text-sm font-medium leading-5 text-slate-600">
-                  Review machine and operator output with shift-aware expected quantity tracking and a cleaner operational filter console.
-                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
@@ -247,23 +244,23 @@ export function EfficiencyReport() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[480px]">
-              <div className="rounded-[20px] border border-teal-200 bg-[linear-gradient(135deg,rgba(240,253,250,1),rgba(236,254,255,0.86))] px-4 py-3 shadow-sm">
+            <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[390px]">
+              <div className="rounded-[18px] border border-teal-200 bg-[linear-gradient(135deg,rgba(240,253,250,1),rgba(236,254,255,0.86))] px-3 py-2.5 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">Overall Efficiency</div>
-                <div className="mt-2 text-3xl font-black tracking-tight text-teal-950">
+                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-teal-950">
                   {overallEfficiency == null ? "-" : `${overallEfficiency.toFixed(2)}%`}
                 </div>
-                <div className="mt-1 text-xs font-semibold text-teal-700">Current filtered output</div>
+                <div className="mt-1 text-[11px] font-semibold text-teal-700">Current filtered output</div>
               </div>
-              <div className="rounded-[20px] border border-sky-200 bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(240,249,255,0.9))] px-4 py-3 shadow-sm">
+              <div className="rounded-[18px] border border-sky-200 bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(240,249,255,0.9))] px-3 py-2.5 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Total Qty</div>
-                <div className="mt-2 text-3xl font-black tracking-tight text-sky-950">{summary.qty.toFixed(2)}</div>
-                <div className="mt-1 text-xs font-semibold text-sky-700">Reported quantity</div>
+                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-sky-950">{summary.qty.toFixed(2)}</div>
+                <div className="mt-1 text-[11px] font-semibold text-sky-700">Reported quantity</div>
               </div>
-              <div className="rounded-[20px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-4 py-3 shadow-sm">
+              <div className="rounded-[18px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-3 py-2.5 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">Expected Qty</div>
-                <div className="mt-2 text-3xl font-black tracking-tight text-violet-950">{summary.expected.toFixed(2)}</div>
-                <div className="mt-1 text-xs font-semibold text-violet-700">Shift based target</div>
+                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-violet-950">{summary.expected.toFixed(2)}</div>
+                <div className="mt-1 text-[11px] font-semibold text-violet-700">Shift based target</div>
               </div>
             </div>
           </div>
