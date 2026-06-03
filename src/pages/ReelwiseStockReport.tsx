@@ -193,50 +193,76 @@ export function ReelwiseStockReport() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">
+      <div className="overflow-hidden rounded-[32px] border border-slate-200/90 bg-white shadow-[0_24px_60px_-28px_rgba(15,23,42,0.28)]">
+        <div className="relative px-5 py-5 md:px-7 md:py-6">
+          <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.12),_transparent_38%),linear-gradient(180deg,_rgba(248,250,252,0.95),_rgba(255,255,255,0))]" />
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-2xl space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">
               <ArrowUpDown size={14} />
               Reports
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-3xl font-black tracking-tight text-slate-950 md:text-[2rem]">Reelwise Stock Report</h2>
+                <p className="max-w-2xl text-sm font-medium leading-6 text-slate-600 md:text-[15px]">
+                  Track reel-by-reel stock with a cleaner operational view across receipts, issues, returns, and ageing so dispatch and stores teams can act faster.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                  Live stock lens
+                </div>
+                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                  Age-based filtering
+                </div>
+                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                  Reel-level traceability
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-black tracking-tight text-slate-950">Reelwise Stock Report</h2>
-              <p className="mt-1 text-sm font-medium text-slate-500">
-                Reel-by-reel stock position using MRR receipts, job issues, returns, and ageing.
-              </p>
+
+            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[600px]">
+              <div className="rounded-[24px] border border-emerald-200 bg-[linear-gradient(135deg,rgba(236,253,245,1),rgba(240,253,250,0.86))] px-4 py-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Reels Not Issued</div>
+                <div className="mt-3 text-4xl font-black tracking-tight text-emerald-950">{summary.reelNotIssuedWeight.toFixed(2)}</div>
+                <div className="mt-1 text-xs font-semibold text-emerald-700">Available weight</div>
+              </div>
+              <div className="rounded-[24px] border border-amber-200 bg-[linear-gradient(135deg,rgba(255,251,235,1),rgba(255,247,237,0.9))] px-4 py-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Reels Issued</div>
+                <div className="mt-3 text-4xl font-black tracking-tight text-amber-950">{summary.reelIssuedWeight.toFixed(2)}</div>
+                <div className="mt-1 text-xs font-semibold text-amber-700">Issued weight</div>
+              </div>
+              <div className="rounded-[24px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-4 py-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">ERP Not Issued</div>
+                <div className="mt-3 text-4xl font-black tracking-tight text-violet-950">{summary.erpNotIssuedCount}</div>
+                <div className="mt-1 text-xs font-semibold text-violet-700">Unique ERPs</div>
+              </div>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[540px]">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Reels Not Issued</div>
-              <div className="mt-2 text-2xl font-black text-emerald-950">{summary.reelNotIssuedWeight.toFixed(2)}</div>
-              <div className="text-xs font-medium text-emerald-700">Available weight</div>
+          <div className="relative mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 md:p-5">
+            <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">Filter Console</div>
+                <div className="mt-1 text-sm font-semibold text-slate-700">Refine the reel ledger by stock position, ageing, and issue state.</div>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+              >
+                Clear Filters
+              </button>
             </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Reels Issued</div>
-              <div className="mt-2 text-2xl font-black text-amber-950">{summary.reelIssuedWeight.toFixed(2)}</div>
-              <div className="text-xs font-medium text-amber-700">Issued weight</div>
-            </div>
-            <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">ERP Not Issued</div>
-              <div className="mt-2 text-2xl font-black text-violet-950">{summary.erpNotIssuedCount}</div>
-              <div className="text-xs font-medium text-violet-700">Unique ERPs</div>
-            </div>
-          </div>
-        </div>
 
-        <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
-          <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
-            <div className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.5fr)_repeat(4,minmax(140px,0.8fr))]">
+            <div className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(320px,1.5fr)_minmax(220px,1fr)_minmax(160px,0.7fr)_minmax(160px,0.7fr)_minmax(220px,1fr)]">
               <label className="space-y-2">
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <Search size={14} />
                   Search
                 </span>
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <Search size={16} className="text-slate-400" />
+                <div className="flex h-[56px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-sky-400 focus-within:ring-4 focus-within:ring-sky-100">
+                  <Search size={16} className="text-sky-500" />
                   <input
                     type="text"
                     value={searchTerm}
@@ -252,13 +278,20 @@ export function ReelwiseStockReport() {
                   <Filter size={14} />
                   Available Wt
                 </span>
-                <div className="flex h-[52px] flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="grid min-h-[56px] grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
                   {[
                     { label: "All", value: "all" as const },
                     { label: "> 500", value: "gt500" as const },
                     { label: "< 500", value: "lt500" as const },
                   ].map((option) => (
-                    <label key={option.value} className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600">
+                    <label
+                      key={option.value}
+                      className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition ${
+                        availabilityFilter === option.value
+                          ? "bg-sky-600 text-white shadow-sm"
+                          : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="availabilityFilter"
@@ -267,7 +300,7 @@ export function ReelwiseStockReport() {
                         onChange={() => setAvailabilityFilter(option.value)}
                         className="hidden"
                       />
-                      <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full border ${availabilityFilter === option.value ? "border-sky-600 bg-sky-600" : "border-slate-300 bg-white"}`}>
+                      <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full border ${availabilityFilter === option.value ? "border-white/70 bg-white/15" : "border-slate-300 bg-white"}`}>
                         {availabilityFilter === option.value ? <Circle size={8} className="fill-white text-white" /> : null}
                       </span>
                       {option.label}
@@ -283,7 +316,7 @@ export function ReelwiseStockReport() {
                   value={minAge}
                   onChange={(e) => setMinAge(e.target.value)}
                   placeholder="Min days"
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 />
               </label>
 
@@ -294,13 +327,13 @@ export function ReelwiseStockReport() {
                   value={maxAge}
                   onChange={(e) => setMaxAge(e.target.value)}
                   placeholder="Max days"
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 />
               </label>
 
               <label className="space-y-2">
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Stock Mode</span>
-                <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
                   <label className="inline-flex cursor-pointer items-center gap-3 text-sm font-semibold text-slate-700">
                     <input
                       type="checkbox"
@@ -313,31 +346,26 @@ export function ReelwiseStockReport() {
                 </div>
               </label>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={handleClearFilters}
-                className="inline-flex h-[52px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
-              >
-                Clear
-              </button>
-            </div>
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <div className="text-sm font-bold text-slate-900">{rows.length} reel rows</div>
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.34)]">
+        <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="text-sm font-bold text-slate-900">{rows.length} reel rows</div>
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
             Reel-level receipt, issue, return, and ageing position
+            </div>
+          </div>
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Available: {summary.reelNotIssuedWeight.toFixed(2)} | Issued: {summary.reelIssuedWeight.toFixed(2)}
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
             <thead>
-              <tr className="bg-slate-950 text-white">
+              <tr className="bg-[linear-gradient(90deg,#020617,#0f172a,#111827)] text-white">
                 {[
                   "SL No",
                   "MRR DATE",
@@ -374,7 +402,7 @@ export function ReelwiseStockReport() {
                 </tr>
               ) : (
                 rows.map((row, index) => (
-                  <tr key={row.slipId} className="border-b border-slate-100 text-sm text-slate-700 transition hover:bg-sky-50/40">
+                  <tr key={row.slipId} className="border-b border-slate-100 text-sm text-slate-700 transition hover:bg-sky-50/50">
                     <td className="px-4 py-3 font-bold text-slate-900">{index + 1}</td>
                     <td className="px-4 py-3">{formatReportDate(row.mrrDate)}</td>
                     <td className="px-4 py-3 font-semibold text-slate-900">{row.mrrNo}</td>
