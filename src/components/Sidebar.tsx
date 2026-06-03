@@ -94,6 +94,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Colors", href: "/masters/colors", icon: Plus },
       { name: "Companies", href: "/masters/companies", icon: Database },
       { name: "Trucks", href: "/masters/trucks", icon: Truck },
+      { name: "Machine Master", href: "/masters/machines", icon: Hammer },
       { name: "Users", href: "/masters/users", icon: Users },
       { name: "Settings", href: "/masters/settings", icon: Database },
     ],

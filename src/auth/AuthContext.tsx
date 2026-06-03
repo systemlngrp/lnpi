@@ -22,13 +22,25 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function normalizeMenuAccess(raw: unknown): string[] {
   if (!raw) return [];
-  if (Array.isArray(raw)) return raw.map((v) => String(v)).filter(Boolean);
+  if (Array.isArray(raw)) {
+    const list = raw.map((v) => String(v)).filter(Boolean);
+    if (list.includes("/masters/settings") && !list.includes("/masters/machines")) {
+      list.push("/masters/machines");
+    }
+    return list;
+  }
   if (typeof raw === "string") {
     const trimmed = raw.trim();
     if (!trimmed) return [];
     try {
       const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) return parsed.map((v) => String(v)).filter(Boolean);
+      if (Array.isArray(parsed)) {
+        const list = parsed.map((v) => String(v)).filter(Boolean);
+        if (list.includes("/masters/settings") && !list.includes("/masters/machines")) {
+          list.push("/masters/machines");
+        }
+        return list;
+      }
     } catch {
       // ignore
     }
