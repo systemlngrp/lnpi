@@ -88,6 +88,7 @@ import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
 import { JobwiseReelConsumptionReport } from "./pages/JobwiseReelConsumptionReport";
 import { EfficiencyReport } from "./pages/EfficiencyReport";
 import { HitVsMissReport } from "./pages/HitVsMissReport";
+import { RealizationReport } from "./pages/RealizationReport";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -223,6 +224,7 @@ export default function App() {
           <Route path="reports/jobwise-reel-consumption" element={<JobwiseReelConsumptionReport />} />
           <Route path="reports/efficiency" element={<EfficiencyReport />} />
           <Route path="reports/hit-vs-miss" element={<HitVsMissReport />} />
+          <Route path="reports/realization" element={<RealizationReport />} />
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />
