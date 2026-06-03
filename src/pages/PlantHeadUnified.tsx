@@ -1,20 +1,17 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Production, Item, Supplier, OrderSchedule, Order, Consumption, Company } from "../types";
+import { Material, MaterialIn, Item, Supplier, Order, Consumption, Company } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, Truck, Activity, XCircle, ClipboardList, Package } from "lucide-react";
-import { isProductionPendingPH } from "../lib/productionStageFilters";
+import { CheckCircle, Truck, XCircle, ClipboardList, Package } from "lucide-react";
 
-type Tab = "all" | "material-in" | "production" | "orders" | "consumption";
+type Tab = "all" | "material-in" | "orders" | "consumption";
 
 export function PlantHeadUnified() {
   const navigate = useNavigate();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
-  const [productions, setProductions] = useData<Production>("productions", []);
-  const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders, setOrders] = useData<Order>("orders", []);
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
   const [materials] = useData<Material>("materials", []);
@@ -25,8 +22,6 @@ export function PlantHeadUnified() {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [cancelingId, setCancelingId] = useState<string | null>(null);
-  const [cancelRemarks, setCancelRemarks] = useState("");
   
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -34,18 +29,16 @@ export function PlantHeadUnified() {
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
   const pendingMaterialIn = materialIn.filter((m) => isPendingPH(m.status));
-  const pendingProductions = productions.filter(isProductionPendingPH);
   const pendingOrders = orders.filter((o) => isPendingPH(o.status));
   const pendingConsumptions = consumptions.filter((c) => isPendingPH(c.status));
 
   const counts = {
     "material-in": pendingMaterialIn.length,
-    "production": pendingProductions.length,
     "orders": pendingOrders.length,
     "consumption": pendingConsumptions.length,
   };
 
-  const totalApprovals = counts["material-in"] + counts["production"] + counts["orders"] + counts["consumption"];
+  const totalApprovals = counts["material-in"] + counts["orders"] + counts["consumption"];
   const showSelection = activeTab !== "all";
 
   const toggleSelectAll = (ids: string[]) => {
@@ -77,10 +70,6 @@ export function PlantHeadUnified() {
         await setMaterialIn(prev => prev.map(m => 
           selectedIds.has(m.id) ? { ...m, status: "Pending Accounts", phTimestamp: timestamp, phEmailId: email } : m
         ));
-      } else if (activeTab === "production") {
-        await setProductions(prev => prev.map(p => 
-          selectedIds.has(p.id) ? { ...p, status: "Pending Consumption", phTimestamp: timestamp, phEmailId: email } : p
-        ));
       } else if (activeTab === "orders") {
         await setOrders(prev => prev.map(o =>
           selectedIds.has(o.id) ? { ...o, status: "Pending Scheduling", updatedBy: "System User", updateTimestamp: timestamp } : o
@@ -108,25 +97,6 @@ export function PlantHeadUnified() {
     try {
       await setMaterialIn(prev => prev.map(m => 
         m.id === id ? { ...m, status: "Pending Accounts", phTimestamp: new Date().toISOString(), phEmailId: "ph@lngrp.in" } : m
-      ));
-    } catch (err) {
-      console.error("Approval error:", err);
-    } finally {
-      setSubmittingId(null);
-      setConfirmId(null);
-    }
-  };
-
-  const handleApproveProduction = async (id: string) => {
-    if (confirmId !== id) {
-      setConfirmId(id);
-      setTimeout(() => setConfirmId(null), 3000);
-      return;
-    }
-    setSubmittingId(id);
-    try {
-      await setProductions(prev => prev.map(p => 
-        p.id === id ? { ...p, status: "Pending Consumption", phTimestamp: new Date().toISOString(), phEmailId: "ph@lngrp.in" } : p
       ));
     } catch (err) {
       console.error("Approval error:", err);
@@ -214,59 +184,6 @@ export function PlantHeadUnified() {
     }
   };
 
-  const handleCancelProduction = async (id: string) => {
-    const prod = productions.find(p => p.id === id);
-    if (!prod) return;
-
-    if (cancelingId !== id) {
-      setCancelingId(id);
-      setCancelRemarks("");
-      return;
-    }
-
-    if (!cancelRemarks.trim()) {
-      alert("Please provide cancellation remarks.");
-      return;
-    }
-
-    setSubmittingId(id);
-    try {
-      const timestamp = new Date().toISOString();
-      const email = "ph@lngrp.in";
-
-      // 1. Update production entry
-      await setProductions(prev => prev.map(p => 
-        p.id === id ? { 
-          ...p, 
-          status: "Cancelled", 
-          cancelTimestamp: timestamp, 
-          cancelEmailId: email, 
-          cancelRemarks: cancelRemarks.trim(),
-          updateTimestamp: timestamp 
-        } : p
-      ));
-
-      // 2. Revert produced quantity in schedule if scheduleId exists
-      if (prod.scheduleId) {
-        await setSchedules(prev => prev.map(s => 
-          s.id === prod.scheduleId ? {
-            ...s,
-            producedQty: Math.max(0, Number(s.producedQty || 0) - Number(prod.qty || 0)),
-            updateTimestamp: timestamp,
-            updatedBy: "System User (Cancel)"
-          } : s
-        ));
-      }
-
-      setCancelingId(null);
-      setCancelRemarks("");
-    } catch (err) {
-      console.error("Cancellation error:", err);
-    } finally {
-      setSubmittingId(null);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className={cn("flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4 transition-opacity", (isBulkApproving || submittingId) && "opacity-50 pointer-events-none")}>
@@ -285,13 +202,6 @@ export function PlantHeadUnified() {
             label="Material In"
             count={counts["material-in"]}
             icon={<Truck size={14} />}
-          />
-          <TabButton 
-            active={activeTab === "production"} 
-            onClick={() => { setActiveTab("production"); setSelectedIds(new Set()); }}
-            label="Production"
-            count={counts["production"]}
-            icon={<Activity size={14} />}
           />
           <TabButton
             active={activeTab === "orders"}
@@ -423,156 +333,6 @@ export function PlantHeadUnified() {
                   </tr>
                 ))}
                 {counts["material-in"] === 0 && <NoPendingRows colSpan={showSelection ? 6 : 5} />}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {(activeTab === "production" || activeTab === "all") && (
-          <div className="p-0 overflow-x-auto">
-            <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
-              <span className="font-bold text-sm uppercase text-slate-600">Pending Production ({counts["production"]})</span>
-            </div>
-            
-            {/* Mobile View - Cards */}
-            <div className="block md:hidden space-y-4 p-2">
-                {pendingProductions.sort((a, b) => {
-                    const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
-                    const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
-                    return timeB - timeA;
-                }).map(p => (
-                    <div key={p.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
-                        <div className="flex justify-between items-center">
-                            {showSelection ? (
-                              <input 
-                                type="checkbox" 
-                                className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                                checked={selectedIds.has(p.id)}
-                                onChange={() => toggleSelect(p.id)}
-                              />
-                            ) : null}
-                            <div className="font-bold text-sm">{p.transactionNo}</div>
-                        </div>
-                        <div className="text-sm font-bold">{items.find(it => it.id === p.itemId)?.name}</div>
-                        <div className="text-sm">{p.qty} {p.uom}</div>
-                        
-                        {cancelingId === p.id && (
-                          <div className="flex flex-col gap-1 w-full py-2">
-                            <input 
-                              type="text"
-                              autoFocus
-                              placeholder="Cancellation remarks..."
-                              value={cancelRemarks}
-                              onChange={(e) => setCancelRemarks(e.target.value)}
-                              className="text-xs p-2 border border-black rounded focus:outline-none focus:border-red-600"
-                            />
-                          </div>
-                        )}
-                        
-                        <div className="flex gap-2 justify-end">
-                            {!cancelingId && (
-                              <ApproveButton 
-                                  confirming={confirmId === p.id} 
-                                  submitting={submittingId === p.id} 
-                                  onClick={() => handleApproveProduction(p.id)} 
-                              />
-                            )}
-                            {(cancelingId === p.id || !confirmId) && (
-                              <CancelButton 
-                                  canceling={cancelingId === p.id}
-                                  submitting={submittingId === p.id}
-                                  onClick={() => handleCancelProduction(p.id)}
-                              />
-                            )}
-                            {cancelingId === p.id && (
-                              <button onClick={() => { setCancelingId(null); setCancelRemarks(""); }} className="text-[10px] uppercase font-bold text-slate-500 hover:text-black transition-colors">Back</button>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            <table className="hidden md:table min-w-full divide-y divide-black">
-              <thead className="bg-slate-50 border-b border-black">
-                <tr className="divide-x divide-black">
-                  {showSelection ? (
-                    <th className="px-4 py-2 w-10">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                        checked={counts["production"] > 0 && selectedIds.size === counts["production"]}
-                        onChange={() => toggleSelectAll(pendingProductions.map(p => p.id))}
-                      />
-                    </th>
-                  ) : null}
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Txn No</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">Item</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Qty</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase">UOM</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black">
-                {pendingProductions
-                  .sort((a, b) => {
-                    const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
-                    const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
-                    return timeB - timeA;
-                  })
-                  .map(p => (
-                  <tr key={p.id} className={cn("divide-x divide-black hover:bg-slate-50", selectedIds.has(p.id) && "bg-emerald-50/50")}>
-                    {showSelection ? (
-                      <td className="px-4 py-2 w-10 text-center">
-                        <input 
-                          type="checkbox" 
-                          className="rounded border-black text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                          checked={selectedIds.has(p.id)}
-                          onChange={() => toggleSelect(p.id)}
-                        />
-                      </td>
-                    ) : null}
-                    <td className="px-4 py-2 text-sm font-medium">{p.transactionNo}</td>
-                    <td className="px-4 py-2 text-sm">{items.find(it => it.id === p.itemId)?.name}</td>
-                    <td className="px-4 py-2 text-sm text-right font-bold">{p.qty}</td>
-                    <td className="px-4 py-2 text-sm">{p.uom}</td>
-                    <td className="px-4 py-2 text-right">
-                      <div className="flex flex-col gap-2 items-end">
-                        {cancelingId === p.id && (
-                          <div className="flex flex-col gap-1 w-full max-w-[200px]">
-                            <input 
-                              type="text"
-                              autoFocus
-                              placeholder="Reason..."
-                              value={cancelRemarks}
-                              onChange={(e) => setCancelRemarks(e.target.value)}
-                              className="text-[10px] p-2 border border-black rounded focus:outline-none focus:border-red-600"
-                            />
-                          </div>
-                        )}
-                        <div className="flex gap-2">
-                          {!cancelingId && (
-                            <ApproveButton 
-                              confirming={confirmId === p.id} 
-                              submitting={submittingId === p.id} 
-                              onClick={() => handleApproveProduction(p.id)} 
-                            />
-                          )}
-                          {(cancelingId === p.id || !confirmId) && (
-                            <CancelButton 
-                                canceling={cancelingId === p.id}
-                                submitting={submittingId === p.id}
-                                onClick={() => handleCancelProduction(p.id)}
-                            />
-                          )}
-                          {cancelingId === p.id && (
-                            <button onClick={() => { setCancelingId(null); setCancelRemarks(""); }} className="text-[10px] uppercase font-bold text-slate-500 hover:text-black transition-colors">Back</button>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {counts["production"] === 0 && <NoPendingRows colSpan={showSelection ? 6 : 5} />}
               </tbody>
             </table>
           </div>
