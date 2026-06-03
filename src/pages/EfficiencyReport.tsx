@@ -219,18 +219,18 @@ export function EfficiencyReport() {
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-[32px] border border-slate-200/90 bg-white shadow-[0_24px_60px_-28px_rgba(15,23,42,0.28)]">
-        <div className="relative px-5 py-5 md:px-7 md:py-6">
-          <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.14),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.10),_transparent_38%),linear-gradient(180deg,_rgba(248,250,252,0.95),_rgba(255,255,255,0))]" />
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-2xl space-y-3">
+      <div className="overflow-hidden rounded-[28px] border border-slate-200/90 bg-white shadow-[0_18px_45px_-28px_rgba(15,23,42,0.24)]">
+        <div className="relative px-4 py-4 md:px-5 md:py-5">
+          <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.12),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.08),_transparent_38%),linear-gradient(180deg,_rgba(248,250,252,0.9),_rgba(255,255,255,0))]" />
+          <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-2xl space-y-2">
               <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">
                 <Filter size={14} />
                 Reports
               </div>
               <div>
-                <h2 className="text-3xl font-black tracking-tight text-slate-950 md:text-[2rem]">Efficiency Report</h2>
-                <p className="mt-2 text-sm font-medium leading-6 text-slate-600 md:text-[15px]">
+                <h2 className="text-2xl font-black tracking-tight text-slate-950 md:text-[1.75rem]">Efficiency Report</h2>
+                <p className="mt-1 text-sm font-medium leading-5 text-slate-600">
                   Review machine and operator output with shift-aware expected quantity tracking and a cleaner operational filter console.
                 </p>
               </div>
@@ -247,49 +247,49 @@ export function EfficiencyReport() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[560px]">
-              <div className="rounded-[24px] border border-teal-200 bg-[linear-gradient(135deg,rgba(240,253,250,1),rgba(236,254,255,0.86))] px-4 py-4 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[480px]">
+              <div className="rounded-[20px] border border-teal-200 bg-[linear-gradient(135deg,rgba(240,253,250,1),rgba(236,254,255,0.86))] px-4 py-3 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">Overall Efficiency</div>
-                <div className="mt-3 text-4xl font-black tracking-tight text-teal-950">
+                <div className="mt-2 text-3xl font-black tracking-tight text-teal-950">
                   {overallEfficiency == null ? "-" : `${overallEfficiency.toFixed(2)}%`}
                 </div>
                 <div className="mt-1 text-xs font-semibold text-teal-700">Current filtered output</div>
               </div>
-              <div className="rounded-[24px] border border-sky-200 bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(240,249,255,0.9))] px-4 py-4 shadow-sm">
+              <div className="rounded-[20px] border border-sky-200 bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(240,249,255,0.9))] px-4 py-3 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Total Qty</div>
-                <div className="mt-3 text-4xl font-black tracking-tight text-sky-950">{summary.qty.toFixed(2)}</div>
+                <div className="mt-2 text-3xl font-black tracking-tight text-sky-950">{summary.qty.toFixed(2)}</div>
                 <div className="mt-1 text-xs font-semibold text-sky-700">Reported quantity</div>
               </div>
-              <div className="rounded-[24px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-4 py-4 shadow-sm">
+              <div className="rounded-[20px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-4 py-3 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">Expected Qty</div>
-                <div className="mt-3 text-4xl font-black tracking-tight text-violet-950">{summary.expected.toFixed(2)}</div>
+                <div className="mt-2 text-3xl font-black tracking-tight text-violet-950">{summary.expected.toFixed(2)}</div>
                 <div className="mt-1 text-xs font-semibold text-violet-700">Shift based target</div>
               </div>
             </div>
           </div>
 
-          <div className="relative mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 md:p-5">
-            <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
+          <div className="relative mt-4 rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-3 md:p-4">
+            <div className="mb-3 flex flex-col gap-2 border-b border-slate-200 pb-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">Filter Console</div>
-                <div className="mt-1 text-sm font-semibold text-slate-700">Narrow the report by date, view mode, shift, machine, and operator.</div>
+                <div className="mt-1 text-xs font-semibold text-slate-700">Date, view, shift, machine, and operator filters.</div>
               </div>
               <button
                 type="button"
                 onClick={handleClear}
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+                className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
               >
                 Clear Filters
               </button>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-12">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
               <label className="space-y-2 xl:col-span-4">
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <Search size={14} />
                   Search
                 </span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
                   <Search size={16} className="text-teal-500" />
                   <input
                     value={searchTerm}
@@ -302,7 +302,7 @@ export function EfficiencyReport() {
 
               <label className="space-y-2 xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">From</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
                   <input
                     type="date"
                     value={dateFrom}
@@ -314,7 +314,7 @@ export function EfficiencyReport() {
 
               <label className="space-y-2 xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">To</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
                   <input
                     type="date"
                     value={dateTo}
@@ -326,7 +326,7 @@ export function EfficiencyReport() {
 
               <label className="space-y-2 xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Day hrs</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
                   <input
                     type="number"
                     value={dayShiftHoursInput}
@@ -340,7 +340,7 @@ export function EfficiencyReport() {
 
               <label className="space-y-2 xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Night hrs</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
                   <input
                     type="number"
                     value={nightShiftHoursInput}
@@ -354,7 +354,7 @@ export function EfficiencyReport() {
 
               <label className="space-y-2 xl:col-span-3">
                 <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">View</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
                   <select
                     value={viewMode}
                     onChange={(e) => setViewMode(e.target.value as ViewMode)}
@@ -369,7 +369,7 @@ export function EfficiencyReport() {
 
               <label className="space-y-2 xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Shift</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
                   <select
                     value={shift}
                     onChange={(e) => setShift(e.target.value as "" | Shift)}
@@ -384,7 +384,7 @@ export function EfficiencyReport() {
 
               <label className="space-y-2 xl:col-span-3">
                 <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Machine</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
                   <select
                     value={machineId}
                     onChange={(e) => setMachineId(e.target.value)}
@@ -402,7 +402,7 @@ export function EfficiencyReport() {
 
               <label className="space-y-2 xl:col-span-3">
                 <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Operator</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
                   <select
                     value={operatorId}
                     onChange={(e) => setOperatorId(e.target.value)}
@@ -422,15 +422,15 @@ export function EfficiencyReport() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.34)]">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
+      <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_14px_34px_-26px_rgba(15,23,42,0.28)]">
+        <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-sm font-bold text-slate-900">{rows.length} rows</div>
             <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
               Efficiency view: {viewMode === "machineDaily" ? "Machine + shift daily" : viewMode === "operatorMachineDaily" ? "Operator + machine + shift daily" : "Detailed"}
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4 text-right text-sm font-semibold text-slate-700 md:min-w-[360px]">
+          <div className="grid grid-cols-3 gap-3 text-right text-sm font-semibold text-slate-700 md:min-w-[320px]">
             <div>
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Overall Eff%</div>
               <div className="text-slate-900">{overallEfficiency == null ? "-" : overallEfficiency.toFixed(2)}</div>
@@ -450,15 +450,15 @@ export function EfficiencyReport() {
           <table className="min-w-full border-collapse">
             <thead>
               <tr className="bg-[linear-gradient(90deg,#042f2e,#0f766e,#134e4a)] text-white">
-                <th className="min-w-[120px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Date</th>
-                <th className="min-w-[150px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Job No.</th>
-                <th className="min-w-[180px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Machine</th>
-                <th className="min-w-[90px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Shift</th>
-                <th className="min-w-[170px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Operator</th>
-                <th className="min-w-[110px] whitespace-nowrap px-4 py-3 text-right text-xs font-bold uppercase tracking-[0.16em]">Qty</th>
-                <th className="min-w-[110px] whitespace-nowrap px-4 py-3 text-right text-xs font-bold uppercase tracking-[0.16em]">Max/Hr</th>
-                <th className="min-w-[120px] whitespace-nowrap px-4 py-3 text-right text-xs font-bold uppercase tracking-[0.16em]">Expected</th>
-                <th className="min-w-[100px] whitespace-nowrap px-4 py-3 text-right text-xs font-bold uppercase tracking-[0.16em]">Eff%</th>
+                <th className="min-w-[110px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Date</th>
+                <th className="min-w-[130px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Job No.</th>
+                <th className="min-w-[150px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Machine</th>
+                <th className="min-w-[80px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Shift</th>
+                <th className="min-w-[140px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Operator</th>
+                <th className="min-w-[95px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Qty</th>
+                <th className="min-w-[95px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Max/Hr</th>
+                <th className="min-w-[105px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Expected</th>
+                <th className="min-w-[90px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Eff%</th>
               </tr>
             </thead>
             <tbody>
@@ -471,23 +471,23 @@ export function EfficiencyReport() {
               ) : (
                 rows.map((row) => (
                   <tr key={row.id} className="border-t border-slate-200 transition hover:bg-teal-50/45">
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-slate-900">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-slate-900">
                       {formatDate(row.date)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-bold text-slate-900">{row.jobNo || "-"}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-slate-900">{row.machineName}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-bold text-slate-900">{row.shift}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-slate-900">{row.operatorName}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-teal-700">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-bold text-slate-900">{row.jobNo || "-"}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-slate-900">{row.machineName}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-bold text-slate-900">{row.shift}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-slate-900">{row.operatorName}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold text-teal-700">
                       {row.qty.toFixed(2)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-900">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
                       {row.maxOutputPerHour.toFixed(2)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-900">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
                       {row.expectedQty.toFixed(2)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-slate-900">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold text-slate-900">
                       {row.efficiencyPercent == null ? "-" : `${row.efficiencyPercent.toFixed(2)}%`}
                     </td>
                   </tr>
@@ -497,19 +497,19 @@ export function EfficiencyReport() {
             {rows.length > 0 ? (
               <tfoot>
                 <tr className="border-t-2 border-slate-300 bg-slate-50">
-                  <td colSpan={5} className="px-4 py-3 text-right text-xs font-black uppercase tracking-[0.16em] text-slate-600">
+                  <td colSpan={5} className="px-3 py-2.5 text-right text-xs font-black uppercase tracking-[0.16em] text-slate-600">
                     Totals
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-black text-teal-700">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-black text-teal-700">
                     {summary.qty.toFixed(2)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-900">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
                     -
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-black text-slate-900">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-black text-slate-900">
                     {summary.expected.toFixed(2)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-black text-slate-900">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-black text-slate-900">
                     {overallEfficiency == null ? "-" : `${overallEfficiency.toFixed(2)}%`}
                   </td>
                 </tr>
