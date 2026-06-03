@@ -244,6 +244,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
       { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
       { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
+      { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
     ],
   },
   {
