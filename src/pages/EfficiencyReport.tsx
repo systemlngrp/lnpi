@@ -58,13 +58,48 @@ export function EfficiencyReport() {
 
   const rows = useMemo<EfficiencyRow[]>(() => {
     const machineMap = new Map(machines.map((machine) => [machine.id, machine]));
+    const machineByNormalizedName = new Map(
+      machines.map((machine) => [normalizeMachineName(machine.name).toLowerCase(), machine])
+    );
     const operatorMap = new Map(users.map((user) => [user.id, user]));
+    const operatorByNormalizedName = new Map(users.map((user) => [String(user.name || "").trim().toLowerCase(), user]));
 
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const fromMs = dateFrom ? new Date(dateFrom).getTime() : null;
     const toMs = dateTo ? new Date(dateTo).getTime() : null;
 
     const base = processing
+      .map((entry) => {
+        const normalizedMachine = normalizeMachineName(entry.machineName || "").trim();
+        const machine =
+          machineMap.get(entry.machineId) ||
+          machineByNormalizedName.get(normalizedMachine.toLowerCase());
+        const normalizedOperatorName = String(entry.operatorName || "").trim();
+        const operator =
+          operatorMap.get(entry.operatorId) ||
+          operatorByNormalizedName.get(normalizedOperatorName.toLowerCase());
+        const resolvedMachineId = machine?.id || entry.machineId || normalizedMachine;
+        const resolvedOperatorId = operator?.id || entry.operatorId || normalizedOperatorName || "-";
+        const maxOutputPerHour = Number(machine?.maxOutputPerHour || 0);
+        const entryShift = (entry.shift || "Day") as Shift;
+        const shiftHours = shiftHoursFor(entryShift);
+        const expectedQty = maxOutputPerHour * shiftHours;
+        return {
+          id: entry.id,
+          date: entry.date,
+          jobNo: String(entry.jobNo || ""),
+          machineId: resolvedMachineId,
+          machineName: normalizedMachine || normalizeMachineName(machine?.name || "") || "-",
+          shift: entryShift,
+          operatorId: resolvedOperatorId,
+          operatorName: operator?.name || normalizedOperatorName || "-",
+          qty: Number(entry.qty || 0),
+          maxOutputPerHour,
+          shiftHours,
+          expectedQty: Number(expectedQty.toFixed(2)),
+          efficiencyPercent: safePercent(Number(entry.qty || 0), expectedQty),
+        } satisfies EfficiencyRow;
+      })
       .filter((entry) => {
         if (machineId && entry.machineId !== machineId) return false;
         if (operatorId && entry.operatorId !== operatorId) return false;
@@ -76,29 +111,6 @@ export function EfficiencyReport() {
         const machine = String(entry.machineName || "").toLowerCase();
         const operator = String(entry.operatorName || "").toLowerCase();
         return job.includes(normalizedSearch) || machine.includes(normalizedSearch) || operator.includes(normalizedSearch);
-      })
-      .map((entry) => {
-        const machine = machineMap.get(entry.machineId);
-        const operator = operatorMap.get(entry.operatorId);
-        const maxOutputPerHour = Number(machine?.maxOutputPerHour || 0);
-        const entryShift = (entry.shift || "Day") as Shift;
-        const shiftHours = shiftHoursFor(entryShift);
-        const expectedQty = maxOutputPerHour * shiftHours;
-        return {
-          id: entry.id,
-          date: entry.date,
-          jobNo: String(entry.jobNo || ""),
-          machineId: entry.machineId,
-          machineName: normalizeMachineName(entry.machineName || machine?.name || ""),
-          shift: entryShift,
-          operatorId: entry.operatorId,
-          operatorName: operator?.name || entry.operatorName || "-",
-          qty: Number(entry.qty || 0),
-          maxOutputPerHour,
-          shiftHours,
-          expectedQty: Number(expectedQty.toFixed(2)),
-          efficiencyPercent: safePercent(Number(entry.qty || 0), expectedQty),
-        } satisfies EfficiencyRow;
       });
 
     if (viewMode === "detailed") {
@@ -109,8 +121,8 @@ export function EfficiencyReport() {
     for (const entry of base) {
       const key =
         viewMode === "operatorMachineDaily"
-          ? `${entry.date}__${entry.operatorId}__${entry.machineId}__${entry.shift}`
-          : `${entry.date}__${entry.machineId}__${entry.shift}`;
+          ? `${entry.date}__${entry.operatorId || entry.operatorName}__${entry.machineId || entry.machineName}__${entry.shift}`
+          : `${entry.date}__${entry.machineId || entry.machineName}__${entry.shift}`;
       const current = grouped.get(key);
       if (!current) {
         grouped.set(key, {
@@ -411,14 +423,14 @@ export function EfficiencyReport() {
       </div>
 
       <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.34)]">
-        <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-sm font-bold text-slate-900">{rows.length} rows</div>
             <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
               Efficiency view: {viewMode === "machineDaily" ? "Machine + shift daily" : viewMode === "operatorMachineDaily" ? "Operator + machine + shift daily" : "Detailed"}
             </div>
           </div>
-          <div className="flex gap-6 text-right text-sm font-semibold text-slate-700">
+          <div className="grid grid-cols-3 gap-4 text-right text-sm font-semibold text-slate-700 md:min-w-[360px]">
             <div>
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Overall Eff%</div>
               <div className="text-slate-900">{overallEfficiency == null ? "-" : overallEfficiency.toFixed(2)}</div>
@@ -438,14 +450,15 @@ export function EfficiencyReport() {
           <table className="min-w-full border-collapse">
             <thead>
               <tr className="bg-[linear-gradient(90deg,#042f2e,#0f766e,#134e4a)] text-white">
-                {["Date", "Job No.", "Machine", "Shift", "Operator", "Qty", "Max/Hr", "Expected", "Eff%"].map((label) => (
-                  <th
-                    key={label}
-                    className="whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]"
-                  >
-                    {label}
-                  </th>
-                ))}
+                <th className="min-w-[120px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Date</th>
+                <th className="min-w-[150px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Job No.</th>
+                <th className="min-w-[180px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Machine</th>
+                <th className="min-w-[90px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Shift</th>
+                <th className="min-w-[170px] whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.16em]">Operator</th>
+                <th className="min-w-[110px] whitespace-nowrap px-4 py-3 text-right text-xs font-bold uppercase tracking-[0.16em]">Qty</th>
+                <th className="min-w-[110px] whitespace-nowrap px-4 py-3 text-right text-xs font-bold uppercase tracking-[0.16em]">Max/Hr</th>
+                <th className="min-w-[120px] whitespace-nowrap px-4 py-3 text-right text-xs font-bold uppercase tracking-[0.16em]">Expected</th>
+                <th className="min-w-[100px] whitespace-nowrap px-4 py-3 text-right text-xs font-bold uppercase tracking-[0.16em]">Eff%</th>
               </tr>
             </thead>
             <tbody>
@@ -481,6 +494,27 @@ export function EfficiencyReport() {
                 ))
               )}
             </tbody>
+            {rows.length > 0 ? (
+              <tfoot>
+                <tr className="border-t-2 border-slate-300 bg-slate-50">
+                  <td colSpan={5} className="px-4 py-3 text-right text-xs font-black uppercase tracking-[0.16em] text-slate-600">
+                    Totals
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-black text-teal-700">
+                    {summary.qty.toFixed(2)}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-900">
+                    -
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-black text-slate-900">
+                    {summary.expected.toFixed(2)}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-black text-slate-900">
+                    {overallEfficiency == null ? "-" : `${overallEfficiency.toFixed(2)}%`}
+                  </td>
+                </tr>
+              </tfoot>
+            ) : null}
           </table>
         </div>
       </div>
