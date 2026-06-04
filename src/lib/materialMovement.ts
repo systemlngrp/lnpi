@@ -7,20 +7,36 @@ import {
   MaterialReturnReelLine,
 } from "../types";
 
-function buildOpenReelCounts(
+function buildSlipNetIssuedWeights(
   issueReelLines: MaterialIssueReelLine[],
   returnReelLines: MaterialReturnReelLine[]
 ) {
-  const counts = new Map<string, number>();
+  const weights = new Map<string, number>();
+  issueReelLines.forEach((line) => {
+    const key = line.packingSlipId;
+    weights.set(key, (weights.get(key) || 0) + Number(line.weightKg || 0));
+  });
+  returnReelLines.forEach((line) => {
+    const key = line.packingSlipId;
+    weights.set(key, (weights.get(key) || 0) - Number(line.weightKg || 0));
+  });
+  return weights;
+}
+
+function buildJobReturnableWeights(
+  issueReelLines: MaterialIssueReelLine[],
+  returnReelLines: MaterialReturnReelLine[]
+) {
+  const weights = new Map<string, number>();
   issueReelLines.forEach((line) => {
     const key = `${line.packingSlipId}::${line.productionId}`;
-    counts.set(key, (counts.get(key) || 0) + 1);
+    weights.set(key, (weights.get(key) || 0) + Number(line.weightKg || 0));
   });
   returnReelLines.forEach((line) => {
     const key = `${line.packingSlipId}::${line.productionId}`;
-    counts.set(key, (counts.get(key) || 0) - 1);
+    weights.set(key, (weights.get(key) || 0) - Number(line.weightKg || 0));
   });
-  return counts;
+  return weights;
 }
 
 export function getNonReelAvailableQty(
@@ -53,14 +69,14 @@ export function getAvailableReelPackingSlips(
   issueReelLines: MaterialIssueReelLine[],
   returnReelLines: MaterialReturnReelLine[]
 ) {
-  const openCounts = buildOpenReelCounts(issueReelLines, returnReelLines);
-  return packingSlips.filter((slip) => {
-    if (slip.materialId !== materialId) return false;
-    if (Number(slip.weightKg || 0) <= 0) return false;
-    const issuedOpenCount = Array.from(openCounts.entries())
-      .filter(([key, count]) => key.startsWith(`${slip.id}::`) && count > 0)
-      .reduce((sum, [, count]) => sum + count, 0);
-    return issuedOpenCount === 0;
+  const netIssuedBySlip = buildSlipNetIssuedWeights(issueReelLines, returnReelLines);
+  return packingSlips.flatMap((slip) => {
+    if (slip.materialId !== materialId) return [];
+    const baseWeight = Number(slip.weightKg || 0);
+    if (baseWeight <= 0) return [];
+    const availableWeight = Number((baseWeight - (netIssuedBySlip.get(slip.id) || 0)).toFixed(2));
+    if (availableWeight <= 0) return [];
+    return [{ ...slip, weightKg: availableWeight }];
   });
 }
 
@@ -70,11 +86,19 @@ export function getReturnableReelLinesForJob(
   issueReelLines: MaterialIssueReelLine[],
   returnReelLines: MaterialReturnReelLine[]
 ) {
-  const openCounts = buildOpenReelCounts(issueReelLines, returnReelLines);
-  return issueReelLines.filter((line) => {
-    if (line.materialId !== materialId) return false;
-    if (line.productionId !== productionId) return false;
+  const returnableWeights = buildJobReturnableWeights(issueReelLines, returnReelLines);
+  const latestIssueLineBySlip = new Map<string, MaterialIssueReelLine>();
+
+  issueReelLines.forEach((line) => {
+    if (line.materialId !== materialId) return;
+    if (line.productionId !== productionId) return;
+    latestIssueLineBySlip.set(line.packingSlipId, line);
+  });
+
+  return Array.from(latestIssueLineBySlip.values()).flatMap((line) => {
     const key = `${line.packingSlipId}::${line.productionId}`;
-    return (openCounts.get(key) || 0) > 0;
+    const returnableWeight = Number((returnableWeights.get(key) || 0).toFixed(2));
+    if (returnableWeight <= 0) return [];
+    return [{ ...line, weightKg: returnableWeight }];
   });
 }
