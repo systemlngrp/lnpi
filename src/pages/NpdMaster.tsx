@@ -20,11 +20,14 @@ const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "itemName", label: "Item Name" },
   { key: "erp", label: "ERP" },
   { key: "rate", label: "Rate" },
+  { key: "uom", label: "UOM" },
   { key: "fluteType", label: "Flute Type" },
   { key: "ply", label: "Ply" },
   { key: "noOfParts", label: "No Of Parts" },
   { key: "noOfUps", label: "No Of Ups" },
   { key: "idToOd2", label: "Id to Od 2" },
+  { key: "openLength", label: "Open Length" },
+  { key: "openWidth", label: "Open Width" },
   { key: "lengthId", label: "Length (ID)" },
   { key: "breadthId", label: "Breadth (ID)" },
   { key: "heightId", label: "Height (ID)" },
@@ -51,6 +54,13 @@ const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "takeUpFactor", label: "Take up Factor" },
   { key: "ups", label: "UPS" },
   { key: "rapc", label: "RAPC" },
+  { key: "opening", label: "Opening" },
+  { key: "receipt", label: "Receipt" },
+  { key: "production", label: "Production" },
+  { key: "invoiced", label: "Invoiced" },
+  { key: "balance", label: "Balance" },
+  { key: "gstRate", label: "GST Rate" },
+  { key: "part", label: "Part" },
   { key: "cuttingWithTrimming", label: "Cutting with Trimming" },
   { key: "standardWeightGms", label: "Standard Weight(gms)" },
   { key: "calculatedWeightPerBox", label: "Calculated Weight per Box" },
@@ -68,6 +78,8 @@ const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "rsl5", label: "RSL5" },
   { key: "rsf5Bf", label: "RSF5-BF" },
   { key: "flapSize", label: "Flap Size" },
+  { key: "deckleSize", label: "Deckle Size" },
+  { key: "topPaperShade", label: "Top Paper Shade" },
   { key: "colorId1", label: "Color Id 1" },
   { key: "printingColour1", label: "Printing Colour 1" },
   { key: "colorId2", label: "Color Id 2" },
@@ -116,6 +128,10 @@ const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "dieCutUps", label: "No Of Die Cut Ups(No Of Boxes In One Die Sheet)" },
   { key: "syncInItemMaster", label: "SYNC IN ITEM MASTER" },
   { key: "platePhpWeight", label: "PLATE/PHP WEIGHT" },
+  { key: "gsmLeastCost", label: "GSM Least Cost" },
+  { key: "backingPaperShade", label: "Backing Paper Shade" },
+  { key: "artwork", label: "Artwork" },
+  { key: "spec", label: "Spec" },
 ];
 
 function getSearchableText(row: NpdRecord) {
@@ -141,7 +157,7 @@ export function NpdMaster() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">NPD Master</h2>
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">NPD Items</h2>
         <div className="relative w-full md:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
