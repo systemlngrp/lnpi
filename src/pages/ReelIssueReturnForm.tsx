@@ -4,6 +4,7 @@ import { useData } from "../hooks/useData";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Material,
+  MaterialGroup,
   MaterialIn,
   MaterialInPackingSlip,
   MaterialIssue,
@@ -33,10 +34,15 @@ function normalizeDate(value?: string | null) {
   return String(value || "").slice(0, 10);
 }
 
+function normalizeText(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export function ReelIssueReturnForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
+  const [materialGroups] = useData<MaterialGroup>("material-groups", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions, setProductions] = useData<Production>("productions", []);
@@ -187,16 +193,31 @@ export function ReelIssueReturnForm() {
     [productions]
   );
 
+  const reelGroupIds = useMemo(
+    () =>
+      new Set(
+        materialGroups
+          .filter((group) => normalizeText(group.name) === "reel")
+          .map((group) => group.id)
+      ),
+    [materialGroups]
+  );
+
   const reelMaterialOptions = useMemo(
     () =>
       materials
-        .filter((material) => material.active !== "No" && material.type === "Reel")
+        .filter((material) => {
+          const isActive = normalizeText(material.active || "Yes") !== "no";
+          const isReelType = normalizeText(material.type) === "reel";
+          const isReelGroup = material.materialGroupId ? reelGroupIds.has(material.materialGroupId) : false;
+          return isActive && (isReelType || isReelGroup);
+        })
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((material) => ({
           value: material.id,
           label: `${material.name}${material.erpCode ? ` (${material.erpCode})` : ""}`,
         })),
-    [materials]
+    [materials, reelGroupIds]
   );
 
   const getMaterial = (materialId: string) => materials.find((material) => material.id === materialId);
