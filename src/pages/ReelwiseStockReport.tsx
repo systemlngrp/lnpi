@@ -227,7 +227,7 @@ export function ReelwiseStockReport() {
           </div>
 
           <div className="relative mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 md:p-5">
-            <div className="grid flex-1 gap-4 border-t-0 md:grid-cols-2 xl:grid-cols-[minmax(320px,1.5fr)_minmax(220px,1fr)_minmax(160px,0.7fr)_minmax(160px,0.7fr)_minmax(220px,1fr)_auto]">
+            <div className="grid flex-1 items-end gap-4 border-t-0 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.35fr)_minmax(180px,0.9fr)_minmax(120px,0.65fr)_minmax(120px,0.65fr)_minmax(180px,0.9fr)_140px]">
               <label className="space-y-2">
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <Search size={14} />
@@ -325,7 +325,7 @@ export function ReelwiseStockReport() {
                 <button
                   type="button"
                   onClick={handleClearFilters}
-                  className="inline-flex h-[56px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 xl:w-auto"
+                  className="inline-flex h-[56px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
                 >
                   Clear Filters
                 </button>
