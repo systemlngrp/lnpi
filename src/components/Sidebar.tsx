@@ -123,7 +123,6 @@ export const NAVIGATION: NavGroup[] = [
     section: "Purchase Order",
     color: "bg-cyan-700",
     items: [
-      { name: "Pending PO", href: "/purchase-orders/pending-po", icon: Activity, countKey: "/purchase-orders/pending-po" },
       { name: "Pending Indent Lines", href: "/purchase-orders/pending-indent-lines", icon: Activity, countKey: "/purchase-orders/pending-indent-lines" },
       { name: "All", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
       { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
@@ -364,7 +363,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/indent/approved": normalizedIndents.filter(i => i.status === "Approved").length,
     "/indent/completed": normalizedIndents.filter(i => i.status === "Completed").length,
     "/indent/rejected": normalizedIndents.filter(i => i.status === "Rejected").length,
-    "/purchase-orders/pending-po": normalizedIndents.filter(i => i.status === "Approved" && Number(i.totalBalanceQty || 0) > 0).length,
     "/purchase-orders/pending-indent-lines": indentLines.filter((l) => Number(l.qty || 0) - Number(l.cancelledQty || 0) - Number(l.orderedQty || 0) > 0).length,
     "/purchase-orders/all": purchaseOrders.length,
     "/purchase-orders/pending-approval": purchaseOrders.filter(po => po.status === "Pending Approval").length,

@@ -485,113 +485,118 @@ export function HitVsMissReport() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 rounded border border-black bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-7">
-        <div className="relative xl:col-span-2">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search order, company, item"
-            className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-          />
-        </div>
+      <div className="space-y-4 rounded border border-black bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.5fr)_repeat(4,minmax(160px,1fr))_auto]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search order, company, item"
+              className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+            />
+          </div>
 
-        <select
-          value={companyFilter}
-          onChange={(e) => setCompanyFilter(e.target.value)}
-          className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-        >
-          <option value="">All Companies</option>
-          {companyOptions.map((company) => (
-            <option key={company.id} value={company.id}>
-              {company.name}
-            </option>
-          ))}
-        </select>
+          <select
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="">All Companies</option>
+            {companyOptions.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name}
+              </option>
+            ))}
+          </select>
 
-        <select
-          value={itemFilter}
-          onChange={(e) => setItemFilter(e.target.value)}
-          className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-        >
-          <option value="">All Items</option>
-          {items.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+          <select
+            value={itemFilter}
+            onChange={(e) => setItemFilter(e.target.value)}
+            className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="">All Items</option>
+            {items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
 
-        <select
-          value={fyFilter}
-          onChange={(e) => setFyFilter(e.target.value)}
-          className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-        >
-          <option value="">All FY</option>
-          {fyOptions.map((fy) => (
-            <option key={fy} value={fy}>
-              {fy}
-            </option>
-          ))}
-        </select>
+          <select
+            value={fyFilter}
+            onChange={(e) => setFyFilter(e.target.value)}
+            className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="">All FY</option>
+            {fyOptions.map((fy) => (
+              <option key={fy} value={fy}>
+                {fy}
+              </option>
+            ))}
+          </select>
 
-        <select
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-          className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-        >
-          <option value="">All Months</option>
-          {monthOptions.map((month) => (
-            <option key={month} value={month}>
-              {month}
-            </option>
-          ))}
-        </select>
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+          >
+            <option value="">All Months</option>
+            {monthOptions.map((month) => (
+              <option key={month} value={month}>
+                {month}
+              </option>
+            ))}
+          </select>
 
-        <div className="flex gap-2">
           <button
             onClick={clearFilters}
             className="rounded border border-black px-3 py-2 text-sm font-bold uppercase hover:bg-slate-50"
           >
             Clear Filters
           </button>
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="inline-flex items-center gap-2 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
-          >
-            <Download size={14} />
-            Excel
-          </button>
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            className="inline-flex items-center gap-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
-          >
-            <FileText size={14} />
-            PDF
-          </button>
         </div>
 
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-          />
-        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(170px,220px)_minmax(170px,220px)_1fr]">
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+            />
+          </div>
 
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-          />
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-2 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
+            >
+              <Download size={14} />
+              Excel
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              className="inline-flex items-center gap-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+            >
+              <FileText size={14} />
+              PDF
+            </button>
+          </div>
         </div>
       </div>
 

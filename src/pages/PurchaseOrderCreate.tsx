@@ -236,7 +236,7 @@ export function PurchaseOrderCreate() {
       await setIndents(indents.map((row) => (row.id === indent.id ? nextIndent : row)));
 
       alert(newOrders.length > 0 ? `${newOrders.length} purchase order(s) created.` : "Indent quantities updated.");
-      navigate("/purchase-orders/pending-po");
+      navigate("/purchase-orders/pending-approval");
     } catch (error) {
       console.error("Failed to create purchase orders:", error);
       alert("Failed to create purchase orders.");

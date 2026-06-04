@@ -106,21 +106,21 @@ export function OrdersPendingScheduling() {
   const handleSave = (orderId: string) => {
     return (async () => {
       const order = orders.find(o => o.id === orderId);
-      if (!order) return;
+      if (!order) return false;
       const rows = modalRows;
       if (rows.some(r => (r as any).qty === '' || (r as any).qty === undefined)) {
         setModalError('Please fill or delete any empty scheduled quantities before saving');
-        return;
+        return false;
       }
 
       const total = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
       if (total > Number(order.qty || 0)) {
         setModalError('Total scheduled quantity exceeds order quantity');
-        return;
+        return false;
       }
       if (rows.some((r) => (r.scheduledDate || "") < today)) {
         setModalError("Previous date scheduling is not allowed.");
-        return;
+        return false;
       }
 
       setSaving(true);
@@ -142,17 +142,22 @@ export function OrdersPendingScheduling() {
           return [...others, ...rowsToSave];
         });
 
-        // If fully scheduled, mark as Scheduled
-        if (total === Number(order.qty || 0)) {
-          await setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Scheduled', updatedBy: 'System User', updateTimestamp: new Date().toISOString() } : o));
-        }
+        const nextStatus = total === Number(order.qty || 0) ? "Scheduled" : "Pending Scheduling";
+        await setOrders(prev =>
+          prev.map(o =>
+            o.id === orderId
+              ? { ...o, status: nextStatus, updatedBy: 'System User', updateTimestamp: new Date().toISOString() }
+              : o
+          )
+        );
 
         setModalError(null);
         setModalRows([]);
-        // close modal is handled by caller after promise resolves
+        return true;
       } catch (err) {
         console.error('Error saving schedule:', err);
         setModalError('Failed to save schedule. Try again.');
+        return false;
       } finally {
         setSaving(false);
       }
@@ -259,7 +264,7 @@ export function OrdersPendingScheduling() {
                   );
                 })()}
 
-                <button onClick={async () => { await handleSave(modalOrderId!); if (!modalError) { setModalOpen(false); setModalOrderId(null); } }} disabled={saving} className="bg-emerald-600 text-white px-3 py-1 rounded flex items-center gap-2">
+                <button onClick={async () => { const saved = await handleSave(modalOrderId!); if (saved) { setModalOpen(false); setModalOrderId(null); } }} disabled={saving} className="bg-emerald-600 text-white px-3 py-1 rounded flex items-center gap-2">
                   {saving ? <Spinner size={16} /> : null}
                   <span>Save Schedule</span>
                 </button>

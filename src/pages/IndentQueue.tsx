@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Eye, ThumbsUp, X } from "lucide-react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import { CheckCircle, Eye, FileText, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
@@ -49,6 +51,88 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
         }),
     [indents, mode]
   );
+
+  const handleExportPdf = () => {
+    const doc = new jsPDF("l", "mm", "a4");
+    doc.setFontSize(16);
+    doc.text(getQueueTitle(mode), 14, 16);
+    doc.setFontSize(10);
+    doc.text(`Total Records: ${visibleIndents.length}`, 14, 24);
+
+    if (mode === "Pending") {
+      const pendingRows = visibleIndents.flatMap((indent) =>
+        indentLines
+          .filter((line) => line.indentId === indent.id)
+          .map((line) => {
+            const material = materials.find((row) => row.id === line.materialId);
+            return [
+              indent.indentNo || indent.id,
+              indent.requestedBy || "",
+              formatDate(indent.requisitionDate),
+              formatDate(indent.requiredDate),
+              line.erpCode || "",
+              material?.name || line.erpCode || "Unknown Material",
+              Number(line.qty || 0).toLocaleString(),
+              line.uom || "",
+              line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "",
+            ];
+          })
+      );
+
+      (doc as any).autoTable({
+        head: [[
+          "Requisition No",
+          "Requested By",
+          "Requisition Date",
+          "Required Date",
+          "ERP",
+          "Item",
+          "Qty",
+          "Unit",
+          "Target Delivery",
+        ]],
+        body: pendingRows,
+        startY: 30,
+        theme: "grid",
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235] },
+        columnStyles: {
+          5: { cellWidth: 72 },
+        },
+      });
+    } else {
+      (doc as any).autoTable({
+        head: [[
+          "Requisition No",
+          "Requested By",
+          "Requisition Date",
+          "Required Date",
+          "Indent Type",
+          "Items",
+        ]],
+        body: visibleIndents.map((indent) => {
+          const lineRows = indentLines.filter((row) => row.indentId === indent.id);
+          return [
+            indent.indentNo || indent.id,
+            indent.requestedBy || "",
+            formatDate(indent.requisitionDate),
+            formatDate(indent.requiredDate),
+            indent.indentType || "",
+            getLineSummary(lineRows, materials),
+          ];
+        }),
+        startY: 30,
+        theme: "grid",
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235] },
+        columnStyles: {
+          5: { cellWidth: 120 },
+        },
+      });
+    }
+
+    doc.save(`${getQueueTitle(mode).replace(/[^a-z0-9]+/gi, "_")}.pdf`);
+  };
 
   const updateIndent = async (indent: Indent, nextStatus: Indent["status"], remarks?: string) => {
     setSubmittingId(indent.id);
@@ -116,6 +200,16 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 border-b border-black pb-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">{getQueueTitle(mode)}</h2>
+        {(mode === "Pending" || mode === "Approved") ? (
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex items-center gap-2 rounded border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+          >
+            <FileText size={14} />
+            PDF
+          </button>
+        ) : null}
       </div>
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">

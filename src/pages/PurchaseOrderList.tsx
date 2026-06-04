@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from "react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import { useData } from "../hooks/useData";
 import { 
   PurchaseOrder, 
@@ -14,7 +16,7 @@ import {
   Check, 
   X,
   Search,
-  Download
+  FileText
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
@@ -168,19 +170,76 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     }
   };
 
+  const handleExportPdf = () => {
+    const doc = new jsPDF("l", "mm", "a4");
+    doc.setFontSize(16);
+    doc.text(getTitle(mode), 14, 16);
+    doc.setFontSize(10);
+    doc.text(`Search: ${searchTerm || "All"} | Total POs: ${filteredOrders.length}`, 14, 24);
+
+    (doc as any).autoTable({
+      head: [[
+        "PO No",
+        "Date",
+        "Supplier",
+        "Items Summary",
+        "Total Qty",
+        "Total Amount",
+        ...(mode === "rejected" ? ["Rejection Reason"] : []),
+        "Status",
+      ]],
+      body: filteredOrders.map((order) => {
+        const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
+        const itemsSummary = lines
+          .map((line) => materialMap.get(line.materialId)?.name || "Unknown")
+          .join(", ");
+
+        return [
+          order.poNo || "DRAFT",
+          formatDate(order.date),
+          supplierMap.get(order.supplierId) || "Unknown",
+          itemsSummary,
+          Number(order.totalQty || 0).toLocaleString(),
+          Number(order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          ...(mode === "rejected" ? [order.rejectedRemarks || ""] : []),
+          order.status,
+        ];
+      }),
+      startY: 30,
+      theme: "grid",
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [37, 99, 235] },
+      columnStyles: {
+        3: { cellWidth: 90 },
+      },
+    });
+
+    doc.save(`${getTitle(mode).replace(/\s+/g, "_")}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">{getTitle(mode)}</h2>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text"
-            placeholder="Search PO, supplier..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-          />
+        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:justify-end">
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text"
+              placeholder="Search PO, supplier..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex min-w-[96px] items-center justify-center gap-2 rounded border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+          >
+            <FileText size={14} />
+            PDF
+          </button>
         </div>
       </div>
 
