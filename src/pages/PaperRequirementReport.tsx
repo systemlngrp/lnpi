@@ -430,34 +430,30 @@ export function PaperRequirementReport() {
 
         <div className="space-y-4 p-5">
           <div className="grid gap-3 md:grid-cols-5">
-            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5">
               <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700">Total Paper Requirement</div>
-              <div className="mt-2 text-2xl font-black text-sky-950">{round2(summary.totalPaperRequirement).toLocaleString()}</div>
+              <div className="mt-1.5 text-[2rem] font-black leading-none text-sky-950">{round2(summary.totalPaperRequirement).toLocaleString()}</div>
             </div>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
               <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Closing Stock</div>
-              <div className="mt-2 text-2xl font-black text-emerald-950">{round2(summary.totalClosingStock).toLocaleString()}</div>
+              <div className="mt-1.5 text-[2rem] font-black leading-none text-emerald-950">{round2(summary.totalClosingStock).toLocaleString()}</div>
             </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
               <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">Pending PO</div>
-              <div className="mt-2 text-2xl font-black text-amber-950">{round2(summary.totalPendingPo).toLocaleString()}</div>
+              <div className="mt-1.5 text-[2rem] font-black leading-none text-amber-950">{round2(summary.totalPendingPo).toLocaleString()}</div>
             </div>
-            <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
+            <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5">
               <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-violet-700">MIL</div>
-              <div className="mt-2 text-2xl font-black text-violet-950">{round2(summary.mil).toLocaleString()}</div>
+              <div className="mt-1.5 text-[2rem] font-black leading-none text-violet-950">{round2(summary.mil).toLocaleString()}</div>
             </div>
-            <div className={`rounded-2xl border px-4 py-3 ${summary.netPaperToOrder >= 0 ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
+            <div className={`rounded-xl border px-4 py-2.5 ${summary.netPaperToOrder >= 0 ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
               <div className={`text-[11px] font-bold uppercase tracking-[0.16em] ${summary.netPaperToOrder >= 0 ? "text-rose-700" : "text-emerald-700"}`}>Net Paper to Order</div>
-              <div className={`mt-2 text-2xl font-black ${summary.netPaperToOrder >= 0 ? "text-rose-950" : "text-emerald-950"}`}>{round2(summary.netPaperToOrder).toLocaleString()}</div>
+              <div className={`mt-1.5 text-[2rem] font-black leading-none ${summary.netPaperToOrder >= 0 ? "text-rose-950" : "text-emerald-950"}`}>{round2(summary.netPaperToOrder).toLocaleString()}</div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
-            <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">Filter Console</div>
-                <div className="mt-1 text-sm font-semibold text-slate-700">RAPC, GSM, date, net position, and layer-wise paper demand view.</div>
-              </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5">
+            <div className="mb-3 flex flex-col gap-3 border-b border-slate-200 pb-3 xl:flex-row xl:items-center xl:justify-end">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -486,13 +482,13 @@ export function PaperRequirementReport() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(320px,1.5fr)_minmax(200px,0.9fr)_minmax(180px,0.85fr)_minmax(180px,0.85fr)]">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.4fr)_minmax(180px,0.85fr)_minmax(170px,0.8fr)_minmax(170px,0.8fr)]">
               <label className="space-y-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">RAPC Range + GSM</span>
                 <select
                   value={selectedRangeGsm}
                   onChange={(e) => setSelectedRangeGsm(e.target.value)}
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="h-[46px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 >
                   {rangeOptions.map((option) => (
                     <option key={option} value={option}>
@@ -511,7 +507,7 @@ export function PaperRequirementReport() {
                   type="date"
                   value={uptoDate}
                   onChange={(e) => setUptoDate(e.target.value)}
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="h-[46px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 />
               </label>
 
@@ -520,7 +516,7 @@ export function PaperRequirementReport() {
                 <select
                   value={netFilter}
                   onChange={(e) => setNetFilter(e.target.value as NetFilter)}
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="h-[46px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 >
                   {NET_FILTER_OPTIONS.map((option) => (
                     <option key={option} value={option}>
@@ -535,7 +531,7 @@ export function PaperRequirementReport() {
                 <select
                   value={groupType}
                   onChange={(e) => setGroupType(e.target.value as GroupTypeFilter)}
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="h-[46px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 >
                   {GROUP_TYPE_OPTIONS.map((option) => (
                     <option key={option} value={option}>
@@ -553,7 +549,7 @@ export function PaperRequirementReport() {
                 <thead className="bg-blue-700 text-white">
                   <tr>
                     {["RAPC RANGE", "GSM", "Total Paper Requirement", "Total Closing Stock", "Total Pending PO", "MIL", "Net Paper to Order"].map((heading) => (
-                      <th key={heading} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] whitespace-nowrap">
+                      <th key={heading} className="border-r border-black px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] whitespace-nowrap last:border-r-0">
                         {heading}
                       </th>
                     ))}
@@ -569,12 +565,12 @@ export function PaperRequirementReport() {
                   ) : (
                     filteredRows.map((row) => (
                       <tr key={`${row.rapcRange}-${row.gsm}`} className="border-t border-black text-sm text-slate-700 transition hover:bg-sky-50/40">
-                        <td className="px-4 py-3 font-semibold text-slate-900">{row.rapcRange}</td>
-                        <td className="px-4 py-3">{row.gsm}</td>
-                        <td className="px-4 py-3">{row.totalPaperRequirement.toLocaleString()}</td>
-                        <td className="px-4 py-3">{row.totalClosingStock.toLocaleString()}</td>
-                        <td className="px-4 py-3">{row.totalPendingPo.toLocaleString()}</td>
-                        <td className="px-4 py-3">{row.mil.toLocaleString()}</td>
+                        <td className="border-r border-black px-4 py-3 font-semibold text-slate-900">{row.rapcRange}</td>
+                        <td className="border-r border-black px-4 py-3">{row.gsm}</td>
+                        <td className="border-r border-black px-4 py-3">{row.totalPaperRequirement.toLocaleString()}</td>
+                        <td className="border-r border-black px-4 py-3">{row.totalClosingStock.toLocaleString()}</td>
+                        <td className="border-r border-black px-4 py-3">{row.totalPendingPo.toLocaleString()}</td>
+                        <td className="border-r border-black px-4 py-3">{row.mil.toLocaleString()}</td>
                         <td className={`px-4 py-3 font-bold ${row.netPaperToOrder >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
                           {row.netPaperToOrder.toLocaleString()}
                         </td>
@@ -585,11 +581,11 @@ export function PaperRequirementReport() {
                 {filteredRows.length > 0 ? (
                   <tfoot className="border-t border-black bg-slate-100">
                     <tr>
-                      <td className="px-4 py-3 text-sm font-black text-slate-900" colSpan={2}>Grand Total</td>
-                      <td className="px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalPaperRequirement).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalClosingStock).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalPendingPo).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm font-black text-slate-900">{round2(summary.mil).toLocaleString()}</td>
+                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900" colSpan={2}>Grand Total</td>
+                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalPaperRequirement).toLocaleString()}</td>
+                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalClosingStock).toLocaleString()}</td>
+                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalPendingPo).toLocaleString()}</td>
+                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900">{round2(summary.mil).toLocaleString()}</td>
                       <td className={`px-4 py-3 text-sm font-black ${summary.netPaperToOrder >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
                         {round2(summary.netPaperToOrder).toLocaleString()}
                       </td>

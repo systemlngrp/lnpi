@@ -186,9 +186,6 @@ export function JobwiseReelConsumptionReport() {
             </div>
             <div>
               <h2 className="text-2xl font-black tracking-tight text-slate-950">Jobwise Reel Consumption Report</h2>
-              <p className="mt-1 text-sm font-medium text-slate-500">
-                Corrugation-paper-date jobs with reel issue, return, consumed cost, GP, and cost-based GP%.
-              </p>
             </div>
           </div>
 
@@ -293,16 +290,10 @@ export function JobwiseReelConsumptionReport() {
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <div className="text-sm font-bold text-slate-900">{rows.length} jobs</div>
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-            GP% is calculated on consumed value
-          </div>
-        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
             <thead>
-              <tr className="bg-emerald-950 text-white">
+              <tr className="bg-blue-700 text-white">
                 {[
                   "Job No.",
                   "Corrugation Date",
@@ -318,7 +309,7 @@ export function JobwiseReelConsumptionReport() {
                 ].map((heading) => (
                   <th
                     key={heading}
-                    className="whitespace-nowrap border-b border-emerald-900 px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em]"
+                    className="whitespace-nowrap border-r border-black border-b border-black px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em] last:border-r-0"
                   >
                     {heading}
                   </th>
@@ -328,23 +319,23 @@ export function JobwiseReelConsumptionReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-12 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={11} className="border-t border-black px-6 py-12 text-center text-sm font-semibold text-slate-500">
                     No jobs match the current filters.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.productionId} className="border-b border-slate-100 text-sm text-slate-700 transition hover:bg-emerald-50/40">
-                    <td className="px-4 py-3 font-bold text-slate-900">{row.jobNo}</td>
-                    <td className="px-4 py-3">{formatDate(row.corrugationDate)}</td>
-                    <td className="px-4 py-3 text-right">{row.jobFfg.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">{row.jobRate.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">{row.jobValue.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">{row.reelIssued.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">{row.reelReturned.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-bold text-amber-700">{row.reelConsumed.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-bold text-violet-700">{row.consumedValue.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-bold text-emerald-700">{row.gp.toFixed(2)}</td>
+                  <tr key={row.productionId} className="border-t border-black text-sm text-slate-700 transition hover:bg-emerald-50/40">
+                    <td className="border-r border-black px-4 py-3 font-bold text-slate-900">{row.jobNo}</td>
+                    <td className="border-r border-black px-4 py-3">{formatDate(row.corrugationDate)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{row.jobFfg.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{row.jobRate.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-slate-900">{row.jobValue.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{row.reelIssued.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{row.reelReturned.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-bold text-amber-700">{row.reelConsumed.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-bold text-violet-700">{row.consumedValue.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-bold text-emerald-700">{row.gp.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-black text-emerald-800">{row.gpPercent.toFixed(2)}</td>
                   </tr>
                 ))

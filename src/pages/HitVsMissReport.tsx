@@ -320,9 +320,6 @@ export function HitVsMissReport() {
       <div className="flex flex-col gap-4 border-b border-black pb-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-xl font-bold uppercase tracking-tight text-black">Hit Vs Miss Report</h2>
-          <p className="text-sm font-medium text-slate-600">
-            Schedule-based report using full invoice completion date versus scheduled date.
-          </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <div className="rounded border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">
@@ -432,11 +429,6 @@ export function HitVsMissReport() {
       <div className="rounded border border-black bg-white shadow-sm">
         <div className="border-b border-black px-4 py-3">
           <h3 className="text-sm font-bold uppercase tracking-wider text-black">Monthly Summary</h3>
-          {overall.open > 0 ? (
-            <p className="mt-1 text-xs font-medium text-amber-700">
-              Open schedules are included in total but excluded from Hit/Miss delay buckets until overdue.
-            </p>
-          ) : null}
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
