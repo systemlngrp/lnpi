@@ -63,6 +63,8 @@ export function MaterialInForm() {
   const [invDate, setInvDate] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [mrrType, setMrrType] = useState<MaterialIn["mrrType"]>("Others");
+  const [insurance, setInsurance] = useState<number | "">("");
+  const [otherCharges, setOtherCharges] = useState<number | "">("");
 
   const [lines, setLines] = useState<MaterialLine[]>([]);
   const [currentItemId, setCurrentItemId] = useState("");
@@ -145,6 +147,8 @@ export function MaterialInForm() {
     setInvDate(editingEntry.invDate || "");
     setSupplierId(editingEntry.supplierId || "");
     setMrrType(editingEntry.mrrType || "Others");
+    setInsurance(editingEntry.insurance ?? "");
+    setOtherCharges(editingEntry.otherCharges ?? "");
     setLines((editingEntry.lines || []).map((line) => computeLineValues({ ...line })));
 
     const existingPackingSlips = packingSlips.filter((row) => row.materialInId === editingEntry.id);
@@ -226,7 +230,9 @@ export function MaterialInForm() {
 
   const totalInvoiceValue = lines.reduce((sum, line) => sum + Number(line.invoiceValue || 0), 0);
   const totalActualValue = lines.reduce((sum, line) => sum + Number(line.actualValue || line.value || 0), 0);
-  const totalAmount = totalActualValue;
+  const insuranceValue = Number(insurance || 0);
+  const otherChargesValue = Number(otherCharges || 0);
+  const totalAmount = totalActualValue + insuranceValue + otherChargesValue;
 
   const computeLineValues = (line: MaterialLine) => {
     const invoiceQty = Number(line.invoiceQty ?? line.qty ?? 0);
@@ -776,6 +782,8 @@ export function MaterialInForm() {
           supplierId,
           totalInvoiceValue,
           totalActualValue,
+          insurance: insuranceValue,
+          otherCharges: otherChargesValue,
           totalAmount,
           lines,
           status: editingEntry?.status || "Pending MRR",
@@ -938,6 +946,28 @@ export function MaterialInForm() {
               value={invDate}
               onChange={(e) => setInvDate(e.target.value)}
               required
+              className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full"
+            />
+          </div>
+          <div className="flex flex-col space-y-1">
+            <label className="font-bold text-black">Insurance</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={insurance}
+              onChange={(e) => setInsurance(e.target.value === "" ? "" : parseFloat(e.target.value))}
+              className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full"
+            />
+          </div>
+          <div className="flex flex-col space-y-1">
+            <label className="font-bold text-black">Other Charges</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={otherCharges}
+              onChange={(e) => setOtherCharges(e.target.value === "" ? "" : parseFloat(e.target.value))}
               className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full"
             />
           </div>
@@ -1241,6 +1271,9 @@ export function MaterialInForm() {
           <div className="mt-4 text-right font-bold text-black text-xl">
             <div>Total Invoice Value: <span className="text-amber-700">Rs {totalInvoiceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total Actual Value: <span className="text-indigo-700">Rs {totalActualValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Insurance: <span className="text-slate-700">Rs {insuranceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Other Charges: <span className="text-slate-700">Rs {otherChargesValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total Amount: <span className="text-emerald-700">Rs {totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
           </div>
         </div>
 

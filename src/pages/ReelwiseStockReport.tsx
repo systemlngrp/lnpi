@@ -207,20 +207,20 @@ export function ReelwiseStockReport() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[600px]">
-              <div className="rounded-[24px] border border-emerald-200 bg-[linear-gradient(135deg,rgba(236,253,245,1),rgba(240,253,250,0.86))] px-4 py-4 shadow-sm">
+            <div className="grid gap-2.5 sm:grid-cols-3 xl:min-w-[520px]">
+              <div className="rounded-[20px] border border-emerald-200 bg-[linear-gradient(135deg,rgba(236,253,245,1),rgba(240,253,250,0.86))] px-3.5 py-3 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Reels Not Issued</div>
-                <div className="mt-3 text-4xl font-black tracking-tight text-emerald-950">{summary.reelNotIssuedWeight.toFixed(2)}</div>
+                <div className="mt-2 text-[2rem] font-black tracking-tight text-emerald-950">{summary.reelNotIssuedWeight.toFixed(2)}</div>
                 <div className="mt-1 text-xs font-semibold text-emerald-700">Available weight</div>
               </div>
-              <div className="rounded-[24px] border border-amber-200 bg-[linear-gradient(135deg,rgba(255,251,235,1),rgba(255,247,237,0.9))] px-4 py-4 shadow-sm">
+              <div className="rounded-[20px] border border-amber-200 bg-[linear-gradient(135deg,rgba(255,251,235,1),rgba(255,247,237,0.9))] px-3.5 py-3 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Reels Issued</div>
-                <div className="mt-3 text-4xl font-black tracking-tight text-amber-950">{summary.reelIssuedWeight.toFixed(2)}</div>
+                <div className="mt-2 text-[2rem] font-black tracking-tight text-amber-950">{summary.reelIssuedWeight.toFixed(2)}</div>
                 <div className="mt-1 text-xs font-semibold text-amber-700">Issued weight</div>
               </div>
-              <div className="rounded-[24px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-4 py-4 shadow-sm">
+              <div className="rounded-[20px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-3.5 py-3 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">ERP Not Issued</div>
-                <div className="mt-3 text-4xl font-black tracking-tight text-violet-950">{summary.erpNotIssuedCount}</div>
+                <div className="mt-2 text-[2rem] font-black tracking-tight text-violet-950">{summary.erpNotIssuedCount}</div>
                 <div className="mt-1 text-xs font-semibold text-violet-700">Unique ERPs</div>
               </div>
             </div>

@@ -430,6 +430,8 @@ export interface MaterialIn {
   totalPoValue?: number;
   totalInvoiceValue?: number;
   totalActualValue?: number;
+  insurance?: number;
+  otherCharges?: number;
   totalAmount: number;
   lines: MaterialLine[];
   phTimestamp?: string;

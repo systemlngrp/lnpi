@@ -3,7 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Boxes,
   ClipboardList,
-  LayoutDashboard,
   Layers,
   FileText,
   UserCheck,
@@ -74,7 +73,6 @@ export const NAVIGATION: NavGroup[] = [
     section: "Quick Access",
     color: "bg-indigo-900",
     items: [
-      { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Operation Dashboard", href: "/operations-dashboard", icon: BarChart3 },
       { name: "Production Plan", href: "/production/plan", icon: ClipboardList },
       { name: "Unified PH Approval", href: "/plant-head", icon: UserCheck, countKey: "/plant-head" },
