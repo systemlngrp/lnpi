@@ -447,41 +447,41 @@ export function EfficiencyReport() {
           <table className="min-w-full border-collapse">
             <thead>
               <tr className="bg-[linear-gradient(90deg,#042f2e,#0f766e,#134e4a)] text-white">
-                <th className="min-w-[110px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Date</th>
-                <th className="min-w-[130px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Job No.</th>
-                <th className="min-w-[150px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Machine</th>
-                <th className="min-w-[80px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Shift</th>
-                <th className="min-w-[140px] whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Operator</th>
-                <th className="min-w-[95px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Qty</th>
-                <th className="min-w-[95px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Max/Hr</th>
-                <th className="min-w-[105px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Expected</th>
+                <th className="min-w-[110px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Date</th>
+                <th className="min-w-[130px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Job No.</th>
+                <th className="min-w-[150px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Machine</th>
+                <th className="min-w-[80px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Shift</th>
+                <th className="min-w-[140px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Operator</th>
+                <th className="min-w-[95px] whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Qty</th>
+                <th className="min-w-[95px] whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Max/Hr</th>
+                <th className="min-w-[105px] whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Expected</th>
                 <th className="min-w-[90px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Eff%</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={9} className="border-t border-black px-4 py-10 text-center text-sm font-semibold text-slate-500">
                     No matching records.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.id} className="border-t border-slate-200 transition hover:bg-teal-50/45">
-                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-slate-900">
+                  <tr key={row.id} className="border-t border-black transition hover:bg-teal-50/45">
+                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-semibold text-slate-900">
                       {formatDate(row.date)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-bold text-slate-900">{row.jobNo || "-"}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-slate-900">{row.machineName}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-bold text-slate-900">{row.shift}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-slate-900">{row.operatorName}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold text-teal-700">
+                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-bold text-slate-900">{row.jobNo || "-"}</td>
+                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-semibold text-slate-900">{row.machineName}</td>
+                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-bold text-slate-900">{row.shift}</td>
+                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-semibold text-slate-900">{row.operatorName}</td>
+                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-bold text-teal-700">
                       {row.qty.toFixed(2)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
+                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
                       {row.maxOutputPerHour.toFixed(2)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
+                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
                       {row.expectedQty.toFixed(2)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold text-slate-900">
@@ -493,17 +493,17 @@ export function EfficiencyReport() {
             </tbody>
             {rows.length > 0 ? (
               <tfoot>
-                <tr className="border-t-2 border-slate-300 bg-slate-50">
-                  <td colSpan={5} className="px-3 py-2.5 text-right text-xs font-black uppercase tracking-[0.16em] text-slate-600">
+                <tr className="border-t-2 border-black bg-slate-50">
+                  <td colSpan={5} className="border-r border-black px-3 py-2.5 text-right text-xs font-black uppercase tracking-[0.16em] text-slate-600">
                     Totals
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-black text-teal-700">
+                  <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-black text-teal-700">
                     {summary.qty.toFixed(2)}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
+                  <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
                     -
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-black text-slate-900">
+                  <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-black text-slate-900">
                     {summary.expected.toFixed(2)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-black text-slate-900">

@@ -79,6 +79,13 @@ function resolveRapcValue(input: number, ranges: RapcRange[]) {
   return Number(match?.rapcRange || 0);
 }
 
+function getMaterialRapcInput(material?: Material | null) {
+  const rapc = Number(material?.rapc || 0);
+  if (rapc > 0) return rapc;
+  const size = Number(material?.size || 0);
+  return size > 0 ? size * 10 : 0;
+}
+
 export function PaperRequirementReport() {
   const [productions] = useData<Production>("productions", []);
   const [items] = useData<Item>("items", []);
@@ -174,7 +181,7 @@ export function PaperRequirementReport() {
     materials
       .filter((material) => material.type === "Reel")
       .forEach((material) => {
-        const rapcRange = resolveRapcValue(Number(material.size || 0), effectiveRanges);
+        const rapcRange = resolveRapcValue(getMaterialRapcInput(material), effectiveRanges);
         const gsm = Number(material.gsm || 0);
         if (!rapcRange || !gsm) return;
 
@@ -228,7 +235,7 @@ export function PaperRequirementReport() {
       if (!po || po.status !== "Approved" || !poDate || normalizeDate(poDate).getTime() > filteredTimestamp) return;
       const material = materialMap.get(line.materialId);
       if (!material || material.type !== "Reel") return;
-      const rapcRange = resolveRapcValue(Number(material.size || 0), effectiveRanges);
+      const rapcRange = resolveRapcValue(getMaterialRapcInput(material), effectiveRanges);
       const gsm = Number(material.gsm || 0);
       if (!rapcRange || !gsm) return;
       const pendingQty = Math.max(0, Number(line.qty || 0) - Number(receivedByPoLine.get(line.id) || 0));
@@ -243,7 +250,7 @@ export function PaperRequirementReport() {
       if (!indentDate || normalizeDate(indentDate).getTime() > filteredTimestamp) return;
       const material = materialMap.get(line.materialId);
       if (!material || material.type !== "Reel") return;
-      const rapcRange = resolveRapcValue(Number(material.size || 0), effectiveRanges);
+      const rapcRange = resolveRapcValue(getMaterialRapcInput(material), effectiveRanges);
       const gsm = Number(material.gsm || 0);
       if (!rapcRange || !gsm) return;
       const balanceQty = Math.max(0, Number(line.balanceQty || 0));
