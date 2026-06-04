@@ -12,9 +12,11 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const endpoint = options?.endpointOverride || `/api/${entity.replace(/_/g, "-")}`;
-  const storageKey = options?.storageKey || entity;
-  const syncEvent = options?.syncEventKey || `sync-data-${entity}`;
+  const isItemAlias = entity === "items" && !options?.endpointOverride;
+  const resolvedEntity = isItemAlias ? "npd" : entity;
+  const endpoint = options?.endpointOverride || `/api/${resolvedEntity.replace(/_/g, "-")}`;
+  const storageKey = options?.storageKey || resolvedEntity;
+  const syncEvent = options?.syncEventKey || `sync-data-${resolvedEntity}`;
 
   // Keep ref in sync
   useEffect(() => {
