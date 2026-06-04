@@ -227,17 +227,7 @@ export function ReelwiseStockReport() {
           </div>
 
           <div className="relative mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 md:p-5">
-            <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-end">
-              <button
-                type="button"
-                onClick={handleClearFilters}
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
-              >
-                Clear Filters
-              </button>
-            </div>
-
-            <div className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(320px,1.5fr)_minmax(220px,1fr)_minmax(160px,0.7fr)_minmax(160px,0.7fr)_minmax(220px,1fr)]">
+            <div className="grid flex-1 gap-4 border-t-0 md:grid-cols-2 xl:grid-cols-[minmax(320px,1.5fr)_minmax(220px,1fr)_minmax(160px,0.7fr)_minmax(160px,0.7fr)_minmax(220px,1fr)_auto]">
               <label className="space-y-2">
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <Search size={14} />
@@ -327,6 +317,19 @@ export function ReelwiseStockReport() {
                   </label>
                 </div>
               </label>
+
+              <div className="space-y-2">
+                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-transparent select-none">
+                  Action
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="inline-flex h-[56px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 xl:w-auto"
+                >
+                  Clear Filters
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -365,7 +368,7 @@ export function ReelwiseStockReport() {
                 ].map((heading) => (
                   <th
                     key={heading}
-                    className="whitespace-nowrap border-b border-slate-800 px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em]"
+                    className="whitespace-nowrap border-r border-black border-b border-black px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em] last:border-r-0"
                   >
                     {heading}
                   </th>
@@ -375,28 +378,28 @@ export function ReelwiseStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="px-6 py-12 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={16} className="border-t border-black px-6 py-12 text-center text-sm font-semibold text-slate-500">
                     No reel rows match the current filters.
                   </td>
                 </tr>
               ) : (
                 rows.map((row, index) => (
-                  <tr key={row.slipId} className="border-b border-slate-100 text-sm text-slate-700 transition hover:bg-sky-50/50">
-                    <td className="px-4 py-3 font-bold text-slate-900">{index + 1}</td>
-                    <td className="px-4 py-3">{formatReportDate(row.mrrDate)}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">{row.mrrNo}</td>
-                    <td className="px-4 py-3 font-bold text-slate-900">{row.ourReelNo}</td>
-                    <td className="px-4 py-3">{row.erp}</td>
-                    <td className="px-4 py-3 min-w-[220px]">{row.supplierName}</td>
-                    <td className="px-4 py-3">{row.gsm || ""}</td>
-                    <td className="px-4 py-3">{row.size || ""}</td>
-                    <td className="px-4 py-3">{row.bf || ""}</td>
-                    <td className="px-4 py-3">{formatReportDate(row.issuedDate)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-amber-700">{row.issuedWeight.toFixed(2)}</td>
-                    <td className="px-4 py-3">{formatReportDate(row.returnedDate)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-violet-700">{row.returnedWeight.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-black text-emerald-700">{row.availableWeight.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">{row.mrrQty.toFixed(2)}</td>
+                  <tr key={row.slipId} className="border-t border-black text-sm text-slate-700 transition hover:bg-sky-50/50">
+                    <td className="border-r border-black px-4 py-3 font-bold text-slate-900">{index + 1}</td>
+                    <td className="border-r border-black px-4 py-3">{formatReportDate(row.mrrDate)}</td>
+                    <td className="border-r border-black px-4 py-3 font-semibold text-slate-900">{row.mrrNo}</td>
+                    <td className="border-r border-black px-4 py-3 font-bold text-slate-900">{row.ourReelNo}</td>
+                    <td className="border-r border-black px-4 py-3">{row.erp}</td>
+                    <td className="border-r border-black px-4 py-3 min-w-[220px]">{row.supplierName}</td>
+                    <td className="border-r border-black px-4 py-3">{row.gsm || ""}</td>
+                    <td className="border-r border-black px-4 py-3">{row.size || ""}</td>
+                    <td className="border-r border-black px-4 py-3">{row.bf || ""}</td>
+                    <td className="border-r border-black px-4 py-3">{formatReportDate(row.issuedDate)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-amber-700">{row.issuedWeight.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3">{formatReportDate(row.returnedDate)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-violet-700">{row.returnedWeight.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-black text-emerald-700">{row.availableWeight.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{row.mrrQty.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right">{row.ageDays}</td>
                   </tr>
                 ))
