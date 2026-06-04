@@ -232,14 +232,6 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
               className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
             />
           </div>
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            className="inline-flex min-w-[96px] items-center justify-center gap-2 rounded border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
-          >
-            <FileText size={14} />
-            PDF
-          </button>
         </div>
       </div>
 
@@ -424,6 +416,17 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleExportPdf}
+          className="inline-flex min-w-[96px] items-center justify-center gap-2 rounded border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+        >
+          <FileText size={14} />
+          PDF
+        </button>
       </div>
     </div>
   );
