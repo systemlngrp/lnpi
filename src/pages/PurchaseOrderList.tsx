@@ -21,6 +21,7 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
+import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
 
 type Mode = "pending-approval" | "approved" | "rejected" | "all";
 
@@ -58,6 +59,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [remarks, setRemarks] = useState("");
+  const [pdfOrderId, setPdfOrderId] = useState<string | null>(null);
 
   const currentSetting = settings[0];
   const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
@@ -217,6 +219,78 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     doc.save(`${getTitle(mode).replace(/\s+/g, "_")}.pdf`);
   };
 
+  const handleRowPdf = async (order: PurchaseOrder) => {
+    const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
+    const indent = indents.find((row) => row.id === order.indentId);
+    const supplierName = supplierMap.get(order.supplierId) || "Unknown";
+    const doc = new jsPDF("p", "mm", "a4");
+    setPdfOrderId(order.id);
+
+    try {
+      const { currentY } = await renderOrganizationHeader(doc, currentSetting, { startY: 12 });
+      let y = currentY;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.text("Purchase Order", 105, y, { align: "center" });
+      y += 10;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(`PO No: ${order.poNo || "DRAFT"}`, 14, y);
+      doc.text(`Status: ${order.status}`, 140, y);
+      y += 6;
+      doc.text(`Supplier: ${supplierName}`, 14, y);
+      doc.text(`Indent Ref: ${indent?.indentNo || "-"}`, 140, y);
+      y += 6;
+      doc.text(`PO Date: ${formatDate(order.poDate)}`, 14, y);
+      doc.text(`Required Date: ${formatDate(order.requiredDate)}`, 140, y);
+      y += 6;
+      doc.text(`Total Qty: ${Number(order.totalQty || 0).toLocaleString()}`, 14, y);
+      doc.text(`Total Amount: Rs. ${Number(order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, y);
+      y += 8;
+
+      const notes: string[] = [];
+      if (order.remarks?.trim()) notes.push(`Remarks: ${order.remarks.trim()}`);
+      if (order.rejectedRemarks?.trim()) notes.push(`Rejection Reason: ${order.rejectedRemarks.trim()}`);
+      if (notes.length > 0) {
+        doc.setFont("helvetica", "normal");
+        const noteLines = doc.splitTextToSize(notes.join("   "), 180);
+        doc.text(noteLines, 14, y);
+        y += noteLines.length * 5 + 2;
+      }
+
+      (doc as any).autoTable({
+        startY: y,
+        theme: "grid",
+        headStyles: { fillColor: [37, 99, 235] },
+        styles: { fontSize: 8, cellPadding: 2 },
+        head: [[
+          "ERP",
+          "Item",
+          "Qty",
+          "UOM",
+          "Rate",
+          "Amount",
+          "Target Delivery",
+        ]],
+        body: lines.map((line) => [
+          line.erpCode || "",
+          materialMap.get(line.materialId)?.name || "Unknown",
+          Number(line.qty || 0).toLocaleString(),
+          line.uom || "",
+          `Rs. ${Number(line.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `Rs. ${Number(line.amount || line.qty * line.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-",
+        ]),
+      });
+
+      doc.save(`PO_${order.poNo || order.id}.pdf`);
+    } finally {
+      setPdfOrderId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
@@ -309,6 +383,15 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                       ) : null}
                       <td className="px-4 py-4">
                         <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleRowPdf(order)}
+                            disabled={pdfOrderId === order.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-rose-300 bg-rose-50 text-rose-700 font-black text-[10px] uppercase hover:bg-rose-100 transition disabled:opacity-50"
+                          >
+                            {pdfOrderId === order.id ? <Spinner size={12} /> : <FileText size={14} />}
+                            PDF
+                          </button>
                           {mode === "pending-approval" ? (
                             <>
                               {rejectingId === order.id ? (

@@ -7,7 +7,8 @@ import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { Indent, IndentLine, Material } from "../types";
+import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
+import { Indent, IndentLine, Material, Setting } from "../types";
 import { withIndentTotals } from "../lib/indentTotals";
 
 type QueueMode = "Pending" | "Approved" | "Completed" | "Rejected";
@@ -37,8 +38,12 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
   const [indents, setIndents] = useData<Indent>("indents", []);
   const [indentLines] = useData<IndentLine>("indent-lines", []);
   const [materials] = useData<Material>("materials", []);
+  const [settings] = useData<Setting>("settings", []);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [pdfIndentId, setPdfIndentId] = useState<string | null>(null);
+
+  const currentSetting = settings[0];
 
   const visibleIndents = useMemo(
     () =>
@@ -132,6 +137,82 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
     }
 
     doc.save(`${getQueueTitle(mode).replace(/[^a-z0-9]+/gi, "_")}.pdf`);
+  };
+
+  const handleRowPdf = async (indent: Indent) => {
+    const lineRows = indentLines.filter((row) => row.indentId === indent.id);
+    const doc = new jsPDF("p", "mm", "a4");
+    setPdfIndentId(indent.id);
+
+    try {
+      const { currentY } = await renderOrganizationHeader(doc, currentSetting, { startY: 12 });
+      let y = currentY;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.text("Indent Document", 105, y, { align: "center" });
+      y += 10;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(`Indent No: ${indent.indentNo || indent.id}`, 14, y);
+      doc.text(`Status: ${indent.status}`, 140, y);
+      y += 6;
+      doc.text(`Requested By: ${indent.requestedBy || "-"}`, 14, y);
+      doc.text(`Indent Type: ${indent.indentType || "-"}`, 140, y);
+      y += 6;
+      doc.text(`Requisition Date: ${formatDate(indent.requisitionDate)}`, 14, y);
+      doc.text(`Required Date: ${formatDate(indent.requiredDate)}`, 140, y);
+      y += 6;
+
+      const totalsIndent = withIndentTotals(indent, lineRows);
+      doc.text(`Total Indent Qty: ${Number(totalsIndent.totalIndentQty || 0).toLocaleString()}`, 14, y);
+      doc.text(`Balance Qty: ${Number(totalsIndent.totalBalanceQty || 0).toLocaleString()}`, 140, y);
+      y += 8;
+
+      if (indent.rejectedRemarks?.trim()) {
+        doc.setFont("helvetica", "bold");
+        doc.text("Remarks:", 14, y);
+        doc.setFont("helvetica", "normal");
+        const remarksLines = doc.splitTextToSize(indent.rejectedRemarks.trim(), 170);
+        doc.text(remarksLines, 32, y);
+        y += Math.max(6, remarksLines.length * 5 + 2);
+      }
+
+      (doc as any).autoTable({
+        startY: y,
+        theme: "grid",
+        headStyles: { fillColor: [37, 99, 235] },
+        styles: { fontSize: 8, cellPadding: 2 },
+        head: [[
+          "ERP",
+          "Item",
+          "Qty",
+          "Unit",
+          "Target Delivery",
+          "Ordered Qty",
+          "Cancelled Qty",
+          "Balance Qty",
+        ]],
+        body: lineRows.map((row) => {
+          const rowMaterial = materials.find((m) => m.id === row.materialId);
+          return [
+            row.erpCode || "",
+            rowMaterial?.name || row.erpCode || "Unknown Material",
+            Number(row.qty || 0).toLocaleString(),
+            row.uom || "",
+            row.targetDeliveryDate ? formatDate(row.targetDeliveryDate) : "-",
+            Number(row.orderedQty || 0).toLocaleString(),
+            Number(row.cancelledQty || 0).toLocaleString(),
+            Number(row.balanceQty || 0).toLocaleString(),
+          ];
+        }),
+      });
+
+      doc.save(`Indent_${indent.indentNo || indent.id}.pdf`);
+    } finally {
+      setPdfIndentId(null);
+    }
   };
 
   const updateIndent = async (indent: Indent, nextStatus: Indent["status"], remarks?: string) => {
@@ -304,6 +385,15 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                           className="inline-flex h-9 w-9 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-50 transition"
                         >
                           <Eye size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleRowPdf(indent)}
+                          disabled={pdfIndentId === indent.id}
+                          title="Download PDF"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition disabled:opacity-50"
+                        >
+                          {pdfIndentId === indent.id ? <Spinner size={16} /> : <FileText size={16} />}
                         </button>
                         {mode === "Pending" ? (
                           <>
