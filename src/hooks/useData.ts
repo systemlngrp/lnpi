@@ -1,13 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-export function useData<T extends { id: string }>(entity: string, initialValue: T[]) {
+type UseDataOptions = {
+  endpointOverride?: string;
+  storageKey?: string;
+  syncEventKey?: string;
+};
+
+export function useData<T extends { id: string }>(entity: string, initialValue: T[], options?: UseDataOptions) {
   const [data, setDataState] = useState<T[]>(initialValue);
   const dataRef = useRef<T[]>(initialValue);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const endpoint = `/api/${entity.replace(/_/g, "-")}`;
-  const syncEvent = `sync-data-${entity}`;
+  const endpoint = options?.endpointOverride || `/api/${entity.replace(/_/g, "-")}`;
+  const storageKey = options?.storageKey || entity;
+  const syncEvent = options?.syncEventKey || `sync-data-${entity}`;
 
   // Keep ref in sync
   useEffect(() => {
@@ -29,11 +36,11 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       setDataState(result);
       dataRef.current = result;
       setError(null);
-      window.localStorage.setItem(entity, JSON.stringify(result));
+      window.localStorage.setItem(storageKey, JSON.stringify(result));
     } catch (err) {
       console.error(`Error fetching ${entity}:`, err);
       setError((err as Error).message);
-      const saved = window.localStorage.getItem(entity);
+      const saved = window.localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         setDataState(parsed);
@@ -42,7 +49,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
     } finally {
       setLoading(false);
     }
-  }, [endpoint, entity]);
+  }, [endpoint, entity, storageKey]);
 
   useEffect(() => {
     fetchData();
@@ -73,7 +80,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
     // Optimistic update
     setDataState(resolvedData);
     dataRef.current = resolvedData;
-    window.localStorage.setItem(entity, JSON.stringify(resolvedData));
+    window.localStorage.setItem(storageKey, JSON.stringify(resolvedData));
 
     // Emit sync event immediately for other local components
     window.dispatchEvent(new CustomEvent(syncEvent));
@@ -122,7 +129,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       window.dispatchEvent(new CustomEvent(syncEvent));
       throw err;
     }
-  }, [endpoint, entity, fetchData, syncEvent]);
+  }, [endpoint, entity, fetchData, storageKey, syncEvent]);
 
   // Providing a more robust interface
   const addItem = async (item: T) => {

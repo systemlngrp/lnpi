@@ -99,6 +99,7 @@ export interface Item {
 export interface MaterialLine {
   id: string;
   itemId: string;
+  npdId?: string;
   qty: number;
   uom: string;
   poId?: string;
@@ -392,6 +393,7 @@ export interface Order {
   poNumber?: string;
   erpCode?: string | number;
   itemId: string;
+  npdId?: string;
   qty: number;
   rate?: number;
   orderBy?: string;
@@ -472,6 +474,7 @@ export interface Production {
   date: string;
   scheduleId?: string;
   itemId: string;
+  npdId?: string;
   qty: number;
   uom: string;
   remarks: string;
@@ -546,6 +549,7 @@ export interface Consumption {
   transactionNo: string;
   date: string;
   itemId: string;
+  npdId?: string;
   qty: number;
   uom: string;
   remarks: string;
@@ -564,6 +568,7 @@ export interface SampleRequest {
   timestamp: string;
   date: string;
   itemId: string;
+  npdId?: string;
   itemName: string;
   erp?: string | number;
   plannedQuantity: number;
@@ -677,6 +682,7 @@ export interface InvoiceLineItem {
   invoiceId: string;
   loadingSlipId: string;
   itemId: string;
+  npdId?: string;
   qty: number;
   rate: number;
   amount: number;

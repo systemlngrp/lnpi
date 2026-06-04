@@ -289,9 +289,20 @@ const DELETE_REFERENCES: Record<string, DeleteReference[]> = {
   ],
   items: [
     { table: "orders", column: "itemId", label: "Orders" },
+    { table: "orders", column: "npdId", label: "Orders" },
     { table: "invoice_line_items", column: "itemId", label: "Invoice Line Items" },
+    { table: "invoice_line_items", column: "npdId", label: "Invoice Line Items" },
     { table: "productions", column: "itemId", label: "Productions" },
+    { table: "productions", column: "npdId", label: "Productions" },
     { table: "sample_requests", column: "itemId", label: "Sample Requests" },
+    { table: "sample_requests", column: "npdId", label: "Sample Requests" },
+  ],
+  npd: [
+    { table: "orders", column: "npdId", label: "Orders" },
+    { table: "invoice_line_items", column: "npdId", label: "Invoice Line Items" },
+    { table: "productions", column: "npdId", label: "Productions" },
+    { table: "sample_requests", column: "npdId", label: "Sample Requests" },
+    { table: "consumptions", column: "npdId", label: "Consumptions" },
   ],
   orders: [{ table: "orders_schedule", column: "orderId", label: "Order Schedule" }],
   orders_schedule: [
@@ -553,6 +564,374 @@ function normalizeOfficialIndiaText(html: string) {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const NPD_LINKED_TABLES = new Set([
+  "orders",
+  "productions",
+  "invoice_line_items",
+  "sample_requests",
+  "consumptions",
+]);
+
+function toFiniteNumber(value: any): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function stringOrEmpty(value: any) {
+  return String(value ?? "").trim();
+}
+
+function resolveLinkedNpdId(value: any) {
+  const npdId = stringOrEmpty(value?.npdId);
+  if (npdId) return npdId;
+  const itemId = stringOrEmpty(value?.itemId);
+  if (itemId) return itemId;
+  return "";
+}
+
+function normalizeMaterialLineNpdLink(line: any) {
+  const resolvedId = resolveLinkedNpdId(line);
+  return {
+    ...line,
+    npdId: resolvedId || undefined,
+    itemId: resolvedId || line?.itemId,
+  };
+}
+
+function normalizeNpdLinkedPayload(tableName: string, data: any) {
+  if (NPD_LINKED_TABLES.has(tableName)) {
+    const resolvedId = resolveLinkedNpdId(data);
+    if (resolvedId) {
+      data.npdId = resolvedId;
+      data.itemId = resolvedId;
+    }
+  }
+
+  if (tableName === "material_in" && Array.isArray(data.lines)) {
+    data.lines = data.lines.map((line: any) => normalizeMaterialLineNpdLink(line));
+  }
+
+  return data;
+}
+
+function normalizeNpdRowForItemConsumers(row: any) {
+  const resolvedId = stringOrEmpty(row?.id || resolveLinkedNpdId(row));
+  const opening = toFiniteNumber(row?.opening) ?? 0;
+  const receipt = toFiniteNumber(row?.receipt) ?? 0;
+  const production = toFiniteNumber(row?.production) ?? 0;
+  const invoiced = toFiniteNumber(row?.invoiced) ?? 0;
+  const balance = toFiniteNumber(row?.balance) ?? opening + receipt + production - invoiced;
+
+  return {
+    ...row,
+    id: resolvedId,
+    npdId: resolvedId || undefined,
+    itemId: resolvedId || undefined,
+    name: row?.name ?? row?.itemName ?? "",
+    customer: row?.customer ?? row?.customerName ?? "",
+    itemType: row?.itemType ?? row?.boxType ?? "",
+    typeName: row?.typeName ?? row?.boxType ?? "",
+    openLength: row?.openLength ?? toFiniteNumber(row?.openLength),
+    openWidth: row?.openWidth ?? toFiniteNumber(row?.openWidth),
+    length: row?.length ?? toFiniteNumber(row?.lengthId),
+    breadth: row?.breadth ?? toFiniteNumber(row?.breadthId),
+    height: row?.height ?? toFiniteNumber(row?.heightId),
+    flute: row?.flute ?? row?.fluteType ?? "",
+    lOd: row?.lOd ?? toFiniteNumber(row?.lengthOd),
+    wOd: row?.wOd ?? toFiniteNumber(row?.breadthOd),
+    hOd: row?.hOd ?? toFiniteNumber(row?.heightOd),
+    l1: row?.l1 ?? toFiniteNumber(row?.psL1),
+    f1: row?.f1 ?? toFiniteNumber(row?.psF1),
+    l2: row?.l2 ?? toFiniteNumber(row?.psL2),
+    f2: row?.f2 ?? toFiniteNumber(row?.psF2),
+    l3: row?.l3 ?? toFiniteNumber(row?.psL3),
+    f3: row?.f3 ?? toFiniteNumber(row?.rsf4),
+    b3: row?.b3 ?? toFiniteNumber(row?.rsl5),
+    flap: row?.flap ?? toFiniteNumber(row?.flapSize),
+    plateWeight: row?.plateWeight ?? toFiniteNumber(row?.platePhpWeight),
+    artwork: row?.artwork ?? row?.artworkUpload ?? "",
+    opening,
+    receipt,
+    production,
+    invoiced,
+    balance,
+  };
+}
+
+function normalizeFetchedRow(tableName: string, row: any) {
+  const newRow = normalizeWorkflowStatus(tableName, row);
+
+  Object.keys(newRow).forEach((key) => {
+    if (key === "lines" && typeof newRow[key] === "string") {
+      try {
+        newRow[key] = JSON.parse(newRow[key]);
+      } catch (e) {
+        console.error(`Failed to parse JSON for column ${key} in table ${tableName}:`, e);
+      }
+    }
+  });
+
+  if (tableName === "material_in" && Array.isArray(newRow.lines)) {
+    newRow.lines = newRow.lines.map((line: any) => normalizeMaterialLineNpdLink(line));
+  }
+
+  if (NPD_LINKED_TABLES.has(tableName)) {
+    const resolvedId = resolveLinkedNpdId(newRow);
+    if (resolvedId) {
+      newRow.npdId = resolvedId;
+      newRow.itemId = resolvedId;
+    }
+  }
+
+  if (tableName === "items" || tableName === "npd") {
+    return normalizeNpdRowForItemConsumers(newRow);
+  }
+
+  return newRow;
+}
+
+async function fetchLegacyItems(db: mysql.Pool) {
+  const [rows] = await db.query(`
+    SELECT
+      i.*,
+      CAST(COALESCE(i.opening, 0) AS DECIMAL(15,2)) AS opening,
+      CAST(COALESCE(r.receipt, 0) AS DECIMAL(15,2)) AS receipt,
+      CAST(COALESCE(p.production, 0) AS DECIMAL(15,2)) AS production,
+      CAST(COALESCE(inv.invoiced, 0) AS DECIMAL(15,2)) AS invoiced,
+      CAST(
+        COALESCE(i.opening, 0)
+        + COALESCE(r.receipt, 0)
+        + COALESCE(p.production, 0)
+        - COALESCE(inv.invoiced, 0)
+      AS DECIMAL(15,2)) AS balance
+    FROM \`items\` i
+    LEFT JOIN (
+      SELECT
+        jt.itemId,
+        SUM(COALESCE(jt.invoiceQty, jt.qty, 0)) AS receipt
+      FROM \`material_in\` mi
+      JOIN JSON_TABLE(
+        mi.lines,
+        '$[*]' COLUMNS (
+          itemId VARCHAR(36) PATH '$.itemId',
+          qty DECIMAL(15,2) PATH '$.qty',
+          invoiceQty DECIMAL(15,2) PATH '$.invoiceQty'
+        )
+      ) jt
+      WHERE mi.status = 'Completed' AND mi.mrrType IN ('Rejection In', 'FG Purchase')
+      GROUP BY jt.itemId
+    ) r ON r.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
+    LEFT JOIN (
+      SELECT
+        itemId,
+        SUM(COALESCE(prodFromFFG, 0)) AS production
+      FROM \`productions\`
+      WHERE status <> 'Cancelled' OR status IS NULL
+      GROUP BY itemId
+    ) p ON p.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
+    LEFT JOIN (
+      SELECT
+        itemId,
+        SUM(COALESCE(qty, 0)) AS invoiced
+      FROM \`invoice_line_items\`
+      GROUP BY itemId
+    ) inv ON inv.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
+  `);
+
+  return (rows as any[]).map((row) => normalizeWorkflowStatus("items", row));
+}
+
+async function fetchActiveNpdItems(db: mysql.Pool) {
+  const [rows] = await db.query(`
+    SELECT
+      n.*,
+      CAST(COALESCE(n.opening, 0) AS DECIMAL(15,2)) AS opening,
+      CAST(COALESCE(r.receipt, 0) AS DECIMAL(15,2)) AS receipt,
+      CAST(COALESCE(p.production, 0) AS DECIMAL(15,2)) AS production,
+      CAST(COALESCE(inv.invoiced, 0) AS DECIMAL(15,2)) AS invoiced,
+      CAST(
+        COALESCE(n.opening, 0)
+        + COALESCE(r.receipt, 0)
+        + COALESCE(p.production, 0)
+        - COALESCE(inv.invoiced, 0)
+      AS DECIMAL(15,2)) AS balance
+    FROM \`npd\` n
+    LEFT JOIN (
+      SELECT
+        COALESCE(NULLIF(jt.npdId, ''), jt.itemId) AS masterId,
+        SUM(COALESCE(jt.invoiceQty, jt.qty, 0)) AS receipt
+      FROM \`material_in\` mi
+      JOIN JSON_TABLE(
+        mi.lines,
+        '$[*]' COLUMNS (
+          npdId VARCHAR(36) PATH '$.npdId',
+          itemId VARCHAR(36) PATH '$.itemId',
+          qty DECIMAL(15,2) PATH '$.qty',
+          invoiceQty DECIMAL(15,2) PATH '$.invoiceQty'
+        )
+      ) jt
+      WHERE mi.status = 'Completed' AND mi.mrrType IN ('Rejection In', 'FG Purchase')
+      GROUP BY COALESCE(NULLIF(jt.npdId, ''), jt.itemId)
+    ) r ON r.masterId COLLATE utf8mb4_unicode_ci = n.id COLLATE utf8mb4_unicode_ci
+    LEFT JOIN (
+      SELECT
+        COALESCE(NULLIF(npdId, ''), itemId) AS masterId,
+        SUM(COALESCE(prodFromFFG, 0)) AS production
+      FROM \`productions\`
+      WHERE status <> 'Cancelled' OR status IS NULL
+      GROUP BY COALESCE(NULLIF(npdId, ''), itemId)
+    ) p ON p.masterId COLLATE utf8mb4_unicode_ci = n.id COLLATE utf8mb4_unicode_ci
+    LEFT JOIN (
+      SELECT
+        COALESCE(NULLIF(npdId, ''), itemId) AS masterId,
+        SUM(COALESCE(qty, 0)) AS invoiced
+      FROM \`invoice_line_items\`
+      GROUP BY COALESCE(NULLIF(npdId, ''), itemId)
+    ) inv ON inv.masterId COLLATE utf8mb4_unicode_ci = n.id COLLATE utf8mb4_unicode_ci
+  `);
+
+  return (rows as any[]).map((row) => normalizeNpdRowForItemConsumers(row));
+}
+
+function normalizeItemLookupId(value: any) {
+  return stringOrEmpty(value?.npdId || value?.itemId || value);
+}
+
+function normalizeComparableName(value: any) {
+  return stringOrEmpty(value).replace(/\s+/g, " ").toLowerCase();
+}
+
+async function ensureColumnExists(db: mysql.Pool, database: string, table: string, column: string, type: string) {
+  const [rows] = await db.query(
+    "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+    [database, table, column]
+  );
+  if ((rows as any[]).length > 0) return;
+  await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
+}
+
+async function buildItemToNpdIdMap(db: mysql.Pool) {
+  const [legacyItemsRows] = await db.query("SELECT id, name, erp FROM `items`");
+  const [npdRows] = await db.query("SELECT id, itemName, erp FROM `npd`");
+
+  const npdByErp = new Map<string, string[]>();
+  const npdByName = new Map<string, string[]>();
+
+  (npdRows as any[]).forEach((row) => {
+    const erp = stringOrEmpty(row.erp);
+    if (erp) npdByErp.set(erp, [...(npdByErp.get(erp) || []), String(row.id)]);
+
+    const name = normalizeComparableName(row.itemName);
+    if (name) npdByName.set(name, [...(npdByName.get(name) || []), String(row.id)]);
+  });
+
+  const mapping = new Map<string, string>();
+
+  (legacyItemsRows as any[]).forEach((row) => {
+    const itemId = String(row.id);
+    if ((npdRows as any[]).some((npd) => String(npd.id) === itemId)) {
+      mapping.set(itemId, itemId);
+      return;
+    }
+
+    const erp = stringOrEmpty(row.erp);
+    const erpMatches = erp ? npdByErp.get(erp) || [] : [];
+    if (erpMatches.length === 1) {
+      mapping.set(itemId, erpMatches[0]);
+      return;
+    }
+
+    const name = normalizeComparableName(row.name);
+    const nameMatches = name ? npdByName.get(name) || [] : [];
+    if (nameMatches.length === 1) {
+      mapping.set(itemId, nameMatches[0]);
+    }
+  });
+
+  return mapping;
+}
+
+async function migrateLinkedTableToNpd(db: mysql.Pool, database: string, table: string, itemToNpdId: Map<string, string>) {
+  await ensureColumnExists(db, database, table, "npdId", "VARCHAR(36) NULL");
+
+  const [rows] = await db.query(`SELECT id, itemId, npdId FROM \`${table}\``);
+  let migrated = 0;
+  let unmatched = 0;
+
+  for (const row of rows as any[]) {
+    const currentLegacyId = stringOrEmpty(row.itemId);
+    const currentNpdId = stringOrEmpty(row.npdId);
+    const resolvedNpdId = currentNpdId || itemToNpdId.get(currentLegacyId) || "";
+
+    if (!resolvedNpdId) {
+      if (currentLegacyId) unmatched += 1;
+      continue;
+    }
+
+    if (currentNpdId === resolvedNpdId && currentLegacyId === resolvedNpdId) continue;
+
+    await db.query(`UPDATE \`${table}\` SET \`npdId\` = ?, \`itemId\` = ? WHERE \`id\` = ?`, [
+      resolvedNpdId,
+      resolvedNpdId,
+      String(row.id),
+    ]);
+    migrated += 1;
+  }
+
+  console.log(`[DB] ${table}: migrated ${migrated} item links to NPD, unmatched ${unmatched}`);
+}
+
+async function migrateMaterialInLinesToNpd(db: mysql.Pool, itemToNpdId: Map<string, string>) {
+  const [rows] = await db.query("SELECT id, lines FROM `material_in`");
+  let migrated = 0;
+  let unmatched = 0;
+
+  for (const row of rows as any[]) {
+    const rawLines = typeof row.lines === "string" ? JSON.parse(row.lines) : row.lines;
+    if (!Array.isArray(rawLines)) continue;
+
+    let changed = false;
+    const nextLines = rawLines.map((line) => {
+      const currentItemId = stringOrEmpty(line?.itemId);
+      const currentNpdId = stringOrEmpty(line?.npdId);
+      const resolvedNpdId = currentNpdId || itemToNpdId.get(currentItemId) || "";
+
+      if (!resolvedNpdId) {
+        if (currentItemId) unmatched += 1;
+        return line;
+      }
+
+      if (currentNpdId === resolvedNpdId && currentItemId === resolvedNpdId) return line;
+      changed = true;
+      migrated += 1;
+      return {
+        ...line,
+        npdId: resolvedNpdId,
+        itemId: resolvedNpdId,
+      };
+    });
+
+    if (!changed) continue;
+    await db.query("UPDATE `material_in` SET `lines` = ? WHERE `id` = ?", [JSON.stringify(nextLines), String(row.id)]);
+  }
+
+  console.log(`[DB] material_in: migrated ${migrated} JSON item links to NPD, unmatched ${unmatched}`);
+}
+
+async function migrateItemMasterLinksToNpd(db: mysql.Pool, database: string) {
+  const itemToNpdId = await buildItemToNpdIdMap(db);
+  if (itemToNpdId.size === 0) {
+    console.warn("[DB] No Item-to-NPD mappings were discovered. Skipping NPD link migration.");
+    return;
+  }
+
+  for (const table of ["orders", "productions", "invoice_line_items", "sample_requests", "consumptions"]) {
+    await migrateLinkedTableToNpd(db, database, table, itemToNpdId);
+  }
+
+  await migrateMaterialInLinesToNpd(db, itemToNpdId);
 }
 
 function extractNamesFromSection(section: string) {
@@ -1308,6 +1687,7 @@ async function initDb(retries = 5) {
           \`poNumber\` VARCHAR(100),
           \`erpCode\` VARCHAR(100),
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2),
           \`orderBy\` VARCHAR(255),
@@ -1437,6 +1817,7 @@ async function initDb(retries = 5) {
           \`date\` VARCHAR(50) NOT NULL,
           \`scheduleId\` VARCHAR(36),
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15, 2) NOT NULL,
           \`uom\` VARCHAR(50) NOT NULL,
           \`remarks\` TEXT,
@@ -1528,6 +1909,7 @@ async function initDb(retries = 5) {
           \`transactionNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15, 2) NOT NULL,
           \`uom\` VARCHAR(50) NOT NULL,
           \`remarks\` TEXT,
@@ -1548,6 +1930,7 @@ async function initDb(retries = 5) {
           \`timestamp\` VARCHAR(255) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`npdId\` VARCHAR(36),
           \`itemName\` VARCHAR(255) NOT NULL,
           \`erp\` VARCHAR(100),
           \`plannedQuantity\` DECIMAL(15,2) NOT NULL,
@@ -1632,6 +2015,7 @@ async function initDb(retries = 5) {
           \`invoiceId\` VARCHAR(36) NOT NULL,
           \`loadingSlipId\` VARCHAR(36) NOT NULL,
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2) NOT NULL,
           \`amount\` DECIMAL(15,2) NOT NULL,
@@ -2013,6 +2397,7 @@ async function initDb(retries = 5) {
         { table: "productions", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "productions", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "productions", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "productions", column: "npdId", type: "VARCHAR(36)" },
         { table: "productions", column: "qty", type: "DECIMAL(15, 2) NOT NULL" },
         { table: "productions", column: "uom", type: "VARCHAR(50) NOT NULL" },
         { table: "productions", column: "remarks", type: "TEXT" },
@@ -2026,6 +2411,7 @@ async function initDb(retries = 5) {
         { table: "consumptions", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "consumptions", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "consumptions", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "consumptions", column: "npdId", type: "VARCHAR(36)" },
         { table: "consumptions", column: "qty", type: "DECIMAL(15, 2) NOT NULL" },
         { table: "consumptions", column: "uom", type: "VARCHAR(50) NOT NULL" },
         { table: "consumptions", column: "remarks", type: "TEXT" },
@@ -2034,6 +2420,7 @@ async function initDb(retries = 5) {
         { table: "sample_requests", column: "timestamp", type: "VARCHAR(255) NOT NULL" },
         { table: "sample_requests", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "sample_requests", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "sample_requests", column: "npdId", type: "VARCHAR(36)" },
         { table: "sample_requests", column: "itemName", type: "VARCHAR(255) NOT NULL" },
         { table: "sample_requests", column: "erp", type: "VARCHAR(100)" },
         { table: "sample_requests", column: "plannedQuantity", type: "DECIMAL(15,2) NOT NULL" },
@@ -2152,6 +2539,7 @@ async function initDb(retries = 5) {
         { table: "orders", column: "orderDate", type: "VARCHAR(50) NOT NULL" },
         { table: "orders", column: "companyId", type: "VARCHAR(36) NOT NULL" },
         { table: "orders", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "orders", column: "npdId", type: "VARCHAR(36)" },
         { table: "orders", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "orders", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
         { table: "orders", column: "erpCode", type: "VARCHAR(100)" },
@@ -2212,6 +2600,7 @@ async function initDb(retries = 5) {
         { table: "invoice_line_items", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
         { table: "invoice_line_items", column: "loadingSlipId", type: "VARCHAR(36) NOT NULL" },
         { table: "invoice_line_items", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "invoice_line_items", column: "npdId", type: "VARCHAR(36)" },
         { table: "invoice_line_items", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoice_line_items", column: "rate", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoice_line_items", column: "amount", type: "DECIMAL(15,2) NOT NULL" },
@@ -2357,6 +2746,12 @@ async function initDb(retries = 5) {
       }
 
       try {
+        await migrateItemMasterLinksToNpd(db, database);
+      } catch (err) {
+        console.warn("[DB] Could not migrate Item Master links to NPD:", (err as Error).message);
+      }
+
+      try {
         if (process.env.NODE_ENV !== "production") {
           await ensureDevSeedUser(db);
         }
@@ -2397,70 +2792,15 @@ const createHandlers = (tableName: string) => {
         }
 
         if (tableName === "items") {
-          [rows] = await db.query(`
-            SELECT
-              i.*,
-              CAST(COALESCE(i.opening, 0) AS DECIMAL(15,2)) AS opening,
-              CAST(COALESCE(r.receipt, 0) AS DECIMAL(15,2)) AS receipt,
-              CAST(COALESCE(p.production, 0) AS DECIMAL(15,2)) AS production,
-              CAST(COALESCE(inv.invoiced, 0) AS DECIMAL(15,2)) AS invoiced,
-              CAST(
-                COALESCE(i.opening, 0)
-                + COALESCE(r.receipt, 0)
-                + COALESCE(p.production, 0)
-                - COALESCE(inv.invoiced, 0)
-              AS DECIMAL(15,2)) AS balance
-            FROM \`items\` i
-            LEFT JOIN (
-              SELECT
-                jt.itemId,
-                SUM(COALESCE(jt.invoiceQty, jt.qty, 0)) AS receipt
-              FROM \`material_in\` mi
-              JOIN JSON_TABLE(
-                mi.lines,
-                '$[*]' COLUMNS (
-                  itemId VARCHAR(36) PATH '$.itemId',
-                  qty DECIMAL(15,2) PATH '$.qty',
-                  invoiceQty DECIMAL(15,2) PATH '$.invoiceQty'
-                )
-              ) jt
-              WHERE mi.status = 'Completed' AND mi.mrrType IN ('Rejection In', 'FG Purchase')
-              GROUP BY jt.itemId
-            ) r ON r.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
-            LEFT JOIN (
-              SELECT
-                itemId,
-                SUM(COALESCE(prodFromFFG, 0)) AS production
-              FROM \`productions\`
-              WHERE status <> 'Cancelled' OR status IS NULL
-              GROUP BY itemId
-            ) p ON p.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
-            LEFT JOIN (
-              SELECT
-                itemId,
-                SUM(COALESCE(qty, 0)) AS invoiced
-              FROM \`invoice_line_items\`
-              GROUP BY itemId
-            ) inv ON inv.itemId COLLATE utf8mb4_unicode_ci = i.id COLLATE utf8mb4_unicode_ci
-          `);
+          rows = await fetchActiveNpdItems(db);
+        } else if (tableName === "npd") {
+          rows = await fetchActiveNpdItems(db);
         } else {
           [rows] = await db.query(`SELECT * FROM \`${tableName}\``);
         }
         
         // Post-process rows to parse JSON columns
-        const processedRows = (rows as any[]).map(row => {
-          const newRow = normalizeWorkflowStatus(tableName, row);
-          Object.keys(newRow).forEach(key => {
-            if (key === 'lines' && typeof newRow[key] === 'string') {
-              try {
-                newRow[key] = JSON.parse(newRow[key]);
-              } catch (e) {
-                console.error(`Failed to parse JSON for column ${key} in table ${tableName}:`, e);
-              }
-            }
-          });
-          return newRow;
-        });
+        const processedRows = (rows as any[]).map((row) => normalizeFetchedRow(tableName, row));
 
         res.json(processedRows);
       } catch (error) {
@@ -2471,7 +2811,7 @@ const createHandlers = (tableName: string) => {
     upsert: async (req: express.Request, res: express.Response) => {
       const db = await getPool();
       if (!db) return res.status(500).json({ error: "DB connection not available" });
-      const data = normalizeWorkflowStatus(tableName, req.body);
+      const data = normalizeNpdLinkedPayload(tableName, normalizeWorkflowStatus(tableName, req.body));
       try {
         if (tableName === "items") {
           delete data.receipt;
@@ -2560,18 +2900,18 @@ const createHandlers = (tableName: string) => {
             const currentStatus = String(data.status || "Pending PH").trim();
             const alreadyApproved = hasWorkflowValue(data.approvedTimestamp) || hasWorkflowValue(data.approvedEmail);
             if (!alreadyApproved && (currentStatus === "Pending PH" || !currentStatus)) {
-              const itemId = String(data.itemId || "").trim();
+              const itemId = resolveLinkedNpdId(data);
               const orderRate = Number(data.rate);
               const punchDate = String(data.orderDate || "").trim() || new Date().toISOString().slice(0, 10);
 
               if (itemId && Number.isFinite(orderRate) && punchDate) {
                 const [billingRows] = await db.query(
-                  `SELECT ili.rate
-                   FROM \`invoice_line_items\` ili
-                   JOIN \`invoices\` inv ON inv.id = ili.invoiceId
-                   WHERE ili.itemId = ?
-                   ORDER BY inv.date DESC, inv.id DESC
-                   LIMIT 1`,
+                   `SELECT ili.rate
+                     FROM \`invoice_line_items\` ili
+                     JOIN \`invoices\` inv ON inv.id = ili.invoiceId
+                     WHERE COALESCE(NULLIF(ili.npdId, ''), ili.itemId) = ?
+                     ORDER BY inv.date DESC, inv.id DESC
+                     LIMIT 1`,
                   [itemId]
                 );
                 const lastBillingRate1 = Number((billingRows as any[])?.[0]?.rate);
@@ -2594,7 +2934,7 @@ const createHandlers = (tableName: string) => {
                     const [rapcRows] = await db.query(
                       `SELECT realizationPerKg
                        FROM \`productions\`
-                       WHERE itemId = ? AND realizationPerKg IS NOT NULL
+                       WHERE COALESCE(NULLIF(npdId, ''), itemId) = ? AND realizationPerKg IS NOT NULL
                        ORDER BY date DESC
                        LIMIT 1`,
                       [itemId]
@@ -2761,7 +3101,7 @@ const createHandlers = (tableName: string) => {
         if (tableName === "orders") {
           const approvalStatuses = new Set(["Pending Scheduling", "Scheduled"]);
           const now = new Date().toISOString();
-          const itemId = String(data.itemId || "").trim();
+          const itemId = resolveLinkedNpdId(data);
           const rateNumber = Number(data.rate);
           const updatedBy = String(data.approvedEmail || data.updatedBy || "System").trim() || "System";
 
@@ -2801,7 +3141,7 @@ const createHandlers = (tableName: string) => {
 
             if (shouldUpdateItemRate) {
               await conn.query(
-                "UPDATE `items` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                "UPDATE `npd` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
                 [rateNumber, updatedBy, now, itemId]
               );
             }
@@ -2851,6 +3191,23 @@ const createHandlers = (tableName: string) => {
 
 // Routes
 const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
+
+app.get("/api/legacy-items", async (req, res) => {
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    if (!hasPermission(user, "/masters/items")) return res.status(403).json({ error: "Forbidden" });
+
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+    const rows = await fetchLegacyItems(db);
+    return res.json(rows);
+  } catch (err) {
+    console.error("[DB] Error fetching legacy items:", err);
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
 
 app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
   const db = await getPool();
@@ -3389,10 +3746,10 @@ app.post("/api/get-pending-job-closure", async (req, res) => {
 
     const productionIds = productions.map((p) => String(p.id));
     const scheduleIds = productions.map((p) => String(p.scheduleId || "")).filter(Boolean);
-    const itemIds = productions.map((p) => String(p.itemId || "")).filter(Boolean);
+    const itemIds = productions.map((p) => normalizeItemLookupId(p)).filter(Boolean);
 
     const [itemsRows] = itemIds.length
-      ? await db.query(`SELECT id, name, typeName FROM \`items\` WHERE id IN (${itemIds.map(() => "?").join(",")})`, itemIds)
+      ? await db.query(`SELECT id, itemName, boxType FROM \`npd\` WHERE id IN (${itemIds.map(() => "?").join(",")})`, itemIds)
       : ([[]] as any);
     const itemsById = new Map((itemsRows as any[]).map((row) => [String(row.id), row]));
 
@@ -3450,9 +3807,9 @@ app.post("/api/get-pending-job-closure", async (req, res) => {
         const planQty = Number(p.qty || 0);
         const planDate = String(p.date || "");
 
-        const item = itemsById.get(String(p.itemId));
-        const typeName = String(item?.typeName || "").trim();
-        const itemName = String(item?.name || "").trim();
+        const item = itemsById.get(normalizeItemLookupId(p));
+        const typeName = String(item?.boxType || "").trim();
+        const itemName = String(item?.itemName || "").trim();
 
         const schedule = schedulesById.get(String(p.scheduleId || ""));
         const order = schedule ? ordersById.get(String(schedule.orderId || "")) : undefined;

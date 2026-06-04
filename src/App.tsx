@@ -10,7 +10,7 @@ import { LoginPage } from "./pages/Login";
 import { UnauthorizedPage } from "./pages/Unauthorized";
 import { ItemGroups } from "./pages/ItemGroups";
 import { MaterialGroups } from "./pages/MaterialGroups";
-import { Items } from "./pages/Items";
+import { LegacyItemsMaster } from "./pages/LegacyItemsMaster";
 import { Materials } from "./pages/Materials";
 import { IndentForm } from "./pages/IndentForm";
 import { IndentDetail } from "./pages/IndentDetail";
@@ -120,7 +120,7 @@ export default function App() {
           {/* Masters */}
           <Route path="masters/item-groups" element={<ItemGroups />} />
           <Route path="masters/material-groups" element={<MaterialGroups />} />
-          <Route path="masters/items" element={<Items />} />
+          <Route path="masters/items" element={<LegacyItemsMaster />} />
           <Route path="masters/materials" element={<Materials />} />
           <Route path="masters/suppliers" element={<Suppliers />} />
           <Route path="masters/states" element={<States />} />
