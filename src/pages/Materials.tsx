@@ -34,7 +34,7 @@ function formatOptionalNumber(value?: number) {
 function getMaterialRapcFromSize(size: string | number | undefined | null) {
   const numericSize = Number(size);
   if (!Number.isFinite(numericSize) || numericSize <= 0) return "";
-  return String(numericSize / 10);
+  return String(numericSize * 10);
 }
 
 function getReelDisplayName(erpCode: string | number, size: number, uom: string, gsm: number, bf: number) {
