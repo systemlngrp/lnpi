@@ -709,6 +709,8 @@ function entityPermissionKey(entity) {
       return "/masters/trucks";
     case "machines":
       return "/masters/machines";
+    case "npd":
+      return "/masters/npd";
     case "settings":
       return "/masters/settings";
     case "material_in":
@@ -1460,6 +1462,121 @@ async function initDb(retries = 5) {
           \`cgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`sgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`igst\` DECIMAL(15,2) NOT NULL DEFAULT 0
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`npd\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`npdId\` LONGTEXT,
+          \`timestamp\` LONGTEXT,
+          \`date\` LONGTEXT,
+          \`boxType\` LONGTEXT,
+          \`companyId\` LONGTEXT,
+          \`customerName\` LONGTEXT,
+          \`contactPerson\` LONGTEXT,
+          \`contactNumber\` LONGTEXT,
+          \`email\` LONGTEXT,
+          \`itemName\` LONGTEXT,
+          \`erp\` LONGTEXT,
+          \`rate\` LONGTEXT,
+          \`fluteType\` LONGTEXT,
+          \`ply\` LONGTEXT,
+          \`noOfParts\` LONGTEXT,
+          \`noOfUps\` LONGTEXT,
+          \`idToOd2\` LONGTEXT,
+          \`lengthId\` LONGTEXT,
+          \`breadthId\` LONGTEXT,
+          \`heightId\` LONGTEXT,
+          \`lengthOd\` LONGTEXT,
+          \`breadthOd\` LONGTEXT,
+          \`heightOd\` LONGTEXT,
+          \`psL1\` LONGTEXT,
+          \`psL1Bf\` LONGTEXT,
+          \`psF1\` LONGTEXT,
+          \`psF1Bf\` LONGTEXT,
+          \`psL2\` LONGTEXT,
+          \`psL2Bf\` LONGTEXT,
+          \`psF2\` LONGTEXT,
+          \`psF2Bf\` LONGTEXT,
+          \`psL3\` LONGTEXT,
+          \`psL3Bf\` LONGTEXT,
+          \`materialWeightInsideInOneBox\` LONGTEXT,
+          \`stackHeight\` LONGTEXT,
+          \`safetyFactor\` LONGTEXT,
+          \`csKgStd\` LONGTEXT,
+          \`csKgTarget\` LONGTEXT,
+          \`bsKgCm2Std\` LONGTEXT,
+          \`bsKgCm2Calculated\` LONGTEXT,
+          \`takeUpFactor\` LONGTEXT,
+          \`ups\` LONGTEXT,
+          \`rapc\` LONGTEXT,
+          \`cuttingWithTrimming\` LONGTEXT,
+          \`standardWeightGms\` LONGTEXT,
+          \`calculatedWeightPerBox\` LONGTEXT,
+          \`standardBGsm\` LONGTEXT,
+          \`calculatedBGsm\` LONGTEXT,
+          \`stitchingGluing\` LONGTEXT,
+          \`rsl1\` LONGTEXT,
+          \`rsl1Bf\` LONGTEXT,
+          \`rsf2\` LONGTEXT,
+          \`rsf2Bf\` LONGTEXT,
+          \`rsl3\` LONGTEXT,
+          \`rsl3Bf\` LONGTEXT,
+          \`rsf4\` LONGTEXT,
+          \`rsf4Bf\` LONGTEXT,
+          \`rsl5\` LONGTEXT,
+          \`rsf5Bf\` LONGTEXT,
+          \`flapSize\` LONGTEXT,
+          \`colorId1\` LONGTEXT,
+          \`printingColour1\` LONGTEXT,
+          \`colorId2\` LONGTEXT,
+          \`printingColour2\` LONGTEXT,
+          \`plainBox\` LONGTEXT,
+          \`whetherPlateApplicable\` LONGTEXT,
+          \`whetherPhpApplicable\` LONGTEXT,
+          \`dimensionsApproved\` LONGTEXT,
+          \`artworkApproved\` LONGTEXT,
+          \`artworkUpload\` LONGTEXT,
+          \`url\` LONGTEXT,
+          \`poDate\` LONGTEXT,
+          \`poNumber\` LONGTEXT,
+          \`supplier\` LONGTEXT,
+          \`printingBlockItemName\` LONGTEXT,
+          \`blockSizeSqInch\` LONGTEXT,
+          \`approvedRateOfSupplier\` LONGTEXT,
+          \`poPdf\` LONGTEXT,
+          \`chargeableToCustomer\` LONGTEXT,
+          \`amount\` LONGTEXT,
+          \`poPdfApproval\` LONGTEXT,
+          \`emailSentToSupplier\` LONGTEXT,
+          \`emailTimestamp\` LONGTEXT,
+          \`invoiceNo\` LONGTEXT,
+          \`invoiceDate\` LONGTEXT,
+          \`invoiceAmount\` LONGTEXT,
+          \`geNo\` LONGTEXT,
+          \`mrrNo\` LONGTEXT,
+          \`dateOfReceipt\` LONGTEXT,
+          \`supplierInvoiceNoMrr\` LONGTEXT,
+          \`itemValueMrr\` LONGTEXT,
+          \`invoiceValueMrr\` LONGTEXT,
+          \`approvalStatus\` LONGTEXT,
+          \`debitNoteNo\` LONGTEXT,
+          \`debitNoteDate\` LONGTEXT,
+          \`debitNoteAmount\` LONGTEXT,
+          \`customerPoNo\` LONGTEXT,
+          \`customerPoDate\` LONGTEXT,
+          \`orderQuantity\` LONGTEXT,
+          \`orderRate\` LONGTEXT,
+          \`customerPoAmount\` LONGTEXT,
+          \`boxesPerSheetDieCut\` LONGTEXT,
+          \`reelSize\` LONGTEXT,
+          \`cuttingSize\` LONGTEXT,
+          \`rapcForSingleBox\` LONGTEXT,
+          \`dieCutUps\` LONGTEXT,
+          \`syncInItemMaster\` LONGTEXT,
+          \`platePhpWeight\` LONGTEXT,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
         )
       `);
       await db.query(`
@@ -2457,7 +2574,7 @@ Exceeds by: ${nextTotal - plannedQty}`
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
 app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });

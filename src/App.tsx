@@ -40,6 +40,7 @@ import { Companies } from "./pages/Companies";
 import { Trucks } from "./pages/Trucks";
 import { Machines } from "./pages/Machines";
 import { RapcRangeMaster } from "./pages/RapcRangeMaster";
+import { NpdMaster } from "./pages/NpdMaster";
 import { MaterialInForm } from "./pages/MaterialInForm";
 import { MrrApprovals } from "./pages/MrrApprovals";
 import { MaterialInMaster } from "./pages/MaterialInMaster";
@@ -130,6 +131,7 @@ export default function App() {
           <Route path="masters/trucks" element={<Trucks />} />
           <Route path="masters/machines" element={<Machines />} />
           <Route path="masters/rapc-ranges" element={<RapcRangeMaster />} />
+          <Route path="masters/npd" element={<NpdMaster />} />
           <Route path="masters/users" element={<Users />} />
           <Route path="masters/settings" element={<SettingsPage />} />
 
