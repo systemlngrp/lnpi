@@ -205,17 +205,6 @@ export function ReelwiseStockReport() {
               <div className="space-y-2">
                 <h2 className="text-3xl font-black tracking-tight text-slate-950 md:text-[2rem]">Reelwise Stock Report</h2>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                  Live stock lens
-                </div>
-                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                  Age-based filtering
-                </div>
-                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                  Reel-level traceability
-                </div>
-              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[600px]">
@@ -238,11 +227,7 @@ export function ReelwiseStockReport() {
           </div>
 
           <div className="relative mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 md:p-5">
-            <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">Filter Console</div>
-                <div className="mt-1 text-sm font-semibold text-slate-700">Refine the reel ledger by stock position, ageing, and issue state.</div>
-              </div>
+            <div className="mb-4 flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-end">
               <button
                 type="button"
                 onClick={handleClearFilters}

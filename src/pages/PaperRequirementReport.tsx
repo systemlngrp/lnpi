@@ -550,7 +550,7 @@ export function PaperRequirementReport() {
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
               <table className="min-w-full">
-                <thead className="bg-slate-900 text-white">
+                <thead className="bg-blue-700 text-white">
                   <tr>
                     {["RAPC RANGE", "GSM", "Total Paper Requirement", "Total Closing Stock", "Total Pending PO", "MIL", "Net Paper to Order"].map((heading) => (
                       <th key={heading} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] whitespace-nowrap">
@@ -568,7 +568,7 @@ export function PaperRequirementReport() {
                     </tr>
                   ) : (
                     filteredRows.map((row) => (
-                      <tr key={`${row.rapcRange}-${row.gsm}`} className="border-t border-slate-200 text-sm text-slate-700 transition hover:bg-sky-50/40">
+                      <tr key={`${row.rapcRange}-${row.gsm}`} className="border-t border-black text-sm text-slate-700 transition hover:bg-sky-50/40">
                         <td className="px-4 py-3 font-semibold text-slate-900">{row.rapcRange}</td>
                         <td className="px-4 py-3">{row.gsm}</td>
                         <td className="px-4 py-3">{row.totalPaperRequirement.toLocaleString()}</td>
@@ -583,7 +583,7 @@ export function PaperRequirementReport() {
                   )}
                 </tbody>
                 {filteredRows.length > 0 ? (
-                  <tfoot className="bg-slate-100">
+                  <tfoot className="border-t border-black bg-slate-100">
                     <tr>
                       <td className="px-4 py-3 text-sm font-black text-slate-900" colSpan={2}>Grand Total</td>
                       <td className="px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalPaperRequirement).toLocaleString()}</td>

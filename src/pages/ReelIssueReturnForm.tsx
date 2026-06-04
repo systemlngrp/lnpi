@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, BarChart3 } from "lucide-react";
+import { Plus, Trash2, BarChart3, Package2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
@@ -74,11 +74,11 @@ export function ReelIssueReturnForm() {
   const selectedProduction = productions.find((production) => production.id === productionId) || null;
 
   const getReelInvoiceRate = (slipId: string): number => {
-    const slip = packingSlips.find(s => s.id === slipId);
+    const slip = packingSlips.find((row) => row.id === slipId);
     if (!slip) return 0;
-    const mrr = materialIn.find(m => m.id === slip.materialInId);
+    const mrr = materialIn.find((row) => row.id === slip.materialInId);
     if (!mrr) return 0;
-    const line = mrr.lines.find(l => l.id === slip.materialLineId);
+    const line = mrr.lines.find((row) => row.id === slip.materialLineId);
     return Number(line?.invoiceRate || line?.rate || 0);
   };
 
@@ -88,39 +88,34 @@ export function ReelIssueReturnForm() {
     let totalReturnWt = 0;
     let totalReturnVal = 0;
 
-    // Issue totals
-    Object.values(selectedIssueReels).flat().forEach(slipId => {
-      const slip = packingSlips.find(s => s.id === slipId);
-      if (slip) {
-        const wt = Number(slip.weightKg || 0);
+    Object.values(selectedIssueReels)
+      .flat()
+      .forEach((slipId) => {
+        const slip = packingSlips.find((row) => row.id === slipId);
+        if (!slip) return;
+        const weight = Number(slip.weightKg || 0);
         const rate = getReelInvoiceRate(slipId);
-        totalIssueWt += wt;
-        totalIssueVal += wt * rate;
-      }
-    });
+        totalIssueWt += weight;
+        totalIssueVal += weight * rate;
+      });
 
-    // Return totals
-    Object.entries(returnQtyDrafts).forEach(([lineId, drafts]) => {
+    Object.values(returnQtyDrafts).forEach((drafts) => {
       Object.entries(drafts).forEach(([slipId, qtyStr]) => {
         const qty = Number(qtyStr || 0);
-        if (qty > 0) {
-          const rate = getReelInvoiceRate(slipId);
-          totalReturnWt += qty;
-          totalReturnVal += qty * rate;
-        }
+        if (qty <= 0) return;
+        const rate = getReelInvoiceRate(slipId);
+        totalReturnWt += qty;
+        totalReturnVal += qty * rate;
       });
     });
-
-    const netWt = totalIssueWt - totalReturnWt;
-    const netVal = totalIssueVal - totalReturnVal;
 
     return {
       issueWt: totalIssueWt,
       issueVal: totalIssueVal,
       returnWt: totalReturnWt,
       returnVal: totalReturnVal,
-      netWt,
-      netVal
+      netWt: totalIssueWt - totalReturnWt,
+      netVal: totalIssueVal - totalReturnVal,
     };
   }, [selectedIssueReels, returnQtyDrafts, packingSlips, materialIn]);
 
@@ -146,7 +141,7 @@ export function ReelIssueReturnForm() {
 
     setReturnLines((prev) => {
       const existingByMaterial = new Map(prev.filter((row) => row.materialId).map((row) => [row.materialId, row]));
-      const next: ReelLineDraft[] = selectedMaterials.map(
+      const next = selectedMaterials.map(
         (materialId) => existingByMaterial.get(materialId) ?? { id: crypto.randomUUID(), materialId }
       );
 
@@ -220,8 +215,6 @@ export function ReelIssueReturnForm() {
     [materials, reelGroupIds]
   );
 
-  const getMaterial = (materialId: string) => materials.find((material) => material.id === materialId);
-
   const ensureReturnLineForMaterial = (materialId: string) => {
     if (!materialId) return "";
     const existing = returnLines.find((line) => line.materialId === materialId);
@@ -279,29 +272,18 @@ export function ReelIssueReturnForm() {
       : [];
     const drafts = getDraftIssuedReelsForMaterial(materialId);
     const seen = new Set<string>();
-    const merged = [...persisted, ...drafts].filter((line) => {
+    return [...persisted, ...drafts].filter((line) => {
       if (seen.has(line.packingSlipId)) return false;
       seen.add(line.packingSlipId);
       return true;
     });
-    return merged;
   };
 
   const addIssueLine = () => setIssueLines((prev) => [...prev, createEmptyReelLine()]);
-  const addReturnLine = () => setReturnLines((prev) => [...prev, createEmptyReelLine()]);
 
   const removeIssueLine = (lineId: string) => {
-    setIssueLines((prev) => (prev.length === 1 ? [createEmptyReelLine()] : prev.filter((l) => l.id !== lineId)));
+    setIssueLines((prev) => (prev.length === 1 ? [createEmptyReelLine()] : prev.filter((line) => line.id !== lineId)));
     setSelectedIssueReels((prev) => {
-      const next = { ...prev };
-      delete next[lineId];
-      return next;
-    });
-  };
-
-  const removeReturnLine = (lineId: string) => {
-    setReturnLines((prev) => (prev.length === 1 ? [createEmptyReelLine()] : prev.filter((l) => l.id !== lineId)));
-    setReturnQtyDrafts((prev) => {
       const next = { ...prev };
       delete next[lineId];
       return next;
@@ -342,26 +324,13 @@ export function ReelIssueReturnForm() {
   };
 
   const updateReturnQty = (lineId: string, materialId: string, packingSlipId: string, value: string) => {
-    setReturnQtyDrafts((prev) => {
-      const next = {
-        ...prev,
-        [lineId]: {
-          ...(prev[lineId] || {}),
-          [packingSlipId]: value,
-        },
-      };
-
-      const returnableMap = new Map(
-        getReturnableReels(materialId).map((row) => [row.packingSlipId, Number(row.weightKg || 0)])
-      );
-      const totalWeight = Object.entries(next[lineId] || {}).reduce((sum, [id, qty]) => {
-        const enteredQty = Number(qty || 0);
-        const maxQty = returnableMap.get(id) || 0;
-        return sum + Math.min(Math.max(enteredQty, 0), maxQty);
-      }, 0);
-
-      return next;
-    });
+    setReturnQtyDrafts((prev) => ({
+      ...prev,
+      [lineId]: {
+        ...(prev[lineId] || {}),
+        [packingSlipId]: value,
+      },
+    }));
   };
 
   const computeIssueLineWeight = (line: ReelLineDraft) => {
@@ -532,7 +501,6 @@ export function ReelIssueReturnForm() {
         }
       }
 
-      // Sync production status based on net usage after both operations
       if (productionId) {
         const usageMap = buildProductionMaterialUsageMap(
           nextMaterialIssues,
@@ -566,266 +534,296 @@ export function ReelIssueReturnForm() {
   };
 
   return (
-    <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
-      <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">Reel Issue & Return</h2>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Date" required>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-              disabled={lockDate}
-              className="w-full border-2 border-black rounded p-2 disabled:bg-slate-50 disabled:opacity-80"
-            />
-          </Field>
-          <Field label="Job No." required>
-            <Select
-              options={jobOptions}
-              value={productionId}
-              onChange={setProductionId}
-              required
-              placeholder="Select Job..."
-              disabled={lockJob}
-            />
-          </Field>
-          <Field label="Remarks" className="md:col-span-2">
-            <input value={remarks} onChange={(e) => setRemarks(e.target.value)} className="w-full border-2 border-black rounded p-2" />
-          </Field>
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-[28px] border border-slate-200/90 bg-white shadow-[0_24px_60px_-28px_rgba(15,23,42,0.28)]">
+        <div className="bg-[linear-gradient(135deg,rgba(30,41,59,1),rgba(79,70,229,0.96))] px-5 py-5 text-white md:px-6">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-white/10 p-2.5 ring-1 ring-white/15">
+              <Package2 size={20} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black tracking-tight">Reel Issue & Return</h2>
+              <p className="text-sm font-medium text-white/75">Issue and return reels with a cleaner, app-matched dashboard layout.</p>
+            </div>
+          </div>
         </div>
 
-        <div className="rounded border border-black p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold uppercase">Issue Reels</h3>
-            <button type="button" onClick={addIssueLine} className="inline-flex items-center gap-2 rounded border border-black px-3 py-2 text-sm font-bold hover:bg-slate-50">
-              <Plus size={16} /> Add
-            </button>
+        <form onSubmit={handleSubmit} className="space-y-6 p-5 md:p-6">
+          <div className="rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,1))] p-4 shadow-sm md:p-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Date" required>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  disabled={lockDate}
+                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100 disabled:bg-slate-50 disabled:opacity-80"
+                />
+              </Field>
+              <Field label="Job No." required>
+                <Select
+                  options={jobOptions}
+                  value={productionId}
+                  onChange={setProductionId}
+                  required
+                  placeholder="Select Job..."
+                  disabled={lockJob}
+                />
+              </Field>
+              <Field label="Remarks" className="md:col-span-2">
+                <input
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Add optional notes..."
+                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+                />
+              </Field>
+            </div>
           </div>
 
-          {issueLines.map((line) => {
-            const availableReels = line.materialId ? getIssueAvailableReels(line.materialId, line.id) : [];
-            const selectedIds = selectedIssueReels[line.id] || [];
-            const totalWeight = line.materialId ? computeIssueLineWeight(line) : 0;
-            return (
-              <div key={line.id} className="rounded border border-black p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="w-full max-w-xl space-y-1">
-                    <label className="text-sm font-bold">Material</label>
-                    <Select
-                      options={reelMaterialOptions}
-                      value={line.materialId}
-                      onChange={(value) => {
-                        setIssueLines((prev) => prev.map((row) => (row.id === line.id ? { ...row, materialId: value } : row)));
-                        setSelectedIssueReels((prev) => ({ ...prev, [line.id]: [] }));
-                      }}
-                      placeholder="Select reel material..."
-                    />
-                  </div>
-                  {line.materialId && (
-                    <div className="w-32 space-y-1">
-                      <label className="text-sm font-black uppercase text-indigo-700">Invoice Rate</label>
-                      <div className="border-2 border-indigo-700 rounded p-2 bg-indigo-50 font-black text-indigo-700 text-center">
-                        ₹{(selectedIds[0] ? getReelInvoiceRate(selectedIds[0]) : 0).toLocaleString()}
-                      </div>
-                    </div>
-                  )}
-                  <button type="button" onClick={() => removeIssueLine(line.id)} className="mt-6 text-red-600 hover:text-red-800" title="Remove line">
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-
-                {line.materialId ? (
-                  <>
-                    <div className="text-sm text-slate-500">
-                      Selected: <span className="font-bold text-black">{totalWeight.toFixed(2)} KG</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full border-collapse border border-black">
-                        <thead className="bg-slate-100">
-                          <tr>
-                            {["Select", "Our Reel No.", "Supplier Reel No.", "Invoice Rate", "Weight KG"].map((heading) => (
-                              <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase">
-                                {heading}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {availableReels.length === 0 ? (
-                            <tr>
-                              <td colSpan={5} className="border border-black px-4 py-6 text-center text-sm text-slate-500">
-                                No available reels for this material.
-                              </td>
-                            </tr>
-                          ) : (
-                            availableReels.map((slip) => (
-                              <tr key={slip.id}>
-                                <td className="border border-black px-3 py-2 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedIds.includes(slip.id)}
-                                    onChange={(e) => updateSelectedIssueReels(line.id, line.materialId, slip.id, e.target.checked)}
-                                  />
-                                </td>
-                                <td className="border border-black px-3 py-2 text-sm">{slip.ourReelNo}</td>
-                                <td className="border border-black px-3 py-2 text-sm">{slip.supplierReelNo || "-"}</td>
-                                <td className="border border-black px-3 py-2 text-sm font-bold text-indigo-700">₹{getReelInvoiceRate(slip.id).toLocaleString()}</td>
-                                <td className="border border-black px-3 py-2 text-sm">{Number(slip.weightKg || 0).toFixed(2)}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : null}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-black tracking-tight text-slate-950">Issue Reels</h3>
+                <p className="text-sm font-medium text-slate-500">Choose a material and issue from the currently available reels.</p>
               </div>
-            );
-          })}
-        </div>
+              <button type="button" onClick={addIssueLine} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50">
+                <Plus size={16} /> Add
+              </button>
+            </div>
 
-	        <div className="rounded border border-black p-4 space-y-4">
-	          <div className="flex items-center justify-between">
-	            <h3 className="text-lg font-bold uppercase">Return Reels</h3>
-	          </div>
-
-	          {returnLines.length === 0 ? (
-	            <div className="text-sm text-slate-500">Select reels in Issue Reels to auto-fill return.</div>
-	          ) : (
-	          returnLines.map((line) => {
-	            const returnableReels = line.materialId ? getReturnableReels(line.materialId) : [];
-	            const drafts = returnQtyDrafts[line.id] || {};
-	            const totalWeight = line.materialId ? computeReturnLineWeight(line) : 0;
-	            return (
-              <div key={line.id} className="rounded border border-black p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-	                  <div className="w-full max-w-xl space-y-1">
-	                    <label className="text-sm font-bold">Material</label>
-	                    <Select
-	                      options={reelMaterialOptions}
-	                      value={line.materialId}
-	                      onChange={() => {}}
-	                      placeholder="Select reel material..."
-	                      disabled
-	                    />
-	                  </div>
+            {issueLines.map((line) => {
+              const availableReels = line.materialId ? getIssueAvailableReels(line.materialId, line.id) : [];
+              const selectedIds = selectedIssueReels[line.id] || [];
+              const totalWeight = line.materialId ? computeIssueLineWeight(line) : 0;
+              return (
+                <div key={line.id} className="mt-4 rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="w-full max-w-xl space-y-1">
+                      <label className="text-sm font-bold text-slate-700">Material</label>
+                      <Select
+                        options={reelMaterialOptions}
+                        value={line.materialId}
+                        onChange={(value) => {
+                          setIssueLines((prev) => prev.map((row) => (row.id === line.id ? { ...row, materialId: value } : row)));
+                          setSelectedIssueReels((prev) => ({ ...prev, [line.id]: [] }));
+                        }}
+                        placeholder="Select reel material..."
+                      />
+                    </div>
                     {line.materialId && (
                       <div className="w-32 space-y-1">
-                        <label className="text-sm font-black uppercase text-indigo-700">Invoice Rate</label>
-                        <div className="border-2 border-indigo-700 rounded p-2 bg-indigo-50 font-black text-indigo-700 text-center">
-                          ₹{(returnableReels[0] ? getReelInvoiceRate(returnableReels[0].packingSlipId) : 0).toLocaleString()}
+                        <label className="text-sm font-black uppercase tracking-wide text-indigo-700">Invoice Rate</label>
+                        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-center font-black text-indigo-700 shadow-sm">
+                          â‚¹{(selectedIds[0] ? getReelInvoiceRate(selectedIds[0]) : 0).toLocaleString()}
                         </div>
                       </div>
                     )}
-	                </div>
+                    <button type="button" onClick={() => removeIssueLine(line.id)} className="mt-6 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100 hover:text-rose-700" title="Remove line">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
 
-                {line.materialId ? (
-                  <>
-                    <div className="text-sm text-slate-500">
-                      Selected: <span className="font-bold text-black">{totalWeight.toFixed(2)} KG</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full border-collapse border border-black">
-                        <thead className="bg-slate-100">
-                          <tr>
-                            {["Our Reel No.", "Invoice Rate", "Issued Weight KG", "Return Qty KG"].map((heading) => (
-                              <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase">
-                                {heading}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {returnableReels.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="border border-black px-4 py-6 text-center text-sm text-slate-500">
-                                No issued reels available for return for this job.
-                              </td>
-                            </tr>
-                          ) : (
-                            returnableReels.map((reelLine) => (
-                              <tr key={reelLine.packingSlipId}>
-                                <td className="border border-black px-3 py-2 text-sm">{reelLine.ourReelNo}</td>
-                                <td className="border border-black px-3 py-2 text-sm font-bold text-indigo-700">₹{getReelInvoiceRate(reelLine.packingSlipId).toLocaleString()}</td>
-                                <td className="border border-black px-3 py-2 text-sm">{Number(reelLine.weightKg || 0).toFixed(2)}</td>
-                                <td className="border border-black px-3 py-2 text-sm">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max={Number(reelLine.weightKg || 0)}
-                                    step="0.01"
-                                    value={drafts[reelLine.packingSlipId] || ""}
-                                    onChange={(e) => updateReturnQty(line.id, line.materialId, reelLine.packingSlipId, e.target.value)}
-                                    className="w-28 rounded border border-slate-300 px-2 py-1 text-right text-sm"
-                                  />
-                                </td>
+                  {line.materialId ? (
+                    <>
+                      <div className="mt-3 inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                        Selected Weight: <span className="ml-1 font-black">{totalWeight.toFixed(2)} KG</span>
+                      </div>
+                      <div className="mt-4 overflow-hidden rounded-[20px] border border-slate-200">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full border-collapse">
+                            <thead className="bg-slate-800 text-white">
+                              <tr>
+                                {["Select", "Our Reel No.", "Supplier Reel No.", "Invoice Rate", "Weight KG"].map((heading) => (
+                                  <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.16em]">
+                                    {heading}
+                                  </th>
+                                ))}
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                            </thead>
+                            <tbody>
+                              {availableReels.length === 0 ? (
+                                <tr>
+                                  <td colSpan={5} className="px-4 py-8 text-center text-sm font-medium text-slate-500">
+                                    No available reels for this material.
+                                  </td>
+                                </tr>
+                              ) : (
+                                availableReels.map((slip, index) => (
+                                  <tr key={slip.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedIds.includes(slip.id)}
+                                        onChange={(e) => updateSelectedIssueReels(line.id, line.materialId, slip.id, e.target.checked)}
+                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                      />
+                                    </td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800">{slip.ourReelNo}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm text-slate-600">{slip.supplierReelNo || "-"}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">â‚¹{getReelInvoiceRate(slip.id).toLocaleString()}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-emerald-700">{Number(slip.weightKg || 0).toFixed(2)}</td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <div>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Return Reels</h3>
+              <p className="text-sm font-medium text-slate-500">Return issued reels back against the selected job.</p>
+            </div>
+
+            {returnLines.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-medium text-slate-500">Select reels in Issue Reels to auto-fill return.</div>
+            ) : (
+              returnLines.map((line) => {
+                const returnableReels = line.materialId ? getReturnableReels(line.materialId) : [];
+                const drafts = returnQtyDrafts[line.id] || {};
+                const totalWeight = line.materialId ? computeReturnLineWeight(line) : 0;
+                return (
+                  <div key={line.id} className="mt-4 rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="w-full max-w-xl space-y-1">
+                        <label className="text-sm font-bold text-slate-700">Material</label>
+                        <Select
+                          options={reelMaterialOptions}
+                          value={line.materialId}
+                          onChange={() => {}}
+                          placeholder="Select reel material..."
+                          disabled
+                        />
+                      </div>
+                      {line.materialId && (
+                        <div className="w-32 space-y-1">
+                          <label className="text-sm font-black uppercase tracking-wide text-indigo-700">Invoice Rate</label>
+                          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-center font-black text-indigo-700 shadow-sm">
+                            â‚¹{(returnableReels[0] ? getReelInvoiceRate(returnableReels[0].packingSlipId) : 0).toLocaleString()}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </>
-                ) : null}
-	              </div>
-	            );
-	          }))}
-	        </div>
 
-        {/* Consumption Summary Section */}
-        <div className="bg-slate-900 text-white p-6 rounded border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <h3 className="text-lg font-black uppercase tracking-tighter mb-4 border-b border-white/20 pb-2 flex items-center gap-2">
-            <BarChart3 size={20} />
-            Consumption Summary
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-4">
-              <div>
-                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Issue Weight</div>
-                <div className="text-xl font-black">{consumptionSummary.issueWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
-              </div>
-              <div>
-                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Issue Value</div>
-                <div className="text-xl font-black">₹{consumptionSummary.issueVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              </div>
-            </div>
+                    {line.materialId ? (
+                      <>
+                        <div className="mt-3 inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                          Return Weight: <span className="ml-1 font-black">{totalWeight.toFixed(2)} KG</span>
+                        </div>
+                        <div className="mt-4 overflow-hidden rounded-[20px] border border-slate-200">
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full border-collapse">
+                              <thead className="bg-slate-800 text-white">
+                                <tr>
+                                  {["Our Reel No.", "Invoice Rate", "Issued Weight KG", "Return Qty KG"].map((heading) => (
+                                    <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.16em]">
+                                      {heading}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {returnableReels.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={4} className="px-4 py-8 text-center text-sm font-medium text-slate-500">
+                                      No issued reels available for return for this job.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  returnableReels.map((reelLine, index) => (
+                                    <tr key={reelLine.packingSlipId} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
+                                      <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800">{reelLine.ourReelNo}</td>
+                                      <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">â‚¹{getReelInvoiceRate(reelLine.packingSlipId).toLocaleString()}</td>
+                                      <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-amber-700">{Number(reelLine.weightKg || 0).toFixed(2)}</td>
+                                      <td className="border-t border-slate-200 px-4 py-3 text-sm">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max={Number(reelLine.weightKg || 0)}
+                                          step="0.01"
+                                          value={drafts[reelLine.packingSlipId] || ""}
+                                          onChange={(e) => updateReturnQty(line.id, line.materialId, reelLine.packingSlipId, e.target.value)}
+                                          className="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-800 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+                                        />
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </div>
 
-            <div className="space-y-4">
-              <div>
-                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Return Weight</div>
-                <div className="text-xl font-black text-amber-400">{consumptionSummary.returnWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
-              </div>
-              <div>
-                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Return Value</div>
-                <div className="text-xl font-black text-amber-400">₹{consumptionSummary.returnVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              </div>
-            </div>
+          <div className="overflow-hidden rounded-[24px] border border-slate-200 shadow-sm">
+            <div className="bg-[linear-gradient(135deg,rgba(15,23,42,1),rgba(49,46,129,0.95))] p-6 text-white">
+              <h3 className="mb-5 flex items-center gap-2 border-b border-white/15 pb-3 text-lg font-black uppercase tracking-tighter">
+                <BarChart3 size={20} />
+                Consumption Summary
+              </h3>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Issue Weight</div>
+                    <div className="text-xl font-black">{consumptionSummary.issueWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Issue Value</div>
+                    <div className="text-xl font-black">â‚¹{consumptionSummary.issueVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  </div>
+                </div>
 
-            <div className="space-y-4">
-              <div>
-                <div className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Net Consumption Weight</div>
-                <div className="text-2xl font-black text-indigo-400">{consumptionSummary.netWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
-              </div>
-              <div>
-                <div className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Net Consumption Value</div>
-                <div className="text-2xl font-black text-indigo-400">₹{consumptionSummary.netVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Return Weight</div>
+                    <div className="text-xl font-black text-amber-400">{consumptionSummary.returnWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Return Value</div>
+                    <div className="text-xl font-black text-amber-400">â‚¹{consumptionSummary.returnVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Net Consumption Weight</div>
+                    <div className="text-2xl font-black text-indigo-300">{consumptionSummary.netWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Net Consumption Value</div>
+                    <div className="text-2xl font-black text-indigo-300">â‚¹{consumptionSummary.netVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={isSubmitting || !productionId || (!hasAnyIssue && !hasAnyReturn)}
-            className="min-w-[180px] bg-indigo-600 text-white px-6 py-3 rounded font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[2px] transition-all uppercase tracking-widest text-sm"
-          >
-            {isSubmitting ? <Spinner size={22} className="text-white" /> : "Save Issue/Return"}
-          </button>
-        </div>
-      </form>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isSubmitting || !productionId || (!hasAnyIssue && !hasAnyReturn)}
+              className="inline-flex min-w-[220px] items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(99,102,241,1),rgba(168,85,247,0.95))] px-6 py-3.5 text-sm font-black uppercase tracking-[0.18em] text-white shadow-[0_18px_35px_-18px_rgba(79,70,229,0.85)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? <Spinner size={22} className="text-white" /> : "Save Issue/Return"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -843,7 +841,7 @@ function Field({
 }) {
   return (
     <div className={`space-y-1 ${className}`}>
-      <label className="font-bold text-black">
+      <label className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
         {label} {required ? <span className="text-red-500">*</span> : null}
       </label>
       {children}
