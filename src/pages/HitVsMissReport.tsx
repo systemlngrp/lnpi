@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { Calendar, Search } from "lucide-react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import * as XLSX from "xlsx";
+import { Calendar, Search, Download, FileText } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, DispatchPlan, Invoice, Item, LoadingSlip, Order, OrderSchedule } from "../types";
 import { formatDate, getFinancialYear } from "../lib/serial";
@@ -297,6 +300,19 @@ export function HitVsMissReport() {
   }, [summaryRows]);
 
   const fyOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.fy))).sort(), [rows]);
+  const companyOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          rows
+            .filter((row) => row.companyId && row.companyName && row.companyName !== "-")
+            .map((row) => [row.companyId, row.companyName])
+        ).entries()
+      )
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [rows]
+  );
   const monthOptions = useMemo(
     () =>
       Array.from(new Set(rows.map((row) => row.month)))
@@ -313,6 +329,141 @@ export function HitVsMissReport() {
     setMonthFilter("");
     setFromDate("");
     setToDate("");
+  };
+
+  const handleExportExcel = () => {
+    const workbook = XLSX.utils.book_new();
+
+    const summarySheet = XLSX.utils.json_to_sheet(
+      summaryRows.map((row) => ({
+        FY: row.fy,
+        Month: row.month,
+        Total: row.total,
+        Delayed: row.delayed,
+        "Delayed (%)": row.delayedPercent,
+        "On Time": row.onTime,
+        "On Time (%)": row.onTimePercent,
+        Open: row.open,
+        "Delay (0-3)": row.bucket0to3,
+        "Delay (4-7)": row.bucket4to7,
+        "Delay (8-10)": row.bucket8to10,
+        "Delay (11-15)": row.bucket11to15,
+        "Delay (>15)": row.bucketAbove15,
+      }))
+    );
+
+    const detailsSheet = XLSX.utils.json_to_sheet(
+      rows.map((row, index) => ({
+        "S.No": index + 1,
+        FY: row.fy,
+        Month: row.month,
+        "Schedule Date": row.scheduledDate,
+        "Order No": row.orderNo,
+        Company: row.companyName,
+        Item: row.itemName,
+        "Sch Qty": row.scheduledQty,
+        Canceled: row.canceledQty,
+        "Target Qty": row.targetQty,
+        "Invoiced Qty": row.invoicedQty,
+        "Pending Qty": row.pendingQty,
+        "Full Invoice Date": row.fullInvoiceDate,
+        Status: row.hitMissLabel,
+        "Delay Days": row.delayDays ?? "",
+        Bucket: row.delayBucket || "",
+      }))
+    );
+
+    XLSX.utils.book_append_sheet(workbook, summarySheet, "Monthly Summary");
+    XLSX.utils.book_append_sheet(workbook, detailsSheet, "Schedule Details");
+    XLSX.writeFile(workbook, "Hit_Vs_Miss_Report.xlsx");
+  };
+
+  const handleExportPdf = () => {
+    const doc = new jsPDF("l", "mm", "a4");
+    doc.setFontSize(16);
+    doc.text("Hit Vs Miss Report", 14, 16);
+    doc.setFontSize(10);
+    doc.text(
+      `Filters: ${companyFilter || "All Companies"} | ${itemFilter || "All Items"} | ${fyFilter || "All FY"} | ${monthFilter || "All Months"}`,
+      14,
+      24
+    );
+
+    (doc as any).autoTable({
+      head: [[
+        "FY",
+        "Month",
+        "Total",
+        "Delayed",
+        "Delayed (%)",
+        "On Time",
+        "On Time (%)",
+        "Delay (0-3)",
+        "Delay (4-7)",
+        "Delay (8-10)",
+        "Delay (11-15)",
+        "Delay (>15)",
+      ]],
+      body: summaryRows.map((row) => [
+        row.fy,
+        row.month,
+        row.total,
+        row.delayed,
+        `${row.delayedPercent.toFixed(2)}%`,
+        row.onTime,
+        `${row.onTimePercent.toFixed(2)}%`,
+        row.bucket0to3,
+        row.bucket4to7,
+        row.bucket8to10,
+        row.bucket11to15,
+        row.bucketAbove15,
+      ]),
+      startY: 30,
+      theme: "grid",
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [37, 99, 235] },
+    });
+
+    (doc as any).autoTable({
+      head: [[
+        "S.No",
+        "FY",
+        "Month",
+        "Schedule Date",
+        "Order No",
+        "Company",
+        "Item",
+        "Target Qty",
+        "Invoiced Qty",
+        "Pending Qty",
+        "Full Invoice Date",
+        "Status",
+        "Delay Days",
+        "Bucket",
+      ]],
+      body: rows.map((row, index) => [
+        index + 1,
+        row.fy,
+        row.month,
+        formatDate(row.scheduledDate),
+        row.orderNo,
+        row.companyName,
+        row.itemName,
+        row.targetQty,
+        row.invoicedQty,
+        row.pendingQty,
+        row.fullInvoiceDate ? formatDate(row.fullInvoiceDate) : "-",
+        row.hitMissLabel,
+        row.delayDays ?? "-",
+        row.delayBucket || "-",
+      ]),
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      theme: "grid",
+      styles: { fontSize: 7, cellPadding: 1.8 },
+      headStyles: { fillColor: [37, 99, 235] },
+    });
+
+    doc.save("Hit_Vs_Miss_Report.pdf");
   };
 
   return (
@@ -352,7 +503,7 @@ export function HitVsMissReport() {
           className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
         >
           <option value="">All Companies</option>
-          {companies.map((company) => (
+          {companyOptions.map((company) => (
             <option key={company.id} value={company.id}>
               {company.name}
             </option>
@@ -398,12 +549,30 @@ export function HitVsMissReport() {
           ))}
         </select>
 
-        <button
-          onClick={clearFilters}
-          className="rounded border border-black px-3 py-2 text-sm font-bold uppercase hover:bg-slate-50"
-        >
-          Clear Filters
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={clearFilters}
+            className="rounded border border-black px-3 py-2 text-sm font-bold uppercase hover:bg-slate-50"
+          >
+            Clear Filters
+          </button>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="inline-flex items-center gap-2 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
+          >
+            <Download size={14} />
+            Excel
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex items-center gap-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+          >
+            <FileText size={14} />
+            PDF
+          </button>
+        </div>
 
         <div className="relative">
           <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
