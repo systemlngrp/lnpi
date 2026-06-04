@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { Calendar, Download, FileText, Filter, RotateCcw } from "lucide-react";
 import { useData } from "../hooks/useData";
@@ -389,7 +389,7 @@ export function PaperRequirementReport() {
       24
     );
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [["Metric", "Value"]],
       body: [
         ["Total Paper Requirement", round2(summary.totalPaperRequirement)],
@@ -405,7 +405,7 @@ export function PaperRequirementReport() {
       headStyles: { fillColor: [31, 41, 55] },
     });
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [["RAPC Range", "GSM", "Total Paper Requirement", "Total Closing Stock", "Total Pending PO", "MIL", "Net Paper to Order"]],
       body: filteredRows.map((row) => [
         row.rapcRange,

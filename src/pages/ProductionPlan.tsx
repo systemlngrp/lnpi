@@ -6,7 +6,7 @@ import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
 import { FileText } from "lucide-react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { exportsAllowed } from "../lib/exportPolicy";
 
 export function ProductionPlan() {
@@ -104,7 +104,7 @@ export function ProductionPlan() {
     const tableColumn = Object.keys(exportData[0]);
     const tableRows = exportData.map(row => Object.values(row));
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
       startY: 20,

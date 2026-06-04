@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { CheckCircle, Eye, FileText, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
@@ -84,7 +84,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
           })
       );
 
-      (doc as any).autoTable({
+      autoTable(doc, {
         head: [[
           "Requisition No",
           "Requested By",
@@ -106,7 +106,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
         },
       });
     } else {
-      (doc as any).autoTable({
+      autoTable(doc, {
         head: [[
           "Requisition No",
           "Requested By",
@@ -179,7 +179,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
         y += Math.max(6, remarksLines.length * 5 + 2);
       }
 
-      (doc as any).autoTable({
+      autoTable(doc, {
         startY: y,
         theme: "grid",
         headStyles: { fillColor: [37, 99, 235] },

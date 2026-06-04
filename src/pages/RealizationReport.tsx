@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { Building2, Calendar, Download, FileText, RotateCcw, TrendingUp, User2 } from "lucide-react";
 import { useData } from "../hooks/useData";
@@ -303,7 +303,7 @@ export function RealizationReport() {
     doc.text(`From: ${fromDate ? formatDate(fromDate) : "All"} | To: ${toDate ? formatDate(toDate) : "All"}`, 14, 23);
     doc.text(`Company: ${companies.find((company) => company.id === companyId)?.name || "All"} | Sales Person: ${users.find((user) => user.id === salesPersonId)?.name || "All"}`, 14, 29);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [["Metric", "Value"]],
       body: summaryExport.map((row) => [row.Metric, row.Value]),
       startY: 34,
@@ -312,7 +312,7 @@ export function RealizationReport() {
       headStyles: { fillColor: [35, 52, 78] },
     });
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [["Sales Person", "Realization/Kg", "Total Qty", "Rows"]],
       body: salesExport.map((row) => [row["Sales Person"], row["Weighted Realization/Kg"], row["Total Qty"], row.Rows]),
       startY: (doc as any).lastAutoTable.finalY + 8,
@@ -321,7 +321,7 @@ export function RealizationReport() {
       headStyles: { fillColor: [35, 52, 78] },
     });
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [["SL No", "Company", "Average Realization/Kg", "Total Qty"]],
       body: companyExport.map((row) => [row["SL No"], row.Company, row["Average Realization/Kg"], row["Total Qty"]]),
       startY: (doc as any).lastAutoTable.finalY + 8,

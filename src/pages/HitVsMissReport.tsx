@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { Calendar, Search, Download, FileText } from "lucide-react";
 import { useData } from "../hooks/useData";
@@ -389,7 +389,7 @@ export function HitVsMissReport() {
       24
     );
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [[
         "FY",
         "Month",
@@ -424,7 +424,7 @@ export function HitVsMissReport() {
       headStyles: { fillColor: [37, 99, 235] },
     });
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [[
         "S.No",
         "FY",

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { useData } from "../hooks/useData";
 import { 
   PurchaseOrder, 
@@ -179,7 +179,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     doc.setFontSize(10);
     doc.text(`Search: ${searchTerm || "All"} | Total POs: ${filteredOrders.length}`, 14, 24);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [[
         "PO No",
         "Date",
@@ -260,7 +260,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         y += noteLines.length * 5 + 2;
       }
 
-      (doc as any).autoTable({
+      autoTable(doc, {
         startY: y,
         theme: "grid",
         headStyles: { fillColor: [37, 99, 235] },
