@@ -1185,15 +1185,41 @@ async function fetchLegacyItems(db: mysql.Pool) {
   return (rows as any[]).map((row) => normalizeWorkflowStatus("items", row));
 }
 
-async function fetchActiveNpdItems(db: mysql.Pool) {
+async function fetchActiveNpdItems(
+  db: mysql.Pool,
+  options?: { search?: string; limit?: number; offset?: number; includeTotal?: boolean }
+) {
   const [npdColumnsRows] = await db.query("SHOW COLUMNS FROM `npd`");
   const npdColumns = new Set((npdColumnsRows as any[]).map((row) => String(row.Field || "").trim()));
   const openingExpr = npdColumns.has("opening") ? "COALESCE(n.opening, 0)" : "0";
   const syncStatusFilter = npdColumns.has("syncStatus")
     ? "COALESCE(NULLIF(TRIM(n.syncStatus), ''), 'active') <> 'removed'"
     : "1 = 1";
+  const search = String(options?.search || "").trim();
+  const limit = Number.isFinite(options?.limit) ? Math.max(1, Number(options?.limit)) : undefined;
+  const offset = Number.isFinite(options?.offset) ? Math.max(0, Number(options?.offset)) : 0;
+  const whereClauses = [syncStatusFilter];
+  const params: any[] = [];
 
-  const [rows] = await db.query(`
+  if (search) {
+    const like = `%${search}%`;
+    whereClauses.push(`(
+      n.npdId LIKE ?
+      OR n.itemName LIKE ?
+      OR n.customerName LIKE ?
+      OR n.companyId LIKE ?
+      OR n.poNumber LIKE ?
+      OR n.erp LIKE ?
+    )`);
+    params.push(like, like, like, like, like, like);
+  }
+
+  const whereSql = `WHERE ${whereClauses.join(" AND ")}`;
+  const orderSql = "ORDER BY COALESCE(NULLIF(TRIM(n.updateTimestamp), ''), NULLIF(TRIM(n.timestamp), ''), NULLIF(TRIM(n.date), '')) DESC, n.npdId ASC";
+  const limitSql = limit ? " LIMIT ? OFFSET ?" : "";
+
+  const [rows] = await db.query(
+    `
     SELECT
       n.*,
       CAST(${openingExpr} AS DECIMAL(15,2)) AS opening,
@@ -1239,10 +1265,31 @@ async function fetchActiveNpdItems(db: mysql.Pool) {
       FROM \`invoice_line_items\`
       GROUP BY COALESCE(NULLIF(npdId, ''), itemId)
     ) inv ON inv.masterId COLLATE utf8mb4_unicode_ci = n.id COLLATE utf8mb4_unicode_ci
-    WHERE ${syncStatusFilter}
-  `);
+    ${whereSql}
+    ${orderSql}
+    ${limitSql}
+  `,
+    limit ? [...params, limit, offset] : params
+  );
 
-  return (rows as any[]).map((row) => normalizeNpdRowForItemConsumers(row));
+  const normalizedRows = (rows as any[]).map((row) => normalizeNpdRowForItemConsumers(row));
+  if (!options?.includeTotal) {
+    return normalizedRows;
+  }
+
+  const [countRows] = await db.query(
+    `
+    SELECT COUNT(*) AS total
+    FROM \`npd\` n
+    ${whereSql}
+  `,
+    params
+  );
+
+  return {
+    rows: normalizedRows,
+    total: Number((countRows as any[])?.[0]?.total || 0),
+  };
 }
 
 function normalizeItemLookupId(value: any) {
@@ -3261,7 +3308,23 @@ const createHandlers = (tableName: string) => {
         if (tableName === "items") {
           rows = await fetchActiveNpdItems(db);
         } else if (tableName === "npd") {
-          rows = await fetchActiveNpdItems(db);
+          const page = Math.max(1, Number(req.query.page || 1));
+          const pageSize = Math.min(200, Math.max(25, Number(req.query.pageSize || 50)));
+          const search = String(req.query.search || "").trim();
+          const result = await fetchActiveNpdItems(db, {
+            search,
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+            includeTotal: true,
+          });
+          const processedRows = result.rows.map((row) => normalizeFetchedRow(tableName, row));
+          return res.json({
+            rows: processedRows,
+            total: result.total,
+            page,
+            pageSize,
+            search,
+          });
         } else {
           [rows] = await db.query(`SELECT * FROM \`${tableName}\``);
         }

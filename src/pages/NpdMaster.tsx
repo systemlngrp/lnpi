@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { useData } from "../hooks/useData";
+import { Spinner } from "../components/Spinner";
 
 type NpdRecord = {
   id: string;
@@ -134,10 +134,6 @@ const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "spec", label: "Spec" },
 ];
 
-function getSearchableText(row: NpdRecord) {
-  return NPD_COLUMNS.map((column) => String(row[column.key] ?? "")).join(" ").toLowerCase();
-}
-
 function formatCellValue(value: NpdRecord[string]) {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -145,55 +141,146 @@ function formatCellValue(value: NpdRecord[string]) {
 }
 
 export function NpdMaster() {
-  const [rows, , loading] = useData<NpdRecord>("npd", []);
+  const [rows, setRows] = useState<NpdRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const pageSize = 50;
 
-  const filteredRows = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
-    if (!search) return rows;
-    return rows.filter((row) => getSearchableText(row).includes(search));
-  }, [rows, searchTerm]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setPage(1);
+      setSearchTerm(searchInput.trim());
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [searchInput]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchRows = async () => {
+      try {
+        setLoading(true);
+        const token = window.localStorage.getItem("authToken") || "";
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(pageSize),
+        });
+        if (searchTerm) params.set("search", searchTerm);
+
+        const response = await fetch(`/api/npd?${params.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch NPD rows.");
+        }
+        const result = await response.json();
+        if (cancelled) return;
+        setRows(Array.isArray(result.rows) ? result.rows : []);
+        setTotal(Number(result.total || 0));
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Failed to fetch NPD rows:", error);
+        setRows([]);
+        setTotal(0);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchRows();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, pageSize, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageLabel = useMemo(() => {
+    if (total === 0) return "0 records";
+    const start = (page - 1) * pageSize + 1;
+    const end = rows.length > 0 ? start + rows.length - 1 : start;
+    return `${start}-${Math.min(total, end)} of ${total}`;
+  }, [page, pageSize, rows.length, total]);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
+      <div className="flex flex-col gap-4 border-b border-black pb-4 md:flex-row md:items-center md:justify-between">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">NPD Items</h2>
         <div className="relative w-full md:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
             type="text"
             placeholder="Search NPD, customer, item, PO..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full rounded border border-black py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-black"
           />
         </div>
       </div>
 
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+      <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-black bg-slate-50 px-4 py-3 text-sm font-semibold text-black md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            {loading ? <Spinner size={18} /> : null}
+            <span>{loading ? "Loading NPD items..." : pageLabel}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={loading || page <= 1}
+              className="rounded border border-black px-3 py-1 text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span className="min-w-[90px] text-center text-xs font-black uppercase">
+              Page {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={loading || page >= totalPages}
+              className="rounded border border-black px-3 py-1 text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
                 {NPD_COLUMNS.map((column) => (
-                  <th key={column.key} className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
+                  <th key={column.key} className="whitespace-nowrap border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black">
                     {column.label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
-              {!loading && filteredRows.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={NPD_COLUMNS.length} className="px-6 py-8 text-center text-black font-medium italic">
+                  <td colSpan={NPD_COLUMNS.length} className="px-6 py-12">
+                    <div className="flex items-center justify-center gap-3 text-black">
+                      <Spinner size={28} />
+                      <span className="font-semibold">Loading NPD items...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={NPD_COLUMNS.length} className="px-6 py-8 text-center font-medium italic text-black">
                     No NPD records found.
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
+                rows.map((row) => (
+                  <tr key={row.id} className="divide-x divide-black transition-colors hover:bg-slate-50">
                     {NPD_COLUMNS.map((column) => (
-                      <td key={column.key} className="px-4 py-3 text-sm text-black border border-black whitespace-nowrap">
+                      <td key={column.key} className="whitespace-nowrap border border-black px-4 py-3 text-sm text-black">
                         {formatCellValue(row[column.key])}
                       </td>
                     ))}
