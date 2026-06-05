@@ -35,10 +35,11 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
         throw new Error(errorData.error || "Failed to fetch data");
       }
       const result = await response.json();
-      setDataState(result);
-      dataRef.current = result;
+      const finalData = Array.isArray(result) ? result : (result && Array.isArray(result.rows) ? result.rows : []);
+      setDataState(finalData);
+      dataRef.current = finalData;
       setError(null);
-      window.localStorage.setItem(storageKey, JSON.stringify(result));
+      window.localStorage.setItem(storageKey, JSON.stringify(finalData));
     } catch (err) {
       console.error(`Error fetching ${entity}:`, err);
       setError((err as Error).message);

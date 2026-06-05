@@ -4,6 +4,7 @@ const NPD_SYNC_CONFIG = {
   tabName: 'NPD',
   spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
   npdIdHeader: 'NPD ID',
+  hostingerSyncHeader: 'HOSTINGER SYNC',
   flushDelayMs: 15000,
   pendingRowsPropertyKey: 'NPD_PENDING_ROWS',
   pendingFullSyncPropertyKey: 'NPD_PENDING_FULL_SYNC',
@@ -27,14 +28,36 @@ function forceFullNpdSync() {
   }
 
   const headers = values[0].map((header) => String(header || '').trim());
-  const rows = values.slice(1).filter((row) => row.some((cell) => String(cell || '').trim() !== ''));
-  const payloadRows = rows.map((row) => {
-    const mapped = {};
-    headers.forEach((header, index) => {
-      mapped[header] = row[index] ?? '';
-    });
-    return mapped;
-  });
+  const hostingerSyncIndex = headers.indexOf(NPD_SYNC_CONFIG.hostingerSyncHeader);
+
+  if (hostingerSyncIndex === -1) {
+    throw new Error(`Column "${NPD_SYNC_CONFIG.hostingerSyncHeader}" not found in sheet.`);
+  }
+
+  const syncTimestamp = new Date().toISOString();
+  const rowsToSync = [];
+  const rowIndicesToUpdate = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const isBlankRow = row.every((cell) => String(cell || '').trim() === '');
+    if (isBlankRow) continue;
+
+    const hostingerSyncValue = String(row[hostingerSyncIndex] || '').trim();
+    if (hostingerSyncValue === '') {
+      const mapped = {};
+      headers.forEach((header, index) => {
+        mapped[header] = row[index] ?? '';
+      });
+      rowsToSync.push(mapped);
+      rowIndicesToUpdate.push(i + 1); // 1-based index
+    }
+  }
+
+  if (rowsToSync.length === 0) {
+    Logger.log('No rows pending sync (all have timestamps or are empty).');
+    return { ok: true, message: 'No rows pending sync.', processedRows: 0 };
+  }
 
   const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.apiUrl, {
     method: 'post',
@@ -48,8 +71,8 @@ function forceFullNpdSync() {
       spreadsheetName: spreadsheet.getName(),
       tabName: sheet.getName(),
       syncMode: 'full',
-      syncTimestamp: new Date().toISOString(),
-      rows: payloadRows,
+      syncTimestamp: syncTimestamp,
+      rows: rowsToSync,
     }),
   });
 
@@ -60,6 +83,11 @@ function forceFullNpdSync() {
   if (response.getResponseCode() >= 400) {
     throw new Error(`NPD sync failed: ${responseText}`);
   }
+
+  // Update timestamps in the sheet
+  rowIndicesToUpdate.forEach((rowIndex) => {
+    sheet.getRange(rowIndex, hostingerSyncIndex + 1).setValue(syncTimestamp);
+  });
 
   return JSON.parse(responseText);
 }
@@ -147,6 +175,7 @@ function flushQueuedNpdSync() {
     return { ok: true, syncMode: 'batch', processedRows: 0, message: 'No pending NPD rows.' };
   }
 
+  const syncTimestamp = new Date().toISOString();
   const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.apiUrl, {
     method: 'post',
     contentType: 'application/json',
@@ -159,7 +188,7 @@ function flushQueuedNpdSync() {
       spreadsheetName: spreadsheet.getName(),
       tabName: sheet.getName(),
       syncMode: 'batch',
-      syncTimestamp: new Date().toISOString(),
+      syncTimestamp: syncTimestamp,
       rows: pendingRows,
     }),
   });
@@ -170,6 +199,26 @@ function flushQueuedNpdSync() {
 
   if (response.getResponseCode() >= 400) {
     throw new Error(`NPD batch sync failed: ${responseText}`);
+  }
+
+  // Update timestamps for successfully synced batch rows
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  const npdIdIndex = headers.indexOf(NPD_SYNC_CONFIG.npdIdHeader);
+  const hostingerSyncIndex = headers.indexOf(NPD_SYNC_CONFIG.hostingerSyncHeader);
+
+  if (npdIdIndex !== -1 && hostingerSyncIndex !== -1) {
+    const sheetData = sheet.getDataRange().getDisplayValues();
+    pendingRows.forEach((row) => {
+      const npdId = String(row[NPD_SYNC_CONFIG.npdIdHeader] || '').trim();
+      if (!npdId) return;
+
+      for (let i = 1; i < sheetData.length; i++) {
+        if (String(sheetData[i][npdIdIndex] || '').trim() === npdId) {
+          sheet.getRange(i + 1, hostingerSyncIndex + 1).setValue(syncTimestamp);
+          break;
+        }
+      }
+    });
   }
 
   clearPendingNpdQueue_();
@@ -187,6 +236,13 @@ function buildSheetRowPayload_(sheet, rowIndex) {
     if (!normalizedHeader) return;
     payload[normalizedHeader] = dataRow[index] ?? '';
   });
+
+  // Only sync if Hostinger Sync is blank
+  const hostingerSyncValue = String(payload[NPD_SYNC_CONFIG.hostingerSyncHeader] || '').trim();
+  if (hostingerSyncValue !== '') {
+    Logger.log('Skipping row %s because it is already synced (HOSTINGER SYNC is not blank).', rowIndex);
+    return null;
+  }
 
   const npdId = String(payload[NPD_SYNC_CONFIG.npdIdHeader] || '').trim();
   if (!npdId) {
