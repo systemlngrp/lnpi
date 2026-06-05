@@ -35,6 +35,7 @@ type ReelwiseStockRow = {
   returnedWeight: number;
   availableWeight: number;
   mrrQty: number;
+  availabilityFormula: string;
   ageDays: number;
 };
 
@@ -57,6 +58,10 @@ function getAgeDays(dateStr?: string) {
   today.setHours(0, 0, 0, 0);
   date.setHours(0, 0, 0, 0);
   return Math.max(0, Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+function formatWeightFormula(mrrQty: number, issuedQty: number, returnQty: number, availableQty: number) {
+  return `MRR ${mrrQty.toFixed(2)} - Issued ${issuedQty.toFixed(2)} + Return ${returnQty.toFixed(2)} = Available ${availableQty.toFixed(2)}`;
 }
 
 export function ReelwiseStockReport() {
@@ -126,6 +131,7 @@ export function ReelwiseStockReport() {
           returnedWeight: Number(returnedWeight.toFixed(2)),
           availableWeight,
           mrrQty,
+          availabilityFormula: formatWeightFormula(mrrQty, issuedWeight, returnedWeight, availableWeight),
           ageDays: getAgeDays(receipt?.date),
         };
       })
@@ -398,7 +404,12 @@ export function ReelwiseStockReport() {
                     <td className="border-r border-black px-4 py-3 text-right font-semibold text-amber-700">{row.issuedWeight.toFixed(2)}</td>
                     <td className="border-r border-black px-4 py-3">{formatReportDate(row.returnedDate)}</td>
                     <td className="border-r border-black px-4 py-3 text-right font-semibold text-violet-700">{row.returnedWeight.toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-black text-emerald-700">{row.availableWeight.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-black text-emerald-700">
+                      <div>{row.availableWeight.toFixed(2)}</div>
+                      <div className="mt-1 whitespace-normal text-[11px] font-medium text-slate-500">
+                        {row.availabilityFormula}
+                      </div>
+                    </td>
                     <td className="border-r border-black px-4 py-3 text-right">{row.mrrQty.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right">{row.ageDays}</td>
                   </tr>
