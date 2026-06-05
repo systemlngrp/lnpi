@@ -58,12 +58,7 @@ export function OrderForm() {
 
   const resolveItemCompanyId = (item: Item | undefined) => {
     if (!item) return "";
-    const directCompanyId = String((item as any).companyId || "").trim();
-    if (directCompanyId && companies.some((company) => company.id === directCompanyId)) {
-      return directCompanyId;
-    }
-
-    const customerName = String((item as any).customerName || item.customer || "").trim().toLowerCase();
+    const customerName = String(item.customer || "").trim().toLowerCase();
     if (!customerName) return "";
     return companies.find((company) => String(company.name || "").trim().toLowerCase() === customerName)?.id || "";
   };
