@@ -38,6 +38,13 @@ function normalizeText(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
+function formatCurrency(value: number) {
+  return `₹${Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 export function ReelIssueReturnForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -616,7 +623,7 @@ export function ReelIssueReturnForm() {
                       <div className="w-32 space-y-1">
                         <label className="text-sm font-black uppercase tracking-wide text-indigo-700">Invoice Rate</label>
                         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-center font-black text-indigo-700 shadow-sm">
-                          â‚¹{(selectedIds[0] ? getReelInvoiceRate(selectedIds[0]) : 0).toLocaleString()}
+                          {formatCurrency(selectedIds[0] ? getReelInvoiceRate(selectedIds[0]) : 0)}
                         </div>
                       </div>
                     )}
@@ -662,7 +669,7 @@ export function ReelIssueReturnForm() {
                                     </td>
                                     <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800">{slip.ourReelNo}</td>
                                     <td className="border-t border-slate-200 px-4 py-3 text-sm text-slate-600">{slip.supplierReelNo || "-"}</td>
-                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">â‚¹{getReelInvoiceRate(slip.id).toLocaleString()}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">{formatCurrency(getReelInvoiceRate(slip.id))}</td>
                                     <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-emerald-700">{Number(slip.weightKg || 0).toFixed(2)}</td>
                                   </tr>
                                 ))
@@ -708,7 +715,7 @@ export function ReelIssueReturnForm() {
                         <div className="w-32 space-y-1">
                           <label className="text-sm font-black uppercase tracking-wide text-indigo-700">Invoice Rate</label>
                           <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-center font-black text-indigo-700 shadow-sm">
-                            â‚¹{(returnableReels[0] ? getReelInvoiceRate(returnableReels[0].packingSlipId) : 0).toLocaleString()}
+                            {formatCurrency(returnableReels[0] ? getReelInvoiceRate(returnableReels[0].packingSlipId) : 0)}
                           </div>
                         </div>
                       )}
@@ -742,7 +749,7 @@ export function ReelIssueReturnForm() {
                                   returnableReels.map((reelLine, index) => (
                                     <tr key={reelLine.packingSlipId} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
                                       <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800">{reelLine.ourReelNo}</td>
-                                      <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">â‚¹{getReelInvoiceRate(reelLine.packingSlipId).toLocaleString()}</td>
+                                      <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">{formatCurrency(getReelInvoiceRate(reelLine.packingSlipId))}</td>
                                       <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-amber-700">{Number(reelLine.weightKg || 0).toFixed(2)}</td>
                                       <td className="border-t border-slate-200 px-4 py-3 text-sm">
                                         <input
@@ -784,7 +791,7 @@ export function ReelIssueReturnForm() {
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Issue Value</div>
-                    <div className="text-xl font-black">â‚¹{consumptionSummary.issueVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <div className="text-xl font-black">{formatCurrency(consumptionSummary.issueVal)}</div>
                   </div>
                 </div>
 
@@ -795,7 +802,7 @@ export function ReelIssueReturnForm() {
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Return Value</div>
-                    <div className="text-xl font-black text-amber-400">â‚¹{consumptionSummary.returnVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <div className="text-xl font-black text-amber-400">{formatCurrency(consumptionSummary.returnVal)}</div>
                   </div>
                 </div>
 
@@ -806,7 +813,7 @@ export function ReelIssueReturnForm() {
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Net Consumption Value</div>
-                    <div className="text-2xl font-black text-indigo-300">â‚¹{consumptionSummary.netVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <div className="text-2xl font-black text-indigo-300">{formatCurrency(consumptionSummary.netVal)}</div>
                   </div>
                 </div>
               </div>
