@@ -29,7 +29,6 @@ export function OrderForm() {
   const [rate, setRate] = useState<string>("");
   const [orderBy, setOrderBy] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [companyError, setCompanyError] = useState("");
 
   const getNextVerbalPoNumber = (effectiveOrderDate: string, ignoreOrderId?: string | null) => {
     const fy = getFinancialYear(effectiveOrderDate);
@@ -58,17 +57,20 @@ export function OrderForm() {
     .map(c => ({ value: c.id, label: c.name }));
 
   const normalizeCompanyName = (value: string | null | undefined) => String(value || "").trim().toLowerCase();
+  const getItemCustomerName = (item: Item | undefined) =>
+    normalizeCompanyName((item as any)?.customerName || item?.customer || "");
 
   const resolveItemCompanyId = (item: Item | undefined) => {
     if (!item) return "";
-    const customerName = normalizeCompanyName((item as any).customerName || item.customer || "");
+    const customerName = getItemCustomerName(item);
     if (!customerName) return "";
     return companies.find((company) => normalizeCompanyName(company.name) === customerName)?.id || "";
   };
 
   const itemOptions = useMemo(() => {
+    const selectedCompanyName = normalizeCompanyName(companies.find((company) => company.id === companyId)?.name);
     return items
-      .filter((item) => !companyId || resolveItemCompanyId(item) === companyId)
+      .filter((item) => !companyId || getItemCustomerName(item) === selectedCompanyName)
       .slice()
       .sort((a,b) => (a.name||"").localeCompare(b.name||""))
       .map(i => ({ value: i.id, label: i.name }));
@@ -116,7 +118,6 @@ export function OrderForm() {
     setRate("");
     setOrderBy("");
     setRemarks("");
-    setCompanyError("");
   };
 
   useEffect(() => {
@@ -138,16 +139,6 @@ export function OrderForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !itemId || !qty) return;
-    const selectedItem = items.find((item) => item.id === itemId);
-    const resolvedCompanyId = resolveItemCompanyId(selectedItem);
-    if (!resolvedCompanyId) {
-      setCompanyError("Selected NPD item Customer Name does not match any Company Master record.");
-      return;
-    }
-    if (resolvedCompanyId !== companyId) {
-      setCompanyError("Selected item does not belong to the chosen Company Master record.");
-      return;
-    }
     if (!orderBy) {
       alert("Order By is mandatory.");
       return;
@@ -201,7 +192,6 @@ export function OrderForm() {
     if (id === itemId) return;
     if (!id) {
       setItemId("");
-      setCompanyError("");
       setErpCode("");
       setRate("");
       return;
@@ -209,12 +199,8 @@ export function OrderForm() {
     setItemId(id);
     const it = items.find(i => i.id === id);
     const linkedCompanyId = resolveItemCompanyId(it);
-    if (linkedCompanyId) {
+    if (!companyId && linkedCompanyId) {
       setCompanyId(linkedCompanyId);
-      setCompanyError("");
-    } else {
-      setCompanyId("");
-      setCompanyError("Selected NPD item Customer Name does not match any Company Master record.");
     }
     if (it && typeof it.erp !== 'undefined') setErpCode((it.erp || "").toString());
     else setErpCode("");
@@ -225,7 +211,6 @@ export function OrderForm() {
 
   const handleCompanyChange = (id: string) => {
     setCompanyId(id);
-    setCompanyError("");
     if (!id) {
       setItemId("");
       return;
@@ -291,7 +276,6 @@ export function OrderForm() {
                 options={companyOptions}
                 placeholder="Select Company..."
               />
-              {companyError ? <span className="text-xs font-semibold text-red-600">{companyError}</span> : null}
             </div>
 
             <div className="flex flex-col space-y-1">
