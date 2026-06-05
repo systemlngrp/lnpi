@@ -331,11 +331,22 @@ export function ReelIssueReturnForm() {
   };
 
   const updateReturnQty = (lineId: string, materialId: string, packingSlipId: string, value: string) => {
+    const currentReturnable = getReturnableReels(materialId);
+    const maxQty = Number(
+      currentReturnable.find((line) => line.packingSlipId === packingSlipId)?.weightKg || 0
+    );
+    const cleanedValue = String(value || "").replace(/[^0-9.]/g, "");
+    const numericValue = Number(cleanedValue || 0);
+    const normalizedValue =
+      cleanedValue === ""
+        ? ""
+        : String(Math.min(Math.max(Number.isFinite(numericValue) ? numericValue : 0, 0), maxQty));
+
     setReturnQtyDrafts((prev) => ({
       ...prev,
       [lineId]: {
         ...(prev[lineId] || {}),
-        [packingSlipId]: value,
+        [packingSlipId]: normalizedValue,
       },
     }));
   };
@@ -761,6 +772,9 @@ export function ReelIssueReturnForm() {
                                           onChange={(e) => updateReturnQty(line.id, line.materialId, reelLine.packingSlipId, e.target.value)}
                                           className="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-800 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-100"
                                         />
+                                        <div className="mt-1 text-[11px] font-medium text-slate-500">
+                                          Max {Number(reelLine.weightKg || 0).toFixed(2)} KG
+                                        </div>
                                       </td>
                                     </tr>
                                   ))
