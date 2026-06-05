@@ -66,8 +66,6 @@ export function OrderForm() {
     return companies.find((company) => normalizeCompanyName(company.name) === customerName)?.id || "";
   };
 
-  const derivedCompanyName = companies.find((company) => company.id === companyId)?.name || "";
-
   const itemOptions = useMemo(() => {
     return items
       .filter((item) => !companyId || resolveItemCompanyId(item) === companyId)
@@ -147,8 +145,7 @@ export function OrderForm() {
       return;
     }
     if (resolvedCompanyId !== companyId) {
-      setCompanyId(resolvedCompanyId);
-      setCompanyError("Company was corrected from the selected NPD item Customer Name.");
+      setCompanyError("Selected item does not belong to the chosen Company Master record.");
       return;
     }
     if (!orderBy) {
@@ -204,7 +201,6 @@ export function OrderForm() {
     if (id === itemId) return;
     if (!id) {
       setItemId("");
-      setCompanyId("");
       setCompanyError("");
       setErpCode("");
       setRate("");
@@ -224,6 +220,23 @@ export function OrderForm() {
     else setErpCode("");
     if (it && typeof it.rate !== "undefined" && it.rate !== null) {
       setRate(String(it.rate));
+    }
+  };
+
+  const handleCompanyChange = (id: string) => {
+    setCompanyId(id);
+    setCompanyError("");
+    if (!id) {
+      setItemId("");
+      return;
+    }
+    if (!itemId) return;
+    const selectedItem = items.find((item) => item.id === itemId);
+    const resolvedCompanyId = resolveItemCompanyId(selectedItem);
+    if (resolvedCompanyId !== id) {
+      setItemId("");
+      setErpCode("");
+      setRate("");
     }
   };
 
@@ -272,11 +285,11 @@ export function OrderForm() {
 
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Company Name</label>
-              <input
-                value={derivedCompanyName}
-                readOnly
-                placeholder="Select Item to derive company..."
-                className="border-2 border-black rounded p-2 bg-slate-100 text-slate-700"
+              <Select
+                value={companyId}
+                onChange={handleCompanyChange}
+                options={companyOptions}
+                placeholder="Select Company..."
               />
               {companyError ? <span className="text-xs font-semibold text-red-600">{companyError}</span> : null}
             </div>
