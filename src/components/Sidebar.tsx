@@ -84,7 +84,6 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { name: "Item Groups", href: "/masters/item-groups", icon: Layers },
       { name: "Material Groups", href: "/masters/material-groups", icon: Layers },
-      { name: "Items", href: "/masters/items", icon: Boxes },
       { name: "Material Master", href: "/masters/materials", icon: Boxes },
       { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
       { name: "States", href: "/masters/states", icon: Database },
