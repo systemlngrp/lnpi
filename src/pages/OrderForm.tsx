@@ -29,6 +29,7 @@ export function OrderForm() {
   const [rate, setRate] = useState<string>("");
   const [orderBy, setOrderBy] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [companyError, setCompanyError] = useState("");
 
   const getNextVerbalPoNumber = (effectiveOrderDate: string, ignoreOrderId?: string | null) => {
     const fy = getFinancialYear(effectiveOrderDate);
@@ -56,12 +57,16 @@ export function OrderForm() {
     .sort((a,b) => (a.name||"").localeCompare(b.name||""))
     .map(c => ({ value: c.id, label: c.name }));
 
+  const normalizeCompanyName = (value: string | null | undefined) => String(value || "").trim().toLowerCase();
+
   const resolveItemCompanyId = (item: Item | undefined) => {
     if (!item) return "";
-    const customerName = String((item as any).customerName || item.customer || "").trim().toLowerCase();
+    const customerName = normalizeCompanyName((item as any).customerName || item.customer || "");
     if (!customerName) return "";
-    return companies.find((company) => String(company.name || "").trim().toLowerCase() === customerName)?.id || "";
+    return companies.find((company) => normalizeCompanyName(company.name) === customerName)?.id || "";
   };
+
+  const derivedCompanyName = companies.find((company) => company.id === companyId)?.name || "";
 
   const itemOptions = useMemo(() => {
     return items
@@ -113,6 +118,7 @@ export function OrderForm() {
     setRate("");
     setOrderBy("");
     setRemarks("");
+    setCompanyError("");
   };
 
   useEffect(() => {
@@ -134,6 +140,17 @@ export function OrderForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !itemId || !qty) return;
+    const selectedItem = items.find((item) => item.id === itemId);
+    const resolvedCompanyId = resolveItemCompanyId(selectedItem);
+    if (!resolvedCompanyId) {
+      setCompanyError("Selected NPD item Customer Name does not match any Company Master record.");
+      return;
+    }
+    if (resolvedCompanyId !== companyId) {
+      setCompanyId(resolvedCompanyId);
+      setCompanyError("Company was corrected from the selected NPD item Customer Name.");
+      return;
+    }
     if (!orderBy) {
       alert("Order By is mandatory.");
       return;
@@ -185,10 +202,24 @@ export function OrderForm() {
   // Auto-fill ERP when item selected
   const handleItemChange = (id: string) => {
     if (id === itemId) return;
+    if (!id) {
+      setItemId("");
+      setCompanyId("");
+      setCompanyError("");
+      setErpCode("");
+      setRate("");
+      return;
+    }
     setItemId(id);
     const it = items.find(i => i.id === id);
     const linkedCompanyId = resolveItemCompanyId(it);
-    if (linkedCompanyId) setCompanyId(linkedCompanyId);
+    if (linkedCompanyId) {
+      setCompanyId(linkedCompanyId);
+      setCompanyError("");
+    } else {
+      setCompanyId("");
+      setCompanyError("Selected NPD item Customer Name does not match any Company Master record.");
+    }
     if (it && typeof it.erp !== 'undefined') setErpCode((it.erp || "").toString());
     else setErpCode("");
     if (it && typeof it.rate !== "undefined" && it.rate !== null) {
@@ -241,7 +272,13 @@ export function OrderForm() {
 
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Company Name</label>
-              <Select value={companyId} onChange={setCompanyId} options={companyOptions} placeholder="Select Company..." />
+              <input
+                value={derivedCompanyName}
+                readOnly
+                placeholder="Select Item to derive company..."
+                className="border-2 border-black rounded p-2 bg-slate-100 text-slate-700"
+              />
+              {companyError ? <span className="text-xs font-semibold text-red-600">{companyError}</span> : null}
             </div>
 
             <div className="flex flex-col space-y-1">
