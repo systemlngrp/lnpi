@@ -43,11 +43,26 @@ function getReelDisplayName(erpCode: string | number, size: number, uom: string,
 
 function getNextNumericErpCode(materials: Material[]) {
   const numericValues = materials
+    .filter((material) => material.type === "Reel")
     .map((material) => Number(material.erpCode))
     .filter((value) => Number.isFinite(value) && value > 0);
 
   if (numericValues.length === 0) return "1";
   return String(Math.max(...numericValues) + 1);
+}
+
+function getNextOtherErpCode(materials: Material[]) {
+  const otherValues = materials
+    .filter((material) => material.type === "Other")
+    .map((material) => String(material.erpCode || "").trim().toUpperCase())
+    .map((erpCode) => {
+      const match = erpCode.match(/^OTH(\d+)$/);
+      return match ? Number(match[1]) : NaN;
+    })
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  const nextValue = otherValues.length === 0 ? 100001 : Math.max(...otherValues) + 1;
+  return `OTH${nextValue}`;
 }
 
 function createInitialFormState(materials: Material[], reelGroupId = "") {
@@ -104,13 +119,21 @@ export function Materials() {
   };
 
   const syncReelDefaults = (nextType: MaterialType, current = formData) => {
-    if (nextType !== "Reel") return current;
+    if (nextType === "Reel") {
+      return {
+        ...current,
+        type: "Reel" as MaterialType,
+        uom: "CM",
+        materialGroupId: reelGroup?.id || current.materialGroupId,
+        erpCode: editingId ? current.erpCode : getNextNumericErpCode(materials),
+      };
+    }
+
     return {
       ...current,
-      type: "Reel" as MaterialType,
+      type: "Other" as MaterialType,
       uom: "CM",
-      materialGroupId: reelGroup?.id || current.materialGroupId,
-      erpCode: editingId ? current.erpCode : current.erpCode || getNextNumericErpCode(materials),
+      erpCode: editingId ? current.erpCode : getNextOtherErpCode(materials),
     };
   };
 
@@ -197,7 +220,7 @@ export function Materials() {
     event.preventDefault();
 
     const normalizedType = formData.type;
-    const erpCode = String(formData.erpCode || "").trim() || (normalizedType === "Reel" ? getNextNumericErpCode(materials) : "");
+    const erpCode = String(formData.erpCode || "").trim() || (normalizedType === "Reel" ? getNextNumericErpCode(materials) : getNextOtherErpCode(materials));
     const uom = "CM";
     const timestamp = new Date().toISOString();
 
@@ -431,7 +454,7 @@ export function Materials() {
           const type = rawType === "Reel" ? "Reel" : rawType === "Other" ? "Other" : "";
           if (!type) throw new Error(`Row ${index + 2}: Type must be Reel or Other.`);
 
-          const erpCode = String(row["ERP Code"] || "").trim() || (type === "Reel" ? getNextNumericErpCode(nextMaterials) : "");
+          const erpCode = String(row["ERP Code"] || "").trim() || (type === "Reel" ? getNextNumericErpCode(nextMaterials) : getNextOtherErpCode(nextMaterials));
           const itemName = String(row["Item Name"] || "").trim();
           const groupName = String(row["Item Group"] || "").trim();
           const unit = String(row["Unit"] || "CM").trim() || "CM";
