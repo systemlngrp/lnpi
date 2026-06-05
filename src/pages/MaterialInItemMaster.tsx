@@ -16,6 +16,7 @@ export function MaterialInItemMaster() {
   const [editQty, setEditQty] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("All");
 
   const handleEditClick = (lineId: string, currentQty: number) => {
     setEditingLineId(lineId);
@@ -62,6 +63,8 @@ export function MaterialInItemMaster() {
   const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
 
   // Flatten the data for display
+  const statusOptions = ["All", ...Array.from(new Set(materialIn.map((entry) => entry.status).filter(Boolean)))];
+
   const allLines = materialIn.flatMap(m => 
     m.lines.map(line => ({
       ...line,
@@ -75,26 +78,42 @@ export function MaterialInItemMaster() {
   ).filter(line => {
     const itemName = materials.find(i => i.id === line.itemId)?.name || items.find(i => i.id === line.itemId)?.name || "";
     const supplierName = getSupplierName(line.parentSupplierId);
-    return itemName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           line.parentTransactionNo.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      line.parentTransactionNo.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "All" || line.parentStatus === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <div className="flex items-center gap-4">
-          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material In Item Master</h2>
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material In</h2>
         </div>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text"
-            placeholder="Search items, trn, supplier..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-          />
+        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text"
+              placeholder="Search items, trn, supplier..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full rounded border border-black px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-52"
+          >
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">

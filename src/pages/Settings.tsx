@@ -102,6 +102,8 @@ export function SettingsPage() {
   const [items] = useData<Item>("items", []);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [designationDraft, setDesignationDraft] = useState<string[]>([]);
+  const [newDesignation, setNewDesignation] = useState("");
   const [organizationDraft, setOrganizationDraft] = useState({
     organizationName: "",
     organizationAddress: "",
@@ -131,6 +133,23 @@ export function SettingsPage() {
   useEffect(() => {
     setMandatoryDraft(parseMandatoryMachinesByType(currentSetting));
   }, [currentSetting?.mandatoryMachinesByType]);
+
+  useEffect(() => {
+    if (!currentSetting?.designations) {
+      setDesignationDraft([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(currentSetting.designations);
+      setDesignationDraft(
+        Array.isArray(parsed)
+          ? parsed.map((value) => String(value || "").trim()).filter(Boolean)
+          : []
+      );
+    } catch {
+      setDesignationDraft([]);
+    }
+  }, [currentSetting?.designations]);
 
   const fyOptions = useMemo(() => {
     const now = new Date();
@@ -252,6 +271,7 @@ export function SettingsPage() {
         productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
         realizationPerKgTargets: currentSetting?.realizationPerKgTargets || JSON.stringify([]),
         mandatoryMachinesByType: currentSetting?.mandatoryMachinesByType || JSON.stringify({}),
+        designations: currentSetting?.designations || JSON.stringify([]),
         organizationName: currentSetting?.organizationName || "",
         organizationAddress: currentSetting?.organizationAddress || "",
         organizationGstDetails: currentSetting?.organizationGstDetails || "",
@@ -454,6 +474,108 @@ export function SettingsPage() {
               className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all"
             >
               {saving ? <Spinner size={18} className="text-white" /> : "Save Realization Setup"}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 border-b border-dashed border-black pb-5">
+          <div>
+            <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Designation Setup</h3>
+            <p className="text-sm text-black leading-6">
+              Maintain the designation list used in the Users form.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 md:flex-row">
+            <input
+              type="text"
+              value={newDesignation}
+              onChange={(e) => setNewDesignation(e.target.value)}
+              disabled={loading || saving}
+              placeholder="Enter designation"
+              className="flex-1 rounded border-2 border-black p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const trimmed = newDesignation.trim();
+                if (!trimmed) return;
+                if (designationDraft.some((value) => value.toLowerCase() === trimmed.toLowerCase())) {
+                  alert("Designation already exists.");
+                  return;
+                }
+                setDesignationDraft((prev) => [...prev, trimmed]);
+                setNewDesignation("");
+              }}
+              disabled={loading || saving}
+              className="rounded border-2 border-black bg-white px-4 py-2 font-bold text-black hover:bg-slate-50"
+            >
+              Add Designation
+            </button>
+          </div>
+
+          <div className="overflow-x-auto rounded border border-black">
+            <table className="min-w-full border-collapse border border-black">
+              <thead className="bg-slate-100">
+                <tr className="divide-x divide-black">
+                  <th className="border border-black px-4 py-2 text-left text-xs font-bold uppercase text-black">Designation</th>
+                  <th className="border border-black px-4 py-2 text-right text-xs font-bold uppercase text-black">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {designationDraft.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="border border-black px-4 py-4 text-center text-sm text-slate-500">
+                      No designations configured.
+                    </td>
+                  </tr>
+                ) : (
+                  designationDraft.map((designation, index) => (
+                    <tr key={`${designation}-${index}`} className="divide-x divide-black">
+                      <td className="border border-black px-4 py-2">
+                        <input
+                          type="text"
+                          value={designation}
+                          onChange={(e) =>
+                            setDesignationDraft((prev) =>
+                              prev.map((value, valueIndex) => (valueIndex === index ? e.target.value : value))
+                            )
+                          }
+                          disabled={loading || saving}
+                          className="w-full rounded border border-black px-2 py-1 text-sm text-black"
+                        />
+                      </td>
+                      <td className="border border-black px-4 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setDesignationDraft((prev) => prev.filter((_, valueIndex) => valueIndex !== index))}
+                          disabled={loading || saving}
+                          className="rounded border border-black bg-white px-3 py-1 text-xs font-bold text-black hover:bg-slate-50"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                const cleaned = Array.from(
+                  new Set(designationDraft.map((value) => value.trim()).filter(Boolean))
+                ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+                setDesignationDraft(cleaned);
+                void handleChange({ designations: JSON.stringify(cleaned) });
+              }}
+              disabled={loading || saving}
+              className="bg-indigo-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all disabled:opacity-50"
+            >
+              {saving ? <Spinner size={18} className="text-white" /> : "Save Designations"}
             </button>
           </div>
         </div>

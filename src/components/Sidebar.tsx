@@ -84,8 +84,6 @@ export const NAVIGATION: NavGroup[] = [
     section: "Masters",
     color: "bg-indigo-700",
     items: [
-      { name: "Item Groups", href: "/masters/item-groups", icon: Layers },
-      { name: "Material Groups", href: "/masters/material-groups", icon: Layers },
       { name: "Material Master", href: "/masters/materials", icon: Boxes },
       { name: "Suppliers", href: "/masters/suppliers", icon: UserCog },
       { name: "States", href: "/masters/states", icon: Database },
@@ -105,7 +103,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-slate-800",
     items: [
       { name: "Material In Form", href: "/material-in/form", icon: ClipboardList },
-      { name: "Item Master View", href: "/material-in/item-master", icon: BarChart3 },
+      { name: "Material In", href: "/material-in/item-master", icon: BarChart3 },
     ],
   },
   {
@@ -123,7 +121,7 @@ export const NAVIGATION: NavGroup[] = [
     section: "Purchase Order",
     color: "bg-cyan-700",
     items: [
-      { name: "Pending Indent Lines", href: "/purchase-orders/pending-indent-lines", icon: Activity, countKey: "/purchase-orders/pending-indent-lines" },
+      { name: "Pending PO Items", href: "/purchase-orders/pending-indent-lines", icon: Activity, countKey: "/purchase-orders/pending-indent-lines" },
       { name: "All", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
       { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
       { name: "Approved", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
@@ -150,10 +148,10 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "Material Movement",
+    section: "Material Issue and Return",
     color: "bg-lime-700",
     items: [
-      { name: "Material issue and return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
+      { name: "Material Issue and Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
       { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
       { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
       { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
@@ -193,7 +191,6 @@ export const NAVIGATION: NavGroup[] = [
     section: "Production Processing",
     color: "bg-teal-800",
     items: [
-      { name: "Reporting Form", href: "/production-processing/form", icon: ClipboardList },
       { name: "Reporting Master", href: "/production-processing/master", icon: Database },
       { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
     ],

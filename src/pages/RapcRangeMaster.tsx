@@ -147,26 +147,26 @@ export function RapcRangeMaster() {
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search ranges..." />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <table className="min-w-full divide-y divide-black">
+        <table className="min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-100">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">From</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">To</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">RAPC Range</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider md:block hidden">Updated</th>
-              <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
+            <tr className="divide-x divide-black">
+              <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">From</th>
+              <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">To</th>
+              <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">RAPC Range</th>
+              <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider md:block hidden">Updated</th>
+              <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-black">
             {filteredRanges.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{row.from}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{row.to}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{row.rapcRange}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 md:block hidden">
+              <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
+                <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{row.from}</td>
+                <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.to}</td>
+                <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.rapcRange}</td>
+                <td className="border border-black px-6 py-4 whitespace-nowrap text-xs text-slate-500 md:block hidden">
                   {row.updatedBy}<br />{new Date(row.updateTimestamp || "").toLocaleString()}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <td className="border border-black px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
                     onClick={() => {
                       setFromValue(row.from);

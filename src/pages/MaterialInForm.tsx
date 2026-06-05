@@ -1013,7 +1013,9 @@ export function MaterialInForm() {
           ) : null}
           <div className="flex flex-wrap gap-4 items-end mb-4 bg-slate-50 p-4 rounded border border-black">
             <div className="flex flex-col space-y-1 w-full md:w-80">
-              <label className="text-sm font-bold text-black">{isFgType ? "FG Item" : "Material"}</label>
+              <label className="text-sm font-bold text-black">
+                {isFgType ? "FG Item" : "Material"} <span className="text-red-600">*</span>
+              </label>
               <Select options={materialOptions} value={currentItemId} onChange={setCurrentItemId} placeholder={isFgType ? "Select Item..." : "Select Material..."} />
             </div>
             {mrrType === "Others" || isFgType ? (

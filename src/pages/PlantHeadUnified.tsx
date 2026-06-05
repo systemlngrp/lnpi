@@ -40,6 +40,10 @@ export function PlantHeadUnified() {
 
   const totalApprovals = counts["material-in"] + counts["orders"] + counts["consumption"];
   const showSelection = activeTab !== "all";
+  const showMaterialInSection = (activeTab === "material-in" || activeTab === "all") && counts["material-in"] > 0;
+  const showOrdersSection = (activeTab === "orders" || activeTab === "all") && counts["orders"] > 0;
+  const showConsumptionSection = (activeTab === "consumption" || activeTab === "all") && counts["consumption"] > 0;
+  const showEmptyState = !showMaterialInSection && !showOrdersSection && !showConsumptionSection;
 
   const toggleSelectAll = (ids: string[]) => {
     if (selectedIds.size === ids.length) {
@@ -237,7 +241,7 @@ export function PlantHeadUnified() {
           </div>
         )}
 
-        {(activeTab === "material-in" || activeTab === "all") && (
+        {showMaterialInSection && (
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Material In ({counts["material-in"]})</span>
@@ -332,13 +336,12 @@ export function PlantHeadUnified() {
                     </td>
                   </tr>
                 ))}
-                {counts["material-in"] === 0 && <NoPendingRows colSpan={showSelection ? 6 : 5} />}
               </tbody>
             </table>
           </div>
         )}
 
-        {(activeTab === "orders" || activeTab === "all") && (
+        {showOrdersSection && (
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Orders ({counts["orders"]})</span>
@@ -371,7 +374,6 @@ export function PlantHeadUnified() {
                   </div>
                 </div>
               ))}
-              {counts["orders"] === 0 ? <div className="p-6 text-center text-black font-bold border-2 border-dashed border-black">No pending orders.</div> : null}
             </div>
 
             <table className="hidden md:table min-w-full divide-y divide-black">
@@ -428,13 +430,12 @@ export function PlantHeadUnified() {
                       </td>
                     </tr>
                   ))}
-                {counts["orders"] === 0 && <NoPendingRows colSpan={showSelection ? 7 : 6} />}
               </tbody>
             </table>
           </div>
         )}
 
-        {(activeTab === "consumption" || activeTab === "all") && (
+        {showConsumptionSection && (
           <div className="p-0 overflow-x-auto">
             <div className="p-4 flex justify-between items-center bg-slate-50 border-b border-black">
               <span className="font-bold text-sm uppercase text-slate-600">Pending Consumption ({counts["consumption"]})</span>
@@ -461,7 +462,6 @@ export function PlantHeadUnified() {
                   </div>
                 </div>
               ))}
-              {counts["consumption"] === 0 ? <div className="p-6 text-center text-black font-bold border-2 border-dashed border-black">No pending consumption approvals.</div> : null}
             </div>
 
             <table className="hidden md:table min-w-full divide-y divide-black">
@@ -510,12 +510,15 @@ export function PlantHeadUnified() {
                       </td>
                     </tr>
                   ))}
-                {counts["consumption"] === 0 && <NoPendingRows colSpan={showSelection ? 7 : 6} />}
               </tbody>
             </table>
           </div>
         )}
-
+        {showEmptyState ? (
+          <div className="p-8 text-center text-sm font-bold uppercase tracking-wide text-slate-500">
+            No pending approvals found.
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -590,12 +593,3 @@ function CancelButton({ canceling, submitting, onClick }: { canceling: boolean; 
   );
 }
 
-function NoPendingRows({ colSpan }: { colSpan: number }) {
-  return (
-    <tr>
-      <td colSpan={colSpan} className="px-4 py-8 text-center text-slate-400 font-medium italic text-sm">
-        No pending transactions in this category.
-      </td>
-    </tr>
-  );
-}

@@ -1,17 +1,34 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { User } from "../types";
-import { Plus, Edit, Trash2, Search } from "lucide-react";
+import { Setting, User } from "../types";
+import { Plus, Edit, Trash2, Search, Eye, EyeOff } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { NAVIGATION } from "../components/Sidebar";
 
+function parseDesignations(setting?: Setting) {
+  if (!setting?.designations) return [];
+  try {
+    const parsed = JSON.parse(setting.designations);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  } catch {
+    return [];
+  }
+}
+
 export function Users() {
   const [users, setUsers] = useData<User>("users", []);
+  const [settings] = useData<Setting>("settings", []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState("");
+  const designationOptions = useMemo(() => parseDesignations(settings[0]), [settings]);
   const allMenuItems = useMemo(() => {
     return NAVIGATION.map((group) => ({
       section: group.section,
@@ -25,6 +42,7 @@ export function Users() {
     mobile: string;
     email: string;
     password: string;
+    designation: string;
     role: "Admin" | "Employee";
     status: "Active" | "Inactive";
     menuAccess: string[];
@@ -34,6 +52,7 @@ export function Users() {
     mobile: "",
     email: "",
     password: "",
+    designation: "",
     role: "Employee",
     status: "Active",
     menuAccess: ["/"],
@@ -41,18 +60,21 @@ export function Users() {
 
   const handleCreateNew = () => {
     setEditingId(null);
-    setFormData({ userId: "", name: "", mobile: "", email: "", password: "", role: "Employee", status: "Active", menuAccess: ["/"] });
+    setShowPassword(false);
+    setFormData({ userId: "", name: "", mobile: "", email: "", password: "", designation: "", role: "Employee", status: "Active", menuAccess: ["/"] });
     setIsFormOpen(true);
   };
 
   const handleEdit = (user: User) => {
     setEditingId(user.id);
+    setShowPassword(false);
     setFormData({
       userId: user.userId,
       name: user.name,
       mobile: user.mobile,
-      email: user.email,
+      email: user.email || "",
       password: "",
+      designation: user.designation || "",
       role: user.role || "Employee",
       status: user.status || "Active",
       menuAccess: Array.isArray(user.menuAccess) ? user.menuAccess : ["/"],
@@ -74,6 +96,11 @@ export function Users() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.userId.trim()) {
+      alert("User ID is required.");
+      return;
+    }
     
     const isDuplicate = users.some(u => 
       u.userId.toLowerCase() === formData.userId.trim().toLowerCase() && u.id !== editingId
@@ -96,9 +123,22 @@ export function Users() {
         updateTimestamp: new Date().toISOString()
       };
 
-      const payload: any = { ...formData };
+      const payload: any = {
+        ...formData,
+        userId: formData.userId.trim(),
+        name: formData.name.trim(),
+        mobile: formData.mobile.trim(),
+        email: formData.email.trim(),
+        designation: formData.designation.trim(),
+      };
       if (editingId && !String(payload.password || "").trim()) {
         delete payload.password;
+      }
+      if (!payload.email) {
+        delete payload.email;
+      }
+      if (!payload.designation) {
+        delete payload.designation;
       }
 
       if (editingId) {
@@ -119,7 +159,8 @@ export function Users() {
   const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.designation || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.mobile.includes(searchTerm)
   );
 
@@ -229,18 +270,32 @@ export function Users() {
                 />
               </div>
               <div className="flex flex-col space-y-1">
-                <label className="font-bold text-black text-sm">Email *</label>
+                <label className="font-bold text-black text-sm">Email</label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
                   className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col space-y-1">
+                <label className="font-bold text-black text-sm">Designation</label>
+                <select
+                  value={formData.designation}
+                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                >
+                  <option value="">{designationOptions.length === 0 ? "No designations configured" : "Select designation"}</option>
+                  {designationOptions.map((designation) => (
+                    <option key={designation} value={designation}>
+                      {designation}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="flex flex-col space-y-1">
                 <label className="font-bold text-black text-sm">Role *</label>
                 <select
@@ -267,13 +322,23 @@ export function Users() {
 
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black text-sm">{editingId ? "Set/Reset Password" : "Password *"}</label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required={!editingId}
-                className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  required={!editingId}
+                  className="w-full border-2 border-black rounded p-3 pr-12 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-700 hover:text-black"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <div className="border-2 border-black rounded p-3 bg-slate-50">
@@ -409,7 +474,9 @@ export function Users() {
                              </div>
                         </div>
                         <div className="text-xs font-black text-slate-500 uppercase">Contact</div>
-                        <div className="text-sm">{user.mobile} | {user.email}</div>
+                        <div className="text-sm">{user.mobile} | {user.email || "-"}</div>
+                        <div className="text-xs font-black text-slate-500 uppercase">Designation</div>
+                        <div className="text-sm">{user.designation || "-"}</div>
                     </div>
                 ))}
             </div>
@@ -421,6 +488,7 @@ export function Users() {
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Name</th>
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Role</th>
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Status</th>
+                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Designation</th>
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Mobile</th>
                   <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Email</th>
                   <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
@@ -429,7 +497,7 @@ export function Users() {
               <tbody className="divide-y divide-black bg-white">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No users found.</td>
+                    <td colSpan={8} className="px-6 py-8 text-center text-black font-medium">No users found.</td>
                   </tr>
                 ) : (
                   filteredUsers.sort((a, b) => {
@@ -442,8 +510,9 @@ export function Users() {
                       <td className="px-6 py-4 text-sm text-black border border-black">{user.name}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{user.role || "Employee"}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{user.status || "Active"}</td>
+                      <td className="px-6 py-4 text-sm text-black border border-black">{user.designation || "-"}</td>
                       <td className="px-6 py-4 text-sm text-black border border-black">{user.mobile}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{user.email}</td>
+                      <td className="px-6 py-4 text-sm text-black border border-black">{user.email || "-"}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
                         <button
                           onClick={() => handleEdit(user)}

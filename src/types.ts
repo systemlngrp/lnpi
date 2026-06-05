@@ -459,8 +459,9 @@ export interface User {
   userId: string;
   name: string;
   mobile: string;
-  email: string;
+  email?: string;
   password?: string;
+  designation?: string;
   role?: "Admin" | "Employee";
   status?: "Active" | "Inactive";
   menuAccess?: string[];
@@ -701,6 +702,7 @@ export interface Setting {
   productionFormVisibleColumns?: string;
   realizationPerKgTargets?: string;
   mandatoryMachinesByType?: string;
+  designations?: string;
   organizationName?: string;
   organizationAddress?: string;
   organizationGstDetails?: string;
