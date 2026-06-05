@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Edit, Plus, Trash2, Search, Upload, Download } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, Supplier } from "../types";
+import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, Supplier, UnitMaster } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
@@ -10,7 +10,6 @@ import * as XLSX from "xlsx";
 type MaterialType = Material["type"];
 type ActiveValue = NonNullable<Material["active"]>;
 
-const UNIT_OPTIONS = [{ value: "CM", label: "CM" }];
 const TYPE_OPTIONS = [
   { value: "Reel", label: "Reel" },
   { value: "Other", label: "Other" },
@@ -86,6 +85,7 @@ export function Materials() {
   const navigate = useNavigate();
   const [materials, setMaterials] = useData<Material>("materials", []);
   const [materialGroups, setMaterialGroups] = useData<MaterialGroup>("material-groups", []);
+  const [units, setUnits] = useData<UnitMaster>("units", []);
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
@@ -106,16 +106,30 @@ export function Materials() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [savingGroup, setSavingGroup] = useState(false);
+  const [showUnitModal, setShowUnitModal] = useState(false);
+  const [newUnitName, setNewUnitName] = useState("");
+  const [savingUnit, setSavingUnit] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   const [formData, setFormData] = useState(() => createInitialFormState(materials, reelGroup?.id || ""));
+
+  const unitOptions = useMemo(
+    () =>
+      units
+        .filter((unit) => unit.active !== "No")
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((unit) => ({ value: unit.name, label: unit.name })),
+    [units]
+  );
 
   const resetForm = (nextMaterials = materials, nextReelGroupId = reelGroup?.id || "") => {
     setFormData(createInitialFormState(nextMaterials, nextReelGroupId));
     setEditingId(null);
     setIsFormOpen(false);
     setShowGroupModal(false);
+    setShowUnitModal(false);
     setNewGroupName("");
+    setNewUnitName("");
   };
 
   const syncReelDefaults = (nextType: MaterialType, current = formData) => {
@@ -216,12 +230,47 @@ export function Materials() {
     }
   };
 
+  const handleCreateUnit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newUnitName.trim()) return;
+
+    const normalizedName = newUnitName.trim();
+    const existing = units.find((unit) => normalizeText(unit.name) === normalizedName.toLowerCase());
+    if (existing) {
+      setFormData((prev) => ({ ...prev, uom: existing.name }));
+      setShowUnitModal(false);
+      setNewUnitName("");
+      return;
+    }
+
+    setSavingUnit(true);
+    const timestamp = new Date().toISOString();
+    const nextUnit: UnitMaster = {
+      id: crypto.randomUUID(),
+      name: normalizedName,
+      active: "Yes",
+      updatedBy: "System User",
+      updateTimestamp: timestamp,
+    };
+
+    try {
+      await setUnits([...units, nextUnit]);
+      setFormData((prev) => ({ ...prev, uom: nextUnit.name }));
+      setShowUnitModal(false);
+      setNewUnitName("");
+    } catch (error) {
+      console.error("Failed to save unit:", error);
+    } finally {
+      setSavingUnit(false);
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     const normalizedType = formData.type;
     const erpCode = String(formData.erpCode || "").trim() || (normalizedType === "Reel" ? getNextNumericErpCode(materials) : getNextOtherErpCode(materials));
-    const uom = "CM";
+    const uom = String(formData.uom || "").trim() || "CM";
     const timestamp = new Date().toISOString();
 
     const size = parseNumericInput(formData.size);
@@ -757,7 +806,7 @@ export function Materials() {
                         type: nextType,
                         erpCode: prev.erpCode || "",
                         name: prev.type === "Reel" ? "" : prev.name,
-                        uom: "CM",
+                        uom: prev.uom || "CM",
                         materialGroupId: "",
                         size: "",
                         gsm: "",
@@ -811,17 +860,13 @@ export function Materials() {
                 <>
                   <div className="space-y-2">
                     <label className="text-blue-700 font-bold">Unit</label>
-                    <select
+                    <Select
                       value={formData.uom}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, uom: e.target.value }))}
-                      className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                    >
-                      {UNIT_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => setFormData((prev) => ({ ...prev, uom: value }))}
+                      options={unitOptions}
+                      placeholder="Select unit"
+                      onAdd={() => setShowUnitModal(true)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-blue-700 font-bold">
@@ -1119,6 +1164,40 @@ export function Materials() {
                 </button>
                 <button type="submit" disabled={savingGroup} className="px-5 py-2 bg-indigo-600 text-white rounded font-bold border border-black disabled:opacity-50">
                   {savingGroup ? <Spinner size={16} className="text-white" /> : "Save Group"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showUnitModal ? (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-md rounded-xl border-2 border-black p-6 shadow-2xl">
+            <h3 className="text-lg font-black text-black uppercase mb-4">Create Unit</h3>
+            <form onSubmit={handleCreateUnit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="font-bold text-black">Unit Name *</label>
+                <input
+                  value={newUnitName}
+                  onChange={(e) => setNewUnitName(e.target.value)}
+                  autoFocus
+                  className="w-full border-2 border-black rounded p-3 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUnitModal(false);
+                    setNewUnitName("");
+                  }}
+                  className="px-5 py-2 border-2 border-black rounded font-bold text-black"
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={savingUnit} className="px-5 py-2 bg-indigo-600 text-white rounded font-bold border border-black disabled:opacity-50">
+                  {savingUnit ? <Spinner size={16} className="text-white" /> : "Save Unit"}
                 </button>
               </div>
             </form>
