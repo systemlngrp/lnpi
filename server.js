@@ -34,6 +34,195 @@ app.get("/uploads/:filename", async (req, res, next) => {
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";
 const AUTH_TTL_SECONDS = Number(process.env.AUTH_TTL_SECONDS || 60 * 60 * 24);
+const NPD_SYNC_SECRET = String(process.env.NPD_SYNC_SECRET || "").trim();
+const NPD_SYNC_ALLOWED_TAB = String(process.env.NPD_SYNC_ALLOWED_TAB || "NPD").trim();
+const NPD_SYNC_HEADER_MAP = {
+  "NPD ID": "npdId",
+  Timestamp: "timestamp",
+  Date: "date",
+  "BOX TYPE": "boxType",
+  "Company Id": "companyId",
+  "Customer Name": "customerName",
+  "Contact Person": "contactPerson",
+  "Contact Number": "contactNumber",
+  Email: "email",
+  "Item Name": "itemName",
+  ERP: "erp",
+  Rate: "rate",
+  UOM: "uom",
+  "Flute Type": "fluteType",
+  Ply: "ply",
+  "No Of Parts": "noOfParts",
+  "No Of Ups": "noOfUps",
+  "Id to Od 2": "idToOd2",
+  "Open Length": "openLength",
+  "Open Width": "openWidth",
+  "Length (ID)": "lengthId",
+  "Breadth (ID)": "breadthId",
+  "Height (ID)": "heightId",
+  "Length (OD)": "lengthOd",
+  "Breadth (OD)": "breadthOd",
+  "Height (OD)": "heightOd",
+  "PS-L1": "psL1",
+  "PS L1-BF": "psL1Bf",
+  "PS F1": "psF1",
+  "PS F1-BF": "psF1Bf",
+  "PS L2": "psL2",
+  "PS L2-BF": "psL2Bf",
+  "PS F2": "psF2",
+  "PS F2-BF": "psF2Bf",
+  "PS L3": "psL3",
+  "PS L3-BF": "psL3Bf",
+  "Material Weight inside in One Box": "materialWeightInsideInOneBox",
+  "Stack Height": "stackHeight",
+  "Safety Factor": "safetyFactor",
+  "CS (Kg) Std": "csKgStd",
+  "CS (Kg) Target": "csKgTarget",
+  "BS (kg/cm2) Std": "bsKgCm2Std",
+  "BS (kg/cm2) Calculated": "bsKgCm2Calculated",
+  "Take up Factor": "takeUpFactor",
+  UPS: "ups",
+  RAPC: "rapc",
+  Opening: "opening",
+  Receipt: "receipt",
+  Production: "production",
+  Invoiced: "invoiced",
+  Balance: "balance",
+  "GST Rate": "gstRate",
+  Part: "part",
+  "Cutting with Trimming": "cuttingWithTrimming",
+  "Standard Weight(gms)": "standardWeightGms",
+  "Calculated Weight per Box": "calculatedWeightPerBox",
+  "Standard B GSM": "standardBGsm",
+  "Calculated B GSM": "calculatedBGsm",
+  "Stitching/Gluing": "stitchingGluing",
+  RSL1: "rsl1",
+  "RSL1-BF": "rsl1Bf",
+  RSF2: "rsf2",
+  "RSF2-BF": "rsf2Bf",
+  RSL3: "rsl3",
+  "RSL3-BF": "rsl3Bf",
+  RSF4: "rsf4",
+  "RSF4-BF": "rsf4Bf",
+  RSL5: "rsl5",
+  "RSF5-BF": "rsf5Bf",
+  "Flap Size": "flapSize",
+  "Deckle Size": "deckleSize",
+  "Top Paper Shade": "topPaperShade",
+  "Color Id 1": "colorId1",
+  "Printing Colour 1": "printingColour1",
+  "Color Id 2": "colorId2",
+  "Printing Colour 2": "printingColour2",
+  "PLAIN BOX": "plainBox",
+  "Whether Plate Applicable": "whetherPlateApplicable",
+  "Whether PHP Applicable": "whetherPhpApplicable",
+  "Dimensions Approved": "dimensionsApproved",
+  "Artwork Approved": "artworkApproved",
+  "Artwork Upload": "artworkUpload",
+  URL: "url",
+  "PO Date": "poDate",
+  "PO Number": "poNumber",
+  Supplier: "supplier",
+  "Printing Block Item Name": "printingBlockItemName",
+  "Block Size (Sq Inch)": "blockSizeSqInch",
+  "Approved Rate of Supplier": "approvedRateOfSupplier",
+  "PO PDF": "poPdf",
+  "Chargeable to Customer": "chargeableToCustomer",
+  Amount: "amount",
+  "PO PDF Approval": "poPdfApproval",
+  "Email Sent to Supplier": "emailSentToSupplier",
+  "Email Timestamp": "emailTimestamp",
+  "Invoice No.": "invoiceNo",
+  "Invoice Date": "invoiceDate",
+  "Invoice Amount": "invoiceAmount",
+  "GE No.": "geNo",
+  "MRR No.": "mrrNo",
+  "Date of Receipt": "dateOfReceipt",
+  "Supplier Invoice No.(MRR)": "supplierInvoiceNoMrr",
+  "Item Value (MRR)": "itemValueMrr",
+  "Invoice Value (MRR)": "invoiceValueMrr",
+  "Approval Status": "approvalStatus",
+  "Debit Note No.": "debitNoteNo",
+  "Debit Note Date": "debitNoteDate",
+  "Debit Note Amount": "debitNoteAmount",
+  "Customer PO No.": "customerPoNo",
+  "Customer PO Date": "customerPoDate",
+  "Order Quantity": "orderQuantity",
+  "Order Rate": "orderRate",
+  "Customer PO Amount": "customerPoAmount",
+  "No. of Boxes per Sheet in case of Die Cut Box": "boxesPerSheetDieCut",
+  "Reel Size": "reelSize",
+  "Cutting Size": "cuttingSize",
+  "Rapc for single box": "rapcForSingleBox",
+  "No Of Die Cut Ups(No Of Boxes In One Die Sheet)": "dieCutUps",
+  "SYNC IN ITEM MASTER": "syncInItemMaster",
+  "PLATE/PHP WEIGHT": "platePhpWeight",
+  "GSM Least Cost": "gsmLeastCost",
+  "Backing Paper Shade": "backingPaperShade",
+  Artwork: "artwork",
+  Spec: "spec"
+};
+const NPD_SYNC_REQUIRED_HEADERS = ["NPD ID"];
+const NPD_SYNC_NUMERIC_KEYS = /* @__PURE__ */ new Set([
+  "erp",
+  "rate",
+  "openLength",
+  "openWidth",
+  "lengthId",
+  "breadthId",
+  "heightId",
+  "lengthOd",
+  "breadthOd",
+  "heightOd",
+  "psL1",
+  "psL1Bf",
+  "psF1",
+  "psF1Bf",
+  "psL2",
+  "psL2Bf",
+  "psF2",
+  "psF2Bf",
+  "psL3",
+  "psL3Bf",
+  "materialWeightInsideInOneBox",
+  "stackHeight",
+  "safetyFactor",
+  "csKgStd",
+  "csKgTarget",
+  "bsKgCm2Std",
+  "bsKgCm2Calculated",
+  "takeUpFactor",
+  "ups",
+  "rapc",
+  "opening",
+  "receipt",
+  "production",
+  "invoiced",
+  "balance",
+  "gstRate",
+  "standardWeightGms",
+  "calculatedWeightPerBox",
+  "standardBGsm",
+  "calculatedBGsm",
+  "blockSizeSqInch",
+  "approvedRateOfSupplier",
+  "amount",
+  "invoiceAmount",
+  "itemValueMrr",
+  "invoiceValueMrr",
+  "debitNoteAmount",
+  "orderQuantity",
+  "orderRate",
+  "customerPoAmount",
+  "boxesPerSheetDieCut",
+  "rapcForSingleBox",
+  "dieCutUps",
+  "platePhpWeight",
+  "gsmLeastCost",
+  "ply",
+  "noOfParts",
+  "noOfUps"
+]);
 function base64UrlEncode(input) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
   return buf.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
@@ -177,7 +366,7 @@ app.post("/api/auth/logout", requireAuth, async (_req, res) => {
   res.json({ success: true });
 });
 app.use("/api", (req, res, next) => {
-  if (req.path.startsWith("/auth/") || req.path === "/db-status") return next();
+  if (req.path.startsWith("/auth/") || req.path === "/db-status" || req.path === "/npd-sync") return next();
   return requireAuth(req, res, next);
 });
 if (!fs.existsSync(path.join(process.cwd(), "uploads"))) {
@@ -219,6 +408,148 @@ app.post("/api/upload-artwork", async (req, res) => {
   } catch (error) {
     console.error("Upload failed:", error);
     return res.status(500).json({ error: "Failed to save file" });
+  }
+});
+app.post("/api/npd-sync", async (req, res) => {
+  const providedSecret = stringOrEmpty(
+    req.headers["x-npd-sync-secret"] || req.headers["x-sync-secret"] || req.query.secret || req.body?.secret
+  );
+  if (!NPD_SYNC_SECRET) {
+    return res.status(503).json({ error: "NPD sync is not configured." });
+  }
+  if (!providedSecret || providedSecret !== NPD_SYNC_SECRET) {
+    return res.status(401).json({ error: "Invalid sync secret." });
+  }
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  const tabName = stringOrEmpty(req.body?.tabName || req.body?.sheetName || req.body?.tab);
+  const rawRowsPayload = req.body?.rows;
+  const syncTimestamp = stringOrEmpty(req.body?.syncTimestamp || (/* @__PURE__ */ new Date()).toISOString());
+  if (!tabName) {
+    return res.status(400).json({ error: "tabName is required." });
+  }
+  if (NPD_SYNC_ALLOWED_TAB && tabName !== NPD_SYNC_ALLOWED_TAB) {
+    return res.status(400).json({ error: `Only tab '${NPD_SYNC_ALLOWED_TAB}' is allowed.` });
+  }
+  if (!Array.isArray(rawRowsPayload)) {
+    return res.status(400).json({ error: "rows must be an array." });
+  }
+  const rowsPayload = rawRowsPayload;
+  const missingRequiredHeaders = NPD_SYNC_REQUIRED_HEADERS.filter(
+    (header) => rowsPayload.length > 0 && !rowsPayload.some((row) => Object.prototype.hasOwnProperty.call(row || {}, header))
+  );
+  if (missingRequiredHeaders.length > 0) {
+    return res.status(400).json({ error: `Missing required header(s): ${missingRequiredHeaders.join(", ")}` });
+  }
+  const normalizedRows = rowsPayload.map((row, index) => {
+    const mapped = mapSheetRowToNpdRow(row || {});
+    return {
+      rowNumber: index + 2,
+      source: row || {},
+      mapped
+    };
+  });
+  const duplicateCounter = /* @__PURE__ */ new Map();
+  normalizedRows.forEach((entry) => {
+    const npdId = stringOrEmpty(entry.mapped.npdId);
+    if (!npdId) return;
+    duplicateCounter.set(npdId, (duplicateCounter.get(npdId) || 0) + 1);
+  });
+  const duplicateNpdIds = [...duplicateCounter.entries()].filter(([, count]) => count > 1).map(([npdId]) => npdId);
+  if (duplicateNpdIds.length > 0) {
+    return res.status(400).json({
+      error: "Duplicate NPD ID values found in sync payload.",
+      duplicateNpdIds
+    });
+  }
+  const invalidRows = normalizedRows.filter((entry) => !entry.mapped.npdId).map((entry) => ({
+    rowNumber: entry.rowNumber,
+    reason: "Missing NPD ID",
+    itemName: stringOrEmpty(entry.source?.["Item Name"])
+  }));
+  const validRows = normalizedRows.filter((entry) => entry.mapped.npdId);
+  const incomingNpdIds = validRows.map((entry) => entry.mapped.npdId);
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [existingRows] = await conn.query(
+      "SELECT id, npdId FROM `npd` WHERE npdId IS NOT NULL AND TRIM(npdId) <> ''"
+    );
+    const existingByNpdId = /* @__PURE__ */ new Map();
+    existingRows.forEach((row) => {
+      const npdId = stringOrEmpty(row.npdId);
+      if (npdId) existingByNpdId.set(npdId, row);
+    });
+    let inserted = 0;
+    let updated = 0;
+    for (const entry of validRows) {
+      const existing = existingByNpdId.get(entry.mapped.npdId);
+      const payload = {
+        id: stringOrEmpty(existing?.id) || crypto.randomUUID(),
+        ...entry.mapped,
+        syncSource: "google_sheets",
+        syncStatus: "active",
+        updatedBy: "Google Sheets Sync",
+        updateTimestamp: syncTimestamp
+      };
+      const columns = Object.keys(payload);
+      const values = columns.map((column) => payload[column]);
+      const insertColumns = columns.map((column) => `\`${column}\``).join(", ");
+      const insertPlaceholders = columns.map(() => "?").join(", ");
+      const updateColumns = columns.filter((column) => column !== "id").map((column) => `\`${column}\` = VALUES(\`${column}\`)`).join(", ");
+      await conn.query(
+        `INSERT INTO \`npd\` (${insertColumns})
+         VALUES (${insertPlaceholders})
+         ON DUPLICATE KEY UPDATE ${updateColumns}`,
+        values
+      );
+      if (existing) updated += 1;
+      else inserted += 1;
+    }
+    let removed = 0;
+    if (incomingNpdIds.length > 0) {
+      const [result] = await conn.query(
+        `UPDATE \`npd\`
+         SET \`syncStatus\` = 'removed',
+             \`updatedBy\` = 'Google Sheets Sync',
+             \`updateTimestamp\` = ?
+         WHERE \`syncSource\` = 'google_sheets'
+           AND COALESCE(NULLIF(TRIM(\`npdId\`), ''), '') <> ''
+           AND \`npdId\` NOT IN (${incomingNpdIds.map(() => "?").join(", ")})
+           AND COALESCE(NULLIF(TRIM(\`syncStatus\`), ''), 'active') <> 'removed'`,
+        [syncTimestamp, ...incomingNpdIds]
+      );
+      removed = Number(result?.affectedRows || 0);
+    } else {
+      const [result] = await conn.query(
+        `UPDATE \`npd\`
+         SET \`syncStatus\` = 'removed',
+             \`updatedBy\` = 'Google Sheets Sync',
+             \`updateTimestamp\` = ?
+         WHERE \`syncSource\` = 'google_sheets'
+           AND COALESCE(NULLIF(TRIM(\`syncStatus\`), ''), 'active') <> 'removed'`,
+        [syncTimestamp]
+      );
+      removed = Number(result?.affectedRows || 0);
+    }
+    await conn.commit();
+    res.json({
+      ok: true,
+      tabName,
+      syncTimestamp,
+      totalRowsReceived: rowsPayload.length,
+      processedRows: validRows.length,
+      inserted,
+      updated,
+      removed,
+      invalidRows
+    });
+  } catch (error) {
+    await conn.rollback();
+    console.error("[NPD_SYNC] Sync failed:", error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    conn.release();
   }
 });
 let pool = null;
@@ -488,6 +819,30 @@ function toFiniteNumber(value) {
 function stringOrEmpty(value) {
   return String(value ?? "").trim();
 }
+function normalizeSyncStatus(value) {
+  return stringOrEmpty(value).toLowerCase() === "removed" ? "removed" : "active";
+}
+function normalizeSheetCellValue(key, value) {
+  if (value == null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "boolean") return value;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  if (NPD_SYNC_NUMERIC_KEYS.has(key)) {
+    const numericValue = Number(trimmed.replace(/,/g, ""));
+    if (Number.isFinite(numericValue)) return numericValue;
+  }
+  return trimmed;
+}
+function mapSheetRowToNpdRow(row) {
+  const mapped = {};
+  Object.entries(NPD_SYNC_HEADER_MAP).forEach(([header, key]) => {
+    if (!Object.prototype.hasOwnProperty.call(row, header)) return;
+    mapped[key] = normalizeSheetCellValue(key, row[header]);
+  });
+  mapped.npdId = stringOrEmpty(mapped.npdId);
+  return mapped;
+}
 function resolveLinkedNpdId(value) {
   const npdId = stringOrEmpty(value?.npdId);
   if (npdId) return npdId;
@@ -523,6 +878,7 @@ function normalizeNpdRowForItemConsumers(row) {
   const production = toFiniteNumber(row?.production) ?? 0;
   const invoiced = toFiniteNumber(row?.invoiced) ?? 0;
   const balance = toFiniteNumber(row?.balance) ?? opening + receipt + production - invoiced;
+  const syncStatus = normalizeSyncStatus(row?.syncStatus);
   return {
     ...row,
     id: resolvedId,
@@ -555,7 +911,8 @@ function normalizeNpdRowForItemConsumers(row) {
     receipt,
     production,
     invoiced,
-    balance
+    balance,
+    syncStatus
   };
 }
 function normalizeFetchedRow(tableName, row) {
@@ -680,6 +1037,7 @@ async function fetchActiveNpdItems(db) {
       FROM \`invoice_line_items\`
       GROUP BY COALESCE(NULLIF(npdId, ''), itemId)
     ) inv ON inv.masterId COLLATE utf8mb4_unicode_ci = n.id COLLATE utf8mb4_unicode_ci
+    WHERE COALESCE(NULLIF(TRIM(n.syncStatus), ''), 'active') <> 'removed'
   `);
   return rows.map((row) => normalizeNpdRowForItemConsumers(row));
 }
@@ -1926,6 +2284,8 @@ async function initDb(retries = 5) {
           \`backingPaperShade\` LONGTEXT,
           \`artwork\` LONGTEXT,
           \`spec\` LONGTEXT,
+          \`syncSource\` VARCHAR(50),
+          \`syncStatus\` VARCHAR(20) DEFAULT 'active',
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -2490,6 +2850,16 @@ async function initDb(retries = 5) {
         } catch (err) {
           console.warn(`[DB] Could not drop column ${m.column} from ${m.table}:`, err.message);
         }
+      }
+      try {
+        await ensureColumnExists(db, database, "npd", "syncSource", "VARCHAR(50) NULL");
+      } catch (err) {
+        console.warn("[DB] Could not ensure npd.syncSource column:", err.message);
+      }
+      try {
+        await ensureColumnExists(db, database, "npd", "syncStatus", "VARCHAR(20) DEFAULT 'active'");
+      } catch (err) {
+        console.warn("[DB] Could not ensure npd.syncStatus column:", err.message);
       }
       try {
         await ensureIndianStatesSeed(db);
