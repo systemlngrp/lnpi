@@ -247,6 +247,15 @@ const NPD_SYNC_NUMERIC_KEYS = new Set([
   "noOfUps",
 ]);
 
+const NPD_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
+  ...[...new Set(Object.values(NPD_SYNC_HEADER_MAP))].map((column) => ({
+    column,
+    type: "LONGTEXT",
+  })),
+  { column: "syncSource", type: "VARCHAR(50) NULL" },
+  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+];
+
 function base64UrlEncode(input: Buffer | string) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
   return buf
@@ -1144,15 +1153,22 @@ async function fetchLegacyItems(db: mysql.Pool) {
 }
 
 async function fetchActiveNpdItems(db: mysql.Pool) {
+  const [npdColumnsRows] = await db.query("SHOW COLUMNS FROM `npd`");
+  const npdColumns = new Set((npdColumnsRows as any[]).map((row) => String(row.Field || "").trim()));
+  const openingExpr = npdColumns.has("opening") ? "COALESCE(n.opening, 0)" : "0";
+  const syncStatusFilter = npdColumns.has("syncStatus")
+    ? "COALESCE(NULLIF(TRIM(n.syncStatus), ''), 'active') <> 'removed'"
+    : "1 = 1";
+
   const [rows] = await db.query(`
     SELECT
       n.*,
-      CAST(COALESCE(n.opening, 0) AS DECIMAL(15,2)) AS opening,
+      CAST(${openingExpr} AS DECIMAL(15,2)) AS opening,
       CAST(COALESCE(r.receipt, 0) AS DECIMAL(15,2)) AS receipt,
       CAST(COALESCE(p.production, 0) AS DECIMAL(15,2)) AS production,
       CAST(COALESCE(inv.invoiced, 0) AS DECIMAL(15,2)) AS invoiced,
       CAST(
-        COALESCE(n.opening, 0)
+        ${openingExpr}
         + COALESCE(r.receipt, 0)
         + COALESCE(p.production, 0)
         - COALESCE(inv.invoiced, 0)
@@ -1190,7 +1206,7 @@ async function fetchActiveNpdItems(db: mysql.Pool) {
       FROM \`invoice_line_items\`
       GROUP BY COALESCE(NULLIF(npdId, ''), itemId)
     ) inv ON inv.masterId COLLATE utf8mb4_unicode_ci = n.id COLLATE utf8mb4_unicode_ci
-    WHERE COALESCE(NULLIF(TRIM(n.syncStatus), ''), 'active') <> 'removed'
+    WHERE ${syncStatusFilter}
   `);
 
   return (rows as any[]).map((row) => normalizeNpdRowForItemConsumers(row));
@@ -1211,6 +1227,12 @@ async function ensureColumnExists(db: mysql.Pool, database: string, table: strin
   );
   if ((rows as any[]).length > 0) return;
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
+}
+
+async function ensureNpdSchemaColumns(db: mysql.Pool, database: string) {
+  for (const { column, type } of NPD_SCHEMA_COLUMNS) {
+    await ensureColumnExists(db, database, "npd", column, type);
+  }
 }
 
 async function buildItemToNpdIdMap(db: mysql.Pool) {
@@ -3137,15 +3159,9 @@ async function initDb(retries = 5) {
       }
 
       try {
-        await ensureColumnExists(db, database, "npd", "syncSource", "VARCHAR(50) NULL");
+        await ensureNpdSchemaColumns(db, database);
       } catch (err) {
-        console.warn("[DB] Could not ensure npd.syncSource column:", (err as Error).message);
-      }
-
-      try {
-        await ensureColumnExists(db, database, "npd", "syncStatus", "VARCHAR(20) DEFAULT 'active'");
-      } catch (err) {
-        console.warn("[DB] Could not ensure npd.syncStatus column:", (err as Error).message);
+        console.warn("[DB] Could not ensure npd schema columns:", (err as Error).message);
       }
 
       try {
