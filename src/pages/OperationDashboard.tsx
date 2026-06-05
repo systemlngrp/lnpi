@@ -450,8 +450,15 @@ export function OperationDashboard() {
   );
 
   const productionUsageMap = useMemo(() => {
-    return buildProductionMaterialUsageMap(filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines);
-  }, [filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines]);
+    return buildProductionMaterialUsageMap(
+      filteredMaterialIssues,
+      materialIssueLines,
+      filteredMaterialReturns,
+      materialReturnLines,
+      issueReelLines,
+      returnReelLines
+    );
+  }, [filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines, issueReelLines, returnReelLines]);
 
   const getProcessingSummary = (productionId: string) => {
     const records = processing.filter((p) => p.productionId === productionId);

@@ -40,8 +40,10 @@ import {
   GateEntry,
   MaterialIssue,
   MaterialIssueLine,
+  MaterialIssueReelLine,
   MaterialReturn,
   MaterialReturnLine,
+  MaterialReturnReelLine,
   Invoice,
 } from "../types";
 import { cn } from "../lib/utils";
@@ -266,8 +268,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [materialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
+  const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [indents] = useData<Indent>("indents", []);
   const [indentLines] = useData<IndentLine>("indent-lines", []);
@@ -285,7 +289,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     materialIssues,
     materialIssueLines,
     materialReturns,
-    materialReturnLines
+    materialReturnLines,
+    materialIssueReelLines,
+    materialReturnReelLines
   );
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";

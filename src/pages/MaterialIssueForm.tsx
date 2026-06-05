@@ -280,7 +280,9 @@ export function MaterialIssueForm() {
           nextMaterialIssues,
           nextIssueLines,
           materialReturns,
-          materialReturnLines
+          materialReturnLines,
+          [...materialIssueReelLines, ...nextReelLines],
+          materialReturnReelLines
         );
         const netUsage = usageMap.get(productionId) || 0;
         await setProductions((prev) =>

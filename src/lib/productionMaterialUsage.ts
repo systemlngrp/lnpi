@@ -1,8 +1,10 @@
 import {
   MaterialIssue,
   MaterialIssueLine,
+  MaterialIssueReelLine,
   MaterialReturn,
   MaterialReturnLine,
+  MaterialReturnReelLine,
   Production,
 } from "../types";
 
@@ -18,7 +20,9 @@ export function buildProductionMaterialUsageMap(
   materialIssues: MaterialIssue[],
   materialIssueLines: MaterialIssueLine[],
   materialReturns: MaterialReturn[],
-  materialReturnLines: MaterialReturnLine[]
+  materialReturnLines: MaterialReturnLine[],
+  materialIssueReelLines: MaterialIssueReelLine[] = [],
+  materialReturnReelLines: MaterialReturnReelLine[] = []
 ) {
   const issueProductionMap = new Map(
     materialIssues
@@ -32,6 +36,8 @@ export function buildProductionMaterialUsageMap(
   );
 
   const totals = new Map<string, number>();
+  const existingIssueLineIds = new Set(materialIssueLines.map((line) => line.id));
+  const existingReturnLineIds = new Set(materialReturnLines.map((line) => line.id));
 
   materialIssueLines.forEach((line) => {
     const productionId = issueProductionMap.get(line.materialIssueId);
@@ -43,6 +49,20 @@ export function buildProductionMaterialUsageMap(
     const productionId = returnProductionMap.get(line.materialReturnId);
     if (!productionId) return;
     totals.set(productionId, (totals.get(productionId) || 0) - Number(line.qty || 0));
+  });
+
+  materialIssueReelLines.forEach((line) => {
+    if (existingIssueLineIds.has(line.materialIssueLineId)) return;
+    const productionId = line.productionId || issueProductionMap.get(line.materialIssueId);
+    if (!productionId) return;
+    totals.set(productionId, (totals.get(productionId) || 0) + Number(line.weightKg || 0));
+  });
+
+  materialReturnReelLines.forEach((line) => {
+    if (existingReturnLineIds.has(line.materialReturnLineId)) return;
+    const productionId = line.productionId || returnProductionMap.get(line.materialReturnId);
+    if (!productionId) return;
+    totals.set(productionId, (totals.get(productionId) || 0) - Number(line.weightKg || 0));
   });
 
   totals.forEach((value, key) => {

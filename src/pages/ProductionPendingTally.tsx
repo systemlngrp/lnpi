@@ -1,6 +1,15 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Production, Item } from "../types";
+import {
+  MaterialIssue,
+  MaterialIssueLine,
+  MaterialIssueReelLine,
+  MaterialReturn,
+  MaterialReturnLine,
+  MaterialReturnReelLine,
+  Production,
+  Item,
+} from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { CheckCircle, Search } from "lucide-react";
@@ -13,12 +22,21 @@ export function ProductionPendingTally() {
   const [items] = useData<Item>("items", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [materialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
+  const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const usageMap = buildProductionMaterialUsageMap(materialIssues, materialIssueLines, materialReturns, materialReturnLines);
+  const usageMap = buildProductionMaterialUsageMap(
+    materialIssues,
+    materialIssueLines,
+    materialReturns,
+    materialReturnLines,
+    materialIssueReelLines,
+    materialReturnReelLines
+  );
 
   const handleComplete = (id: string) => {
     if (confirmId !== id) {

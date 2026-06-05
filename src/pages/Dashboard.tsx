@@ -12,7 +12,25 @@ import {
 } from "recharts";
 import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Company, Consumption, DispatchPlan, Invoice, Item, LoadingSlip, Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialReturn, MaterialReturnLine, Order, OrderSchedule, Production } from "../types";
+import {
+  Company,
+  Consumption,
+  DispatchPlan,
+  Invoice,
+  Item,
+  LoadingSlip,
+  Material,
+  MaterialIn,
+  MaterialIssue,
+  MaterialIssueLine,
+  MaterialIssueReelLine,
+  MaterialReturn,
+  MaterialReturnLine,
+  MaterialReturnReelLine,
+  Order,
+  OrderSchedule,
+  Production,
+} from "../types";
 import { cn, formatDate, formatNumber } from "../lib/utils";
 import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
@@ -27,8 +45,10 @@ export function Dashboard() {
   const [productions] = useData<Production>("productions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [materialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
+  const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [items] = useData<Item>("items", []);
   const [materials] = useData<Material>("materials", []);
   const [orders] = useData<Order>("orders", []);
@@ -117,7 +137,14 @@ export function Dashboard() {
   const filteredProductions = productions.filter((entry) => isWithinSelectedRange(entry.date));
   const filteredMaterialIssues = materialIssues.filter((entry) => isWithinSelectedRange(entry.date));
   const filteredMaterialReturns = materialReturns.filter((entry) => isWithinSelectedRange(entry.date));
-  const productionUsageMap = buildProductionMaterialUsageMap(filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines);
+  const productionUsageMap = buildProductionMaterialUsageMap(
+    filteredMaterialIssues,
+    materialIssueLines,
+    filteredMaterialReturns,
+    materialReturnLines,
+    materialIssueReelLines,
+    materialReturnReelLines
+  );
   const yesterdayDate = (() => {
     const date = parseAppDate(today);
     if (!date) return today;

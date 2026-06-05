@@ -401,7 +401,9 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
     filteredMaterialIssues,
     args.materialIssueLines,
     filteredMaterialReturns,
-    args.materialReturnLines
+    args.materialReturnLines,
+    args.issueReelLines,
+    args.returnReelLines
   );
 
   const totalProduction = sumProductionQty(filteredProductions);

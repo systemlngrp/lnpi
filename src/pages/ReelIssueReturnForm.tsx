@@ -400,8 +400,10 @@ export function ReelIssueReturnForm() {
       const timestamp = new Date().toISOString();
       const nextMaterialIssues = [...materialIssues];
       const nextMaterialIssueLines = [...materialIssueLines];
+      const nextMaterialIssueReelLines = [...materialIssueReelLines];
       const nextMaterialReturns = [...materialReturns];
       const nextMaterialReturnLines = [...materialReturnLines];
+      const nextMaterialReturnReelLines = [...materialReturnReelLines];
 
       if (hasAnyIssue) {
         const issueId = crypto.randomUUID();
@@ -465,7 +467,8 @@ export function ReelIssueReturnForm() {
         await setMaterialIssues(nextMaterialIssues);
         await setMaterialIssueLines(nextMaterialIssueLines);
         if (createdReelLines.length > 0) {
-          await setMaterialIssueReelLines([...materialIssueReelLines, ...createdReelLines]);
+          nextMaterialIssueReelLines.push(...createdReelLines);
+          await setMaterialIssueReelLines(nextMaterialIssueReelLines);
         }
       }
 
@@ -531,7 +534,8 @@ export function ReelIssueReturnForm() {
         await setMaterialReturns(nextMaterialReturns);
         await setMaterialReturnLines(nextMaterialReturnLines);
         if (createdReelLines.length > 0) {
-          await setMaterialReturnReelLines([...materialReturnReelLines, ...createdReelLines]);
+          nextMaterialReturnReelLines.push(...createdReelLines);
+          await setMaterialReturnReelLines(nextMaterialReturnReelLines);
         }
       }
 
@@ -540,7 +544,9 @@ export function ReelIssueReturnForm() {
           nextMaterialIssues,
           nextMaterialIssueLines,
           nextMaterialReturns,
-          nextMaterialReturnLines
+          nextMaterialReturnLines,
+          nextMaterialIssueReelLines,
+          nextMaterialReturnReelLines
         );
         const netUsage = usageMap.get(productionId) || 0;
         await setProductions((prev) =>

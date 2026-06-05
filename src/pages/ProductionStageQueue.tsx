@@ -7,8 +7,10 @@ import {
   Item,
   MaterialIssue,
   MaterialIssueLine,
+  MaterialIssueReelLine,
   MaterialReturn,
   MaterialReturnLine,
+  MaterialReturnReelLine,
   Order,
   OrderSchedule,
   Production,
@@ -71,8 +73,10 @@ export function ProductionStageQueue({
   const [items] = useData<Item>("items", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [materialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
+  const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -85,8 +89,16 @@ export function ProductionStageQueue({
   const [sortKey, setSortKey] = useState<SortKey>("jobNo");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const usageMap = useMemo(
-    () => buildProductionMaterialUsageMap(materialIssues, materialIssueLines, materialReturns, materialReturnLines),
-    [materialIssueLines, materialIssues, materialReturnLines, materialReturns]
+    () =>
+      buildProductionMaterialUsageMap(
+        materialIssues,
+        materialIssueLines,
+        materialReturns,
+        materialReturnLines,
+        materialIssueReelLines,
+        materialReturnReelLines
+      ),
+    [materialIssueLines, materialIssueReelLines, materialIssues, materialReturnLines, materialReturnReelLines, materialReturns]
   );
 
   const toggleSort = (nextKey: SortKey) => {
