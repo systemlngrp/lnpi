@@ -45,6 +45,10 @@ function formatCurrency(value: number) {
   })}`;
 }
 
+function formatWeightFormula(mrrQty: number, issuedQty: number, returnQty: number, availableQty: number) {
+  return `MRR ${mrrQty.toFixed(2)} - Issued ${issuedQty.toFixed(2)} + Return ${returnQty.toFixed(2)} = Available ${availableQty.toFixed(2)}`;
+}
+
 export function ReelIssueReturnForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -88,6 +92,19 @@ export function ReelIssueReturnForm() {
     const line = mrr.lines.find((row) => row.id === slip.materialLineId);
     return Number(line?.invoiceRate || line?.rate || 0);
   };
+
+  const getSlipBaseWeight = (slipId: string): number =>
+    Number(packingSlips.find((row) => row.id === slipId)?.weightKg || 0);
+
+  const getSlipIssuedWeight = (slipId: string): number =>
+    materialIssueReelLines
+      .filter((row) => row.packingSlipId === slipId)
+      .reduce((sum, row) => sum + Number(row.weightKg || 0), 0);
+
+  const getSlipReturnedWeight = (slipId: string): number =>
+    materialReturnReelLines
+      .filter((row) => row.packingSlipId === slipId)
+      .reduce((sum, row) => sum + Number(row.weightKg || 0), 0);
 
   const consumptionSummary = useMemo(() => {
     let totalIssueWt = 0;
@@ -653,7 +670,7 @@ export function ReelIssueReturnForm() {
                           <table className="min-w-full border-collapse">
                             <thead className="bg-slate-800 text-white">
                               <tr>
-                                {["Select", "Our Reel No.", "Supplier Reel No.", "Invoice Rate", "Weight KG"].map((heading) => (
+                                {["Select", "Our Reel No.", "Supplier Reel No.", "Invoice Rate", "Available Weight KG"].map((heading) => (
                                   <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.16em]">
                                     {heading}
                                   </th>
@@ -668,9 +685,14 @@ export function ReelIssueReturnForm() {
                                   </td>
                                 </tr>
                               ) : (
-                                availableReels.map((slip, index) => (
+                                availableReels.map((slip, index) => {
+                                  const mrrQty = getSlipBaseWeight(slip.id);
+                                  const issuedQty = getSlipIssuedWeight(slip.id);
+                                  const returnQty = getSlipReturnedWeight(slip.id);
+                                  const availableQty = Number(slip.weightKg || 0);
+                                  return (
                                   <tr key={slip.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
-                                    <td className="border-t border-slate-200 px-4 py-3 text-center">
+                                    <td className="border-t border-slate-200 px-4 py-3 text-center align-top">
                                       <input
                                         type="checkbox"
                                         checked={selectedIds.includes(slip.id)}
@@ -678,12 +700,17 @@ export function ReelIssueReturnForm() {
                                         className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                       />
                                     </td>
-                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800">{slip.ourReelNo}</td>
-                                    <td className="border-t border-slate-200 px-4 py-3 text-sm text-slate-600">{slip.supplierReelNo || "-"}</td>
-                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">{formatCurrency(getReelInvoiceRate(slip.id))}</td>
-                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-emerald-700">{Number(slip.weightKg || 0).toFixed(2)}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800 align-top">{slip.ourReelNo}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm text-slate-600 align-top">{slip.supplierReelNo || "-"}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700 align-top">{formatCurrency(getReelInvoiceRate(slip.id))}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-emerald-700">
+                                      <div>{availableQty.toFixed(2)}</div>
+                                      <div className="mt-1 text-[11px] font-medium text-slate-500">
+                                        {formatWeightFormula(mrrQty, issuedQty, returnQty, availableQty)}
+                                      </div>
+                                    </td>
                                   </tr>
-                                ))
+                                )})
                               )}
                             </tbody>
                           </table>
