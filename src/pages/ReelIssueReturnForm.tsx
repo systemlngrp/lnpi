@@ -45,8 +45,11 @@ function formatCurrency(value: number) {
   })}`;
 }
 
-function formatWeightFormula(mrrQty: number, issuedQty: number, returnQty: number, availableQty: number) {
-  return `MRR ${mrrQty.toFixed(2)} - Issued ${issuedQty.toFixed(2)} + Return ${returnQty.toFixed(2)} = Available ${availableQty.toFixed(2)}`;
+function formatCurrencyDisplay(value: number) {
+  return `₹${Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 export function ReelIssueReturnForm() {
@@ -93,19 +96,6 @@ export function ReelIssueReturnForm() {
     return Number(line?.invoiceRate || line?.rate || 0);
   };
 
-  const getSlipBaseWeight = (slipId: string): number =>
-    Number(packingSlips.find((row) => row.id === slipId)?.weightKg || 0);
-
-  const getSlipIssuedWeight = (slipId: string): number =>
-    materialIssueReelLines
-      .filter((row) => row.packingSlipId === slipId)
-      .reduce((sum, row) => sum + Number(row.weightKg || 0), 0);
-
-  const getSlipReturnedWeight = (slipId: string): number =>
-    materialReturnReelLines
-      .filter((row) => row.packingSlipId === slipId)
-      .reduce((sum, row) => sum + Number(row.weightKg || 0), 0);
-
   const consumptionSummary = useMemo(() => {
     let totalIssueWt = 0;
     let totalIssueVal = 0;
@@ -144,7 +134,11 @@ export function ReelIssueReturnForm() {
   }, [selectedIssueReels, returnQtyDrafts, packingSlips, materialIn]);
 
   useEffect(() => {
-    const slipById = new Map(packingSlips.map((slip) => [slip.id, slip]));
+    const availableSlipById = new Map(
+      issueLines
+        .flatMap((line) => (line.materialId ? getIssueAvailableReels(line.materialId, line.id) : []))
+        .map((slip) => [slip.id, slip])
+    );
     const materialToSelectedSlipIds = new Map<string, string[]>();
 
     issueLines.forEach((line) => {
@@ -185,7 +179,7 @@ export function ReelIssueReturnForm() {
               currentDrafts[slipId] = previousLineDrafts[slipId];
               return;
             }
-            const slip = slipById.get(slipId);
+            const slip = availableSlipById.get(slipId);
             const weight = Number(slip?.weightKg || 0);
             currentDrafts[slipId] = weight > 0 ? weight.toFixed(2) : "";
           });
@@ -198,7 +192,7 @@ export function ReelIssueReturnForm() {
 
       return next;
     });
-  }, [issueLines, selectedIssueReels, packingSlips]);
+  }, [issueLines, selectedIssueReels, packingSlips, materialIssueReelLines, materialReturnReelLines]);
 
   const jobOptions = useMemo(
     () =>
@@ -273,7 +267,12 @@ export function ReelIssueReturnForm() {
 
     if (selectedIds.size === 0) return [];
 
-    const slipById = new Map(packingSlips.map((slip) => [slip.id, slip]));
+    const slipById = new Map(
+      issueLines
+        .filter((line) => line.materialId === materialId)
+        .flatMap((line) => getIssueAvailableReels(materialId, line.id))
+        .map((slip) => [slip.id, slip])
+    );
     return Array.from(selectedIds)
       .map((id) => slipById.get(id))
       .filter((slip): slip is MaterialInPackingSlip => Boolean(slip))
@@ -651,7 +650,7 @@ export function ReelIssueReturnForm() {
                       <div className="w-32 space-y-1">
                         <label className="text-sm font-black uppercase tracking-wide text-indigo-700">Invoice Rate</label>
                         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-center font-black text-indigo-700 shadow-sm">
-                          {formatCurrency(selectedIds[0] ? getReelInvoiceRate(selectedIds[0]) : 0)}
+                          {formatCurrencyDisplay(selectedIds[0] ? getReelInvoiceRate(selectedIds[0]) : 0)}
                         </div>
                       </div>
                     )}
@@ -686,9 +685,6 @@ export function ReelIssueReturnForm() {
                                 </tr>
                               ) : (
                                 availableReels.map((slip, index) => {
-                                  const mrrQty = getSlipBaseWeight(slip.id);
-                                  const issuedQty = getSlipIssuedWeight(slip.id);
-                                  const returnQty = getSlipReturnedWeight(slip.id);
                                   const availableQty = Number(slip.weightKg || 0);
                                   return (
                                   <tr key={slip.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
@@ -702,13 +698,8 @@ export function ReelIssueReturnForm() {
                                     </td>
                                     <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800 align-top">{slip.ourReelNo}</td>
                                     <td className="border-t border-slate-200 px-4 py-3 text-sm text-slate-600 align-top">{slip.supplierReelNo || "-"}</td>
-                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700 align-top">{formatCurrency(getReelInvoiceRate(slip.id))}</td>
-                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-emerald-700">
-                                      <div>{availableQty.toFixed(2)}</div>
-                                      <div className="mt-1 text-[11px] font-medium text-slate-500">
-                                        {formatWeightFormula(mrrQty, issuedQty, returnQty, availableQty)}
-                                      </div>
-                                    </td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700 align-top">{formatCurrencyDisplay(getReelInvoiceRate(slip.id))}</td>
+                                    <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-emerald-700">{availableQty.toFixed(2)}</td>
                                   </tr>
                                 )})
                               )}
@@ -753,7 +744,7 @@ export function ReelIssueReturnForm() {
                         <div className="w-32 space-y-1">
                           <label className="text-sm font-black uppercase tracking-wide text-indigo-700">Invoice Rate</label>
                           <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-center font-black text-indigo-700 shadow-sm">
-                            {formatCurrency(returnableReels[0] ? getReelInvoiceRate(returnableReels[0].packingSlipId) : 0)}
+                            {formatCurrencyDisplay(returnableReels[0] ? getReelInvoiceRate(returnableReels[0].packingSlipId) : 0)}
                           </div>
                         </div>
                       )}
@@ -787,7 +778,7 @@ export function ReelIssueReturnForm() {
                                   returnableReels.map((reelLine, index) => (
                                     <tr key={reelLine.packingSlipId} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
                                       <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800">{reelLine.ourReelNo}</td>
-                                      <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">{formatCurrency(getReelInvoiceRate(reelLine.packingSlipId))}</td>
+                                      <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-indigo-700">{formatCurrencyDisplay(getReelInvoiceRate(reelLine.packingSlipId))}</td>
                                       <td className="border-t border-slate-200 px-4 py-3 text-sm font-semibold text-amber-700">{Number(reelLine.weightKg || 0).toFixed(2)}</td>
                                       <td className="border-t border-slate-200 px-4 py-3 text-sm">
                                         <input
@@ -832,7 +823,7 @@ export function ReelIssueReturnForm() {
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Issue Value</div>
-                    <div className="text-xl font-black">{formatCurrency(consumptionSummary.issueVal)}</div>
+                    <div className="text-xl font-black">{formatCurrencyDisplay(consumptionSummary.issueVal)}</div>
                   </div>
                 </div>
 
@@ -843,7 +834,7 @@ export function ReelIssueReturnForm() {
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Return Value</div>
-                    <div className="text-xl font-black text-amber-400">{formatCurrency(consumptionSummary.returnVal)}</div>
+                    <div className="text-xl font-black text-amber-400">{formatCurrencyDisplay(consumptionSummary.returnVal)}</div>
                   </div>
                 </div>
 
@@ -854,7 +845,7 @@ export function ReelIssueReturnForm() {
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Net Consumption Value</div>
-                    <div className="text-2xl font-black text-indigo-300">{formatCurrency(consumptionSummary.netVal)}</div>
+                    <div className="text-2xl font-black text-indigo-300">{formatCurrencyDisplay(consumptionSummary.netVal)}</div>
                   </div>
                 </div>
               </div>
