@@ -279,7 +279,7 @@ export function ReelIssueReturnForm() {
       : [];
     const drafts = getDraftIssuedReelsForMaterial(materialId);
     const seen = new Set<string>();
-    return [...persisted, ...drafts].filter((line) => {
+    return [...drafts, ...persisted].filter((line) => {
       if (seen.has(line.packingSlipId)) return false;
       seen.add(line.packingSlipId);
       return true;
@@ -742,7 +742,7 @@ export function ReelIssueReturnForm() {
                             <table className="min-w-full border-collapse">
                               <thead className="bg-slate-800 text-white">
                                 <tr>
-                                  {["Our Reel No.", "Invoice Rate", "Issued Weight KG", "Return Qty KG"].map((heading) => (
+                                  {["Our Reel No.", "Invoice Rate", "Available Weight KG", "Return Qty KG"].map((heading) => (
                                     <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.16em]">
                                       {heading}
                                     </th>
