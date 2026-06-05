@@ -57,6 +57,7 @@ const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";
 const AUTH_TTL_SECONDS = Number(process.env.AUTH_TTL_SECONDS || 60 * 60 * 24); // 24h
 const NPD_SYNC_SECRET = String(process.env.NPD_SYNC_SECRET || "").trim();
 const NPD_SYNC_ALLOWED_TAB = String(process.env.NPD_SYNC_ALLOWED_TAB || "NPD").trim();
+const NPD_SYNC_LOG_PREFIX = "[NPD_SYNC]";
 
 const NPD_SYNC_HEADER_MAP = {
   "NPD ID": "npdId",
@@ -500,6 +501,10 @@ app.post("/api/npd-sync", async (req, res) => {
   const tabName = stringOrEmpty(req.body?.tabName || req.body?.sheetName || req.body?.tab);
   const rawRowsPayload = req.body?.rows;
   const syncTimestamp = stringOrEmpty(req.body?.syncTimestamp || new Date().toISOString());
+  const syncModeRaw = stringOrEmpty(req.body?.syncMode || "batch").toLowerCase();
+  const syncMode = syncModeRaw === "full" ? "full" : "batch";
+  const spreadsheetName = stringOrEmpty(req.body?.spreadsheetName);
+  const spreadsheetId = stringOrEmpty(req.body?.spreadsheetId);
 
   if (!tabName) {
     return res.status(400).json({ error: "tabName is required." });
@@ -513,6 +518,18 @@ app.post("/api/npd-sync", async (req, res) => {
     return res.status(400).json({ error: "rows must be an array." });
   }
   const rowsPayload = rawRowsPayload as any[];
+
+  console.log(
+    `${NPD_SYNC_LOG_PREFIX} Request received`,
+    JSON.stringify({
+      tabName,
+      syncMode,
+      spreadsheetName,
+      spreadsheetId,
+      totalRowsReceived: rowsPayload.length,
+      syncTimestamp,
+    })
+  );
 
   const missingRequiredHeaders = NPD_SYNC_REQUIRED_HEADERS.filter((header) =>
     rowsPayload.length > 0 && !rowsPayload.some((row) => Object.prototype.hasOwnProperty.call(row || {}, header))
@@ -530,23 +547,6 @@ app.post("/api/npd-sync", async (req, res) => {
     };
   });
 
-  const duplicateCounter = new Map<string, number>();
-  normalizedRows.forEach((entry) => {
-    const npdId = stringOrEmpty(entry.mapped.npdId);
-    if (!npdId) return;
-    duplicateCounter.set(npdId, (duplicateCounter.get(npdId) || 0) + 1);
-  });
-  const duplicateNpdIds = [...duplicateCounter.entries()]
-    .filter(([, count]) => count > 1)
-    .map(([npdId]) => npdId);
-
-  if (duplicateNpdIds.length > 0) {
-    return res.status(400).json({
-      error: "Duplicate NPD ID values found in sync payload.",
-      duplicateNpdIds,
-    });
-  }
-
   const invalidRows = normalizedRows
     .filter((entry) => !entry.mapped.npdId)
     .map((entry) => ({
@@ -555,8 +555,35 @@ app.post("/api/npd-sync", async (req, res) => {
       itemName: stringOrEmpty(entry.source?.["Item Name"]),
     }));
 
-  const validRows = normalizedRows.filter((entry) => entry.mapped.npdId);
+  const duplicateCounter = new Map<string, number>();
+  const dedupedByNpdId = new Map<string, (typeof normalizedRows)[number]>();
+  normalizedRows.forEach((entry) => {
+    const npdId = stringOrEmpty(entry.mapped.npdId);
+    if (!npdId) return;
+    duplicateCounter.set(npdId, (duplicateCounter.get(npdId) || 0) + 1);
+    dedupedByNpdId.set(npdId, entry);
+  });
+  const duplicateNpdIds = [...duplicateCounter.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([npdId]) => npdId);
+
+  const validRows = [...dedupedByNpdId.values()];
   const incomingNpdIds = validRows.map((entry) => entry.mapped.npdId);
+
+  if (syncMode === "full" && duplicateNpdIds.length > 0) {
+    console.error(`${NPD_SYNC_LOG_PREFIX} Duplicate NPD IDs in full sync`, duplicateNpdIds);
+    return res.status(400).json({
+      error: "Duplicate NPD ID values found in sync payload.",
+      duplicateNpdIds,
+    });
+  }
+
+  if (duplicateNpdIds.length > 0) {
+    console.warn(
+      `${NPD_SYNC_LOG_PREFIX} Deduplicated repeated NPD IDs in batch payload`,
+      JSON.stringify({ duplicateNpdIds, keptRows: validRows.length })
+    );
+  }
 
   const conn = await db.getConnection();
   try {
@@ -606,47 +633,53 @@ app.post("/api/npd-sync", async (req, res) => {
     }
 
     let removed = 0;
-    if (incomingNpdIds.length > 0) {
-      const [result] = await conn.query(
-        `UPDATE \`npd\`
-         SET \`syncStatus\` = 'removed',
-             \`updatedBy\` = 'Google Sheets Sync',
-             \`updateTimestamp\` = ?
-         WHERE \`syncSource\` = 'google_sheets'
-           AND COALESCE(NULLIF(TRIM(\`npdId\`), ''), '') <> ''
-           AND \`npdId\` NOT IN (${incomingNpdIds.map(() => "?").join(", ")})
-           AND COALESCE(NULLIF(TRIM(\`syncStatus\`), ''), 'active') <> 'removed'`,
-        [syncTimestamp, ...incomingNpdIds]
-      );
-      removed = Number((result as any)?.affectedRows || 0);
-    } else {
-      const [result] = await conn.query(
-        `UPDATE \`npd\`
-         SET \`syncStatus\` = 'removed',
-             \`updatedBy\` = 'Google Sheets Sync',
-             \`updateTimestamp\` = ?
-         WHERE \`syncSource\` = 'google_sheets'
-           AND COALESCE(NULLIF(TRIM(\`syncStatus\`), ''), 'active') <> 'removed'`,
-        [syncTimestamp]
-      );
-      removed = Number((result as any)?.affectedRows || 0);
+    if (syncMode === "full") {
+      if (incomingNpdIds.length > 0) {
+        const [result] = await conn.query(
+          `UPDATE \`npd\`
+           SET \`syncStatus\` = 'removed',
+               \`updatedBy\` = 'Google Sheets Sync',
+               \`updateTimestamp\` = ?
+           WHERE \`syncSource\` = 'google_sheets'
+             AND COALESCE(NULLIF(TRIM(\`npdId\`), ''), '') <> ''
+             AND \`npdId\` NOT IN (${incomingNpdIds.map(() => "?").join(", ")})
+             AND COALESCE(NULLIF(TRIM(\`syncStatus\`), ''), 'active') <> 'removed'`,
+          [syncTimestamp, ...incomingNpdIds]
+        );
+        removed = Number((result as any)?.affectedRows || 0);
+      } else {
+        const [result] = await conn.query(
+          `UPDATE \`npd\`
+           SET \`syncStatus\` = 'removed',
+               \`updatedBy\` = 'Google Sheets Sync',
+               \`updateTimestamp\` = ?
+           WHERE \`syncSource\` = 'google_sheets'
+             AND COALESCE(NULLIF(TRIM(\`syncStatus\`), ''), 'active') <> 'removed'`,
+          [syncTimestamp]
+        );
+        removed = Number((result as any)?.affectedRows || 0);
+      }
     }
 
     await conn.commit();
-    res.json({
+    const responsePayload = {
       ok: true,
       tabName,
+      syncMode,
       syncTimestamp,
       totalRowsReceived: rowsPayload.length,
       processedRows: validRows.length,
       inserted,
       updated,
       removed,
+      duplicateNpdIds,
       invalidRows,
-    });
+    };
+    console.log(`${NPD_SYNC_LOG_PREFIX} Sync completed`, JSON.stringify(responsePayload));
+    res.json(responsePayload);
   } catch (error) {
     await conn.rollback();
-    console.error("[NPD_SYNC] Sync failed:", error);
+    console.error(`${NPD_SYNC_LOG_PREFIX} Sync failed:`, error);
     res.status(500).json({ error: (error as Error).message });
   } finally {
     conn.release();
