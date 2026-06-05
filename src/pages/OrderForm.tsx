@@ -56,9 +56,21 @@ export function OrderForm() {
     .sort((a,b) => (a.name||"").localeCompare(b.name||""))
     .map(c => ({ value: c.id, label: c.name }));
 
+  const resolveItemCompanyId = (item: Item | undefined) => {
+    if (!item) return "";
+    const directCompanyId = String((item as any).companyId || "").trim();
+    if (directCompanyId && companies.some((company) => company.id === directCompanyId)) {
+      return directCompanyId;
+    }
+
+    const customerName = String((item as any).customerName || item.customer || "").trim().toLowerCase();
+    if (!customerName) return "";
+    return companies.find((company) => String(company.name || "").trim().toLowerCase() === customerName)?.id || "";
+  };
+
   const itemOptions = useMemo(() => {
     return items
-      .filter(i => !companyId || i.customer === companies.find(c => c.id === companyId)?.name)
+      .filter((item) => !companyId || resolveItemCompanyId(item) === companyId)
       .slice()
       .sort((a,b) => (a.name||"").localeCompare(b.name||""))
       .map(i => ({ value: i.id, label: i.name }));
@@ -180,6 +192,8 @@ export function OrderForm() {
     if (id === itemId) return;
     setItemId(id);
     const it = items.find(i => i.id === id);
+    const linkedCompanyId = resolveItemCompanyId(it);
+    if (linkedCompanyId) setCompanyId(linkedCompanyId);
     if (it && typeof it.erp !== 'undefined') setErpCode((it.erp || "").toString());
     else setErpCode("");
     if (it && typeof it.rate !== "undefined" && it.rate !== null) {
