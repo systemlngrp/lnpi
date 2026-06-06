@@ -3003,7 +3003,7 @@ const createHandlers = (tableName) => {
           rows = await fetchActiveNpdItems(db);
         } else if (tableName === "npd") {
           const page = Math.max(1, Number(req.query.page || 1));
-          const pageSize = Math.min(200, Math.max(25, Number(req.query.pageSize || 50)));
+          const pageSize = Math.min(1e4, Math.max(25, Number(req.query.pageSize || 1e4)));
           const search = String(req.query.search || "").trim();
           const result = await fetchActiveNpdItems(db, {
             search,

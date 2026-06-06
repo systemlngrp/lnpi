@@ -147,7 +147,7 @@ export function NpdMaster() {
   const [total, setTotal] = useState(0);
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const pageSize = 50;
+  const pageSize = 10000;
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -199,10 +199,11 @@ export function NpdMaster() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const pageLabel = useMemo(() => {
     if (total === 0) return "0 records";
+    if (totalPages <= 1) return `${rows.length} of ${total} records`;
     const start = (page - 1) * pageSize + 1;
     const end = rows.length > 0 ? start + rows.length - 1 : start;
     return `${start}-${Math.min(total, end)} of ${total}`;
-  }, [page, pageSize, rows.length, total]);
+  }, [page, pageSize, rows.length, total, totalPages]);
 
   return (
     <div className="space-y-6">
@@ -226,27 +227,29 @@ export function NpdMaster() {
             {loading ? <Spinner size={18} /> : null}
             <span>{loading ? "Loading NPD items..." : pageLabel}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              disabled={loading || page <= 1}
-              className="rounded border border-black px-3 py-1 text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Prev
-            </button>
-            <span className="min-w-[90px] text-center text-xs font-black uppercase">
-              Page {page} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={loading || page >= totalPages}
-              className="rounded border border-black px-3 py-1 text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={loading || page <= 1}
+                className="rounded border border-black px-3 py-1 text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <span className="min-w-[90px] text-center text-xs font-black uppercase">
+                Page {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={loading || page >= totalPages}
+                className="rounded border border-black px-3 py-1 text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="overflow-x-auto">

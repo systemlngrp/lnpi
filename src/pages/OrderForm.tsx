@@ -76,42 +76,18 @@ export function OrderForm() {
   const fetchAllOrderItems = useCallback(async () => {
     const token = window.localStorage.getItem("authToken") || "";
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const pageSize = 2000;
-    let page = 1;
-    let total = Number.POSITIVE_INFINITY;
-    const collected: Item[] = [];
-    const seenIds = new Set<string>();
+    const pageSize = 10000;
 
     try {
-      while (collected.length < total) {
-        const response = await fetch(`/api/npd?page=${page}&pageSize=${pageSize}`, { headers });
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to fetch full item list");
-        }
-
-        const result = await response.json();
-        const rows = Array.isArray(result?.rows) ? result.rows : [];
-        const reportedTotal = Number(result?.total);
-        if (Number.isFinite(reportedTotal) && reportedTotal >= 0) {
-          total = reportedTotal;
-        }
-
-        rows.forEach((row) => {
-          const id = String(row?.id || "").trim();
-          if (!id || seenIds.has(id)) return;
-          seenIds.add(id);
-          collected.push(row);
-        });
-
-        if (rows.length === 0 || rows.length < pageSize) {
-          break;
-        }
-
-        page += 1;
+      const response = await fetch(`/api/npd?page=1&pageSize=${pageSize}`, { headers });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to fetch full item list");
       }
 
-      setAllItems(collected);
+      const result = await response.json();
+      const rows = Array.isArray(result?.rows) ? result.rows : [];
+      setAllItems(rows);
     } catch (error) {
       console.error("Failed to fetch full NPD item list for orders:", error);
     }
