@@ -702,6 +702,7 @@ export function ProductionForm() {
               <InfoTile label="Order No" value={selectedOrder.orderNo || "-"} />
               <InfoTile label="Company" value={selectedCompany?.name || "-"} />
               <InfoTile label="Item" value={selectedItem?.name || "-"} />
+              <InfoTile label="Type" value={selectedItem?.typeName || "-"} />
               <InfoTile label="ERP Code" value={selectedOrder.erpCode || "-"} />
               <InfoTile label="Schedule Date" value={formatDate(selectedSchedule.scheduledDate)} />
               <InfoTile label="Scheduled Qty" value={`${selectedSchedule.qty || 0} ${selectedItem?.uom || ""}`} />
