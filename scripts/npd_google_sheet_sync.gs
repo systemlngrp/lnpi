@@ -34,9 +34,8 @@ function forceFullNpdSync() {
     throw new Error(`Column "${NPD_SYNC_CONFIG.hostingerSyncHeader}" not found in sheet.`);
   }
 
-  const syncTimestamp = new Date().toISOString();
-  const rowsToSync = [];
-  const rowIndicesToUpdate = [];
+  const allRowsToSync = [];
+  const allRowIndicesToUpdate = [];
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
@@ -49,47 +48,75 @@ function forceFullNpdSync() {
       headers.forEach((header, index) => {
         mapped[header] = row[index] ?? '';
       });
-      rowsToSync.push(mapped);
-      rowIndicesToUpdate.push(i + 1); // 1-based index
+      allRowsToSync.push(mapped);
+      allRowIndicesToUpdate.push(i + 1); // 1-based index
     }
   }
 
-  if (rowsToSync.length === 0) {
+  if (allRowsToSync.length === 0) {
     Logger.log('No rows pending sync (all have timestamps or are empty).');
     return { ok: true, message: 'No rows pending sync.', processedRows: 0 };
   }
 
-  const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.apiUrl, {
-    method: 'post',
-    contentType: 'application/json',
-    muteHttpExceptions: true,
-    headers: {
-      'x-npd-sync-secret': NPD_SYNC_CONFIG.secret,
-    },
-    payload: JSON.stringify({
-      spreadsheetId: NPD_SYNC_CONFIG.spreadsheetId,
-      spreadsheetName: spreadsheet.getName(),
-      tabName: sheet.getName(),
-      syncMode: 'full',
-      syncTimestamp: syncTimestamp,
-      rows: rowsToSync,
-    }),
-  });
+  const batchSize = 100;
+  let totalProcessed = 0;
+  let lastResult = null;
 
-  const responseText = response.getContentText();
-  Logger.log('NPD sync response code: %s', response.getResponseCode());
-  Logger.log('NPD sync response body: %s', responseText);
+  Logger.log('Starting sync for %s total pending rows in batches of %s', allRowsToSync.length, batchSize);
 
-  if (response.getResponseCode() >= 400) {
-    throw new Error(`NPD sync failed: ${responseText}`);
+  for (let i = 0; i < allRowsToSync.length; i += batchSize) {
+    const rowsToSync = allRowsToSync.slice(i, i + batchSize);
+    const rowIndicesToUpdate = allRowIndicesToUpdate.slice(i, i + batchSize);
+    const syncTimestamp = new Date().toISOString();
+
+    Logger.log('Syncing batch %s (%s rows)...', (i / batchSize) + 1, rowsToSync.length);
+
+    const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.apiUrl, {
+      method: 'post',
+      contentType: 'application/json',
+      muteHttpExceptions: true,
+      headers: {
+        'x-npd-sync-secret': NPD_SYNC_CONFIG.secret,
+      },
+      payload: JSON.stringify({
+        spreadsheetId: NPD_SYNC_CONFIG.spreadsheetId,
+        spreadsheetName: spreadsheet.getName(),
+        tabName: sheet.getName(),
+        syncMode: 'full_batch_chunk',
+        syncTimestamp: syncTimestamp,
+        rows: rowsToSync,
+      }),
+    });
+
+    const responseText = response.getContentText();
+    const responseCode = response.getResponseCode();
+    Logger.log('Batch sync response code: %s', responseCode);
+
+    if (responseCode >= 400) {
+      Logger.log('Batch sync failed at chunk starting at index %s: %s', i, responseText);
+      throw new Error(`NPD sync failed at batch starting row ${rowIndicesToUpdate[0]}: ${responseText}`);
+    }
+
+    // Update timestamps in the sheet for THIS batch
+    Logger.log('Updating timestamps for %s rows in this batch', rowIndicesToUpdate.length);
+    rowIndicesToUpdate.forEach((rowIndex) => {
+      try {
+        sheet.getRange(rowIndex, hostingerSyncIndex + 1).setValue(syncTimestamp);
+      } catch (err) {
+        Logger.log('Failed to update timestamp for row %s: %s', rowIndex, err);
+      }
+    });
+
+    SpreadsheetApp.flush();
+    totalProcessed += rowsToSync.length;
+    lastResult = JSON.parse(responseText);
   }
 
-  // Update timestamps in the sheet
-  rowIndicesToUpdate.forEach((rowIndex) => {
-    sheet.getRange(rowIndex, hostingerSyncIndex + 1).setValue(syncTimestamp);
-  });
-
-  return JSON.parse(responseText);
+  return {
+    ...lastResult,
+    totalProcessed: totalProcessed,
+    message: `Successfully synced ${totalProcessed} rows in batches.`
+  };
 }
 
 function onNpdSheetEdit(e) {
@@ -207,6 +234,7 @@ function flushQueuedNpdSync() {
   const hostingerSyncIndex = headers.indexOf(NPD_SYNC_CONFIG.hostingerSyncHeader);
 
   if (npdIdIndex !== -1 && hostingerSyncIndex !== -1) {
+    Logger.log('Batch update: searching for %s rows to timestamp in column %s', pendingRows.length, hostingerSyncIndex + 1);
     const sheetData = sheet.getDataRange().getDisplayValues();
     pendingRows.forEach((row) => {
       const npdId = String(row[NPD_SYNC_CONFIG.npdIdHeader] || '').trim();
@@ -214,11 +242,19 @@ function flushQueuedNpdSync() {
 
       for (let i = 1; i < sheetData.length; i++) {
         if (String(sheetData[i][npdIdIndex] || '').trim() === npdId) {
-          sheet.getRange(i + 1, hostingerSyncIndex + 1).setValue(syncTimestamp);
+          try {
+            sheet.getRange(i + 1, hostingerSyncIndex + 1).setValue(syncTimestamp);
+            Logger.log('Set timestamp for NPD ID: %s at row %s', npdId, i + 1);
+          } catch (err) {
+            Logger.log('Error setting timestamp for NPD ID %s: %s', npdId, err);
+          }
           break;
         }
       }
     });
+    SpreadsheetApp.flush();
+  } else {
+    Logger.log('Batch update failed: Headers not found (NPD ID: %s, SYNC: %s)', npdIdIndex, hostingerSyncIndex);
   }
 
   clearPendingNpdQueue_();

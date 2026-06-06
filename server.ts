@@ -3298,9 +3298,11 @@ const createHandlers = (tableName: string) => {
 
         if (tableName === "users") {
           [rows] = await db.query("SELECT * FROM `users` ORDER BY updateTimestamp DESC");
+          const viewer = await getRequestUser(req);
+          const isAdminViewer = viewer?.role === "Admin";
           const sanitized = (rows as any[]).map((r) => {
-            const { password, ...rest } = r || {};
-            return { ...rest };
+            const { password, menuAccess, ...rest } = r || {};
+            return isAdminViewer ? { ...rest, menuAccess: normalizeMenuAccess(menuAccess) } : { ...rest };
           });
           return res.json(sanitized);
         }
@@ -4476,6 +4478,7 @@ entities.forEach(entity => {
       if (!user) return res.status(401).json({ error: "Unauthorized" });
 
       if (entity === "users") {
+        if (req.method === "GET") return next();
         if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
         return next();
       }
