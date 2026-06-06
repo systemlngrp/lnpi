@@ -343,11 +343,29 @@ export function OrderForm() {
           return;
         }
 
-        await setOrders([...orders, ...newOrders]);
-        alert(`Successfully uploaded ${newOrders.length} orders.`);
+        const token = window.localStorage.getItem("authToken") || "";
+        const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+        for (let index = 0; index < newOrders.length; index += 1) {
+          const order = newOrders[index];
+          const response = await fetch("/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders },
+            body: JSON.stringify(order),
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const message = errData.error || `Failed to save row ${index + 2}.`;
+            throw new Error(message);
+          }
+        }
+
+        window.dispatchEvent(new CustomEvent("sync-data-orders"));
+        alert(`Successfully uploaded ${newOrders.length} orders to DB.`);
       } catch (error) {
         console.error("Bulk order upload error:", error);
-        alert("Failed to parse or upload the Excel file.");
+        alert(error instanceof Error ? error.message : "Failed to parse or upload the Excel file.");
       } finally {
         setIsSubmitting(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
