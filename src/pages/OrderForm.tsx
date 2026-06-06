@@ -76,7 +76,7 @@ export function OrderForm() {
   const fetchAllOrderItems = useCallback(async () => {
     const token = window.localStorage.getItem("authToken") || "";
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const pageSize = 200;
+    const pageSize = 2000;
     let page = 1;
     let total = Number.POSITIVE_INFINITY;
     const collected: Item[] = [];
