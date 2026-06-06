@@ -98,14 +98,6 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "Material In",
-    color: "bg-slate-800",
-    items: [
-      { name: "Material In Form", href: "/material-in/form", icon: ClipboardList },
-      { name: "Material In", href: "/material-in/item-master", icon: BarChart3 },
-    ],
-  },
-  {
     section: "Indent",
     color: "bg-orange-700",
     items: [
