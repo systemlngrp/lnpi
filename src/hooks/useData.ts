@@ -6,6 +6,25 @@ type UseDataOptions = {
   syncEventKey?: string;
 };
 
+function safeGetLocalStorage(key: string) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    console.warn(`[useData] Failed to read localStorage key "${key}":`, error);
+    return null;
+  }
+}
+
+function safeSetLocalStorage(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.warn(`[useData] Failed to write localStorage key "${key}":`, error);
+    return false;
+  }
+}
+
 export function useData<T extends { id: string }>(entity: string, initialValue: T[], options?: UseDataOptions) {
   const [data, setDataState] = useState<T[]>(initialValue);
   const dataRef = useRef<T[]>(initialValue);
@@ -39,11 +58,11 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       setDataState(finalData);
       dataRef.current = finalData;
       setError(null);
-      window.localStorage.setItem(storageKey, JSON.stringify(finalData));
+      safeSetLocalStorage(storageKey, JSON.stringify(finalData));
     } catch (err) {
       console.error(`Error fetching ${entity}:`, err);
       setError((err as Error).message);
-      const saved = window.localStorage.getItem(storageKey);
+      const saved = safeGetLocalStorage(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         setDataState(parsed);
@@ -83,7 +102,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
     // Optimistic update
     setDataState(resolvedData);
     dataRef.current = resolvedData;
-    window.localStorage.setItem(storageKey, JSON.stringify(resolvedData));
+    safeSetLocalStorage(storageKey, JSON.stringify(resolvedData));
 
     // Emit sync event immediately for other local components
     window.dispatchEvent(new CustomEvent(syncEvent));
