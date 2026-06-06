@@ -531,7 +531,7 @@ export function ProductionForm() {
       sheetWeight: round2(sheetWeight),
       totalPaperWeight: round2(totalPaperWeight),
       totalWeightOfSet: round2(totalWeightOfSet),
-      realizationPerKg: round2(realizationPerKg),
+      realizationPerKg: realizationPerKg === "" ? "" : round2(realizationPerKg),
       productionInMeter: round2(productionInMeter),
       plannedProductionInMeter: plannedProductionInMeter === "" ? "" : round2(Number(plannedProductionInMeter)),
       avgWeight,
