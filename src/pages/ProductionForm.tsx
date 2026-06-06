@@ -501,8 +501,8 @@ export function ProductionForm() {
     const totalPaperWeight = totalJobWeightValue;
     const totalWeightOfSet = sheetWeight + plateWeight;
 
-    // Realization per kg = Rate / Sheet Weight
-    const realizationPerKg = sheetWeight > 0 ? rate / sheetWeight : 0;
+    // Realization per kg = Rate / Total Wt of Set
+    const realizationPerKg = totalWeightOfSet > 0 ? rate / totalWeightOfSet : "";
 
     const wastage =
       prodFromFFG > 0 && sheetWeight > 0 && actualPaperUsed > 0
@@ -958,7 +958,7 @@ export function ProductionForm() {
               {showField("Actual Paper Used") ? <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" helpText="Workflow-managed field. It is derived from Material Issue minus Material Return against the job, and then used in Avg Weight and Wastage calculations." /> : null}
 
               {showField("Rate") ? <FormInput label="Rate" value={formData.rate} readOnly type="number" helpText="Auto-fetched from the selected order." /> : null}
-              {showField("Realization/KG") ? <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: Rate / Sheet Weight." /> : null}
+              {showField("Realization/KG") ? <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: Rate / Total Wt of Set." /> : null}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">

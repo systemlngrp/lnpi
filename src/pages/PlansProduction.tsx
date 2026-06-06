@@ -114,7 +114,7 @@ const formulaCards = [
   },
   {
     title: "Realization/KG",
-    formula: "(Rate / Total Wt of Set) x No. of Parts",
+    formula: "Rate / Total Wt of Set",
     description: "The app uses the order rate and total set weight to estimate realization per kilogram.",
   },
   {
@@ -328,7 +328,7 @@ const fieldRules = [
   {
     field: "Realization/KG",
     source: "Auto-calculated",
-    formula: "(Rate / Total Wt of Set) x No. of Parts",
+    formula: "Rate / Total Wt of Set",
     validation: "Read-only in Production Form.",
   },
   {
