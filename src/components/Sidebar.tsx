@@ -246,6 +246,15 @@ export const NAVIGATION: NavGroup[] = [
   },
 ];
 
+const NAVIGATION_WITH_SORTED_MASTERS: NavGroup[] = NAVIGATION.map((group) =>
+  group.section === "Masters"
+    ? {
+        ...group,
+        items: [...group.items].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+      }
+    : group
+);
+
 export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
   const { hasAccess } = useAuth();
@@ -412,7 +421,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   consumptions.filter(c => isPendingPH(c.status)).length
   };
 
-  const navigation = NAVIGATION;
+  const navigation = NAVIGATION_WITH_SORTED_MASTERS;
 
   useEffect(() => {
     const next: Record<string, boolean> = {};
