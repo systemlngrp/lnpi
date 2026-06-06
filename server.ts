@@ -3361,6 +3361,26 @@ const createHandlers = (tableName: string) => {
           }
         }
 
+        if (tableName === "users") {
+          const normalizedUserId = String(data.userId || "").trim();
+          if (!normalizedUserId) {
+            return res.status(400).json({ error: "User ID is required." });
+          }
+
+          const [duplicateRows] = await db.query(
+            "SELECT id, userId, name FROM `users` WHERE LOWER(TRIM(userId)) = LOWER(TRIM(?)) AND id <> ? LIMIT 1",
+            [normalizedUserId, String(data.id || "")]
+          );
+          const duplicateUser = (duplicateRows as any[])[0];
+          if (duplicateUser?.id) {
+            return res.status(409).json({
+              error: `User ID already exists for ${String(duplicateUser.name || duplicateUser.userId || "another user")}.`,
+            });
+          }
+
+          data.userId = normalizedUserId;
+        }
+
         if (tableName === "production_processing") {
           const missing: string[] = [];
           if (!String(data.productionId || "").trim()) missing.push("Job/Production");
