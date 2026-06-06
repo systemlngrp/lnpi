@@ -362,7 +362,7 @@ export function ProductionForm() {
     const openWidth = Number(selectedItem?.openWidth || 0);
     const openLength = Number(selectedItem?.openLength || 0);
     const normalizedType = String(selectedItem?.typeName || "").trim().toUpperCase();
-    const normalizedPart = normalizeNumericPart(selectedItem?.part);
+    const normalizedPart = normalizeNumericPart(selectedItem?.part ?? selectedItem?.noOfParts);
     const dieCutUps = Number(selectedItem?.dieCutUps || 0);
     const f3 = Number(selectedItem?.f3 || 0);
     const b3 = Number(selectedItem?.b3 || 0);
