@@ -1131,6 +1131,15 @@ function normalizeFetchedRow(tableName: string, row: any) {
     return normalizeNpdRowForItemConsumers(newRow);
   }
 
+  if (tableName === "users") {
+    newRow.userId = String(newRow.userId || newRow.userid || newRow.user_id || "").trim();
+    newRow.updatedBy = String(newRow.updatedBy || newRow.updated_by || "").trim();
+    newRow.updateTimestamp = String(newRow.updateTimestamp || newRow.update_timestamp || "").trim();
+    if (newRow.menuAccess === undefined && newRow.menuaccess !== undefined) {
+      newRow.menuAccess = newRow.menuaccess;
+    }
+  }
+
   return newRow;
 }
 
@@ -1307,6 +1316,54 @@ async function ensureColumnExists(db: mysql.Pool, database: string, table: strin
   );
   if ((rows as any[]).length > 0) return;
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
+}
+
+async function getExistingColumnNames(db: mysql.Pool, database: string, table: string) {
+  const [rows] = await db.query(
+    "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?",
+    [database, table]
+  );
+  return new Set((rows as any[]).map((row) => String(row.COLUMN_NAME || "")));
+}
+
+async function ensureUsersCanonicalData(db: mysql.Pool, database: string) {
+  const columns = await getExistingColumnNames(db, database, "users");
+
+  if (columns.has("userId")) {
+    const userIdSources = ["userid", "user_id"].filter((column) => columns.has(column));
+    if (userIdSources.length > 0) {
+      const expr = userIdSources.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ");
+      await db.query(
+        `UPDATE \`users\` SET \`userId\` = COALESCE(NULLIF(TRIM(\`userId\`), ''), ${expr}) WHERE COALESCE(NULLIF(TRIM(\`userId\`), ''), '') = ''`
+      );
+    }
+  }
+
+  if (columns.has("updatedBy")) {
+    const updatedBySources = ["updated_by"].filter((column) => columns.has(column));
+    if (updatedBySources.length > 0) {
+      const expr = updatedBySources.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ");
+      await db.query(
+        `UPDATE \`users\` SET \`updatedBy\` = COALESCE(NULLIF(TRIM(\`updatedBy\`), ''), ${expr}) WHERE COALESCE(NULLIF(TRIM(\`updatedBy\`), ''), '') = ''`
+      );
+    }
+  }
+
+  if (columns.has("updateTimestamp")) {
+    const updateTimestampSources = ["update_timestamp"].filter((column) => columns.has(column));
+    if (updateTimestampSources.length > 0) {
+      const expr = updateTimestampSources.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ");
+      await db.query(
+        `UPDATE \`users\` SET \`updateTimestamp\` = COALESCE(NULLIF(TRIM(\`updateTimestamp\`), ''), ${expr}) WHERE COALESCE(NULLIF(TRIM(\`updateTimestamp\`), ''), '') = ''`
+      );
+    }
+  }
+
+  if (columns.has("menuAccess") && columns.has("menuaccess")) {
+    await db.query(
+      "UPDATE `users` SET `menuAccess` = COALESCE(`menuAccess`, `menuaccess`) WHERE `menuAccess` IS NULL"
+    );
+  }
 }
 
 async function ensureNpdSchemaColumns(db: mysql.Pool, database: string) {
@@ -1639,7 +1696,9 @@ async function loadAuthUserById(userId: string): Promise<AuthUser | null> {
   const db = await getPool();
   if (!db) return null;
   const [rows] = await db.query("SELECT * FROM `users` WHERE id = ? LIMIT 1", [userId]);
-  const row = (rows as any[])[0];
+  const rawRow = (rows as any[])[0];
+  if (!rawRow) return null;
+  const row = normalizeFetchedRow("users", rawRow);
   if (!row) return null;
   return {
     id: String(row.id),
@@ -3205,6 +3264,12 @@ async function initDb(retries = 5) {
       }
 
       try {
+        await ensureUsersCanonicalData(db, database);
+      } catch (err) {
+        console.warn("[DB] Could not normalize legacy users columns:", (err as Error).message);
+      }
+
+      try {
         const [oldLeastSheetWeight] = await db.query(
           "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
           [database, "productions", "leastSheetWeight"]
@@ -3299,10 +3364,17 @@ const createHandlers = (tableName: string) => {
         let rows;
 
         if (tableName === "users") {
-          [rows] = await db.query("SELECT * FROM `users` ORDER BY updateTimestamp DESC");
+          [rows] = await db.query("SELECT * FROM `users`");
           const viewer = await getRequestUser(req);
           const isAdminViewer = viewer?.role === "Admin";
-          const sanitized = (rows as any[]).map((r) => {
+          const sanitized = (rows as any[])
+            .map((row) => normalizeFetchedRow("users", row))
+            .sort((a, b) => {
+              const timeA = a?.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
+              const timeB = b?.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
+              return timeB - timeA || String(b?.id || "").localeCompare(String(a?.id || ""));
+            })
+            .map((r) => {
             const { password, menuAccess, ...rest } = r || {};
             return isAdminViewer ? { ...rest, menuAccess: normalizeMenuAccess(menuAccess) } : { ...rest };
           });
@@ -3367,18 +3439,90 @@ const createHandlers = (tableName: string) => {
             return res.status(400).json({ error: "User ID is required." });
           }
 
+          const [databaseRows] = await db.query("SELECT DATABASE() as db");
+          const currentDatabase = String((databaseRows as any[])[0]?.db || "");
+          const userColumns = await getExistingColumnNames(db, currentDatabase, "users");
+          const userIdSources = ["userId", "userid", "user_id"].filter((column) => userColumns.has(column));
+          if (userIdSources.length === 0) {
+            return res.status(500).json({ error: "Users table is missing a user ID column." });
+          }
+          const canonicalUserIdSql = `COALESCE(${userIdSources.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ")})`;
+
           const [duplicateRows] = await db.query(
-            "SELECT id, userId, name FROM `users` WHERE LOWER(TRIM(userId)) = LOWER(TRIM(?)) AND id <> ? LIMIT 1",
+            `SELECT id, name,
+                ${canonicalUserIdSql} as canonicalUserId
+             FROM \`users\`
+             WHERE LOWER(TRIM(${canonicalUserIdSql})) = LOWER(TRIM(?))
+               AND id <> ?
+             LIMIT 1`,
             [normalizedUserId, String(data.id || "")]
           );
           const duplicateUser = (duplicateRows as any[])[0];
           if (duplicateUser?.id) {
             return res.status(409).json({
-              error: `User ID already exists for ${String(duplicateUser.name || duplicateUser.userId || "another user")}.`,
+              error: `User ID already exists for ${String(duplicateUser.name || duplicateUser.canonicalUserId || "another user")}.`,
             });
           }
 
           data.userId = normalizedUserId;
+          data.updatedBy = String(data.updatedBy || "").trim() || "System Admin";
+          data.updateTimestamp = String(data.updateTimestamp || "").trim() || new Date().toISOString();
+
+          const userRecord: Record<string, any> = {
+            id: String(data.id || crypto.randomUUID()),
+            userId: data.userId,
+            name: String(data.name || "").trim(),
+            mobile: String(data.mobile || "").trim(),
+            email: data.email ? String(data.email).trim() : null,
+            password: data.password ? String(data.password) : null,
+            designation: data.designation ? String(data.designation).trim() : null,
+            role: String(data.role || "Employee") === "Admin" ? "Admin" : "Employee",
+            status: String(data.status || "Active") === "Inactive" ? "Inactive" : "Active",
+            menuAccess: JSON.stringify(normalizeMenuAccess(data.menuAccess)),
+            updatedBy: data.updatedBy,
+            updateTimestamp: data.updateTimestamp,
+          };
+
+          const columnValueMap: Record<string, any> = {};
+          const assignIfPresent = (column: string, value: any) => {
+            if (userColumns.has(column)) columnValueMap[column] = value;
+          };
+
+          assignIfPresent("id", userRecord.id);
+          assignIfPresent("userId", userRecord.userId);
+          assignIfPresent("userid", userRecord.userId);
+          assignIfPresent("user_id", userRecord.userId);
+          assignIfPresent("name", userRecord.name);
+          assignIfPresent("mobile", userRecord.mobile);
+          assignIfPresent("email", userRecord.email);
+          assignIfPresent("password", userRecord.password);
+          assignIfPresent("designation", userRecord.designation);
+          assignIfPresent("role", userRecord.role);
+          assignIfPresent("status", userRecord.status);
+          assignIfPresent("menuAccess", userRecord.menuAccess);
+          assignIfPresent("menuaccess", userRecord.menuAccess);
+          assignIfPresent("updatedBy", userRecord.updatedBy);
+          assignIfPresent("updated_by", userRecord.updatedBy);
+          assignIfPresent("updateTimestamp", userRecord.updateTimestamp);
+          assignIfPresent("update_timestamp", userRecord.updateTimestamp);
+
+          if (userColumns.has("id")) {
+            const [existingRows] = await db.query("SELECT id FROM `users` WHERE id = ? LIMIT 1", [userRecord.id]);
+            const exists = (existingRows as any[]).length > 0;
+            const keys = Object.keys(columnValueMap);
+            const values = keys.map((key) => columnValueMap[key]);
+
+            if (exists) {
+              const updates = keys.filter((key) => key !== "id").map((key) => `\`${key}\` = ?`).join(", ");
+              await db.query(`UPDATE \`users\` SET ${updates} WHERE \`id\` = ?`, [...keys.filter((key) => key !== "id").map((key) => columnValueMap[key]), userRecord.id]);
+            } else {
+              const placeholders = keys.map(() => "?").join(", ");
+              const columnNames = keys.map((key) => `\`${key}\``).join(", ");
+              await db.query(`INSERT INTO \`users\` (${columnNames}) VALUES (${placeholders})`, values);
+            }
+          }
+
+          return res.json(normalizeFetchedRow("users", userRecord));
         }
 
         if (tableName === "production_processing") {
