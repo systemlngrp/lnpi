@@ -49,6 +49,50 @@ export function OrderForm() {
     return `${fy}/${maxNo + 1}`;
   };
 
+  const normalizeOrderDate = (value: unknown) => {
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      const yyyy = value.getFullYear();
+      const mm = String(value.getMonth() + 1).padStart(2, "0");
+      const dd = String(value.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (parsed) {
+        const yyyy = parsed.y;
+        const mm = String(parsed.m).padStart(2, "0");
+        const dd = String(parsed.d).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+
+    const text = String(value || "").trim();
+    if (!text) return "";
+
+    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+    const parsed = new Date(text);
+    if (!isNaN(parsed.getTime())) {
+      const yyyy = parsed.getFullYear();
+      const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+      const dd = String(parsed.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    return text;
+  };
+
+  const getOrderFinancialYearLabel = (dateStr: string) => {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "0000-00";
+    let fyStart = date.getFullYear();
+    const month = date.getMonth() + 1;
+    if (month < 4) fyStart -= 1;
+    return `${fyStart}-${String(fyStart + 1).slice(2)}`;
+  };
+
   const poOptions = [
     { value: "Verbal", label: "Verbal" },
     { value: "Ref No.", label: "Ref No." },
@@ -141,10 +185,10 @@ export function OrderForm() {
     reader.onload = async (event) => {
       try {
         const bstr = event.target?.result;
-        const wb = XLSX.read(bstr, { type: "binary" });
+        const wb = XLSX.read(bstr, { type: "binary", cellDates: true });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
+        const data = XLSX.utils.sheet_to_json(ws, { raw: true });
 
         if (data.length === 0) {
           alert("The file is empty.");
@@ -175,6 +219,7 @@ export function OrderForm() {
         const missingItems: string[] = [];
         const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as const;
         const nextVerbalPoNumbers = new Map<string, number>();
+        const nextOrderNumbers = new Map<string, number>();
 
         orders.forEach((order) => {
           if (order.poType !== "Verbal") return;
@@ -185,9 +230,17 @@ export function OrderForm() {
           nextVerbalPoNumbers.set(fy, Math.max(nextVerbalPoNumbers.get(fy) || 0, numberPart));
         });
 
+        orders.forEach((order) => {
+          const orderNoParts = String(order.orderNo || "").split("/");
+          const fy = orderNoParts[0] || "";
+          const numberPart = parseInt(orderNoParts[1] || "0", 10);
+          if (!fy || !Number.isFinite(numberPart)) return;
+          nextOrderNumbers.set(fy, Math.max(nextOrderNumbers.get(fy) || 0, numberPart));
+        });
+
         const newOrders: Order[] = data.map((row: any, index) => {
           const rowNumber = index + 2;
-          const orderDateValue = String(row["Order Date"] || "").trim();
+          const orderDateValue = normalizeOrderDate(row["Order Date"]);
           const poTypeValue = String(row["PO Type"] || "").trim();
           const poNumberValue = String(row["PO Number"] || "").trim();
           const itemNameValue = String(row["Item Name"] || "").trim();
@@ -258,8 +311,14 @@ export function OrderForm() {
             resolvedPoNumber = `${fy}/${nextNumber}`;
           }
 
+          const orderFy = getOrderFinancialYearLabel(orderDateValue);
+          const nextOrderNumber = (nextOrderNumbers.get(orderFy) || 0) + 1;
+          nextOrderNumbers.set(orderFy, nextOrderNumber);
+          const resolvedOrderNo = `${orderFy}/${String(nextOrderNumber).padStart(5, "0")}`;
+
           return {
             id: crypto.randomUUID(),
+            orderNo: resolvedOrderNo,
             orderDate: orderDateValue,
             companyId,
             poNumber: poType === "Ref No." ? poNumberValue : resolvedPoNumber,
