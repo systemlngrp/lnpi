@@ -84,12 +84,12 @@ const formulaCards = [
   },
   {
     title: "Top Paper Weight (KG)",
-    formula: "Reel As per Calculation x Cutting Trim x 25.4 x 25.4 x Top x Paper Required (Nos) / 1,000,000,000",
+    formula: "((Reel As per Calculation / 25.4) x (Cutting Trim / 25.4) x Top x Paper Required (Nos)) / 1,000,000,000",
     description: "This field is auto-calculated in Production Form using the current Reel As per Calculation, Cutting Trim, Top, and Paper Required (Nos).",
   },
   {
     title: "Liner Weight (KG)",
-    formula: "Reel As per Calculation x Cutting Trim x 25.4 x 25.4 x (GSM minus Top) x Paper Required (Nos) / 1,000,000,000",
+    formula: "((Reel As per Calculation / 25.4) x (Cutting Trim / 25.4) x (GSM minus Top) x Paper Required (Nos)) / 1,000,000,000",
     description: "This field is auto-calculated in Production Form using the current Reel As per Calculation, Cutting Trim, GSM, Top, and Paper Required (Nos).",
   },
   {
@@ -268,13 +268,13 @@ const fieldRules = [
   {
     field: "Top Paper Weight (KG)",
     source: "Auto-calculated",
-    formula: "Reel As per Calculation x Cutting Trim x 25.4 x 25.4 x Top x Paper Required (Nos) / 1,000,000,000",
+    formula: "((Reel As per Calculation / 25.4) x (Cutting Trim / 25.4) x Top x Paper Required (Nos)) / 1,000,000,000",
     validation: "Read-only in Production Form.",
   },
   {
     field: "Liner Weight (KG)",
     source: "Auto-calculated",
-    formula: "Reel As per Calculation x Cutting Trim x 25.4 x 25.4 x (GSM minus Top) x Paper Required (Nos) / 1,000,000,000",
+    formula: "((Reel As per Calculation / 25.4) x (Cutting Trim / 25.4) x (GSM minus Top) x Paper Required (Nos)) / 1,000,000,000",
     validation: "Read-only in Production Form.",
   },
   {

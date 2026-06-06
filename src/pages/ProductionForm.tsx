@@ -484,11 +484,11 @@ export function ProductionForm() {
 
     const topPaperWeightKg =
       paperRequiredNos !== ""
-        ? (reelAsPerCalc * cutting * 25.4 * 25.4 * top * paperRequiredNos) / 1000000000
+        ? ((reelAsPerCalc / 25.4) * (cutting / 25.4) * top * paperRequiredNos) / 1000000000
         : "";
     const linerWeightKg =
       paperRequiredNos !== ""
-        ? (reelAsPerCalc * cutting * 25.4 * 25.4 * (gsm - top) * paperRequiredNos) / 1000000000
+        ? ((reelAsPerCalc / 25.4) * (cutting / 25.4) * (gsm - top) * paperRequiredNos) / 1000000000
         : "";
     const totalJobWeight = topPaperWeightKg !== "" && linerWeightKg !== "" ? topPaperWeightKg + linerWeightKg : "";
     const totalJobWeightValue = totalJobWeight === "" ? 0 : Number(totalJobWeight || 0);
@@ -923,7 +923,7 @@ export function ProductionForm() {
                 readOnly
                 type="number"
                 step="0.00001"
-                helpText="Formula: Reel As per Calculation x Cutting Trim x 25.4 x 25.4 x Top x Paper Required (Nos) / 1,000,000,000."
+                helpText="Formula: ((Reel As per Calculation / 25.4) x (Cutting Trim / 25.4) x Top x Paper Required (Nos)) / 1,000,000,000."
               /> : null}
               {showField("Liner Weight (KG)") ? <FormInput
                 label="Liner Weight (KG)"
@@ -931,7 +931,7 @@ export function ProductionForm() {
                 readOnly
                 type="number"
                 step="0.00001"
-                helpText="Formula: Reel As per Calculation x Cutting Trim x 25.4 x 25.4 x (GSM minus Top) x Paper Required (Nos) / 1,000,000,000."
+                helpText="Formula: ((Reel As per Calculation / 25.4) x (Cutting Trim / 25.4) x (GSM minus Top) x Paper Required (Nos)) / 1,000,000,000."
               /> : null}
               {showField("Total Job Weight") ? <FormInput
                 label="Total Job Weight"
