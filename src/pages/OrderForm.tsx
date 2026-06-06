@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, Upload, Download } from "lucide-react";
 import { Order, Company, Item } from "../types";
@@ -15,6 +15,7 @@ export function OrderForm() {
   const [companies] = useData<Company>("companies", []);
   const [items] = useData<Item>("items", []);
   const [users] = useData<User>("users", []);
+  const [allItems, setAllItems] = useState<Item[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -72,14 +73,64 @@ export function OrderForm() {
     return companies.find((company) => normalizeCompanyName(company.name) === customerName)?.id || "";
   };
 
+  const fetchAllOrderItems = useCallback(async () => {
+    const token = window.localStorage.getItem("authToken") || "";
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    const pageSize = 200;
+    let page = 1;
+    let total = Number.POSITIVE_INFINITY;
+    const collected: Item[] = [];
+    const seenIds = new Set<string>();
+
+    try {
+      while (collected.length < total) {
+        const response = await fetch(`/api/npd?page=${page}&pageSize=${pageSize}`, { headers });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to fetch full item list");
+        }
+
+        const result = await response.json();
+        const rows = Array.isArray(result?.rows) ? result.rows : [];
+        const reportedTotal = Number(result?.total);
+        if (Number.isFinite(reportedTotal) && reportedTotal >= 0) {
+          total = reportedTotal;
+        }
+
+        rows.forEach((row) => {
+          const id = String(row?.id || "").trim();
+          if (!id || seenIds.has(id)) return;
+          seenIds.add(id);
+          collected.push(row);
+        });
+
+        if (rows.length === 0 || rows.length < pageSize) {
+          break;
+        }
+
+        page += 1;
+      }
+
+      setAllItems(collected);
+    } catch (error) {
+      console.error("Failed to fetch full NPD item list for orders:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAllOrderItems();
+  }, [fetchAllOrderItems]);
+
+  const effectiveItems = allItems.length > 0 ? allItems : items;
+
   const itemOptions = useMemo(() => {
     const selectedCompanyName = normalizeCompanyName(companies.find((company) => company.id === companyId)?.name);
-    return items
+    return effectiveItems
       .filter((item) => !companyId || getItemCustomerName(item) === selectedCompanyName)
       .slice()
       .sort((a,b) => (a.name||"").localeCompare(b.name||""))
       .map(i => ({ value: i.id, label: i.name }));
-  }, [items, companyId, companies]);
+  }, [effectiveItems, companyId, companies]);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const location = useLocation();
@@ -127,7 +178,7 @@ export function OrderForm() {
         setIsSubmitting(true);
 
         const itemMap = new Map<string, Item>();
-        items.forEach((item) => {
+        effectiveItems.forEach((item) => {
           const keys = [item.name, (item as any)?.itemName]
             .map((value) => normalizeText(value))
             .filter(Boolean);
@@ -386,7 +437,7 @@ export function OrderForm() {
       return;
     }
     setItemId(id);
-    const it = items.find(i => i.id === id);
+    const it = effectiveItems.find(i => i.id === id);
     const linkedCompanyId = resolveItemCompanyId(it);
     if (!companyId && linkedCompanyId) {
       setCompanyId(linkedCompanyId);
@@ -405,7 +456,7 @@ export function OrderForm() {
       return;
     }
     if (!itemId) return;
-    const selectedItem = items.find((item) => item.id === itemId);
+    const selectedItem = effectiveItems.find((item) => item.id === itemId);
     const resolvedCompanyId = resolveItemCompanyId(selectedItem);
     if (resolvedCompanyId !== id) {
       setItemId("");
@@ -574,7 +625,7 @@ export function OrderForm() {
                 <td className="px-4 py-2 border border-black">{companies.find(c => c.id === o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{o.poNumber}</td>
                 <td className="px-4 py-2 border border-black">{o.erpCode}</td>
-                <td className="px-4 py-2 border border-black">{items.find(i => i.id === o.itemId)?.name}</td>
+                <td className="px-4 py-2 border border-black">{effectiveItems.find(i => i.id === o.itemId)?.name}</td>
                 <td className="px-4 py-2 text-right border border-black">{o.qty}</td>
                 <td className="px-4 py-2 text-right border border-black">{o.rate}</td>
                 <td className="px-4 py-2 text-right border border-black">{users.find(u => u.id === o.orderBy)?.name}</td>
