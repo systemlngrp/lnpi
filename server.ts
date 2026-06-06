@@ -1091,7 +1091,12 @@ function normalizeNpdRowForItemConsumers(row: any) {
     f3: row?.f3 ?? toFiniteNumber(row?.rsf4),
     b3: row?.b3 ?? toFiniteNumber(row?.rsl5),
     flap: row?.flap ?? toFiniteNumber(row?.flapSize),
-    plateWeight: row?.plateWeight ?? toFiniteNumber(row?.platePhpWeight),
+    plateWeight:
+      row?.plateWeight ??
+      (() => {
+        const platePhpWeight = toFiniteNumber(row?.platePhpWeight);
+        return platePhpWeight === undefined ? undefined : platePhpWeight / 1000;
+      })(),
     artwork: row?.artwork ?? row?.artworkUpload ?? "",
     opening,
     receipt,

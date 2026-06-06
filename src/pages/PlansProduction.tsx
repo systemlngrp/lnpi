@@ -297,8 +297,8 @@ const fieldRules = [
   },
   {
     field: "Plate/PHP Weight",
-    source: "Auto-filled from Item Master",
-    formula: "Direct copy from the selected item.",
+    source: "Auto-filled from NPD Master",
+    formula: "Selected item's stored Plate/PHP Weight value / 1000.",
     validation: "Read-only in Production Form.",
   },
   {
