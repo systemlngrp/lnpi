@@ -62,6 +62,13 @@ function joinPrintingColors(color1?: string, color2?: string) {
   return [color1?.trim(), color2?.trim()].filter(Boolean).join(" / ");
 }
 
+function normalizeNumericPart(value?: string | number | null): 1 | 2 | null {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "1" || normalized === "SINGLE") return 1;
+  if (normalized === "2" || normalized === "2 PART BOX") return 2;
+  return null;
+}
+
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
     Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
@@ -355,7 +362,7 @@ export function ProductionForm() {
     const openWidth = Number(selectedItem?.openWidth || 0);
     const openLength = Number(selectedItem?.openLength || 0);
     const normalizedType = String(selectedItem?.typeName || "").trim().toUpperCase();
-    const normalizedPart = String(selectedItem?.part || "").trim().toUpperCase();
+    const normalizedPart = normalizeNumericPart(selectedItem?.part);
     const dieCutUps = Number(selectedItem?.dieCutUps || 0);
     const f3 = Number(selectedItem?.f3 || 0);
     const b3 = Number(selectedItem?.b3 || 0);
@@ -410,9 +417,9 @@ export function ProductionForm() {
         cutting = 0;
       } else if (normalizedType === "DIE CUT SHEET" && openLength > 0 && noOfUpsInCuttingForPlates > 0) {
         cutting = ((openLength * noOfUpsInCuttingForPlates) + 20) / 25.4;
-      } else if (normalizedType === "RSC" && (normalizedPart === "1" || normalizedPart === "SINGLE")) {
+      } else if (normalizedType === "RSC" && normalizedPart === 1) {
         cutting = ((2 * (lOd + wOd)) + 50) / 25.4;
-      } else if (normalizedType === "RSC" && (normalizedPart === "2" || normalizedPart === "2 PART BOX")) {
+      } else if (normalizedType === "RSC" && normalizedPart === 2) {
         cutting = ((lOd + wOd) + 50) / 25.4;
       } else if (normalizedType && lOd > 0 && noOfUpsInCuttingForPlates > 0) {
         cutting = ((lOd * noOfUpsInCuttingForPlates) + 20) / 25.4;
@@ -463,9 +470,9 @@ export function ProductionForm() {
       ) {
         paperRequiredNos = qty / (ups * noOfUpsInCuttingForPlates) / dieCutUps;
       } else if (normalizedType === "RSC" && ups > 0) {
-        if (normalizedPart === "SINGLE") {
+        if (normalizedPart === 1) {
           paperRequiredNos = qty / ups;
-        } else if (normalizedPart === "2 PART BOX") {
+        } else if (normalizedPart === 2) {
           paperRequiredNos = (qty / ups) * 2;
         }
       }
@@ -904,7 +911,7 @@ export function ProductionForm() {
                 value={formData.paperRequiredNos}
                 readOnly
                 type="number"
-                helpText="Calculated from TYPE. For VERTICAL PLATE, HORIZONTAL PLATE, U/C PLATE, and ROTARY TRAY: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)). For 2 PLY LINER: blank. For DIE CUT SHEET: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)) / Die Cut Ups. For RSC with PART = Single: Planned Quantity / UPS. For RSC with PART = 2 part box: (Planned Quantity / UPS) x 2."
+                helpText="Calculated from TYPE. For VERTICAL PLATE, HORIZONTAL PLATE, U/C PLATE, and ROTARY TRAY: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)). For 2 PLY LINER: blank. For DIE CUT SHEET: Planned Quantity / (UPS x No. of ups in Cutting (For Plates)) / Die Cut Ups. For RSC with PART = 1: Planned Quantity / UPS. For RSC with PART = 2: (Planned Quantity / UPS) x 2."
               /> : null}
               {showField("Top Paper Weight (KG)") ? <FormInput
                 label="Top Paper Weight (KG)"
