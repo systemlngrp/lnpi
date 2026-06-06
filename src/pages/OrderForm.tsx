@@ -58,10 +58,12 @@ export function OrderForm() {
     .sort((a,b) => (a.name||"").localeCompare(b.name||""))
     .map(c => ({ value: c.id, label: c.name }));
 
-  const normalizeCompanyName = (value: string | null | undefined) => String(value || "").trim().toLowerCase();
+  const normalizeCompanyName = (value: string | null | undefined) =>
+    String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
   const getItemCustomerName = (item: Item | undefined) =>
     normalizeCompanyName((item as any)?.customerName || item?.customer || "");
-  const normalizeText = (value: string | null | undefined) => String(value || "").trim().toLowerCase();
+  const normalizeText = (value: string | null | undefined) =>
+    String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 
   const resolveItemCompanyId = (item: Item | undefined) => {
     if (!item) return "";
@@ -126,8 +128,12 @@ export function OrderForm() {
 
         const itemMap = new Map<string, Item>();
         items.forEach((item) => {
-          const key = normalizeText(item.name);
-          if (key && !itemMap.has(key)) itemMap.set(key, item);
+          const keys = [item.name, (item as any)?.itemName]
+            .map((value) => normalizeText(value))
+            .filter(Boolean);
+          keys.forEach((key) => {
+            if (key && !itemMap.has(key)) itemMap.set(key, item);
+          });
         });
 
         const userMap = new Map<string, User>();
