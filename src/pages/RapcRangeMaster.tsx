@@ -147,49 +147,67 @@ export function RapcRangeMaster() {
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search ranges..." />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <table className="min-w-full divide-y divide-black border-collapse border border-black">
-          <thead className="bg-slate-100">
-            <tr className="divide-x divide-black">
-              <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">From</th>
-              <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">To</th>
-              <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">RAPC Range</th>
-              <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider md:block hidden">Updated</th>
-              <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-black">
-            {filteredRanges.map((row) => (
-              <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
-                <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{row.from}</td>
-                <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.to}</td>
-                <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.rapcRange}</td>
-                <td className="border border-black px-6 py-4 whitespace-nowrap text-xs text-slate-500 md:block hidden">
-                  {row.updatedBy}<br />{new Date(row.updateTimestamp || "").toLocaleString()}
-                </td>
-                <td className="border border-black px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => {
-                      setFromValue(row.from);
-                      setToValue(row.to);
-                      setRapcRangeValue(row.rapcRange);
-                      setEditingId(row.id);
-                      setIsFormOpen(true);
-                    }}
-                    className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"
-                  >
-                    <Edit size={16} className="mr-1" /> Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(row.id)}
-                    className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
-                  >
-                    <Trash2 size={16} className="mr-1" /> {deletingId === row.id ? "Confirm?" : "Delete"}
-                  </button>
-                </td>
+        <div className="table-scroll-shell">
+          <table className="min-w-max divide-y divide-black border-collapse border border-black">
+            <thead className="bg-slate-100">
+              <tr className="divide-x divide-black">
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">From</th>
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">To</th>
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">RAPC Range</th>
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated By</th>
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated Timestamp</th>
+                <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white divide-y divide-black">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="border border-black px-6 py-8 text-center text-black">
+                    <div className="flex justify-center">
+                      <Spinner />
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredRanges.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="border border-black px-6 py-8 text-center text-black font-medium">
+                    No RAPC ranges found.
+                  </td>
+                </tr>
+              ) : (
+                filteredRanges.map((row) => (
+                  <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{row.from}</td>
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.to}</td>
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.rapcRange}</td>
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.updatedBy || "-"}</td>
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.updateTimestamp ? new Date(row.updateTimestamp).toLocaleString() : "-"}</td>
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => {
+                          setFromValue(row.from);
+                          setToValue(row.to);
+                          setRapcRangeValue(row.rapcRange);
+                          setEditingId(row.id);
+                          setIsFormOpen(true);
+                        }}
+                        className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"
+                      >
+                        <Edit size={16} className="mr-1" /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(row.id)}
+                        className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
+                      >
+                        <Trash2 size={16} className="mr-1" /> {deletingId === row.id ? "Confirm?" : "Delete"}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

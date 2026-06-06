@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { Supplier, StateMaster } from "../types";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
@@ -38,8 +37,7 @@ const createInitialFormState = (): SupplierFormState => ({
 });
 
 export function Suppliers() {
-  const navigate = useNavigate();
-  const [suppliers, setSuppliers] = useData<Supplier>("suppliers", []);
+  const [suppliers, setSuppliers, suppliersLoading] = useData<Supplier>("suppliers", []);
   const [states] = useData<StateMaster>("states", []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,11 +74,7 @@ export function Suppliers() {
             .toLowerCase();
           return haystack.includes(searchTerm.toLowerCase());
         })
-        .sort((a, b) => {
-          const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-          const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-          return timeB - timeA || (a.name || "").localeCompare(b.name || "");
-        }),
+        .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })),
     [searchTerm, suppliers]
   );
 
@@ -183,7 +177,7 @@ export function Suppliers() {
             district: String(row["District"] || "").trim() || undefined,
             pinCode: String(row["PIN Code"] || "").trim() || undefined,
             address: String(row["Address"] || "").trim() || undefined,
-            active: row["Active"] === "No" ? "No" : "Yes",
+            active: row["Active"] === "No" ? "No" : "Yes" as "Yes" | "No",
             ...audit,
           };
         }).filter(s => s.name);
@@ -468,8 +462,9 @@ export function Suppliers() {
             />
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black overflow-x-auto">
-            <table className="min-w-full divide-y divide-black border-collapse border border-black">
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
+            <div className="table-scroll-shell">
+            <table className="min-w-max divide-y divide-black border-collapse border border-black">
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
                   {["Supplier Name", "Contact Person", "Contact Number", "Email", "GST No.", "GST Supply Type", "State", "District", "PIN Code", "Active", "Actions"].map((heading) => (
@@ -483,7 +478,7 @@ export function Suppliers() {
                 {filteredSuppliers.length === 0 ? (
                   <tr>
                     <td colSpan={11} className="px-6 py-8 text-center text-black font-medium tracking-wide">
-                      {isSubmitting ? <Spinner /> : "No suppliers found."}
+                      {suppliersLoading || isSubmitting ? <Spinner /> : "No suppliers found."}
                     </td>
                   </tr>
                 ) : (
@@ -512,6 +507,7 @@ export function Suppliers() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}

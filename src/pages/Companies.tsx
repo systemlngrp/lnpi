@@ -370,11 +370,13 @@ export function Companies() {
                 step="any"
                 value={toleranceAllowed}
                 onChange={(e) => {
-                  let val = e.target.value === "" ? "" : parseFloat(e.target.value);
-                  if (typeof val === "number") {
-                    val = Math.max(0, Math.min(10, val));
+                  const rawValue = e.target.value;
+                  if (rawValue === "") {
+                    setToleranceAllowed("");
+                    return;
                   }
-                  setToleranceAllowed(val);
+                  const numericValue = Math.max(0, Math.min(10, parseFloat(rawValue)));
+                  setToleranceAllowed(numericValue);
                 }}
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
               />
@@ -393,7 +395,11 @@ export function Companies() {
       <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
         <div className="block md:hidden space-y-4 p-4">
           {sortedCompanies.map((c) => (
-            <div key={c.id} className="bg-white border-2 border-black p-4 space-y-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div
+              key={c.id}
+              onClick={() => handleEdit(c)}
+              className="cursor-pointer bg-white border-2 border-black p-4 space-y-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+            >
               <div className="flex justify-between items-start">
                 <div>
                   <div className="text-sm font-bold">{c.name}</div>
@@ -405,8 +411,8 @@ export function Companies() {
                   <div className="text-xs text-slate-700">Tolerance Allowed: {c.toleranceAllowed ?? "-"}%</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleEdit(c)} disabled={isSubmitting} className="text-indigo-600 hover:text-indigo-900 flex items-center disabled:opacity-50 font-bold"><Edit size={16} /></button>
-                  <button onClick={() => handleDelete(c.id)} className={`${deletingId === c.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold flex items-center`}><Trash2 size={16} /></button>
+                  <button onClick={(event) => { event.stopPropagation(); handleEdit(c); }} disabled={isSubmitting} className="text-indigo-600 hover:text-indigo-900 flex items-center disabled:opacity-50 font-bold"><Edit size={16} /></button>
+                  <button onClick={(event) => { event.stopPropagation(); handleDelete(c.id); }} className={`${deletingId === c.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold flex items-center`}><Trash2 size={16} /></button>
                 </div>
               </div>
               {c.address && <div className="text-xs text-slate-700">{c.address}</div>}
@@ -414,68 +420,80 @@ export function Companies() {
           ))}
         </div>
 
-        <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
-          <thead className="bg-slate-100 divide-x divide-black">
-            <tr className="divide-x divide-black">
-              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Company</th>
-              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Contact Person</th>
-              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Contact Number</th>
-              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Email Id</th>
-              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Address</th>
-              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">District</th>
-              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">State</th>
-              <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">GST NO</th>
-              <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">GST Supply Type</th>
-              <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Deviation Allowed</th>
-              <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Tolerance Allowed</th>
-              <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-black bg-white">
-            {sortedCompanies.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="px-6 py-8 text-center text-black font-medium tracking-wide">
-                  {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found. Click "Add New" to create one.'}
-                </td>
+        <div className="table-scroll-shell hidden md:block">
+          <table className="min-w-max divide-y divide-black border-collapse border border-black">
+            <thead className="bg-slate-100 divide-x divide-black">
+              <tr className="divide-x divide-black">
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Company</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Contact Person</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Contact Number</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Email Id</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Address</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">District</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">State</th>
+                <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">GST NO</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">GST Supply Type</th>
+                <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Deviation Allowed</th>
+                <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Tolerance Allowed</th>
+                <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
               </tr>
-            ) : (
-              sortedCompanies.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.name}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.contactPerson}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.contactNumber}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.email}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.address}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.district}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.state}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.gstNo}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.gstSupplyType || "INTRA_STATE"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.deviationAllowed ?? "-"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.toleranceAllowed ?? "-"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium border border-black">
-                    <button
-                      title="Edit"
-                      aria-label="Edit"
-                      onClick={() => handleEdit(c)}
-                      disabled={isSubmitting}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4 disabled:opacity-50"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      title={deletingId === c.id ? "Confirm delete" : "Delete"}
-                      aria-label={deletingId === c.id ? "Confirm delete" : "Delete"}
-                      onClick={() => handleDelete(c.id)}
-                      className={`${deletingId === c.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 inline-flex items-center justify-end`}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+            </thead>
+            <tbody className="divide-y divide-black bg-white">
+              {sortedCompanies.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                    {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found. Click "Add New" to create one.'}
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                sortedCompanies.map((c) => (
+                  <tr
+                    key={c.id}
+                    onClick={() => handleEdit(c)}
+                    className="cursor-pointer hover:bg-slate-50 transition-colors divide-x divide-black"
+                  >
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.name}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.contactPerson}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.contactNumber}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.email}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.address}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.district}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.state}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.gstNo}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.gstSupplyType || "INTRA_STATE"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.deviationAllowed ?? "-"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.toleranceAllowed ?? "-"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium border border-black">
+                      <button
+                        title="Edit"
+                        aria-label="Edit"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleEdit(c);
+                        }}
+                        disabled={isSubmitting}
+                        className="text-indigo-600 hover:text-indigo-900 mr-4 disabled:opacity-50"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button
+                        title={deletingId === c.id ? "Confirm delete" : "Delete"}
+                        aria-label={deletingId === c.id ? "Confirm delete" : "Delete"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDelete(c.id);
+                        }}
+                        className={`${deletingId === c.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 inline-flex items-center justify-end`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

@@ -9,8 +9,6 @@ type NpdRecord = {
 
 const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "npdId", label: "NPD ID" },
-  { key: "timestamp", label: "Timestamp" },
-  { key: "date", label: "Date" },
   { key: "boxType", label: "BOX TYPE" },
   { key: "companyId", label: "Company Id" },
   { key: "customerName", label: "Customer Name" },
@@ -252,8 +250,8 @@ export function NpdMaster() {
           ) : null}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-black border-collapse border border-black">
+        <div className="table-scroll-shell">
+          <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
                 {NPD_COLUMNS.map((column) => (

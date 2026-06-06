@@ -2305,6 +2305,7 @@ async function initDb(retries = 5) {
           \`mobile\` VARCHAR(20),
           \`email\` VARCHAR(255),
           \`password\` VARCHAR(255),
+          \`designation\` VARCHAR(255),
           \`role\` VARCHAR(20) NOT NULL DEFAULT 'Employee',
           \`status\` VARCHAR(20) NOT NULL DEFAULT 'Active',
           \`menuAccess\` JSON,
@@ -2941,6 +2942,7 @@ async function initDb(retries = 5) {
         { table: "users", column: "mobile", type: "VARCHAR(20)" },
         { table: "users", column: "email", type: "VARCHAR(255)" },
         { table: "users", column: "password", type: "VARCHAR(255)" },
+        { table: "users", column: "designation", type: "VARCHAR(255)" },
         { table: "companies", column: "deviationAllowed", type: "DECIMAL(10,2)" },
         { table: "companies", column: "toleranceAllowed", type: "DECIMAL(10,2)" },
         { table: "companies", column: "gstSupplyType", type: "VARCHAR(20) DEFAULT 'INTRA_STATE'" },
@@ -3318,7 +3320,7 @@ const createHandlers = (tableName: string) => {
             limit: pageSize,
             offset: (page - 1) * pageSize,
             includeTotal: true,
-          });
+          }) as { rows: any[]; total: number };
           const processedRows = result.rows.map((row) => normalizeFetchedRow(tableName, row));
           return res.json({
             rows: processedRows,

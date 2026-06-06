@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+@layer utilities {
+  .table-scroll-shell {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  .table-scroll-shell > table {
+    min-width: max-content;
+  }
+}

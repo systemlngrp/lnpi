@@ -20,7 +20,7 @@ function parseDesignations(setting?: Setting) {
 }
 
 export function Users() {
-  const [users, setUsers] = useData<User>("users", []);
+  const [users, setUsers, usersLoading] = useData<User>("users", []);
   const [settings] = useData<Setting>("settings", []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,7 +94,7 @@ export function Users() {
     setDeletingId(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.userId.trim()) {
@@ -117,7 +117,7 @@ export function Users() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
       const audit = {
         updatedBy: "System Admin",
         updateTimestamp: new Date().toISOString()
@@ -128,32 +128,30 @@ export function Users() {
         userId: formData.userId.trim(),
         name: formData.name.trim(),
         mobile: formData.mobile.trim(),
-        email: formData.email.trim(),
-        designation: formData.designation.trim(),
+        email: formData.email.trim() || null,
+        designation: formData.designation.trim() || null,
       };
       if (editingId && !String(payload.password || "").trim()) {
         delete payload.password;
       }
-      if (!payload.email) {
-        delete payload.email;
-      }
-      if (!payload.designation) {
-        delete payload.designation;
-      }
 
       if (editingId) {
-        setUsers(users.map(u => u.id === editingId ? { ...u, ...payload, ...audit } : u));
+        await setUsers(users.map(u => u.id === editingId ? { ...u, ...payload, ...audit } : u));
       } else {
         const newUser: User = {
           id: crypto.randomUUID(),
           ...payload,
           ...audit
         };
-        setUsers([newUser, ...users]);
+        await setUsers([newUser, ...users]);
       }
-      setIsSubmitting(false);
       setIsFormOpen(false);
-    }, 500);
+    } catch (error) {
+      console.error("Failed to save user:", error);
+      alert(error instanceof Error ? error.message : "Failed to save user.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const filteredUsers = users.filter(u => 
@@ -481,57 +479,67 @@ export function Users() {
                 ))}
             </div>
 
-            <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
-              <thead className="bg-slate-100 divide-x divide-black">
-                <tr className="divide-x divide-black">
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">User ID</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Name</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Role</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Status</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Designation</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Mobile</th>
-                  <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Email</th>
-                  <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black bg-white">
-                {filteredUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-black font-medium">No users found.</td>
+            <div className="table-scroll-shell hidden md:block">
+              <table className="min-w-max divide-y divide-black border-collapse border border-black">
+                <thead className="bg-slate-100 divide-x divide-black">
+                  <tr className="divide-x divide-black">
+                    <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">User ID</th>
+                    <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Name</th>
+                    <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Role</th>
+                    <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Designation</th>
+                    <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Mobile</th>
+                    <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Email</th>
+                    <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
                   </tr>
-                ) : (
-                  filteredUsers.sort((a, b) => {
-                    const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-                    const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-                    return timeB - timeA || a.name.localeCompare(b.name);
-                  }).map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50 divide-x divide-black">
-                      <td className="px-6 py-4 text-sm font-medium text-black border border-black">{user.userId}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{user.name}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{user.role || "Employee"}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{user.status || "Active"}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{user.designation || "-"}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{user.mobile}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{user.email || "-"}</td>
-                      <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
-                        <button
-                          onClick={() => handleEdit(user)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"
-                        >
-                          <Edit size={16} className="mr-1" /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          className="text-red-600 hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end"
-                        >
-                          <Trash2 size={16} className="mr-1" /> Delete
-                        </button>
+                </thead>
+                <tbody className="divide-y divide-black bg-white">
+                  {usersLoading ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-8 text-center text-black">
+                        <div className="flex justify-center">
+                          <Spinner />
+                        </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-8 text-center text-black font-medium">No users found.</td>
+                    </tr>
+                  ) : (
+                    filteredUsers.sort((a, b) => {
+                      const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
+                      const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
+                      return timeB - timeA || a.name.localeCompare(b.name);
+                    }).map((user) => (
+                      <tr key={user.id} className="hover:bg-slate-50 divide-x divide-black">
+                        <td className="px-6 py-4 text-sm font-medium text-black border border-black">{user.userId}</td>
+                        <td className="px-6 py-4 text-sm text-black border border-black">{user.name}</td>
+                        <td className="px-6 py-4 text-sm text-black border border-black">{user.role || "Employee"}</td>
+                        <td className="px-6 py-4 text-sm text-black border border-black">{user.status || "Active"}</td>
+                        <td className="px-6 py-4 text-sm text-black border border-black">{user.designation || "-"}</td>
+                        <td className="px-6 py-4 text-sm text-black border border-black">{user.mobile}</td>
+                        <td className="px-6 py-4 text-sm text-black border border-black">{user.email || "-"}</td>
+                        <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
+                          <button
+                            onClick={() => handleEdit(user)}
+                            className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"
+                          >
+                            <Edit size={16} className="mr-1" /> Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(user.id)}
+                            className="text-red-600 hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end"
+                          >
+                            <Trash2 size={16} className="mr-1" /> Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
