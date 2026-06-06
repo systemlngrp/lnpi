@@ -212,5 +212,5 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
     }
   };
 
-  return [data, updateData, loading] as const;
+  return [data, updateData, loading, { refresh: fetchData, addItem, removeItem, saveItem }] as const;
 }

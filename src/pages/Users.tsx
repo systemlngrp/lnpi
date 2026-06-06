@@ -20,7 +20,7 @@ function parseDesignations(setting?: Setting) {
 }
 
 export function Users() {
-  const [users, setUsers, usersLoading] = useData<User>("users", []);
+  const [users, setUsers, usersLoading, userActions] = useData<User>("users", []);
   const [settings] = useData<Setting>("settings", []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,8 +90,13 @@ export function Users() {
       setTimeout(() => setDeletingId(null), 3000);
       return;
     }
-    setUsers(users.filter(u => u.id !== id));
-    setDeletingId(null);
+    userActions.removeItem(id)
+      .then(() => userActions.refresh())
+      .catch((error) => {
+        console.error("Failed to delete user:", error);
+        alert(error instanceof Error ? error.message : "Failed to delete user.");
+      })
+      .finally(() => setDeletingId(null));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -135,16 +140,14 @@ export function Users() {
         delete payload.password;
       }
 
-      if (editingId) {
-        await setUsers(users.map(u => u.id === editingId ? { ...u, ...payload, ...audit } : u));
-      } else {
-        const newUser: User = {
-          id: crypto.randomUUID(),
-          ...payload,
-          ...audit
-        };
-        await setUsers([newUser, ...users]);
-      }
+      const nextUser: User = {
+        id: editingId || crypto.randomUUID(),
+        ...payload,
+        ...audit,
+      };
+
+      await userActions.saveItem(nextUser);
+      await userActions.refresh();
       setIsFormOpen(false);
     } catch (error) {
       console.error("Failed to save user:", error);
