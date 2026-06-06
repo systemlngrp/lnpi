@@ -16,6 +16,21 @@ const TYPE_OPTIONS = [
 ];
 const ACTIVE_OPTIONS: ActiveValue[] = ["Yes", "No"];
 
+function normalizeBulkMaterialType(value: unknown): MaterialType | "" {
+  const normalizedValue = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+  if (normalizedValue === "reel") return "Reel";
+  if (normalizedValue === "other" || normalizedValue === "others") return "Other";
+  return "";
+}
+
+function isBulkMaterialRowEmpty(row: Record<string, unknown>) {
+  return Object.values(row).every((value) => String(value ?? "").trim() === "");
+}
+
 function normalizeText(value: string | number | undefined | null) {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -479,8 +494,9 @@ export function Materials() {
         }> = [];
 
         data.forEach((row: any) => {
-          const rawType = String(row["Type"] || "").trim();
-          if (rawType !== "Reel") return;
+          if (isBulkMaterialRowEmpty(row)) return;
+          const type = normalizeBulkMaterialType(row["Type"]);
+          if (type !== "Reel") return;
           const erpCode = String(row["ERP Code"] || "").trim();
           const reelQtyValue = parseNumericInput(String(row["Reel Qty"] ?? ""));
           const openingQtyValue = parseNumericInput(String(row["Opening Qty"] ?? ""));
@@ -499,8 +515,8 @@ export function Materials() {
         });
 
         data.forEach((row: any, index) => {
-          const rawType = String(row["Type"] || "").trim();
-          const type = rawType === "Reel" ? "Reel" : rawType === "Other" ? "Other" : "";
+          if (isBulkMaterialRowEmpty(row)) return;
+          const type = normalizeBulkMaterialType(row["Type"]);
           if (!type) throw new Error(`Row ${index + 2}: Type must be Reel or Other.`);
 
           const erpCode = String(row["ERP Code"] || "").trim() || (type === "Reel" ? getNextNumericErpCode(nextMaterials) : getNextOtherErpCode(nextMaterials));
