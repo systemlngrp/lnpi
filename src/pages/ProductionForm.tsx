@@ -69,6 +69,10 @@ function normalizeNumericPart(value?: string | number | null): 1 | 2 | null {
   return null;
 }
 
+function round2(value: number) {
+  return parseFloat(value.toFixed(2));
+}
+
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
     Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
@@ -438,7 +442,7 @@ export function ProductionForm() {
     const actualPaperUsed = Number(formData.actualPaperUsed);
     const prodFromFFG = Number(formData.prodFromFFG);
     const avgWeight =
-      actualPaperUsed > 0 && prodFromFFG > 0 ? parseFloat((actualPaperUsed / prodFromFFG).toFixed(3)) : "";
+      actualPaperUsed > 0 && prodFromFFG > 0 ? round2(actualPaperUsed / prodFromFFG) : "";
     // Total job weight based on paperRequiredNos (not including plate weight).
     const normalizedFlute = formData.flute.toUpperCase().trim().replace(/\s+/g, "");
     const fluteBatchMap: Record<string, string> = {
@@ -521,25 +525,25 @@ export function ProductionForm() {
       idToOd,
       idToOd17,
       takeUpFactor,
-      gsm: parseFloat(gsm.toFixed(2)),
-      reelAsPerCalc: parseFloat(reelAsPerCalc.toFixed(2)),
-      cuttingWithTrimming: parseFloat(cutting.toFixed(2)),
-      sheetWeight: parseFloat(sheetWeight.toFixed(5)),
-      totalPaperWeight: parseFloat(totalPaperWeight.toFixed(5)),
-      totalWeightOfSet: parseFloat(totalWeightOfSet.toFixed(5)),
-      realizationPerKg: parseFloat(realizationPerKg.toFixed(2)),
-      productionInMeter: parseFloat(productionInMeter.toFixed(2)),
-      plannedProductionInMeter,
+      gsm: round2(gsm),
+      reelAsPerCalc: round2(reelAsPerCalc),
+      cuttingWithTrimming: round2(cutting),
+      sheetWeight: round2(sheetWeight),
+      totalPaperWeight: round2(totalPaperWeight),
+      totalWeightOfSet: round2(totalWeightOfSet),
+      realizationPerKg: round2(realizationPerKg),
+      productionInMeter: round2(productionInMeter),
+      plannedProductionInMeter: plannedProductionInMeter === "" ? "" : round2(Number(plannedProductionInMeter)),
       avgWeight,
       wastage,
       fluteBatches,
       leastGsm: leastGsmValue,
       printingColor,
-      paperRequiredNos: paperRequiredNos === "" ? "" : parseFloat(paperRequiredNos.toFixed(2)),
-      topPaperWeightKg: topPaperWeightKg === "" ? "" : parseFloat(topPaperWeightKg.toFixed(5)),
-      linerWeightKg: linerWeightKg === "" ? "" : parseFloat(linerWeightKg.toFixed(5)),
-      totalJobWeight: totalJobWeight === "" ? "" : parseFloat(totalJobWeight.toFixed(5)),
-      lineRequiredNos: lineRequiredNos === "" ? "" : parseFloat(lineRequiredNos.toFixed(2)),
+      paperRequiredNos: paperRequiredNos === "" ? "" : round2(paperRequiredNos),
+      topPaperWeightKg: topPaperWeightKg === "" ? "" : round2(topPaperWeightKg),
+      linerWeightKg: linerWeightKg === "" ? "" : round2(linerWeightKg),
+      totalJobWeight: totalJobWeight === "" ? "" : round2(totalJobWeight),
+      lineRequiredNos: lineRequiredNos === "" ? "" : round2(lineRequiredNos),
     }));
   }, [
     formData.color1,
