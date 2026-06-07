@@ -31,12 +31,39 @@ export function OrdersPendingPH() {
 
   const pending = orders.filter(o => !o.status || o.status === 'Pending PH');
 
-  const orderByOptions = Array.from(new Set(pending.map(o => o.orderBy).filter(Boolean))).map(id => users.find(u => u.id === id)).filter(Boolean).map(u => ({ value: (u as User).id, label: (u as User).name })).sort((a, b) => a.label.localeCompare(b.label));
+  const normalize = (s: string) => String(s || "").trim().toLowerCase();
+
+  const resolveOrderByLabel = (raw: string) => {
+    const val = String(raw || "").trim();
+    if (!val) return "";
+    // try by id
+    const byId = users.find(u => u.id === val);
+    if (byId) return byId.name || "";
+    // try by userId
+    const byUserId = users.find(u => String(u.userId || "") === val);
+    if (byUserId) return byUserId.name || "";
+    // try by name (normalized)
+    const byName = users.find(u => normalize(u.name) === normalize(val));
+    if (byName) return byName.name || "";
+    // fallback: if raw looks like a name (contains space) or email, show it
+    if (val.includes(" ") || val.includes("@")) return val;
+    return "";
+  };
+
+  const presentOrderByValues = Array.from(new Set(pending.map(o => String(o.orderBy || "").trim()).filter(Boolean)));
+  const orderByOptions = presentOrderByValues
+    .map((raw) => ({ value: raw, label: resolveOrderByLabel(raw) }))
+    .filter(opt => opt.label)
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const filtered = pending.filter(o => {
     if (orderByFilter && String(o.orderBy || "") !== orderByFilter) return false;
     return true;
   });
+
+  const unmappedOrderBys = presentOrderByValues.filter(v => !resolveOrderByLabel(v));
+  const params = new URLSearchParams(window.location.search);
+  const showDebug = params.get("debug") === "1";
 
   const handleApprove = (id: string) => {
     const now = new Date().toISOString();
@@ -101,6 +128,11 @@ export function OrdersPendingPH() {
       </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+        {showDebug && (
+          <div className="p-3 bg-yellow-50 border-b border-black text-sm">
+            <strong>Debug:</strong> Unmapped Order By values: {unmappedOrderBys.length} {unmappedOrderBys.length > 0 && ` — ${unmappedOrderBys.slice(0,10).join(", ")}`}
+          </div>
+        )}
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">
             <tr>
@@ -120,7 +152,7 @@ export function OrdersPendingPH() {
                 <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-4 py-2 border border-black">{(companies as any[]).find((c:any)=>c.id===o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{npdItems.find((item) => item.id === o.itemId)?.name}</td>
-                <td className="px-4 py-2 border border-black whitespace-nowrap">{users.find(u => u.id === o.orderBy)?.name || '-'}</td>
+                <td className="px-4 py-2 border border-black whitespace-nowrap">{resolveOrderByLabel(o.orderBy) || '-'}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">
                   <button onClick={() => handleApprove(o.id)} className="bg-emerald-600 text-white px-3 py-1 rounded font-bold mr-2">Approve</button>
