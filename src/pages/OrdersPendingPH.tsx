@@ -31,24 +31,10 @@ export function OrdersPendingPH() {
 
   const pending = orders.filter(o => !o.status || o.status === 'Pending PH');
 
-  const normalize = (s: string) => String(s || "").trim().toLowerCase();
-
-  const looksLikeId = (val: string) => /^[0-9a-fA-F\-]{10,}$/.test(val);
-
   const resolveOrderByUser = (raw: string): User | null => {
     const val = String(raw || "").trim();
     if (!val) return null;
-    // If it looks like an id, match only against users.id
-    if (looksLikeId(val)) {
-      return users.find(u => u.id === val) || null;
-    }
-    // try by userId
-    const byUserId = users.find(u => String(u.userId || "") === val);
-    if (byUserId) return byUserId;
-    // try by name (normalized)
-    const byName = users.find(u => normalize(u.name) === normalize(val));
-    if (byName) return byName;
-    return null;
+    return users.find(u => u.id === val) || null;
   };
 
   const presentUserMap = new Map<string, User>();
@@ -74,10 +60,7 @@ export function OrdersPendingPH() {
   const getOrderByLabel = (raw: string) => {
     const u = resolveOrderByUser(String(raw || ""));
     if (u) return u.name || "";
-    const val = String(raw || "").trim();
-    if (!val) return "";
-    if (val.includes(" ") || val.includes("@")) return val;
-    return "";
+    return String(raw || "").trim();
   };
 
   const handleApprove = (id: string) => {
