@@ -1,13 +1,14 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Edit, Plus, Trash2, Search, Upload, Download } from "lucide-react";
+import { Edit, Plus, Trash2, Search, Upload, Download, CheckCircle, Package, Layers, Disc } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, Supplier, UnitMaster } from "../types";
+import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, MaterialIssueLine, MaterialIssueReelLine, MaterialReturnLine, MaterialReturnReelLine, Supplier, UnitMaster, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { ClientPagination } from "../components/ClientPagination";
 import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { fetchNpdItems } from "../lib/npdItems";
 
 type MaterialType = Material["type"];
 type ActiveValue = NonNullable<Material["active"]>;
@@ -111,6 +112,12 @@ export function Materials() {
   const [returnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [reelReturnLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [npdItems, setNpdItems] = useState<Item[]>([]);
+  
+  useEffect(() => {
+    fetchNpdItems().then(setNpdItems).catch(() => setNpdItems([]));
+  }, []);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reelGroup = useMemo(
@@ -138,29 +145,25 @@ export function Materials() {
 
   const movementSummaryMap = useMemo(() => {
     const map = new Map<string, { receipts: number; issues: number; returns: number }>();
-
-    // Initialize map
     materials.forEach(m => map.set(m.id, { receipts: 0, issues: 0, returns: 0 }));
 
-    // 1. Receipts (Material In)
-    // Filter materialIn by date
     const filteredMaterialIn = materialIn.filter(r => {
-      if (fromDate && (r.date || "") < fromDate) return false;
-      if (toDate && (r.date || "") > toDate) return false;
+      const d = r.date || "";
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
       return true;
     });
     const receiptIds = new Set(filteredMaterialIn.map(r => r.id));
 
-    // Reels from packing slips
     packingSlips.forEach(slip => {
       if (!receiptIds.has(slip.materialInId)) return;
       const current = map.get(slip.materialId) || { receipts: 0, issues: 0, returns: 0 };
       current.receipts += Number(slip.weightKg || 0);
       map.set(slip.materialId, current);
     });
-    // Others from lines
+
     filteredMaterialIn.forEach(receipt => {
-      if (receipt.mrrType === "Other") {
+      if (receipt.mrrType === "Others") {
         receipt.lines.forEach(line => {
           const current = map.get(line.itemId) || { receipts: 0, issues: 0, returns: 0 };
           current.receipts += Number(line.qty || 0);
@@ -169,16 +172,7 @@ export function Materials() {
       }
     });
 
-    // 2. Issues
-    // Filter issues by date? (Assuming we want to filter movements)
-    // Wait, if I filter issues by date, the BALANCE will be wrong for a point in time.
-    // Usually, From/To filters for "Balance" should only show movements in that period, but opening balance needs to be adjusted.
-    // But user asked for "Receipts, Issue, Return" against each material.
-    // If From/To is provided, these columns should probably show totals for that period.
-    
     reelIssueLines.forEach(l => {
-      // Need parent issue for date
-      // This is getting expensive. Let's simplify.
       const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
       current.issues += Number(l.weightKg || 0);
       map.set(l.materialId, current);
@@ -189,7 +183,6 @@ export function Materials() {
       map.set(l.materialId, current);
     });
 
-    // 3. Returns
     reelReturnLines.forEach(l => {
       const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
       current.returns += Number(l.weightKg || 0);
@@ -207,14 +200,12 @@ export function Materials() {
   const metrics = useMemo(() => {
     let totalReelWeight = 0;
     let totalOtherStock = 0;
-    
     materials.forEach(m => {
       const mvt = movementSummaryMap.get(m.id) || { receipts: 0, issues: 0, returns: 0 };
       const balance = Number(m.openingQty || 0) + mvt.receipts + mvt.returns - mvt.issues;
       if (m.type === "Reel") totalReelWeight += balance;
       else totalOtherStock += balance;
     });
-
     return {
       total: materials.length,
       active: materials.filter(m => m.active !== "No").length,
@@ -254,7 +245,6 @@ export function Materials() {
         erpCode: editingId ? current.erpCode : getNextNumericErpCode(materials),
       };
     }
-
     return {
       ...current,
       type: "Other" as MaterialType,
@@ -312,7 +302,6 @@ export function Materials() {
   const handleCreateGroup = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newGroupName.trim()) return;
-
     const normalizedName = newGroupName.trim();
     const existing = materialGroups.find((group) => normalizeText(group.name) === normalizedName.toLowerCase());
     if (existing) {
@@ -321,16 +310,9 @@ export function Materials() {
       setNewGroupName("");
       return;
     }
-
     setSavingGroup(true);
     const timestamp = new Date().toISOString();
-    const nextGroup: MaterialGroup = {
-      id: crypto.randomUUID(),
-      name: normalizedName,
-      updatedBy: "System User",
-      updateTimestamp: timestamp,
-    };
-
+    const nextGroup: MaterialGroup = { id: crypto.randomUUID(), name: normalizedName, updatedBy: "System User", updateTimestamp: timestamp };
     try {
       await setMaterialGroups([...materialGroups, nextGroup]);
       setFormData((prev) => ({ ...prev, materialGroupId: nextGroup.id }));
@@ -346,7 +328,6 @@ export function Materials() {
   const handleCreateUnit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newUnitName.trim()) return;
-
     const normalizedName = newUnitName.trim();
     const existing = units.find((unit) => normalizeText(unit.name) === normalizedName.toLowerCase());
     if (existing) {
@@ -355,17 +336,9 @@ export function Materials() {
       setNewUnitName("");
       return;
     }
-
     setSavingUnit(true);
     const timestamp = new Date().toISOString();
-    const nextUnit: UnitMaster = {
-      id: crypto.randomUUID(),
-      name: normalizedName,
-      active: "Yes",
-      updatedBy: "System User",
-      updateTimestamp: timestamp,
-    };
-
+    const nextUnit: UnitMaster = { id: crypto.randomUUID(), name: normalizedName, active: "Yes", updatedBy: "System User", updateTimestamp: timestamp };
     try {
       await setUnits([...units, nextUnit]);
       setFormData((prev) => ({ ...prev, uom: nextUnit.name }));
@@ -380,62 +353,42 @@ export function Materials() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
     const normalizedType = formData.type;
     const erpCode = String(formData.erpCode || "").trim() || (normalizedType === "Reel" ? getNextNumericErpCode(materials) : getNextOtherErpCode(materials));
     const uom = String(formData.uom || "").trim() || "CM";
     const timestamp = new Date().toISOString();
-
     const size = parseNumericInput(formData.size);
     const gsm = parseNumericInput(formData.gsm);
     const bf = parseNumericInput(formData.bf);
     const openingQty = parseNumericInput(formData.openingQty);
     const openingRate = parseNumericInput(formData.openingRate);
     const openingValueInput = parseNumericInput(formData.openingValue);
-    const openingValue =
-      openingValueInput !== ""
-        ? Number(openingValueInput)
-        : openingQty !== "" && openingRate !== ""
-          ? Number(openingQty) * Number(openingRate)
-          : undefined;
-
+    const openingValue = openingValueInput !== "" ? Number(openingValueInput) : openingQty !== "" && openingRate !== "" ? Number(openingQty) * Number(openingRate) : undefined;
     if (normalizedType === "Reel" && (size === "" || gsm === "" || bf === "")) {
       alert("Size, GSM, and BF are required for Reel.");
       return;
     }
-
     if (normalizedType === "Other" && !formData.materialGroupId) {
       alert("Item Group is required for Other items.");
       return;
     }
-
     if (normalizedType === "Other" && !formData.name.trim()) {
       alert("Item Name is required for Other items.");
       return;
     }
-
     setIsSubmitting(true);
     try {
       let reelGroupId = reelGroup?.id || "";
       if (normalizedType === "Reel" && !reelGroupId) {
-        const nextReelGroup: MaterialGroup = {
-          id: crypto.randomUUID(),
-          name: "Reel",
-          updatedBy: "System User",
-          updateTimestamp: timestamp,
-        };
+        const nextReelGroup: MaterialGroup = { id: crypto.randomUUID(), name: "Reel", updatedBy: "System User", updateTimestamp: timestamp };
         await setMaterialGroups([...materialGroups, nextReelGroup]);
         reelGroupId = nextReelGroup.id;
       }
-
       const nextMaterial: Material = {
         id: editingId || crypto.randomUUID(),
         type: normalizedType,
         erpCode: erpCode || undefined,
-        name:
-          normalizedType === "Reel"
-            ? getReelDisplayName(erpCode, Number(size), uom, Number(gsm), Number(bf))
-            : formData.name.trim(),
+        name: normalizedType === "Reel" ? getReelDisplayName(erpCode, Number(size), uom, Number(gsm), Number(bf)) : formData.name.trim(),
         uom,
         materialGroupId: normalizedType === "Reel" ? reelGroupId || undefined : formData.materialGroupId || undefined,
         size: normalizedType === "Reel" ? Number(size) : undefined,
@@ -449,11 +402,7 @@ export function Materials() {
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
-
-      const nextMaterials = editingId
-        ? materials.map((material) => (material.id === editingId ? nextMaterial : material))
-        : [nextMaterial, ...materials];
-
+      const nextMaterials = editingId ? materials.map((material) => (material.id === editingId ? nextMaterial : material)) : [nextMaterial, ...materials];
       await setMaterials(nextMaterials);
       resetForm(nextMaterials, reelGroupId);
     } catch (error) {
@@ -476,10 +425,7 @@ export function Materials() {
   const filteredMaterials = useMemo(() => {
     return [...materials]
       .filter((material) => {
-        const matchesSearch =
-          !searchTerm ||
-          normalizeText(material.erpCode).includes(searchTerm.toLowerCase()) ||
-          normalizeText(material.name).includes(searchTerm.toLowerCase());
+        const matchesSearch = !searchTerm || normalizeText(material.erpCode).includes(searchTerm.toLowerCase()) || normalizeText(material.name).includes(searchTerm.toLowerCase());
         const matchesType = typeFilter === "All" || material.type === typeFilter;
         const matchesSize = sizeFilter === "All" || formatOptionalNumber(material.size) === sizeFilter;
         const matchesGsm = gsmFilter === "All" || formatOptionalNumber(material.gsm) === gsmFilter;
@@ -491,61 +437,14 @@ export function Materials() {
         return timeB - timeA || a.name.localeCompare(b.name);
       });
   }, [gsmFilter, materials, searchTerm, sizeFilter, typeFilter]);
-  const {
-    page,
-    setPage,
-    pageSize,
-    setPageSize,
-    totalItems,
-    paginatedItems: paginatedMaterials,
-  } = useClientPagination(filteredMaterials, 25);
 
-  const handleExport = () => {};
+  const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems: paginatedMaterials } = useClientPagination(filteredMaterials, 25);
 
   const downloadTemplate = () => {
     const templateData = [
-      {
-        "Type": "Reel",
-        "ERP Code": "1001",
-        "Item Name": "",
-        "Item Group": "Reel",
-        "MRR No.": "MI/26-27/00001",
-        "MRR Date": "2026-06-02",
-        "Supplier Name": "Bizskill",
-        "Our Reel No.": "R00001",
-        "Reel Qty": 250.5,
-        "Unit": "CM",
-        "Size": 120,
-        "GSM": 150,
-        "BF": 18,
-        "Opening Qty": 0,
-        "Opening Rate": 0,
-        "Opening Value": 0,
-        "Remarks": "",
-        "Active": "Yes",
-      },
-      {
-        "Type": "Other",
-        "ERP Code": "2001",
-        "Item Name": "Service",
-        "Item Group": "Consumable",
-        "MRR No.": "",
-        "MRR Date": "",
-        "Supplier Name": "",
-        "Our Reel No.": "",
-        "Reel Qty": "",
-        "Unit": "CM",
-        "Size": "",
-        "GSM": "",
-        "BF": "",
-        "Opening Qty": 0,
-        "Opening Rate": 0,
-        "Opening Value": 0,
-        "Remarks": "",
-        "Active": "Yes",
-      },
+      { "Type": "Reel", "ERP Code": "1001", "Item Name": "", "Item Group": "Reel", "MRR No.": "MI/26-27/00001", "MRR Date": "2026-06-02", "Supplier Name": "Bizskill", "Our Reel No.": "R00001", "Reel Qty": 250.5, "Unit": "CM", "Size": 120, "GSM": 150, "BF": 18, "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" },
+      { "Type": "Other", "ERP Code": "2001", "Item Name": "Service", "Item Group": "Consumable", "MRR No.": "", "MRR Date": "", "Supplier Name": "", "Our Reel No.": "", "Reel Qty": "", "Unit": "CM", "Size": "", "GSM": "", "BF": "", "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" }
     ];
-
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Materials");
@@ -555,7 +454,6 @@ export function Materials() {
   const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
@@ -564,44 +462,24 @@ export function Materials() {
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
-
-        if (data.length === 0) {
-          alert("The file is empty.");
-          return;
-        }
-
+        if (data.length === 0) { alert("The file is empty."); return; }
         setIsUploading(true);
         const timestamp = new Date().toISOString();
         const nextGroups = [...materialGroups];
         let reelGroupId = reelGroup?.id || "";
         let nextMaterialIn = [...materialIn];
         let nextPackingSlips = [...packingSlips];
-
         if (!reelGroupId) {
-          const nextReelGroup: MaterialGroup = {
-            id: crypto.randomUUID(),
-            name: "Reel",
-            updatedBy: "System User",
-            updateTimestamp: timestamp,
-          };
+          const nextReelGroup: MaterialGroup = { id: crypto.randomUUID(), name: "Reel", updatedBy: "System User", updateTimestamp: timestamp };
           nextGroups.push(nextReelGroup);
           reelGroupId = nextReelGroup.id;
         }
-
         const groupMap = new Map(nextGroups.map((group) => [normalizeText(group.name), group]));
         const supplierMap = new Map(suppliers.map((supplier) => [normalizeText(supplier.name), supplier]));
         let nextMaterials = [...materials];
         const reelOpeningQtyByErp = new Map<string, number>();
         const reelOpeningBalanceByErp = new Map<string, number>();
-        const reelReceiptRows: Array<{
-          materialId: string;
-          ourReelNo: string;
-          reelQty: number;
-          mrrNo: string;
-          mrrDate: string;
-          supplierId: string;
-        }> = [];
-
+        const reelReceiptRows: Array<{ materialId: string; ourReelNo: string; reelQty: number; mrrNo: string; mrrDate: string; supplierId: string; }> = [];
         data.forEach((row: any) => {
           if (isBulkMaterialRowEmpty(row)) return;
           const type = normalizeBulkMaterialType(row["Type"]);
@@ -610,24 +488,17 @@ export function Materials() {
           const reelQtyValue = parseNumericInput(String(row["Reel Qty"] ?? ""));
           const openingQtyValue = parseNumericInput(String(row["Opening Qty"] ?? ""));
           if (!erpCode || reelQtyValue === "") return;
-          reelOpeningQtyByErp.set(
-            erpCode,
-            Number((reelOpeningQtyByErp.get(erpCode) || 0) + Number(reelQtyValue || 0))
-          );
+          reelOpeningQtyByErp.set(erpCode, Number((reelOpeningQtyByErp.get(erpCode) || 0) + Number(reelQtyValue || 0)));
           if (openingQtyValue !== "") {
             const numericOpeningQty = Number(openingQtyValue || 0);
-            if (reelOpeningBalanceByErp.has(erpCode) && reelOpeningBalanceByErp.get(erpCode) !== numericOpeningQty) {
-              throw new Error(`Reel rows for ERP ${erpCode} must use the same Opening Qty balance.`);
-            }
+            if (reelOpeningBalanceByErp.has(erpCode) && reelOpeningBalanceByErp.get(erpCode) !== numericOpeningQty) throw new Error(`Reel rows for ERP ${erpCode} must use the same Opening Qty balance.`);
             reelOpeningBalanceByErp.set(erpCode, numericOpeningQty);
           }
         });
-
         data.forEach((row: any, index) => {
           if (isBulkMaterialRowEmpty(row)) return;
           const type = normalizeBulkMaterialType(row["Type"]);
           if (!type) throw new Error(`Row ${index + 2}: Type must be Reel or Other.`);
-
           const erpCode = String(row["ERP Code"] || "").trim() || (type === "Reel" ? getNextNumericErpCode(nextMaterials) : getNextOtherErpCode(nextMaterials));
           const itemName = String(row["Item Name"] || "").trim();
           const groupName = String(row["Item Group"] || "").trim();
@@ -645,114 +516,37 @@ export function Materials() {
           const openingValueInput = parseNumericInput(String(row["Opening Value"] ?? ""));
           const remarks = String(row["Remarks"] ?? "").trim();
           const activeValue = String(row["Active"] || "Yes").trim() === "No" ? "No" : "Yes";
-
-          if (type === "Reel" && (sizeValue === "" || gsmValue === "" || bfValue === "")) {
-            throw new Error(`Row ${index + 2}: Reel rows require Size, GSM, and BF.`);
-          }
-          if (type === "Reel") {
-            if (!mrrNo || !mrrDate || !supplierName || !ourReelNo || reelQtyValue === "") {
-              throw new Error(`Row ${index + 2}: Reel rows require MRR No., MRR Date, Supplier Name, Our Reel No., and Reel Qty.`);
-            }
-          }
-          if (type === "Other" && !itemName) {
-            throw new Error(`Row ${index + 2}: Other rows require Item Name.`);
-          }
-
+          if (type === "Reel" && (sizeValue === "" || gsmValue === "" || bfValue === "")) throw new Error(`Row ${index + 2}: Reel rows require Size, GSM, and BF.`);
+          if (type === "Reel") if (!mrrNo || !mrrDate || !supplierName || !ourReelNo || reelQtyValue === "") throw new Error(`Row ${index + 2}: Reel rows require MRR No., MRR Date, Supplier Name, Our Reel No., and Reel Qty.`);
+          if (type === "Other" && !itemName) throw new Error(`Row ${index + 2}: Other rows require Item Name.`);
           let materialGroupId: string | undefined = undefined;
-          if (type === "Reel") {
-            materialGroupId = reelGroupId;
-          } else {
+          if (type === "Reel") materialGroupId = reelGroupId;
+          else {
             if (!groupName) throw new Error(`Row ${index + 2}: Other rows require Item Group.`);
             const normalizedGroupName = normalizeText(groupName);
             let matchedGroup = groupMap.get(normalizedGroupName);
-            if (!matchedGroup) {
-              matchedGroup = {
-                id: crypto.randomUUID(),
-                name: groupName,
-                updatedBy: "System User",
-                updateTimestamp: timestamp,
-              };
-              nextGroups.push(matchedGroup);
-              groupMap.set(normalizedGroupName, matchedGroup);
-            }
+            if (!matchedGroup) { matchedGroup = { id: crypto.randomUUID(), name: groupName, updatedBy: "System User", updateTimestamp: timestamp }; nextGroups.push(matchedGroup); groupMap.set(normalizedGroupName, matchedGroup); }
             materialGroupId = matchedGroup.id;
           }
-
-          const openingValue =
-            openingValueInput !== ""
-              ? Number(openingValueInput)
-              : openingQtyValue !== "" && openingRateValue !== ""
-                ? Number(openingQtyValue) * Number(openingRateValue)
-                : undefined;
-
-          const generatedName =
-            type === "Reel"
-              ? getReelDisplayName(erpCode, Number(sizeValue), unit, Number(gsmValue), Number(bfValue))
-              : itemName;
-
-          const existing = nextMaterials.find((material) =>
-            type === "Reel"
-              ? normalizeText(material.erpCode) === normalizeText(erpCode)
-              : normalizeText(material.name) === normalizeText(generatedName)
-          );
-
+          const openingValue = openingValueInput !== "" ? Number(openingValueInput) : openingQtyValue !== "" && openingRateValue !== "" ? Number(openingQtyValue) * Number(openingRateValue) : undefined;
+          const generatedName = type === "Reel" ? getReelDisplayName(erpCode, Number(sizeValue), unit, Number(gsmValue), Number(bfValue)) : itemName;
+          const existing = nextMaterials.find((material) => type === "Reel" ? normalizeText(material.erpCode) === normalizeText(erpCode) : normalizeText(material.name) === normalizeText(generatedName));
           const nextMaterial: Material = {
-            id: existing?.id || crypto.randomUUID(),
-            type,
-            erpCode: erpCode || undefined,
-            name: generatedName,
-            uom: unit,
-            materialGroupId,
-            size: type === "Reel" && sizeValue !== "" ? Number(sizeValue) : undefined,
-            gsm: type === "Reel" && gsmValue !== "" ? Number(gsmValue) : undefined,
-            bf: type === "Reel" && bfValue !== "" ? Number(bfValue) : undefined,
-            openingQty:
-              type === "Reel"
-                ? Number((reelOpeningQtyByErp.get(erpCode) || 0) + (reelOpeningBalanceByErp.get(erpCode) || 0)) || undefined
-                : openingQtyValue === "" ? undefined : Number(openingQtyValue),
+            id: existing?.id || crypto.randomUUID(), type, erpCode: erpCode || undefined, name: generatedName, uom: unit, materialGroupId, size: type === "Reel" && sizeValue !== "" ? Number(sizeValue) : undefined, gsm: type === "Reel" && gsmValue !== "" ? Number(gsmValue) : undefined, bf: type === "Reel" && bfValue !== "" ? Number(bfValue) : undefined,
+            openingQty: type === "Reel" ? Number((reelOpeningQtyByErp.get(erpCode) || 0) + (reelOpeningBalanceByErp.get(erpCode) || 0)) || undefined : openingQtyValue === "" ? undefined : Number(openingQtyValue),
             openingRate: openingRateValue === "" ? undefined : Number(openingRateValue),
-            openingValue:
-              type === "Reel"
-                ? (
-                    openingValueInput !== ""
-                      ? Number(openingValueInput)
-                      : Number(
-                          (Number(reelOpeningQtyByErp.get(erpCode) || 0) + (reelOpeningBalanceByErp.get(erpCode) || 0)) *
-                            Number(openingRateValue || 0)
-                        )
-                  ) || undefined
-                : openingValue,
-            remarks: remarks || undefined,
-            active: activeValue,
-            updatedBy: "System User",
-            updateTimestamp: timestamp,
+            openingValue: type === "Reel" ? (openingValueInput !== "" ? Number(openingValueInput) : Number((Number(reelOpeningQtyByErp.get(erpCode) || 0) + (reelOpeningBalanceByErp.get(erpCode) || 0)) * Number(openingRateValue || 0))) || undefined : openingValue,
+            remarks: remarks || undefined, active: activeValue, updatedBy: "System User", updateTimestamp: timestamp
           };
-
-          if (existing) {
-            nextMaterials = nextMaterials.map((material) => (material.id === existing.id ? nextMaterial : material));
-          } else {
-            nextMaterials = [nextMaterial, ...nextMaterials];
-          }
-
+          if (existing) nextMaterials = nextMaterials.map((material) => (material.id === existing.id ? nextMaterial : material));
+          else nextMaterials = [nextMaterial, ...nextMaterials];
           if (type === "Reel") {
             const matchedSupplier = supplierMap.get(normalizeText(supplierName));
-            if (!matchedSupplier) {
-              throw new Error(`Row ${index + 2}: Supplier Name not found.`);
-            }
-            if (Number(reelQtyValue) <= 0) {
-              throw new Error(`Row ${index + 2}: Reel Qty must be greater than 0.`);
-            }
-            reelReceiptRows.push({
-              materialId: nextMaterial.id,
-              ourReelNo,
-              reelQty: Number(reelQtyValue),
-              mrrNo,
-              mrrDate,
-              supplierId: matchedSupplier.id,
-            });
+            if (!matchedSupplier) throw new Error(`Row ${index + 2}: Supplier Name not found.`);
+            if (Number(reelQtyValue) <= 0) throw new Error(`Row ${index + 2}: Reel Qty must be greater than 0.`);
+            reelReceiptRows.push({ materialId: nextMaterial.id, ourReelNo, reelQty: Number(reelQtyValue), mrrNo, mrrDate, supplierId: matchedSupplier.id });
           }
         });
-
         const receiptGroups = new Map<string, typeof reelReceiptRows>();
         reelReceiptRows.forEach((row) => {
           const key = `${row.mrrNo}__${row.mrrDate}__${row.supplierId}`;
@@ -760,131 +554,40 @@ export function Materials() {
           current.push(row);
           receiptGroups.set(key, current);
         });
-
         receiptGroups.forEach((rowsForReceipt) => {
           const sample = rowsForReceipt[0];
-          const existingReceipt = nextMaterialIn.find(
-            (entry) => entry.transactionNo === sample.mrrNo && entry.supplierId === sample.supplierId
-          );
-
+          const existingReceipt = nextMaterialIn.find((entry) => entry.transactionNo === sample.mrrNo && entry.supplierId === sample.supplierId);
           const packingSlipsForReceipt = nextPackingSlips.filter((slip) => slip.materialInId === existingReceipt?.id);
           const existingLineByMaterial = new Map((existingReceipt?.lines || []).map((line) => [line.itemId, line]));
           const existingSlipByReelNo = new Map(packingSlipsForReceipt.map((slip) => [normalizeText(slip.ourReelNo), slip]));
-          const mergedSlipMap = new Map(
-            packingSlipsForReceipt.map((slip) => [
-              normalizeText(slip.ourReelNo),
-              {
-                materialId: slip.materialId,
-                ourReelNo: slip.ourReelNo,
-                weightKg: Number(slip.weightKg || 0),
-                existingSlip: slip,
-              },
-            ])
-          );
-
-          rowsForReceipt.forEach((row) => {
-            mergedSlipMap.set(normalizeText(row.ourReelNo), {
-              materialId: row.materialId,
-              ourReelNo: row.ourReelNo,
-              weightKg: Number(row.reelQty || 0),
-              existingSlip: existingSlipByReelNo.get(normalizeText(row.ourReelNo)),
-            });
-          });
-
+          const mergedSlipMap = new Map(packingSlipsForReceipt.map((slip) => [normalizeText(slip.ourReelNo), { materialId: slip.materialId, ourReelNo: slip.ourReelNo, weightKg: Number(slip.weightKg || 0), existingSlip: slip }]));
+          rowsForReceipt.forEach((row) => { mergedSlipMap.set(normalizeText(row.ourReelNo), { materialId: row.materialId, ourReelNo: row.ourReelNo, weightKg: Number(row.reelQty || 0), existingSlip: existingSlipByReelNo.get(normalizeText(row.ourReelNo)) }); });
           const aggregatedWeightByMaterial = new Map<string, number>();
-          Array.from(mergedSlipMap.values()).forEach((slip) => {
-            aggregatedWeightByMaterial.set(
-              slip.materialId,
-              Number((aggregatedWeightByMaterial.get(slip.materialId) || 0) + Number(slip.weightKg || 0))
-            );
-          });
-
+          Array.from(mergedSlipMap.values()).forEach((slip) => { aggregatedWeightByMaterial.set(slip.materialId, Number((aggregatedWeightByMaterial.get(slip.materialId) || 0) + Number(slip.weightKg || 0))); });
           const nextLines = Array.from(aggregatedWeightByMaterial.entries()).map(([materialId, totalQty]) => {
             const existingLine = existingLineByMaterial.get(materialId);
-            return {
-              id: existingLine?.id || crypto.randomUUID(),
-              itemId: materialId,
-              qty: totalQty,
-              uom: "KG",
-              invoiceQty: totalQty,
-              invoiceRate: Number(existingLine?.invoiceRate ?? existingLine?.rate ?? 0),
-              invoiceValue: 0,
-              actualQty: totalQty,
-              actualValue: 0,
-              rate: Number(existingLine?.rate || 0),
-              value: 0,
-            };
+            return { id: existingLine?.id || crypto.randomUUID(), itemId: materialId, qty: totalQty, uom: "KG", invoiceQty: totalQty, invoiceRate: Number(existingLine?.invoiceRate ?? existingLine?.rate ?? 0), invoiceValue: 0, actualQty: totalQty, actualValue: 0, rate: Number(existingLine?.rate || 0), value: 0 };
           });
-
           const nextReceiptId = existingReceipt?.id || crypto.randomUUID();
-          const nextReceipt: MaterialIn = {
-            id: nextReceiptId,
-            transactionNo: sample.mrrNo,
-            mrrType: "Reel",
-            timestamp: existingReceipt?.timestamp || timestamp,
-            entryEmailId: existingReceipt?.entryEmailId || "system@lngrp.in",
-            date: sample.mrrDate,
-            invoiceNo: existingReceipt?.invoiceNo || sample.mrrNo,
-            invDate: sample.mrrDate,
-            supplierId: sample.supplierId,
-            totalAmount: 0,
-            totalInvoiceValue: 0,
-            totalActualValue: 0,
-            lines: nextLines,
-            status: existingReceipt?.status || "Completed",
-            updatedBy: "System User",
-            updateTimestamp: timestamp,
-          };
-
-          if (existingReceipt) {
-            nextMaterialIn = nextMaterialIn.map((entry) => (entry.id === existingReceipt.id ? nextReceipt : entry));
-          } else {
-            nextMaterialIn = [...nextMaterialIn, nextReceipt];
-          }
-
+          const nextReceipt: MaterialIn = { id: nextReceiptId, transactionNo: sample.mrrNo, mrrType: "Reel", timestamp: existingReceipt?.timestamp || timestamp, entryEmailId: existingReceipt?.entryEmailId || "system@lngrp.in", date: sample.mrrDate, invoiceNo: existingReceipt?.invoiceNo || sample.mrrNo, invDate: sample.mrrDate, supplierId: sample.supplierId, totalAmount: 0, totalInvoiceValue: 0, totalActualValue: 0, lines: nextLines, status: existingReceipt?.status || "Completed", updatedBy: "System User", updateTimestamp: timestamp };
+          if (existingReceipt) nextMaterialIn = nextMaterialIn.map((entry) => (entry.id === existingReceipt.id ? nextReceipt : entry));
+          else nextMaterialIn = [...nextMaterialIn, nextReceipt];
           Array.from(mergedSlipMap.values()).forEach((row) => {
             const matchingLine = nextLines.find((line) => line.itemId === row.materialId);
             const existingSlip = row.existingSlip;
-            const nextSlip: MaterialInPackingSlip = {
-              id: existingSlip?.id || crypto.randomUUID(),
-              materialInId: nextReceiptId,
-              materialLineId: matchingLine?.id || crypto.randomUUID(),
-              materialId: row.materialId,
-              ourReelNo: row.ourReelNo,
-              weightKg: Number(row.weightKg),
-              updatedBy: "System User",
-              updateTimestamp: timestamp,
-            };
-
-            if (existingSlip) {
-              nextPackingSlips = nextPackingSlips.map((slip) => (slip.id === existingSlip.id ? nextSlip : slip));
-            } else {
-              nextPackingSlips = [...nextPackingSlips, nextSlip];
-            }
+            const nextSlip: MaterialInPackingSlip = { id: existingSlip?.id || crypto.randomUUID(), materialInId: nextReceiptId, materialLineId: matchingLine?.id || crypto.randomUUID(), materialId: row.materialId, ourReelNo: row.ourReelNo, weightKg: Number(row.weightKg), updatedBy: "System User", updateTimestamp: timestamp };
+            if (existingSlip) nextPackingSlips = nextPackingSlips.map((slip) => (slip.id === existingSlip.id ? nextSlip : slip));
+            else nextPackingSlips = [...nextPackingSlips, nextSlip];
           });
         });
-
-        await setMaterialGroups(nextGroups);
-        await setMaterials(nextMaterials);
-        await setMaterialIn(nextMaterialIn);
-        await setPackingSlips(nextPackingSlips);
+        await setMaterialGroups(nextGroups); await setMaterials(nextMaterials); await setMaterialIn(nextMaterialIn); await setPackingSlips(nextPackingSlips);
         alert(`Successfully uploaded ${data.length} material rows.`);
       } catch (error) {
         console.error("Material bulk upload error:", error);
         alert(error instanceof Error ? error.message : "Failed to parse the Excel file.");
-      } finally {
-        setIsUploading(false);
-        e.target.value = "";
-      }
+      } finally { setIsUploading(false); e.target.value = ""; }
     };
     reader.readAsBinaryString(file);
-  };
-
-  const clearFilters = () => {
-    setSearchTerm("");
-    setTypeFilter("All");
-    setSizeFilter("All");
-    setGsmFilter("All");
   };
 
   const groupOptions = materialGroups
@@ -897,7 +600,7 @@ export function Materials() {
       {isFormOpen ? (
         <div className="bg-white border border-black rounded-xl p-6 shadow-sm">
           <div className="flex justify-between items-start gap-4 mb-8">
-            <h2 className="text-xl font-bold text-black uppercase tracking-tight">New Item</h2>
+            <h2 className="text-xl font-bold text-black uppercase tracking-tight">{editingId ? "Edit Item" : "New Item"}</h2>
             <button
               type="button"
               onClick={() => resetForm()}
@@ -1134,9 +837,8 @@ export function Materials() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-black bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <h2 className="text-2xl font-black text-black tracking-tight uppercase">Material Master</h2>
                 <p className="text-sm font-medium text-slate-600 uppercase">
@@ -1258,7 +960,7 @@ export function Materials() {
             </div>
           </div>
 
-          <div className="bg-white rounded shadow-sm border border-black overflow-hidden">
+          <div className="bg-white rounded shadow-sm border border-black overflow-hidden mt-6">
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse">
                 <thead>
@@ -1281,7 +983,6 @@ export function Materials() {
                     paginatedMaterials.map((material, index) => {
                       const mvt = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
                       const balance = Number(material.openingQty || 0) + mvt.receipts + mvt.returns - mvt.issues;
-                      
                       return (
                         <tr key={material.id} className={`hover:bg-indigo-50/30 transition-colors divide-x divide-black ${material.active === "No" ? "opacity-50 grayscale" : ""}`}>
                           <td className="px-4 py-3 text-black font-bold text-xs">{(page - 1) * pageSize + index + 1}</td>
@@ -1291,7 +992,6 @@ export function Materials() {
                           <td className="px-4 py-3 text-black text-xs">{material.size ?? "-"}</td>
                           <td className="px-4 py-3 text-black text-xs">{material.gsm ?? "-"}</td>
                           <td className="px-4 py-3 text-black text-xs">{material.bf ?? "-"}</td>
-                          
                           <td className="px-4 py-3 text-black text-xs font-medium bg-slate-50">{material.openingQty?.toLocaleString() ?? "0"}</td>
                           <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/30">{mvt.receipts.toLocaleString()}</td>
                           <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/30">{mvt.issues.toLocaleString()}</td>
@@ -1299,7 +999,6 @@ export function Materials() {
                           <td className={`px-4 py-3 text-xs font-black border-r-2 border-black ${balance < 0 ? "text-red-600 bg-red-50" : "text-slate-900 bg-amber-50/50"}`}>
                             {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
-
                           <td className="px-4 py-3 text-black text-[10px] font-black uppercase">{material.uom || ""}</td>
                           <td className="px-4 py-3">
                             <div className="flex gap-1">
@@ -1321,13 +1020,7 @@ export function Materials() {
                 </tbody>
               </table>
             </div>
-            <ClientPagination
-              page={page}
-              pageSize={pageSize}
-              totalItems={totalItems}
-              onPageChange={setPage}
-              onPageSizeChange={setPageSize}
-            />
+            <ClientPagination page={page} pageSize={pageSize} totalItems={totalItems} onPageChange={setPage} onPageSizeChange={setPageSize} />
           </div>
         </div>
       )}
@@ -1339,24 +1032,10 @@ export function Materials() {
             <form onSubmit={handleCreateGroup} className="space-y-4">
               <div className="space-y-2">
                 <label className="font-bold text-black">Group Name *</label>
-                <input
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  autoFocus
-                    className="w-full border-2 border-black rounded p-3 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                />
+                <input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} autoFocus className="w-full border-2 border-black rounded p-3 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600" />
               </div>
               <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGroupModal(false);
-                    setNewGroupName("");
-                  }}
-                  className="px-5 py-2 border-2 border-black rounded font-bold text-black"
-                >
-                  Cancel
-                </button>
+                <button type="button" onClick={() => { setShowGroupModal(false); setNewGroupName(""); }} className="px-5 py-2 border-2 border-black rounded font-bold text-black">Cancel</button>
                 <button type="submit" disabled={savingGroup} className="px-5 py-2 bg-indigo-600 text-white rounded font-bold border border-black disabled:opacity-50">
                   {savingGroup ? <Spinner size={16} className="text-white" /> : "Save Group"}
                 </button>
@@ -1373,24 +1052,10 @@ export function Materials() {
             <form onSubmit={handleCreateUnit} className="space-y-4">
               <div className="space-y-2">
                 <label className="font-bold text-black">Unit Name *</label>
-                <input
-                  value={newUnitName}
-                  onChange={(e) => setNewUnitName(e.target.value)}
-                  autoFocus
-                  className="w-full border-2 border-black rounded p-3 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                />
+                <input value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} autoFocus className="w-full border-2 border-black rounded p-3 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600" />
               </div>
               <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUnitModal(false);
-                    setNewUnitName("");
-                  }}
-                  className="px-5 py-2 border-2 border-black rounded font-bold text-black"
-                >
-                  Cancel
-                </button>
+                <button type="button" onClick={() => { setShowUnitModal(false); setNewUnitName(""); }} className="px-5 py-2 border-2 border-black rounded font-bold text-black">Cancel</button>
                 <button type="submit" disabled={savingUnit} className="px-5 py-2 bg-indigo-600 text-white rounded font-bold border border-black disabled:opacity-50">
                   {savingUnit ? <Spinner size={16} className="text-white" /> : "Save Unit"}
                 </button>
@@ -1465,3 +1130,4 @@ function ActionButton({
     </button>
   );
 }
+
