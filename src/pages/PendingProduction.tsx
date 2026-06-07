@@ -66,7 +66,7 @@ export function PendingProduction() {
           const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
           return timeB - timeA;
         }),
-    [companies, cutoffDate, items, orders, schedules]
+    [companies, cutoffDate, npdItems, orders, schedules]
   );
 
   const handleCancelQty = async (schedule: OrderSchedule) => {

@@ -217,7 +217,7 @@ export function ProductionStageQueue({
       });
   }, [
     companies,
-    items,
+    npdItems,
     issuePrereqMachineName,
     orders,
     predicate,

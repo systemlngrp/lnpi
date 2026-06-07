@@ -57,7 +57,7 @@ export function DeliveryBook() {
         return matchesDate && matchesSearch;
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [loadingSlips, dispatchPlans, orders, companies, items, trucks, searchTerm, dateFilter]);
+  }, [loadingSlips, dispatchPlans, orders, companies, npdItems, trucks, searchTerm, dateFilter]);
 
   return (
     <div className="space-y-6">

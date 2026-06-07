@@ -97,7 +97,7 @@ export function BillingPendingTally() {
         return searchStr.includes(searchTerm.toLowerCase());
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [invoices, companies, lineItems, items, slips, dispatchPlans, orders, searchTerm]);
+  }, [invoices, companies, lineItems, npdItems, slips, dispatchPlans, orders, searchTerm]);
 
   const handleMarkPosted = async (id: string) => {
     if (!confirm("Mark this invoice as Posted to Tally?")) return;

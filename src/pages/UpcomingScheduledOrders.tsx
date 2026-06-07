@@ -66,7 +66,7 @@ export function UpcomingScheduledOrders() {
           const timeB = new Date(b.schedule.scheduledDate || 0).getTime();
           return timeA - timeB; // Ascending by date
         }),
-    [companies, cutoffDate, items, orders, schedules]
+    [companies, cutoffDate, npdItems, orders, schedules]
   );
 
   const handleCancelQty = async (schedule: OrderSchedule) => {

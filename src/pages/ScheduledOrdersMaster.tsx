@@ -91,7 +91,7 @@ export function ScheduledOrdersMaster() {
       if (dateCompare !== 0) return dateCompare;
       return a.orderNo.localeCompare(b.orderNo, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [schedules, orders, companies, items, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
+  }, [schedules, orders, companies, npdItems, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -151,7 +151,7 @@ export function ScheduledOrdersMaster() {
             className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none appearance-none bg-white"
           >
             <option value="">All Items</option>
-            {items.map(i => (
+            {npdItems.map(i => (
               <option key={i.id} value={i.id}>{i.name}</option>
             ))}
           </select>
