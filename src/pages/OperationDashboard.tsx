@@ -294,7 +294,7 @@ export function OperationDashboard() {
     { id: "company", label: "Company", render: (r) => r.company?.name || "-" },
     { id: "planDate", label: "Plan Date", render: (r) => formatDate(r.production.date) },
     { id: "itemName", label: "Item Name", className: "min-w-[150px]", render: (r) => r.item?.name || "Unknown" },
-    { id: "type", label: "Type", render: (r) => r.item?.typeName || "-" },
+    { id: "type", label: "Type", render: (r) => (r.item as any)?.boxType || "-" },
     { id: "mandatory", label: "Mandatory", render: (r) => r.mandatoryCell },
     { id: "plannedQty", label: "Planned Qty", align: "right", className: "font-medium text-emerald-700", render: (r) => `${r.production.qty ?? "-"} ${r.production.uom || ""}`.trim() },
     { id: "loadedQty", label: "Loaded Qty", align: "right", className: "font-bold text-amber-700 bg-amber-50/40", render: (r) => Number(r.loadedQty || 0).toLocaleString() },
@@ -469,8 +469,8 @@ export function OperationDashboard() {
     return `${machines} (${totalQty})`;
   };
 
-  const getMandatoryStatus = (productionId: string, typeName?: string) => {
-    const required = getRequiredMachinesForType(mandatoryMachinesByType, typeName);
+  const getMandatoryStatus = (productionId: string, boxType?: string) => {
+    const required = getRequiredMachinesForType(mandatoryMachinesByType, boxType);
     if (required.length === 0) return { required, done: 0, missing: [] as string[] };
     const doneSet = processingMachinesMap.get(productionId) || new Set<string>();
     const missing = required.filter((name) => !doneSet.has(normalizeMachineName(name)));
@@ -487,7 +487,7 @@ export function OperationDashboard() {
         const company = companies.find((c) => c.id === order?.companyId);
         const item = npdItems.find((i) => i.id === p.itemId);
 
-        const mandatory = getMandatoryStatus(p.id, item?.typeName);
+        const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
         const mandatoryCell =
           mandatory.required.length === 0
             ? "-"
@@ -637,7 +637,7 @@ export function OperationDashboard() {
       Company: r.company?.name || "-",
       "Plan Date": formatDate(r.production.date),
       "Item Name": r.item?.name || "-",
-      Type: r.item?.typeName || "-",
+      Type: (r.item as any)?.boxType || "-",
       "Planned Qty": `${r.production.qty ?? "-"} ${r.production.uom || ""}`.trim(),
       "Loaded Qty": r.loadedQty,
       Paper: r.processingTotals.paper,

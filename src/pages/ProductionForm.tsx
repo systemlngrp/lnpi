@@ -375,7 +375,7 @@ export function ProductionForm() {
     const flap = Number(selectedItem?.flap || 0);
     const openWidth = Number(selectedItem?.openWidth || 0);
     const openLength = Number(selectedItem?.openLength || 0);
-    const normalizedType = String(selectedItem?.typeName || "").trim().toUpperCase();
+    const normalizedType = String((selectedItem as any)?.boxType || "").trim().toUpperCase();
     const normalizedPart = normalizeNumericPart(selectedItem?.part ?? selectedItem?.noOfParts);
     const dieCutUps = Number(selectedItem?.dieCutUps || 0);
     const f3 = Number(selectedItem?.f3 || 0);
@@ -592,7 +592,7 @@ export function ProductionForm() {
     selectedItem?.openWidth,
     selectedItem?.part,
     selectedItem?.dieCutUps,
-    selectedItem?.typeName,
+    (selectedItem as any)?.boxType,
     selectedItem?.wOd,
   ]);
 
@@ -724,7 +724,7 @@ export function ProductionForm() {
               <InfoTile label="Order No" value={selectedOrder.orderNo || "-"} />
               <InfoTile label="Company" value={selectedCompany?.name || "-"} />
               <InfoTile label="Item" value={selectedItem?.name || "-"} />
-              <InfoTile label="Type" value={selectedItem?.typeName || "-"} />
+              <InfoTile label="Type" value={String((selectedItem as any)?.boxType || "-")} />
               <InfoTile label="ERP Code" value={selectedOrder.erpCode || "-"} />
               <InfoTile label="Schedule Date" value={formatDate(selectedSchedule.scheduledDate)} />
               <InfoTile label="Scheduled Qty" value={`${selectedSchedule.qty || 0} ${selectedItem?.uom || ""}`} />

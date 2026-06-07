@@ -118,8 +118,8 @@ export function ProductionMaster() {
 
     productions.forEach((production) => {
       const item = npdItems.find((i) => i.id === String(production.itemId || "").trim());
-      const typeName = item?.typeName;
-      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, typeName).map((m) =>
+      const boxType = (item as any)?.boxType;
+      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, boxType).map((m) =>
         normalizeMachineName(m)
       );
 
@@ -129,7 +129,7 @@ export function ProductionMaster() {
       const reasons: string[] = [];
 
       if (requiredMachines.length === 0) {
-        reasons.push(`No required process steps configured for Type: ${String(typeName || "-")}`);
+        reasons.push(`No required process steps configured for Type: ${String(boxType || "-")}`);
       }
 
       const isEntryComplete = (entry: ProductionProcessing) => {
@@ -344,8 +344,8 @@ export function ProductionMaster() {
     return `${machines} (${totalQty})`;
   };
 
-  const getMandatoryStatus = (productionId: string, typeName?: string) => {
-    const required = getRequiredMachinesForType(mandatoryMachinesByType, typeName);
+  const getMandatoryStatus = (productionId: string, boxType?: string) => {
+    const required = getRequiredMachinesForType(mandatoryMachinesByType, boxType);
     if (required.length === 0) return { required, done: 0, missing: [] as string[] };
 
     const doneSet = processingMachinesMap.get(productionId) || new Set<string>();
@@ -398,7 +398,7 @@ export function ProductionMaster() {
                 const leastGsm = erpLeastGsmMap.get(erp);
                 const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                 const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-                const mandatory = getMandatoryStatus(p.id, item?.typeName);
+                const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
                 const displayStatus = getProductionDisplayStatus(p);
                 
                 return (
@@ -428,7 +428,7 @@ export function ProductionMaster() {
                       )}
                       <div className="text-sm font-bold">{item?.name || "Unknown"}</div>
                       <div className="text-[10px] text-slate-600 uppercase font-black">
-                        Type: {item?.typeName || "-"} | Print: {p.printingColor || "-"}
+                        Type: {(item as any)?.boxType || "-"} | Print: {p.printingColor || "-"}
                       </div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">
                         OD: {item?.lOd || "-"}×{item?.wOd || "-"}×{item?.hOd || "-"} | Flap: {item?.flap || "-"} | Deckle: {item?.deckleSize || "-"} | Cutting: {item?.cuttingSize || "-"}
@@ -568,7 +568,7 @@ export function ProductionMaster() {
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
-                  const mandatory = getMandatoryStatus(p.id, item?.typeName);
+                  const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
                   const erp = String(p.erpCode || "").trim();
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
@@ -582,7 +582,7 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{item?.name || "Unknown"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{item?.typeName || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.boxType || "-"}</td>
                       <td className="px-4 py-4 text-[11px] text-black border border-black whitespace-nowrap">
                         {mandatory.required.length === 0 ? (
                           "-"
