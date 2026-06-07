@@ -38,7 +38,7 @@ export function IndentForm() {
     const rows = document.querySelectorAll('table tbody tr');
     rows.forEach((row) => {
       const txt = (row.textContent || '').toLowerCase();
-      row.style.display = q && !txt.includes(q) ? 'none' : '';
+      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
     });
   }, [searchTerm]);
 
@@ -184,7 +184,7 @@ export function IndentForm() {
   };
 
   return (
-
+    <>
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-6">
@@ -349,5 +349,6 @@ export function IndentForm() {
         </div>
       </form>
     </div>
+    </>
   );
 }

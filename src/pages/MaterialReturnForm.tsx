@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
@@ -28,7 +28,7 @@ export function MaterialReturnForm() {
     const rows = document.querySelectorAll('table tbody tr');
     rows.forEach((row) => {
       const txt = (row.textContent || '').toLowerCase();
-      row.style.display = q && !txt.includes(q) ? 'none' : '';
+      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
     });
   }, [searchTerm]);
 
@@ -276,7 +276,7 @@ export function MaterialReturnForm() {
   };
 
   return (
-
+    <>
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
@@ -332,14 +332,14 @@ export function MaterialReturnForm() {
                   <div key={line.id} className="rounded border border-black p-4 space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="font-bold">{material?.name || "Unknown Material"}</div>
-                        <div className="text-sm text-slate-500">
-                          {line.isReel ? `Selected Weight: ${line.qty.toFixed(2)} KG` : `Return Qty: ${line.qty} ${line.uom}`}
-                        </div>
+                        <div className="text-sm font-black">{material?.name || 'Unknown Material'}</div>
+                        <div className="text-xs text-slate-500">{line.isReel ? `Selected Weight: ${line.qty.toFixed(2)} KG` : `Return Qty: ${line.qty} ${line.uom}`}</div>
                       </div>
-                      <button type="button" onClick={() => handleRemoveLine(line.id)} className="text-red-600 hover:text-red-800">
-                        <Trash2 size={18} />
-                      </button>
+                      <div>
+                        <button type="button" onClick={() => handleRemoveLine(line.id)} className="text-red-600 hover:text-red-800">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
 
                     {line.isReel ? (
@@ -394,6 +394,7 @@ export function MaterialReturnForm() {
         </div>
       </form>
     </div>
+    </>
   );
 }
 

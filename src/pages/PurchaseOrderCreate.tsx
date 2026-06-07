@@ -25,7 +25,7 @@ export function PurchaseOrderCreate() {
     const rows = document.querySelectorAll('table tbody tr');
     rows.forEach((row) => {
       const txt = (row.textContent || '').toLowerCase();
-      row.style.display = q && !txt.includes(q) ? 'none' : '';
+      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
     });
   }, [searchTerm]);
 
@@ -261,10 +261,10 @@ export function PurchaseOrderCreate() {
 
   if (!indent || !normalizedIndent) {
     return (
+      <>
+        <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-
-      <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-4">
+        <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Create Purchase Order</h2>
         <p className="text-black font-medium">Approved indent not found.</p>
         <button
@@ -274,7 +274,8 @@ export function PurchaseOrderCreate() {
         >
           Back
         </button>
-      </div>
+        </div>
+      </>
     );
   }
 

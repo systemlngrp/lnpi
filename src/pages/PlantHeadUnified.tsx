@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier, Order, Consumption, Company } from "../types";
@@ -21,7 +21,7 @@ export function PlantHeadUnified() {
     const rows = document.querySelectorAll('table tbody tr');
     rows.forEach((row) => {
       const txt = (row.textContent || '').toLowerCase();
-      row.style.display = q && !txt.includes(q) ? 'none' : '';
+      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
     });
   }, [searchTerm]);
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
@@ -40,7 +40,7 @@ export function MaterialIssueForm() {
     const rows = document.querySelectorAll('table tbody tr');
     rows.forEach((row) => {
       const txt = (row.textContent || '').toLowerCase();
-      row.style.display = q && !txt.includes(q) ? 'none' : '';
+      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
     });
   }, [searchTerm]);
 
@@ -333,7 +333,7 @@ export function MaterialIssueForm() {
   };
 
   return (
-
+    <>
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
@@ -455,12 +455,8 @@ export function MaterialIssueForm() {
                       <tr key={line.id} className="divide-x divide-black align-top hover:bg-slate-50">
                         <td className="px-4 py-4 text-sm font-black text-center">{index + 1}</td>
                         <td className="px-4 py-4 space-y-2">
-                          <div>
-                            <div className="font-bold text-black">{material?.name || "Unknown Material"}</div>
-                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
-                              ERP: {material?.erpCode || "-"} | UOM: {line.uom}
-                            </div>
-                          </div>
+                          <div className="text-sm font-black">{material?.name || 'Unknown Material'}</div>
+                          <div className="text-xs text-slate-500">ERP: {material?.erpCode || "-"} | UOM: {line.uom}</div>
 
                           {line.isReel && (
                             <div className="mt-2 rounded border border-black overflow-hidden bg-white">
@@ -543,6 +539,7 @@ export function MaterialIssueForm() {
         </div>
       </form>
     </div>
+    </>
   );
 }
 

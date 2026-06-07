@@ -19,7 +19,7 @@ export function PendingDispatchPlanning() {
     const rows = document.querySelectorAll('table tbody tr');
     rows.forEach((row) => {
       const txt = (row.textContent || '').toLowerCase();
-      row.style.display = q && !txt.includes(q) ? 'none' : '';
+      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
     });
   }, [searchTerm]);
 
@@ -433,10 +433,10 @@ export function PendingDispatchPlanning() {
       </div>
 
       {calculationRows.length > 0 ? (
+        <>
+          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+          <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
           <div className="px-4 py-3 border-b border-black bg-slate-50">
             <div className="text-sm font-black uppercase text-black">Dispatch Planning Calculation</div>
             <div className="text-[11px] font-bold text-slate-600">
@@ -481,7 +481,8 @@ export function PendingDispatchPlanning() {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        </>
       ) : null}
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
