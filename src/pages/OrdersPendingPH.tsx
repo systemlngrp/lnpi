@@ -31,9 +31,7 @@ export function OrdersPendingPH() {
 
   const pending = orders.filter(o => !o.status || o.status === 'Pending PH');
 
-  const orderByOptions = users
-    .filter(u => !!u.name)
-    .map(u => ({ value: u.id, label: u.name }));
+  const orderByOptions = Array.from(new Set(pending.map(o => o.orderBy).filter(Boolean))).map(id => users.find(u => u.id === id)).filter(Boolean).map(u => ({ value: (u as User).id, label: (u as User).name })).sort((a, b) => a.label.localeCompare(b.label));
 
   const filtered = pending.filter(o => {
     if (orderByFilter && String(o.orderBy || "") !== orderByFilter) return false;
@@ -122,7 +120,7 @@ export function OrdersPendingPH() {
                 <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-4 py-2 border border-black">{(companies as any[]).find((c:any)=>c.id===o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{npdItems.find((item) => item.id === o.itemId)?.name}</td>
-                <td className="px-4 py-2 border border-black whitespace-nowrap">{users.find(u => u.id === o.orderBy)?.name || o.orderBy || '-'}</td>
+                <td className="px-4 py-2 border border-black whitespace-nowrap">{users.find(u => u.id === o.orderBy)?.name || '-'}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">
                   <button onClick={() => handleApprove(o.id)} className="bg-emerald-600 text-white px-3 py-1 rounded font-bold mr-2">Approve</button>
