@@ -106,6 +106,8 @@ export function OrderForm() {
     String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
   const getItemCustomerName = (item: Item | undefined) =>
     normalizeCompanyName((item as any)?.customerName || item?.customer || "");
+  const getItemDisplayName = (item: Item | undefined) =>
+    String(item?.name || (item as any)?.itemName || item?.erp || "").trim();
   const normalizeText = (value: string | null | undefined) =>
     String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -130,7 +132,11 @@ export function OrderForm() {
 
       const result = await response.json();
       const rows = Array.isArray(result?.rows) ? result.rows : [];
-      setAllItems(rows);
+      const normalizedRows = rows.map((row) => ({
+        ...row,
+        name: String(row?.name || row?.itemName || row?.erp || "").trim(),
+      }));
+      setAllItems(normalizedRows);
     } catch (error) {
       console.error("Failed to fetch full NPD item list for orders:", error);
     }
@@ -145,8 +151,8 @@ export function OrderForm() {
     return allItems
       .filter((item) => !companyId || getItemCustomerName(item) === selectedCompanyName)
       .slice()
-      .sort((a,b) => (a.name||"").localeCompare(b.name||""))
-      .map(i => ({ value: i.id, label: i.name }));
+      .sort((a,b) => getItemDisplayName(a).localeCompare(getItemDisplayName(b)))
+      .map(i => ({ value: i.id, label: getItemDisplayName(i) }));
   }, [allItems, companyId, companies]);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -196,7 +202,7 @@ export function OrderForm() {
 
         const itemMap = new Map<string, Item>();
         allItems.forEach((item) => {
-          const keys = [item.name, (item as any)?.itemName]
+          const keys = [item.name, (item as any)?.itemName, item.erp?.toString?.()]
             .map((value) => normalizeText(value))
             .filter(Boolean);
           keys.forEach((key) => {
@@ -675,7 +681,7 @@ export function OrderForm() {
                 <td className="px-4 py-2 border border-black">{companies.find(c => c.id === o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{o.poNumber}</td>
                 <td className="px-4 py-2 border border-black">{o.erpCode}</td>
-                <td className="px-4 py-2 border border-black">{allItems.find(i => i.id === o.itemId)?.name}</td>
+                <td className="px-4 py-2 border border-black">{getItemDisplayName(allItems.find(i => i.id === o.itemId))}</td>
                 <td className="px-4 py-2 text-right border border-black">{o.qty}</td>
                 <td className="px-4 py-2 text-right border border-black">{o.rate}</td>
                 <td className="px-4 py-2 text-right border border-black">{users.find(u => u.id === o.orderBy)?.name}</td>
