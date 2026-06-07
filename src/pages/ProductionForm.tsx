@@ -307,13 +307,17 @@ export function ProductionForm() {
   const currentGsm = Number(formData.gsm || 0);
   const leastGsm = Number(formData.leastGsm || 0);
   const deviationLimit = isSameAsLastItem ? Number((lastPlanQty * (deviationAllowed / 100)).toFixed(2)) : 0;
+  const maximumDeviationQty =
+    isSameAsLastItem && lastPlanQty > 0
+      ? Number((lastPlanQty + deviationLimit).toFixed(2))
+      : 0;
 
   const quantityDeviationError =
     !isSampleItem &&
     isSameAsLastItem &&
     currentQty > 0 &&
-    deviationLimit > 0 &&
-    currentQty > deviationLimit;
+    maximumDeviationQty > 0 &&
+    currentQty > maximumDeviationQty;
 
   const maximumAllowedProductionError =
     currentQty > 0 &&
@@ -863,7 +867,7 @@ export function ProductionForm() {
               )}
               {quantityDeviationError && (
                 <span className="text-red-600 text-xs font-bold">
-                  Planned Quantity cannot exceed {deviationLimit.toLocaleString()} based on Last Plan Qty and Deviation Allowed.
+                  Planned Quantity cannot exceed {maximumDeviationQty.toLocaleString()} based on Last Plan Qty and Deviation Allowed.
                 </span>
               )}
             </div>}
