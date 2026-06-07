@@ -32,7 +32,10 @@ export function ProductionProcessingMaster() {
           String(p.jobNo || "").toLowerCase().includes(query) ||
           (p.machineName || "").toLowerCase().includes(query) ||
           (p.operatorName || "").toLowerCase().includes(query) ||
-          String(p.shift || "Day").toLowerCase().includes(query)
+          String(p.shift || "Day").toLowerCase().includes(query) ||
+          String(p.itemName || "").toLowerCase().includes(query) ||
+          String(p.erp || "").toLowerCase().includes(query) ||
+          String(p.boxType || "").toLowerCase().includes(query)
         );
         const matchesFrom = !fromDate || String(p.date || "") >= fromDate;
         const matchesTo = !toDate || String(p.date || "") <= toDate;
@@ -55,7 +58,7 @@ export function ProductionProcessingMaster() {
 
       <div className="flex flex-nowrap items-center gap-3 overflow-x-auto">
         <div className="min-w-0 flex-1">
-          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search by Job No, Machine, or Operator..." />
+          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search by Job No, Machine, Operator, Item, or ERP..." />
         </div>
         <div className="flex shrink-0 items-end gap-3 rounded border border-black bg-white px-3 py-2">
           <div className="flex flex-col gap-1">
@@ -91,35 +94,41 @@ export function ProductionProcessingMaster() {
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-black">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Job No</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Shift</th>
-                <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Quantity</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Operator Name</th>
-                <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
+          <table className="min-w-full divide-y divide-black border-collapse border border-black">
+            <thead className="bg-slate-100 divide-x divide-black">
+              <tr className="divide-x divide-black">
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border border-black">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border border-black">Job No</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border border-black">Item Name</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border border-black">ERP</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border border-black">Box Type</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border border-black">Machine</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border border-black">Shift</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border border-black">Quantity</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border border-black">Operator Name</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border border-black">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-black">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500 font-medium">No reporting records found.</td>
+                  <td colSpan={10} className="px-6 py-8 text-center text-slate-500 font-medium border border-black">No reporting records found.</td>
                 </tr>
               ) : (
                 filtered.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{formatDate(item.date)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{item.jobNo}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{item.machineName}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{item.shift || "Day"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-right text-emerald-700">
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{formatDate(item.date)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{item.jobNo}</td>
+                    <td className="px-6 py-4 text-sm text-black border border-black">{item.itemName || "-"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{item.erp || "-"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{item.boxType || "-"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{item.machineName}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{item.shift || "Day"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-right text-emerald-700 border border-black">
                       {Number(item.qty || 0).toLocaleString()}
                     </td>
-                    <td className="px-6 py-4 text-sm text-black">{item.operatorName || "-"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-6 py-4 text-sm text-black border border-black">{item.operatorName || "-"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium border border-black">
                       <button 
                         onClick={() => handleDelete(item.id)} 
                         className={`${deletingId === item.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}
