@@ -319,12 +319,34 @@ export function PendingDispatchPlanning() {
       .sort((a, b) => a.itemName.localeCompare(b.itemName));
   }, [
     availableToPlanByItemId,
-    items,
+    npdItems,
     loadedQtyByItemId,
     pendingProductionPlanQtyByItemId,
     plannedNowByItemId,
     reservedDispatchPlanQtyByItemId,
   ]);
+
+  const metrics = useMemo(() => {
+    let totalPendingQty = 0;
+    let overdueCount = 0;
+
+    basePendingSchedules.forEach(s => {
+      const effectivePlanned = getEffectivePlannedForSchedule(s.id);
+      const balance = Number(s.qty || 0) - effectivePlanned;
+      totalPendingQty += Math.max(0, balance);
+      
+      const schedDate = new Date(s.scheduledDate);
+      if (schedDate < today) overdueCount++;
+    });
+
+    return {
+      pendingOrders: basePendingSchedules.length,
+      pendingQty: totalPendingQty,
+      overdue: overdueCount,
+      activeSelection: selectedIds.size,
+      activePlanned: totalSessionPlannedQty
+    };
+  }, [basePendingSchedules, getEffectivePlannedForSchedule, today, selectedIds, totalSessionPlannedQty]);
 
   const handleSubmit = async () => {
     if (selectedIds.size === 0) {
@@ -388,53 +410,97 @@ export function PendingDispatchPlanning() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
-        <div>
-          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Dispatch Planning</h2>
-          <p className="text-xs text-slate-500 mt-1 font-bold">Plan dispatches for today and tomorrow</p>
-        </div>
-        
-        <div className="flex items-center gap-6">
-          {selectedIds.size > 0 && (
-            <div className="bg-amber-50 border-2 border-amber-500 px-4 py-1.5 rounded-lg flex items-center gap-3 shadow-[2px_2px_0px_0px_rgba(245,158,11,1)]">
-              <span className="text-[10px] font-black uppercase text-amber-700">Total Planned:</span>
-              <span className="text-lg font-black text-amber-900">{totalSessionPlannedQty.toLocaleString()}</span>
-            </div>
-          )}
-
-          <div className="flex flex-col">
-            <label className="text-[10px] font-bold uppercase text-slate-500 mb-1">Filter by Company</label>
-            <select 
-              value={selectedCompanyId}
-              onChange={(e) => {
-                setSelectedCompanyId(e.target.value);
-                setSelectedIds(new Set());
-              }}
-              className="border-2 border-black rounded p-2 text-sm focus:outline-none focus:border-indigo-600 font-bold min-w-[200px]"
-            >
-              <option value="">All Companies</option>
-              {availableCompanies.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-black pb-4">
+          <div>
+            <h2 className="text-2xl font-black text-black tracking-tight uppercase">Dispatch Planning</h2>
+            <p className="text-sm font-medium text-slate-600 uppercase">
+              Schedule Orders for Loading & Delivery
+            </p>
           </div>
           
-          {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3">
+             {selectedIds.size > 0 && (
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 transition flex items-center border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+              >
+                <Save size={18} className="mr-2" />
+                {isSubmitting ? "Saving..." : `Submit Plan (${selectedIds.size})`}
+              </button>
+            )}
             <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="bg-emerald-600 text-white px-6 py-2 rounded font-bold hover:bg-emerald-700 transition flex items-center mt-4 self-end h-[42px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[2px]"
+              onClick={() => navigate(-1)}
+              className="px-4 py-2 border-2 border-black rounded-xl text-xs font-bold bg-white hover:bg-slate-50 transition uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             >
-              <Save size={18} className="mr-2" />
-              {isSubmitting ? "Saving..." : `Submit Plan (${selectedIds.size})`}
+              Back
             </button>
-          )}
+          </div>
+        </div>
+
+        {/* Colorful Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+            <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Pending Orders</div>
+            <div className="text-3xl font-black">{metrics.pendingOrders}</div>
+            <div className="text-[10px] font-bold mt-1 opacity-90">Schedules to be planned</div>
+          </div>
+          <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+            <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Overdue</div>
+            <div className="text-3xl font-black">{metrics.overdue}</div>
+            <div className="text-[10px] font-bold mt-1 opacity-90">Orders past delivery date</div>
+          </div>
+          <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+            <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Pending Qty</div>
+            <div className="text-3xl font-black">{metrics.pendingQty.toLocaleString()}</div>
+            <div className="text-[10px] font-bold mt-1 opacity-90">Total balance pieces</div>
+          </div>
+          <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+            <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Session Planned</div>
+            <div className="text-3xl font-black">{metrics.activePlanned.toLocaleString()}</div>
+            <div className="text-[10px] font-bold mt-1 opacity-90">{metrics.activeSelection} items selected now</div>
+          </div>
+        </div>
+
+        <div className="bg-white border-2 border-black rounded-xl p-4 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[240px] space-y-1">
+              <div className="text-indigo-700 font-bold text-[10px] uppercase tracking-wider">Search Orders</div>
+              <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search by Job, Order, Item, Company..." />
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-indigo-700 font-bold text-[10px] uppercase tracking-wider">Filter by Company</div>
+              <select 
+                value={selectedCompanyId}
+                onChange={(e) => {
+                  setSelectedCompanyId(e.target.value);
+                  setSelectedIds(new Set());
+                }}
+                className="border-2 border-black rounded px-3 py-1.5 text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[240px]"
+              >
+                <option value="">All Companies</option>
+                {availableCompanies.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            {(selectedCompanyId || searchTerm) && (
+              <button 
+                onClick={() => {
+                  setSelectedCompanyId("");
+                  setSearchTerm("");
+                }}
+                className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
       </div>
-
-      {calculationRows.length > 0 ? (
-        <>
-          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
           <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
           <div className="px-4 py-3 border-b border-black bg-slate-50">

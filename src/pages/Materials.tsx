@@ -225,7 +225,7 @@ export function Materials() {
     [units]
   );
 
-  const resetForm = (nextMaterials = materials, nextReelGroupId = reelGroup?.id || "") => {
+  function resetForm(nextMaterials = materials, nextReelGroupId = reelGroup?.id || "") {
     setFormData(createInitialFormState(nextMaterials, nextReelGroupId));
     setEditingId(null);
     setIsFormOpen(false);
@@ -233,9 +233,9 @@ export function Materials() {
     setShowUnitModal(false);
     setNewGroupName("");
     setNewUnitName("");
-  };
+  }
 
-  const syncReelDefaults = (nextType: MaterialType, current = formData) => {
+  function syncReelDefaults(nextType: MaterialType, current = formData) {
     if (nextType === "Reel") {
       return {
         ...current,
@@ -251,15 +251,15 @@ export function Materials() {
       uom: "CM",
       erpCode: editingId ? current.erpCode : getNextOtherErpCode(materials),
     };
-  };
+  }
 
-  const handleOpenNew = () => {
+  function handleOpenNew() {
     setEditingId(null);
     setFormData(createInitialFormState(materials, reelGroup?.id || ""));
     setIsFormOpen(true);
-  };
+  }
 
-  const handleEdit = (material: Material) => {
+  function handleEdit(material: Material) {
     setEditingId(material.id);
     setFormData({
       type: material.type,
@@ -277,13 +277,13 @@ export function Materials() {
       active: material.active === "No" ? "No" : "Yes",
     });
     setIsFormOpen(true);
-  };
+  }
 
-  const handleDelete = (id: string) => {
+  function handleDelete(id: string) {
     setMaterials(materials.filter((material) => material.id !== id));
-  };
+  }
 
-  const handleToggleActive = (material: Material) => {
+  function handleToggleActive(material: Material) {
     const timestamp = new Date().toISOString();
     setMaterials(
       materials.map((row) =>
@@ -297,9 +297,9 @@ export function Materials() {
           : row
       )
     );
-  };
+  }
 
-  const handleCreateGroup = async (event: React.FormEvent) => {
+  async function handleCreateGroup(event: React.FormEvent) {
     event.preventDefault();
     if (!newGroupName.trim()) return;
     const normalizedName = newGroupName.trim();
@@ -323,9 +323,9 @@ export function Materials() {
     } finally {
       setSavingGroup(false);
     }
-  };
+  }
 
-  const handleCreateUnit = async (event: React.FormEvent) => {
+  async function handleCreateUnit(event: React.FormEvent) {
     event.preventDefault();
     if (!newUnitName.trim()) return;
     const normalizedName = newUnitName.trim();
@@ -349,9 +349,9 @@ export function Materials() {
     } finally {
       setSavingUnit(false);
     }
-  };
+  }
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const normalizedType = formData.type;
     const erpCode = String(formData.erpCode || "").trim() || (normalizedType === "Reel" ? getNextNumericErpCode(materials) : getNextOtherErpCode(materials));
@@ -410,7 +410,7 @@ export function Materials() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
 
   const sizeOptions = useMemo(() => {
     const values = Array.from(new Set(materials.map((material) => formatOptionalNumber(material.size)).filter(Boolean)));
@@ -440,7 +440,7 @@ export function Materials() {
 
   const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems: paginatedMaterials } = useClientPagination(filteredMaterials, 25);
 
-  const downloadTemplate = () => {
+  function downloadTemplate() {
     const templateData = [
       { "Type": "Reel", "ERP Code": "1001", "Item Name": "", "Item Group": "Reel", "MRR No.": "MI/26-27/00001", "MRR Date": "2026-06-02", "Supplier Name": "Bizskill", "Our Reel No.": "R00001", "Reel Qty": 250.5, "Unit": "CM", "Size": 120, "GSM": 150, "BF": 18, "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" },
       { "Type": "Other", "ERP Code": "2001", "Item Name": "Service", "Item Group": "Consumable", "MRR No.": "", "MRR Date": "", "Supplier Name": "", "Our Reel No.": "", "Reel Qty": "", "Unit": "CM", "Size": "", "GSM": "", "BF": "", "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" }
@@ -449,9 +449,9 @@ export function Materials() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Materials");
     XLSX.writeFile(wb, "Material_Master_Bulk_Template.xlsx");
-  };
+  }
 
-  const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  function handleBulkUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -588,7 +588,16 @@ export function Materials() {
       } finally { setIsUploading(false); e.target.value = ""; }
     };
     reader.readAsBinaryString(file);
-  };
+  }
+
+  function clearFilters() {
+    setSearchTerm("");
+    setTypeFilter("All");
+    setSizeFilter("All");
+    setGsmFilter("All");
+    setFromDate("");
+    setToDate("");
+  }
 
   const groupOptions = materialGroups
     .slice()
@@ -1098,36 +1107,3 @@ function FilterSelect({
     </div>
   );
 }
-
-function ActionButton({
-  label,
-  tone,
-  onClick,
-  icon,
-}: {
-  label: string;
-  tone: "edit" | "deactivate" | "activate" | "delete";
-  onClick: () => void;
-  icon?: React.ReactNode;
-}) {
-  const toneClasses =
-    tone === "edit"
-      ? "bg-white text-indigo-700 border-slate-300 hover:bg-slate-50"
-      : tone === "activate"
-        ? "bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700"
-        : tone === "deactivate"
-          ? "bg-red-600 text-white border-red-700 hover:bg-red-700"
-          : "bg-slate-900 text-white border-slate-900 hover:bg-black";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1 px-4 py-2 rounded-xl border font-bold text-sm transition whitespace-nowrap ${toneClasses}`}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
