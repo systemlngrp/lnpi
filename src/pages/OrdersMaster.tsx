@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowDown, ArrowUp, Plus, Search, Calendar } from "lucide-react";
+import Select from "react-select";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { ClientPagination } from "../components/ClientPagination";
@@ -167,6 +168,63 @@ export function OrdersMaster() {
       });
   }, [companyFilter, dateFrom, dateTo, itemFilter, orderByFilter, orderNoSort, rows, searchTerm, valueGreaterThan, quantityGreaterThan]);
 
+  const availableCompanies = useMemo(() => {
+    const ns = searchTerm.trim().toLowerCase();
+    const set = new Set<string>();
+    rows.forEach((row) => {
+      if (itemFilter && row.itemName !== itemFilter) return;
+      if (orderByFilter && row.orderByName !== orderByFilter) return;
+      if ((dateFrom || dateTo) && !isWithinDateRange(row.order.orderDate, dateFrom, dateTo)) return;
+      if (valueGreaterThan !== "" && toNumber(row.orderAmount) <= toNumber(valueGreaterThan)) return;
+      if (quantityGreaterThan !== "" && toNumber(row.order.qty) <= toNumber(quantityGreaterThan)) return;
+      if (ns) {
+        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.order.erpCode, row.order.poNumber, row.orderByName]
+          .some((v) => String(v || "").toLowerCase().includes(ns));
+        if (!anyMatch) return;
+      }
+      if (row.companyName) set.add(row.companyName);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rows, itemFilter, orderByFilter, dateFrom, dateTo, valueGreaterThan, quantityGreaterThan, searchTerm]);
+
+  const availableItems = useMemo(() => {
+    const ns = searchTerm.trim().toLowerCase();
+    const set = new Set<string>();
+    rows.forEach((row) => {
+      if (companyFilter && row.companyName !== companyFilter) return;
+      if (orderByFilter && row.orderByName !== orderByFilter) return;
+      if ((dateFrom || dateTo) && !isWithinDateRange(row.order.orderDate, dateFrom, dateTo)) return;
+      if (valueGreaterThan !== "" && toNumber(row.orderAmount) <= toNumber(valueGreaterThan)) return;
+      if (quantityGreaterThan !== "" && toNumber(row.order.qty) <= toNumber(quantityGreaterThan)) return;
+      if (ns) {
+        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.order.erpCode, row.order.poNumber, row.orderByName]
+          .some((v) => String(v || "").toLowerCase().includes(ns));
+        if (!anyMatch) return;
+      }
+      if (row.itemName) set.add(row.itemName);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rows, companyFilter, orderByFilter, dateFrom, dateTo, valueGreaterThan, quantityGreaterThan, searchTerm]);
+
+  const availableUsers = useMemo(() => {
+    const ns = searchTerm.trim().toLowerCase();
+    const set = new Set<string>();
+    rows.forEach((row) => {
+      if (companyFilter && row.companyName !== companyFilter) return;
+      if (itemFilter && row.itemName !== itemFilter) return;
+      if ((dateFrom || dateTo) && !isWithinDateRange(row.order.orderDate, dateFrom, dateTo)) return;
+      if (valueGreaterThan !== "" && toNumber(row.orderAmount) <= toNumber(valueGreaterThan)) return;
+      if (quantityGreaterThan !== "" && toNumber(row.order.qty) <= toNumber(quantityGreaterThan)) return;
+      if (ns) {
+        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.order.erpCode, row.order.poNumber, row.orderByName]
+          .some((v) => String(v || "").toLowerCase().includes(ns));
+        if (!anyMatch) return;
+      }
+      if (row.orderByName) set.add(row.orderByName);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rows, companyFilter, itemFilter, dateFrom, dateTo, valueGreaterThan, quantityGreaterThan, searchTerm]);
+
   const {
     page,
     setPage,
@@ -184,6 +242,8 @@ export function OrdersMaster() {
     return {
       totalOrders: filteredRows.length,
       orderValue: filteredRows.reduce((sum, row) => sum + toNumber(row.orderAmount), 0),
+      pendingQuantity: filteredRows.reduce((sum, row) => sum + toNumber(row.pendingQty), 0),
+      pendingValue: filteredRows.reduce((sum, row) => sum + toNumber(row.pendingQty) * toNumber(row.order.rate), 0),
       companies: uniqueCompanies.size,
     };
   }, [filteredRows]);
@@ -204,7 +264,7 @@ export function OrdersMaster() {
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-5">
         <div className="rounded p-4 bg-gradient-to-r from-indigo-50 to-indigo-100 border border-indigo-200">
           <div className="text-xs font-bold uppercase tracking-wide text-indigo-600">Total Orders</div>
           <div className="mt-2 text-2xl font-bold text-indigo-800">{summary.totalOrders}</div>
@@ -216,6 +276,14 @@ export function OrdersMaster() {
         <div className="rounded p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200">
           <div className="text-xs font-bold uppercase tracking-wide text-yellow-700">Companies</div>
           <div className="mt-2 text-2xl font-bold text-yellow-800">{summary.companies}</div>
+        </div>
+        <div className="rounded p-4 bg-gradient-to-r from-rose-50 to-rose-100 border border-rose-200">
+          <div className="text-xs font-bold uppercase tracking-wide text-rose-600">Pending Order Quantity</div>
+          <div className="mt-2 text-2xl font-bold text-rose-800">{formatAmount(summary.pendingQuantity)}</div>
+        </div>
+        <div className="rounded p-4 bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-200">
+          <div className="text-xs font-bold uppercase tracking-wide text-purple-600">Pending Order Value</div>
+          <div className="mt-2 text-2xl font-bold text-purple-800">{formatAmount(summary.pendingValue)}</div>
         </div>
       </div>
 
@@ -236,59 +304,41 @@ export function OrdersMaster() {
 
           <label className="flex flex-col gap-1 text-sm font-bold text-black">
             <span>Company</span>
-            <input
-              list="companies-list"
-              value={companyFilter}
-              onChange={(e) => setCompanyFilter(e.target.value)}
+            <Select
+              options={availableCompanies.map((c) => ({ value: c, label: c }))}
+              value={companyFilter ? { value: companyFilter, label: companyFilter } : null}
+              onChange={(opt) => setCompanyFilter(opt ? (opt as any).value : "")}
+              isClearable
               placeholder="All Companies"
-              className="rounded border border-black px-3 py-2 font-normal"
+              menuPlacement="bottom"
+              styles={{ control: (provided) => ({ ...provided, minHeight: 40 }) }}
             />
-            <datalist id="companies-list">
-              {companies
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((c) => (
-                  <option key={c.id} value={c.name} />
-                ))}
-            </datalist>
           </label>
 
           <label className="flex flex-col gap-1 text-sm font-bold text-black">
             <span>Item</span>
-            <input
-              list="items-list"
-              value={itemFilter}
-              onChange={(e) => setItemFilter(e.target.value)}
+            <Select
+              options={availableItems.map((it) => ({ value: it, label: it }))}
+              value={itemFilter ? { value: itemFilter, label: itemFilter } : null}
+              onChange={(opt) => setItemFilter(opt ? (opt as any).value : "")}
+              isClearable
               placeholder="All Items"
-              className="rounded border border-black px-3 py-2 font-normal"
+              menuPlacement="bottom"
+              styles={{ control: (provided) => ({ ...provided, minHeight: 40 }) }}
             />
-            <datalist id="items-list">
-              {npdItems
-                .slice()
-                .sort((left, right) => (left.name || "").localeCompare(right.name || ""))
-                .map((item) => (
-                  <option key={item.id} value={item.name} />
-                ))}
-            </datalist>
           </label>
 
           <label className="flex flex-col gap-1 text-sm font-bold text-black">
             <span>Order By</span>
-            <input
-              list="users-list"
-              value={orderByFilter}
-              onChange={(e) => setOrderByFilter(e.target.value)}
+            <Select
+              options={availableUsers.map((u) => ({ value: u, label: u }))}
+              value={orderByFilter ? { value: orderByFilter, label: orderByFilter } : null}
+              onChange={(opt) => setOrderByFilter(opt ? (opt as any).value : "")}
+              isClearable
               placeholder="All Users"
-              className="rounded border border-black px-3 py-2 font-normal"
+              menuPlacement="bottom"
+              styles={{ control: (provided) => ({ ...provided, minHeight: 40 }) }}
             />
-            <datalist id="users-list">
-              {users
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((u) => (
-                  <option key={u.id} value={u.name} />
-                ))}
-            </datalist>
           </label>
         </div>
 
