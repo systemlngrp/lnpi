@@ -5,19 +5,20 @@ import { Order, Company, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/utils";
 import { Select } from "../components/Select";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { User } from "../types";
 import { getFinancialYear } from "../lib/serial";
 import * as XLSX from "xlsx";
 
 export function OrderForm() {
+  const navigate = useNavigate();
   const [orders, setOrders, isLoading] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [users] = useData<User>("users", []);
   const [allItems, setAllItems] = useState<Item[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -29,6 +30,11 @@ export function OrderForm() {
   const [erpCode, setErpCode] = useState<string>("");
   const [qty, setQty] = useState<string>("");
   const [rate, setRate] = useState<string>("");
+  const orderAmount = (() => {
+    const qtyNumber = Number(qty || 0);
+    const rateNumber = Number(rate || 0);
+    return Number.isFinite(qtyNumber) && Number.isFinite(rateNumber) ? qtyNumber * rateNumber : 0;
+  })();
   const [orderBy, setOrderBy] = useState("");
   const [remarks, setRemarks] = useState("");
 
@@ -329,6 +335,7 @@ export function OrderForm() {
             itemId: matchedItem?.id || "",
             qty: /^[0-9]+$/.test(qtyValue) ? parseInt(qtyValue, 10) : 0,
             rate: Number.isFinite(rateNumber) ? rateNumber : 0,
+            orderAmount: /^[0-9]+$/.test(qtyValue) && Number.isFinite(rateNumber) ? parseInt(qtyValue, 10) * rateNumber : 0,
             orderBy: matchedUser?.id || "",
             poType: (poType || "Verbal") as "Verbal" | "Ref No.",
             remarks: remarksValue,
@@ -464,6 +471,7 @@ export function OrderForm() {
         itemId,
         qty: parseInt(qty,10),
         rate: rateNumber,
+        orderAmount,
         orderBy,
         poType,
         remarks,
@@ -480,6 +488,7 @@ export function OrderForm() {
       resetForm();
       setIsFormOpen(false);
       setIsSubmitting(false);
+      navigate("/orders/master");
     }, 500);
   };
 
@@ -640,6 +649,11 @@ export function OrderForm() {
             </div>
 
             <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Order Amount</label>
+              <input value={orderAmount.toFixed(2)} className="border-2 border-black rounded p-2 bg-slate-100 text-slate-700" readOnly />
+            </div>
+
+            <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Order By <span className="text-red-500">*</span></label>
               <Select value={orderBy} onChange={setOrderBy} options={userOptions} placeholder="Select user..." required />
             </div>
@@ -652,12 +666,12 @@ export function OrderForm() {
 
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded font-bold">{isSubmitting ? <Spinner /> : 'Submit'}</button>
-            <button type="button" onClick={()=>{ setIsFormOpen(false); resetForm(); }} className="bg-white text-black border-2 border-black px-6 py-2 rounded font-bold">Cancel</button>
+            <button type="button" onClick={()=>{ setIsFormOpen(false); resetForm(); navigate("/orders/master"); }} className="bg-white text-black border-2 border-black px-6 py-2 rounded font-bold">Cancel</button>
           </div>
         </form>
       )}
 
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+      {!isFormOpen && <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
@@ -693,7 +707,7 @@ export function OrderForm() {
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }

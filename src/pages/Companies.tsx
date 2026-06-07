@@ -3,8 +3,10 @@ import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, Upload, Download, FileSpreadsheet } from "lucide-react";
 import { Company } from "../types";
 import { Spinner } from "../components/Spinner";
+import { ClientPagination } from "../components/ClientPagination";
 import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
 import { isMandatoryField } from "../lib/mandatoryFields";
+import { useClientPagination } from "../hooks/useClientPagination";
 import * as XLSX from "xlsx";
 
 export function Companies() {
@@ -240,6 +242,14 @@ export function Companies() {
     const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
     return timeB - timeA || (a.name || "").localeCompare(b.name || "");
   });
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedCompanies,
+  } = useClientPagination(sortedCompanies, 25);
 
   return (
     <div className="space-y-6">
@@ -394,7 +404,7 @@ export function Companies() {
 
       <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
         <div className="block md:hidden space-y-4 p-4">
-          {sortedCompanies.map((c) => (
+          {paginatedCompanies.map((c) => (
             <div
               key={c.id}
               onClick={() => handleEdit(c)}
@@ -446,7 +456,7 @@ export function Companies() {
                   </td>
                 </tr>
               ) : (
-                sortedCompanies.map((c) => (
+                paginatedCompanies.map((c) => (
                   <tr
                     key={c.id}
                     onClick={() => handleEdit(c)}
@@ -494,6 +504,13 @@ export function Companies() {
             </tbody>
           </table>
         </div>
+        <ClientPagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
     </div>
   );

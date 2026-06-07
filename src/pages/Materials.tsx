@@ -4,8 +4,10 @@ import { Edit, Plus, Trash2, Search, Upload, Download } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, Supplier, UnitMaster } from "../types";
 import { Spinner } from "../components/Spinner";
+import { ClientPagination } from "../components/ClientPagination";
 import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 type MaterialType = Material["type"];
 type ActiveValue = NonNullable<Material["active"]>;
@@ -395,6 +397,14 @@ export function Materials() {
         return timeB - timeA || a.name.localeCompare(b.name);
       });
   }, [gsmFilter, materials, searchTerm, sizeFilter, typeFilter]);
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedMaterials,
+  } = useClientPagination(filteredMaterials, 25);
 
   const handleExport = () => {};
 
@@ -1133,9 +1143,9 @@ export function Materials() {
                       </td>
                     </tr>
                   ) : (
-                    filteredMaterials.map((material, index) => (
+                    paginatedMaterials.map((material, index) => (
                       <tr key={material.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-4 text-black font-bold border-2 border-black">{index + 1}</td>
+                        <td className="px-4 py-4 text-black font-bold border-2 border-black">{(page - 1) * pageSize + index + 1}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.type}</td>
                         <td className="px-4 py-4 text-black text-sm font-black border-2 border-black">{material.erpCode || ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black min-w-[420px]">{material.name}</td>
@@ -1166,6 +1176,13 @@ export function Materials() {
                 </tbody>
               </table>
             </div>
+            <ClientPagination
+              page={page}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         </div>
       )}

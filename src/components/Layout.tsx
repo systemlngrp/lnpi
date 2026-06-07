@@ -74,7 +74,7 @@ export function Layout() {
                   <button
                     type="button"
                     onClick={() => logout()}
-                    className="hidden sm:inline-flex items-center rounded border border-black bg-white px-3 py-1.5 text-[11px] font-black text-black hover:bg-slate-100 transition"
+                    className="hidden sm:inline-flex items-center rounded border border-black bg-red-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-red-700 transition"
                     title="Logout"
                   >
                     Logout

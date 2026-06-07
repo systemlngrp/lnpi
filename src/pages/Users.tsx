@@ -4,6 +4,8 @@ import { Setting, User } from "../types";
 import { Plus, Edit, Trash2, Search, Eye, EyeOff } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { NAVIGATION } from "../components/Sidebar";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 function parseDesignations(setting?: Setting) {
   if (!setting?.designations) return [];
@@ -164,6 +166,19 @@ export function Users() {
     (u.designation || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.mobile.includes(searchTerm)
   );
+  const sortedFilteredUsers = [...filteredUsers].sort((a, b) => {
+    const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
+    const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
+    return timeB - timeA || a.name.localeCompare(b.name);
+  });
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedUsers,
+  } = useClientPagination(sortedFilteredUsers, 25);
 
   const setAllMenus = () => {
     const keys = allMenuItems.flatMap((g) => g.items.map((i) => i.key));
@@ -448,11 +463,7 @@ export function Users() {
           <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
             {/* Mobile View - Cards */}
             <div className="block md:hidden space-y-4 p-2">
-                {filteredUsers.sort((a, b) => {
-                    const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-                    const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-                    return timeB - timeA || a.name.localeCompare(b.name);
-                }).map((user) => (
+                {paginatedUsers.map((user) => (
                     <div key={user.id} className="bg-white border-2 border-black p-4 space-y-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
                         <div className="flex justify-between items-center">
                              <div>
@@ -510,11 +521,7 @@ export function Users() {
                       <td colSpan={8} className="px-6 py-8 text-center text-black font-medium">No users found.</td>
                     </tr>
                   ) : (
-                    filteredUsers.sort((a, b) => {
-                      const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-                      const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-                      return timeB - timeA || a.name.localeCompare(b.name);
-                    }).map((user) => (
+                    paginatedUsers.map((user) => (
                       <tr key={user.id} className="hover:bg-slate-50 divide-x divide-black">
                         <td className="px-6 py-4 text-sm font-medium text-black border border-black">{user.userId}</td>
                         <td className="px-6 py-4 text-sm text-black border border-black">{user.name}</td>
@@ -543,6 +550,13 @@ export function Users() {
                 </tbody>
               </table>
             </div>
+            <ClientPagination
+              page={page}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         </div>
       )}

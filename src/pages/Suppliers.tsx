@@ -2,11 +2,13 @@ import React, { useMemo, useState, useRef } from "react";
 import { Supplier, StateMaster } from "../types";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
+import { ClientPagination } from "../components/ClientPagination";
 import { Select } from "../components/Select";
 import { Edit, Trash2, Upload, Download, FileSpreadsheet } from "lucide-react";
 import { MandatoryLegend, MandatoryLabel } from "../components/Mandatory";
 import { isMandatoryField } from "../lib/mandatoryFields";
 import * as XLSX from "xlsx";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 type SupplierFormState = {
   name: string;
@@ -77,6 +79,14 @@ export function Suppliers() {
         .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })),
     [searchTerm, suppliers]
   );
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedSuppliers,
+  } = useClientPagination(filteredSuppliers, 25);
 
   const resetForm = () => {
     setEditingId(null);
@@ -482,7 +492,7 @@ export function Suppliers() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSuppliers.map((supplier) => (
+                  paginatedSuppliers.map((supplier) => (
                     <tr key={supplier.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
                       <td className="px-4 py-3 text-sm text-black border border-black whitespace-nowrap">{supplier.name}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black whitespace-nowrap">{supplier.contactPerson || ""}</td>
@@ -508,6 +518,13 @@ export function Suppliers() {
               </tbody>
             </table>
             </div>
+            <ClientPagination
+              page={page}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         </div>
       )}

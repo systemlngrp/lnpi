@@ -397,6 +397,7 @@ export interface Order {
   npdId?: string;
   qty: number;
   rate?: number;
+  orderAmount?: number;
   orderBy?: string;
   poType?: POType;
   remarks?: string;

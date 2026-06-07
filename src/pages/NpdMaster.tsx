@@ -8,14 +8,14 @@ type NpdRecord = {
 };
 
 const NPD_COLUMNS: Array<{ key: string; label: string }> = [
-  { key: "npdId", label: "NPD ID" },
   { key: "boxType", label: "BOX TYPE" },
-  { key: "companyId", label: "Company Id" },
   { key: "customerName", label: "Customer Name" },
-  { key: "contactPerson", label: "Contact Person" },
-  { key: "contactNumber", label: "Contact Number" },
-  { key: "email", label: "Email" },
   { key: "itemName", label: "Item Name" },
+  { key: "opening", label: "Opening" },
+  { key: "receipt", label: "Receipt" },
+  { key: "production", label: "Production" },
+  { key: "invoiced", label: "Invoiced" },
+  { key: "balance", label: "Balance" },
   { key: "erp", label: "ERP" },
   { key: "rate", label: "Rate" },
   { key: "uom", label: "UOM" },
@@ -52,11 +52,6 @@ const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "takeUpFactor", label: "Take up Factor" },
   { key: "ups", label: "UPS" },
   { key: "rapc", label: "RAPC" },
-  { key: "opening", label: "Opening" },
-  { key: "receipt", label: "Receipt" },
-  { key: "production", label: "Production" },
-  { key: "invoiced", label: "Invoiced" },
-  { key: "balance", label: "Balance" },
   { key: "gstRate", label: "GST Rate" },
   { key: "part", label: "Part" },
   { key: "cuttingWithTrimming", label: "Cutting with Trimming" },
@@ -131,6 +126,15 @@ const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "artwork", label: "Artwork" },
   { key: "spec", label: "Spec" },
 ];
+
+function getHeaderLines(label: string) {
+  const words = String(label || "").split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  for (let i = 0; i < words.length; i += 2) {
+    lines.push(words.slice(i, i + 2).join(" "));
+  }
+  return lines;
+}
 
 function formatCellValue(value: NpdRecord[string]) {
   if (value === null || value === undefined || value === "") return "-";
@@ -275,8 +279,14 @@ export function NpdMaster() {
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
                 {NPD_COLUMNS.map((column) => (
-                  <th key={column.key} className="whitespace-nowrap border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black">
-                    {column.label}
+                  <th key={column.key} className="border border-black px-3 py-3 text-left text-xs font-bold uppercase text-black align-top min-w-[92px] max-w-[180px] whitespace-normal break-words">
+                    <span className="block leading-4">
+                      {getHeaderLines(column.label).map((line, index) => (
+                        <span key={`${column.key}-${index}`} className="block">
+                          {line}
+                        </span>
+                      ))}
+                    </span>
                   </th>
                 ))}
               </tr>
@@ -300,11 +310,36 @@ export function NpdMaster() {
               ) : (
                 rows.map((row) => (
                   <tr key={row.id} className="divide-x divide-black transition-colors hover:bg-slate-50">
-                    {NPD_COLUMNS.map((column) => (
-                      <td key={column.key} className="whitespace-nowrap border border-black px-4 py-3 text-sm text-black">
-                        {formatCellValue(row[column.key])}
-                      </td>
-                    ))}
+                    {NPD_COLUMNS.map((column) => {
+                      const isWrappedText = column.key === "itemName" || column.key === "customerName";
+                      const rawValue = row[column.key];
+                      return (
+                        <td
+                          key={column.key}
+                          className={`border border-black px-3 py-3 text-sm text-black align-top ${
+                            isWrappedText
+                              ? "whitespace-normal break-words min-w-[240px] max-w-[320px]"
+                              : "whitespace-nowrap"
+                          }`}
+                        >
+                          {column.key === "url" ? (
+                            rawValue ? (
+                              <button
+                                type="button"
+                                onClick={() => window.open(String(rawValue), "_blank", "noopener,noreferrer")}
+                                className="rounded bg-indigo-600 px-3 py-1 font-bold text-white hover:bg-indigo-700"
+                              >
+                                Open
+                              </button>
+                            ) : (
+                              "-"
+                            )
+                          ) : (
+                            formatCellValue(rawValue)
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))
               )}

@@ -2232,6 +2232,7 @@ async function initDb(retries = 5) {
           \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2),
+          \`orderAmount\` DECIMAL(15,2) DEFAULT 0,
           \`orderBy\` VARCHAR(255),
           \`poType\` VARCHAR(50),
           \`remarks\` TEXT,
@@ -3094,6 +3095,7 @@ async function initDb(retries = 5) {
         { table: "orders", column: "erpCode", type: "VARCHAR(100)" },
         { table: "orders", column: "poNumber", type: "VARCHAR(100)" },
         { table: "orders", column: "rate", type: "DECIMAL(15,2)" },
+        { table: "orders", column: "orderAmount", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "orders", column: "poType", type: "VARCHAR(50)" },
         { table: "orders_schedule", column: "orderId", type: "VARCHAR(36) NOT NULL" },
         { table: "orders_schedule", column: "scheduledDate", type: "VARCHAR(50) NOT NULL" },
@@ -3242,6 +3244,15 @@ async function initDb(retries = 5) {
         } catch (err) {
           console.warn(`[DB] Could not ensure column ${m.column} in ${m.table}:`, (err as Error).message);
         }
+      }
+
+      try {
+        await db.query(`
+          UPDATE \`orders\`
+          SET \`orderAmount\` = ROUND(COALESCE(\`qty\`, 0) * COALESCE(\`rate\`, 0), 2)
+        `);
+      } catch (err) {
+        console.warn("[DB] Could not backfill orders.orderAmount:", (err as Error).message);
       }
 
       try {
@@ -3549,6 +3560,13 @@ const createHandlers = (tableName: string) => {
         // Auto-generate orderNo for orders when not provided
         if (tableName === 'orders') {
           try {
+            const orderQty = Number(data.qty || 0);
+            const orderRate = Number(data.rate || 0);
+            data.orderAmount =
+              Number.isFinite(orderQty) && Number.isFinite(orderRate)
+                ? Number((orderQty * orderRate).toFixed(2))
+                : 0;
+
             if (!data.orderNo) {
               const dateStr = data.orderDate || new Date().toISOString().slice(0,10);
               const d = new Date(dateStr);
@@ -3580,7 +3598,6 @@ const createHandlers = (tableName: string) => {
             const alreadyApproved = hasWorkflowValue(data.approvedTimestamp) || hasWorkflowValue(data.approvedEmail);
             if (!alreadyApproved && (currentStatus === "Pending PH" || !currentStatus)) {
               const itemId = resolveLinkedNpdId(data);
-              const orderRate = Number(data.rate);
               const punchDate = String(data.orderDate || "").trim() || new Date().toISOString().slice(0, 10);
 
               if (itemId && Number.isFinite(orderRate) && punchDate) {

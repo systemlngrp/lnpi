@@ -4,6 +4,8 @@ import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { Company, Item, Order, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/serial";
 
 function getPendingProductionQty(schedule: OrderSchedule) {
@@ -68,6 +70,14 @@ export function PendingProduction() {
         }),
     [companies, cutoffDate, npdItems, orders, schedules]
   );
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedRows,
+  } = useClientPagination(pendingRows, 25);
 
   const handleCancelQty = async (schedule: OrderSchedule) => {
     const rawValue = cancelValues[schedule.id];
@@ -148,7 +158,7 @@ export function PendingProduction() {
                 </td>
               </tr>
             ) : (
-              pendingRows.map(({ schedule, order, item, company, pendingQty }) => {
+              paginatedRows.map(({ schedule, order, item, company, pendingQty }) => {
                 const boxType = String((item as any)?.boxType || "").trim();
                 const hasBoxType = Boolean(boxType);
                 return (
@@ -201,6 +211,13 @@ export function PendingProduction() {
           </tbody>
         </table>
       </div>
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }

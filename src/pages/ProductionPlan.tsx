@@ -4,11 +4,13 @@ import { Production, OrderSchedule, Order, Company, SampleRequest } from "../typ
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
+import { ClientPagination } from "../components/ClientPagination";
 import { FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { exportsAllowed } from "../lib/exportPolicy";
 import { fetchNpdItems } from "../lib/npdItems";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 export function ProductionPlan() {
   const [productions] = useData<Production>("productions", []);
@@ -65,6 +67,14 @@ export function ProductionPlan() {
       })
       .sort((a, b) => a.transactionNo.localeCompare(b.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
   }, [productions, selectedDate, searchTerm, npdItems, schedules, orders, companies]);
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedList,
+  } = useClientPagination(filteredList, 25);
 
   const getExportData = (data: Production[]) => {
     return data.map((p, index) => {
@@ -97,7 +107,7 @@ export function ProductionPlan() {
         "F2": format2(p.f2),
         "L3": format2(p.l3),
         "GSM": format2(p.gsm),
-        "List GSM": format2(p.leastGsm),
+        "Least GSM": format2(p.leastGsm),
         "Reel As Per Calculation": format2(p.reelAsPerCalc),
         "Reel Actual Trim": format2(p.reelActualWithTrimming),
         "Cutting Trim": format2(p.cuttingWithTrimming),
@@ -192,7 +202,7 @@ export function ProductionPlan() {
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">F2</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L3</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">GSM</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">List GSM</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Least GSM</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Reel As Per Calculation</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Reel Actual Trim</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Cutting Trim</th>
@@ -211,7 +221,7 @@ export function ProductionPlan() {
                   <td colSpan={28} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
                 </tr>
               ) : (
-                filteredList.map((p, index) => {
+                paginatedList.map((p, index) => {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
@@ -225,7 +235,7 @@ export function ProductionPlan() {
 
                   return (
                     <tr key={p.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 text-right text-[11px] font-bold text-black border border-black whitespace-nowrap">{index + 1}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-bold text-black border border-black whitespace-nowrap">{(page - 1) * pageSize + index + 1}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-3 text-[11px] font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-normal break-words min-w-[220px] max-w-[220px]" title={company?.name}>{company?.name || "-"}</td>
@@ -260,6 +270,13 @@ export function ProductionPlan() {
             </tbody>
           </table>
         </div>
+        <ClientPagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
     </div>
   );

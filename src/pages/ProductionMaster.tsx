@@ -3,6 +3,7 @@ import { useData } from "../hooks/useData";
 import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
+import { ClientPagination } from "../components/ClientPagination";
 import { ClipboardList, CheckCircle, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -11,6 +12,7 @@ import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { getProductionDisplayStatus } from "../lib/productionStageFilters";
 import { fetchNpdItems } from "../lib/npdItems";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 export function ProductionMaster() {
   const navigate = useNavigate();
@@ -335,6 +337,14 @@ export function ProductionMaster() {
       (company?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
     })
     .sort((a, b) => b.transactionNo.localeCompare(a.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedList,
+  } = useClientPagination(filteredList, 25);
 
   const getProcessingSummary = (pId: string) => {
     const records = processing.filter(p => p.productionId === pId);
@@ -389,7 +399,7 @@ export function ProductionMaster() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4 p-2">
-            {filteredList.map((p) => {
+            {paginatedList.map((p) => {
                 const schedule = schedules.find(s => s.id === p.scheduleId);
                 const order = orders.find(o => o.id === schedule?.orderId);
                 const company = companies.find(c => c.id === order?.companyId);
@@ -563,7 +573,7 @@ export function ProductionMaster() {
                   <td colSpan={45} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
                 </tr>
               ) : (
-                filteredList.map((p) => {
+                paginatedList.map((p) => {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
@@ -736,6 +746,13 @@ export function ProductionMaster() {
             </tbody>
           </table>
         </div>
+        <ClientPagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
 
       {cancelTarget ? (

@@ -12,6 +12,8 @@ import {
 import { formatDate } from "../lib/serial";
 import { Search, Calendar, Building2, Package, X, Filter } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 export function ScheduledOrdersMaster() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -92,6 +94,14 @@ export function ScheduledOrdersMaster() {
       return a.orderNo.localeCompare(b.orderNo, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [schedules, orders, companies, npdItems, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedSchedules,
+  } = useClientPagination(detailedSchedules, 25);
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -233,9 +243,9 @@ export function ScheduledOrdersMaster() {
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
-              {detailedSchedules.map((s, idx) => (
+              {paginatedSchedules.map((s, idx) => (
                 <tr key={s.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
-                  <td className="px-3 py-2 border border-black text-slate-500">{idx + 1}</td>
+                  <td className="px-3 py-2 border border-black text-slate-500">{(page - 1) * pageSize + idx + 1}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap font-medium">{formatDate(s.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black font-bold text-black">{s.orderNo}</td>
                   <td className="px-3 py-2 border border-black truncate max-w-[150px]" title={s.companyName}>{s.companyName}</td>
@@ -297,6 +307,13 @@ export function ScheduledOrdersMaster() {
             )}
           </table>
         </div>
+        <ClientPagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
     </div>
   );
