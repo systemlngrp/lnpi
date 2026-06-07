@@ -14,6 +14,8 @@ export function MaterialInMaster() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const setting = settings[0];
 
@@ -71,7 +73,11 @@ export function MaterialInMaster() {
       
       const matchesStatus = statusFilter === "All" || entry.status === statusFilter;
 
-      return matchesSearch && matchesStatus;
+      const receiptDate = entry.date || "";
+      const matchesFromDate = !fromDate || receiptDate >= fromDate;
+      const matchesToDate = !toDate || receiptDate <= toDate;
+
+      return matchesSearch && matchesStatus && matchesFromDate && matchesToDate;
     })
     .sort((a, b) => {
       const timeA = new Date(a.updateTimestamp || a.timestamp || 0).getTime();
@@ -79,30 +85,103 @@ export function MaterialInMaster() {
       return timeB - timeA;
     });
 
+  const metrics = useMemo(() => {
+    return {
+        total: filteredMaterialIn.length,
+        totalInvoice: filteredMaterialIn.reduce((sum, r) => sum + Number(r.totalInvoiceValue || 0), 0),
+        totalActual: filteredMaterialIn.reduce((sum, r) => sum + Number(r.totalActualValue || r.totalAmount || 0), 0),
+        completed: filteredMaterialIn.filter(r => r.status === "Completed").length,
+    };
+  }, [filteredMaterialIn]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material In Master</h2>
         </div>
-        <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-black rounded text-sm focus:outline-none focus:ring-1 focus:ring-black bg-white font-bold uppercase"
-          >
-            {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search transaction, supplier..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-            />
-          </div>
+      </div>
+
+      {/* Colorful Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Total Receipts</div>
+          <div className="text-2xl font-black">{metrics.total}</div>
+          <div className="text-[10px] font-bold mt-1 opacity-90">{metrics.completed} Fully Completed</div>
+        </div>
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Actual Value</div>
+          <div className="text-2xl font-black">₹{metrics.totalActual.toLocaleString()}</div>
+          <div className="text-[10px] font-bold mt-1 opacity-90">Net Purchase Value</div>
+        </div>
+        <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Invoice Value</div>
+          <div className="text-2xl font-black">₹{metrics.totalInvoice.toLocaleString()}</div>
+          <div className="text-[10px] font-bold mt-1 opacity-90">Reported on Invoices</div>
+        </div>
+        <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Value Diff.</div>
+          <div className="text-2xl font-black">₹{(metrics.totalInvoice - metrics.totalActual).toLocaleString()}</div>
+          <div className="text-[10px] font-bold mt-1 opacity-90">Invoice vs Actual</div>
+        </div>
+      </div>
+
+      <div className="bg-slate-50 p-4 border border-black rounded shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">From Date</label>
+                <input 
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="px-3 py-1.5 border border-black rounded text-xs font-bold bg-white focus:outline-none focus:ring-1 focus:ring-black"
+                />
+            </div>
+            <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">To Date</label>
+                <input 
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="px-3 py-1.5 border border-black rounded text-xs font-bold bg-white focus:outline-none focus:ring-1 focus:ring-black"
+                />
+            </div>
+            <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">Status</label>
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-3 py-1.5 border border-black rounded text-xs focus:outline-none focus:ring-1 focus:ring-black bg-white font-bold uppercase"
+                >
+                    {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+            </div>
+            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+                <label className="text-[10px] font-black uppercase text-slate-500">Search</label>
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                    <input
+                        type="text"
+                        placeholder="Search transaction, supplier..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-1.5 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-xs font-bold"
+                    />
+                </div>
+            </div>
+            {(fromDate || toDate || statusFilter !== "All" || searchTerm) && (
+              <button 
+                onClick={() => {
+                  setFromDate("");
+                  setToDate("");
+                  setStatusFilter("All");
+                  setSearchTerm("");
+                }}
+                className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline ml-2 mt-4"
+              >
+                Reset
+              </button>
+            )}
         </div>
       </div>
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">

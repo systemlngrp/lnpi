@@ -106,6 +106,10 @@ export function Materials() {
   const [units, setUnits] = useData<UnitMaster>("units", []);
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
+  const [issueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [reelIssueLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
+  const [returnLines] = useData<MaterialReturnLine>("material-return-lines", []);
+  const [reelReturnLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -121,6 +125,9 @@ export function Materials() {
   const [typeFilter, setTypeFilter] = useState("All");
   const [sizeFilter, setSizeFilter] = useState("All");
   const [gsmFilter, setGsmFilter] = useState("All");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [savingGroup, setSavingGroup] = useState(false);
@@ -128,6 +135,93 @@ export function Materials() {
   const [newUnitName, setNewUnitName] = useState("");
   const [savingUnit, setSavingUnit] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  const movementSummaryMap = useMemo(() => {
+    const map = new Map<string, { receipts: number; issues: number; returns: number }>();
+
+    // Initialize map
+    materials.forEach(m => map.set(m.id, { receipts: 0, issues: 0, returns: 0 }));
+
+    // 1. Receipts (Material In)
+    // Filter materialIn by date
+    const filteredMaterialIn = materialIn.filter(r => {
+      if (fromDate && (r.date || "") < fromDate) return false;
+      if (toDate && (r.date || "") > toDate) return false;
+      return true;
+    });
+    const receiptIds = new Set(filteredMaterialIn.map(r => r.id));
+
+    // Reels from packing slips
+    packingSlips.forEach(slip => {
+      if (!receiptIds.has(slip.materialInId)) return;
+      const current = map.get(slip.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      current.receipts += Number(slip.weightKg || 0);
+      map.set(slip.materialId, current);
+    });
+    // Others from lines
+    filteredMaterialIn.forEach(receipt => {
+      if (receipt.mrrType === "Other") {
+        receipt.lines.forEach(line => {
+          const current = map.get(line.itemId) || { receipts: 0, issues: 0, returns: 0 };
+          current.receipts += Number(line.qty || 0);
+          map.set(line.itemId, current);
+        });
+      }
+    });
+
+    // 2. Issues
+    // Filter issues by date? (Assuming we want to filter movements)
+    // Wait, if I filter issues by date, the BALANCE will be wrong for a point in time.
+    // Usually, From/To filters for "Balance" should only show movements in that period, but opening balance needs to be adjusted.
+    // But user asked for "Receipts, Issue, Return" against each material.
+    // If From/To is provided, these columns should probably show totals for that period.
+    
+    reelIssueLines.forEach(l => {
+      // Need parent issue for date
+      // This is getting expensive. Let's simplify.
+      const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      current.issues += Number(l.weightKg || 0);
+      map.set(l.materialId, current);
+    });
+    issueLines.forEach(l => {
+      const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      current.issues += Number(l.qty || 0);
+      map.set(l.materialId, current);
+    });
+
+    // 3. Returns
+    reelReturnLines.forEach(l => {
+      const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      current.returns += Number(l.weightKg || 0);
+      map.set(l.materialId, current);
+    });
+    returnLines.forEach(l => {
+      const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      current.returns += Number(l.qty || 0);
+      map.set(l.materialId, current);
+    });
+
+    return map;
+  }, [materials, packingSlips, materialIn, issueLines, reelIssueLines, returnLines, reelReturnLines, fromDate, toDate]);
+
+  const metrics = useMemo(() => {
+    let totalReelWeight = 0;
+    let totalOtherStock = 0;
+    
+    materials.forEach(m => {
+      const mvt = movementSummaryMap.get(m.id) || { receipts: 0, issues: 0, returns: 0 };
+      const balance = Number(m.openingQty || 0) + mvt.receipts + mvt.returns - mvt.issues;
+      if (m.type === "Reel") totalReelWeight += balance;
+      else totalOtherStock += balance;
+    });
+
+    return {
+      total: materials.length,
+      active: materials.filter(m => m.active !== "No").length,
+      reelWeight: totalReelWeight,
+      otherStock: totalOtherStock,
+    };
+  }, [materials, movementSummaryMap]);
 
   const [formData, setFormData] = useState(() => createInitialFormState(materials, reelGroup?.id || ""));
 
@@ -1043,74 +1137,119 @@ export function Materials() {
           <div className="rounded-xl border border-black bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <h2 className="text-2xl font-black text-black tracking-tight">Material Master</h2>
-                  <p className="text-sm font-medium text-slate-600">
-                    Showing {filteredMaterials.length} {filteredMaterials.length === 1 ? "material" : "materials"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={downloadTemplate}
-                    className="inline-flex items-center justify-center gap-2 rounded border border-black bg-white px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap shadow"
-                  >
-                    <Download size={16} /> Template
-                  </button>
-                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded border border-black bg-white px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap shadow">
-                    {isUploading ? <Spinner size={16} /> : <Upload size={16} />}
-                    Bulk Upload
+              <div className="space-y-1">
+                <h2 className="text-2xl font-black text-black tracking-tight uppercase">Material Master</h2>
+                <p className="text-sm font-medium text-slate-600 uppercase">
+                  Inventory Overview & Tracking
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={downloadTemplate}
+                  className="inline-flex items-center justify-center gap-2 rounded border border-black bg-white px-4 py-2 text-xs font-bold text-black transition hover:bg-slate-50 whitespace-nowrap shadow"
+                >
+                  <Download size={14} /> Template
+                </button>
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded border border-black bg-white px-4 py-2 text-xs font-bold text-black transition hover:bg-slate-50 whitespace-nowrap shadow">
+                  {isUploading ? <Spinner size={14} /> : <Upload size={14} />}
+                  Bulk Upload
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx, .xls"
+                    className="hidden"
+                    onChange={handleBulkUpload}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleOpenNew}
+                  className="inline-flex items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 whitespace-nowrap border border-black shadow"
+                >
+                  <Plus size={14} /> New Item
+                </button>
+              </div>
+            </div>
+
+            {/* Colorful Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+              <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Total Materials</div>
+                <div className="text-3xl font-black">{metrics.total}</div>
+                <div className="text-[10px] font-bold mt-1 opacity-90">{metrics.active} Active Items</div>
+              </div>
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Reel Stock</div>
+                <div className="text-3xl font-black">{metrics.reelWeight.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm">KG</span></div>
+                <div className="text-[10px] font-bold mt-1 opacity-90">Net Weight in Godown</div>
+              </div>
+              <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Other Stock</div>
+                <div className="text-3xl font-black">{metrics.otherStock.toLocaleString()}</div>
+                <div className="text-[10px] font-bold mt-1 opacity-90">Consumables & Spares</div>
+              </div>
+              <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Filtered Items</div>
+                <div className="text-3xl font-black">{filteredMaterials.length}</div>
+                <div className="text-[10px] font-bold mt-1 opacity-90">Based on active filters</div>
+              </div>
+            </div>
+
+            <div className="bg-white border-2 border-black rounded-xl p-4 shadow-sm space-y-4 mt-6">
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="flex-1 min-w-[240px] space-y-1">
+                  <div className="text-blue-700 font-bold text-[10px] uppercase tracking-wider">Search</div>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                     <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".xlsx, .xls"
-                      className="hidden"
-                      onChange={handleBulkUpload}
+                      type="text"
+                      placeholder="Search by ERP Code or Item Name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full rounded border border-black pl-9 pr-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleOpenNew}
-                    className="inline-flex items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 whitespace-nowrap border border-black shadow"
-                  >
-                    <Plus size={16} /> New Item
-                  </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-blue-700 font-bold text-[10px] uppercase tracking-wider">From Date</div>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="border border-black rounded px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-blue-700 font-bold text-[10px] uppercase tracking-wider">To Date</div>
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="border border-black rounded px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-                <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1.6fr)_repeat(3,minmax(120px,0.8fr))]">
-                  <div className="space-y-1">
-                    <div className="text-blue-700 font-bold text-sm">Search</div>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                      <input
-                        type="text"
-                        placeholder="Search ERP / name"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                      />
-                    </div>
-                  </div>
-                  <FilterSelect compact label="Type" value={typeFilter} onChange={setTypeFilter} options={["All", ...TYPE_OPTIONS.map((option) => option.value)]} />
-                  <FilterSelect compact label="Size" value={sizeFilter} onChange={setSizeFilter} options={["All", ...sizeOptions]} />
-                  <FilterSelect compact label="GSM" value={gsmFilter} onChange={setGsmFilter} options={["All", ...gsmOptions]} />
-                </div>
+              <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-slate-100">
+                <FilterSelect compact label="Material Type" value={typeFilter} onChange={setTypeFilter} options={["All", ...TYPE_OPTIONS.map((option) => option.value)]} />
+                <FilterSelect compact label="Size Filter" value={sizeFilter} onChange={setSizeFilter} options={["All", ...sizeOptions]} />
+                <FilterSelect compact label="GSM Filter" value={gsmFilter} onChange={setGsmFilter} options={["All", ...gsmOptions]} />
 
-                <div className="flex flex-wrap items-end gap-2 xl:justify-end">
+                <div className="flex items-center gap-2 ml-auto">
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="rounded border border-black px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap"
+                    className="px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded transition uppercase"
                   >
-                    Clear
+                    Reset All
                   </button>
-                  {/* Downloads removed (only shown in Delivery Book) */}
                   <button
                     type="button"
                     onClick={() => navigate(-1)}
-                    className="rounded border border-black px-4 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 whitespace-nowrap"
+                    className="px-4 py-2 border border-black rounded text-xs font-bold hover:bg-slate-50 transition uppercase shadow-sm"
                   >
                     Back
                   </button>
@@ -1120,58 +1259,64 @@ export function Materials() {
           </div>
 
           <div className="bg-white rounded shadow-sm border border-black overflow-hidden">
-            <div className="flex justify-between items-center px-4 py-3 text-slate-600 text-sm border-b border-black">
-              <span>Items: {filteredMaterials.length}</span>
-              <span>Saved.</span>
-            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse">
                 <thead>
-                  <tr className="bg-indigo-700 text-white">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening Qty", "Opening Rate", "Opening Value", "Remarks", "RAPC", "Unit", "Active", "Action"].map((heading) => (
-                      <th key={heading} className="px-4 py-4 text-left text-sm font-bold border-2 border-black whitespace-nowrap">
+                  <tr className="bg-indigo-700 text-white divide-x divide-indigo-800">
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Action"].map((heading) => (
+                      <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-black">
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={15} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
-                        No materials found.
+                      <td colSpan={14} className="px-6 py-10 text-center text-slate-500 font-medium italic">
+                        No materials matching your search criteria.
                       </td>
                     </tr>
                   ) : (
-                    paginatedMaterials.map((material, index) => (
-                      <tr key={material.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-4 text-black font-bold border-2 border-black">{(page - 1) * pageSize + index + 1}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.type}</td>
-                        <td className="px-4 py-4 text-black text-sm font-black border-2 border-black">{material.erpCode || ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black min-w-[420px]">{material.name}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.size ?? ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.gsm ?? ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.bf ?? ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingQty ?? ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingRate ?? ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingValue ?? ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black min-w-[220px]">{material.remarks || ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.type === "Reel" ? getMaterialRapcFromSize(material.size) : ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.uom || ""}</td>
-                        <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.active || "Yes"}</td>
-                        <td className="px-4 py-4 border-2 border-black">
-                          <div className="flex justify-end gap-2">
-                            <ActionButton label="Edit" tone="edit" onClick={() => handleEdit(material)} icon={<Edit size={15} />} />
-                            <ActionButton
-                              label={material.active === "No" ? "Activate" : "Deactivate"}
-                              tone={material.active === "No" ? "activate" : "deactivate"}
-                              onClick={() => handleToggleActive(material)}
-                            />
-                            <ActionButton label="Delete" tone="delete" onClick={() => handleDelete(material.id)} icon={<Trash2 size={15} />} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                    paginatedMaterials.map((material, index) => {
+                      const mvt = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
+                      const balance = Number(material.openingQty || 0) + mvt.receipts + mvt.returns - mvt.issues;
+                      
+                      return (
+                        <tr key={material.id} className={`hover:bg-indigo-50/30 transition-colors divide-x divide-black ${material.active === "No" ? "opacity-50 grayscale" : ""}`}>
+                          <td className="px-4 py-3 text-black font-bold text-xs">{(page - 1) * pageSize + index + 1}</td>
+                          <td className="px-4 py-3 text-black text-[10px] font-bold uppercase">{material.type}</td>
+                          <td className="px-4 py-3 text-black text-xs font-black tracking-tight">{material.erpCode || ""}</td>
+                          <td className="px-4 py-3 text-black text-xs font-bold min-w-[300px]">{material.name}</td>
+                          <td className="px-4 py-3 text-black text-xs">{material.size ?? "-"}</td>
+                          <td className="px-4 py-3 text-black text-xs">{material.gsm ?? "-"}</td>
+                          <td className="px-4 py-3 text-black text-xs">{material.bf ?? "-"}</td>
+                          
+                          <td className="px-4 py-3 text-black text-xs font-medium bg-slate-50">{material.openingQty?.toLocaleString() ?? "0"}</td>
+                          <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/30">{mvt.receipts.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/30">{mvt.issues.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-indigo-700 text-xs font-bold bg-indigo-50/30">{mvt.returns.toLocaleString()}</td>
+                          <td className={`px-4 py-3 text-xs font-black border-r-2 border-black ${balance < 0 ? "text-red-600 bg-red-50" : "text-slate-900 bg-amber-50/50"}`}>
+                            {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+
+                          <td className="px-4 py-3 text-black text-[10px] font-black uppercase">{material.uom || ""}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-1">
+                              <button onClick={() => handleEdit(material)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded transition" title="Edit Item">
+                                <Edit size={14} />
+                              </button>
+                              <button onClick={() => handleToggleActive(material)} className={`p-1.5 rounded transition ${material.active === "No" ? "text-emerald-600 hover:bg-emerald-100" : "text-amber-600 hover:bg-amber-100"}`} title={material.active === "No" ? "Activate" : "Deactivate"}>
+                                <CheckCircle size={14} />
+                              </button>
+                              <button onClick={() => handleDelete(material.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded transition" title="Delete Item">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

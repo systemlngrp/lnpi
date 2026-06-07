@@ -114,7 +114,7 @@ export function MaterialReturnMaster() {
       reelDetails: finalReelDetails,
       metrics,
     };
-  }, [materialReturns, returnLines, reelLines, materialMap, searchTerm, fromDate, toDate, typeFilter]);
+    }, [materialReturns, returnLines, reelLines, materialMap, searchTerm, fromDate, toDate, typeFilter]);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -138,23 +138,23 @@ export function MaterialReturnMaster() {
         </div>
       </div>
 
-      {/* Metrics Header */}
+      {/* Colorful Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
-          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Transactions</div>
-          <div className="text-2xl font-black text-indigo-700">{processedData.metrics.totalTransactions.toLocaleString()}</div>
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Transactions</div>
+          <div className="text-3xl font-black">{processedData.metrics.totalTransactions.toLocaleString()}</div>
         </div>
-        <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
-          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Reel Weight</div>
-          <div className="text-2xl font-black text-emerald-700">{processedData.metrics.totalWeight.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs">KG</span></div>
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Reel Weight</div>
+          <div className="text-3xl font-black">{processedData.metrics.totalWeight.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs">KG</span></div>
         </div>
-        <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
-          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Job Returns</div>
-          <div className="text-2xl font-black text-amber-700">{processedData.metrics.jobReturns.toLocaleString()}</div>
+        <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Job Returns</div>
+          <div className="text-3xl font-black">{processedData.metrics.jobReturns.toLocaleString()}</div>
         </div>
-        <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">
-          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">General Returns</div>
-          <div className="text-2xl font-black text-slate-700">{processedData.metrics.generalReturns.toLocaleString()}</div>
+        <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">General Returns</div>
+          <div className="text-3xl font-black">{processedData.metrics.generalReturns.toLocaleString()}</div>
         </div>
       </div>
 
