@@ -415,13 +415,6 @@ export function ProductionMaster() {
                   <div key={p.id} className={`${isHighGsm ? "bg-amber-50" : "bg-white"} border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative`}>
                        <div className="flex justify-between items-center">
                           <div className="font-bold text-sm">Job: {p.transactionNo}</div>
-                           <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
-                              displayStatus === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
-                              displayStatus === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
-                              'bg-amber-100 text-amber-900 border-amber-900'
-                          }`}>
-                              {displayStatus}
-                          </span>
                       </div>
 	                      <div className="text-xs text-slate-500">Prod Date: {formatDate(p.date)}</div>
 	                      {displayStatus === "Completed" ? (
@@ -446,7 +439,7 @@ export function ProductionMaster() {
                       <div className="flex justify-between items-center text-sm">
                         <div className="flex flex-col">
                           <span>{p.qty} {p.uom}</span>
-                          <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-1 rounded border border-indigo-100">Prod: {Number(p.prodFromFFG || 0).toLocaleString()}</span>
+                          <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-1 rounded border border-indigo-100">Production FFG: {Number(p.prodFromFFG || 0).toLocaleString()}</span>
                         </div>
                         <span className="font-bold text-amber-700">Loaded: {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}</span>
                         <div className="flex flex-col items-end text-[10px] font-bold text-indigo-700 bg-indigo-50 p-1 border border-indigo-100 rounded">
@@ -458,9 +451,6 @@ export function ProductionMaster() {
                             {p.gsm && <span className="font-bold text-indigo-700">GSM: {p.gsm}</span>}
                             {leastGsm && <span className="text-[10px] font-black text-emerald-700">Least: {leastGsm}</span>}
                         </div>
-                      </div>
-                      <div className="text-[10px] font-bold text-indigo-600 bg-indigo-50 p-1.5 rounded border border-indigo-100">
-                        Processing: {getProcessingSummary(p.id)}
                       </div>
                       {mandatory.required.length > 0 ? (
                         <div
@@ -526,7 +516,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Mandatory</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Planned Qty</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap bg-indigo-50/50">Production</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap bg-indigo-50/50">Production FFG</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">UPS</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap bg-amber-50">Loaded Qty</th>
 
@@ -579,8 +569,6 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Rate</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Value</th>
                 
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Processing Status</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job Closer</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close Date</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
@@ -589,7 +577,7 @@ export function ProductionMaster() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={58} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                  <td colSpan={56} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
                 </tr>
               ) : (
                 paginatedList.map((p, idx) => {
@@ -637,7 +625,7 @@ export function ProductionMaster() {
                       </td>
 
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.paper.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap bg-emerald-50/30">{(p.actualPaperUsed || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap bg-emerald-50/30">{Number(p.actualPaperUsed || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.liner.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.printing.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.pasting.toLocaleString()}</td>
@@ -687,27 +675,10 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{Number(p.rate) ? Number(p.rate).toFixed(2) : (p.rate || "-")}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{Number(p.qty || 0) && Number(p.rate || 0) ? (Number(p.qty || 0) * Number(p.rate || 0)).toLocaleString() : "-"}</td>
 
-                      <td className="px-4 py-4 text-xs text-indigo-600 font-bold border border-black max-w-[200px] truncate" title={getProcessingSummary(p.id)}>
-                        {getProcessingSummary(p.id)}
-                      </td>
-
-                      <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
-                          getProductionDisplayStatus(p) === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' : 
-                          getProductionDisplayStatus(p) === 'Cancelled' ? 'bg-red-100 text-red-900 border-red-900' :
-                          'bg-amber-100 text-amber-900 border-amber-900'
-                        }`}>
-                          {getProductionDisplayStatus(p)}
-                        </span>
-                        {p.status === 'Cancelled' && p.cancelRemarks && (
-                          <div className="text-[9px] text-red-600 font-bold mt-1 max-w-[120px] truncate" title={p.cancelRemarks}>
-                            {p.cancelRemarks}
-                          </div>
-                        )}
-                      </td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
                         <select
                           value={p.closeBy || ""}
+                          disabled={!Number(p.actualPaperUsed || 0) || !Number(p.prodFromFFG || 0)}
                           onChange={(e) => {
                             const nextValue = e.target.value;
                             const today = new Date().toISOString().split("T")[0];
@@ -724,7 +695,7 @@ export function ProductionMaster() {
                             );
                           }}
                           onBlur={(e) => void updateCloseMeta(p.id, { closeBy: e.target.value, closeDate: p.closeDate })}
-                          className="w-24 border border-black rounded px-2 py-1 text-xs bg-white"
+                          className="w-24 border border-black rounded px-2 py-1 text-xs bg-white disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
                           <option value=""></option>
                           <option value="Yes">Yes</option>
@@ -735,9 +706,10 @@ export function ProductionMaster() {
                         <input
                           type="date"
                           value={(p.closeDate || "").split("T")[0]}
+                          disabled={!Number(p.actualPaperUsed || 0) || !Number(p.prodFromFFG || 0)}
                           onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeDate: e.target.value } : row)))}
                           onBlur={(e) => void updateCloseMeta(p.id, { closeDate: e.target.value, closeBy: p.closeBy })}
-                          className={`w-36 border rounded px-2 py-1 text-xs ${p.closeBy === "Yes" && !p.closeDate ? "border-red-600" : "border-black"}`}
+                          className={`w-36 border rounded px-2 py-1 text-xs disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 ${p.closeBy === "Yes" && !p.closeDate ? "border-red-600" : "border-black"}`}
                           required={p.closeBy === "Yes"}
                         />
                       </td>
