@@ -109,7 +109,7 @@ export function MachinePendingProcessing() {
       }))
       .filter(g => g.jobs.length > 0)
       .sort((a, b) => a.machineName.localeCompare(b.machineName));
-  }, [productions, items, machines, processing, mandatoryMachinesMapping, searchTerm, filterMachineId]);
+  }, [productions, npdItems, machines, processing, mandatoryMachinesMapping, searchTerm, filterMachineId]);
 
   const toggleMachine = (id: string) => {
     const next = new Set(expandedMachines);

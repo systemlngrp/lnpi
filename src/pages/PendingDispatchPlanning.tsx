@@ -138,7 +138,7 @@ export function PendingDispatchPlanning() {
 
   const availableToPlanByItemId = useMemo(() => {
     const map = new Map<string, number>();
-    items.forEach((item) => {
+    npdItems.forEach((item) => {
       const opening = Number((item as any).opening || 0);
       const receipt = Number((item as any).receipt || 0);
       const production = Number((item as any).production || 0);
@@ -152,7 +152,7 @@ export function PendingDispatchPlanning() {
       map.set(item.id, Math.max(0, dispatchBalance + pendingProduction - reserved));
     });
     return map;
-  }, [items, loadedQtyByItemId, pendingProductionPlanQtyByItemId, reservedDispatchPlanQtyByItemId]);
+  }, [npdItems, loadedQtyByItemId, pendingProductionPlanQtyByItemId, reservedDispatchPlanQtyByItemId]);
 
   const basePendingSchedules = useMemo(() => {
     return schedules.filter(s => {
@@ -213,7 +213,7 @@ export function PendingDispatchPlanning() {
 
       return sortDirection === "asc" ? compare : -compare;
     });
-  }, [basePendingSchedules, selectedCompanyId, orders, companies, items, sortDirection, sortKey, getEffectivePlannedForSchedule]);
+  }, [basePendingSchedules, selectedCompanyId, orders, companies, npdItems, sortDirection, sortKey, getEffectivePlannedForSchedule]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {

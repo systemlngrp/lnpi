@@ -124,7 +124,7 @@ export function PendingInvoicing() {
     return Array.from(companyMap.values())
       .filter(g => g.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
       .sort((a, b) => a.companyName.localeCompare(b.companyName));
-  }, [loadingSlips, companies, plans, orders, trucks, items, searchTerm]);
+  }, [loadingSlips, companies, plans, orders, trucks, npdItems, searchTerm]);
 
   useEffect(() => {
     if (didInitExpand.current) return;

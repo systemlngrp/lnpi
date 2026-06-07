@@ -75,7 +75,7 @@ export function ItemwiseLeastCost() {
     });
 
     return Array.from(erpMap.values()).sort((a, b) => a.erp.localeCompare(b.erp));
-  }, [productions, items]);
+  }, [productions, npdItems]);
 
   const filteredData = useMemo(() => {
     return leastCostData.filter(row => 

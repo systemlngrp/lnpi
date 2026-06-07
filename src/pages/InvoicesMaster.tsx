@@ -72,7 +72,7 @@ export function InvoicesMaster() {
              inv.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
              inv.itemSummary.toLowerCase().includes(searchTerm.toLowerCase());
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [invoices, companies, lineItems, items, slips, searchTerm]);
+  }, [invoices, companies, lineItems, npdItems, slips, searchTerm]);
 
   const invoiceDetails = useMemo(() => {
     if (!selectedInvoice) return [];
@@ -87,7 +87,7 @@ export function InvoicesMaster() {
           slipNo: slip?.slipNo || "N/A"
         };
       });
-  }, [selectedInvoice, lineItems, items, slips]);
+  }, [selectedInvoice, lineItems, npdItems, slips]);
 
   return (
     <div className="space-y-6">

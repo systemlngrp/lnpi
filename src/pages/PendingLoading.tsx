@@ -171,7 +171,7 @@ export function PendingLoading() {
     });
 
     return final;
-  }, [companies, items, orders, plans, searchTerm]);
+  }, [companies, npdItems, orders, plans, searchTerm]);
 
   useEffect(() => {
     if (didInitExpand.current) return;
