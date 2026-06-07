@@ -5,6 +5,8 @@ import { useData } from "../hooks/useData";
 import { Indent, IndentLine, Material, User } from "../types";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { summarizeIndentLines } from "../lib/indentTotals";
 
 type EditableIndentLine = {
@@ -28,6 +30,18 @@ function getIndentLineUom(indentType: Indent["indentType"], material?: Material 
 }
 
 export function IndentForm() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const [indents, setIndents] = useData<Indent>("indents", []);
   const [indentLines, setIndentLines] = useData<IndentLine>("indent-lines", []);
@@ -170,7 +184,10 @@ export function IndentForm() {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-6">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-6">
       <div className="flex items-start justify-between gap-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">New Indent</h2>
         <button

@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+
+import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { OrderSchedule, Order, Company, Item, DispatchPlan, LoadingSlip, Production } from "../types";
@@ -9,6 +11,18 @@ import { ArrowUpDown, Save } from "lucide-react";
 type SortKey = "scheduledDate" | "orderNo" | "companyName" | "itemName" | "pendingQty";
 
 export function PendingDispatchPlanning() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -419,7 +433,10 @@ export function PendingDispatchPlanning() {
       </div>
 
       {calculationRows.length > 0 ? (
-        <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
           <div className="px-4 py-3 border-b border-black bg-slate-50">
             <div className="text-sm font-black uppercase text-black">Dispatch Planning Calculation</div>
             <div className="text-[11px] font-bold text-slate-600">

@@ -3,6 +3,8 @@ import { useData } from "../hooks/useData";
 import { Machine, Setting } from "../types";
 import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { getFinancialYear } from "../lib/serial";
@@ -98,6 +100,18 @@ const MONTH_OPTIONS = [
 ];
 
 export function SettingsPage() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [machines] = useData<Machine>("machines", []);
   const npdItems = useNpdItems();
@@ -347,6 +361,8 @@ export function SettingsPage() {
       <div className="flex justify-between items-center pb-4 border-b border-black">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Settings</h2>
       </div>
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-5">
         <div className="space-y-4 border-b border-dashed border-black pb-5">

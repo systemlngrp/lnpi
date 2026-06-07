@@ -18,6 +18,8 @@ import {
 import { generateTransactionNo } from "../lib/serial";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { getAvailableReelPackingSlips, getReturnableReelLinesForJob } from "../lib/materialMovement";
 import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
 
@@ -53,6 +55,18 @@ function formatCurrencyDisplay(value: number) {
 }
 
 export function ReelIssueReturnForm() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
@@ -672,7 +686,10 @@ export function ReelIssueReturnForm() {
                       </div>
                       <div className="mt-4 overflow-hidden rounded-[20px] border border-slate-200">
                         <div className="overflow-x-auto">
-                          <table className="min-w-full border-collapse">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <table className="min-w-full border-collapse">
                             <thead className="bg-slate-800 text-white">
                               <tr>
                                 {["Select", "Our Reel No.", "Supplier Reel No.", "Invoice Rate", "Available Weight KG"].map((heading) => (

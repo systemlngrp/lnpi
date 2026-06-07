@@ -1,8 +1,9 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, Upload, Download, FileSpreadsheet } from "lucide-react";
 import { Company } from "../types";
 import { Spinner } from "../components/Spinner";
+import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
 import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
 import { isMandatoryField } from "../lib/mandatoryFields";
@@ -242,6 +243,23 @@ export function Companies() {
     const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
     return timeB - timeA || (a.name || "").localeCompare(b.name || "");
   });
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredCompanies = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return sortedCompanies;
+    return sortedCompanies.filter((c) => {
+      return (
+        (c.name || "").toLowerCase().includes(q) ||
+        (c.contactPerson || "").toLowerCase().includes(q) ||
+        (c.contactNumber || "").toLowerCase().includes(q) ||
+        (c.email || "").toLowerCase().includes(q) ||
+        (c.district || "").toLowerCase().includes(q) ||
+        (c.state || "").toLowerCase().includes(q)
+      );
+    });
+  }, [sortedCompanies, searchTerm]);
+
   const {
     page,
     setPage,
@@ -249,7 +267,7 @@ export function Companies() {
     setPageSize,
     totalItems,
     paginatedItems: paginatedCompanies,
-  } = useClientPagination(sortedCompanies, 25);
+  } = useClientPagination(filteredCompanies, 25);
 
   return (
     <div className="space-y-6">
@@ -401,6 +419,8 @@ export function Companies() {
           </div>
         </form>
       )}
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search companies..." />
 
       <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
         <div className="block md:hidden space-y-4 p-4">

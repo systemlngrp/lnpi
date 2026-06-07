@@ -17,6 +17,8 @@ import {
 import { generateTransactionNo } from "../lib/serial";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { getAvailableReelPackingSlips, getNonReelAvailableQty } from "../lib/materialMovement";
 import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
 
@@ -30,6 +32,18 @@ function isWithoutJobIssue(issueType?: string) {
 }
 
 export function MaterialIssueForm() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [materials] = useData<Material>("materials", []);
@@ -319,7 +333,10 @@ export function MaterialIssueForm() {
   };
 
   return (
-    <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
       <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">Material Issue Form</h2>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

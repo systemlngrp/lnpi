@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { Company, Item, Order, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/serial";
@@ -29,6 +31,18 @@ function parseLocalYmd(dateStr?: string) {
 }
 
 export function PendingProduction() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
@@ -132,6 +146,8 @@ export function PendingProduction() {
       <div className="flex justify-between items-center border-b border-black pb-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Production Plan</h2>
       </div>
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">

@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+
+import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
 import { DispatchPlan, Truck, Order, Company, OrderSchedule } from "../types";
 import { formatDate } from "../lib/serial";
@@ -6,6 +8,18 @@ import { Trash2 } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 export function DispatchPlansMaster() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [trucks] = useData<Truck>("trucks", []);
   const [orders] = useData<Order>("orders", []);
@@ -30,6 +44,8 @@ export function DispatchPlansMaster() {
       <div className="flex justify-between items-center pb-4 border-b border-black">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Dispatch Plans Master</h2>
       </div>
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">

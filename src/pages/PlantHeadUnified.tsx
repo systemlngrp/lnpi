@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier, Order, Consumption, Company } from "../types";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, Truck, XCircle, ClipboardList, Package } from "lucide-react";
@@ -11,6 +13,18 @@ import { useNpdItems } from "../hooks/useNpdItems";
 type Tab = "all" | "material-in" | "orders" | "consumption";
 
 export function PlantHeadUnified() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [orders, setOrders] = useData<Order>("orders", []);

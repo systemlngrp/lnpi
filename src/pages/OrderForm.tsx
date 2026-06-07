@@ -3,6 +3,8 @@ import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, Upload, Download } from "lucide-react";
 import { Order, Company, Item } from "../types";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/utils";
 import { Select } from "../components/Select";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -11,6 +13,18 @@ import { getFinancialYear } from "../lib/serial";
 import * as XLSX from "xlsx";
 
 export function OrderForm() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const [orders, setOrders, isLoading] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -588,50 +602,56 @@ export function OrderForm() {
       </div>
 
       {isFormOpen && (
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-sm border border-black space-y-4">
-          <div className="max-w-3xl space-y-4">
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Order Date</label>
-              <input type="date" value={orderDate} onChange={(e)=>setOrderDate(e.target.value)} className="border-2 border-black rounded p-2" />
+        <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-lg border border-slate-200 space-y-6 max-w-4xl mx-auto">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Order Date</label>
+              <input type="date" value={orderDate} onChange={(e)=>setOrderDate(e.target.value)} className="w-full border border-slate-300 rounded-md p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Company Name</label>
-              <Select
-                value={companyId}
-                onChange={handleCompanyChange}
-                options={companyOptions}
-                placeholder="Select Company..."
-              />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Company Name</label>
+              <div className="w-full">
+                <Select
+                  value={companyId}
+                  onChange={handleCompanyChange}
+                  options={companyOptions}
+                  placeholder="Select Company..."
+                />
+              </div>
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">PO Type</label>
-              <Select value={poType} onChange={(v:any)=>setPoType(v)} options={poOptions} />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">PO Type</label>
+              <div className="w-full">
+                <Select value={poType} onChange={(v:any)=>setPoType(v)} options={poOptions} />
+              </div>
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">PO Number</label>
-              <input value={poNumber} onChange={(e)=>setPoNumber(e.target.value)} className={`border-2 rounded p-2 ${poType === 'Verbal' ? 'bg-slate-200 border-gray-300 text-slate-600' : 'border-black text-black'}`} disabled={poType === 'Verbal'} />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">PO Number</label>
+              <input value={poNumber} onChange={(e)=>setPoNumber(e.target.value)} className={`w-full border rounded-md p-3 ${poType === 'Verbal' ? 'bg-slate-100 border-slate-200 text-slate-600' : 'border-slate-300 text-slate-900'}`} disabled={poType === 'Verbal'} />
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Item</label>
-              <Select value={itemId} onChange={handleItemChange} options={itemOptions} placeholder="Select Item..." />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Item</label>
+              <div className="w-full">
+                <Select value={itemId} onChange={handleItemChange} options={itemOptions} placeholder="Select Item..." />
+              </div>
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">ERP Code</label>
-              <input value={erpCode} onChange={(e)=>setErpCode(e.target.value)} className="border-2 border-black rounded p-2 bg-slate-100 text-slate-700" readOnly />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">ERP Code</label>
+              <input value={erpCode} onChange={(e)=>setErpCode(e.target.value)} className="w-full border border-slate-300 rounded-md p-3 bg-slate-50 text-slate-700" readOnly />
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Qty</label>
-              <input value={qty} onChange={(e)=>setQty(e.target.value.replace(/[^0-9]/g,''))} className="border-2 border-black rounded p-2" />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Qty</label>
+              <input value={qty} onChange={(e)=>setQty(e.target.value.replace(/[^0-9]/g,''))} className="w-full border border-slate-300 rounded-md p-3" />
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Rate</label>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Rate</label>
               <input
                 value={rate}
                 onChange={(e) => {
@@ -644,29 +664,31 @@ export function OrderForm() {
                 type="number"
                 min={0.01}
                 step={0.01}
-                className="border-2 border-black rounded p-2"
+                className="w-full border border-slate-300 rounded-md p-3"
               />
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Order Amount</label>
-              <input value={orderAmount.toFixed(2)} className="border-2 border-black rounded p-2 bg-slate-100 text-slate-700" readOnly />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Order Amount</label>
+              <input value={orderAmount.toFixed(2)} className="w-full border border-slate-300 rounded-md p-3 bg-slate-50 text-slate-700" readOnly />
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Order By <span className="text-red-500">*</span></label>
-              <Select value={orderBy} onChange={setOrderBy} options={userOptions} placeholder="Select user..." required />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Order By <span className="text-red-500">*</span></label>
+              <div className="w-full">
+                <Select value={orderBy} onChange={setOrderBy} options={userOptions} placeholder="Select user..." required />
+              </div>
             </div>
 
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black">Remarks</label>
-              <input value={remarks} onChange={(e)=>setRemarks(e.target.value)} className="border-2 border-black rounded p-2" />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Remarks</label>
+              <input value={remarks} onChange={(e)=>setRemarks(e.target.value)} className="w-full border border-slate-300 rounded-md p-3" />
             </div>
           </div>
 
-          <div className="flex gap-2 pt-2">
-            <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded font-bold">{isSubmitting ? <Spinner /> : 'Submit'}</button>
-            <button type="button" onClick={()=>{ setIsFormOpen(false); resetForm(); navigate("/orders/master"); }} className="bg-white text-black border-2 border-black px-6 py-2 rounded font-bold">Cancel</button>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded-md font-semibold shadow">{isSubmitting ? <Spinner /> : 'Submit'}</button>
+            <button type="button" onClick={()=>{ setIsFormOpen(false); resetForm(); navigate("/orders/master"); }} className="bg-white text-black border border-slate-300 px-6 py-2 rounded-md font-semibold">Cancel</button>
           </div>
         </form>
       )}

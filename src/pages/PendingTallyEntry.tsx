@@ -2,6 +2,8 @@ import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier } from "../types";
 import { useState, useMemo } from "react";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, ArrowLeft } from "lucide-react";
@@ -9,6 +11,18 @@ import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 export function PendingTallyEntry() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
@@ -106,7 +120,10 @@ export function PendingTallyEntry() {
       </div>
 
       <div className="p-4">
-        <div className="bg-white border border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <div className="bg-white border border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
           <div className="bg-fuchsia-700 px-4 py-2 text-white font-black uppercase text-sm border-b border-black flex justify-between items-center">
             <span>Pending Records ({pendingList.length})</span>
             <div className="flex items-center gap-4">

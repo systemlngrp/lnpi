@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+
+import { TableControls } from "../components/TableControls";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -87,6 +89,18 @@ function getMaterialRapcInput(material?: Material | null) {
 }
 
 export function PaperRequirementReport() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [productions] = useData<Production>("productions", []);
   const npdItems = useNpdItems();
   const [materials] = useData<Material>("materials", []);
@@ -552,7 +566,10 @@ export function PaperRequirementReport() {
 
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
-              <table className="min-w-full">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <table className="min-w-full">
                 <thead className="bg-blue-700 text-white">
                   <tr>
                     {["RAPC RANGE", "GSM", "Total Paper Requirement", "Total Closing Stock", "Total Pending PO", "MIL", "Net Paper to Order"].map((heading) => (

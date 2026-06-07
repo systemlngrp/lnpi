@@ -5,6 +5,8 @@ import autoTable from "jspdf-autotable";
 import { CheckCircle, Eye, FileText, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
@@ -284,7 +286,10 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
       </div>
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
-        <table className="min-w-full border-collapse">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-slate-100">
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black whitespace-nowrap">Requisition No</th>
@@ -449,6 +454,18 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
 }
 
 export function IndentPending() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   return <IndentQueue mode="Pending" />;
 }
 

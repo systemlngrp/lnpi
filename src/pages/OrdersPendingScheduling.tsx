@@ -1,12 +1,26 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useData } from "../hooks/useData";
 import { Order, OrderSchedule } from "../types";
 import { Select } from "../components/Select";
 import { Trash2 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 export function OrdersPendingScheduling() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [orders, setOrders] = useData<Order>("orders", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [companies] = useData("companies", []);
@@ -168,6 +182,8 @@ export function OrdersPendingScheduling() {
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-black uppercase">Pending Scheduling</h2>
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white p-4 rounded border border-black">
         <div className="mb-4">

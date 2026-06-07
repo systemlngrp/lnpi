@@ -42,6 +42,18 @@ type Range = {
 };
 
 export function Dashboard() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
@@ -358,7 +370,10 @@ export function Dashboard() {
           <WorkflowCard label="MD Approval" count={pendingMD} tone="bg-[#f3e5f5]" />
           <WorkflowCard label="Pending Task" count={pendingTasks} tone="bg-[#e5e7eb]" />
         </div>
-        <div className="bg-white/90 rounded-none border-2 border-black shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <div className="bg-white/90 rounded-none border-2 border-black shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
           <div className="px-4 py-3 bg-slate-50 border-b-2 border-black flex items-center justify-between">
             <div className="text-sm font-black uppercase tracking-widest">Pending Task List</div>
             <div className="text-xs font-black text-slate-600">Total: {formatNumber(pendingTasks, false)}</div>

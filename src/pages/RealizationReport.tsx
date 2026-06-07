@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+
+import { TableControls } from "../components/TableControls";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -127,6 +129,18 @@ function resolveTargetForRange(targets: TargetRow[], fromDate: string, toDate: s
 }
 
 export function RealizationReport() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [productions] = useData<Production>("productions", []);
   const [orders] = useData<Order>("orders", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -478,7 +492,10 @@ export function RealizationReport() {
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 text-xl font-bold text-slate-900">Sales Person vs Realization</div>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="min-w-full border-collapse">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <table className="min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-800 text-white">
                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-[0.16em]">Metric</th>

@@ -14,6 +14,8 @@ import {
   SampleRequest,
 } from "../types";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
 import { generateTransactionNo, formatDate } from "../lib/serial";
 import { CircleHelp } from "lucide-react";
@@ -153,6 +155,18 @@ function createInitialFormData(todayStr: string) {
 }
 
 export function ProductionForm() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -704,6 +718,8 @@ export function ProductionForm() {
       <div className="flex justify-between items-center pb-4 border-b border-black">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Production Form</h2>
       </div>
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white p-4 rounded shadow-sm border border-black w-full">
         <form onSubmit={handleSubmit} className="space-y-5">

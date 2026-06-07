@@ -3,10 +3,24 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { Indent, IndentLine, Material, Setting } from "../types";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
 import { withIndentTotals } from "../lib/indentTotals";
 
 export function IndentDetail() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const navigate = useNavigate();
   const { id = "" } = useParams();
   const [indents, setIndents] = useData<Indent>("indents", []);
@@ -87,6 +101,9 @@ export function IndentDetail() {
 
   if (!indent) {
     return (
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
       <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Indent Detail</h2>
         <p className="text-black font-medium">Indent not found.</p>

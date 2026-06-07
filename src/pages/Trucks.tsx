@@ -1,10 +1,24 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { Truck } from "../types";
 import { Spinner } from "../components/Spinner";
 
+
+import { TableControls } from "../components/TableControls";
 export function Trucks() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [trucks, setTrucks, isLoading] = useData<Truck>("trucks", []);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -161,6 +175,8 @@ export function Trucks() {
           </div>
         </form>
       )}
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
         {/* Mobile View - Cards */}

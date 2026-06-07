@@ -94,6 +94,18 @@ const reportingNotes = [
 ];
 
 export function PlansLoading() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   return (
     <div className="space-y-6">
       <div className="border-b border-black pb-4">
@@ -111,6 +123,8 @@ export function PlansLoading() {
           </div>
         ))}
       </div>
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white border border-black rounded shadow-sm overflow-hidden">
         <div className="bg-slate-100 border-b border-black px-5 py-3">

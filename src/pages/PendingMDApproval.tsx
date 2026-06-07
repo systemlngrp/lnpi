@@ -2,12 +2,26 @@ import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier } from "../types";
 import { useState } from "react";
 import { Spinner } from "../components/Spinner";
+
+import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 export function PendingMDApproval() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
@@ -175,7 +189,9 @@ export function PendingMDApproval() {
               ))}
         </div>
 
-        <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
               <th className="px-6 py-3 w-10 border border-black">

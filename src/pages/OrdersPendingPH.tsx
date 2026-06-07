@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+
+import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
 import { Order } from "../types";
 import { formatDate } from "../lib/utils";
@@ -6,6 +8,18 @@ import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 export function OrdersPendingPH() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   const [orders, setOrders] = useData<Order>("orders", []);
   const [companies] = useData("companies", []);
   const npdItems = useNpdItems();
@@ -57,6 +71,9 @@ export function OrdersPendingPH() {
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-black uppercase">Pending Salesman Approval</h2>
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">

@@ -497,6 +497,18 @@ const gsmSettingsDrivenRules = [
 ];
 
 export function PlansProduction() {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Simple DOM-based table row filter bound to the search input
+  useEffect(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+    rows.forEach((row) => {
+      const txt = (row.textContent || '').toLowerCase();
+      row.style.display = q && !txt.includes(q) ? 'none' : '';
+    });
+  }, [searchTerm]);
+
   return (
     <div className="space-y-6">
       <div className="border-b border-black pb-4">
@@ -507,7 +519,10 @@ export function PlansProduction() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-black rounded shadow-sm p-5">
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      <div className="bg-white border border-black rounded shadow-sm p-5">
           <h3 className="text-sm font-black uppercase text-slate-600 mb-3">What Is Auto Filled</h3>
           <p className="text-sm text-black leading-6">
             After selecting a Scheduled Order, the app pulls company, item, ERP code, rate, dimensions, ply, flute, plate weight, and paper layer values from the related masters and order records.
