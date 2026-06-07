@@ -3395,6 +3395,13 @@ const createHandlers = (tableName: string) => {
             pageSize,
             search,
           });
+        } else if (tableName === "production_processing") {
+          [rows] = await db.query(`
+            SELECT pp.*, n.itemName, n.erp, n.boxType
+            FROM \`production_processing\` pp
+            LEFT JOIN \`productions\` p ON pp.productionId = p.id
+            LEFT JOIN \`npd\` n ON p.itemId = n.id
+          `);
         } else {
           [rows] = await db.query(`SELECT * FROM \`${tableName}\``);
         }

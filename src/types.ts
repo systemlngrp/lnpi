@@ -365,6 +365,9 @@ export interface ProductionProcessing {
   date: string;
   updatedBy?: string;
   updateTimestamp?: string;
+  itemName?: string;
+  erp?: string | number;
+  boxType?: string;
 }
 
 export interface Company {
