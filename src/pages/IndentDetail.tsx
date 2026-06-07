@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { Indent, IndentLine, Material, Setting } from "../types";
@@ -101,20 +101,21 @@ export function IndentDetail() {
 
   if (!indent) {
     return (
+      <>
+        <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-
-      <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Indent Detail</h2>
-        <p className="text-black font-medium">Indent not found.</p>
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="px-5 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition"
-        >
-          Back
-        </button>
-      </div>
+        <div className="bg-white rounded-xl border border-black p-6 shadow-sm space-y-4">
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Indent Detail</h2>
+          <p className="text-black font-medium">Indent not found.</p>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="px-5 py-2 rounded border border-black text-black font-bold hover:bg-slate-50 transition"
+          >
+            Back
+          </button>
+        </div>
+      </>
     );
   }
 
