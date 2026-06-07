@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowDown, ArrowUp, Plus, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Search, Calendar } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { ClientPagination } from "../components/ClientPagination";
@@ -60,6 +60,8 @@ export function OrdersMaster() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [orderNoSort, setOrderNoSort] = useState<SortDirection>("desc");
+  const [valueGreaterThan, setValueGreaterThan] = useState<number | "">("");
+  const [quantityGreaterThan, setQuantityGreaterThan] = useState<number | "">("");
 
   const companyMap = useMemo(
     () => new Map(companies.map((company) => [company.id, company.name || ""])),
@@ -135,10 +137,12 @@ export function OrdersMaster() {
 
     return rows
       .filter((row) => {
-        if (companyFilter && row.order.companyId !== companyFilter) return false;
-        if (itemFilter && row.order.itemId !== itemFilter) return false;
-        if (orderByFilter && row.order.orderBy !== orderByFilter) return false;
+        if (companyFilter && row.companyName !== companyFilter) return false;
+        if (itemFilter && row.itemName !== itemFilter) return false;
+        if (orderByFilter && row.orderByName !== orderByFilter) return false;
         if ((dateFrom || dateTo) && !isWithinDateRange(row.order.orderDate, dateFrom, dateTo)) return false;
+        if (valueGreaterThan !== "" && toNumber(row.orderAmount) <= toNumber(valueGreaterThan)) return false;
+        if (quantityGreaterThan !== "" && toNumber(row.order.qty) <= toNumber(quantityGreaterThan)) return false;
 
         if (!normalizedSearch) return true;
 
@@ -161,7 +165,7 @@ export function OrdersMaster() {
         const orderNoCompare = String(left.order.orderNo || "").localeCompare(String(right.order.orderNo || ""));
         return orderNoSort === "asc" ? orderNoCompare : -orderNoCompare;
       });
-  }, [companyFilter, dateFrom, dateTo, itemFilter, orderByFilter, orderNoSort, rows, searchTerm]);
+  }, [companyFilter, dateFrom, dateTo, itemFilter, orderByFilter, orderNoSort, rows, searchTerm, valueGreaterThan, quantityGreaterThan]);
 
   const {
     page,
@@ -201,110 +205,161 @@ export function OrdersMaster() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded border border-black bg-white p-4">
-          <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Total Orders</div>
-          <div className="mt-2 text-2xl font-bold text-black">{summary.totalOrders}</div>
+        <div className="rounded p-4 bg-gradient-to-r from-indigo-50 to-indigo-100 border border-indigo-200">
+          <div className="text-xs font-bold uppercase tracking-wide text-indigo-600">Total Orders</div>
+          <div className="mt-2 text-2xl font-bold text-indigo-800">{summary.totalOrders}</div>
         </div>
-        <div className="rounded border border-black bg-white p-4">
-          <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Order Value</div>
-          <div className="mt-2 text-2xl font-bold text-black">{formatAmount(summary.orderValue)}</div>
+        <div className="rounded p-4 bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200">
+          <div className="text-xs font-bold uppercase tracking-wide text-emerald-600">Order Value</div>
+          <div className="mt-2 text-2xl font-bold text-emerald-800">{formatAmount(summary.orderValue)}</div>
         </div>
-        <div className="rounded border border-black bg-white p-4">
-          <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Companies</div>
-          <div className="mt-2 text-2xl font-bold text-black">{summary.companies}</div>
+        <div className="rounded p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200">
+          <div className="text-xs font-bold uppercase tracking-wide text-yellow-700">Companies</div>
+          <div className="mt-2 text-2xl font-bold text-yellow-800">{summary.companies}</div>
         </div>
       </div>
 
-      <div className="grid gap-3 rounded border border-black bg-white p-4 md:grid-cols-2 xl:grid-cols-6">
-        <label className="flex flex-col gap-1 text-sm font-bold text-black xl:col-span-2">
-          <span>Search</span>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+      <div className="rounded border border-black bg-white p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <label className="flex flex-col gap-1 text-sm font-bold text-black xl:col-span-2">
+            <span>Search</span>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search order, ERP, item, PO..."
+                className="w-full rounded border border-black py-2 pl-10 pr-3 font-normal"
+              />
+            </div>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-bold text-black">
+            <span>Company</span>
             <input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search order, ERP, item, PO..."
-              className="w-full rounded border border-black py-2 pl-10 pr-3 font-normal"
+              list="companies-list"
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              placeholder="All Companies"
+              className="rounded border border-black px-3 py-2 font-normal"
             />
+            <datalist id="companies-list">
+              {companies
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((c) => (
+                  <option key={c.id} value={c.name} />
+                ))}
+            </datalist>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-bold text-black">
+            <span>Item</span>
+            <input
+              list="items-list"
+              value={itemFilter}
+              onChange={(e) => setItemFilter(e.target.value)}
+              placeholder="All Items"
+              className="rounded border border-black px-3 py-2 font-normal"
+            />
+            <datalist id="items-list">
+              {npdItems
+                .slice()
+                .sort((left, right) => (left.name || "").localeCompare(right.name || ""))
+                .map((item) => (
+                  <option key={item.id} value={item.name} />
+                ))}
+            </datalist>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-bold text-black">
+            <span>Order By</span>
+            <input
+              list="users-list"
+              value={orderByFilter}
+              onChange={(e) => setOrderByFilter(e.target.value)}
+              placeholder="All Users"
+              className="rounded border border-black px-3 py-2 font-normal"
+            />
+            <datalist id="users-list">
+              {users
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((u) => (
+                  <option key={u.id} value={u.name} />
+                ))}
+            </datalist>
+          </label>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6 items-end">
+          <label className="flex flex-col gap-1 text-sm font-bold text-black xl:col-span-1">
+            <span>Order Date From</span>
+            <div className="relative">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(event) => setDateFrom(event.target.value)}
+                className="w-full rounded border border-black px-3 py-2 pr-10 font-normal"
+              />
+              <Calendar size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500" />
+            </div>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-bold text-black xl:col-span-1">
+            <span>Order Date To</span>
+            <div className="relative">
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(event) => setDateTo(event.target.value)}
+                className="w-full rounded border border-black px-3 py-2 pr-10 font-normal"
+              />
+              <Calendar size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500" />
+            </div>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-bold text-black">
+            <span>Value Greater Than</span>
+            <input
+              type="number"
+              value={valueGreaterThan === "" ? "" : String(valueGreaterThan)}
+              onChange={(e) => setValueGreaterThan(e.target.value === "" ? "" : Number(e.target.value))}
+              placeholder="Value Greater Than"
+              className="rounded border border-black px-3 py-2 font-normal"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-bold text-black">
+            <span>Quantity Greater Than</span>
+            <input
+              type="number"
+              value={quantityGreaterThan === "" ? "" : String(quantityGreaterThan)}
+              onChange={(e) => setQuantityGreaterThan(e.target.value === "" ? "" : Number(e.target.value))}
+              placeholder="Quantity Greater than"
+              className="rounded border border-black px-3 py-2 font-normal"
+            />
+          </label>
+
+          <div className="flex items-center gap-2 xl:col-span-1">
+            <button
+              type="button"
+              onClick={() => {
+                setCompanyFilter("");
+                setItemFilter("");
+                setOrderByFilter("");
+                setDateFrom("");
+                setDateTo("");
+                setValueGreaterThan("");
+                setQuantityGreaterThan("");
+                setSearchTerm("");
+              }}
+              className="ml-auto rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+            >
+              Clear Filters
+            </button>
           </div>
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm font-bold text-black">
-          <span>Company</span>
-          <select
-            value={companyFilter}
-            onChange={(event) => setCompanyFilter(event.target.value)}
-            className="rounded border border-black px-3 py-2 font-normal"
-          >
-            <option value="">All Companies</option>
-            {companies
-              .slice()
-              .sort((left, right) => left.name.localeCompare(right.name))
-              .map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm font-bold text-black">
-          <span>Item</span>
-          <select
-            value={itemFilter}
-            onChange={(event) => setItemFilter(event.target.value)}
-            className="rounded border border-black px-3 py-2 font-normal"
-          >
-            <option value="">All Items</option>
-            {npdItems
-              .slice()
-              .sort((left, right) => (left.name || "").localeCompare(right.name || ""))
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm font-bold text-black">
-          <span>Order By</span>
-          <select
-            value={orderByFilter}
-            onChange={(event) => setOrderByFilter(event.target.value)}
-            className="rounded border border-black px-3 py-2 font-normal"
-          >
-            <option value="">All Users</option>
-            {users
-              .slice()
-              .sort((left, right) => left.name.localeCompare(right.name))
-              .map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm font-bold text-black">
-          <span>Order Date From</span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => setDateFrom(event.target.value)}
-            className="rounded border border-black px-3 py-2 font-normal"
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm font-bold text-black">
-          <span>Order Date To</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(event) => setDateTo(event.target.value)}
-            className="rounded border border-black px-3 py-2 font-normal"
-          />
-        </label>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded border border-black bg-white">
