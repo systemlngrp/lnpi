@@ -176,6 +176,7 @@ export function OrdersPendingPH() {
               <th className="px-4 py-2 border border-black">Order Date</th>
               <th className="px-4 py-2 border border-black">Company</th>
               <th className="px-4 py-2 border border-black">Item</th>
+              <th className="px-4 py-2 border border-black">Item ERP</th>
               <th className="px-4 py-2 border border-black">Order By</th>
               <th className="px-4 py-2 border border-black">Qty</th>
               <th className="px-4 py-2 border border-black">Actions</th>
@@ -188,6 +189,7 @@ export function OrdersPendingPH() {
                 <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-4 py-2 border border-black">{(companies as any[]).find((c:any)=>c.id===o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{npdItems.find((item) => item.id === o.itemId)?.name}</td>
+                <td className="px-4 py-2 border border-black">{npdItems.find((item) => item.id === o.itemId)?.erp || "-"}</td>
                 <td className="px-4 py-2 border border-black whitespace-nowrap">{getOrderByLabel(o.orderBy) || '-'}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">

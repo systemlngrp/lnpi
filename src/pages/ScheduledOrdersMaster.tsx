@@ -70,6 +70,7 @@ export function ScheduledOrdersMaster() {
         companyName: company?.name || "-",
         itemId: item?.id || "",
         itemName: item?.name || "-",
+        itemErp: item?.erp || "-",
         produced,
         pendingPlanning: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0) - produced, 0),
         loaded,
