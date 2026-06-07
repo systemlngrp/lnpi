@@ -210,6 +210,7 @@ export function ScheduledOrdersMaster() {
                   <span className="block">Item</span>
                   <span className="block">Name</span>
                 </th>
+                <th className="px-2 py-2 border border-black text-left leading-tight">ERP</th>
                 <th className="px-2 py-2 border border-black text-right bg-indigo-50 leading-tight">
                   <span className="block">Sch.</span>
                   <span className="block">Qty</span>
@@ -251,6 +252,7 @@ export function ScheduledOrdersMaster() {
                   <td className="px-3 py-2 border border-black font-bold text-black">{s.orderNo}</td>
                   <td className="px-3 py-2 border border-black truncate max-w-[150px]" title={s.companyName}>{s.companyName}</td>
                   <td className="px-3 py-2 border border-black min-w-[150px]">{s.itemName}</td>
+                  <td className="px-3 py-2 border border-black">{s.itemErp}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium bg-indigo-50/30">{(Number(s.qty) || 0).toLocaleString()}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-red-600 bg-red-50/30">{(Number(s.canceledQty) || 0).toLocaleString()}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-emerald-700 bg-emerald-50/30">{s.produced.toLocaleString()}</td>
@@ -269,7 +271,7 @@ export function ScheduledOrdersMaster() {
               ))}
               {detailedSchedules.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
+                  <td colSpan={14} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
                     No schedules found matching your criteria
                   </td>
                 </tr>
@@ -278,7 +280,7 @@ export function ScheduledOrdersMaster() {
             {detailedSchedules.length > 0 && (
               <tfoot className="bg-slate-100 font-bold border-t border-black">
                 <tr className="divide-x divide-black">
-                  <td colSpan={5} className="px-3 py-2 text-right uppercase">Filtered Totals</td>
+                  <td colSpan={6} className="px-3 py-2 text-right uppercase">Filtered Totals</td>
                   <td className="px-3 py-2 text-right bg-indigo-50">
                     {detailedSchedules.reduce((sum, s) => sum + (Number(s.qty) || 0), 0).toLocaleString()}
                   </td>

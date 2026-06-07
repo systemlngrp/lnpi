@@ -39,6 +39,7 @@ export function CanceledOrders() {
               <th className="px-3 py-2 border border-black">Order Date</th>
               <th className="px-3 py-2 border border-black">Company</th>
               <th className="px-3 py-2 border border-black">Item</th>
+              <th className="px-3 py-2 border border-black">Item ERP</th>
               <th className="px-3 py-2 border border-black">Qty</th>
               <th className="px-3 py-2 border border-black">Remarks</th>
             </tr>
@@ -50,6 +51,7 @@ export function CanceledOrders() {
                 <td className="px-3 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
                 <td className="px-3 py-2 border border-black">{npdItems.find(i => i.id === o.itemId)?.name}</td>
+                <td className="px-3 py-2 border border-black">{npdItems.find(i => i.id === o.itemId)?.erp || "-"}</td>
                 <td className="px-3 py-2 border border-black">{o.qty}</td>
                 <td className="px-3 py-2 border border-black">{o.remarks}</td>
               </tr>
