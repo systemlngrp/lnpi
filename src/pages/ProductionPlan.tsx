@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company } from "../types";
+import { Production, OrderSchedule, Order, Company, SampleRequest } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
@@ -15,6 +15,7 @@ export function ProductionPlan() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [npdItems, setNpdItems] = useState<Item[]>([]);
 
   useEffect(() => {
@@ -42,6 +43,12 @@ export function ProductionPlan() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
+  const format2 = (value: unknown) => {
+    if (value === "" || value === null || value === undefined) return "-";
+    const num = Number(value);
+    return Number.isFinite(num) ? num.toFixed(2) : "-";
+  };
+
   const filteredList = useMemo(() => {
     return productions
       .filter(p => normalizeDate(p.date) === selectedDate)
@@ -59,45 +66,48 @@ export function ProductionPlan() {
       .sort((a, b) => a.transactionNo.localeCompare(b.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
   }, [productions, selectedDate, searchTerm, npdItems, schedules, orders, companies]);
 
-  const getPrintingColour = (item?: Item) => {
-    const c1 = String(item?.printingColour1 || "").trim();
-    const c2 = String(item?.printingColour2 || "").trim();
-    if (c1 && c2) return `${c1} / ${c2}`;
-    return c1 || c2 || "-";
-  };
-
   const getExportData = (data: Production[]) => {
-    return data.map(p => {
+    return data.map((p, index) => {
       const schedule = schedules.find(s => s.id === p.scheduleId);
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
       const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
+      const isSample = sampleRequests.some(
+        (row) =>
+          String(row.itemId || "").trim() === String(p.itemId || "").trim() &&
+          String(row.jobCardNo || "").trim() === String(p.transactionNo || p.jobCardNo || "").trim()
+      );
+      const value = (Number(p.qty || 0) || 0) * (Number(p.rate || 0) || 0);
 
       return {
-        "Status": p.status || "-",
-        "Lot No": p.transactionNo || "-",
-        "Party Name": company?.name || "-",
+        "Sr. No.": index + 1,
+        "Date": formatDate(p.date),
+        "Job Number": p.transactionNo || "-",
+        "Company": company?.name || "-",
+        "ERP": p.erpCode || "-",
         "Item Name": item?.name || "-",
-        "ERP Code": p.erpCode || "-",
-        "TYPE": item?.typeName || "-",
-        "Plan Quantity": p.qty ?? "-",
-        "PART": item?.part || "-",
-        "Printing Colour": getPrintingColour(item),
-        "L": p.length ?? "-",
-        "W": p.breadth ?? "-",
-        "H": p.height ?? "-",
-        "Ply": p.ply ?? "-",
-        "Length (OD)": item?.lOd ?? "-",
-        "Width (OD)": item?.wOd ?? "-",
-        "Height (OD)": item?.hOd ?? "-",
-        "FLAP": item?.flap ?? "-",
-        "No. of Outs (Reel Size)": p.ups ?? "-",
-        "No. of ups in Cutting (For Plates)": p.noOfUpsInCuttingForPlates ?? "-",
-        "Paper Required": p.paperRequiredNos ?? "-",
-        "Liner Required": p.lineRequiredNos ?? "-",
-        "Top Paper Weight (KG)": p.topPaperWeightKg ?? "-",
-        "Liner Weight (KG)": p.linerWeightKg ?? "-",
-        "Total Job Weight": p.totalJobWeight ?? "-",
+        "Sample (Yes/No)": isSample ? "Yes" : "No",
+        "Plan Quantity": format2(p.qty),
+        "UPS": format2(p.ups),
+        "Ply": format2(p.ply),
+        "Flute": p.flute || "-",
+        "L1": format2(p.l1),
+        "F1": format2(p.f1),
+        "L2": format2(p.l2),
+        "F2": format2(p.f2),
+        "L3": format2(p.l3),
+        "GSM": format2(p.gsm),
+        "List GSM": format2(p.leastGsm),
+        "Reel As Per Calculation": format2(p.reelAsPerCalc),
+        "Reel Actual Trim": format2(p.reelActualWithTrimming),
+        "Cutting Trim": format2(p.cuttingWithTrimming),
+        "Planned Production (Meter)": format2(p.plannedProductionInMeter),
+        "Sheet Weight": format2(p.sheetWeight),
+        "Total Paper Weight": format2(p.totalPaperWeight),
+        "Realization Per Kg": format2(p.realizationPerKg),
+        "Flute Batch": p.fluteBatches || "-",
+        "Rate": format2(p.rate),
+        "Value": format2(value),
       } as Record<string, string | number>;
     });
   };
@@ -165,70 +175,84 @@ export function ProductionPlan() {
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100">
               <tr className="divide-x divide-black">
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Lot No</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Party Name</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Sr. No.</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Date</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Job Number</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Company</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">ERP</th>
                 <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Item Name</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">ERP Code</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">TYPE</th>
+                <th className="px-4 py-3 text-center text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Sample (Yes/No)</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Plan Quantity</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">PART</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Printing Colour</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">W</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">H</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">UPS</th>
                 <th className="px-4 py-3 text-center text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Ply</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Length (OD)</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Width (OD)</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Height (OD)</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">FLAP</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">No. of Outs (Reel Size)</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">No. of ups in Cutting (For Plates)</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Paper Required</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Liner Required</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Top Paper Weight (KG)</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Liner Weight (KG)</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Total Job Weight</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Flute</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L1</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">F1</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L2</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">F2</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L3</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">GSM</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">List GSM</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Reel As Per Calculation</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Reel Actual Trim</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Cutting Trim</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Planned Production (Meter)</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Sheet Weight</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Total Paper Weight</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Realization Per Kg</th>
+                <th className="px-4 py-3 text-left text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Flute Batch</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Rate</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Value</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={24} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
+                  <td colSpan={28} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
                 </tr>
               ) : (
-                filteredList.map((p) => {
+                filteredList.map((p, index) => {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
+                  const isSample = sampleRequests.some(
+                    (row) =>
+                      String(row.itemId || "").trim() === String(p.itemId || "").trim() &&
+                      String(row.jobCardNo || "").trim() === String(p.transactionNo || p.jobCardNo || "").trim()
+                  );
+                  const value = (Number(p.qty || 0) || 0) * (Number(p.rate || 0) || 0);
 
                   return (
                     <tr key={p.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{p.status || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-bold text-black border border-black whitespace-nowrap">{index + 1}</td>
+                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-3 text-[11px] font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
-                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap max-w-[160px] truncate" title={company?.name}>{company?.name || "-"}</td>
-                      <td className="px-4 py-3 text-[11px] text-black border border-black max-w-[220px] truncate" title={item?.name}>{item?.name || "-"}</td>
+                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-normal break-words min-w-[220px] max-w-[220px]" title={company?.name}>{company?.name || "-"}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{p.erpCode || "-"}</td>
-                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{item?.typeName || "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] font-bold text-emerald-700 border border-black whitespace-nowrap">{p.qty}</td>
-                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{item?.part || "-"}</td>
-                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{getPrintingColour(item)}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.length ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.breadth ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.height ?? "-"}</td>
-                      <td className="px-4 py-3 text-center text-[11px] text-black border border-black whitespace-nowrap">{p.ply ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.lOd ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.wOd ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.hOd ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{item?.flap ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.ups ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.noOfUpsInCuttingForPlates ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.paperRequiredNos ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.lineRequiredNos ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.topPaperWeightKg ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{p.linerWeightKg ?? "-"}</td>
-                      <td className="px-4 py-3 text-right text-[11px] font-bold text-black border border-black whitespace-nowrap">{p.totalJobWeight ?? "-"}</td>
+                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-normal break-words min-w-[320px] max-w-[320px]" title={item?.name}>{item?.name || "-"}</td>
+                      <td className="px-4 py-3 text-center text-[11px] text-black border border-black whitespace-nowrap">{isSample ? "Yes" : "No"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-bold text-emerald-700 border border-black whitespace-nowrap">{format2(p.qty)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.ups)}</td>
+                      <td className="px-4 py-3 text-center text-[11px] text-black border border-black whitespace-nowrap">{format2(p.ply)}</td>
+                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{p.flute || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.l1)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.f1)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.l2)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.f2)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.l3)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.gsm)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.leastGsm)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.reelAsPerCalc)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.reelActualWithTrimming)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.cuttingWithTrimming)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.plannedProductionInMeter)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.sheetWeight)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.totalPaperWeight)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.realizationPerKg)}</td>
+                      <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{p.fluteBatches || "-"}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.rate)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] font-bold text-black border border-black whitespace-nowrap">{format2(value)}</td>
                     </tr>
                   );
                 })
