@@ -516,12 +516,10 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Mandatory</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Planned Qty</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap bg-indigo-50/50">Production FFG</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">UPS</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap bg-amber-50">Loaded Qty</th>
 
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Paper</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-emerald-900 uppercase border border-black whitespace-nowrap bg-emerald-50">Actual Paper (KG)</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Liner</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Print</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Paste</th>
@@ -569,6 +567,8 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Rate</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Value</th>
                 
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap bg-indigo-50/50">Production FFG</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-emerald-900 uppercase border border-black whitespace-nowrap bg-emerald-50">Actual Paper (KG)</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job Closer</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close Date</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
@@ -618,14 +618,12 @@ export function ProductionMaster() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-black border border-black whitespace-nowrap bg-indigo-50/20">{Number(p.prodFromFFG || 0).toLocaleString()}</td>
                       <td className="px-4 py-4 text-center text-xs font-medium text-black border border-black whitespace-nowrap">{p.ups || (item as any)?.ups || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-amber-700 border border-black whitespace-nowrap bg-amber-50/40">
                         {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}
                       </td>
 
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.paper.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap bg-emerald-50/30">{Number(p.actualPaperUsed || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.liner.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.printing.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.pasting.toLocaleString()}</td>
@@ -675,6 +673,8 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{Number(p.rate) ? Number(p.rate).toFixed(2) : (p.rate || "-")}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{Number(p.qty || 0) && Number(p.rate || 0) ? (Number(p.qty || 0) * Number(p.rate || 0)).toLocaleString() : "-"}</td>
 
+                      <td className="px-4 py-4 text-right text-xs font-bold text-black border border-black whitespace-nowrap bg-indigo-50/20">{Number(p.prodFromFFG || 0).toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap bg-emerald-50/30">{Number(p.actualPaperUsed || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
                         <select
                           value={p.closeBy || ""}
