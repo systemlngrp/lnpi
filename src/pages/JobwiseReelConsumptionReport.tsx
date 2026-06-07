@@ -101,11 +101,11 @@ export function JobwiseReelConsumptionReport() {
         const jobFfg = Number(production.prodFromFFG || 0);
         const jobRate = Number(production.rate || 0);
         const jobValue = jobFfg * jobRate;
-        const reelIssued = Number(issued.weight.toFixed(2));
-        const reelReturned = Number(returned.weight.toFixed(2));
+        const reelIssued = Number(Number(issued.weight || 0).toFixed(2));
+        const reelReturned = Number(Number(returned.weight || 0).toFixed(2));
         const reelConsumed = Number((reelIssued - reelReturned).toFixed(2));
-        const consumedValue = Number((issued.value - returned.value).toFixed(2));
-        const gp = Number((jobValue - consumedValue).toFixed(2));
+        const consumedValue = Number(Number(issued.value - returned.value || 0).toFixed(2));
+        const gp = Number(Number(jobValue - consumedValue || 0).toFixed(2));
         const gpPercent = consumedValue > 0 ? Number(((gp / consumedValue) * 100).toFixed(2)) : 0;
 
         return {
@@ -328,15 +328,15 @@ export function JobwiseReelConsumptionReport() {
                   <tr key={row.productionId} className="border-t border-black text-sm text-slate-700 transition hover:bg-emerald-50/40">
                     <td className="border-r border-black px-4 py-3 font-bold text-slate-900">{row.jobNo}</td>
                     <td className="border-r border-black px-4 py-3">{formatDate(row.corrugationDate)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right">{row.jobFfg.toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right">{row.jobRate.toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-slate-900">{row.jobValue.toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right">{row.reelIssued.toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right">{row.reelReturned.toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-bold text-amber-700">{row.reelConsumed.toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-bold text-violet-700">{row.consumedValue.toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-bold text-emerald-700">{row.gp.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-black text-emerald-800">{row.gpPercent.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.jobFfg || 0).toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.jobRate || 0).toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-slate-900">{Number(row.jobValue || 0).toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.reelIssued || 0).toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.reelReturned || 0).toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-bold text-amber-700">{Number(row.reelConsumed || 0).toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-bold text-violet-700">{Number(row.consumedValue || 0).toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-bold text-emerald-700">{Number(row.gp || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-black text-emerald-800">{Number(row.gpPercent || 0).toFixed(2)}</td>
                   </tr>
                 ))
               )}

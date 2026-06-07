@@ -496,7 +496,7 @@ export function MaterialIssueForm() {
                         </td>
                         <td className="px-4 py-4 text-right space-y-1">
                           <div className="text-sm font-black text-indigo-700">
-                            {line.isReel ? `${line.qty.toFixed(2)} KG` : `${line.qty} ${line.uom}`}
+                            {line.isReel ? `${Number(line.qty || 0).toFixed(2)} KG` : `${line.qty} ${line.uom}`}
                           </div>
                           {!line.isReel && !isWithoutJobIssue(issueType) && (
                             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter bg-slate-100 p-1 rounded inline-block">

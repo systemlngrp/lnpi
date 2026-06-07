@@ -334,8 +334,8 @@ export function OperationDashboard() {
     { id: "processingStatus", label: "Processing Status", className: "text-indigo-600 font-bold max-w-[200px] truncate", render: (r) => r.processingStatusText },
     { id: "jobCloser", label: "Job Closer", render: (r) => r.production.closeBy || "-" },
     { id: "closeDate", label: "Close Date", render: (r) => r.production.closeDate || "-" },
-    { id: "actualPaperUsed", label: "Actual Paper Used", align: "right", className: "font-bold text-indigo-700", render: (r) => r.actualPaperUsed.toFixed(2) },
-    { id: "wastagePct", label: "Wastage %", align: "right", className: "font-bold", render: (r) => (r.wastagePct === null ? "-" : `${r.wastagePct.toFixed(2)}%`) },
+    { id: "actualPaperUsed", label: "Actual Paper Used", align: "right", className: "font-bold text-indigo-700", render: (r) => Number(r.actualPaperUsed || 0).toFixed(2) },
+    { id: "wastagePct", label: "Wastage %", align: "right", className: "font-bold", render: (r) => (r.wastagePct === null ? "-" : `${Number(r.wastagePct || 0).toFixed(2)}%`) },
   ]), []);
 
   const defaultOrder: ColumnId[] = useMemo(

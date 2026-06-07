@@ -160,12 +160,12 @@ export function ErpWiseReelStockReport() {
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.size || ""}</td>
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.gsm || ""}</td>
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.bf || ""}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.openingStock.toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.issued.toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.returned.toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{row.availableWeight.toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.rate.toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{row.valuation.toFixed(2)}</td>
+                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.openingStock || 0).toFixed(2)}</td>
+                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.issued || 0).toFixed(2)}</td>
+                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.returned || 0).toFixed(2)}</td>
+                    <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(row.availableWeight || 0).toFixed(2)}</td>
+                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.rate || 0).toFixed(2)}</td>
+                    <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(row.valuation || 0).toFixed(2)}</td>
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.noOfReels}</td>
                   </tr>
                 ))
@@ -175,12 +175,12 @@ export function ErpWiseReelStockReport() {
               <tfoot>
                 <tr className="bg-slate-100">
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black" colSpan={4}>TOTAL</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{totals.openingStock.toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{totals.issued.toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{totals.returned.toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{totals.availableWeight.toFixed(2)}</td>
+                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.openingStock || 0).toFixed(2)}</td>
+                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.issued || 0).toFixed(2)}</td>
+                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.returned || 0).toFixed(2)}</td>
+                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.availableWeight || 0).toFixed(2)}</td>
                   <td className="px-4 py-4 text-black text-sm border-2 border-black">-</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{totals.valuation.toFixed(2)}</td>
+                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.valuation || 0).toFixed(2)}</td>
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{totals.noOfReels}</td>
                 </tr>
               </tfoot>

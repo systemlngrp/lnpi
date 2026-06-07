@@ -248,18 +248,18 @@ export function EfficiencyReport() {
               <div className="rounded-[18px] border border-teal-200 bg-[linear-gradient(135deg,rgba(240,253,250,1),rgba(236,254,255,0.86))] px-3 py-2.5 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">Overall Efficiency</div>
                 <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-teal-950">
-                  {overallEfficiency == null ? "-" : `${overallEfficiency.toFixed(2)}%`}
+                  {overallEfficiency == null ? "-" : `${Number(overallEfficiency || 0).toFixed(2)}%`}
                 </div>
                 <div className="mt-1 text-[11px] font-semibold text-teal-700">Current filtered output</div>
               </div>
               <div className="rounded-[18px] border border-sky-200 bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(240,249,255,0.9))] px-3 py-2.5 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Total Qty</div>
-                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-sky-950">{summary.qty.toFixed(2)}</div>
+                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-sky-950">{Number(summary.qty || 0).toFixed(2)}</div>
                 <div className="mt-1 text-[11px] font-semibold text-sky-700">Reported quantity</div>
               </div>
               <div className="rounded-[18px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-3 py-2.5 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">Expected Qty</div>
-                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-violet-950">{summary.expected.toFixed(2)}</div>
+                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-violet-950">{Number(summary.expected || 0).toFixed(2)}</div>
                 <div className="mt-1 text-[11px] font-semibold text-violet-700">Shift based target</div>
               </div>
             </div>
@@ -430,15 +430,15 @@ export function EfficiencyReport() {
           <div className="grid grid-cols-3 gap-3 text-right text-sm font-semibold text-slate-700 md:min-w-[320px]">
             <div>
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Overall Eff%</div>
-              <div className="text-slate-900">{overallEfficiency == null ? "-" : overallEfficiency.toFixed(2)}</div>
+              <div className="text-slate-900">{overallEfficiency == null ? "-" : Number(overallEfficiency || 0).toFixed(2)}</div>
             </div>
             <div>
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Total Qty</div>
-              <div className="text-slate-900">{summary.qty.toFixed(2)}</div>
+              <div className="text-slate-900">{Number(summary.qty || 0).toFixed(2)}</div>
             </div>
             <div>
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Expected Qty</div>
-              <div className="text-slate-900">{summary.expected.toFixed(2)}</div>
+              <div className="text-slate-900">{Number(summary.expected || 0).toFixed(2)}</div>
             </div>
           </div>
         </div>
@@ -476,16 +476,16 @@ export function EfficiencyReport() {
                     <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-bold text-slate-900">{row.shift}</td>
                     <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-semibold text-slate-900">{row.operatorName}</td>
                     <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-bold text-teal-700">
-                      {row.qty.toFixed(2)}
+                      {Number(row.qty || 0).toFixed(2)}
                     </td>
                     <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
-                      {row.maxOutputPerHour.toFixed(2)}
+                      {Number(row.maxOutputPerHour || 0).toFixed(2)}
                     </td>
                     <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
-                      {row.expectedQty.toFixed(2)}
+                      {Number(row.expectedQty || 0).toFixed(2)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold text-slate-900">
-                      {row.efficiencyPercent == null ? "-" : `${row.efficiencyPercent.toFixed(2)}%`}
+                      {row.efficiencyPercent == null ? "-" : `${Number(row.efficiencyPercent || 0).toFixed(2)}%`}
                     </td>
                   </tr>
                 ))
@@ -498,16 +498,16 @@ export function EfficiencyReport() {
                     Totals
                   </td>
                   <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-black text-teal-700">
-                    {summary.qty.toFixed(2)}
+                    {Number(summary.qty || 0).toFixed(2)}
                   </td>
                   <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
                     -
                   </td>
                   <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-black text-slate-900">
-                    {summary.expected.toFixed(2)}
+                    {Number(summary.expected || 0).toFixed(2)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-black text-slate-900">
-                    {overallEfficiency == null ? "-" : `${overallEfficiency.toFixed(2)}%`}
+                    {overallEfficiency == null ? "-" : `${Number(overallEfficiency || 0).toFixed(2)}%`}
                   </td>
                 </tr>
               </tfoot>

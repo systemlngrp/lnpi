@@ -301,7 +301,7 @@ export function MaterialReturnMaster() {
                       <td className="px-4 py-3 text-sm">{formatDate(row.date)}</td>
                       <td className="px-4 py-3 text-sm font-medium">{row.jobNo || "-"}</td>
                       <td className="px-4 py-3 text-sm">{row.specs}</td>
-                      <td className="px-4 py-3 text-sm text-right font-black text-emerald-600">{row.totalWeight.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-black text-emerald-600">{Number(row.totalWeight || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-sm text-center font-bold">{row.reelCount}</td>
                     </tr>
                   ))
@@ -335,7 +335,7 @@ export function MaterialReturnMaster() {
                       <td className="px-4 py-3 text-sm font-medium">{row.jobNo || "-"}</td>
                       <td className="px-4 py-3 text-sm">{row.specs}</td>
                       <td className="px-4 py-3 text-sm font-black text-slate-900">{row.ourReelNo}</td>
-                      <td className="px-4 py-3 text-sm text-right font-bold text-amber-600">{row.weightKg.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-amber-600">{Number(row.weightKg || 0).toFixed(2)}</td>
                     </tr>
                   ))
                 )}
