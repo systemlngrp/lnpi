@@ -1971,6 +1971,7 @@ async function initDb(retries = 5) {
           \`openingQty\` DECIMAL(15,2),
           \`openingRate\` DECIMAL(15,2),
           \`openingValue\` DECIMAL(15,2),
+          \`remarks\` TEXT,
           \`active\` VARCHAR(10) DEFAULT 'Yes',
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
@@ -2798,6 +2799,7 @@ async function initDb(retries = 5) {
         { table: "materials", column: "openingQty", type: "DECIMAL(15,2)" },
         { table: "materials", column: "openingRate", type: "DECIMAL(15,2)" },
         { table: "materials", column: "openingValue", type: "DECIMAL(15,2)" },
+        { table: "materials", column: "remarks", type: "TEXT" },
         { table: "materials", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
         { table: "indents", column: "indentNo", type: "VARCHAR(30)" },
         { table: "indents", column: "requestedBy", type: "VARCHAR(255) NOT NULL" },

@@ -25,6 +25,7 @@ export interface Material {
   openingQty?: number;
   openingRate?: number;
   openingValue?: number;
+  remarks?: string;
   active?: "Yes" | "No";
   updatedBy?: string;
   updateTimestamp?: string;

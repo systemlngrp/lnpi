@@ -92,6 +92,7 @@ function createInitialFormState(materials: Material[], reelGroupId = "") {
     openingQty: "",
     openingRate: "",
     openingValue: "",
+    remarks: "",
     active: "Yes" as ActiveValue,
   };
 }
@@ -186,6 +187,7 @@ export function Materials() {
       openingQty: formatOptionalNumber(material.openingQty),
       openingRate: formatOptionalNumber(material.openingRate),
       openingValue: formatOptionalNumber(material.openingValue),
+      remarks: material.remarks || "",
       active: material.active === "No" ? "No" : "Yes",
     });
     setIsFormOpen(true);
@@ -346,6 +348,7 @@ export function Materials() {
         openingQty: openingQty === "" ? undefined : Number(openingQty),
         openingRate: openingRate === "" ? undefined : Number(openingRate),
         openingValue,
+        remarks: String(formData.remarks || "").trim() || undefined,
         active: formData.active,
         updatedBy: "System User",
         updateTimestamp: timestamp,
@@ -414,6 +417,7 @@ export function Materials() {
         "Opening Qty": 0,
         "Opening Rate": 0,
         "Opening Value": 0,
+        "Remarks": "",
         "Active": "Yes",
       },
       {
@@ -433,6 +437,7 @@ export function Materials() {
         "Opening Qty": 0,
         "Opening Rate": 0,
         "Opening Value": 0,
+        "Remarks": "",
         "Active": "Yes",
       },
     ];
@@ -534,6 +539,7 @@ export function Materials() {
           const openingQtyValue = parseNumericInput(String(row["Opening Qty"] ?? ""));
           const openingRateValue = parseNumericInput(String(row["Opening Rate"] ?? ""));
           const openingValueInput = parseNumericInput(String(row["Opening Value"] ?? ""));
+          const remarks = String(row["Remarks"] ?? "").trim();
           const activeValue = String(row["Active"] || "Yes").trim() === "No" ? "No" : "Yes";
 
           if (type === "Reel" && (sizeValue === "" || gsmValue === "" || bfValue === "")) {
@@ -612,6 +618,7 @@ export function Materials() {
                         )
                   ) || undefined
                 : openingValue,
+            remarks: remarks || undefined,
             active: activeValue,
             updatedBy: "System User",
             updateTimestamp: timestamp,
@@ -830,6 +837,7 @@ export function Materials() {
                         openingQty: prev.openingQty,
                         openingRate: prev.openingRate,
                         openingValue: prev.openingValue,
+                        remarks: prev.remarks || "",
                       };
                     });
                   }}
@@ -977,6 +985,14 @@ export function Materials() {
                 />
               </div>
               <div className="space-y-2">
+                <label className="text-blue-700 font-bold">Remarks</label>
+                <input
+                  value={formData.remarks}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, remarks: e.target.value }))}
+                  className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                />
+              </div>
+              <div className="space-y-2">
                 <label className="text-blue-700 font-bold">RAPC</label>
                 <input
                   value={formData.type === "Reel" ? getMaterialRapcFromSize(formData.size) : ""}
@@ -1102,7 +1118,7 @@ export function Materials() {
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening Qty", "Opening Rate", "Opening Value", "RAPC", "Unit", "Active", "Action"].map((heading) => (
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening Qty", "Opening Rate", "Opening Value", "Remarks", "RAPC", "Unit", "Active", "Action"].map((heading) => (
                       <th key={heading} className="px-4 py-4 text-left text-sm font-bold border-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
@@ -1112,7 +1128,7 @@ export function Materials() {
                 <tbody>
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={14} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                      <td colSpan={15} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                         No materials found.
                       </td>
                     </tr>
@@ -1129,6 +1145,7 @@ export function Materials() {
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingQty ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingRate ?? ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.openingValue ?? ""}</td>
+                        <td className="px-4 py-4 text-black text-sm border-2 border-black min-w-[220px]">{material.remarks || ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.type === "Reel" ? getMaterialRapcFromSize(material.size) : ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.uom || ""}</td>
                         <td className="px-4 py-4 text-black text-sm border-2 border-black">{material.active || "Yes"}</td>
