@@ -4,8 +4,9 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { Calendar, Search, Download, FileText } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Company, DispatchPlan, Invoice, Item, LoadingSlip, Order, OrderSchedule } from "../types";
+import { Company, DispatchPlan, Invoice, LoadingSlip, Order, OrderSchedule } from "../types";
 import { formatDate, getFinancialYear } from "../lib/serial";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 type DelayBucket = "0-3" | "4-7" | "8-10" | "11-15" | ">15" | "";
 type RowStatus = "Hit" | "Miss" | "Pending";
@@ -86,7 +87,7 @@ export function HitVsMissReport() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [invoices] = useData<Invoice>("invoices", []);
@@ -104,7 +105,7 @@ export function HitVsMissReport() {
   const rows = useMemo<ScheduleReportRow[]>(() => {
     const orderMap = new Map(orders.map((order) => [order.id, order]));
     const companyMap = new Map(companies.map((company) => [company.id, company]));
-    const itemMap = new Map(items.map((item) => [item.id, item]));
+    const itemMap = new Map(npdItems.map((item) => [item.id, item]));
     const invoiceDateMap = new Map(
       invoices.map((invoice) => [invoice.id, normalizeDate(invoice.date || invoice.updateTimestamp || "")])
     );
@@ -222,7 +223,7 @@ export function HitVsMissReport() {
         if (dateCompare !== 0) return dateCompare;
         return a.orderNo.localeCompare(b.orderNo, undefined, { numeric: true, sensitivity: "base" });
       });
-  }, [companies, companyFilter, fromDate, fyFilter, invoices, itemFilter, items, loadingSlips, monthFilter, orders, plans, schedules, searchTerm, toDate, today]);
+  }, [companies, companyFilter, fromDate, fyFilter, invoices, itemFilter, loadingSlips, monthFilter, npdItems, orders, plans, schedules, searchTerm, toDate, today]);
 
   const summaryRows = useMemo<MonthlySummaryRow[]>(() => {
     const grouped = new Map<string, MonthlySummaryRow>();

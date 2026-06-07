@@ -5,11 +5,12 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle } from "lucide-react";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function PendingPHApproval() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
@@ -89,7 +90,7 @@ export function PendingPHApproval() {
     return (
       <ul className="list-none space-y-1">
         {lines.map((l, idx) => {
-          const itemName = materials.find(i => i.id === l.itemId)?.name || items.find(i => i.id === l.itemId)?.name;
+          const itemName = materials.find(i => i.id === l.itemId)?.name || npdItems.find(i => i.id === l.itemId)?.name;
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>

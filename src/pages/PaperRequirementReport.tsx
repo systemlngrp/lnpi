@@ -7,7 +7,6 @@ import { useData } from "../hooks/useData";
 import {
   Indent,
   IndentLine,
-  Item,
   Material,
   MaterialIn,
   MaterialIssue,
@@ -21,6 +20,7 @@ import {
 } from "../types";
 import { formatDate } from "../lib/serial";
 import { getEffectiveRapcRanges } from "../lib/rapcRanges";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 type GroupTypeFilter = "All" | "Top" | "A-Flute" | "A-Backing" | "B-Flute" | "B-Backing";
 type NetFilter = "All" | "Need To Order" | "Surplus";
@@ -88,7 +88,7 @@ function getMaterialRapcInput(material?: Material | null) {
 
 export function PaperRequirementReport() {
   const [productions] = useData<Production>("productions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [issueEntries] = useData<MaterialIssue>("material-issues", []);
@@ -113,7 +113,7 @@ export function PaperRequirementReport() {
 
   const reportData = useMemo(() => {
     const effectiveRanges = getEffectiveRapcRanges(rapcRanges);
-    const itemMap = new Map(items.map((item) => [item.id, item]));
+    const itemMap = new Map(npdItems.map((item) => [item.id, item]));
     const materialMap = new Map(materials.map((material) => [material.id, material]));
     const issueMap = new Map(issueEntries.map((entry) => [entry.id, entry]));
     const returnMap = new Map(returnEntries.map((entry) => [entry.id, entry]));
@@ -297,7 +297,7 @@ export function PaperRequirementReport() {
     indents,
     issueEntries,
     issueReelLines,
-    items,
+    npdItems,
     materialIn,
     materials,
     productions,

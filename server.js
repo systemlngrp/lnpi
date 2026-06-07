@@ -944,7 +944,10 @@ function normalizeNpdRowForItemConsumers(row) {
     f3: row?.f3 ?? toFiniteNumber(row?.rsf4),
     b3: row?.b3 ?? toFiniteNumber(row?.rsl5),
     flap: row?.flap ?? toFiniteNumber(row?.flapSize),
-    plateWeight: row?.plateWeight ?? toFiniteNumber(row?.platePhpWeight),
+    plateWeight: row?.plateWeight ?? (() => {
+      const platePhpWeight = toFiniteNumber(row?.platePhpWeight);
+      return platePhpWeight === void 0 ? void 0 : platePhpWeight / 1e3;
+    })(),
     artwork: row?.artwork ?? row?.artworkUpload ?? "",
     opening,
     receipt,
@@ -977,6 +980,14 @@ function normalizeFetchedRow(tableName, row) {
   }
   if (tableName === "items" || tableName === "npd") {
     return normalizeNpdRowForItemConsumers(newRow);
+  }
+  if (tableName === "users") {
+    newRow.userId = String(newRow.userId || newRow.userid || newRow.user_id || "").trim();
+    newRow.updatedBy = String(newRow.updatedBy || newRow.updated_by || "").trim();
+    newRow.updateTimestamp = String(newRow.updateTimestamp || newRow.update_timestamp || "").trim();
+    if (newRow.menuAccess === void 0 && newRow.menuaccess !== void 0) {
+      newRow.menuAccess = newRow.menuaccess;
+    }
   }
   return newRow;
 }
@@ -1138,39 +1149,60 @@ async function ensureColumnExists(db, database, table, column, type) {
   if (rows.length > 0) return;
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
 }
+async function getExistingColumnNames(db, database, table) {
+  const [rows] = await db.query(
+    "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?",
+    [database, table]
+  );
+  return new Set(rows.map((row) => String(row.COLUMN_NAME || "")));
+}
+async function ensureUsersCanonicalData(db, database) {
+  const columns = await getExistingColumnNames(db, database, "users");
+  if (columns.has("userId")) {
+    const userIdSources = ["userid", "user_id"].filter((column) => columns.has(column));
+    if (userIdSources.length > 0) {
+      const expr = userIdSources.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ");
+      await db.query(
+        `UPDATE \`users\` SET \`userId\` = COALESCE(NULLIF(TRIM(\`userId\`), ''), ${expr}) WHERE COALESCE(NULLIF(TRIM(\`userId\`), ''), '') = ''`
+      );
+    }
+  }
+  if (columns.has("updatedBy")) {
+    const updatedBySources = ["updated_by"].filter((column) => columns.has(column));
+    if (updatedBySources.length > 0) {
+      const expr = updatedBySources.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ");
+      await db.query(
+        `UPDATE \`users\` SET \`updatedBy\` = COALESCE(NULLIF(TRIM(\`updatedBy\`), ''), ${expr}) WHERE COALESCE(NULLIF(TRIM(\`updatedBy\`), ''), '') = ''`
+      );
+    }
+  }
+  if (columns.has("updateTimestamp")) {
+    const updateTimestampSources = ["update_timestamp"].filter((column) => columns.has(column));
+    if (updateTimestampSources.length > 0) {
+      const expr = updateTimestampSources.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ");
+      await db.query(
+        `UPDATE \`users\` SET \`updateTimestamp\` = COALESCE(NULLIF(TRIM(\`updateTimestamp\`), ''), ${expr}) WHERE COALESCE(NULLIF(TRIM(\`updateTimestamp\`), ''), '') = ''`
+      );
+    }
+  }
+  if (columns.has("menuAccess") && columns.has("menuaccess")) {
+    await db.query(
+      "UPDATE `users` SET `menuAccess` = COALESCE(`menuAccess`, `menuaccess`) WHERE `menuAccess` IS NULL"
+    );
+  }
+}
 async function ensureNpdSchemaColumns(db, database) {
   for (const { column, type } of NPD_SCHEMA_COLUMNS) {
     await ensureColumnExists(db, database, "npd", column, type);
   }
 }
 async function buildItemToNpdIdMap(db) {
-  const [legacyItemsRows] = await db.query("SELECT id, name, erp FROM `items`");
   const [npdRows] = await db.query("SELECT id, itemName, erp FROM `npd`");
-  const npdByErp = /* @__PURE__ */ new Map();
-  const npdByName = /* @__PURE__ */ new Map();
-  npdRows.forEach((row) => {
-    const erp = stringOrEmpty(row.erp);
-    if (erp) npdByErp.set(erp, [...npdByErp.get(erp) || [], String(row.id)]);
-    const name = normalizeComparableName(row.itemName);
-    if (name) npdByName.set(name, [...npdByName.get(name) || [], String(row.id)]);
-  });
   const mapping = /* @__PURE__ */ new Map();
-  legacyItemsRows.forEach((row) => {
-    const itemId = String(row.id);
-    if (npdRows.some((npd) => String(npd.id) === itemId)) {
-      mapping.set(itemId, itemId);
-      return;
-    }
-    const erp = stringOrEmpty(row.erp);
-    const erpMatches = erp ? npdByErp.get(erp) || [] : [];
-    if (erpMatches.length === 1) {
-      mapping.set(itemId, erpMatches[0]);
-      return;
-    }
-    const name = normalizeComparableName(row.name);
-    const nameMatches = name ? npdByName.get(name) || [] : [];
-    if (nameMatches.length === 1) {
-      mapping.set(itemId, nameMatches[0]);
+  npdRows.forEach((row) => {
+    const npdId = String(row.id || "").trim();
+    if (npdId) {
+      mapping.set(npdId, npdId);
     }
   });
   return mapping;
@@ -1414,7 +1446,9 @@ async function loadAuthUserById(userId) {
   const db = await getPool();
   if (!db) return null;
   const [rows] = await db.query("SELECT * FROM `users` WHERE id = ? LIMIT 1", [userId]);
-  const row = rows[0];
+  const rawRow = rows[0];
+  if (!rawRow) return null;
+  const row = normalizeFetchedRow("users", rawRow);
   if (!row) return null;
   return {
     id: String(row.id),
@@ -1659,6 +1693,7 @@ async function initDb(retries = 5) {
           \`openingQty\` DECIMAL(15,2),
           \`openingRate\` DECIMAL(15,2),
           \`openingValue\` DECIMAL(15,2),
+          \`remarks\` TEXT,
           \`active\` VARCHAR(10) DEFAULT 'Yes',
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
@@ -2031,6 +2066,7 @@ async function initDb(retries = 5) {
           \`mobile\` VARCHAR(20),
           \`email\` VARCHAR(255),
           \`password\` VARCHAR(255),
+          \`designation\` VARCHAR(255),
           \`role\` VARCHAR(20) NOT NULL DEFAULT 'Employee',
           \`status\` VARCHAR(20) NOT NULL DEFAULT 'Active',
           \`menuAccess\` JSON,
@@ -2443,6 +2479,7 @@ async function initDb(retries = 5) {
         { table: "materials", column: "openingQty", type: "DECIMAL(15,2)" },
         { table: "materials", column: "openingRate", type: "DECIMAL(15,2)" },
         { table: "materials", column: "openingValue", type: "DECIMAL(15,2)" },
+        { table: "materials", column: "remarks", type: "TEXT" },
         { table: "materials", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
         { table: "indents", column: "indentNo", type: "VARCHAR(30)" },
         { table: "indents", column: "requestedBy", type: "VARCHAR(255) NOT NULL" },
@@ -2651,6 +2688,7 @@ async function initDb(retries = 5) {
         { table: "users", column: "mobile", type: "VARCHAR(20)" },
         { table: "users", column: "email", type: "VARCHAR(255)" },
         { table: "users", column: "password", type: "VARCHAR(255)" },
+        { table: "users", column: "designation", type: "VARCHAR(255)" },
         { table: "companies", column: "deviationAllowed", type: "DECIMAL(10,2)" },
         { table: "companies", column: "toleranceAllowed", type: "DECIMAL(10,2)" },
         { table: "companies", column: "gstSupplyType", type: "VARCHAR(20) DEFAULT 'INTRA_STATE'" },
@@ -2909,6 +2947,11 @@ async function initDb(retries = 5) {
         }
       }
       try {
+        await ensureUsersCanonicalData(db, database);
+      } catch (err) {
+        console.warn("[DB] Could not normalize legacy users columns:", err.message);
+      }
+      try {
         const [oldLeastSheetWeight] = await db.query(
           "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
           [database, "productions", "leastSheetWeight"]
@@ -2990,10 +3033,14 @@ const createHandlers = (tableName) => {
         console.log(`[DB] Fetching all from ${tableName}`);
         let rows;
         if (tableName === "users") {
-          [rows] = await db.query("SELECT * FROM `users` ORDER BY updateTimestamp DESC");
+          [rows] = await db.query("SELECT * FROM `users`");
           const viewer = await getRequestUser(req);
           const isAdminViewer = viewer?.role === "Admin";
-          const sanitized = rows.map((r) => {
+          const sanitized = rows.map((row) => normalizeFetchedRow("users", row)).sort((a, b) => {
+            const timeA = a?.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
+            const timeB = b?.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
+            return timeB - timeA || String(b?.id || "").localeCompare(String(a?.id || ""));
+          }).map((r) => {
             const { password, menuAccess, ...rest } = r || {};
             return isAdminViewer ? { ...rest, menuAccess: normalizeMenuAccess(menuAccess) } : { ...rest };
           });
@@ -3045,6 +3092,88 @@ const createHandlers = (tableName) => {
           if (!Number.isFinite(rateNumber) || rateNumber <= 0) {
             return res.status(400).json({ error: "Rate must be greater than 0." });
           }
+        }
+        if (tableName === "users") {
+          const normalizedUserId = String(data.userId || "").trim();
+          if (!normalizedUserId) {
+            return res.status(400).json({ error: "User ID is required." });
+          }
+          const [databaseRows] = await db.query("SELECT DATABASE() as db");
+          const currentDatabase = String(databaseRows[0]?.db || "");
+          const userColumns = await getExistingColumnNames(db, currentDatabase, "users");
+          const userIdSources = ["userId", "userid", "user_id"].filter((column) => userColumns.has(column));
+          if (userIdSources.length === 0) {
+            return res.status(500).json({ error: "Users table is missing a user ID column." });
+          }
+          const canonicalUserIdSql = `COALESCE(${userIdSources.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ")})`;
+          const [duplicateRows] = await db.query(
+            `SELECT id, name,
+                ${canonicalUserIdSql} as canonicalUserId
+             FROM \`users\`
+             WHERE LOWER(TRIM(${canonicalUserIdSql})) = LOWER(TRIM(?))
+               AND id <> ?
+             LIMIT 1`,
+            [normalizedUserId, String(data.id || "")]
+          );
+          const duplicateUser = duplicateRows[0];
+          if (duplicateUser?.id) {
+            return res.status(409).json({
+              error: `User ID already exists for ${String(duplicateUser.name || duplicateUser.canonicalUserId || "another user")}.`
+            });
+          }
+          data.userId = normalizedUserId;
+          data.updatedBy = String(data.updatedBy || "").trim() || "System Admin";
+          data.updateTimestamp = String(data.updateTimestamp || "").trim() || (/* @__PURE__ */ new Date()).toISOString();
+          const userRecord = {
+            id: String(data.id || crypto.randomUUID()),
+            userId: data.userId,
+            name: String(data.name || "").trim(),
+            mobile: String(data.mobile || "").trim(),
+            email: data.email ? String(data.email).trim() : null,
+            password: data.password ? String(data.password) : null,
+            designation: data.designation ? String(data.designation).trim() : null,
+            role: String(data.role || "Employee") === "Admin" ? "Admin" : "Employee",
+            status: String(data.status || "Active") === "Inactive" ? "Inactive" : "Active",
+            menuAccess: JSON.stringify(normalizeMenuAccess(data.menuAccess)),
+            updatedBy: data.updatedBy,
+            updateTimestamp: data.updateTimestamp
+          };
+          const columnValueMap = {};
+          const assignIfPresent = (column, value) => {
+            if (userColumns.has(column)) columnValueMap[column] = value;
+          };
+          assignIfPresent("id", userRecord.id);
+          assignIfPresent("userId", userRecord.userId);
+          assignIfPresent("userid", userRecord.userId);
+          assignIfPresent("user_id", userRecord.userId);
+          assignIfPresent("name", userRecord.name);
+          assignIfPresent("mobile", userRecord.mobile);
+          assignIfPresent("email", userRecord.email);
+          assignIfPresent("password", userRecord.password);
+          assignIfPresent("designation", userRecord.designation);
+          assignIfPresent("role", userRecord.role);
+          assignIfPresent("status", userRecord.status);
+          assignIfPresent("menuAccess", userRecord.menuAccess);
+          assignIfPresent("menuaccess", userRecord.menuAccess);
+          assignIfPresent("updatedBy", userRecord.updatedBy);
+          assignIfPresent("updated_by", userRecord.updatedBy);
+          assignIfPresent("updateTimestamp", userRecord.updateTimestamp);
+          assignIfPresent("update_timestamp", userRecord.updateTimestamp);
+          if (userColumns.has("id")) {
+            const [existingRows] = await db.query("SELECT id FROM `users` WHERE id = ? LIMIT 1", [userRecord.id]);
+            const exists = existingRows.length > 0;
+            const keys2 = Object.keys(columnValueMap);
+            const values2 = keys2.map((key) => columnValueMap[key]);
+            if (exists) {
+              const updates2 = keys2.filter((key) => key !== "id").map((key) => `\`${key}\` = ?`).join(", ");
+              await db.query(`UPDATE \`users\` SET ${updates2} WHERE \`id\` = ?`, [...keys2.filter((key) => key !== "id").map((key) => columnValueMap[key]), userRecord.id]);
+            } else {
+              const placeholders2 = keys2.map(() => "?").join(", ");
+              const columnNames2 = keys2.map((key) => `\`${key}\``).join(", ");
+              await db.query(`INSERT INTO \`users\` (${columnNames2}) VALUES (${placeholders2})`, values2);
+            }
+          }
+          return res.json(normalizeFetchedRow("users", userRecord));
         }
         if (tableName === "production_processing") {
           const missing = [];

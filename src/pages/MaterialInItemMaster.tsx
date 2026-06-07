@@ -5,11 +5,12 @@ import { Edit2, Check, X, Search } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function MaterialInItemMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
 
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
@@ -76,7 +77,7 @@ export function MaterialInItemMaster() {
       timestamp: m.timestamp
     }))
   ).filter(line => {
-    const itemName = materials.find(i => i.id === line.itemId)?.name || items.find(i => i.id === line.itemId)?.name || "";
+    const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "";
     const supplierName = getSupplierName(line.parentSupplierId);
     const matchesSearch =
       itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -120,7 +121,7 @@ export function MaterialInItemMaster() {
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4 p-2">
             {allLines.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((lineComponent) => {
-               const itemName = materials.find(i => i.id === lineComponent.itemId)?.name || items.find(i => i.id === lineComponent.itemId)?.name || "Unknown";
+               const itemName = materials.find(i => i.id === lineComponent.itemId)?.name || npdItems.find(i => i.id === lineComponent.itemId)?.name || "Unknown";
                const isEditing = editingLineId === lineComponent.id;
                return (
                 <div key={lineComponent.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
@@ -167,7 +168,7 @@ export function MaterialInItemMaster() {
                  <td colSpan={10} className="px-4 py-8 text-center text-black font-medium italic">No line items found.</td>
               </tr>
             ) : allLines.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((lineComponent) => {
-              const itemName = materials.find(i => i.id === lineComponent.itemId)?.name || items.find(i => i.id === lineComponent.itemId)?.name || "Unknown";
+              const itemName = materials.find(i => i.id === lineComponent.itemId)?.name || npdItems.find(i => i.id === lineComponent.itemId)?.name || "Unknown";
               const canEdit = lineComponent.parentStatus === "Pending PH";
               const isEditing = editingLineId === lineComponent.id;
 

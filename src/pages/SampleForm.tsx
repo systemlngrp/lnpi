@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Item, SampleRequest } from "../types";
+import { SampleRequest } from "../types";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function SampleForm() {
   const [, setSampleRequests] = useData<SampleRequest>("sample_requests", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
 
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [itemId, setItemId] = useState("");
@@ -15,10 +16,10 @@ export function SampleForm() {
 
   const sortedItems = useMemo(
     () =>
-      [...items].sort((a, b) =>
+      [...npdItems].sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
       ),
-    [items]
+    [npdItems]
   );
 
   const itemOptions = useMemo(

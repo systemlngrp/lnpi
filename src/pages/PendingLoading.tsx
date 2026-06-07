@@ -26,6 +26,7 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 interface PendingPlan extends DispatchPlan {
   companyName: string;
@@ -70,7 +71,7 @@ function getLoadingSlipJobAllocations(line: LoadingSlipLine): Array<{ jobId: str
 export function PendingLoading() {
   const [plans, updatePlans, plansLoading] = useData<DispatchPlan>("dispatch_plans", []);
   const [trucks] = useData<Truck>("trucks", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [productions] = useData<Production>("productions", []);
@@ -121,7 +122,7 @@ export function PendingLoading() {
       if (pending <= 0) return false;
 
       const order = orders.find((row) => row.id === plan.orderId);
-      const item = items.find((row) => row.id === order?.itemId);
+      const item = npdItems.find((row) => row.id === order?.itemId);
       const company = companies.find((row) => row.id === order?.companyId);
 
       const searchBlob = `${item?.name || ""} ${company?.name || ""} ${order?.orderNo || ""}`.toLowerCase();
@@ -132,7 +133,7 @@ export function PendingLoading() {
 
     filtered.forEach((plan) => {
       const order = orders.find((row) => row.id === plan.orderId);
-      const item = items.find((row) => row.id === order?.itemId);
+      const item = npdItems.find((row) => row.id === order?.itemId);
       const company = companies.find((row) => row.id === order?.companyId);
       if (!item || !company) return;
 
@@ -591,7 +592,7 @@ export function PendingLoading() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-slate-50 p-4 border border-black rounded shadow-inner">
                   <div className="text-[10px] text-slate-500 uppercase font-black mb-1">Item Being Loaded</div>
-                  <div className="font-bold text-black text-sm">{items.find((item) => item.id === loadingModal.itemId)?.name}</div>
+                  <div className="font-bold text-black text-sm">{npdItems.find((item) => item.id === loadingModal.itemId)?.name}</div>
                 </div>
                 
                 <div className="bg-slate-50 p-4 border border-black rounded shadow-inner">

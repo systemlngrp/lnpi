@@ -1378,40 +1378,14 @@ async function ensureNpdSchemaColumns(db: mysql.Pool, database: string) {
 }
 
 async function buildItemToNpdIdMap(db: mysql.Pool) {
-  const [legacyItemsRows] = await db.query("SELECT id, name, erp FROM `items`");
   const [npdRows] = await db.query("SELECT id, itemName, erp FROM `npd`");
-
-  const npdByErp = new Map<string, string[]>();
-  const npdByName = new Map<string, string[]>();
-
-  (npdRows as any[]).forEach((row) => {
-    const erp = stringOrEmpty(row.erp);
-    if (erp) npdByErp.set(erp, [...(npdByErp.get(erp) || []), String(row.id)]);
-
-    const name = normalizeComparableName(row.itemName);
-    if (name) npdByName.set(name, [...(npdByName.get(name) || []), String(row.id)]);
-  });
 
   const mapping = new Map<string, string>();
 
-  (legacyItemsRows as any[]).forEach((row) => {
-    const itemId = String(row.id);
-    if ((npdRows as any[]).some((npd) => String(npd.id) === itemId)) {
-      mapping.set(itemId, itemId);
-      return;
-    }
-
-    const erp = stringOrEmpty(row.erp);
-    const erpMatches = erp ? npdByErp.get(erp) || [] : [];
-    if (erpMatches.length === 1) {
-      mapping.set(itemId, erpMatches[0]);
-      return;
-    }
-
-    const name = normalizeComparableName(row.name);
-    const nameMatches = name ? npdByName.get(name) || [] : [];
-    if (nameMatches.length === 1) {
-      mapping.set(itemId, nameMatches[0]);
+  (npdRows as any[]).forEach((row) => {
+    const npdId = String(row.id || "").trim();
+    if (npdId) {
+      mapping.set(npdId, npdId);
     }
   });
 

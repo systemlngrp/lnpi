@@ -5,11 +5,12 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, Edit2, X, Save } from "lucide-react";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function PendingAccountsApproval() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
@@ -130,7 +131,7 @@ export function PendingAccountsApproval() {
     return (
       <ul className="list-none space-y-1">
         {lines.map((l, idx) => {
-          const itemName = materials.find(i => i.id === l.itemId)?.name || items.find(i => i.id === l.itemId)?.name;
+          const itemName = materials.find(i => i.id === l.itemId)?.name || npdItems.find(i => i.id === l.itemId)?.name;
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>
@@ -212,7 +213,7 @@ export function PendingAccountsApproval() {
                       {isEditing && editForm ? (
                         <div className="space-y-2">
                            {editForm.lines.map((l, idx) => {
-                             const itemName = materials.find(i => i.id === l.itemId)?.name || items.find(i => i.id === l.itemId)?.name;
+                             const itemName = materials.find(i => i.id === l.itemId)?.name || npdItems.find(i => i.id === l.itemId)?.name;
                              return (
                                <div key={idx} className="flex flex-wrap items-center gap-2 p-2 border border-slate-200 rounded bg-slate-50">
                                   <div className="text-xs font-bold w-full">{itemName}</div>

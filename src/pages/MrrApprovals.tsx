@@ -8,6 +8,7 @@ import { Spinner } from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 type Stage = "Pending PH" | "Pending Accounts" | "Pending MD";
 
@@ -15,7 +16,7 @@ export function MrrApprovals() {
   const navigate = useNavigate();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   
   const [activeStage, setActiveStage] = useState<Stage>("Pending PH");
@@ -184,7 +185,7 @@ export function MrrApprovals() {
   const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
     const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
     if (isFgType) {
-      const item = items.find(i => i.id === line.itemId);
+      const item = npdItems.find(i => i.id === line.itemId);
       return item ? item.name : line.itemId;
     }
     const material = materials.find(m => m.id === line.itemId);

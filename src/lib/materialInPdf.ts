@@ -7,13 +7,13 @@ import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 export async function downloadMaterialInPdf({
   mrr,
   materials,
-  items,
+  npdItems,
   suppliers,
   setting,
 }: {
   mrr: MaterialIn;
   materials: Material[];
-  items: Item[];
+  npdItems: Item[];
   suppliers: Supplier[];
   setting?: Setting | null;
 }) {
@@ -51,7 +51,7 @@ export async function downloadMaterialInPdf({
   currentY += 35;
 
   const lineTableRows = mrr.lines.map((line, index) => {
-    const itemName = materials.find(m => m.id === line.itemId)?.name || items.find(i => i.id === line.itemId)?.name || "Unknown";
+    const itemName = materials.find(m => m.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
     return [
       index + 1,
       itemName,

@@ -11,12 +11,13 @@ import {
 } from "../types";
 import { formatDate } from "../lib/serial";
 import { Search, Calendar, Building2, Package, X, Filter } from "lucide-react";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function ScheduledOrdersMaster() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [productions] = useData<Production>("productions", []);
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -32,7 +33,7 @@ export function ScheduledOrdersMaster() {
     return schedules.map(s => {
       const order = orders.find(o => o.id === s.orderId);
       const company = companies.find(c => c.id === order?.companyId);
-      const item = items.find(i => i.id === order?.itemId);
+      const item = npdItems.find(i => i.id === order?.itemId);
 
       // 1. Produced (from productions table linked to this schedule)
       const produced = productions

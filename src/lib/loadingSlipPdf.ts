@@ -28,7 +28,7 @@ export async function downloadLoadingSlipPdf({
   trucks,
   plans,
   orders,
-  items,
+  npdItems,
   companies,
 }: {
   slip: LoadingSlip;
@@ -36,7 +36,7 @@ export async function downloadLoadingSlipPdf({
   trucks: Truck[];
   plans: DispatchPlan[];
   orders: Order[];
-  items: Item[];
+  npdItems: Item[];
   companies: Company[];
 }) {
   const doc = new jsPDF("p", "mm", "a4");
@@ -72,7 +72,7 @@ export async function downloadLoadingSlipPdf({
   const rows = slip.lines.map((line, index) => {
     const plan = plans.find((p) => p.id === line.dispatchPlanId);
     const order = orders.find((o) => o.id === plan?.orderId);
-    const item = items.find((i) => i.id === order?.itemId);
+    const item = npdItems.find((i) => i.id === order?.itemId);
     const company = companies.find((c) => c.id === order?.companyId);
     return [
       index + 1,

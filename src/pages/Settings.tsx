@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Item, Machine, Setting } from "../types";
+import { Machine, Setting } from "../types";
 import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { Spinner } from "../components/Spinner";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { getFinancialYear } from "../lib/serial";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -99,7 +100,7 @@ const MONTH_OPTIONS = [
 export function SettingsPage() {
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
   const [machines] = useData<Machine>("machines", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [designationDraft, setDesignationDraft] = useState<string[]>([]);
@@ -114,13 +115,13 @@ export function SettingsPage() {
   const currentSetting = settings[0];
 
   const typeNames = useMemo(() => {
-    const fromItems = items.map((item) => String(item.typeName || "").trim()).filter(Boolean);
+    const fromItems = npdItems.map((item) => String(item.typeName || "").trim()).filter(Boolean);
     const fromSetting = Object.keys(parseMandatoryMachinesByType(currentSetting));
     return Array.from(new Set([...DEFAULT_ITEM_TYPES, ...fromItems, ...fromSetting]))
       .map((t) => t.trim())
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  }, [currentSetting, items]);
+  }, [currentSetting, npdItems]);
 
   const machineNames = useMemo(() => {
     return Array.from(new Set(machines.map((m) => normalizeMachineName(m.name)).filter(Boolean))).sort((a, b) =>
@@ -591,7 +592,7 @@ export function SettingsPage() {
 
           {typeNames.length === 0 ? (
             <div className="rounded border border-black bg-slate-50 p-4 text-sm font-semibold text-slate-700">
-              No TYPE values found in Items master.
+              No TYPE values found in NPD master.
             </div>
           ) : machineNames.length === 0 ? (
             <div className="rounded border border-black bg-slate-50 p-4 text-sm font-semibold text-slate-700">
@@ -823,7 +824,7 @@ export function SettingsPage() {
             {selectedFlapOption.description}
           </div>
           <div className="text-xs font-bold text-slate-500">
-            {saving ? "Saving setting..." : "These selections are used by Item Form and Production Form for new calculations."}
+            {saving ? "Saving setting..." : "These selections are used by NPD-driven forms and Production Form for new calculations."}
           </div>
         </div>
 

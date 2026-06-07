@@ -4,12 +4,13 @@ import { Order } from "../types";
 import { formatDate } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function OrdersMaster() {
   const navigate = useNavigate();
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData("companies", []);
-  const [items] = useData("items", []);
+  const npdItems = useNpdItems();
   const [users] = useData("users", []);
 
   return (
@@ -46,7 +47,7 @@ export function OrdersMaster() {
                 <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
                 <td className="px-3 py-2 border border-black">{o.poNumber}</td>
                 <td className="px-3 py-2 border border-black">{o.erpCode}</td>
-                <td className="px-3 py-2 border border-black">{(items as any[]).find(i=>i.id===o.itemId)?.name}</td>
+                <td className="px-3 py-2 border border-black">{npdItems.find(i => i.id === o.itemId)?.name}</td>
                 <td className="px-3 py-2 border border-black">{o.qty}</td>
                 <td className="px-3 py-2 border border-black">{o.rate}</td>
                 <td className="px-3 py-2 border border-black">{(users as any[]).find(u=>u.id===o.orderBy)?.name}</td>

@@ -3,11 +3,12 @@ import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 import { Trash2, Search } from "lucide-react";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function MaterialInMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [settings] = useData<Setting>("settings", []);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export function MaterialInMaster() {
     return (
       <ul className="list-none space-y-1">
         {lines.map((line, idx) => {
-          const itemName = materials.find((item) => item.id === line.itemId)?.name || items.find((item) => item.id === line.itemId)?.name;
+          const itemName = materials.find((item) => item.id === line.itemId)?.name || npdItems.find((item) => item.id === line.itemId)?.name;
           return (
             <li key={idx} className="border-b border-black pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
               <div className="font-medium text-black">{itemName || "Unknown"}</div>
@@ -60,7 +61,7 @@ export function MaterialInMaster() {
     .filter((entry) => {
       const supplierName = getSupplierName(entry.supplierId);
       const itemNames = entry.lines
-        .map((line) => materials.find((item) => item.id === line.itemId)?.name || items.find((item) => item.id === line.itemId)?.name || "")
+        .map((line) => materials.find((item) => item.id === line.itemId)?.name || npdItems.find((item) => item.id === line.itemId)?.name || "")
         .join(" ");
       
       const matchesSearch = 
