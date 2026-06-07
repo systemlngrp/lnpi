@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 
 import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
+import { User } from "../types";
 import { useData } from "../hooks/useData";
 import { Order } from "../types";
 import { formatDate } from "../lib/utils";
@@ -23,14 +25,18 @@ export function OrdersPendingPH() {
 
   const [orders, setOrders] = useData<Order>("orders", []);
   const [companies] = useData("companies", []);
+  const [users] = useData<User>("users", []);
   const npdItems = useNpdItems();
   const navigate = useNavigate();
 
   const pending = orders.filter(o => !o.status || o.status === 'Pending PH');
 
-  const orderByOptions = Array.from(new Set(orders.map(o => o.orderBy).filter(Boolean))).sort();
+  const orderByOptions = users
+    .filter(u => !!u.name)
+    .map(u => ({ value: u.id, label: u.name }));
+
   const filtered = pending.filter(o => {
-    if (orderByFilter && String(o.orderBy || '').toLowerCase() !== orderByFilter.toLowerCase()) return false;
+    if (orderByFilter && String(o.orderBy || "") !== orderByFilter) return false;
     return true;
   });
 
@@ -79,16 +85,20 @@ export function OrdersPendingPH() {
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-black uppercase">Pending Salesman Approval</h2>
 
-      <div className="flex items-center gap-4">
-        <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-bold text-black uppercase">Order By</label>
-          <select value={orderByFilter} onChange={(e) => setOrderByFilter(e.target.value)} className="border border-black rounded px-2 py-1 text-sm">
-            <option value="">All</option>
-            {orderByOptions.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="min-w-[320px]">
+          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-black uppercase">Order By</span>
+          <div className="w-64">
+            <Select
+              options={orderByOptions}
+              value={orderByFilter}
+              onChange={(v) => setOrderByFilter(v)}
+              placeholder="All"
+            />
+          </div>
         </div>
       </div>
 
@@ -112,7 +122,7 @@ export function OrdersPendingPH() {
                 <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-4 py-2 border border-black">{(companies as any[]).find((c:any)=>c.id===o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{npdItems.find((item) => item.id === o.itemId)?.name}</td>
-                <td className="px-4 py-2 border border-black whitespace-nowrap">{o.orderBy || '-'}</td>
+                <td className="px-4 py-2 border border-black whitespace-nowrap">{users.find(u => u.id === o.orderBy)?.name || o.orderBy || '-'}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">
                   <button onClick={() => handleApprove(o.id)} className="bg-emerald-600 text-white px-3 py-1 rounded font-bold mr-2">Approve</button>
