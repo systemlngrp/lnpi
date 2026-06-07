@@ -24,6 +24,7 @@ import {
   ChevronRight
 } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import { useAuth } from "../auth/AuthContext";
 import {
   MaterialIn,
@@ -168,6 +169,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-emerald-700",
     items: [
       { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
+      { name: "Pending NPD", href: "/production/pending-npd", icon: Activity, countKey: "/production/pending-npd" },
       { name: "Upcoming Scheduled Orders", href: "/production/upcoming", icon: Activity, countKey: "/orders/upcoming" },
       { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
       { name: "Pending FG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
@@ -262,6 +264,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
   const [orders] = useData<Order>("orders", []);
+  const npdItems = useNpdItems();
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
@@ -356,6 +359,15 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/material-receipt/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
     "/material-receipt/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
     "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
+    "/production/pending-npd": schedules.filter((schedule) => {
+      const order = orders.find((row) => row.id === schedule.orderId);
+      if (!order || order.status === "Cancelled") return false;
+      const item = npdItems.find((row) => row.id === String(order.itemId || "").trim());
+      if (!item) return false;
+      const boxType = String((item as any)?.boxType || "").trim();
+      const rapcValue = String((item as any)?.rapc ?? "").trim();
+      return !boxType || !rapcValue;
+    }).length,
     "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-tally": productions.filter((p) => isProductionReadyForTally(p, getProductionActualPaperUsed(p, productionUsageMap))).length,

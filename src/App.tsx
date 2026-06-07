@@ -51,6 +51,7 @@ import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
 import { ProductionPendingConsumption, ProductionPendingFFG } from "./pages/ProductionStageQueue";
 import { ProductionPlan } from "./pages/ProductionPlan";
+import { PendingNpd } from "./pages/PendingNpd";
 import { OperationDashboard } from "./pages/OperationDashboard";
 import { PendingJobClosure } from "./pages/PendingJobClosure";
 import { MachinePendingProcessing } from "./pages/MachinePendingProcessing";
@@ -188,6 +189,7 @@ export default function App() {
           {/* Production */}
           <Route path="production/form" element={<ProductionForm />} />
           <Route path="production/pending" element={<PendingProduction />} />
+          <Route path="production/pending-npd" element={<PendingNpd />} />
           <Route path="production/upcoming" element={<UpcomingScheduledOrders />} />
           <Route path="production/pending-consumption" element={<ProductionPendingConsumption />} />
           <Route path="production/pending-ffg" element={<ProductionPendingFFG />} />

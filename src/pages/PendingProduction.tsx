@@ -102,6 +102,10 @@ export function PendingProduction() {
   const handleMakeJob = async (schedule: OrderSchedule) => {
     const pendingQty = getPendingProductionQty(schedule);
     if (pendingQty <= 0) return;
+    const order = orders.find((row) => row.id === schedule.orderId);
+    const item = npdItems.find((row) => row.id === String(order?.itemId || "").trim());
+    const boxType = String((item as any)?.boxType || "").trim();
+    if (!boxType) return;
 
     if (makeConfirmId !== schedule.id) {
       setMakeConfirmId(schedule.id);
@@ -127,6 +131,7 @@ export function PendingProduction() {
               <th className="px-3 py-2 border border-black">Schedule Date</th>
               <th className="px-3 py-2 border border-black">Company</th>
               <th className="px-3 py-2 border border-black">Item</th>
+              <th className="px-3 py-2 border border-black">Box Type</th>
               <th className="px-3 py-2 border border-black">Scheduled Qty</th>
               <th className="px-3 py-2 border border-black">Produced Qty</th>
               <th className="px-3 py-2 border border-black">Canceled Qty</th>
@@ -138,17 +143,21 @@ export function PendingProduction() {
           <tbody>
             {pendingRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">
+                <td colSpan={11} className="px-6 py-8 text-center text-black font-medium">
                   No pending production schedules.
                 </td>
               </tr>
             ) : (
-              pendingRows.map(({ schedule, order, item, company, pendingQty }) => (
+              pendingRows.map(({ schedule, order, item, company, pendingQty }) => {
+                const boxType = String((item as any)?.boxType || "").trim();
+                const hasBoxType = Boolean(boxType);
+                return (
                 <tr key={schedule.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 border border-black">{order?.orderNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{formatDate(schedule.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>
                   <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
+                  <td className={`px-3 py-2 border border-black font-bold ${hasBoxType ? "text-black" : "bg-red-100 text-red-700"}`}>{boxType || "Missing"}</td>
                   <td className="px-3 py-2 border border-black">{schedule.qty || 0}</td>
                   <td className="px-3 py-2 border border-black">{schedule.producedQty || 0}</td>
                   <td className="px-3 py-2 border border-black">{schedule.canceledQty || 0}</td>
@@ -176,17 +185,18 @@ export function PendingProduction() {
                       </button>
                       <button
                         onClick={() => void handleMakeJob(schedule)}
-                        disabled={pendingQty <= 0}
+                        disabled={pendingQty <= 0 || !hasBoxType}
                         className={`px-3 py-1 rounded font-bold disabled:opacity-50 ${
                           makeConfirmId === schedule.id ? "bg-amber-500 text-black" : "bg-yellow-400 text-black"
                         }`}
+                        title={hasBoxType ? "Plan job" : "Box Type is missing in NPD. Planning is disabled."}
                       >
                         {makeConfirmId === schedule.id ? "Confirm?" : "Plan Job"}
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))
+              )})
             )}
           </tbody>
         </table>
