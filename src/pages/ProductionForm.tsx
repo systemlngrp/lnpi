@@ -643,7 +643,7 @@ export function ProductionForm() {
     if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.date || formData.date < todayStr) return;
 
     const qty = Number(formData.qty);
-    if (qty <= 0 || qty > pendingQty || quantityDeviationError || maximumAllowedProductionError || gsmValidationError) return;
+    if (qty <= 0 || quantityDeviationError || maximumAllowedProductionError || gsmValidationError) return;
 
     setIsSubmitting(true);
     try {
@@ -854,7 +854,6 @@ export function ProductionForm() {
                   type="number"
                   step="any"
                   min={0}
-                  max={pendingQty || undefined}
                   value={formData.qty}
                   onChange={(e) =>
                     setFormData({
@@ -1026,7 +1025,6 @@ export function ProductionForm() {
                 !formData.date ||
                 formData.date < todayStr ||
                 currentQty <= 0 ||
-                currentQty > pendingQty ||
                 quantityDeviationError ||
                 maximumAllowedProductionError ||
                 gsmValidationError
