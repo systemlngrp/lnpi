@@ -511,15 +511,18 @@ export function ProductionMaster() {
           <table className="min-w-max w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Sr. No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Order No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">ERP Code</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Company</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Plan Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Item Name</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Sample</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Type</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Mandatory</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Planned Qty</th>
+                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">UPS</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap bg-amber-50">Loaded Qty</th>
 
                 <th className="px-4 py-3 text-right text-xs font-bold text-indigo-900 uppercase border border-black whitespace-nowrap bg-indigo-50">Paper</th>
@@ -542,6 +545,11 @@ export function ProductionMaster() {
                 
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Ply</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Flute</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">L1</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">F1</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">L2</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">F2</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">L3</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Top</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">GSM</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Least GSM</th>
@@ -559,6 +567,14 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Avg Wt</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Wastage</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Real/KG</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Reel (Calc)</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Reel Trim</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Cutting Trim</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Planned Prod (M)</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Sheet Wt</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Flute Batch</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Rate</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Value</th>
                 
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Processing Status</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Status</th>
@@ -570,10 +586,11 @@ export function ProductionMaster() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={45} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                  <td colSpan={60} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
                 </tr>
               ) : (
-                paginatedList.map((p) => {
+                paginatedList.map((p, idx) => {
+                  const srNo = (page - 1) * pageSize + idx + 1;
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
@@ -584,14 +601,16 @@ export function ProductionMaster() {
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                   const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
                   
-                  return (
+                    return (
                     <tr key={p.id} className={`${isHighGsm ? "bg-amber-50" : "hover:bg-slate-50"} divide-x divide-black transition-colors`}>
+                      <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{srNo}</td>
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.erpCode || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{item?.name || "Unknown"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.isSample ? "Yes" : "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.boxType || "-"}</td>
                       <td className="px-4 py-4 text-[11px] text-black border border-black whitespace-nowrap">
                         {mandatory.required.length === 0 ? (
@@ -608,6 +627,7 @@ export function ProductionMaster() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
+                      <td className="px-4 py-4 text-center text-xs font-medium text-black border border-black whitespace-nowrap">{p.ups || (item as any)?.ups || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-amber-700 border border-black whitespace-nowrap bg-amber-50/40">
                         {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}
                       </td>
@@ -632,6 +652,11 @@ export function ProductionMaster() {
 
                       <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{p.ply || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.flute || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.l1 || (item as any)?.l1 || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.f1 || (item as any)?.f1 || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.l2 || (item as any)?.l2 || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.f2 || (item as any)?.f2 || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.l3 || (item as any)?.l3 || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.top || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-700">{p.gsm || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-black text-emerald-700">{erpLeastGsmMap.get(erp) || "-"}</td>
@@ -651,6 +676,14 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">
                         {Number(p.realizationPerKg || 0) ? Number(p.realizationPerKg || 0).toFixed(2) : "-"}
                       </td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).reelAsPerCalc || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).reelActualWithTrimming || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).cuttingWithTrimming || item?.cuttingSize || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.plannedProductionInMeter ?? "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.sheetWeight || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.fluteBatches || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{Number(p.rate) ? Number(p.rate).toFixed(2) : (p.rate || "-")}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{Number(p.qty || 0) && Number(p.rate || 0) ? (Number(p.qty || 0) * Number(p.rate || 0)).toLocaleString() : "-"}</td>
 
                       <td className="px-4 py-4 text-xs text-indigo-600 font-bold border border-black max-w-[200px] truncate" title={getProcessingSummary(p.id)}>
                         {getProcessingSummary(p.id)}
