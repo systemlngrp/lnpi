@@ -1,14 +1,15 @@
 import { useData } from "../hooks/useData";
-import { Consumption, Item } from "../types";
+import { Consumption } from "../types";
 import { useState } from "react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle } from "lucide-react";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function ConsumptionPendingPH() {
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
@@ -133,7 +134,7 @@ export function ConsumptionPendingPH() {
                   </div>
                   <div>
                     <div className="text-xs font-black text-slate-500 uppercase">Item</div>
-                    <div className="text-sm font-bold">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
+                    <div className="text-sm font-bold">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
                   </div>
                   <div className="flex justify-between items-center">
                     <div>
@@ -207,7 +208,7 @@ export function ConsumptionPendingPH() {
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{c.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(c.date)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">{c.qty}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{c.uom}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black">

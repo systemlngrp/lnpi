@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { Consumption, Item } from "../types";
+import { Consumption } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Trash2 } from "lucide-react";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function ConsumptionMaster() {
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -24,7 +25,7 @@ export function ConsumptionMaster() {
   const filteredList = consumptions
     .filter(c => 
       c.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (items.find(i => i.id === c.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+      (npdItems.find(i => i.id === c.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
       const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
@@ -59,7 +60,7 @@ export function ConsumptionMaster() {
                         </span>
                     </div>
                     <div className="text-xs text-slate-500">{formatDate(c.date)}</div>
-                    <div className="text-sm font-bold">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
+                    <div className="text-sm font-bold">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
                     <div className="text-sm">{c.qty} {c.uom}</div>
                      <button 
                       onClick={() => handleDelete(c.id)} 
@@ -93,7 +94,7 @@ export function ConsumptionMaster() {
                 <tr key={c.id} className="hover:bg-slate-50 divide-x divide-black">
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{c.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(c.date)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-amber-700 border border-black">{c.qty}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{c.uom}</td>
                   <td className="px-6 py-4 text-sm border border-black">

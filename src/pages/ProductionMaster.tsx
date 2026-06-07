@@ -10,18 +10,28 @@ import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { getProductionDisplayStatus } from "../lib/productionStageFilters";
+import { fetchNpdItems } from "../lib/npdItems";
 
 export function ProductionMaster() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [productions, setProductions] = useData<Production>("productions", []);
-  const [items] = useData<Item>("items", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [npdItems, setNpdItems] = useState<Item[]>([]);
+
+  useEffect(() => {
+    fetchNpdItems()
+      .then(setNpdItems)
+      .catch((error) => {
+        console.error("Failed to fetch NPD items for Production Master:", error);
+        setNpdItems([]);
+      });
+  }, []);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [closingId, setClosingId] = useState<string | null>(null);
@@ -107,7 +117,7 @@ export function ProductionMaster() {
     const result = new Map<string, { canClose: boolean; reasons: string[] }>();
 
     productions.forEach((production) => {
-      const item = items.find((i) => i.id === production.itemId);
+      const item = npdItems.find((i) => i.id === String(production.itemId || "").trim());
       const typeName = item?.typeName;
       const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, typeName).map((m) =>
         normalizeMachineName(m)
@@ -158,7 +168,7 @@ export function ProductionMaster() {
     });
 
     return result;
-  }, [productions, items, processing, mandatoryMachinesByType]);
+  }, [productions, npdItems, processing, mandatoryMachinesByType]);
 
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -314,7 +324,7 @@ export function ProductionMaster() {
 
   const filteredList = productions
     .filter(p => {
-      const item = items.find(i => i.id === p.itemId);
+      const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
       const schedule = schedules.find(s => s.id === p.scheduleId);
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
@@ -346,7 +356,7 @@ export function ProductionMaster() {
   const cancelTarget = cancelModalJobId ? productions.find((p) => p.id === cancelModalJobId) : null;
   const cancelTargetSchedule = cancelTarget?.scheduleId ? schedules.find((schedule) => schedule.id === cancelTarget.scheduleId) : null;
   const cancelTargetOrder = cancelTargetSchedule ? orders.find((order) => order.id === cancelTargetSchedule.orderId) : null;
-  const cancelTargetItem = cancelTarget ? items.find((item) => item.id === cancelTarget.itemId) : null;
+  const cancelTargetItem = cancelTarget ? npdItems.find((item) => item.id === String(cancelTarget.itemId || "").trim()) : null;
 
   return (
     <div className="space-y-6">
@@ -383,7 +393,7 @@ export function ProductionMaster() {
                 const schedule = schedules.find(s => s.id === p.scheduleId);
                 const order = orders.find(o => o.id === schedule?.orderId);
                 const company = companies.find(c => c.id === order?.companyId);
-                const item = items.find(i => i.id === p.itemId);
+                const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
                 const erp = String(p.erpCode || "").trim();
                 const leastGsm = erpLeastGsmMap.get(erp);
                 const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
@@ -557,7 +567,7 @@ export function ProductionMaster() {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = items.find(i => i.id === p.itemId);
+                  const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
                   const mandatory = getMandatoryStatus(p.id, item?.typeName);
                   const erp = String(p.erpCode || "").trim();
                   const leastGsm = erpLeastGsmMap.get(erp);

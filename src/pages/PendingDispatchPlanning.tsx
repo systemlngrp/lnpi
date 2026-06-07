@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import { OrderSchedule, Order, Company, Item, DispatchPlan, LoadingSlip, Production } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
@@ -11,7 +12,7 @@ export function PendingDispatchPlanning() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [productions] = useData<Production>("productions", []);
@@ -170,8 +171,8 @@ export function PendingDispatchPlanning() {
       const orderB = orders.find(o => o.id === b.orderId);
       const companyA = companies.find(c => c.id === orderA?.companyId)?.name || "";
       const companyB = companies.find(c => c.id === orderB?.companyId)?.name || "";
-      const itemA = items.find(i => i.id === orderA?.itemId)?.name || "";
-      const itemB = items.find(i => i.id === orderB?.itemId)?.name || "";
+      const itemA = npdItems.find(i => i.id === orderA?.itemId)?.name || "";
+      const itemB = npdItems.find(i => i.id === orderB?.itemId)?.name || "";
       const plannedA = getEffectivePlannedForSchedule(a.id);
       const plannedB = getEffectivePlannedForSchedule(b.id);
       const pendingA = Math.max(0, Number(a.qty || 0) - plannedA);
@@ -274,7 +275,7 @@ export function PendingDispatchPlanning() {
     const itemIds = Array.from(plannedNowByItemId.keys());
     return itemIds
       .map((itemId) => {
-        const item = items.find((row) => row.id === itemId);
+        const item = npdItems.find((row) => row.id === itemId);
         const opening = Number((item as any)?.opening || 0);
         const receipt = Number((item as any)?.receipt || 0);
         const production = Number((item as any)?.production || 0);
@@ -321,7 +322,7 @@ export function PendingDispatchPlanning() {
     plannedNowByItemId.forEach((plannedNow, itemId) => {
       const available = Number(availableToPlanByItemId.get(itemId) || 0);
       if (plannedNow > available + 1e-9) {
-        const itemName = items.find((i) => i.id === itemId)?.name || "Unknown Item";
+        const itemName = npdItems.find((i) => i.id === itemId)?.name || "Unknown Item";
         violations.push(`${itemName}: Trying to plan ${plannedNow.toLocaleString()} but only ${available.toLocaleString()} is available.`);
       }
     });
@@ -496,7 +497,7 @@ export function PendingDispatchPlanning() {
                 filteredSchedules.map((s) => {
                   const order = orders.find(o => o.id === s.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = items.find(i => i.id === order?.itemId);
+                  const item = npdItems.find(i => i.id === order?.itemId);
                   
                   const schedDate = new Date(s.scheduledDate);
                   const isOverdue = schedDate < today;

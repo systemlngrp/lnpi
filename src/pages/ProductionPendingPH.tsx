@@ -1,15 +1,16 @@
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule } from "../types";
+import { Production, OrderSchedule } from "../types";
 import { useState } from "react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, XCircle } from "lucide-react";
 import { isProductionPendingPH } from "../lib/productionStageFilters";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function ProductionPendingPH() {
   const [productions, setProductions] = useData<Production>("productions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -188,7 +189,7 @@ export function ProductionPendingPH() {
                   </div>
                   <div>
                     <div className="text-xs font-black text-slate-500 uppercase">Item</div>
-                    <div className="text-sm font-bold">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
+                    <div className="text-sm font-bold">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
                   </div>
                   <div className="flex justify-between items-center">
                     <div>
@@ -312,7 +313,7 @@ export function ProductionPendingPH() {
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{p.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">{p.qty}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{p.uom}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black">

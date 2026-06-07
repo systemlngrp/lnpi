@@ -17,6 +17,7 @@ import { generateTransactionNo } from "../lib/serial";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 type PackingSlipDraft = {
   id: string;
@@ -53,7 +54,7 @@ export function MaterialInForm() {
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
   const [materials] = useData<Material>("materials", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
   const [purchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
@@ -95,7 +96,7 @@ export function MaterialInForm() {
   const materialOptions = useMemo(
     () => {
       if (isFgType) {
-        return items
+        return npdItems
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((item) => ({
             value: item.id,
@@ -111,7 +112,7 @@ export function MaterialInForm() {
           label: `${material.name}${material.erpCode ? ` (${material.erpCode})` : ""}`,
         }));
     },
-    [materials, items, mrrType, isFgType]
+    [materials, npdItems, mrrType, isFgType]
   );
 
   const supplierOptions = useMemo(
@@ -173,7 +174,7 @@ export function MaterialInForm() {
   }, [editingEntry, packingSlips]);
 
   const getMaterial = (materialId: string) => {
-    if (isFgType) return items.find((item) => item.id === materialId);
+    if (isFgType) return npdItems.find((item) => item.id === materialId);
     return materials.find((material) => material.id === materialId);
   };
 

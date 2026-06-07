@@ -1,14 +1,15 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { Consumption, Item } from "../types";
+import { Consumption } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { CheckCircle, Search } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function ConsumptionPendingTally() {
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -39,7 +40,7 @@ export function ConsumptionPendingTally() {
   const pendingList = consumptions.filter(c => 
     c.status === "Pending Tally" && (
       c.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (items.find(i => i.id === c.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+      (npdItems.find(i => i.id === c.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
     )
   );
 
@@ -71,7 +72,7 @@ export function ConsumptionPendingTally() {
                         <div className="font-bold text-sm">{c.transactionNo}</div>
                         <div className="text-xs text-slate-500">{formatDate(c.date)}</div>
                     </div>
-                    <div className="text-sm font-bold">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
+                    <div className="text-sm font-bold">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
                     <div className="text-sm">{c.qty} {c.uom}</div>
                      <button
                       onClick={() => handleComplete(c.id)}
@@ -111,7 +112,7 @@ export function ConsumptionPendingTally() {
                 <tr key={c.id} className="hover:bg-slate-50 divide-x divide-black">
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{c.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(c.date)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-amber-700 border border-black">{c.qty}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{c.uom}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black">

@@ -6,6 +6,7 @@ import { parseMandatoryMachinesByType, getRequiredMachinesForType } from "../lib
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 interface PendingMachineJob {
   production: Production;
@@ -30,7 +31,7 @@ export function MachinePendingProcessing() {
   const filterMachineId = searchParams.get("machineId") || "";
 
   const [productions] = useData<Production>("productions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [machines] = useData<Machine>("machines", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
@@ -64,7 +65,7 @@ export function MachinePendingProcessing() {
     );
 
     activeProductions.forEach(p => {
-      const item = items.find(i => i.id === p.itemId);
+      const item = npdItems.find(i => i.id === p.itemId);
       const requiredMachines = getRequiredMachinesForType(mandatoryMachinesMapping, item?.typeName);
       
       requiredMachines.forEach(machineName => {

@@ -1,15 +1,16 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { DispatchPlan, Truck, Order, Company, Item, OrderSchedule } from "../types";
+import { DispatchPlan, Truck, Order, Company, OrderSchedule } from "../types";
 import { formatDate } from "../lib/serial";
 import { Trash2 } from "lucide-react";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function DispatchPlansMaster() {
   const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [trucks] = useData<Truck>("trucks", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export function DispatchPlansMaster() {
                 plans.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((p) => {
                   const order = orders.find(o => o.id === p.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = items.find(i => i.id === order?.itemId);
+                  const item = npdItems.find(i => i.id === order?.itemId);
                   const pending = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
 
                   return (

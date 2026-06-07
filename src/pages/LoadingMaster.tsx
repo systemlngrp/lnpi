@@ -6,7 +6,6 @@ import {
   Truck, 
   DispatchPlan,
   Order,
-  Item,
   Company,
   Invoice,
   InvoiceLineItem,
@@ -22,13 +21,14 @@ import {
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function LoadingMaster() {
   const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [trucks] = useData<Truck>("trucks", []);
   const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [companies] = useData<Company>("companies", []);
   const [invoices, setInvoices] = useData<Invoice>("invoices", []);
   const [invoiceLineItems, setInvoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
@@ -57,7 +57,7 @@ export function LoadingMaster() {
     slip.lines.map((line) => {
       const plan = plans.find((p) => p.id === line.dispatchPlanId);
       const order = orders.find((o) => o.id === plan?.orderId);
-      const item = items.find((i) => i.id === order?.itemId);
+      const item = npdItems.find((i) => i.id === order?.itemId);
       const company = companies.find((c) => c.id === order?.companyId);
       const plannedQty = Number(plan?.plannedQty || 0);
       const cancelledQty = Number(plan?.canceledQty || 0);

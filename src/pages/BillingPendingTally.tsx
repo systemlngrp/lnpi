@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import { 
   Invoice, 
   InvoiceLineItem,
@@ -28,7 +29,7 @@ export function BillingPendingTally() {
   const [invoices, setInvoices, isLoading] = useData<Invoice>("invoices", []);
   const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [companies] = useData<Company>("companies", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [slips] = useData<LoadingSlip>("loading_slips", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
@@ -86,7 +87,7 @@ export function BillingPendingTally() {
           grandTotal: Number(inv.totalAfterGst || 0) + Number(inv.roundOff || 0),
           details: invLines.map(li => ({
             ...li,
-            itemName: items.find(i => i.id === li.itemId)?.name || "Unknown",
+            itemName: npdItems.find(i => i.id === li.itemId)?.name || "Unknown",
             slipNo: slips.find(s => s.id === li.loadingSlipId)?.slipNo || "N/A"
           }))
         };

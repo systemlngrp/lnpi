@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import { Production, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Search } from "lucide-react";
@@ -28,7 +29,8 @@ interface LeastCostRecord {
 
 export function ItemwiseLeastCost() {
   const [productions, , prodsLoading] = useData<Production>("productions", []);
-  const [items, , itemsLoading] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
+  const itemsLoading = false;
   const [searchTerm, setSearchTerm] = useState("");
 
   const isLoading = prodsLoading || itemsLoading;
@@ -45,7 +47,7 @@ export function ItemwiseLeastCost() {
       
       if (!erp || isNaN(gsm) || gsm <= 0) return;
 
-      const item = items.find(i => i.id === prod.itemId);
+      const item = npdItems.find(i => i.id === prod.itemId);
       const itemName = item?.name || String(prod.itemId || "Unknown Item");
 
       if (!erpMap.has(erp) || gsm < erpMap.get(erp)!.gsm) {

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import { 
   LoadingSlip, 
   Company, 
@@ -54,7 +55,7 @@ interface InvoiceItemRow {
 export function PendingInvoicing() {
   const [loadingSlips, updateSlips] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [trucks] = useData<Truck>("trucks", []);
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
@@ -109,7 +110,7 @@ export function PendingInvoicing() {
       const slipItems = s.lines.map(l => {
         const lp = plans.find(p => p.id === l.dispatchPlanId);
         const lo = orders.find(o => o.id === lp?.orderId);
-        return items.find(i => i.id === lo?.itemId)?.name || "Unknown";
+        return npdItems.find(i => i.id === lo?.itemId)?.name || "Unknown";
       });
 
       companyMap.get(company.id)!.slips.push({
@@ -185,7 +186,7 @@ export function PendingInvoicing() {
       slip.lines.forEach((line: any) => {
         const plan = plans.find((p) => p.id === line.dispatchPlanId);
         const order = orders.find((o) => o.id === plan?.orderId);
-        const item = items.find((i) => i.id === order?.itemId);
+        const item = npdItems.find((i) => i.id === order?.itemId);
         if (!order || !item) return;
 
         const qty = Number(line.loadedQty || 0);
@@ -360,14 +361,14 @@ export function PendingInvoicing() {
     for (const itemRow of invoiceRows) {
       const allocTotal = itemRow.allocations.reduce((s, a) => s + Number(a.qty || 0), 0);
       if (Math.abs(allocTotal - Number(itemRow.totalQty || 0)) > 0.01) {
-        const itemName = items.find((i) => i.id === itemRow.itemId)?.name || "Item";
+        const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
         alert(
           `Item-wise quantity mismatch for ${itemName}.\nLoaded: ${Number(itemRow.totalQty || 0).toLocaleString()}\nAllocated: ${allocTotal.toLocaleString()}`
         );
         return;
       }
       if (itemRow.allocations.some((a) => !String(a.orderId || "").trim())) {
-        const itemName = items.find((i) => i.id === itemRow.itemId)?.name || "Item";
+        const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
         alert(`Please select Order for all allocation rows of ${itemName}.`);
         return;
       }
@@ -383,7 +384,7 @@ export function PendingInvoicing() {
         const allowedMax = Number(order.qty || 0) * (1 + tolerancePercent / 100);
         const currentlyDispatched = totalDispatched + Number(alloc.qty || 0);
         if (currentlyDispatched > allowedMax + 0.01) {
-          const itemName = items.find((i) => i.id === itemRow.itemId)?.name || "Item";
+          const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
           alert(`Dispatched quantity for ${itemName} exceeds allowed tolerance (${tolerancePercent}%). Max allowed: ${allowedMax.toLocaleString()}`);
           return;
         }
@@ -620,7 +621,7 @@ export function PendingInvoicing() {
                   </thead>
                   <tbody className="divide-y divide-black">
                     {invoiceRows.flatMap((itemRow) => {
-                      const itemName = items.find((i) => i.id === itemRow.itemId)?.name || "Item";
+                      const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
                       const pendingOrdersForItem = orders.filter((o) => {
                         if (o.companyId !== invoiceModal.companyId) return false;
                         if (o.status === "Cancelled") return false;

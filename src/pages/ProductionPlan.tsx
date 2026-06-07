@@ -8,13 +8,23 @@ import { FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { exportsAllowed } from "../lib/exportPolicy";
+import { fetchNpdItems } from "../lib/npdItems";
 
 export function ProductionPlan() {
   const [productions] = useData<Production>("productions", []);
-  const [items] = useData<Item>("items", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [npdItems, setNpdItems] = useState<Item[]>([]);
+
+  useEffect(() => {
+    fetchNpdItems()
+      .then(setNpdItems)
+      .catch((error) => {
+        console.error("Failed to fetch NPD items for Production Plan:", error);
+        setNpdItems([]);
+      });
+  }, []);
 
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -36,7 +46,7 @@ export function ProductionPlan() {
     return productions
       .filter(p => normalizeDate(p.date) === selectedDate)
       .filter(p => {
-        const item = items.find(i => i.id === p.itemId);
+        const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
         const schedule = schedules.find(s => s.id === p.scheduleId);
         const order = orders.find(o => o.id === schedule?.orderId);
         const company = companies.find(c => c.id === order?.companyId);
@@ -47,7 +57,7 @@ export function ProductionPlan() {
         (company?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
       })
       .sort((a, b) => a.transactionNo.localeCompare(b.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
-  }, [productions, selectedDate, searchTerm, items, schedules, orders, companies]);
+  }, [productions, selectedDate, searchTerm, npdItems, schedules, orders, companies]);
 
   const getPrintingColour = (item?: Item) => {
     const c1 = String(item?.printingColour1 || "").trim();
@@ -61,7 +71,7 @@ export function ProductionPlan() {
       const schedule = schedules.find(s => s.id === p.scheduleId);
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
-      const item = items.find(i => i.id === p.itemId);
+      const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
 
       return {
         "Status": p.status || "-",
@@ -191,7 +201,7 @@ export function ProductionPlan() {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = items.find(i => i.id === p.itemId);
+                  const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
 
                   return (
                     <tr key={p.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">

@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { ChevronRight, Info } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import {
   Company,
   Consumption,
@@ -49,7 +50,7 @@ export function Dashboard() {
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [materials] = useData<Material>("materials", []);
   const [orders] = useData<Order>("orders", []);
   const [consumptions] = useData<Consumption>("consumptions", []);
@@ -263,7 +264,7 @@ export function Dashboard() {
       const targetId = type === "pur" ? (entry as MaterialIn).lines?.[0]?.itemId : (entry as Production).itemId;
       if (!targetId) return;
 
-      const itemName = materials.find((item) => item.id === targetId)?.name || items.find((item) => item.id === targetId)?.name || "Unknown Item";
+      const itemName = materials.find((item) => item.id === targetId)?.name || npdItems.find((item) => item.id === targetId)?.name || "Unknown Item";
       const amount = type === "pur" ? Number((entry as MaterialIn).totalAmount || 0) : Number((entry as Production).qty || 0);
       stats[itemName] = (stats[itemName] || 0) + amount;
     });

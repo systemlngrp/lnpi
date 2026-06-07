@@ -1,14 +1,15 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company } from "../types";
+import { Production, OrderSchedule, Order, Company } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { RefreshCw } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function CanceledProductions() {
   const [productions, setProductions] = useData<Production>("productions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -59,7 +60,7 @@ export function CanceledProductions() {
   const filteredList = productions
     .filter(p => p.status === "Cancelled")
     .filter(p => {
-      const item = items.find(i => i.id === p.itemId);
+      const item = npdItems.find(i => i.id === p.itemId);
       const schedule = schedules.find(s => s.id === p.scheduleId);
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
@@ -111,7 +112,7 @@ export function CanceledProductions() {
                     <tr key={p.id} className="hover:bg-red-50 divide-x divide-black transition-colors">
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{items.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.cancelTimestamp ? formatDate(p.cancelTimestamp) : "-"}</td>
                       <td className="px-4 py-4 text-xs text-red-700 font-medium border border-black">{p.cancelRemarks || "-"}</td>

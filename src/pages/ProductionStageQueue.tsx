@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpDown, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import {
   Company,
   Item,
@@ -70,7 +71,7 @@ export function ProductionStageQueue({
 }) {
   const navigate = useNavigate();
   const [productions, setProductions] = useData<Production>("productions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
@@ -119,7 +120,7 @@ export function ProductionStageQueue({
       .map((production) => {
         const schedule = schedules.find((row) => row.id === production.scheduleId);
         const order = orders.find((row) => row.id === schedule?.orderId);
-        const item = items.find((row) => row.id === production.itemId);
+        const item = npdItems.find((row) => row.id === production.itemId);
         const company = companies.find((row) => row.id === order?.companyId);
         const prereqQty = prereqMachine
           ? processing

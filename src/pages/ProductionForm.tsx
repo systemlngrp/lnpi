@@ -18,6 +18,7 @@ import { Select } from "../components/Select";
 import { generateTransactionNo, formatDate } from "../lib/serial";
 import { CircleHelp } from "lucide-react";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
+import { fetchNpdItems } from "../lib/npdItems";
 
 const REEL_FORMULA_MODE = {
   breadthHeightBased: "breadth-height-based",
@@ -158,12 +159,12 @@ export function ProductionForm() {
   const [productions, setProductions] = useData<Production>("productions", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
-  const [items] = useData<Item>("items", []);
   const [companies] = useData<Company>("companies", []);
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [sampleRequests, setSampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [settings] = useData<Setting>("settings", []);
+  const [npdItems, setNpdItems] = useState<Item[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const urlScheduleId = searchParams.get("scheduleId") || searchParams.get("scheduledId") || "";
@@ -175,6 +176,15 @@ export function ProductionForm() {
   }, []);
 
   const [formData, setFormData] = useState(() => createInitialFormData(todayStr));
+
+  useEffect(() => {
+    fetchNpdItems()
+      .then(setNpdItems)
+      .catch((error) => {
+        console.error("Failed to fetch NPD items for Production Form:", error);
+        setNpdItems([]);
+      });
+  }, []);
 
   const pendingSchedules = useMemo(
     () =>
@@ -206,7 +216,7 @@ export function ProductionForm() {
 
   const selectedSchedule = pendingSchedules.find((schedule) => schedule.id === selectedScheduleId);
   const selectedOrder = orders.find((order) => order.id === selectedSchedule?.orderId);
-  const selectedItem = items.find((item) => item.id === selectedOrder?.itemId);
+  const selectedItem = npdItems.find((item) => item.id === String(selectedOrder?.itemId || "").trim());
   const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
   const selectedErp = String(selectedOrder?.erpCode || "").trim();
   const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule) : 0;
@@ -231,7 +241,7 @@ export function ProductionForm() {
     [productions]
   );
 
-  const lastItem = items.find((item) => item.id === latestRelevantProduction?.itemId);
+  const lastItem = npdItems.find((item) => item.id === String(latestRelevantProduction?.itemId || "").trim());
   const lastPlanQty = Number(latestRelevantProduction?.qty || 0);
   const isSameAsLastItem = Boolean(selectedItem?.id && lastItem?.id && selectedItem.id === lastItem.id);
 
@@ -241,7 +251,7 @@ export function ProductionForm() {
     return [...sampleRequests]
       .filter(
         (row) =>
-          row.itemId === selectedItem.id &&
+          String(row.itemId || "").trim() === selectedItem.id &&
           !row.cancelTimestamp &&
           (row.jobCardNo === "" || row.jobCardNo === null || row.jobCardNo === undefined)
       )
@@ -263,7 +273,7 @@ export function ProductionForm() {
 
     return schedules.reduce((sum, schedule) => {
       const order = orders.find((row) => row.id === schedule.orderId);
-      if (!order || order.itemId !== selectedItem.id) return sum;
+      if (!order || String(order.itemId || "").trim() !== selectedItem.id) return sum;
 
       const invoiced = getScheduleInvoicedQty(schedule.id, plans, loadingSlips);
       const pendingOrderQty = Math.max(
@@ -283,7 +293,7 @@ export function ProductionForm() {
         const prodFromFFGValue = production.prodFromFFG;
         const hasFFGValue = !(prodFromFFGValue === null || prodFromFFGValue === undefined || String(prodFromFFGValue) === "");
 
-        return production.itemId === selectedItem.id && !production.cancelTimestamp && !hasFFGValue;
+        return String(production.itemId || "").trim() === selectedItem.id && !production.cancelTimestamp && !hasFFGValue;
       })
       .reduce((sum, production) => sum + (Number(production.qty) || 0), 0);
   }, [productions, selectedItem?.id]);
@@ -595,7 +605,7 @@ export function ProductionForm() {
 
   const scheduleOptions = pendingSchedules.map((schedule) => {
     const order = orders.find((row) => row.id === schedule.orderId);
-    const item = items.find((row) => row.id === order?.itemId);
+    const item = npdItems.find((row) => row.id === String(order?.itemId || "").trim());
     const company = companies.find((row) => row.id === order?.companyId);
     const pending = getPendingProductionQty(schedule);
 
@@ -624,7 +634,8 @@ export function ProductionForm() {
           transactionNo: txnNo,
           date: formData.date,
           scheduleId: selectedSchedule.id,
-          itemId: selectedOrder.itemId,
+          itemId: selectedItem.id,
+          npdId: selectedItem.id,
           qty,
           uom: selectedItem.uom || "",
           remarks: formData.remarks,
@@ -1025,7 +1036,7 @@ export function ProductionForm() {
                 .map((production) => {
                   const schedule = schedules.find((row) => row.id === production.scheduleId);
                   const order = orders.find((row) => row.id === schedule?.orderId);
-                  const item = items.find((row) => row.id === production.itemId);
+                  const item = npdItems.find((row) => row.id === String(production.itemId || "").trim());
 
                   return (
                     <tr key={production.id} className="hover:bg-slate-50 divide-x divide-black">

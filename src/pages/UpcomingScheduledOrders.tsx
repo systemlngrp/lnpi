@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Company, Item, Order, OrderSchedule } from "../types";
+import { Company, Order, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { useNavigate } from "react-router-dom";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
@@ -29,7 +30,7 @@ export function UpcomingScheduledOrders() {
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [companies] = useData<Company>("companies", []);
 
   const [cancelValues, setCancelValues] = useState<Record<string, string>>({});
@@ -56,7 +57,7 @@ export function UpcomingScheduledOrders() {
         })
         .map((schedule) => {
           const order = orders.find((row) => row.id === schedule.orderId);
-          const item = items.find((row) => row.id === order?.itemId);
+          const item = npdItems.find((row) => row.id === order?.itemId);
           const company = companies.find((row) => row.id === order?.companyId);
           return { schedule, order, item, company, pendingQty: getPendingProductionQty(schedule) };
         })

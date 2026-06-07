@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import type {
   Company,
   DispatchPlan,
@@ -259,7 +260,7 @@ function getSummaryCard(summary: OperationDashboardSummary, cardId: string) {
 
 export function OperationDashboard() {
   const [productions] = useData<Production>("productions", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
@@ -484,7 +485,7 @@ export function OperationDashboard() {
         const schedule = schedules.find((s) => s.id === p.scheduleId);
         const order = orders.find((o) => o.id === schedule?.orderId);
         const company = companies.find((c) => c.id === order?.companyId);
-        const item = items.find((i) => i.id === p.itemId);
+        const item = npdItems.find((i) => i.id === p.itemId);
 
         const mandatory = getMandatoryStatus(p.id, item?.typeName);
         const mandatoryCell =

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
+import { useNpdItems } from "../hooks/useNpdItems";
 import { 
   Invoice, 
   InvoiceLineItem,
@@ -24,7 +25,7 @@ export function InvoicesMaster() {
   const [invoices] = useData<Invoice>("invoices", []);
   const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [companies] = useData<Company>("companies", []);
-  const [items] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [slips] = useData<LoadingSlip>("loading_slips", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,7 +47,7 @@ export function InvoicesMaster() {
       const company = companies.find(c => c.id === inv.companyId);
       const invLines = lineItems.filter(li => li.invoiceId === inv.id);
       const invItems = invLines.map(li => {
-        const item = items.find(i => i.id === li.itemId);
+        const item = npdItems.find(i => i.id === li.itemId);
         return item?.name || "Unknown";
       });
       const roundOff = getRoundOff(inv);
@@ -62,7 +63,7 @@ export function InvoicesMaster() {
         grandTotal,
         details: invLines.map(li => ({
           ...li,
-          itemName: items.find(i => i.id === li.itemId)?.name || "Unknown",
+          itemName: npdItems.find(i => i.id === li.itemId)?.name || "Unknown",
           slipNo: slips.find(s => s.id === li.loadingSlipId)?.slipNo || "N/A"
         }))
       };
@@ -78,7 +79,7 @@ export function InvoicesMaster() {
     return lineItems
       .filter(li => li.invoiceId === selectedInvoice.id)
       .map(li => {
-        const item = items.find(i => i.id === li.itemId);
+        const item = npdItems.find(i => i.id === li.itemId);
         const slip = slips.find(s => s.id === li.loadingSlipId);
         return {
           ...li,

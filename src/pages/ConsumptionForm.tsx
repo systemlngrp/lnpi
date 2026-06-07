@@ -5,10 +5,12 @@ import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { generateTransactionNo, formatDate } from "../lib/serial";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 export function ConsumptionForm() {
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
   const [items, setItems] = useData<Item>("items", []);
+  const npdItems = useNpdItems();
   const [productions, setProductions] = useData<Production>("productions", []);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -33,7 +35,7 @@ export function ConsumptionForm() {
       return timeB - timeA;
     })
     .map((production) => {
-      const item = items.find((row) => row.id === production.itemId);
+      const item = npdItems.find((row) => row.id === production.itemId);
       const displayedJobNo = String(production.jobCardNo || production.transactionNo || "");
       return {
         value: production.id,
@@ -41,11 +43,11 @@ export function ConsumptionForm() {
       };
     });
 
-  const itemOptions = items
+  const itemOptions = npdItems
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(i => ({ value: i.id, label: i.name }));
 
-  const selectedItem = items.find(i => i.id === formData.itemId);
+  const selectedItem = npdItems.find(i => i.id === formData.itemId);
   const selectedProduction = productions.find((production) => production.id === formData.productionId);
 
   const handleAddItem = () => {
@@ -56,17 +58,7 @@ export function ConsumptionForm() {
     e.preventDefault();
     if (!quickAddName.trim()) return;
     
-    const newItem: Item = {
-      id: crypto.randomUUID(),
-      name: quickAddName.trim(),
-      uom: "KG", // Default
-      groupId: "", 
-      updateTimestamp: new Date().toISOString(),
-      updatedBy: "System User"
-    };
-    
-    setItems([...items, newItem]);
-    setFormData({ ...formData, itemId: newItem.id });
+    alert("Quick add is disabled. Please create items in NPD Master only.");
     setQuickAddName("");
     setShowQuickAdd(false);
   };
@@ -79,7 +71,7 @@ export function ConsumptionForm() {
     try {
       const today = new Date().toISOString().split("T")[0];
       const timestamp = new Date().toISOString();
-      const item = items.find(i => i.id === formData.itemId);
+      const item = npdItems.find(i => i.id === formData.itemId);
       const nextConsumptionQty = Number(formData.qty);
       const linkedJobNo = formData.productionId ? String(selectedProduction?.jobCardNo || selectedProduction?.transactionNo || "") : undefined;
 
@@ -274,7 +266,7 @@ export function ConsumptionForm() {
                         <div className="text-xs text-slate-500">{formatDate(c.date)}</div>
                     </div>
                     {c.jobCardNo && <div className="text-xs font-bold text-indigo-700 uppercase">Job: {c.jobCardNo}</div>}
-                    <div className="text-sm font-bold">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
+                    <div className="text-sm font-bold">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
                     <div className="text-sm">{c.qty} {c.uom}</div>
                 </div>
             ))}
@@ -308,7 +300,7 @@ export function ConsumptionForm() {
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{c.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{c.jobCardNo || "-"}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(c.date)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{items.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-amber-700 border border-black">{c.qty}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{c.uom}</td>
                 </tr>
