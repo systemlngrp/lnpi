@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Order, OrderSchedule } from "../types";
 import { Select } from "../components/Select";
-import { Trash2 } from "lucide-react";
+import { Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
@@ -10,6 +10,7 @@ import { useNpdItems } from "../hooks/useNpdItems";
 
 export function OrdersPendingScheduling() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Simple DOM-based table row filter bound to the search input
   useEffect(() => {
@@ -38,9 +39,21 @@ export function OrdersPendingScheduling() {
   };
 
   const today = new Date().toISOString().slice(0, 10);
-  const pending = orders
-    .filter(o => o.status === "Pending Scheduling" && o.status !== "Cancelled" && (o.qty || 0) > totalScheduled(o.id))
-    .sort((a, b) => (a.orderNo || "").localeCompare(b.orderNo || "", undefined, { numeric: true, sensitivity: "base" }));
+  
+  const pending = useMemo(() => {
+    return orders
+      .filter(o => o.status === "Pending Scheduling" && o.status !== "Cancelled" && (o.qty || 0) > totalScheduled(o.id))
+      .sort((a, b) => {
+        const aNo = a.orderNo || "";
+        const bNo = b.orderNo || "";
+        const cmp = aNo.localeCompare(bNo, undefined, { numeric: true, sensitivity: "base" });
+        return sortOrder === "asc" ? cmp : -cmp;
+      });
+  }, [orders, schedules, sortOrder]);
+
+  const toggleSort = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalOrderId, setModalOrderId] = useState<string | null>(null);
@@ -192,7 +205,15 @@ export function OrdersPendingScheduling() {
             <thead className="bg-slate-100">
               <tr>
                 <th className="px-3 py-2 border border-black">S.No</th>
-                <th className="px-3 py-2 border border-black">Order No</th>
+                <th 
+                  className="px-3 py-2 border border-black cursor-pointer hover:bg-slate-200 select-none"
+                  onClick={toggleSort}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    Order No
+                    {sortOrder === "asc" ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                </th>
                 <th className="px-3 py-2 border border-black">Company</th>
                 <th className="px-3 py-2 border border-black">Item</th>
                 <th className="px-3 py-2 border border-black">Order Quantity</th>

@@ -8,10 +8,12 @@ import { Order } from "../types";
 import { formatDate } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { ChevronUp, ChevronDown } from "lucide-react";
 
 export function OrdersPendingPH() {
   const [searchTerm, setSearchTerm] = useState('');
   const [orderByFilter, setOrderByFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Simple DOM-based table row filter bound to the search input
   useEffect(() => {
@@ -62,10 +64,19 @@ export function OrdersPendingPH() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [pending, users, userMap]);
 
-  const filtered = pending.filter(o => {
-    if (orderByFilter && String(o.orderBy || "") !== orderByFilter) return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return pending
+      .filter(o => {
+        if (orderByFilter && String(o.orderBy || "") !== orderByFilter) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const aNo = a.orderNo || "";
+        const bNo = b.orderNo || "";
+        const cmp = aNo.localeCompare(bNo, undefined, { numeric: true, sensitivity: "base" });
+        return sortOrder === "asc" ? cmp : -cmp;
+      });
+  }, [pending, orderByFilter, sortOrder]);
 
   const presentOrderByValues = Array.from(new Set(pending.map(o => String(o.orderBy || "").trim()).filter(Boolean)));
   const unmappedOrderBys = presentOrderByValues.filter(v => !resolveOrderByUser(v));
@@ -76,6 +87,10 @@ export function OrdersPendingPH() {
     const u = resolveOrderByUser(String(raw || ""));
     if (u) return u.name || "";
     return String(raw || "").trim();
+  };
+
+  const toggleSort = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
   };
 
   const handleApprove = (id: string) => {
@@ -149,7 +164,15 @@ export function OrdersPendingPH() {
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">
             <tr>
-              <th className="px-4 py-2 border border-black">Order No</th>
+              <th 
+                className="px-4 py-2 border border-black cursor-pointer hover:bg-slate-200 select-none"
+                onClick={toggleSort}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Order No
+                  {sortOrder === "asc" ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+              </th>
               <th className="px-4 py-2 border border-black">Order Date</th>
               <th className="px-4 py-2 border border-black">Company</th>
               <th className="px-4 py-2 border border-black">Item</th>
