@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
@@ -7,7 +6,6 @@ import { Company, Order, OrderSchedule } from "../types";
 import { formatDate } from "../lib/serial";
 
 export function PendingNpd() {
-  const navigate = useNavigate();
   const [orders] = useData<Order>("orders", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [companies] = useData<Company>("companies", []);
@@ -93,13 +91,12 @@ export function PendingNpd() {
               <th className="px-3 py-2 border border-black">Contact Person</th>
               <th className="px-3 py-2 border border-black">Box Type</th>
               <th className="px-3 py-2 border border-black">RAPC</th>
-              <th className="px-3 py-2 border border-black">Action</th>
             </tr>
           </thead>
           <tbody>
             {pendingRows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-6 py-8 text-center text-black font-medium">
+                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">
                   No scheduled items are pending NPD completion.
                 </td>
               </tr>
@@ -119,14 +116,6 @@ export function PendingNpd() {
                   </td>
                   <td className={`px-3 py-2 border border-black font-bold ${rapcValue ? "" : "bg-red-100 text-red-700"}`}>
                     {rapcValue || "Missing"}
-                  </td>
-                  <td className="px-3 py-2 border border-black">
-                    <button
-                      onClick={() => navigate("/masters/npd")}
-                      className="bg-indigo-600 text-white px-3 py-1 rounded font-bold hover:bg-indigo-700"
-                    >
-                      Open NPD
-                    </button>
                   </td>
                 </tr>
               ))
