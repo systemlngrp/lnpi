@@ -315,6 +315,11 @@ export function ProductionForm() {
     deviationLimit > 0 &&
     currentQty > deviationLimit;
 
+  const maximumAllowedProductionError =
+    currentQty > 0 &&
+    maximumAllowedProduction > 0 &&
+    currentQty > maximumAllowedProduction;
+
   const gsmValidationError =
     !isSampleItem &&
     !isSameAsLastItem &&
@@ -620,7 +625,7 @@ export function ProductionForm() {
     if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.date || formData.date < todayStr) return;
 
     const qty = Number(formData.qty);
-    if (qty <= 0 || qty > pendingQty || quantityDeviationError || gsmValidationError) return;
+    if (qty <= 0 || qty > pendingQty || quantityDeviationError || maximumAllowedProductionError || gsmValidationError) return;
 
     setIsSubmitting(true);
     try {
@@ -844,11 +849,18 @@ export function ProductionForm() {
                     "w-full border-2 border-black rounded p-2 text-black shadow-sm",
                     isSampleItem
                       ? "bg-slate-100 cursor-not-allowed focus:outline-none"
-                      : "focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                      : quantityDeviationError || maximumAllowedProductionError
+                        ? "border-red-600 bg-red-50 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600"
+                        : "focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                   )}
                 />
                 {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
               </div>
+              {maximumAllowedProductionError && (
+                <span className="text-red-600 text-xs font-bold">
+                  Planned Quantity cannot be greater than Maximum Allowed Production.
+                </span>
+              )}
               {quantityDeviationError && (
                 <span className="text-red-600 text-xs font-bold">
                   Planned Quantity cannot exceed {deviationLimit.toLocaleString()} based on Last Plan Qty and Deviation Allowed.
@@ -996,6 +1008,7 @@ export function ProductionForm() {
                 currentQty <= 0 ||
                 currentQty > pendingQty ||
                 quantityDeviationError ||
+                maximumAllowedProductionError ||
                 gsmValidationError
               }
               className="flex items-center justify-center min-w-[120px] bg-emerald-600 text-white px-6 py-2 rounded font-bold hover:bg-emerald-700 transition disabled:opacity-50 border border-black shadow"
