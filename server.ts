@@ -983,6 +983,7 @@ const NPD_LINKED_TABLES = new Set([
 ]);
 
 function toFiniteNumber(value: any): number | undefined {
+  if (value === null || value === undefined || String(value).trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
@@ -1091,6 +1092,7 @@ function normalizeNpdRowForItemConsumers(row: any) {
     f3: row?.f3 ?? toFiniteNumber(row?.rsf4),
     b3: row?.b3 ?? toFiniteNumber(row?.rsl5),
     flap: row?.flap ?? toFiniteNumber(row?.flapSize),
+    takeUpFactor: row?.takeUpFactor ?? toFiniteNumber(row?.takeUpFactor),
     plateWeight:
       row?.plateWeight ??
       (() => {

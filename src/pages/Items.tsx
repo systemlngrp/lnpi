@@ -67,6 +67,7 @@ export function Items() {
   const [deckleSize, setDeckleSize] = useState<string>("");
   const [cuttingSize, setCuttingSize] = useState<string>("");
   const [itemRate, setItemRate] = useState<string>("");
+  const [takeUpFactor, setTakeUpFactor] = useState<string>("");
   const [artwork, setArtwork] = useState<string>("");
   const [spec, setSpec] = useState<string>("");
 
@@ -702,6 +703,7 @@ export function Items() {
     setDeckleSize("");
     setCuttingSize("");
     setItemRate("");
+    setTakeUpFactor("");
     setArtwork("");
     setSpec("");
     setEditingId(null);
@@ -727,6 +729,7 @@ export function Items() {
     setHeight(item.height?.toString() || "");
     setPly(item.ply?.toString() || "");
     setFlute(item.flute || "");
+    setTakeUpFactor(item.takeUpFactor?.toString() || "");
     setDieCutUps(item.dieCutUps?.toString() || "");
     setTopPaperShade(item.topPaperShade || "");
     setPlateWeight(item.plateWeight?.toString() || "");
@@ -806,7 +809,7 @@ export function Items() {
         height: parseFloat(height) || undefined,
         ply: parseInt(ply) || undefined,
         flute,
-        takeUpFactor: takeUpFactorCalculated === "" ? undefined : Number(takeUpFactorCalculated),
+        takeUpFactor: takeUpFactor ? parseFloat(takeUpFactor) : (takeUpFactorCalculated === "" ? undefined : Number(takeUpFactorCalculated)),
         dieCutUps: parseInt(dieCutUps) || undefined,
         topPaperShade: topPaperShade.trim() || undefined,
         plateWeight: parseFloat(plateWeight) || undefined,

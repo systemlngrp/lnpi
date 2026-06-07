@@ -1,6 +1,21 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+export const takeUpFactorMap: Record<string, number> = {
+  A: 1.5,
+  B: 1.35,
+  C: 1.42,
+  E: 1.26,
+  "B+C": 1.38,
+  "B+E": 1.3,
+};
+
+export function calculateTakeUpFactor(flute?: string): number | "" {
+  if (!flute) return "";
+  const normalized = flute.toUpperCase().trim().replace(/\s+/g, "");
+  return takeUpFactorMap[normalized] ?? "";
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

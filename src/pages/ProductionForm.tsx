@@ -557,7 +557,6 @@ export function ProductionForm() {
       ...prev,
       idToOd,
       idToOd17,
-      takeUpFactor,
       gsm: round2(gsm),
       reelAsPerCalc: round2(reelAsPerCalc),
       cuttingWithTrimming: round2(cutting),
