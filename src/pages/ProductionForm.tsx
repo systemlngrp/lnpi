@@ -849,7 +849,6 @@ export function ProductionForm() {
                 />
                 {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}
               </div>
-              {selectedSchedule && <span className="text-xs font-bold text-slate-500">Max against current schedule: {pendingQty}</span>}
               {quantityDeviationError && (
                 <span className="text-red-600 text-xs font-bold">
                   Planned Quantity cannot exceed {deviationLimit.toLocaleString()} based on Last Plan Qty and Deviation Allowed.
