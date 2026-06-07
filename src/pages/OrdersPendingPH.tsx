@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
@@ -29,23 +29,38 @@ export function OrdersPendingPH() {
   const npdItems = useNpdItems();
   const navigate = useNavigate();
 
-  const pending = orders.filter(o => !o.status || o.status === 'Pending PH');
+  const userMap = useMemo(() => {
+    const map = new Map<string, User>();
+    users.forEach((u) => {
+      if (u.id) map.set(u.id.toLowerCase(), u);
+      if (u.userId) map.set(u.userId.toLowerCase(), u);
+      if (u.name) map.set(u.name.toLowerCase(), u);
+    });
+    return map;
+  }, [users]);
 
   const resolveOrderByUser = (raw: string): User | null => {
-    const val = String(raw || "").trim();
+    const val = String(raw || "").trim().toLowerCase();
     if (!val) return null;
-    return users.find(u => u.id === val) || null;
+    return userMap.get(val) || null;
   };
 
-  const presentUserMap = new Map<string, User>();
-  pending.forEach(o => {
-    const u = resolveOrderByUser(String(o.orderBy || ""));
-    if (u) presentUserMap.set(u.id, u);
-  });
+  const pending = orders.filter(o => !o.status || o.status === 'Pending PH');
 
-  const orderByOptions = Array.from(presentUserMap.values())
-    .map(u => ({ value: u.id, label: u.name }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const orderByOptions = useMemo(() => {
+    const presentUserIds = new Set<string>();
+    pending.forEach((o) => {
+      const u = resolveOrderByUser(String(o.orderBy || ""));
+      if (u) presentUserIds.add(u.id);
+    });
+
+    return Array.from(presentUserIds)
+      .map((id) => {
+        const u = users.find((user) => user.id === id);
+        return { value: id, label: u?.name || id };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [pending, users, userMap]);
 
   const filtered = pending.filter(o => {
     if (orderByFilter && String(o.orderBy || "") !== orderByFilter) return false;
