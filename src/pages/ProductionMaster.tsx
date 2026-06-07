@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
 import { formatDate } from "../lib/serial";
