@@ -33,27 +33,32 @@ export function OrdersPendingPH() {
 
   const normalize = (s: string) => String(s || "").trim().toLowerCase();
 
-  const resolveOrderByLabel = (raw: string) => {
+  const looksLikeId = (val: string) => /^[0-9a-fA-F\-]{10,}$/.test(val);
+
+  const resolveOrderByUser = (raw: string): User | null => {
     const val = String(raw || "").trim();
-    if (!val) return "";
-    // try by id
-    const byId = users.find(u => u.id === val);
-    if (byId) return byId.name || "";
+    if (!val) return null;
+    // If it looks like an id, match only against users.id
+    if (looksLikeId(val)) {
+      return users.find(u => u.id === val) || null;
+    }
     // try by userId
     const byUserId = users.find(u => String(u.userId || "") === val);
-    if (byUserId) return byUserId.name || "";
+    if (byUserId) return byUserId;
     // try by name (normalized)
     const byName = users.find(u => normalize(u.name) === normalize(val));
-    if (byName) return byName.name || "";
-    // fallback: if raw looks like a name (contains space) or email, show it
-    if (val.includes(" ") || val.includes("@")) return val;
-    return "";
+    if (byName) return byName;
+    return null;
   };
 
-  const presentOrderByValues = Array.from(new Set(pending.map(o => String(o.orderBy || "").trim()).filter(Boolean)));
-  const orderByOptions = presentOrderByValues
-    .map((raw) => ({ value: raw, label: resolveOrderByLabel(raw) }))
-    .filter(opt => opt.label)
+  const presentUserMap = new Map<string, User>();
+  pending.forEach(o => {
+    const u = resolveOrderByUser(String(o.orderBy || ""));
+    if (u) presentUserMap.set(u.id, u);
+  });
+
+  const orderByOptions = Array.from(presentUserMap.values())
+    .map(u => ({ value: u.id, label: u.name }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const filtered = pending.filter(o => {
@@ -61,9 +66,19 @@ export function OrdersPendingPH() {
     return true;
   });
 
-  const unmappedOrderBys = presentOrderByValues.filter(v => !resolveOrderByLabel(v));
+  const presentOrderByValues = Array.from(new Set(pending.map(o => String(o.orderBy || "").trim()).filter(Boolean)));
+  const unmappedOrderBys = presentOrderByValues.filter(v => !resolveOrderByUser(v));
   const params = new URLSearchParams(window.location.search);
   const showDebug = params.get("debug") === "1";
+
+  const getOrderByLabel = (raw: string) => {
+    const u = resolveOrderByUser(String(raw || ""));
+    if (u) return u.name || "";
+    const val = String(raw || "").trim();
+    if (!val) return "";
+    if (val.includes(" ") || val.includes("@")) return val;
+    return "";
+  };
 
   const handleApprove = (id: string) => {
     const now = new Date().toISOString();
@@ -152,7 +167,7 @@ export function OrdersPendingPH() {
                 <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-4 py-2 border border-black">{(companies as any[]).find((c:any)=>c.id===o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{npdItems.find((item) => item.id === o.itemId)?.name}</td>
-                <td className="px-4 py-2 border border-black whitespace-nowrap">{resolveOrderByLabel(o.orderBy) || '-'}</td>
+                <td className="px-4 py-2 border border-black whitespace-nowrap">{getOrderByLabel(o.orderBy) || '-'}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">
                   <button onClick={() => handleApprove(o.id)} className="bg-emerald-600 text-white px-3 py-1 rounded font-bold mr-2">Approve</button>
