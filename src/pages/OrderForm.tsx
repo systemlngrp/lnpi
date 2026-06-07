@@ -574,7 +574,7 @@ export function OrderForm() {
 
       {isFormOpen && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-sm border border-black space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="max-w-3xl space-y-4">
             <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Order Date</label>
               <input type="date" value={orderDate} onChange={(e)=>setOrderDate(e.target.value)} className="border-2 border-black rounded p-2" />
@@ -638,7 +638,7 @@ export function OrderForm() {
               <Select value={orderBy} onChange={setOrderBy} options={userOptions} placeholder="Select user..." required />
             </div>
 
-            <div className="flex flex-col space-y-1 md:col-span-3 lg:col-span-1">
+            <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Remarks</label>
               <input value={remarks} onChange={(e)=>setRemarks(e.target.value)} className="border-2 border-black rounded p-2" />
             </div>
