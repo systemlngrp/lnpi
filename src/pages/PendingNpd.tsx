@@ -87,8 +87,6 @@ export function PendingNpd() {
               <th className="px-3 py-2 border border-black">Company</th>
               <th className="px-3 py-2 border border-black">ERP</th>
               <th className="px-3 py-2 border border-black">Item</th>
-              <th className="px-3 py-2 border border-black">Customer</th>
-              <th className="px-3 py-2 border border-black">Contact Person</th>
               <th className="px-3 py-2 border border-black">Box Type</th>
               <th className="px-3 py-2 border border-black">RAPC</th>
             </tr>
@@ -96,7 +94,7 @@ export function PendingNpd() {
           <tbody>
             {pendingRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">
+                <td colSpan={8} className="px-6 py-8 text-center text-black font-medium">
                   No scheduled items are pending NPD completion.
                 </td>
               </tr>
@@ -109,8 +107,6 @@ export function PendingNpd() {
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{order.erpCode || "-"}</td>
                   <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
-                  <td className="px-3 py-2 border border-black">{String((item as any)?.customerName || "-")}</td>
-                  <td className="px-3 py-2 border border-black">{String((item as any)?.contactPerson || "-")}</td>
                   <td className={`px-3 py-2 border border-black font-bold ${boxType ? "" : "bg-red-100 text-red-700"}`}>
                     {boxType || "Missing"}
                   </td>
