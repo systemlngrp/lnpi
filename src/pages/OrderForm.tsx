@@ -13,7 +13,6 @@ import * as XLSX from "xlsx";
 export function OrderForm() {
   const [orders, setOrders, isLoading] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
-  const [items] = useData<Item>("items", []);
   const [users] = useData<User>("users", []);
   const [allItems, setAllItems] = useState<Item[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -141,16 +140,14 @@ export function OrderForm() {
     fetchAllOrderItems();
   }, [fetchAllOrderItems]);
 
-  const effectiveItems = allItems.length > 0 ? allItems : items;
-
   const itemOptions = useMemo(() => {
     const selectedCompanyName = normalizeCompanyName(companies.find((company) => company.id === companyId)?.name);
-    return effectiveItems
+    return allItems
       .filter((item) => !companyId || getItemCustomerName(item) === selectedCompanyName)
       .slice()
       .sort((a,b) => (a.name||"").localeCompare(b.name||""))
       .map(i => ({ value: i.id, label: i.name }));
-  }, [effectiveItems, companyId, companies]);
+  }, [allItems, companyId, companies]);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const location = useLocation();
@@ -198,7 +195,7 @@ export function OrderForm() {
         setIsSubmitting(true);
 
         const itemMap = new Map<string, Item>();
-        effectiveItems.forEach((item) => {
+        allItems.forEach((item) => {
           const keys = [item.name, (item as any)?.itemName]
             .map((value) => normalizeText(value))
             .filter(Boolean);
@@ -490,7 +487,7 @@ export function OrderForm() {
       return;
     }
     setItemId(id);
-    const it = effectiveItems.find(i => i.id === id);
+    const it = allItems.find(i => i.id === id);
     const linkedCompanyId = resolveItemCompanyId(it);
     if (!companyId && linkedCompanyId) {
       setCompanyId(linkedCompanyId);
@@ -509,7 +506,7 @@ export function OrderForm() {
       return;
     }
     if (!itemId) return;
-    const selectedItem = effectiveItems.find((item) => item.id === itemId);
+    const selectedItem = allItems.find((item) => item.id === itemId);
     const resolvedCompanyId = resolveItemCompanyId(selectedItem);
     if (resolvedCompanyId !== id) {
       setItemId("");
@@ -678,7 +675,7 @@ export function OrderForm() {
                 <td className="px-4 py-2 border border-black">{companies.find(c => c.id === o.companyId)?.name}</td>
                 <td className="px-4 py-2 border border-black">{o.poNumber}</td>
                 <td className="px-4 py-2 border border-black">{o.erpCode}</td>
-                <td className="px-4 py-2 border border-black">{effectiveItems.find(i => i.id === o.itemId)?.name}</td>
+                <td className="px-4 py-2 border border-black">{allItems.find(i => i.id === o.itemId)?.name}</td>
                 <td className="px-4 py-2 text-right border border-black">{o.qty}</td>
                 <td className="px-4 py-2 text-right border border-black">{o.rate}</td>
                 <td className="px-4 py-2 text-right border border-black">{users.find(u => u.id === o.orderBy)?.name}</td>
