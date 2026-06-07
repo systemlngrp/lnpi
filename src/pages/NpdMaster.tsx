@@ -145,7 +145,7 @@ export function NpdMaster() {
   const [total, setTotal] = useState(0);
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const pageSize = 10000;
+  const [pageSize, setPageSize] = useState(100);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -225,6 +225,25 @@ export function NpdMaster() {
             {loading ? <Spinner size={18} /> : null}
             <span>{loading ? "Loading NPD items..." : pageLabel}</span>
           </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs font-black uppercase">
+              Rows
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPage(1);
+                  setPageSize(Number(e.target.value));
+                }}
+                disabled={loading}
+                className="rounded border border-black bg-white px-2 py-1 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {[50, 100, 250, 500].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
           {totalPages > 1 ? (
             <div className="flex items-center gap-2">
               <button
@@ -248,6 +267,7 @@ export function NpdMaster() {
               </button>
             </div>
           ) : null}
+          </div>
         </div>
 
         <div className="table-scroll-shell">
