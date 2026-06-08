@@ -65,12 +65,12 @@ export function LoadingMaster() {
       slip.lines.forEach(line => {
         const plan = plans.find(p => p.id === line.dispatchPlanId);
         const order = orders.find(o => o.id === plan?.orderId);
-        const item = npdItems.find(i => i.id === order?.itemId);
-        if (item?.erpCode) codes.add(item.erpCode);
+        const erp = String(order?.erpCode || "").trim();
+        if (erp) codes.add(erp);
       });
     });
     return ["All", ...Array.from(codes).sort()];
-  }, [loadingSlips, plans, orders, npdItems]);
+  }, [loadingSlips, plans, orders]);
 
   const itemOptions = useMemo(() => {
     const names = new Set<string>();
@@ -102,7 +102,9 @@ export function LoadingMaster() {
         
         if (item?.name) uniqueItemNames.add(item.name);
         if (company?.name) uniqueCompanies.add(company.name);
-        if (item?.erpCode) uniqueErpCodes.add(item.erpCode);
+        
+        const erp = String(order?.erpCode || "").trim();
+        if (erp) uniqueErpCodes.add(erp);
       });
 
       return {
