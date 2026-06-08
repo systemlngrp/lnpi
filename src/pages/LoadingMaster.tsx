@@ -36,12 +36,54 @@ export function LoadingMaster() {
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("All");
+  const [erpFilter, setErpFilter] = useState("All");
+  const [itemFilter, setItemFilter] = useState("All");
   const [expandedSlipIds, setExpandedSlipIds] = useState<Set<string>>(new Set());
   const [editingSlipIds, setEditingSlipIds] = useState<Set<string>>(new Set());
   const [draftBySlipId, setDraftBySlipId] = useState<Record<string, LoadingSlip>>({});
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
   const getTruckNo = (id: string) => trucks.find(t => t.id === id)?.truckNo || "Unknown";
+
+  const companyOptions = useMemo(() => {
+    const names = new Set<string>();
+    loadingSlips.forEach(slip => {
+      slip.lines.forEach(line => {
+        const plan = plans.find(p => p.id === line.dispatchPlanId);
+        const order = orders.find(o => o.id === plan?.orderId);
+        const company = companies.find(c => c.id === order?.companyId);
+        if (company?.name) names.add(company.name);
+      });
+    });
+    return ["All", ...Array.from(names).sort()];
+  }, [loadingSlips, plans, orders, companies]);
+
+  const erpOptions = useMemo(() => {
+    const codes = new Set<string>();
+    loadingSlips.forEach(slip => {
+      slip.lines.forEach(line => {
+        const plan = plans.find(p => p.id === line.dispatchPlanId);
+        const order = orders.find(o => o.id === plan?.orderId);
+        const item = npdItems.find(i => i.id === order?.itemId);
+        if (item?.erpCode) codes.add(item.erpCode);
+      });
+    });
+    return ["All", ...Array.from(codes).sort()];
+  }, [loadingSlips, plans, orders, npdItems]);
+
+  const itemOptions = useMemo(() => {
+    const names = new Set<string>();
+    loadingSlips.forEach(slip => {
+      slip.lines.forEach(line => {
+        const plan = plans.find(p => p.id === line.dispatchPlanId);
+        const order = orders.find(o => o.id === plan?.orderId);
+        const item = npdItems.find(i => i.id === order?.itemId);
+        if (item?.name) names.add(item.name);
+      });
+    });
+    return ["All", ...Array.from(names).sort()];
+  }, [loadingSlips, plans, orders, npdItems]);
 
   const processedSlips = useMemo(() => {
     return loadingSlips.map(slip => {
@@ -71,15 +113,15 @@ export function LoadingMaster() {
         erpCodes: Array.from(uniqueErpCodes).join(", ")
       };
     }).filter(slip => {
-      const q = searchTerm.toLowerCase();
-      return (
-        slip.slipNo.toLowerCase().includes(q) ||
-        slip.itemNames.toLowerCase().includes(q) ||
-        slip.companyNames.toLowerCase().includes(q) ||
-        slip.erpCodes.toLowerCase().includes(q)
-      );
+      const q = searchTerm.toLowerCase().trim();
+      const matchesSearch = !q || slip.slipNo.toLowerCase().includes(q);
+      const matchesCompany = companyFilter === "All" || slip.companyNames.includes(companyFilter);
+      const matchesErp = erpFilter === "All" || slip.erpCodes.includes(erpFilter);
+      const matchesItem = itemFilter === "All" || slip.itemNames.includes(itemFilter);
+      
+      return matchesSearch && matchesCompany && matchesErp && matchesItem;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [loadingSlips, plans, orders, npdItems, companies, searchTerm]);
+  }, [loadingSlips, plans, orders, npdItems, companies, searchTerm, companyFilter, erpFilter, itemFilter]);
 
   const handleDownloadPdf = async (slip: LoadingSlip) => {
     setIsDownloading(slip.id);
@@ -136,8 +178,8 @@ export function LoadingMaster() {
       return;
     }
     if (slip.invoiceId) {
-      const confirmed = window.confirm("This slip is invoiced. Editing will update the linked invoice totals. Continue?");
-      if (!confirmed) return;
+      alert("Invoiced loading slips cannot be edited.");
+      return;
     }
     setEditingSlipIds((prev) => new Set(prev).add(slip.id));
     setDraftBySlipId((prev) => ({ ...prev, [slip.id]: JSON.parse(JSON.stringify(slip)) }));
@@ -345,6 +387,42 @@ export function LoadingMaster() {
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="bg-slate-50 border border-black rounded p-4 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-500">Company Filter</label>
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              className="w-full rounded border border-black bg-white px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-black"
+            >
+              {companyOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-500">Item Filter</label>
+            <select
+              value={itemFilter}
+              onChange={(e) => setItemFilter(e.target.value)}
+              className="w-full rounded border border-black bg-white px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-black"
+            >
+              {itemOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-500">ERP Filter</label>
+            <select
+              value={erpFilter}
+              onChange={(e) => setErpFilter(e.target.value)}
+              className="w-full rounded border border-black bg-white px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-black"
+            >
+              {erpOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white border-2 border-black rounded shadow-sm overflow-hidden">
         <table className="min-w-full border-collapse">
           <thead className="bg-slate-100">
@@ -353,7 +431,8 @@ export function LoadingMaster() {
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Status</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Date</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Company</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Items (ERP)</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Item</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">ERP</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border-b border-black">Total Qty</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border-b border-black">Actions</th>
             </tr>
@@ -361,7 +440,7 @@ export function LoadingMaster() {
           <tbody className="bg-white divide-y divide-black">
             {processedSlips.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
+                <td colSpan={8} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
               </tr>
             ) : processedSlips.map((slip) => (
               <tr key={slip.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
@@ -390,13 +469,18 @@ export function LoadingMaster() {
                   {formatDate(slip.date)}
                 </td>
                 <td className="px-6 py-4 text-sm text-black">
-                  <div className="max-w-xs truncate font-medium" title={slip.companyNames}>
+                  <div className="max-w-[150px] truncate font-medium" title={slip.companyNames}>
                     {slip.companyNames || "-"}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-sm text-slate-600">
-                  <div className="max-w-md truncate" title={slip.itemNames}>
-                    {slip.itemNames} <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">({slip.erpCodes})</span>
+                  <div className="max-w-[200px] truncate" title={slip.itemNames}>
+                    {slip.itemNames || "-"}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-slate-600">
+                  <div className="max-w-[100px] truncate font-bold uppercase tracking-tight" title={slip.erpCodes}>
+                    {slip.erpCodes || "-"}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-600">
@@ -418,8 +502,9 @@ export function LoadingMaster() {
                       <button
                         type="button"
                         onClick={() => startEdit(slip)}
-                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded bg-white hover:bg-slate-50 transition-colors uppercase"
-                        title="Edit loading slip"
+                        disabled={!!slip.invoiceId}
+                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded bg-white hover:bg-slate-50 transition-colors uppercase disabled:opacity-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                        title={slip.invoiceId ? "Invoiced slip cannot be edited" : "Edit loading slip"}
                       >
                         Edit
                       </button>
@@ -453,7 +538,7 @@ export function LoadingMaster() {
               const lines = getSlipLines(draft);
               return (
                 <tr key={`${slip.id}-details`} className="bg-white">
-                  <td colSpan={7} className="px-6 pb-6 pt-2 border-t border-black">
+                  <td colSpan={8} className="px-6 pb-6 pt-2 border-t border-black">
                     <div className="rounded border border-black overflow-hidden">
                       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3 border-b border-black">
                         <div className="text-sm font-bold text-black">
