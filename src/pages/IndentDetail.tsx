@@ -11,16 +11,6 @@ import { withIndentTotals } from "../lib/indentTotals";
 export function IndentDetail() {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
-
   const navigate = useNavigate();
   const { id = "" } = useParams();
   const [indents, setIndents] = useData<Indent>("indents", []);
@@ -38,12 +28,21 @@ export function IndentDetail() {
 
   const lineValues = useMemo(
     () =>
-      lineRows.map((line) => ({
-        ...line,
-        material: materials.find((row) => row.id === line.materialId) || null,
-        qtyValue: editableQty[line.id] ?? String(Number(line.qty || 0)),
-      })),
-    [editableQty, lineRows, materials]
+      lineRows
+        .map((line) => ({
+          ...line,
+          material: materials.find((row) => row.id === line.materialId) || null,
+          qtyValue: editableQty[line.id] ?? String(Number(line.qty || 0)),
+        }))
+        .filter((row) => {
+          if (!searchTerm.trim()) return true;
+          const q = searchTerm.toLowerCase().trim();
+          return (
+            (row.erpCode || "").toLowerCase().includes(q) ||
+            (row.material?.name || "").toLowerCase().includes(q)
+          );
+        }),
+    [editableQty, lineRows, materials, searchTerm]
   );
   const handleQtyChange = (lineId: string, value: string) => {
     setEditableQty((prev) => ({ ...prev, [lineId]: value }));

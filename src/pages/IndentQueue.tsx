@@ -44,19 +44,34 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [pdfIndentId, setPdfIndentId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const currentSetting = settings[0];
 
   const visibleIndents = useMemo(
     () =>
       indents
-        .filter((indent) => indent.status === mode)
+        .filter((indent) => {
+          if (indent.status !== mode) return false;
+          if (!searchTerm.trim()) return true;
+          
+          const q = searchTerm.toLowerCase().trim();
+          const indentLinesForThis = indentLines.filter(l => l.indentId === indent.id);
+          const itemSummary = getLineSummary(indentLinesForThis, materials).toLowerCase();
+          
+          return (
+            (indent.indentNo || "").toLowerCase().includes(q) ||
+            (indent.requestedBy || "").toLowerCase().includes(q) ||
+            (indent.indentType || "").toLowerCase().includes(q) ||
+            itemSummary.includes(q)
+          );
+        })
         .sort((a, b) => {
           const timeA = new Date(a.updateTimestamp || a.requisitionDate || 0).getTime();
           const timeB = new Date(b.updateTimestamp || b.requisitionDate || 0).getTime();
           return timeB - timeA;
         }),
-    [indents, mode]
+    [indents, mode, searchTerm, indentLines, materials]
   );
 
   const handleExportPdf = () => {
@@ -454,18 +469,6 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
 }
 
 export function IndentPending() {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
-
   return <IndentQueue mode="Pending" />;
 }
 

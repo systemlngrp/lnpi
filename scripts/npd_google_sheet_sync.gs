@@ -11,15 +11,44 @@ const NPD_SYNC_CONFIG = {
   flushTriggerHandler: 'flushQueuedNpdSync',
 };
 
+const COMPANY_SYNC_CONFIG = {
+  apiUrl: 'https://darkred-lobster-409686.hostingersite.com/api/npd-sync',
+  secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
+  tabName: 'Companies',
+  spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
+  idHeader: 'Id',
+  hostingerSyncHeader: 'NPD Hostinger Sync',
+  flushDelayMs: 15000,
+  pendingRowsPropertyKey: 'COMPANY_PENDING_ROWS',
+  pendingFullSyncPropertyKey: 'COMPANY_PENDING_FULL_SYNC',
+  flushTriggerHandler: 'flushQueuedCompanySync',
+};
+
 function syncNpdSheetToHostinger() {
   return forceFullNpdSync();
 }
 
+function syncCompaniesSheetToHostinger() {
+  return forceFullCompanySync();
+}
+
+function formatDate_(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+}
+
 function forceFullNpdSync() {
-  const spreadsheet = SpreadsheetApp.openById(NPD_SYNC_CONFIG.spreadsheetId);
-  const sheet = spreadsheet.getSheetByName(NPD_SYNC_CONFIG.tabName);
+  return performFullSync_(NPD_SYNC_CONFIG, true);
+}
+
+function forceFullCompanySync() {
+  return performFullSync_(COMPANY_SYNC_CONFIG, false);
+}
+
+function performFullSync_(config, skipAlreadySynced) {
+  const spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
+  const sheet = spreadsheet.getSheetByName(config.tabName);
   if (!sheet) {
-    throw new Error(`Sheet tab not found: ${NPD_SYNC_CONFIG.tabName}`);
+    throw new Error(`Sheet tab not found: ${config.tabName}`);
   }
 
   const values = sheet.getDataRange().getDisplayValues();
@@ -28,10 +57,10 @@ function forceFullNpdSync() {
   }
 
   const headers = values[0].map((header) => String(header || '').trim());
-  const hostingerSyncIndex = headers.indexOf(NPD_SYNC_CONFIG.hostingerSyncHeader);
+  const hostingerSyncIndex = headers.indexOf(config.hostingerSyncHeader);
 
   if (hostingerSyncIndex === -1) {
-    throw new Error(`Column "${NPD_SYNC_CONFIG.hostingerSyncHeader}" not found in sheet.`);
+    throw new Error(`Column "${config.hostingerSyncHeader}" not found in sheet.`);
   }
 
   const allRowsToSync = [];
@@ -43,43 +72,43 @@ function forceFullNpdSync() {
     if (isBlankRow) continue;
 
     const hostingerSyncValue = String(row[hostingerSyncIndex] || '').trim();
-    if (hostingerSyncValue === '') {
+    if (!skipAlreadySynced || hostingerSyncValue === '') {
       const mapped = {};
       headers.forEach((header, index) => {
         mapped[header] = row[index] ?? '';
       });
       allRowsToSync.push(mapped);
-      allRowIndicesToUpdate.push(i + 1); // 1-based index
+      allRowIndicesToUpdate.push(i + 1);
     }
   }
 
   if (allRowsToSync.length === 0) {
-    Logger.log('No rows pending sync (all have timestamps or are empty).');
+    Logger.log('No rows pending sync for %s.', config.tabName);
     return { ok: true, message: 'No rows pending sync.', processedRows: 0 };
   }
 
+  return processBatchSync_(config, spreadsheet, sheet, allRowsToSync, allRowIndicesToUpdate, hostingerSyncIndex);
+}
+
+function processBatchSync_(config, spreadsheet, sheet, allRowsToSync, allRowIndicesToUpdate, hostingerSyncIndex) {
   const batchSize = 100;
   let totalProcessed = 0;
   let lastResult = null;
 
-  Logger.log('Starting sync for %s total pending rows in batches of %s', allRowsToSync.length, batchSize);
-
   for (let i = 0; i < allRowsToSync.length; i += batchSize) {
     const rowsToSync = allRowsToSync.slice(i, i + batchSize);
     const rowIndicesToUpdate = allRowIndicesToUpdate.slice(i, i + batchSize);
-    const syncTimestamp = new Date().toISOString();
+    const syncTimestamp = formatDate_(new Date());
 
-    Logger.log('Syncing batch %s (%s rows)...', (i / batchSize) + 1, rowsToSync.length);
-
-    const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.apiUrl, {
+    const response = UrlFetchApp.fetch(config.apiUrl, {
       method: 'post',
       contentType: 'application/json',
       muteHttpExceptions: true,
       headers: {
-        'x-npd-sync-secret': NPD_SYNC_CONFIG.secret,
+        'x-npd-sync-secret': config.secret,
       },
       payload: JSON.stringify({
-        spreadsheetId: NPD_SYNC_CONFIG.spreadsheetId,
+        spreadsheetId: config.spreadsheetId,
         spreadsheetName: spreadsheet.getName(),
         tabName: sheet.getName(),
         syncMode: 'full_batch_chunk',
@@ -90,15 +119,12 @@ function forceFullNpdSync() {
 
     const responseText = response.getContentText();
     const responseCode = response.getResponseCode();
-    Logger.log('Batch sync response code: %s', responseCode);
 
     if (responseCode >= 400) {
-      Logger.log('Batch sync failed at chunk starting at index %s: %s', i, responseText);
-      throw new Error(`NPD sync failed at batch starting row ${rowIndicesToUpdate[0]}: ${responseText}`);
+      Logger.log('Sync failed for %s: %s', config.tabName, responseText);
+      throw new Error(`Sync failed for ${config.tabName} at row ${rowIndicesToUpdate[0]}: ${responseText}`);
     }
 
-    // Update timestamps in the sheet for THIS batch
-    Logger.log('Updating timestamps for %s rows in this batch', rowIndicesToUpdate.length);
     rowIndicesToUpdate.forEach((rowIndex) => {
       try {
         sheet.getRange(rowIndex, hostingerSyncIndex + 1).setValue(syncTimestamp);
@@ -115,103 +141,96 @@ function forceFullNpdSync() {
   return {
     ...lastResult,
     totalProcessed: totalProcessed,
-    message: `Successfully synced ${totalProcessed} rows in batches.`
+    message: `Successfully synced ${totalProcessed} rows to ${config.tabName}.`
   };
 }
 
 function onNpdSheetEdit(e) {
   if (!e || !e.range) {
-    scheduleNpdFlush_();
     return;
   }
 
   const sheet = e.range.getSheet();
-  if (!sheet || sheet.getName() !== NPD_SYNC_CONFIG.tabName) {
-    return;
+  const sheetName = sheet.getName();
+  
+  if (sheetName === NPD_SYNC_CONFIG.tabName) {
+    handleSheetEdit_(e, NPD_SYNC_CONFIG, true);
+  } else if (sheetName === COMPANY_SYNC_CONFIG.tabName) {
+    handleSheetEdit_(e, COMPANY_SYNC_CONFIG, false);
   }
+}
 
+function handleSheetEdit_(e, config, skipIfSynced) {
+  const sheet = e.range.getSheet();
   const rowIndex = e.range.getRow();
+  
   if (rowIndex <= 1) {
-    queueFullNpdSync_();
-    scheduleNpdFlush_();
+    queueFullSync_(config);
+    scheduleFlush_(config);
     return;
   }
 
-  const rowPayload = buildSheetRowPayload_(sheet, rowIndex);
+  const rowPayload = buildRowPayload_(sheet, rowIndex, config, skipIfSynced);
   if (!rowPayload) {
     return;
   }
 
-  queuePendingNpdRow_(rowPayload);
-  scheduleNpdFlush_();
+  queuePendingRow_(rowPayload, config);
+  scheduleFlush_(config);
 }
 
 function onNpdSheetChange(e) {
-  const spreadsheet = SpreadsheetApp.openById(NPD_SYNC_CONFIG.spreadsheetId);
-  const sheet = spreadsheet.getSheetByName(NPD_SYNC_CONFIG.tabName);
-  if (!sheet) {
-    return;
-  }
-
   const changeType = e && e.changeType ? String(e.changeType) : 'UNKNOWN';
   if (changeType === 'EDIT') {
     return;
   }
 
-  queueFullNpdSync_();
-  scheduleNpdFlush_();
-}
-
-function installNpdSyncTrigger() {
-  const spreadsheet = SpreadsheetApp.openById(NPD_SYNC_CONFIG.spreadsheetId);
-  ScriptApp.getProjectTriggers()
-    .filter((trigger) => ['onNpdSheetChange', 'onNpdSheetEdit', NPD_SYNC_CONFIG.flushTriggerHandler].includes(trigger.getHandlerFunction()))
-    .forEach((trigger) => ScriptApp.deleteTrigger(trigger));
-
-  ScriptApp.newTrigger('onNpdSheetChange')
-    .forSpreadsheet(spreadsheet)
-    .onChange()
-    .create();
-
-  ScriptApp.newTrigger('onNpdSheetEdit')
-    .forSpreadsheet(spreadsheet)
-    .onEdit()
-    .create();
+  queueFullSync_(NPD_SYNC_CONFIG);
+  scheduleFlush_(NPD_SYNC_CONFIG);
+  
+  queueFullSync_(COMPANY_SYNC_CONFIG);
+  scheduleFlush_(COMPANY_SYNC_CONFIG);
 }
 
 function flushQueuedNpdSync() {
-  const spreadsheet = SpreadsheetApp.openById(NPD_SYNC_CONFIG.spreadsheetId);
-  const sheet = spreadsheet.getSheetByName(NPD_SYNC_CONFIG.tabName);
-  if (!sheet) {
-    throw new Error(`Sheet tab not found: ${NPD_SYNC_CONFIG.tabName}`);
-  }
+  return performFlush_(NPD_SYNC_CONFIG, NPD_SYNC_CONFIG.npdIdHeader);
+}
+
+function flushQueuedCompanySync() {
+  return performFlush_(COMPANY_SYNC_CONFIG, COMPANY_SYNC_CONFIG.idHeader);
+}
+
+function performFlush_(config, idHeader) {
+  const spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
+  const sheet = spreadsheet.getSheetByName(config.tabName);
+  if (!sheet) return;
 
   const properties = PropertiesService.getScriptProperties();
-  const runFullSync = properties.getProperty(NPD_SYNC_CONFIG.pendingFullSyncPropertyKey) === 'true';
-  const pendingRows = getPendingNpdRows_();
+  const runFullSync = properties.getProperty(config.pendingFullSyncPropertyKey) === 'true';
+  const pendingRows = getPendingRows_(config);
 
   if (runFullSync) {
-    const result = forceFullNpdSync();
-    clearPendingNpdQueue_();
-    deleteFlushTriggers_();
+    const result = (config.tabName === 'NPD') ? forceFullNpdSync() : forceFullCompanySync();
+    clearPendingQueue_(config);
+    deleteFlushTriggers_(config);
     return result;
   }
 
   if (!pendingRows.length) {
-    deleteFlushTriggers_();
-    return { ok: true, syncMode: 'batch', processedRows: 0, message: 'No pending NPD rows.' };
+    deleteFlushTriggers_(config);
+    return { ok: true, processedRows: 0 };
   }
 
-  const syncTimestamp = new Date().toISOString();
-  const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.apiUrl, {
+  const syncTimestamp = formatDate_(new Date());
+  const response = UrlFetchApp.fetch(config.apiUrl, {
     method: 'post',
     contentType: 'application/json',
     muteHttpExceptions: true,
     headers: {
-      'x-npd-sync-secret': NPD_SYNC_CONFIG.secret,
+      'x-npd-sync-secret': config.secret,
     },
     payload: JSON.stringify({
-      spreadsheetId: NPD_SYNC_CONFIG.spreadsheetId,
+      spreadsheetId: config.spreadsheetId,
       spreadsheetName: spreadsheet.getName(),
       tabName: sheet.getName(),
       syncMode: 'batch',
@@ -220,49 +239,44 @@ function flushQueuedNpdSync() {
     }),
   });
 
-  const responseText = response.getContentText();
-  Logger.log('NPD batch sync response code: %s', response.getResponseCode());
-  Logger.log('NPD batch sync response body: %s', responseText);
-
   if (response.getResponseCode() >= 400) {
-    throw new Error(`NPD batch sync failed: ${responseText}`);
+    throw new Error(`Batch sync failed for ${config.tabName}: ${response.getContentText()}`);
   }
 
-  // Update timestamps for successfully synced batch rows
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
-  const npdIdIndex = headers.indexOf(NPD_SYNC_CONFIG.npdIdHeader);
-  const hostingerSyncIndex = headers.indexOf(NPD_SYNC_CONFIG.hostingerSyncHeader);
+  updateTimestamps_(sheet, pendingRows, idHeader, config.hostingerSyncHeader, syncTimestamp);
 
-  if (npdIdIndex !== -1 && hostingerSyncIndex !== -1) {
-    Logger.log('Batch update: searching for %s rows to timestamp in column %s', pendingRows.length, hostingerSyncIndex + 1);
+  clearPendingQueue_(config);
+  deleteFlushTriggers_(config);
+  return JSON.parse(response.getContentText());
+}
+
+function updateTimestamps_(sheet, pendingRows, idHeader, syncHeader, timestamp) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  const idIndex = headers.indexOf(idHeader);
+  const syncIndex = headers.indexOf(syncHeader);
+
+  if (idIndex !== -1 && syncIndex !== -1) {
     const sheetData = sheet.getDataRange().getDisplayValues();
     pendingRows.forEach((row) => {
-      const npdId = String(row[NPD_SYNC_CONFIG.npdIdHeader] || '').trim();
-      if (!npdId) return;
+      const idValue = String(row[idHeader] || '').trim();
+      if (!idValue) return;
 
       for (let i = 1; i < sheetData.length; i++) {
-        if (String(sheetData[i][npdIdIndex] || '').trim() === npdId) {
+        if (String(sheetData[i][idIndex] || '').trim() === idValue) {
           try {
-            sheet.getRange(i + 1, hostingerSyncIndex + 1).setValue(syncTimestamp);
-            Logger.log('Set timestamp for NPD ID: %s at row %s', npdId, i + 1);
+            sheet.getRange(i + 1, syncIndex + 1).setValue(timestamp);
           } catch (err) {
-            Logger.log('Error setting timestamp for NPD ID %s: %s', npdId, err);
+            Logger.log('Error setting timestamp for ID %s: %s', idValue, err);
           }
           break;
         }
       }
     });
     SpreadsheetApp.flush();
-  } else {
-    Logger.log('Batch update failed: Headers not found (NPD ID: %s, SYNC: %s)', npdIdIndex, hostingerSyncIndex);
   }
-
-  clearPendingNpdQueue_();
-  deleteFlushTriggers_();
-  return JSON.parse(responseText);
 }
 
-function buildSheetRowPayload_(sheet, rowIndex) {
+function buildRowPayload_(sheet, rowIndex, config, skipIfSynced) {
   const headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   const dataRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   const payload = {};
@@ -273,68 +287,76 @@ function buildSheetRowPayload_(sheet, rowIndex) {
     payload[normalizedHeader] = dataRow[index] ?? '';
   });
 
-  // Only sync if Hostinger Sync is blank
-  const hostingerSyncValue = String(payload[NPD_SYNC_CONFIG.hostingerSyncHeader] || '').trim();
-  if (hostingerSyncValue !== '') {
-    Logger.log('Skipping row %s because it is already synced (HOSTINGER SYNC is not blank).', rowIndex);
-    return null;
+  if (skipIfSynced) {
+    const hostingerSyncValue = String(payload[config.hostingerSyncHeader] || '').trim();
+    if (hostingerSyncValue !== '') return null;
   }
 
-  const npdId = String(payload[NPD_SYNC_CONFIG.npdIdHeader] || '').trim();
-  if (!npdId) {
-    Logger.log('Skipping row %s because %s is blank.', rowIndex, NPD_SYNC_CONFIG.npdIdHeader);
-    return null;
-  }
+  const idValue = String(payload[config.idHeader || config.npdIdHeader] || '').trim();
+  if (!idValue) return null;
 
   return payload;
 }
 
-function queuePendingNpdRow_(rowPayload) {
-  const npdId = String(rowPayload[NPD_SYNC_CONFIG.npdIdHeader] || '').trim();
-  if (!npdId) return;
+function queuePendingRow_(rowPayload, config) {
+  const idValue = String(rowPayload[config.idHeader || config.npdIdHeader] || '').trim();
+  if (!idValue) return;
 
   const properties = PropertiesService.getScriptProperties();
-  const current = getPendingNpdRowMap_();
-  current[npdId] = rowPayload;
-  properties.setProperty(NPD_SYNC_CONFIG.pendingRowsPropertyKey, JSON.stringify(current));
+  const current = getPendingRowMap_(config);
+  current[idValue] = rowPayload;
+  properties.setProperty(config.pendingRowsPropertyKey, JSON.stringify(current));
 }
 
-function getPendingNpdRows_() {
-  return Object.values(getPendingNpdRowMap_());
+function getPendingRows_(config) {
+  return Object.values(getPendingRowMap_(config));
 }
 
-function getPendingNpdRowMap_() {
-  const raw = PropertiesService.getScriptProperties().getProperty(NPD_SYNC_CONFIG.pendingRowsPropertyKey);
+function getPendingRowMap_(config) {
+  const raw = PropertiesService.getScriptProperties().getProperty(config.pendingRowsPropertyKey);
   if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    return JSON.parse(raw) || {};
   } catch (error) {
-    Logger.log('Failed to parse pending NPD rows: %s', error);
     return {};
   }
 }
 
-function queueFullNpdSync_() {
-  PropertiesService.getScriptProperties().setProperty(NPD_SYNC_CONFIG.pendingFullSyncPropertyKey, 'true');
+function queueFullSync_(config) {
+  PropertiesService.getScriptProperties().setProperty(config.pendingFullSyncPropertyKey, 'true');
 }
 
-function clearPendingNpdQueue_() {
+function clearPendingQueue_(config) {
   const properties = PropertiesService.getScriptProperties();
-  properties.deleteProperty(NPD_SYNC_CONFIG.pendingRowsPropertyKey);
-  properties.deleteProperty(NPD_SYNC_CONFIG.pendingFullSyncPropertyKey);
+  properties.deleteProperty(config.pendingRowsPropertyKey);
+  properties.deleteProperty(config.pendingFullSyncPropertyKey);
 }
 
-function scheduleNpdFlush_() {
-  deleteFlushTriggers_();
-  ScriptApp.newTrigger(NPD_SYNC_CONFIG.flushTriggerHandler)
+function scheduleFlush_(config) {
+  deleteFlushTriggers_(config);
+  ScriptApp.newTrigger(config.flushTriggerHandler)
     .timeBased()
-    .after(NPD_SYNC_CONFIG.flushDelayMs)
+    .after(config.flushDelayMs)
     .create();
 }
 
-function deleteFlushTriggers_() {
+function deleteFlushTriggers_(config) {
   ScriptApp.getProjectTriggers()
-    .filter((trigger) => trigger.getHandlerFunction() === NPD_SYNC_CONFIG.flushTriggerHandler)
+    .filter((trigger) => trigger.getHandlerFunction() === config.flushTriggerHandler)
     .forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+}
+
+function installSyncTriggers() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  ScriptApp.getProjectTriggers().forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+
+  ScriptApp.newTrigger('onNpdSheetChange')
+    .forSpreadsheet(spreadsheet)
+    .onChange()
+    .create();
+
+  ScriptApp.newTrigger('onNpdSheetEdit')
+    .forSpreadsheet(spreadsheet)
+    .onEdit()
+    .create();
 }
