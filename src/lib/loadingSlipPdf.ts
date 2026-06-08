@@ -47,13 +47,29 @@ export async function downloadLoadingSlipPdf({
   doc.text("LOADING SLIP", 105, currentY, { align: "center" });
   currentY += 10;
 
+  const companyIds = new Set<string>();
+  slip.lines.forEach((line) => {
+    const plan = plans.find((p) => p.id === line.dispatchPlanId);
+    const order = orders.find((o) => o.id === plan?.orderId);
+    if (order?.companyId) companyIds.add(order.companyId);
+  });
+  const uniqueCompanies = Array.from(companyIds)
+    .map((id) => companies.find((c) => c.id === id))
+    .filter(Boolean) as Company[];
+
+  const companyDisplay = uniqueCompanies.length === 1 
+    ? uniqueCompanies[0].name 
+    : uniqueCompanies.length > 1 
+      ? "Multiple" 
+      : "-";
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   const details: Array<[string, string]> = [
     ["Slip No", slip.slipNo || "-"],
     ["Date", formatDate(slip.date)],
     ["Total Qty", slip.lines.reduce((sum, l) => sum + Number(l.loadedQty || 0), 0).toLocaleString()],
-    ["Status", slip.status === "Cancelled" ? "Cancelled" : "Active"],
+    ["Company", companyDisplay],
   ];
 
   details.forEach(([label, value], index) => {
@@ -66,16 +82,6 @@ export async function downloadLoadingSlipPdf({
   });
   currentY += 15;
 
-  const companyIds = new Set<string>();
-  slip.lines.forEach((line) => {
-    const plan = plans.find((p) => p.id === line.dispatchPlanId);
-    const order = orders.find((o) => o.id === plan?.orderId);
-    if (order?.companyId) companyIds.add(order.companyId);
-  });
-  const uniqueCompanies = Array.from(companyIds)
-    .map((id) => companies.find((c) => c.id === id))
-    .filter(Boolean) as Company[];
-
   if (uniqueCompanies.length === 1) {
     const company = uniqueCompanies[0];
     const companyLines = [company.address, company.district, company.state]
@@ -83,13 +89,6 @@ export async function downloadLoadingSlipPdf({
       .filter(Boolean)
       .join(", ");
     const gstLine = String(company.gstNo || "").trim();
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("Company:", 14, currentY);
-    doc.setFont("helvetica", "normal");
-    doc.text(company.name, 34, currentY);
-    currentY += 6;
 
     if (companyLines) {
       doc.setFontSize(9);
@@ -108,13 +107,6 @@ export async function downloadLoadingSlipPdf({
     }
 
     currentY += 2;
-  } else if (uniqueCompanies.length > 1) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("Companies:", 14, currentY);
-    doc.setFont("helvetica", "normal");
-    doc.text("Multiple", 38, currentY);
-    currentY += 8;
   }
 
   const rows = slip.lines.map((line, index) => {
