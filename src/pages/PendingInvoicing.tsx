@@ -464,7 +464,7 @@ export function PendingInvoicing() {
           }
         }
       }
-      
+
       await updateLineItems(prev => [...prev, ...lineItems]);
 
       await updateSlips(prev => prev.map(s => {
@@ -478,15 +478,13 @@ export function PendingInvoicing() {
       setBillingMode(null);
       setSelectedSlips(new Set());
       alert("Invoice generated successfully! Showing Pending Tally Posting...");
-      } catch (err) {
+    } catch (err) {
       console.error("Failed to generate invoice:", err);
       alert("Failed to generate invoice. Please check the console for details.");
-      } finally {
-        setIsSubmitting(false);
-      }
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
+    };
   const format2 = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
