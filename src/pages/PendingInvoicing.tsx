@@ -481,9 +481,8 @@ export function PendingInvoicing() {
       console.error("Failed to generate invoice:", err);
       alert("Failed to generate invoice. Please check the console for details.");
       } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
       }
-
     }
   };
 
