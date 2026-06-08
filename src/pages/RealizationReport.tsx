@@ -362,7 +362,7 @@ export function RealizationReport() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="text-sm font-bold uppercase tracking-[0.16em] text-white/85">Overall Realization Per Kg</div>
               <div className="flex flex-wrap items-center gap-3">
-                <div className="text-4xl font-black tracking-tight">{overall.average.toFixed(2)} <span className="text-base font-bold text-white/85">per kg</span></div>
+                <div className="text-4xl font-black tracking-tight">{Number(overall.average || 0).toFixed(2)} <span className="text-base font-bold text-white/85">per kg</span></div>
                 <div className={`rounded-full border px-4 py-2 text-sm font-black ${getTargetBadgeClass(currentTarget?.value || 0, overall.average)}`}>
                   Current Rate: {currentTarget?.value ?? "-"}
                 </div>
@@ -371,7 +371,7 @@ export function RealizationReport() {
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3">
                 <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/75">Filtered Qty</div>
-                <div className="mt-1 text-2xl font-black tracking-tight">{overall.totalQty.toFixed(2)}</div>
+                <div className="mt-1 text-2xl font-black tracking-tight">{Number(overall.totalQty || 0).toFixed(2)}</div>
               </div>
               <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3">
                 <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/75">Production Rows</div>
@@ -518,7 +518,7 @@ export function RealizationReport() {
                         : "bg-rose-50 text-rose-700"
                     }`}
                   >
-                    {row.average.toFixed(2)}
+                    {Number(row.average || 0).toFixed(2)}
                   </td>
                 ))}
               </tr>
@@ -557,7 +557,7 @@ export function RealizationReport() {
                           : "bg-rose-50 text-rose-700"
                       }`}
                     >
-                      {row.average.toFixed(2)}
+                      {Number(row.average || 0).toFixed(2)}
                     </td>
                   </tr>
                 ))

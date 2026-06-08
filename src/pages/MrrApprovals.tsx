@@ -300,12 +300,12 @@ export function MrrApprovals() {
                             </div>
                           ))}
                         </td>
-                        <td className="px-4 py-4 text-right font-bold">{mrrWeight.toFixed(2)}</td>
-                        <td className="px-4 py-4 text-right font-bold">{invWeight.toFixed(2)}</td>
+                        <td className="px-4 py-4 text-right font-bold">{Number(mrrWeight || 0).toFixed(2)}</td>
+                        <td className="px-4 py-4 text-right font-bold">{Number(invWeight || 0).toFixed(2)}</td>
                         <td className="px-4 py-4 text-right">{Number(firstLine.poRate || 0).toFixed(2)}</td>
                         <td className="px-4 py-4 text-right">{Number(firstLine.invoiceRate || 0).toFixed(2)}</td>
                         <td className="px-4 py-4 text-right">{Number(firstLine.gstRate || 0)}%</td>
-                        <td className="px-4 py-4 text-right font-black">{basicValue.toFixed(2)}</td>
+                        <td className="px-4 py-4 text-right font-black">{Number(basicValue || 0).toFixed(2)}</td>
                         <td className="px-4 py-4">
                           <div className="flex flex-col gap-1">
                             <div className="grid grid-cols-2 gap-1">

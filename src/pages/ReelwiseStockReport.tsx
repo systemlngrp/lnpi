@@ -401,16 +401,16 @@ export function ReelwiseStockReport() {
                     <td className="border-r border-black px-4 py-3">{row.size || ""}</td>
                     <td className="border-r border-black px-4 py-3">{row.bf || ""}</td>
                     <td className="border-r border-black px-4 py-3">{formatReportDate(row.issuedDate)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-amber-700">{row.issuedWeight.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-amber-700">{Number(row.issuedWeight || 0).toFixed(2)}</td>
                     <td className="border-r border-black px-4 py-3">{formatReportDate(row.returnedDate)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-violet-700">{row.returnedWeight.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-violet-700">{Number(row.returnedWeight || 0).toFixed(2)}</td>
                     <td className="border-r border-black px-4 py-3 text-right font-black text-emerald-700">
-                      <div>{row.availableWeight.toFixed(2)}</div>
+                      <div>{Number(row.availableWeight || 0).toFixed(2)}</div>
                       <div className="mt-1 whitespace-normal text-[11px] font-medium text-slate-500">
                         {row.availabilityFormula}
                       </div>
                     </td>
-                    <td className="border-r border-black px-4 py-3 text-right">{row.mrrQty.toFixed(2)}</td>
+                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.mrrQty || 0).toFixed(2)}</td>
                     <td className="px-4 py-3 text-right">{row.ageDays}</td>
                   </tr>
                 ))

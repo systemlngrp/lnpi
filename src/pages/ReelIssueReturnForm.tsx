@@ -842,7 +842,7 @@ export function ReelIssueReturnForm() {
                 <div className="space-y-4">
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Issue Weight</div>
-                    <div className="text-xl font-black">{consumptionSummary.issueWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+                    <div className="text-xl font-black">{Number(consumptionSummary.issueWt || 0).toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Issue Value</div>
@@ -853,7 +853,7 @@ export function ReelIssueReturnForm() {
                 <div className="space-y-4">
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Return Weight</div>
-                    <div className="text-xl font-black text-amber-400">{consumptionSummary.returnWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+                    <div className="text-xl font-black text-amber-400">{Number(consumptionSummary.returnWt || 0).toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Return Value</div>
@@ -864,7 +864,7 @@ export function ReelIssueReturnForm() {
                 <div className="space-y-4">
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Net Consumption Weight</div>
-                    <div className="text-2xl font-black text-indigo-300">{consumptionSummary.netWt.toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
+                    <div className="text-2xl font-black text-indigo-300">{Number(consumptionSummary.netWt || 0).toFixed(2)} <span className="text-xs text-slate-400">KG</span></div>
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Net Consumption Value</div>
