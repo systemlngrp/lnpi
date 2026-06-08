@@ -187,6 +187,24 @@ const NPD_SYNC_HEADER_MAP = {
 } as const;
 
 const NPD_SYNC_REQUIRED_HEADERS = ["NPD ID"] as const;
+
+const COMPANY_SYNC_HEADER_MAP = {
+  "Id": "id",
+  "Company Name": "name",
+  "Contact Person": "contactPerson",
+  "Contact Number": "contactNumber",
+  "Email": "email",
+  "Address": "address",
+  "District": "district",
+  "State": "state",
+  "GST No": "gstNo",
+  "GST Supply Type": "gstSupplyType",
+  "Deviation Allowed": "deviationAllowed",
+  "Tolerance Allowed": "toleranceAllowed",
+} as const;
+
+const COMPANY_SYNC_REQUIRED_HEADERS = ["Id", "Company Name"] as const;
+
 const NPD_SYNC_NUMERIC_KEYS = new Set([
   "erp",
   "rate",
@@ -246,6 +264,8 @@ const NPD_SYNC_NUMERIC_KEYS = new Set([
   "ply",
   "noOfParts",
   "noOfUps",
+  "deviationAllowed",
+  "toleranceAllowed",
 ]);
 
 const NPD_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
@@ -510,8 +530,34 @@ app.post("/api/npd-sync", async (req, res) => {
     return res.status(400).json({ error: "tabName is required." });
   }
 
-  if (NPD_SYNC_ALLOWED_TAB && tabName !== NPD_SYNC_ALLOWED_TAB) {
-    return res.status(400).json({ error: `Only tab '${NPD_SYNC_ALLOWED_TAB}' is allowed.` });
+  const tabConfigs: Record<string, any> = {
+    [NPD_SYNC_ALLOWED_TAB]: {
+      table: "npd",
+      idColumn: "npdId",
+      headerMap: NPD_SYNC_HEADER_MAP,
+      requiredHeaders: NPD_SYNC_REQUIRED_HEADERS,
+      mapFn: mapSheetRowToNpdRow,
+    },
+    "Companies": {
+      table: "companies",
+      idColumn: "id",
+      headerMap: COMPANY_SYNC_HEADER_MAP,
+      requiredHeaders: COMPANY_SYNC_REQUIRED_HEADERS,
+      mapFn: (row: Record<string, any>) => {
+        const mapped: Record<string, any> = {};
+        Object.entries(COMPANY_SYNC_HEADER_MAP).forEach(([header, key]) => {
+          if (!Object.prototype.hasOwnProperty.call(row, header)) return;
+          mapped[key] = normalizeSheetCellValue(key, row[header]);
+        });
+        mapped.id = stringOrEmpty(mapped.id);
+        return mapped;
+      },
+    }
+  };
+
+  const config = tabConfigs[tabName];
+  if (!config) {
+    return res.status(400).json({ error: `Only tab(s) ${Object.keys(tabConfigs).filter(Boolean).join(", ")} are allowed.` });
   }
 
   if (!Array.isArray(rawRowsPayload)) {
@@ -531,7 +577,7 @@ app.post("/api/npd-sync", async (req, res) => {
     })
   );
 
-  const missingRequiredHeaders = NPD_SYNC_REQUIRED_HEADERS.filter((header) =>
+  const missingRequiredHeaders = config.requiredHeaders.filter((header) =>
     rowsPayload.length > 0 && !rowsPayload.some((row) => Object.prototype.hasOwnProperty.call(row || {}, header))
   );
   if (missingRequiredHeaders.length > 0) {
@@ -539,7 +585,7 @@ app.post("/api/npd-sync", async (req, res) => {
   }
 
   const normalizedRows = rowsPayload.map((row, index) => {
-    const mapped = mapSheetRowToNpdRow((row || {}) as Record<string, any>);
+    const mapped = config.mapFn((row || {}) as Record<string, any>);
     return {
       rowNumber: index + 2,
       source: row || {},
@@ -548,40 +594,40 @@ app.post("/api/npd-sync", async (req, res) => {
   });
 
   const invalidRows = normalizedRows
-    .filter((entry) => !entry.mapped.npdId)
+    .filter((entry) => !entry.mapped[config.idColumn])
     .map((entry) => ({
       rowNumber: entry.rowNumber,
-      reason: "Missing NPD ID",
-      itemName: stringOrEmpty(entry.source?.["Item Name"]),
+      reason: `Missing ${config.idColumn}`,
+      itemName: stringOrEmpty(entry.source?.["Item Name"] || entry.source?.["Company Name"] || entry.source?.["Name"]),
     }));
 
   const duplicateCounter = new Map<string, number>();
-  const dedupedByNpdId = new Map<string, (typeof normalizedRows)[number]>();
+  const dedupedById = new Map<string, (typeof normalizedRows)[number]>();
   normalizedRows.forEach((entry) => {
-    const npdId = stringOrEmpty(entry.mapped.npdId);
-    if (!npdId) return;
-    duplicateCounter.set(npdId, (duplicateCounter.get(npdId) || 0) + 1);
-    dedupedByNpdId.set(npdId, entry);
+    const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
+    if (!syncId) return;
+    duplicateCounter.set(syncId, (duplicateCounter.get(syncId) || 0) + 1);
+    dedupedById.set(syncId, entry);
   });
-  const duplicateNpdIds = [...duplicateCounter.entries()]
+  const duplicateIds = [...duplicateCounter.entries()]
     .filter(([, count]) => count > 1)
-    .map(([npdId]) => npdId);
+    .map(([id]) => id);
 
-  const validRows = [...dedupedByNpdId.values()];
-  const incomingNpdIds = validRows.map((entry) => entry.mapped.npdId);
+  const validRows = [...dedupedById.values()];
+  const incomingIds = validRows.map((entry) => entry.mapped[config.idColumn]);
 
-  if (syncMode === "full" && duplicateNpdIds.length > 0) {
-    console.error(`${NPD_SYNC_LOG_PREFIX} Duplicate NPD IDs in full sync`, duplicateNpdIds);
+  if (syncMode === "full" && duplicateIds.length > 0) {
+    console.error(`${NPD_SYNC_LOG_PREFIX} Duplicate IDs in full sync`, duplicateIds);
     return res.status(400).json({
-      error: "Duplicate NPD ID values found in sync payload.",
-      duplicateNpdIds,
+      error: `Duplicate ${config.idColumn} values found in sync payload.`,
+      duplicateIds,
     });
   }
 
-  if (duplicateNpdIds.length > 0) {
+  if (duplicateIds.length > 0) {
     console.warn(
-      `${NPD_SYNC_LOG_PREFIX} Deduplicated repeated NPD IDs in batch payload`,
-      JSON.stringify({ duplicateNpdIds, keptRows: validRows.length })
+      `${NPD_SYNC_LOG_PREFIX} Deduplicated repeated IDs in batch payload`,
+      JSON.stringify({ duplicateIds, keptRows: validRows.length })
     );
   }
 
@@ -590,21 +636,22 @@ app.post("/api/npd-sync", async (req, res) => {
     await conn.beginTransaction();
 
     const [existingRows] = await conn.query(
-      "SELECT id, npdId FROM `npd` WHERE npdId IS NOT NULL AND TRIM(npdId) <> ''"
+      `SELECT id, \`${config.idColumn}\` as syncId FROM \`${config.table}\` WHERE \`${config.idColumn}\` IS NOT NULL AND TRIM(\`${config.idColumn}\`) <> ''`
     );
-    const existingByNpdId = new Map<string, any>();
+    const existingBySyncId = new Map<string, any>();
     (existingRows as any[]).forEach((row) => {
-      const npdId = stringOrEmpty(row.npdId);
-      if (npdId) existingByNpdId.set(npdId, row);
+      const syncId = stringOrEmpty(row.syncId);
+      if (syncId) existingBySyncId.set(syncId, row);
     });
 
     let inserted = 0;
     let updated = 0;
 
     for (const entry of validRows) {
-      const existing = existingByNpdId.get(entry.mapped.npdId);
+      const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
+      const existing = existingBySyncId.get(syncId);
       const payload: Record<string, any> = {
-        id: stringOrEmpty(existing?.id) || crypto.randomUUID(),
+        id: stringOrEmpty(existing?.id) || (config.idColumn === 'id' ? syncId : null) || crypto.randomUUID(),
         ...entry.mapped,
         syncSource: "google_sheets",
         syncStatus: "active",
@@ -622,34 +669,34 @@ app.post("/api/npd-sync", async (req, res) => {
         .join(", ");
 
       await conn.query(
-        `INSERT INTO \`npd\` (${insertColumns})
+        `INSERT INTO \`${config.table}\` (${insertColumns})
          VALUES (${insertPlaceholders})
          ON DUPLICATE KEY UPDATE ${updateColumns}`,
         values
       );
 
-      if (existing) updated += 1;
-      else inserted += 1;
+      if (existing) updated++;
+      else inserted++;
     }
 
     let removed = 0;
     if (syncMode === "full") {
-      if (incomingNpdIds.length > 0) {
+      if (incomingIds.length > 0) {
         const [result] = await conn.query(
-          `UPDATE \`npd\`
+          `UPDATE \`${config.table}\`
            SET \`syncStatus\` = 'removed',
                \`updatedBy\` = 'Google Sheets Sync',
                \`updateTimestamp\` = ?
            WHERE \`syncSource\` = 'google_sheets'
-             AND COALESCE(NULLIF(TRIM(\`npdId\`), ''), '') <> ''
-             AND \`npdId\` NOT IN (${incomingNpdIds.map(() => "?").join(", ")})
+             AND COALESCE(NULLIF(TRIM(\`${config.idColumn}\`), ''), '') <> ''
+             AND \`${config.idColumn}\` NOT IN (${incomingIds.map(() => "?").join(", ")})
              AND COALESCE(NULLIF(TRIM(\`syncStatus\`), ''), 'active') <> 'removed'`,
-          [syncTimestamp, ...incomingNpdIds]
+          [syncTimestamp, ...incomingIds]
         );
         removed = Number((result as any)?.affectedRows || 0);
       } else {
         const [result] = await conn.query(
-          `UPDATE \`npd\`
+          `UPDATE \`${config.table}\`
            SET \`syncStatus\` = 'removed',
                \`updatedBy\` = 'Google Sheets Sync',
                \`updateTimestamp\` = ?
@@ -672,7 +719,7 @@ app.post("/api/npd-sync", async (req, res) => {
       inserted,
       updated,
       removed,
-      duplicateNpdIds,
+      duplicateIds,
       invalidRows,
     };
     console.log(`${NPD_SYNC_LOG_PREFIX} Sync completed`, JSON.stringify(responsePayload));
@@ -2282,6 +2329,8 @@ async function initDb(retries = 5) {
           \`gstSupplyType\` VARCHAR(20) DEFAULT 'INTRA_STATE',
           \`deviationAllowed\` DECIMAL(10,2),
           \`toleranceAllowed\` DECIMAL(10,2),
+          \`syncSource\` VARCHAR(50),
+          \`syncStatus\` VARCHAR(20) DEFAULT 'active',
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -3067,6 +3116,8 @@ async function initDb(retries = 5) {
         { table: "companies", column: "district", type: "VARCHAR(255)" },
         { table: "companies", column: "state", type: "VARCHAR(255)" },
         { table: "companies", column: "gstNo", type: "VARCHAR(100)" },
+        { table: "companies", column: "syncSource", type: "VARCHAR(50)" },
+        { table: "companies", column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
         { table: "machines", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "machines", column: "maxOutputPerHour", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "machines", column: "updatedBy", type: "VARCHAR(255)" },

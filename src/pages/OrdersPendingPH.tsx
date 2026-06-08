@@ -8,7 +8,7 @@ import { Order } from "../types";
 import { formatDate } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronUp, ChevronDown, CheckCircle, XCircle, Edit } from "lucide-react";
 
 export function OrdersPendingPH() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -193,9 +193,29 @@ export function OrdersPendingPH() {
                 <td className="px-4 py-2 border border-black whitespace-nowrap">{getOrderByLabel(o.orderBy) || '-'}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">
-                  <button onClick={() => handleApprove(o.id)} className="bg-emerald-600 text-white px-3 py-1 rounded font-bold mr-2">Approve</button>
-                  <button onClick={() => handleCancel(o.id)} className="bg-red-600 text-white px-3 py-1 rounded font-bold mr-2">Cancel</button>
-                  <button onClick={() => navigate(`/orders/form?edit=${o.id}`)} className="bg-slate-200 text-black px-3 py-1 rounded font-bold">Edit</button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => handleApprove(o.id)} 
+                      title="Approve"
+                      className="text-emerald-600 hover:text-emerald-800 transition-colors"
+                    >
+                      <CheckCircle size={20} />
+                    </button>
+                    <button 
+                      onClick={() => handleCancel(o.id)} 
+                      title="Cancel"
+                      className="text-red-600 hover:text-red-800 transition-colors"
+                    >
+                      <XCircle size={20} />
+                    </button>
+                    <button 
+                      onClick={() => navigate(`/orders/form?edit=${o.id}`)} 
+                      title="Edit"
+                      className="text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      <Edit size={20} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

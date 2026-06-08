@@ -164,6 +164,21 @@ const NPD_SYNC_HEADER_MAP = {
   Spec: "spec"
 };
 const NPD_SYNC_REQUIRED_HEADERS = ["NPD ID"];
+const COMPANY_SYNC_HEADER_MAP = {
+  "Id": "id",
+  "Company Name": "name",
+  "Contact Person": "contactPerson",
+  "Contact Number": "contactNumber",
+  "Email": "email",
+  "Address": "address",
+  "District": "district",
+  "State": "state",
+  "GST No": "gstNo",
+  "GST Supply Type": "gstSupplyType",
+  "Deviation Allowed": "deviationAllowed",
+  "Tolerance Allowed": "toleranceAllowed"
+};
+const COMPANY_SYNC_REQUIRED_HEADERS = ["Id", "Company Name"];
 const NPD_SYNC_NUMERIC_KEYS = /* @__PURE__ */ new Set([
   "erp",
   "rate",
@@ -222,7 +237,9 @@ const NPD_SYNC_NUMERIC_KEYS = /* @__PURE__ */ new Set([
   "gsmLeastCost",
   "ply",
   "noOfParts",
-  "noOfUps"
+  "noOfUps",
+  "deviationAllowed",
+  "toleranceAllowed"
 ]);
 const NPD_SCHEMA_COLUMNS = [
   ...[...new Set(Object.values(NPD_SYNC_HEADER_MAP))].map((column) => ({
@@ -441,8 +458,33 @@ app.post("/api/npd-sync", async (req, res) => {
   if (!tabName) {
     return res.status(400).json({ error: "tabName is required." });
   }
-  if (NPD_SYNC_ALLOWED_TAB && tabName !== NPD_SYNC_ALLOWED_TAB) {
-    return res.status(400).json({ error: `Only tab '${NPD_SYNC_ALLOWED_TAB}' is allowed.` });
+  const tabConfigs = {
+    [NPD_SYNC_ALLOWED_TAB]: {
+      table: "npd",
+      idColumn: "npdId",
+      headerMap: NPD_SYNC_HEADER_MAP,
+      requiredHeaders: NPD_SYNC_REQUIRED_HEADERS,
+      mapFn: mapSheetRowToNpdRow
+    },
+    "Companies": {
+      table: "companies",
+      idColumn: "id",
+      headerMap: COMPANY_SYNC_HEADER_MAP,
+      requiredHeaders: COMPANY_SYNC_REQUIRED_HEADERS,
+      mapFn: (row) => {
+        const mapped = {};
+        Object.entries(COMPANY_SYNC_HEADER_MAP).forEach(([header, key]) => {
+          if (!Object.prototype.hasOwnProperty.call(row, header)) return;
+          mapped[key] = normalizeSheetCellValue(key, row[header]);
+        });
+        mapped.id = stringOrEmpty(mapped.id);
+        return mapped;
+      }
+    }
+  };
+  const config = tabConfigs[tabName];
+  if (!config) {
+    return res.status(400).json({ error: `Only tab(s) ${Object.keys(tabConfigs).filter(Boolean).join(", ")} are allowed.` });
   }
   if (!Array.isArray(rawRowsPayload)) {
     return res.status(400).json({ error: "rows must be an array." });
@@ -459,66 +501,67 @@ app.post("/api/npd-sync", async (req, res) => {
       syncTimestamp
     })
   );
-  const missingRequiredHeaders = NPD_SYNC_REQUIRED_HEADERS.filter(
+  const missingRequiredHeaders = config.requiredHeaders.filter(
     (header) => rowsPayload.length > 0 && !rowsPayload.some((row) => Object.prototype.hasOwnProperty.call(row || {}, header))
   );
   if (missingRequiredHeaders.length > 0) {
     return res.status(400).json({ error: `Missing required header(s): ${missingRequiredHeaders.join(", ")}` });
   }
   const normalizedRows = rowsPayload.map((row, index) => {
-    const mapped = mapSheetRowToNpdRow(row || {});
+    const mapped = config.mapFn(row || {});
     return {
       rowNumber: index + 2,
       source: row || {},
       mapped
     };
   });
-  const invalidRows = normalizedRows.filter((entry) => !entry.mapped.npdId).map((entry) => ({
+  const invalidRows = normalizedRows.filter((entry) => !entry.mapped[config.idColumn]).map((entry) => ({
     rowNumber: entry.rowNumber,
-    reason: "Missing NPD ID",
-    itemName: stringOrEmpty(entry.source?.["Item Name"])
+    reason: `Missing ${config.idColumn}`,
+    itemName: stringOrEmpty(entry.source?.["Item Name"] || entry.source?.["Company Name"] || entry.source?.["Name"])
   }));
   const duplicateCounter = /* @__PURE__ */ new Map();
-  const dedupedByNpdId = /* @__PURE__ */ new Map();
+  const dedupedById = /* @__PURE__ */ new Map();
   normalizedRows.forEach((entry) => {
-    const npdId = stringOrEmpty(entry.mapped.npdId);
-    if (!npdId) return;
-    duplicateCounter.set(npdId, (duplicateCounter.get(npdId) || 0) + 1);
-    dedupedByNpdId.set(npdId, entry);
+    const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
+    if (!syncId) return;
+    duplicateCounter.set(syncId, (duplicateCounter.get(syncId) || 0) + 1);
+    dedupedById.set(syncId, entry);
   });
-  const duplicateNpdIds = [...duplicateCounter.entries()].filter(([, count]) => count > 1).map(([npdId]) => npdId);
-  const validRows = [...dedupedByNpdId.values()];
-  const incomingNpdIds = validRows.map((entry) => entry.mapped.npdId);
-  if (syncMode === "full" && duplicateNpdIds.length > 0) {
-    console.error(`${NPD_SYNC_LOG_PREFIX} Duplicate NPD IDs in full sync`, duplicateNpdIds);
+  const duplicateIds = [...duplicateCounter.entries()].filter(([, count]) => count > 1).map(([id]) => id);
+  const validRows = [...dedupedById.values()];
+  const incomingIds = validRows.map((entry) => entry.mapped[config.idColumn]);
+  if (syncMode === "full" && duplicateIds.length > 0) {
+    console.error(`${NPD_SYNC_LOG_PREFIX} Duplicate IDs in full sync`, duplicateIds);
     return res.status(400).json({
-      error: "Duplicate NPD ID values found in sync payload.",
-      duplicateNpdIds
+      error: `Duplicate ${config.idColumn} values found in sync payload.`,
+      duplicateIds
     });
   }
-  if (duplicateNpdIds.length > 0) {
+  if (duplicateIds.length > 0) {
     console.warn(
-      `${NPD_SYNC_LOG_PREFIX} Deduplicated repeated NPD IDs in batch payload`,
-      JSON.stringify({ duplicateNpdIds, keptRows: validRows.length })
+      `${NPD_SYNC_LOG_PREFIX} Deduplicated repeated IDs in batch payload`,
+      JSON.stringify({ duplicateIds, keptRows: validRows.length })
     );
   }
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
     const [existingRows] = await conn.query(
-      "SELECT id, npdId FROM `npd` WHERE npdId IS NOT NULL AND TRIM(npdId) <> ''"
+      `SELECT id, \`${config.idColumn}\` as syncId FROM \`${config.table}\` WHERE \`${config.idColumn}\` IS NOT NULL AND TRIM(\`${config.idColumn}\`) <> ''`
     );
-    const existingByNpdId = /* @__PURE__ */ new Map();
+    const existingBySyncId = /* @__PURE__ */ new Map();
     existingRows.forEach((row) => {
-      const npdId = stringOrEmpty(row.npdId);
-      if (npdId) existingByNpdId.set(npdId, row);
+      const syncId = stringOrEmpty(row.syncId);
+      if (syncId) existingBySyncId.set(syncId, row);
     });
     let inserted = 0;
     let updated = 0;
     for (const entry of validRows) {
-      const existing = existingByNpdId.get(entry.mapped.npdId);
+      const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
+      const existing = existingBySyncId.get(syncId);
       const payload = {
-        id: stringOrEmpty(existing?.id) || crypto.randomUUID(),
+        id: stringOrEmpty(existing?.id) || (config.idColumn === "id" ? syncId : null) || crypto.randomUUID(),
         ...entry.mapped,
         syncSource: "google_sheets",
         syncStatus: "active",
@@ -531,32 +574,32 @@ app.post("/api/npd-sync", async (req, res) => {
       const insertPlaceholders = columns.map(() => "?").join(", ");
       const updateColumns = columns.filter((column) => column !== "id").map((column) => `\`${column}\` = VALUES(\`${column}\`)`).join(", ");
       await conn.query(
-        `INSERT INTO \`npd\` (${insertColumns})
+        `INSERT INTO \`${config.table}\` (${insertColumns})
          VALUES (${insertPlaceholders})
          ON DUPLICATE KEY UPDATE ${updateColumns}`,
         values
       );
-      if (existing) updated += 1;
-      else inserted += 1;
+      if (existing) updated++;
+      else inserted++;
     }
     let removed = 0;
     if (syncMode === "full") {
-      if (incomingNpdIds.length > 0) {
+      if (incomingIds.length > 0) {
         const [result] = await conn.query(
-          `UPDATE \`npd\`
+          `UPDATE \`${config.table}\`
            SET \`syncStatus\` = 'removed',
                \`updatedBy\` = 'Google Sheets Sync',
                \`updateTimestamp\` = ?
            WHERE \`syncSource\` = 'google_sheets'
-             AND COALESCE(NULLIF(TRIM(\`npdId\`), ''), '') <> ''
-             AND \`npdId\` NOT IN (${incomingNpdIds.map(() => "?").join(", ")})
+             AND COALESCE(NULLIF(TRIM(\`${config.idColumn}\`), ''), '') <> ''
+             AND \`${config.idColumn}\` NOT IN (${incomingIds.map(() => "?").join(", ")})
              AND COALESCE(NULLIF(TRIM(\`syncStatus\`), ''), 'active') <> 'removed'`,
-          [syncTimestamp, ...incomingNpdIds]
+          [syncTimestamp, ...incomingIds]
         );
         removed = Number(result?.affectedRows || 0);
       } else {
         const [result] = await conn.query(
-          `UPDATE \`npd\`
+          `UPDATE \`${config.table}\`
            SET \`syncStatus\` = 'removed',
                \`updatedBy\` = 'Google Sheets Sync',
                \`updateTimestamp\` = ?
@@ -578,7 +621,7 @@ app.post("/api/npd-sync", async (req, res) => {
       inserted,
       updated,
       removed,
-      duplicateNpdIds,
+      duplicateIds,
       invalidRows
     };
     console.log(`${NPD_SYNC_LOG_PREFIX} Sync completed`, JSON.stringify(responsePayload));
@@ -598,7 +641,8 @@ const DELETE_REFERENCES = {
     { table: "invoices", column: "companyId", label: "Invoices" }
   ],
   items: [
-    { table: "item_groups", column: "groupId", label: "Item Groups" },
+    { table: "item_groups", column: "groupId", label: "Item Groups" }
+    // This is likely backwards, but keeping for safety if it was intended
   ],
   npd: [
     { table: "orders", column: "itemId", label: "Orders" },
@@ -610,7 +654,7 @@ const DELETE_REFERENCES = {
     { table: "sample_requests", column: "itemId", label: "Sample Requests" },
     { table: "sample_requests", column: "npdId", label: "Sample Requests" },
     { table: "consumptions", column: "itemId", label: "Consumptions" },
-    { table: "consumptions", column: "npdId", label: "Consumptions" },
+    { table: "consumptions", column: "npdId", label: "Consumptions" }
   ],
   orders: [{ table: "orders_schedule", column: "orderId", label: "Order Schedule" }],
   orders_schedule: [
@@ -850,6 +894,7 @@ const NPD_LINKED_TABLES = /* @__PURE__ */ new Set([
   "consumptions"
 ]);
 function toFiniteNumber(value) {
+  if (value === null || value === void 0 || String(value).trim() === "") return void 0;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : void 0;
 }
@@ -942,6 +987,7 @@ function normalizeNpdRowForItemConsumers(row) {
     f3: row?.f3 ?? toFiniteNumber(row?.rsf4),
     b3: row?.b3 ?? toFiniteNumber(row?.rsl5),
     flap: row?.flap ?? toFiniteNumber(row?.flapSize),
+    takeUpFactor: row?.takeUpFactor ?? toFiniteNumber(row?.takeUpFactor),
     plateWeight: row?.plateWeight ?? (() => {
       const platePhpWeight = toFiniteNumber(row?.platePhpWeight);
       return platePhpWeight === void 0 ? void 0 : platePhpWeight / 1e3;
@@ -1958,6 +2004,7 @@ async function initDb(retries = 5) {
           \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2),
+          \`orderAmount\` DECIMAL(15,2) DEFAULT 0,
           \`orderBy\` VARCHAR(255),
           \`poType\` VARCHAR(50),
           \`remarks\` TEXT,
@@ -2004,6 +2051,8 @@ async function initDb(retries = 5) {
           \`gstSupplyType\` VARCHAR(20) DEFAULT 'INTRA_STATE',
           \`deviationAllowed\` DECIMAL(10,2),
           \`toleranceAllowed\` DECIMAL(10,2),
+          \`syncSource\` VARCHAR(50),
+          \`syncStatus\` VARCHAR(20) DEFAULT 'active',
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -2771,6 +2820,8 @@ async function initDb(retries = 5) {
         { table: "companies", column: "district", type: "VARCHAR(255)" },
         { table: "companies", column: "state", type: "VARCHAR(255)" },
         { table: "companies", column: "gstNo", type: "VARCHAR(100)" },
+        { table: "companies", column: "syncSource", type: "VARCHAR(50)" },
+        { table: "companies", column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
         { table: "machines", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "machines", column: "maxOutputPerHour", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "machines", column: "updatedBy", type: "VARCHAR(255)" },
@@ -2799,6 +2850,7 @@ async function initDb(retries = 5) {
         { table: "orders", column: "erpCode", type: "VARCHAR(100)" },
         { table: "orders", column: "poNumber", type: "VARCHAR(100)" },
         { table: "orders", column: "rate", type: "DECIMAL(15,2)" },
+        { table: "orders", column: "orderAmount", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "orders", column: "poType", type: "VARCHAR(50)" },
         { table: "orders_schedule", column: "orderId", type: "VARCHAR(36) NOT NULL" },
         { table: "orders_schedule", column: "scheduledDate", type: "VARCHAR(50) NOT NULL" },
@@ -2945,6 +2997,14 @@ async function initDb(retries = 5) {
         }
       }
       try {
+        await db.query(`
+          UPDATE \`orders\`
+          SET \`orderAmount\` = ROUND(COALESCE(\`qty\`, 0) * COALESCE(\`rate\`, 0), 2)
+        `);
+      } catch (err) {
+        console.warn("[DB] Could not backfill orders.orderAmount:", err.message);
+      }
+      try {
         await ensureUsersCanonicalData(db, database);
       } catch (err) {
         console.warn("[DB] Could not normalize legacy users columns:", err.message);
@@ -2987,7 +3047,7 @@ async function initDb(retries = 5) {
         const [rows] = await db.query(
           "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_NAME = 'invoice_line_items' AND CONSTRAINT_NAME = 'fk_invoice_line_items_itemId_items' AND REFERENCED_TABLE_NAME = 'items'"
         );
-        if (rows && rows.length > 0) {
+        if (Array.isArray(rows) && rows.length > 0) {
           console.log("[DB] Dropping legacy foreign key fk_invoice_line_items_itemId_items...");
           await db.query("ALTER TABLE `invoice_line_items` DROP FOREIGN KEY `fk_invoice_line_items_itemId_items` ");
         }
@@ -3075,6 +3135,13 @@ const createHandlers = (tableName) => {
             pageSize,
             search
           });
+        } else if (tableName === "production_processing") {
+          [rows] = await db.query(`
+            SELECT pp.*, n.itemName, n.erp, n.boxType
+            FROM \`production_processing\` pp
+            LEFT JOIN \`productions\` p ON pp.productionId = p.id
+            LEFT JOIN \`npd\` n ON p.itemId = n.id
+          `);
         } else {
           [rows] = await db.query(`SELECT * FROM \`${tableName}\``);
         }
@@ -3223,6 +3290,9 @@ Exceeds by: ${nextTotal - plannedQty}`
         }
         if (tableName === "orders") {
           try {
+            const orderQty = Number(data.qty || 0);
+            const orderRate = Number(data.rate || 0);
+            data.orderAmount = Number.isFinite(orderQty) && Number.isFinite(orderRate) ? Number((orderQty * orderRate).toFixed(2)) : 0;
             if (!data.orderNo) {
               const dateStr = data.orderDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
               const d = new Date(dateStr);
@@ -3247,7 +3317,6 @@ Exceeds by: ${nextTotal - plannedQty}`
             const alreadyApproved = hasWorkflowValue(data.approvedTimestamp) || hasWorkflowValue(data.approvedEmail);
             if (!alreadyApproved && (currentStatus === "Pending PH" || !currentStatus)) {
               const itemId = resolveLinkedNpdId(data);
-              const orderRate = Number(data.rate);
               const punchDate = String(data.orderDate || "").trim() || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
               if (itemId && Number.isFinite(orderRate) && punchDate) {
                 const [billingRows] = await db.query(

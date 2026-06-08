@@ -506,7 +506,6 @@ export function PendingInvoicing() {
       <div className="space-y-4">
         {groupedData.length === 0 ? (
           <div className="bg-white border-2 border-dashed border-slate-300 rounded-lg p-12 text-center">
-            <Receipt className="mx-auto h-12 w-12 text-slate-300 mb-4" />
             <p className="text-slate-500 font-medium">No pending loading slips for invoicing.</p>
           </div>
         ) : groupedData.map((group) => (
