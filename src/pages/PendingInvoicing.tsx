@@ -332,7 +332,7 @@ export function PendingInvoicing() {
   }, [invoiceRows, gstSupplyType, orders]);
 
   const handleSubmitInvoice = async () => {
-    if (!invoiceModal) return;
+    if (!invoiceModal || isSubmitting) return;
     const company = companies.find(c => c.id === invoiceModal.companyId);
     if (!company) return;
 
@@ -464,9 +464,7 @@ export function PendingInvoicing() {
         }
       }
       
-      for (const li of lineItems) {
-        await updateLineItems(prev => [...prev, li]);
-      }
+      await updateLineItems(prev => [...prev, ...lineItems]);
 
       await updateSlips(prev => prev.map(s => {
         if (invoiceModal.slips.some(os => os.id === s.id)) {
@@ -479,11 +477,13 @@ export function PendingInvoicing() {
       setBillingMode(null);
       setSelectedSlips(new Set());
       alert("Invoice generated successfully! Showing Pending Tally Posting...");
-      // In a real app, we'd navigate to the Tally Posting view here.
-    } catch (err) {
+      } catch (err) {
       console.error("Failed to generate invoice:", err);
-    } finally {
+      alert("Failed to generate invoice. Please check the console for details.");
+      } finally {
       setIsSubmitting(false);
+      }
+
     }
   };
 
