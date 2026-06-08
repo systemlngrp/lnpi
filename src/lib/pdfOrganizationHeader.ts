@@ -54,6 +54,9 @@ export async function renderOrganizationHeader(
   if (organizationLogoUrl) {
     try {
       const imageDataUrl = await getImageDataUrl(organizationLogoUrl);
+      // Ensure white background behind the logo
+      doc.setFillColor(255, 255, 255);
+      doc.rect(90, currentY, 30, 18, "F");
       doc.addImage(imageDataUrl, "PNG", 90, currentY, 30, 18, undefined, "FAST");
       currentY += 22;
     } catch (error) {

@@ -753,7 +753,7 @@ export function SettingsPage() {
                 </label>
                 {organizationDraft.organizationLogo ? (
                   <div className="space-y-2">
-                    <div className="flex min-h-[96px] min-w-[220px] items-center justify-center rounded border border-black bg-slate-50 p-3">
+                    <div className="flex min-h-[96px] min-w-[220px] items-center justify-center rounded border border-black bg-transparency p-3">
                       <img
                         src={organizationLogoUrl}
                         alt="Organization logo"
@@ -770,7 +770,7 @@ export function SettingsPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="rounded border border-dashed border-black bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  <div className="rounded border border-dashed border-black bg-white px-4 py-3 text-sm text-slate-600">
                     No logo uploaded yet.
                   </div>
                 )}
