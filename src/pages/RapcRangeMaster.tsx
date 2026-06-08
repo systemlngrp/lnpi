@@ -11,6 +11,8 @@ export function RapcRangeMaster() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [filterFrom, setFilterFrom] = useState<"" | number>("");
+  const [filterTo, setFilterTo] = useState<"" | number>("");
   const [fromValue, setFromValue] = useState<number | "">("");
   const [toValue, setToValue] = useState<number | "">("");
   const [rapcRangeValue, setRapcRangeValue] = useState<number | "">("");
@@ -72,14 +74,16 @@ export function RapcRangeMaster() {
   const filteredRanges = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
     return ranges.filter((row) => {
-      if (!normalized) return true;
-      return (
+      if (!normalized && filterFrom === '' && filterTo === '') return true;
+      const matchesSearch =
         String(row.from).includes(normalized) ||
         String(row.to).includes(normalized) ||
-        String(row.rapcRange).includes(normalized)
-      );
+        String(row.rapcRange).includes(normalized);
+      const matchesFrom = filterFrom === '' || row.from >= Number(filterFrom);
+      const matchesTo = filterTo === '' || row.to <= Number(filterTo);
+      return matchesSearch && matchesFrom && matchesTo;
     });
-  }, [ranges, searchTerm]);
+  }, [ranges, searchTerm, filterFrom, filterTo]);
 
   return (
     <div className="space-y-6">
@@ -145,6 +149,35 @@ export function RapcRangeMaster() {
       )}
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search ranges..." />
+      {/* Range filter inputs */}
+      <div className="flex items-center gap-2 mt-2">
+        <input
+          type="number"
+          placeholder="From"
+          value={filterFrom}
+          onChange={(e) => setFilterFrom(e.target.value === "" ? "" : Number(e.target.value))}
+          className="border-2 border-black rounded p-1 text-sm w-24"
+        />
+        <input
+          type="number"
+          placeholder="To"
+          value={filterTo}
+          onChange={(e) => setFilterTo(e.target.value === "" ? "" : Number(e.target.value))}
+          className="border-2 border-black rounded p-1 text-sm w-24"
+        />
+        {(filterFrom !== "" || filterTo !== "") && (
+          <button
+            type="button"
+            onClick={() => {
+              setFilterFrom("");
+              setFilterTo("");
+            }}
+            className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded hover:bg-gray-300"
+          >
+            Clear Filter
+          </button>
+        )}
+      </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-scroll-shell">

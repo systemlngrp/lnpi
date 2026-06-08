@@ -76,35 +76,36 @@ type ClosedJobFilter = "all" | "yes" | "no";
 
 const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
   {
-    groupId: "headline",
-    cards: [
-      { id: "production", tone: "bg-cyan-50", valueTone: "text-cyan-800" },
-      { id: "linearMeter", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
-      { id: "todayPlanQty", tone: "bg-amber-50", valueTone: "text-amber-800" },
-      { id: "todayPlanValue", tone: "bg-rose-50", valueTone: "text-rose-800" },
-      { id: "tomorrowPlanQty", tone: "bg-sky-50", valueTone: "text-sky-800" },
-      { id: "tomorrowPlanValue", tone: "bg-fuchsia-50", valueTone: "text-fuchsia-800" },
-      { id: "actualPaperUsed", tone: "bg-violet-50", valueTone: "text-violet-800" },
-      { id: "wastage", tone: "bg-orange-50", valueTone: "text-orange-800" },
-      { id: "planPaper", tone: "bg-indigo-50", valueTone: "text-indigo-800" },
-      { id: "activeJobs", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
-      { id: "pendingTally", tone: "bg-lime-50", valueTone: "text-lime-800" },
-    ],
+    groupId: "production",
+      cards: [
+        { id: "production", tone: "bg-cyan-50", valueTone: "text-cyan-800" },
+        { id: "linearMeter", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
+        { id: "todayPlanQty", tone: "bg-amber-50", valueTone: "text-amber-800" },
+        { id: "todayPlanValue", tone: "bg-rose-50", valueTone: "text-rose-800" },
+        { id: "tomorrowPlanQty", tone: "bg-sky-50", valueTone: "text-sky-800" },
+        { id: "tomorrowPlanValue", tone: "bg-fuchsia-50", valueTone: "text-fuchsia-800" },
+        { id: "actualPaperUsed", tone: "bg-violet-50", valueTone: "text-violet-800" },
+        { id: "wastage", tone: "bg-orange-50", valueTone: "text-orange-800" },
+        { id: "planPaper", tone: "bg-indigo-50", valueTone: "text-indigo-800" },
+        { id: "activeJobs", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
+        { id: "pendingTally", tone: "bg-lime-50", valueTone: "text-lime-800" }
+      ],
   },
   {
     groupId: "dispatch",
     cards: [
-      { id: "totalSales", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
-      { id: "todaySalesValue", tone: "bg-teal-50", valueTone: "text-teal-800" },
       { id: "dispatchPlannedQty", tone: "bg-indigo-50", valueTone: "text-indigo-800" },
       { id: "dispatchLoadedQty", tone: "bg-blue-50", valueTone: "text-blue-800" },
       { id: "loadingQty", tone: "bg-violet-50", valueTone: "text-violet-800" },
-      { id: "invoiceCount", tone: "bg-yellow-50", valueTone: "text-yellow-800" },
       { id: "pendingPlanningValue", tone: "bg-pink-50", valueTone: "text-pink-800" },
-      { id: "pendingPlanningCount", tone: "bg-amber-50", valueTone: "text-amber-800" },
-      { id: "wipQty", tone: "bg-cyan-50", valueTone: "text-cyan-800" },
-      { id: "fgStock", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
-      { id: "reelStock", tone: "bg-violet-50", valueTone: "text-violet-800" },
+    ],
+  },
+  {
+    groupId: "sales",
+    cards: [
+      { id: "totalSales", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
+      { id: "todaySalesValue", tone: "bg-teal-50", valueTone: "text-teal-800" },
+      { id: "invoiceCount", tone: "bg-yellow-50", valueTone: "text-yellow-800" },
     ],
   },
 ];

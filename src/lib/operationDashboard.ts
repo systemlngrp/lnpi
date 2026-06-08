@@ -446,7 +446,7 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const groups: OperationDashboardMetricGroup[] = [
     {
       id: "production",
-      title: "Production",
+      title: "Operation",
       cards: [
         makeCard({ id: "production", label: "Production", value: totalProduction, format: "number" }),
         makeCard({ id: "actualPaperUsed", label: "Actual Paper Used", value: totalActualPaperUsed, format: "number", decimals: 2 }),
@@ -458,15 +458,6 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       ],
     },
     {
-      id: "sales",
-      title: "Sales",
-      cards: [
-        makeCard({ id: "totalSales", label: "Total Sales", value: totalSale, format: "currency" }),
-        makeCard({ id: "todaySalesValue", label: "Today Sales Value", value: todaySalesValue, format: "currency" }),
-        makeCard({ id: "invoiceCount", label: "Invoices", value: filteredInvoices.length, format: "number" }),
-      ],
-    },
-    {
       id: "dispatch",
       title: "Dispatch",
       cards: [
@@ -474,6 +465,15 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
         makeCard({ id: "dispatchLoadedQty", label: "Dispatch Loaded Qty", value: dispatchLoadedQty, format: "number" }),
         makeCard({ id: "loadingQty", label: "Loading Slip Qty", value: loadingSlipQty, format: "number" }),
         makeCard({ id: "pendingPlanningValue", label: "Pending Dispatch Value", value: pendingPlanningValue, format: "currency" }),
+      ],
+    },
+    {
+      id: "sales",
+      title: "Sales",
+      cards: [
+        makeCard({ id: "totalSales", label: "Total Sales", value: totalSale, format: "currency" }),
+        makeCard({ id: "todaySalesValue", label: "Today Sales Value", value: todaySalesValue, format: "currency" }),
+        makeCard({ id: "invoiceCount", label: "Invoices", value: filteredInvoices.length, format: "number" }),
       ],
     },
   ];
