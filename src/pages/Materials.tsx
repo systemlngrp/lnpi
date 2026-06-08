@@ -247,19 +247,19 @@ export function Materials() {
   const metrics = useMemo(() => {
     let totalReelWeight = 0;
     let totalOtherStock = 0;
-    materials.forEach(m => {
+    filteredMaterials.forEach(m => {
       const mvt = movementSummaryMap.get(m.id) || { receipts: 0, issues: 0, returns: 0 };
       const balance = Number(m.openingQty || 0) + mvt.receipts + mvt.returns - mvt.issues;
       if (m.type === "Reel") totalReelWeight += balance;
       else totalOtherStock += balance;
     });
     return {
-      total: materials.length,
-      active: materials.filter(m => m.active !== "No").length,
+      total: filteredMaterials.length,
+      active: filteredMaterials.filter(m => m.active !== "No").length,
       reelWeight: totalReelWeight,
       otherStock: totalOtherStock,
     };
-  }, [materials, movementSummaryMap]);
+  }, [filteredMaterials, movementSummaryMap]);
 
   const [formData, setFormData] = useState(() => createInitialFormState(materials, reelGroup?.id || ""));
 
@@ -1021,7 +1021,7 @@ export function Materials() {
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white divide-x divide-indigo-800">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Action"].map((heading) => (
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit"].map((heading) => (
                       <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
@@ -1031,7 +1031,7 @@ export function Materials() {
                 <tbody className="divide-y divide-black">
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={14} className="px-6 py-10 text-center text-slate-500 font-medium italic">
+                      <td colSpan={13} className="px-6 py-10 text-center text-slate-500 font-medium italic">
                         No materials matching your search criteria.
                       </td>
                     </tr>
@@ -1056,19 +1056,6 @@ export function Materials() {
                             {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-black text-[10px] font-black uppercase">{material.uom || ""}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-1">
-                              <button onClick={() => handleEdit(material)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded transition" title="Edit Item">
-                                <Edit size={14} />
-                              </button>
-                              <button onClick={() => handleToggleActive(material)} className={`p-1.5 rounded transition ${material.active === "No" ? "text-emerald-600 hover:bg-emerald-100" : "text-amber-600 hover:bg-amber-100"}`} title={material.active === "No" ? "Activate" : "Deactivate"}>
-                                <CheckCircle size={14} />
-                              </button>
-                              <button onClick={() => handleDelete(material.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded transition" title="Delete Item">
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
                         </tr>
                       );
                     })
