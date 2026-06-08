@@ -573,7 +573,7 @@ export function OperationDashboard() {
           );
         }}
         onBlur={(e) => void updateCloseMeta(r.production.id, { closeBy: e.target.value, closeDate: r.production.closeDate })}
-        className="w-24 border border-black rounded px-1 py-0.5 text-[9px] bg-white disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+        className="w-24 border border-black rounded px-1 py-0.5 text-[10px] bg-white disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
       >
         <option value=""></option>
         <option value="Yes">Yes</option>
@@ -587,7 +587,7 @@ export function OperationDashboard() {
         disabled={!Number(r.actualPaperUsed || 0) || !Number(r.production.prodFromFFG || 0)}
         onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === r.production.id ? { ...row, closeDate: e.target.value } : row)))}
         onBlur={(e) => void updateCloseMeta(r.production.id, { closeDate: e.target.value, closeBy: r.production.closeBy })}
-        className={`w-28 border rounded px-1 py-0.5 text-[9px] disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 ${r.production.closeBy === "Yes" && !r.production.closeDate ? "border-red-600" : "border-black"}`}
+        className={`w-28 border rounded px-1 py-0.5 text-[10px] disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 ${r.production.closeBy === "Yes" && !r.production.closeDate ? "border-red-600" : "border-black"}`}
         required={r.production.closeBy === "Yes"}
       />
     ) },
@@ -772,7 +772,7 @@ export function OperationDashboard() {
               : (
                 <div className="space-y-1">
                   <div className="font-black text-amber-700">Pending {mandatory.done}/{mandatory.required.length}</div>
-                  <div className="text-[9px] font-semibold text-slate-600 whitespace-normal max-w-[240px]">
+                  <div className="text-[10px] font-semibold text-slate-600 whitespace-normal max-w-[240px]">
                     Missing: {mandatory.missing.join(", ")}
                   </div>
                 </div>
@@ -1030,12 +1030,12 @@ export function OperationDashboard() {
               <button
                 type="button"
                 onClick={() => setDateRange({ from: "", to: "" })}
-                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-rose-50 px-2.5 py-1 text-[9px] font-black uppercase text-rose-700 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-rose-50 px-2.5 py-1 text-[10px] font-black uppercase text-rose-700 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
               >
                 Clear
               </button>
               <div className="flex items-center gap-1.5 rounded-md border-2 border-slate-900 bg-white px-2.5 py-1 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
-                <label htmlFor="closed-job-filter-top" className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-700">
+                <label htmlFor="closed-job-filter-top" className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">
                   Closed Job
                 </label>
                 <select
@@ -1055,7 +1055,7 @@ export function OperationDashboard() {
               <button
                 type="button"
                 onClick={() => setIsColumnsOpen((v) => !v)}
-                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
               >
                 <SlidersHorizontal size={14} strokeWidth={3} />
                 Columns
@@ -1072,7 +1072,7 @@ export function OperationDashboard() {
                     key={group.id}
                     className={cn("overflow-hidden rounded-lg border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]", groupConfig.className)}
                   >
-                    <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
+                    <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
                     <div className={cn("grid gap-0", groupConfig.gridClassName)}>
                       {groupConfig.cards.map((cardConfig) => {
                         const card = getSummaryCard(summary, cardConfig.id);
@@ -1109,7 +1109,7 @@ export function OperationDashboard() {
             <button
               type="button"
               onClick={onResetColumns}
-              className="text-[9px] font-black uppercase px-3 py-1 border-2 border-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-px hover:translate-y-px hover:shadow-none transition"
+              className="text-[10px] font-black uppercase px-3 py-1 border-2 border-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-px hover:translate-y-px hover:shadow-none transition"
             >
               Reset
             </button>
@@ -1151,7 +1151,7 @@ export function OperationDashboard() {
                     onDragOver={onDragOver}
                     onDrop={onDrop(c.id)}
                     className={cn(
-                      "px-2 py-1.5 text-left text-[9px] font-black uppercase text-slate-900 border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
+                      "px-2 py-1.5 text-left text-[10px] font-black uppercase text-slate-900 border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
                       c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
                       c.id === "paper" || c.id === "liner" || c.id === "print" || c.id === "paste" || c.id === "stitch" || c.id === "punch" || c.id === "glue" ? "bg-indigo-50 text-indigo-900" :
                       c.id === "loadedQty" ? "bg-amber-50" :
@@ -1181,7 +1181,7 @@ export function OperationDashboard() {
                         <td
                           key={c.id}
                           className={cn(
-                            "px-2 py-1.5 text-[9px] text-black border-r border-black/90 align-top",
+                            "px-2 py-1.5 text-[10px] text-black border-r border-black/90 align-top",
                             c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
                             c.id === "itemName" ? "whitespace-normal min-w-[150px]" : "whitespace-nowrap",
                             c.id === "paper" || c.id === "liner" || c.id === "print" || c.id === "paste" || c.id === "stitch" || c.id === "punch" || c.id === "glue" ? "bg-indigo-50/30" :
