@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, ClipboardList, CheckCircle, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import type {
   Company,
   DispatchPlan,
@@ -44,15 +46,18 @@ import {
 } from "../lib/operationDashboard";
 
 type ColumnId =
+  | "srNo"
   | "jobNo"
   | "orderNo"
   | "erpCode"
   | "company"
   | "planDate"
   | "itemName"
+  | "sample"
   | "type"
   | "mandatory"
   | "plannedQty"
+  | "ups"
   | "loadedQty"
   | "paper"
   | "liner"
@@ -67,11 +72,13 @@ type ColumnId =
   | "lOd"
   | "wOd"
   | "hOd"
-  | "flap"
-  | "deckle"
-  | "cutting"
   | "ply"
   | "flute"
+  | "l1"
+  | "f1"
+  | "l2"
+  | "f2"
+  | "l3"
   | "top"
   | "gsm"
   | "leastGsm"
@@ -87,11 +94,19 @@ type ColumnId =
   | "avgWt"
   | "wastage"
   | "realPerKg"
-  | "processingStatus"
+  | "reelCalc"
+  | "reelTrim"
+  | "cuttingTrim"
+  | "plannedProdM"
+  | "sheetWt"
+  | "fluteBatch"
+  | "rate"
+  | "value"
+  | "prodFromFFG"
+  | "actualPaperUsed"
   | "jobCloser"
   | "closeDate"
-  | "actualPaperUsed"
-  | "wastagePct";
+  | "actions";
 
 type ProcessingTotals = {
   paper: number;
@@ -104,19 +119,17 @@ type ProcessingTotals = {
 };
 
 type OperationRow = {
+  srNo: number;
   production: Production;
   item?: Item;
   schedule?: OrderSchedule;
   order?: Order;
   company?: Company;
   mandatoryCell: React.ReactNode;
-  processingStatusText: string;
   processingTotals: ProcessingTotals;
   loadedQty: number;
   leastGsm: number | null;
   actualPaperUsed: number;
-  planPaper: number;
-  wastagePct: number | null;
 };
 
 type ColumnDef = {
@@ -259,12 +272,14 @@ function getSummaryCard(summary: OperationDashboardSummary, cardId: string) {
 }
 
 export function OperationDashboard() {
-  const [productions] = useData<Production>("productions", []);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [productions, setProductions] = useData<Production>("productions", []);
   const npdItems = useNpdItems();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
-  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
@@ -287,17 +302,207 @@ export function OperationDashboard() {
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
   const columnsPanelRef = useRef<HTMLDivElement | null>(null);
 
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [cancelModalJobId, setCancelModalJobId] = useState<string | null>(null);
+  const [cancelRemarks, setCancelRemarks] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelSubmittingId, setCancelSubmittingId] = useState<string | null>(null);
+
+  const updateCloseMeta = async (id: string, patch: Partial<Pick<Production, "closeBy" | "closeDate">>) => {
+    const resolvedPatch = { ...patch };
+    if (resolvedPatch.closeBy === "Yes" && !resolvedPatch.closeDate) {
+      alert("Close Date is mandatory when Closer is Yes.");
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    await setProductions((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              ...resolvedPatch,
+              updateTimestamp: timestamp,
+              updatedBy: user?.name || "System User",
+            }
+          : p
+      )
+    );
+  };
+
+  const processingMachinesMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    processing.forEach((row) => {
+      const set = map.get(row.productionId) || new Set<string>();
+      set.add(normalizeMachineName(row.machineName));
+      map.set(row.productionId, set);
+    });
+    return map;
+  }, [processing]);
+
+  const mandatoryMachinesByType = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
+
+  const jobClosureStatusMap = useMemo(() => {
+    const isCorrugationLiner = (name?: string | null) =>
+      String(normalizeMachineName(name || "")).trim().toLowerCase() === "corrugation liner";
+
+    const result = new Map<string, { canClose: boolean; reasons: string[] }>();
+    productions.forEach((production) => {
+      const item = npdItems.find((i) => i.id === String(production.itemId || "").trim());
+      const boxType = (item as any)?.boxType;
+      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, boxType).map((m) =>
+        normalizeMachineName(m)
+      );
+      const records = processing.filter((entry) => entry.productionId === production.id);
+      const planQty = Number(production.qty || 0);
+      const reasons: string[] = [];
+      if (requiredMachines.length === 0) {
+        reasons.push(`No required process steps configured for Type: ${String(boxType || "-")}`);
+      }
+      const isEntryComplete = (entry: ProductionProcessing) => {
+        const qtyValue = Number(entry.qty || 0);
+        if (!Number.isFinite(qtyValue) || qtyValue <= 0) return false;
+        if (!String(entry.machineId || "").trim()) return false;
+        if (!String(entry.operatorId || "").trim()) return false;
+        if (!String(entry.shift || "").trim()) return false;
+        if (!String(entry.date || "").trim()) return false;
+        return true;
+      };
+      requiredMachines.forEach((machineName) => {
+        const normalized = normalizeMachineName(machineName);
+        const stepRecords = records.filter((r) => normalizeMachineName(r.machineName) === normalized);
+        if (stepRecords.length === 0) {
+          reasons.push(`Missing processing step: ${normalized}`);
+          return;
+        }
+        if (!stepRecords.some(isEntryComplete)) {
+          reasons.push(`Incomplete processing entry: ${normalized}`);
+        }
+        if (!isCorrugationLiner(normalized) && planQty > 0) {
+          const stepQty = stepRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
+          if (stepQty > planQty) {
+            reasons.push(`Qty exceeds Plan Qty for ${normalized} (Plan ${planQty}, Reported ${stepQty})`);
+          }
+        }
+      });
+      result.set(production.id, { canClose: reasons.length === 0, reasons });
+    });
+    return result;
+  }, [productions, npdItems, processing, mandatoryMachinesByType]);
+
+  const handleCloseJob = async (id: string) => {
+    const target = productions.find((p) => p.id === id);
+    if (!target || target.status === "Completed" || target.status === "Cancelled") return;
+    const closureStatus = jobClosureStatusMap.get(id);
+    if (!closureStatus?.canClose) {
+      const reasons = closureStatus?.reasons?.length ? closureStatus.reasons : ["Processing data is incomplete."];
+      alert(`Job Close is blocked:\n- ${reasons.join("\n- ")}`);
+      return;
+    }
+    if (closingId !== id) {
+      setClosingId(id);
+      setTimeout(() => setClosingId(null), 3000);
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    const closeDate = new Date().toISOString().split("T")[0];
+    try {
+      await setProductions((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: "Completed",
+                tallyTimestamp: p.tallyTimestamp || timestamp,
+                closeBy: p.closeBy || "Yes",
+                closeDate: p.closeDate || closeDate,
+                updateTimestamp: timestamp,
+                updatedBy: user?.name || "System User",
+              }
+            : p
+        )
+      );
+    } catch (err) {
+      console.error("Failed to close job:", err);
+    } finally {
+      setClosingId(null);
+    }
+  };
+
+  const openCancelModal = (id: string) => {
+    const target = productions.find((p) => p.id === id);
+    if (!target || target.status === "Cancelled") return;
+    setCancelModalJobId(id);
+    setCancelRemarks("");
+    setCancelError("");
+  };
+
+  const handleCancelJob = async () => {
+    const id = cancelModalJobId;
+    if (!id) return;
+    const target = productions.find((p) => p.id === id);
+    if (!target || target.status === "Cancelled") return;
+    const reason = cancelRemarks.trim();
+    if (!reason) {
+      setCancelError("Cancel reason is mandatory.");
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    setCancelSubmittingId(id);
+    try {
+      await setProductions((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: "Cancelled",
+                cancelTimestamp: timestamp,
+                cancelEmailId: user?.email || "System User",
+                cancelRemarks: reason,
+                updateTimestamp: timestamp,
+                updatedBy: user?.name || "System User",
+              }
+            : p
+        )
+      );
+      if (target.scheduleId) {
+        await setSchedules((prev) =>
+          prev.map((schedule) =>
+            schedule.id === target.scheduleId
+              ? {
+                  ...schedule,
+                  producedQty: Math.max(0, Number(schedule.producedQty || 0) - Number(target.qty || 0)),
+                  updateTimestamp: timestamp,
+                  updatedBy: user?.name || "System User",
+                }
+              : schedule
+          )
+        );
+      }
+      alert("Job cancelled successfully.");
+      setCancelModalJobId(null);
+      setCancelRemarks("");
+    } catch (err) {
+      console.error("Failed to cancel job:", err);
+    } finally {
+      setCancelSubmittingId(null);
+    }
+  };
+
   const columns: ColumnDef[] = useMemo(() => ([
+    { id: "srNo", label: "Sr. No.", render: (r) => r.srNo },
     { id: "jobNo", label: "Job No.", className: "font-bold", render: (r) => r.production.transactionNo },
     { id: "orderNo", label: "Order No.", render: (r) => r.order?.orderNo || "-" },
     { id: "erpCode", label: "ERP Code", render: (r) => r.production.erpCode || "-" },
     { id: "company", label: "Company", render: (r) => r.company?.name || "-" },
     { id: "planDate", label: "Plan Date", render: (r) => formatDate(r.production.date) },
     { id: "itemName", label: "Item Name", className: "min-w-[150px]", render: (r) => r.item?.name || "Unknown" },
+    { id: "sample", label: "Sample", render: (r) => ((r.item as any)?.isSample ? "Yes" : "-") },
     { id: "type", label: "Type", render: (r) => (r.item as any)?.boxType || "-" },
     { id: "mandatory", label: "Mandatory", render: (r) => r.mandatoryCell },
     { id: "plannedQty", label: "Planned Qty", align: "right", className: "font-medium text-emerald-700", render: (r) => `${r.production.qty ?? "-"} ${r.production.uom || ""}`.trim() },
+    { id: "ups", label: "UPS", align: "center", render: (r) => r.production.ups || (r.item as any)?.ups || "-" },
     { id: "loadedQty", label: "Loaded Qty", align: "right", className: "font-bold text-amber-700 bg-amber-50/40", render: (r) => Number(r.loadedQty || 0).toLocaleString() },
+
     { id: "paper", label: "Paper", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.paper || 0).toLocaleString() },
     { id: "liner", label: "Liner", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.liner || 0).toLocaleString() },
     { id: "print", label: "Print", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.printing || 0).toLocaleString() },
@@ -305,20 +510,25 @@ export function OperationDashboard() {
     { id: "stitch", label: "Stitch", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.stitching || 0).toLocaleString() },
     { id: "punch", label: "Punch", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.punching || 0).toLocaleString() },
     { id: "glue", label: "Glue", align: "right", className: "font-bold text-indigo-700 bg-indigo-50/30", render: (r) => Number(r.processingTotals.gluing || 0).toLocaleString() },
+
     { id: "l", label: "L", align: "right", render: (r) => r.production.length || "-" },
     { id: "b", label: "B", align: "right", render: (r) => r.production.breadth || "-" },
     { id: "h", label: "H", align: "right", render: (r) => r.production.height || "-" },
     { id: "lOd", label: "L (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.lOd || "-" },
     { id: "wOd", label: "W (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.wOd || "-" },
     { id: "hOd", label: "H (OD)", align: "right", className: "font-medium text-indigo-600", render: (r) => r.item?.hOd || "-" },
-    { id: "flap", label: "Flap", align: "right", render: (r) => r.item?.flap || "-" },
-    { id: "deckle", label: "Deckle", align: "right", render: (r) => r.item?.deckleSize || "-" },
-    { id: "cutting", label: "Cutting", align: "right", render: (r) => r.item?.cuttingSize || "-" },
+
     { id: "ply", label: "Ply", align: "center", render: (r) => r.production.ply || "-" },
     { id: "flute", label: "Flute", render: (r) => r.production.flute || "-" },
+    { id: "l1", label: "L1", align: "right", render: (r) => r.production.l1 || (r.item as any)?.l1 || "-" },
+    { id: "f1", label: "F1", align: "right", render: (r) => r.production.f1 || (r.item as any)?.f1 || "-" },
+    { id: "l2", label: "L2", align: "right", render: (r) => r.production.l2 || (r.item as any)?.l2 || "-" },
+    { id: "f2", label: "F2", align: "right", render: (r) => r.production.f2 || (r.item as any)?.f2 || "-" },
+    { id: "l3", label: "L3", align: "right", render: (r) => r.production.l3 || (r.item as any)?.l3 || "-" },
     { id: "top", label: "Top", align: "right", render: (r) => r.production.top || "-" },
     { id: "gsm", label: "GSM", align: "right", className: "font-medium text-indigo-700", render: (r) => r.production.gsm || "-" },
     { id: "leastGsm", label: "Least GSM", align: "right", className: "font-black text-emerald-700", render: (r) => (r.leastGsm === null ? "-" : r.leastGsm) },
+
     { id: "color1", label: "Color 1", render: (r) => r.production.color1 || "-" },
     { id: "color2", label: "Color 2", render: (r) => r.production.color2 || "-" },
     { id: "printingColor", label: "Printing Color", render: (r) => r.production.printingColor || "-" },
@@ -327,16 +537,94 @@ export function OperationDashboard() {
     { id: "linerWtKg", label: "Liner Wt (KG)", align: "right", render: (r) => r.production.linerWeightKg || "-" },
     { id: "totalJobWt", label: "Total Job Wt", align: "right", render: (r) => r.production.totalJobWeight || "-" },
     { id: "lineReq", label: "Line Req.", align: "right", render: (r) => r.production.lineRequiredNos || "-" },
+
     { id: "totalWt", label: "Total Wt", align: "right", render: (r) => r.production.totalPaperWeight || "-" },
     { id: "avgWt", label: "Avg Wt", align: "right", render: (r) => r.production.avgWeight || "-" },
     { id: "wastage", label: "Wastage", align: "right", render: (r) => r.production.wastage || "-" },
     { id: "realPerKg", label: "Real/KG", align: "right", className: "font-bold text-indigo-700", render: (r) => (Number(r.production.realizationPerKg || 0) ? Number(r.production.realizationPerKg || 0).toFixed(2) : "-") },
-    { id: "processingStatus", label: "Processing Status", className: "text-indigo-600 font-bold max-w-[200px] truncate", render: (r) => r.processingStatusText },
-    { id: "jobCloser", label: "Job Closer", render: (r) => r.production.closeBy || "-" },
-    { id: "closeDate", label: "Close Date", render: (r) => r.production.closeDate || "-" },
-    { id: "actualPaperUsed", label: "Actual Paper Used", align: "right", className: "font-bold text-indigo-700", render: (r) => Number(r.actualPaperUsed || 0).toFixed(2) },
-    { id: "wastagePct", label: "Wastage %", align: "right", className: "font-bold", render: (r) => (r.wastagePct === null ? "-" : `${Number(r.wastagePct || 0).toFixed(2)}%`) },
-  ]), []);
+    { id: "reelCalc", label: "Reel (Calc)", align: "right", render: (r) => (r.production as any).reelAsPerCalc || "-" },
+    { id: "reelTrim", label: "Reel Trim", align: "right", render: (r) => (r.production as any).reelActualWithTrimming || "-" },
+    { id: "cuttingTrim", label: "Cutting Trim", align: "right", render: (r) => (r.production as any).cuttingWithTrimming || r.item?.cuttingSize || "-" },
+    { id: "plannedProdM", label: "Planned Prod (M)", align: "right", render: (r) => r.production.plannedProductionInMeter ?? "-" },
+    { id: "sheetWt", label: "Sheet Wt", align: "right", render: (r) => r.production.sheetWeight || "-" },
+    { id: "fluteBatch", label: "Flute Batch", render: (r) => r.production.fluteBatches || "-" },
+    { id: "rate", label: "Rate", align: "right", render: (r) => (Number(r.production.rate) ? Number(r.production.rate).toFixed(2) : (r.production.rate || "-")) },
+    { id: "value", label: "Value", align: "right", render: (r) => (Number(r.production.qty || 0) && Number(r.production.rate || 0) ? (Number(r.production.qty || 0) * Number(r.production.rate || 0)).toLocaleString() : "-") },
+
+    { id: "prodFromFFG", label: "Production FFG", align: "right", className: "font-bold text-black bg-indigo-50/20", render: (r) => Number(r.production.prodFromFFG || 0).toLocaleString() },
+    { id: "actualPaperUsed", label: "Actual Paper (KG)", align: "right", className: "font-bold text-emerald-700 bg-emerald-50/30", render: (r) => Number(r.actualPaperUsed || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+    { id: "jobCloser", label: "Job Closer", render: (r) => (
+      <select
+        value={r.production.closeBy || ""}
+        disabled={!Number(r.actualPaperUsed || 0) || !Number(r.production.prodFromFFG || 0)}
+        onChange={(e) => {
+          const nextValue = e.target.value;
+          const today = new Date().toISOString().split("T")[0];
+          void setProductions((prev) =>
+            prev.map((row) =>
+              row.id === r.production.id
+                ? {
+                    ...row,
+                    closeBy: nextValue,
+                    closeDate: nextValue === "Yes" ? row.closeDate || today : row.closeDate,
+                  }
+                : row
+            )
+          );
+        }}
+        onBlur={(e) => void updateCloseMeta(r.production.id, { closeBy: e.target.value, closeDate: r.production.closeDate })}
+        className="w-24 border border-black rounded px-1 py-0.5 text-[9px] bg-white disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+      >
+        <option value=""></option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    ) },
+    { id: "closeDate", label: "Close Date", render: (r) => (
+      <input
+        type="date"
+        value={(r.production.closeDate || "").split("T")[0]}
+        disabled={!Number(r.actualPaperUsed || 0) || !Number(r.production.prodFromFFG || 0)}
+        onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === r.production.id ? { ...row, closeDate: e.target.value } : row)))}
+        onBlur={(e) => void updateCloseMeta(r.production.id, { closeDate: e.target.value, closeBy: r.production.closeBy })}
+        className={`w-28 border rounded px-1 py-0.5 text-[9px] disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 ${r.production.closeBy === "Yes" && !r.production.closeDate ? "border-red-600" : "border-black"}`}
+        required={r.production.closeBy === "Yes"}
+      />
+    ) },
+    { id: "actions", label: "Actions", align: "center", render: (r) => (
+      <div className="flex items-center justify-center gap-2">
+        <button 
+          onClick={() => navigate(`/production-processing/form?productionId=${r.production.id}`)}
+          title="Report Processing"
+          className="text-indigo-600 hover:text-indigo-900 transition-all p-1"
+        >
+          <ClipboardList size={14} />
+        </button>
+        {r.production.status !== "Completed" && r.production.status !== "Cancelled" && jobClosureStatusMap.get(r.production.id)?.canClose ? (
+          <button
+            onClick={() => handleCloseJob(r.production.id)}
+            title={closingId === r.production.id ? "Click to confirm close" : "Close job"}
+            className={`transition-all p-1 ${
+              closingId === r.production.id
+                ? "text-amber-600 animate-pulse scale-110"
+                : "text-emerald-700 hover:text-emerald-900"
+            }`}
+          >
+            <CheckCircle size={14} />
+          </button>
+        ) : null}
+        {r.production.status !== "Completed" && r.production.status !== "Cancelled" && (
+          <button 
+            onClick={() => openCancelModal(r.production.id)} 
+            title="Cancel job"
+            className="text-red-600 hover:text-red-900 transition-all p-1"
+          >
+            <XCircle size={14} />
+          </button>
+        )}
+      </div>
+    ) },
+  ]), [navigate, setProductions, updateCloseMeta, jobClosureStatusMap, closingId, handleCloseJob, openCancelModal]);
 
   const defaultOrder: ColumnId[] = useMemo(
     () => columns.map((c) => c.id),
@@ -396,18 +684,6 @@ export function OperationDashboard() {
     });
     return map;
   }, [processing]);
-
-  const processingMachinesMap = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    processing.forEach((row) => {
-      const set = map.get(row.productionId) || new Set<string>();
-      set.add(normalizeMachineName(row.machineName));
-      map.set(row.productionId, set);
-    });
-    return map;
-  }, [processing]);
-
-  const mandatoryMachinesByType = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
 
   const loadedQtyByProductionId = useMemo(() => {
     const map = new Map<string, number>();
@@ -480,7 +756,7 @@ export function OperationDashboard() {
   const rows: OperationRow[] = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
 
-    return filteredProductions
+    const sorted = filteredProductions
       .map((p) => {
         const schedule = schedules.find((s) => s.id === p.scheduleId);
         const order = orders.find((o) => o.id === schedule?.orderId);
@@ -496,7 +772,7 @@ export function OperationDashboard() {
               : (
                 <div className="space-y-1">
                   <div className="font-black text-amber-700">Pending {mandatory.done}/{mandatory.required.length}</div>
-                  <div className="text-[10px] font-semibold text-slate-600 whitespace-normal max-w-[240px]">
+                  <div className="text-[9px] font-semibold text-slate-600 whitespace-normal max-w-[240px]">
                     Missing: {mandatory.missing.join(", ")}
                   </div>
                 </div>
@@ -514,6 +790,7 @@ export function OperationDashboard() {
         const wastagePct = planPaper > 0 ? ((actualPaperUsed - planPaper) / planPaper) * 100 : null;
 
         return {
+          srNo: 0,
           production: p,
           item,
           schedule,
@@ -546,6 +823,8 @@ export function OperationDashboard() {
         return blob.includes(q);
       })
       .sort((a, b) => b.production.transactionNo.localeCompare(a.production.transactionNo, undefined, { numeric: true, sensitivity: "base" }));
+
+    return sorted.map((row, idx) => ({ ...row, srNo: idx + 1 }));
   }, [
     filteredProductions,
     schedules,
@@ -631,14 +910,17 @@ export function OperationDashboard() {
 
   const exportData = useMemo(() => {
     return rows.map((r) => ({
+      "Sr. No.": r.srNo,
       "Job No.": r.production.transactionNo || "-",
       "Order No.": r.order?.orderNo || "-",
       "ERP Code": r.production.erpCode || "-",
       Company: r.company?.name || "-",
       "Plan Date": formatDate(r.production.date),
       "Item Name": r.item?.name || "-",
+      Sample: (r.item as any)?.isSample ? "Yes" : "-",
       Type: (r.item as any)?.boxType || "-",
       "Planned Qty": `${r.production.qty ?? "-"} ${r.production.uom || ""}`.trim(),
+      UPS: r.production.ups || (r.item as any)?.ups || "-",
       "Loaded Qty": r.loadedQty,
       Paper: r.processingTotals.paper,
       Liner: r.processingTotals.liner,
@@ -653,11 +935,13 @@ export function OperationDashboard() {
       "L (OD)": r.item?.lOd ?? "-",
       "W (OD)": r.item?.wOd ?? "-",
       "H (OD)": r.item?.hOd ?? "-",
-      Flap: r.item?.flap ?? "-",
-      Deckle: r.item?.deckleSize ?? "-",
-      Cutting: r.item?.cuttingSize ?? "-",
       Ply: r.production.ply ?? "-",
       Flute: r.production.flute ?? "-",
+      L1: r.production.l1 || (r.item as any)?.l1 || "-",
+      F1: r.production.f1 || (r.item as any)?.f1 || "-",
+      L2: r.production.l2 || (r.item as any)?.l2 || "-",
+      F2: r.production.f2 || (r.item as any)?.f2 || "-",
+      L3: r.production.l3 || (r.item as any)?.l3 || "-",
       Top: r.production.top ?? "-",
       GSM: r.production.gsm ?? "-",
       "Least GSM": r.leastGsm === null ? "-" : r.leastGsm,
@@ -673,11 +957,18 @@ export function OperationDashboard() {
       "Avg Wt": r.production.avgWeight ?? "-",
       Wastage: r.production.wastage ?? "-",
       "Real/KG": Number(r.production.realizationPerKg || 0) ? Number(r.production.realizationPerKg || 0).toFixed(2) : "-",
-      "Processing Status": r.processingStatusText,
+      "Reel (Calc)": (r.production as any).reelAsPerCalc || "-",
+      "Reel Trim": (r.production as any).reelActualWithTrimming || "-",
+      "Cutting Trim": (r.production as any).cuttingWithTrimming || r.item?.cuttingSize || "-",
+      "Planned Prod (M)": r.production.plannedProductionInMeter ?? "-",
+      "Sheet Wt": r.production.sheetWeight || "-",
+      "Flute Batch": r.production.fluteBatches || "-",
+      Rate: Number(r.production.rate) ? Number(r.production.rate).toFixed(2) : (r.production.rate || "-"),
+      Value: Number(r.production.qty || 0) && Number(r.production.rate || 0) ? (Number(r.production.qty || 0) * Number(r.production.rate || 0)).toLocaleString() : "-",
+      "Production FFG": Number(r.production.prodFromFFG || 0),
+      "Actual Paper (KG)": Number(r.actualPaperUsed.toFixed(2)),
       "Job Closer": r.production.closeBy || "-",
       "Close Date": r.production.closeDate || "-",
-      "Actual Paper Used": Number(r.actualPaperUsed.toFixed(5)),
-      "Wastage %": r.wastagePct === null ? "-" : Number(r.wastagePct.toFixed(5)),
     }));
   }, [rows]);
 
@@ -720,6 +1011,11 @@ export function OperationDashboard() {
     e.dataTransfer.dropEffect = "move";
   };
 
+  const cancelTarget = cancelModalJobId ? productions.find((p) => p.id === cancelModalJobId) : null;
+  const cancelTargetSchedule = cancelTarget?.scheduleId ? schedules.find((s) => s.id === cancelTarget.scheduleId) : null;
+  const cancelTargetOrder = cancelTargetSchedule ? orders.find((o) => o.id === cancelTargetSchedule.orderId) : null;
+  const cancelTargetItem = cancelTarget ? npdItems.find((i) => i.id === String(cancelTarget.itemId || "").trim()) : null;
+
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[5px_5px_0px_0px_rgba(15,23,42,1)]">
@@ -734,12 +1030,12 @@ export function OperationDashboard() {
               <button
                 type="button"
                 onClick={() => setDateRange({ from: "", to: "" })}
-                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-rose-50 px-2.5 py-1 text-[10px] font-black uppercase text-rose-700 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-rose-50 px-2.5 py-1 text-[9px] font-black uppercase text-rose-700 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
               >
                 Clear
               </button>
               <div className="flex items-center gap-1.5 rounded-md border-2 border-slate-900 bg-white px-2.5 py-1 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
-                <label htmlFor="closed-job-filter-top" className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">
+                <label htmlFor="closed-job-filter-top" className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-700">
                   Closed Job
                 </label>
                 <select
@@ -759,7 +1055,7 @@ export function OperationDashboard() {
               <button
                 type="button"
                 onClick={() => setIsColumnsOpen((v) => !v)}
-                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
+                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-900 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
               >
                 <SlidersHorizontal size={14} strokeWidth={3} />
                 Columns
@@ -776,7 +1072,7 @@ export function OperationDashboard() {
                     key={group.id}
                     className={cn("overflow-hidden rounded-lg border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]", groupConfig.className)}
                   >
-                    <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
+                    <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-white">{group.title}</div>
                     <div className={cn("grid gap-0", groupConfig.gridClassName)}>
                       {groupConfig.cards.map((cardConfig) => {
                         const card = getSummaryCard(summary, cardConfig.id);
@@ -813,7 +1109,7 @@ export function OperationDashboard() {
             <button
               type="button"
               onClick={onResetColumns}
-              className="text-[10px] font-black uppercase px-3 py-1 border-2 border-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-px hover:translate-y-px hover:shadow-none transition"
+              className="text-[9px] font-black uppercase px-3 py-1 border-2 border-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-px hover:translate-y-px hover:shadow-none transition"
             >
               Reset
             </button>
@@ -855,8 +1151,12 @@ export function OperationDashboard() {
                     onDragOver={onDragOver}
                     onDrop={onDrop(c.id)}
                     className={cn(
-                      "px-2 py-1.5 text-left text-[10px] font-black uppercase text-slate-900 border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
-                      c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left"
+                      "px-2 py-1.5 text-left text-[9px] font-black uppercase text-slate-900 border-b border-r border-black whitespace-nowrap select-none cursor-move bg-slate-100",
+                      c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
+                      c.id === "paper" || c.id === "liner" || c.id === "print" || c.id === "paste" || c.id === "stitch" || c.id === "punch" || c.id === "glue" ? "bg-indigo-50 text-indigo-900" :
+                      c.id === "loadedQty" ? "bg-amber-50" :
+                      c.id === "prodFromFFG" ? "bg-indigo-50/50" :
+                      c.id === "actualPaperUsed" ? "bg-emerald-50 text-emerald-900" : ""
                     )}
                     title="Drag to reorder"
                   >
@@ -877,17 +1177,19 @@ export function OperationDashboard() {
                   <tr key={row.production.id} className="divide-x divide-black border-b border-black/80 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-sky-50/50">
                     {visibleColumns.map((c) => {
                       const value = c.render(row);
-                      const title = typeof value === "string" ? value : c.id === "processingStatus" ? row.processingStatusText : undefined;
                       return (
                         <td
                           key={c.id}
                           className={cn(
-                            "px-2 py-1.5 text-[10.5px] text-black border-r border-black/90 align-top",
+                            "px-2 py-1.5 text-[9px] text-black border-r border-black/90 align-top",
                             c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
-                            c.id === "itemName" || c.id === "processingStatus" ? "whitespace-normal min-w-[150px]" : "whitespace-nowrap",
+                            c.id === "itemName" ? "whitespace-normal min-w-[150px]" : "whitespace-nowrap",
+                            c.id === "paper" || c.id === "liner" || c.id === "print" || c.id === "paste" || c.id === "stitch" || c.id === "punch" || c.id === "glue" ? "bg-indigo-50/30" :
+                            c.id === "loadedQty" ? "bg-amber-50/40" :
+                            c.id === "prodFromFFG" ? "bg-indigo-50/20" :
+                            c.id === "actualPaperUsed" ? "bg-emerald-50/30" : "",
                             c.className
                           )}
-                          title={title}
                         >
                           {value}
                         </td>
@@ -900,6 +1202,61 @@ export function OperationDashboard() {
           </table>
         </div>
       </div>
+
+      {cancelTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setCancelModalJobId(null)}>
+          <div className="w-full max-w-lg rounded border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-black px-5 py-4">
+              <h3 className="text-lg font-black uppercase tracking-tight text-black">Cancel Job</h3>
+              <div className="mt-2 text-xs font-bold text-slate-600">
+                Job: {cancelTarget.transactionNo} | Order: {cancelTargetOrder?.orderNo || "-"} | Item: {cancelTargetItem?.name || "Unknown"}
+              </div>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <div className="text-sm font-medium text-slate-700">
+                This will return{" "}
+                <span className="font-black text-red-700">
+                  {Number(cancelTarget.qty || 0).toLocaleString()} {cancelTarget.uom || ""}
+                </span>{" "}
+                to Pending Production Plan.
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-black uppercase tracking-wider text-black">
+                  Cancel Reason <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={cancelRemarks}
+                  onChange={(e) => {
+                    setCancelRemarks(e.target.value);
+                    if (cancelError) setCancelError("");
+                  }}
+                  placeholder="Enter cancellation reason"
+                  className={`w-full rounded border-2 px-3 py-2 text-sm text-black outline-none ${cancelError ? "border-red-600" : "border-black"}`}
+                />
+                {cancelError ? <div className="text-xs font-bold text-red-600">{cancelError}</div> : null}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-black px-5 py-4">
+              <button
+                onClick={() => setCancelModalJobId(null)}
+                disabled={Boolean(cancelSubmittingId)}
+                className="rounded border border-black px-4 py-2 text-sm font-bold text-black hover:bg-slate-50 disabled:opacity-50"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => void handleCancelJob()}
+                disabled={Boolean(cancelSubmittingId)}
+                className="rounded border border-black bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {cancelSubmittingId === cancelTarget.id ? "Cancelling..." : "Confirm Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
