@@ -66,23 +66,27 @@ export function MaterialInItemMaster() {
   // Flatten the data for display
   const statusOptions = ["All", ...Array.from(new Set(materialIn.map((entry) => entry.status).filter(Boolean)))];
 
-  const allLines = materialIn.flatMap(m => 
-    m.lines.map(line => ({
-      ...line,
-      parentStatus: m.status,
-      parentTransactionNo: m.transactionNo,
-      parentDate: m.date,
-      parentSupplierId: m.supplierId,
-      parentId: m.id,
-      timestamp: m.timestamp
-    }))
-  ).filter(line => {
+  const allLines = materialIn.flatMap(m => {
+    const safeLines = Array.isArray(m.lines) ? m.lines : [];
+    return safeLines.map(line => {
+      if (!line) return null;
+      return {
+        ...line,
+        parentStatus: m.status,
+        parentTransactionNo: m.transactionNo,
+        parentDate: m.date,
+        parentSupplierId: m.supplierId,
+        parentId: m.id,
+        timestamp: m.timestamp
+      };
+    }).filter((l): l is NonNullable<typeof l> => l !== null);
+  }).filter(line => {
     const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "";
     const supplierName = getSupplierName(line.parentSupplierId);
     const matchesSearch =
       itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      line.parentTransactionNo.toLowerCase().includes(searchTerm.toLowerCase());
+      (line.parentTransactionNo || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "All" || line.parentStatus === statusFilter;
     return matchesSearch && matchesStatus;
   });

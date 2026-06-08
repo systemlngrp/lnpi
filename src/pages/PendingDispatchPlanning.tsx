@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
@@ -11,6 +12,7 @@ import { ArrowUpDown, Save } from "lucide-react";
 type SortKey = "scheduledDate" | "orderNo" | "companyName" | "itemName" | "pendingQty";
 
 export function PendingDispatchPlanning() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
 
   // Simple DOM-based table row filter bound to the search input
@@ -502,6 +504,8 @@ export function PendingDispatchPlanning() {
         </div>
       </div>
 
+      {calculationRows.length > 0 ? (
+        <>
           <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
           <div className="px-4 py-3 border-b border-black bg-slate-50">
             <div className="text-sm font-black uppercase text-black">Dispatch Planning Calculation</div>

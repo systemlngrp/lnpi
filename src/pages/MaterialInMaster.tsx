@@ -40,9 +40,11 @@ export function MaterialInMaster() {
   };
 
   const getLineItemsElement = (lines: MaterialIn["lines"] = []) => {
+    const safeLines = Array.isArray(lines) ? lines : [];
     return (
       <ul className="list-none space-y-1">
-        {lines.map((line, idx) => {
+        {safeLines.map((line, idx) => {
+          if (!line) return null;
           const itemName = materials.find((item) => item.id === line.itemId)?.name || npdItems.find((item) => item.id === line.itemId)?.name;
           return (
             <li key={idx} className="border-b border-black pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
@@ -62,12 +64,16 @@ export function MaterialInMaster() {
   const filteredMaterialIn = materialIn
     .filter((entry) => {
       const supplierName = getSupplierName(entry.supplierId);
-      const itemNames = entry.lines
-        .map((line) => materials.find((item) => item.id === line.itemId)?.name || npdItems.find((item) => item.id === line.itemId)?.name || "")
+      const safeLines = Array.isArray(entry.lines) ? entry.lines : [];
+      const itemNames = safeLines
+        .map((line) => {
+          if (!line) return "";
+          return materials.find((item) => item.id === line.itemId)?.name || npdItems.find((item) => item.id === line.itemId)?.name || "";
+        })
         .join(" ");
       
       const matchesSearch = 
-        entry.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (entry.transactionNo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         itemNames.toLowerCase().includes(searchTerm.toLowerCase());
       
