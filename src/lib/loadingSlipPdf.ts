@@ -151,7 +151,7 @@ export async function downloadLoadingSlipPdf({
 
   currentY = (doc as any).lastAutoTable.finalY + 10;
 
-  if (slip.packingDetails && slip.packingDetails.length > 0) {
+  if (Array.isArray(slip.packingDetails) && slip.packingDetails.length > 0) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.text("PACKING DETAILS", 14, currentY);
@@ -159,9 +159,9 @@ export async function downloadLoadingSlipPdf({
 
     const packingRows = slip.packingDetails.map((pd, idx) => [
       idx + 1,
-      pd.bundles.toLocaleString(),
-      pd.packSize.toLocaleString(),
-      pd.quantity.toLocaleString()
+      Number(pd.bundles || 0).toLocaleString(),
+      Number(pd.packSize || 0).toLocaleString(),
+      Number(pd.quantity || 0).toLocaleString()
     ]);
 
     if (slip.extraItemsQty) {
