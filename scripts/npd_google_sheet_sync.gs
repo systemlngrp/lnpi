@@ -66,20 +66,45 @@ function performFullSync_(config, skipAlreadySynced) {
   const allRowsToSync = [];
   const allRowIndicesToUpdate = [];
 
+  const nameMap = new Map();
+  const duplicateRowIndices = [];
+
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
     const isBlankRow = row.every((cell) => String(cell || '').trim() === '');
     if (isBlankRow) continue;
 
     const hostingerSyncValue = String(row[hostingerSyncIndex] || '').trim();
-    if (!skipAlreadySynced || hostingerSyncValue === '') {
-      const mapped = {};
-      headers.forEach((header, index) => {
-        mapped[header] = row[index] ?? '';
-      });
-      allRowsToSync.push(mapped);
-      allRowIndicesToUpdate.push(i + 1);
+    if (skipAlreadySynced && hostingerSyncValue !== '') {
+      continue;
     }
+
+    const mapped = {};
+    headers.forEach((header, index) => {
+      mapped[header] = row[index] ?? '';
+    });
+    const name = String(mapped[config.idHeader] || '').trim();
+    if (!name) continue;
+
+    if (nameMap.has(name)) {
+      duplicateRowIndices.push(i + 1); // sheet row index (1-based)
+      continue;
+    }
+    nameMap.set(name, i + 1);
+    allRowsToSync.push(mapped);
+    allRowIndicesToUpdate.push(i + 1);
+  }
+
+  // Delete duplicate rows from bottom to top to avoid shifting indices
+  if (duplicateRowIndices.length > 0) {
+    duplicateRowIndices.sort((a, b) => b - a);
+    duplicateRowIndices.forEach((rowIdx) => {
+      try {
+        sheet.deleteRow(rowIdx);
+      } catch (e) {
+        Logger.log('Failed to delete duplicate row %s: %s', rowIdx, e);
+      }
+    });
   }
 
   if (allRowsToSync.length === 0) {
