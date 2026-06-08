@@ -47,14 +47,11 @@ export async function downloadLoadingSlipPdf({
   doc.text("LOADING SLIP", 105, currentY, { align: "center" });
   currentY += 10;
 
-  const truckNo = trucks.find((t) => t.id === slip.truckId)?.truckNo || "Unknown";
-
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   const details: Array<[string, string]> = [
     ["Slip No", slip.slipNo || "-"],
     ["Date", formatDate(slip.date)],
-    ["Truck No", truckNo],
     ["Total Qty", slip.lines.reduce((sum, l) => sum + Number(l.loadedQty || 0), 0).toLocaleString()],
     ["Status", slip.status === "Cancelled" ? "Cancelled" : "Active"],
   ];
@@ -67,23 +64,7 @@ export async function downloadLoadingSlipPdf({
     doc.setFont("helvetica", "normal");
     doc.text(String(value || "-"), x + 26, y);
   });
-  currentY += 20;
-
-  const rows = slip.lines.map((line, index) => {
-    const plan = plans.find((p) => p.id === line.dispatchPlanId);
-    const order = orders.find((o) => o.id === plan?.orderId);
-    const item = npdItems.find((i) => i.id === order?.itemId);
-    const company = companies.find((c) => c.id === order?.companyId);
-    return [
-      index + 1,
-      company?.name || "Unknown",
-      order?.orderNo || "-",
-      item?.name || "Unknown Item",
-      Number(plan?.plannedQty || 0).toLocaleString(),
-      Number(line.loadedQty || 0).toLocaleString(),
-      formatAllocations(line.allocations, line.jobNos),
-    ];
-  });
+  currentY += 15;
 
   const companyIds = new Set<string>();
   slip.lines.forEach((line) => {
@@ -97,7 +78,7 @@ export async function downloadLoadingSlipPdf({
 
   if (uniqueCompanies.length === 1) {
     const company = uniqueCompanies[0];
-    const companyLines = [company.name, company.address, company.district, company.state]
+    const companyLines = [company.address, company.district, company.state]
       .map((v) => String(v || "").trim())
       .filter(Boolean)
       .join(", ");
@@ -111,16 +92,18 @@ export async function downloadLoadingSlipPdf({
     currentY += 6;
 
     if (companyLines) {
+      doc.setFontSize(9);
       const wrapped = doc.splitTextToSize(companyLines, 180);
       doc.text(wrapped, 14, currentY);
       currentY += wrapped.length * 5;
     }
 
     if (gstLine) {
+      doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.text("GST No:", 14, currentY);
       doc.setFont("helvetica", "normal");
-      doc.text(gstLine, 34, currentY);
+      doc.text(gstLine, 30, currentY);
       currentY += 6;
     }
 
@@ -134,18 +117,27 @@ export async function downloadLoadingSlipPdf({
     currentY += 8;
   }
 
+  const rows = slip.lines.map((line, index) => {
+    const plan = plans.find((p) => p.id === line.dispatchPlanId);
+    const order = orders.find((o) => o.id === plan?.orderId);
+    const item = npdItems.find((i) => i.id === order?.itemId);
+    return [
+      index + 1,
+      item?.name || "Unknown Item",
+      Number(line.loadedQty || 0).toLocaleString(),
+    ];
+  });
+
   autoTable(doc, {
     startY: currentY,
-    head: [["SL", "Company", "Order No", "Item", "Planned", "Loaded", "Jobs / Allocations"]],
+    head: [["SL", "Item Name", "Loaded Qty"]],
     body: rows,
     theme: "grid",
-    styles: { fontSize: 8.5, cellPadding: 2.2, textColor: 0 },
+    styles: { fontSize: 9.5, cellPadding: 3, textColor: 0 },
     headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold" },
     columnStyles: {
-      0: { halign: "center", cellWidth: 10 },
-      4: { halign: "right", cellWidth: 18 },
-      5: { halign: "right", cellWidth: 18 },
-      6: { cellWidth: 60 },
+      0: { halign: "center", cellWidth: 15 },
+      2: { halign: "right", cellWidth: 35, fontStyle: "bold" },
     },
   });
 
@@ -185,23 +177,6 @@ export async function downloadLoadingSlipPdf({
     
     currentY = (doc as any).lastAutoTable.finalY + 15;
   }
-
-  // Highlight Balance in bottom left
-  const totalLoaded = slip.lines.reduce((sum, l) => sum + Number(l.loadedQty || 0), 0);
-  const totalPlanned = slip.lines.reduce((sum, l) => {
-    const plan = plans.find(p => p.id === l.dispatchPlanId);
-    return sum + Number(plan?.plannedQty || 0);
-  }, 0);
-  const remainingBalance = Math.max(0, totalPlanned - totalLoaded);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.text(`BALANCE: ${remainingBalance.toLocaleString()}`, 14, currentY);
-  
-  doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139); // slate-500
-  doc.text("(Total Planned - Total Loaded in this slip)", 14, currentY + 5);
 
   const safeSlipNo = String(slip.slipNo || "LoadingSlip").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
   doc.save(`LoadingSlip_${safeSlipNo}_${String(slip.date || "").slice(0, 10)}.pdf`);
