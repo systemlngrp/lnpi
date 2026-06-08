@@ -545,11 +545,34 @@ app.post("/api/npd-sync", async (req, res) => {
       requiredHeaders: COMPANY_SYNC_REQUIRED_HEADERS,
       mapFn: (row: Record<string, any>) => {
         const mapped: Record<string, any> = {};
+        
+        // Find company name using either "Company Name" or "Company"
+        const nameVal = stringOrEmpty(row["Company Name"] || row["Company"]);
+        mapped.name = nameVal;
+
+        // Find GST no using "GST No", "GST NO", or "GST No."
+        const gstVal = stringOrEmpty(row["GST No"] || row["GST NO"] || row["GST No."]);
+        if (gstVal) {
+          mapped.gstNo = gstVal;
+        }
+
+        // Map other headers
         Object.entries(COMPANY_SYNC_HEADER_MAP).forEach(([header, key]) => {
+          if (header === "Company Name" || header === "GST No") return; // Already handled above
           if (!Object.prototype.hasOwnProperty.call(row, header)) return;
           mapped[key] = normalizeSheetCellValue(key, row[header]);
         });
-        mapped.id = stringOrEmpty(mapped.id);
+
+        // Find or generate ID
+        const idVal = stringOrEmpty(row["Id"] || row["id"] || row["ID"]);
+        if (idVal) {
+          mapped.id = idVal;
+        } else if (nameVal) {
+          // Generate stable UUID based on company name
+          const hash = crypto.createHash("md5").update(nameVal.trim().toUpperCase()).digest("hex");
+          mapped.id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+        }
+        
         return mapped;
       },
     }
@@ -577,9 +600,20 @@ app.post("/api/npd-sync", async (req, res) => {
     })
   );
 
-  const missingRequiredHeaders = config.requiredHeaders.filter((header) =>
-    rowsPayload.length > 0 && !rowsPayload.some((row) => Object.prototype.hasOwnProperty.call(row || {}, header))
-  );
+  let missingRequiredHeaders: string[] = [];
+  if (tabName === "Companies") {
+    const hasCompanyHeader = rowsPayload.some((row) => 
+      Object.prototype.hasOwnProperty.call(row || {}, "Company Name") ||
+      Object.prototype.hasOwnProperty.call(row || {}, "Company")
+    );
+    if (!hasCompanyHeader) {
+      missingRequiredHeaders.push("Company Name");
+    }
+  } else {
+    missingRequiredHeaders = config.requiredHeaders.filter((header) =>
+      rowsPayload.length > 0 && !rowsPayload.some((row) => Object.prototype.hasOwnProperty.call(row || {}, header))
+    );
+  }
   if (missingRequiredHeaders.length > 0) {
     return res.status(400).json({ error: `Missing required header(s): ${missingRequiredHeaders.join(", ")}` });
   }

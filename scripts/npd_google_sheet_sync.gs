@@ -16,7 +16,7 @@ const COMPANY_SYNC_CONFIG = {
   secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
   tabName: 'Companies',
   spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
-  idHeader: 'Id',
+  idHeader: 'Company Name',
   hostingerSyncHeader: 'NPD Hostinger Sync',
   flushDelayMs: 15000,
   pendingRowsPropertyKey: 'COMPANY_PENDING_ROWS',
