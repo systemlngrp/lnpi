@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Edit, Plus, Trash2, Search, Upload, Download, CheckCircle, Package, Layers, Disc } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, MaterialIssueLine, MaterialIssueReelLine, MaterialReturnLine, MaterialReturnReelLine, Supplier, UnitMaster, Item } from "../types";
+import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine, MaterialReturn, MaterialReturnLine, MaterialReturnReelLine, Supplier, UnitMaster, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { ClientPagination } from "../components/ClientPagination";
 import { Select } from "../components/Select";
@@ -244,6 +244,22 @@ export function Materials() {
     return map;
   }, [materials, packingSlips, materialIn, materialIssues, issueLines, reelIssueLines, materialReturnsHeader, returnLines, reelReturnLines, fromDate, toDate]);
 
+  const filteredMaterials = useMemo(() => {
+    return [...materials]
+      .filter((material) => {
+        const matchesSearch = !searchTerm || normalizeText(material.erpCode).includes(searchTerm.toLowerCase()) || normalizeText(material.name).includes(searchTerm.toLowerCase());
+        const matchesType = typeFilter === "All" || material.type === typeFilter;
+        const matchesSize = sizeFilter === "All" || formatOptionalNumber(material.size) === sizeFilter;
+        const matchesGsm = gsmFilter === "All" || formatOptionalNumber(material.gsm) === gsmFilter;
+        return matchesSearch && matchesType && matchesSize && matchesGsm;
+      })
+      .sort((a, b) => {
+        const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
+        const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
+        return timeB - timeA || a.name.localeCompare(b.name);
+      });
+  }, [gsmFilter, materials, searchTerm, sizeFilter, typeFilter]);
+
   const metrics = useMemo(() => {
     let totalReelWeight = 0;
     let totalOtherStock = 0;
@@ -260,6 +276,8 @@ export function Materials() {
       otherStock: totalOtherStock,
     };
   }, [filteredMaterials, movementSummaryMap]);
+
+  const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems: paginatedMaterials } = useClientPagination(filteredMaterials, 25);
 
   const [formData, setFormData] = useState(() => createInitialFormState(materials, reelGroup?.id || ""));
 
@@ -327,6 +345,7 @@ export function Materials() {
   }
 
   function handleDelete(id: string) {
+    if (!window.confirm("Are you sure you want to delete this item?")) return;
     setMaterials(materials.filter((material) => material.id !== id));
   }
 
@@ -468,24 +487,6 @@ export function Materials() {
     const values = Array.from(new Set(materials.map((material) => formatOptionalNumber(material.gsm)).filter(Boolean)));
     return values.sort((a, b) => Number(a) - Number(b));
   }, [materials]);
-
-  const filteredMaterials = useMemo(() => {
-    return [...materials]
-      .filter((material) => {
-        const matchesSearch = !searchTerm || normalizeText(material.erpCode).includes(searchTerm.toLowerCase()) || normalizeText(material.name).includes(searchTerm.toLowerCase());
-        const matchesType = typeFilter === "All" || material.type === typeFilter;
-        const matchesSize = sizeFilter === "All" || formatOptionalNumber(material.size) === sizeFilter;
-        const matchesGsm = gsmFilter === "All" || formatOptionalNumber(material.gsm) === gsmFilter;
-        return matchesSearch && matchesType && matchesSize && matchesGsm;
-      })
-      .sort((a, b) => {
-        const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-        const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-        return timeB - timeA || a.name.localeCompare(b.name);
-      });
-  }, [gsmFilter, materials, searchTerm, sizeFilter, typeFilter]);
-
-  const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems: paginatedMaterials } = useClientPagination(filteredMaterials, 25);
 
   function downloadTemplate() {
     const templateData = [
@@ -1021,7 +1022,7 @@ export function Materials() {
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white divide-x divide-indigo-800">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit"].map((heading) => (
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Actions"].map((heading) => (
                       <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
@@ -1031,7 +1032,7 @@ export function Materials() {
                 <tbody className="divide-y divide-black">
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="px-6 py-10 text-center text-slate-500 font-medium italic">
+                      <td colSpan={14} className="px-6 py-10 text-center text-slate-500 font-medium italic">
                         No materials matching your search criteria.
                       </td>
                     </tr>
@@ -1056,6 +1057,35 @@ export function Materials() {
                             {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-black text-[10px] font-black uppercase">{material.uom || ""}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleEdit(material)}
+                                className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition border border-transparent hover:border-indigo-200"
+                                title="Edit Item"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleToggleActive(material)}
+                                className={`p-1.5 rounded transition border border-transparent ${
+                                  material.active === "No"
+                                    ? "text-slate-400 hover:bg-slate-50 hover:border-slate-200"
+                                    : "text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200"
+                                }`}
+                                title={material.active === "No" ? "Mark Active" : "Mark Inactive"}
+                              >
+                                <CheckCircle size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(material.id)}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition border border-transparent hover:border-rose-200"
+                                title="Delete Item"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
