@@ -345,11 +345,12 @@ export function LoadingMaster() {
         </div>
       </div>
 
-      <div className="bg-white border border-black rounded shadow-sm overflow-hidden">
-        <table className="min-w-full divide-y divide-black">
+      <div className="bg-white border-2 border-black rounded shadow-sm overflow-hidden">
+        <table className="min-w-full border-collapse">
           <thead className="bg-slate-100">
-            <tr>
+            <tr className="divide-x divide-black">
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Slip No</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Status</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Date</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Company</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Items (ERP)</th>
@@ -357,31 +358,33 @@ export function LoadingMaster() {
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border-b border-black">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-slate-200">
+          <tbody className="bg-white divide-y divide-black">
             {processedSlips.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
+                <td colSpan={7} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
               </tr>
             ) : processedSlips.map((slip) => (
-              <tr key={slip.id} className="hover:bg-slate-50 transition-colors">
+              <tr key={slip.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <FileText size={16} className="text-indigo-600 mr-2" />
                     <span className="font-bold text-sm">{slip.slipNo}</span>
-                    {slip.status === "Cancelled" ? (
-                      <span className="ml-2 rounded border border-red-700 bg-red-100 px-2 py-0.5 text-[10px] font-black uppercase text-red-800">
-                        Cancelled
-                      </span>
-                    ) : slip.invoiceId ? (
-                      <span className="ml-2 rounded border border-emerald-700 bg-emerald-100 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-800">
-                        Invoiced
-                      </span>
-                    ) : (
-                      <span className="ml-2 rounded border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase text-slate-700">
-                        Not Invoiced
-                      </span>
-                    )}
                   </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {slip.status === "Cancelled" ? (
+                    <span className="rounded border border-red-700 bg-red-100 px-2 py-0.5 text-[10px] font-black uppercase text-red-800">
+                      Cancelled
+                    </span>
+                  ) : slip.invoiceId ? (
+                    <span className="rounded border border-emerald-700 bg-emerald-100 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-800">
+                      Invoiced
+                    </span>
+                  ) : (
+                    <span className="rounded border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase text-slate-700">
+                      Not Invoiced
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   {formatDate(slip.date)}
@@ -450,7 +453,7 @@ export function LoadingMaster() {
               const lines = getSlipLines(draft);
               return (
                 <tr key={`${slip.id}-details`} className="bg-white">
-                  <td colSpan={6} className="px-6 pb-6 pt-2 border-t border-black">
+                  <td colSpan={7} className="px-6 pb-6 pt-2 border-t border-black">
                     <div className="rounded border border-black overflow-hidden">
                       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3 border-b border-black">
                         <div className="text-sm font-bold text-black">
