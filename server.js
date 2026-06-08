@@ -2985,10 +2985,9 @@ async function initDb(retries = 5) {
       }
       try {
         const [rows] = await db.query(
-          "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'invoice_line_items' AND CONSTRAINT_NAME = 'fk_invoice_line_items_itemId_items'",
-          [database]
+          "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_NAME = 'invoice_line_items' AND CONSTRAINT_NAME = 'fk_invoice_line_items_itemId_items' AND REFERENCED_TABLE_NAME = 'items'"
         );
-        if ((rows as any[]).length > 0) {
+        if (rows && rows.length > 0) {
           console.log("[DB] Dropping legacy foreign key fk_invoice_line_items_itemId_items...");
           await db.query("ALTER TABLE `invoice_line_items` DROP FOREIGN KEY `fk_invoice_line_items_itemId_items` ");
         }
