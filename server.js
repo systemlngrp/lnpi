@@ -598,6 +598,9 @@ const DELETE_REFERENCES = {
     { table: "invoices", column: "companyId", label: "Invoices" }
   ],
   items: [
+    { table: "item_groups", column: "groupId", label: "Item Groups" },
+  ],
+  npd: [
     { table: "orders", column: "itemId", label: "Orders" },
     { table: "orders", column: "npdId", label: "Orders" },
     { table: "invoice_line_items", column: "itemId", label: "Invoice Line Items" },
@@ -605,14 +608,9 @@ const DELETE_REFERENCES = {
     { table: "productions", column: "itemId", label: "Productions" },
     { table: "productions", column: "npdId", label: "Productions" },
     { table: "sample_requests", column: "itemId", label: "Sample Requests" },
-    { table: "sample_requests", column: "npdId", label: "Sample Requests" }
-  ],
-  npd: [
-    { table: "orders", column: "npdId", label: "Orders" },
-    { table: "invoice_line_items", column: "npdId", label: "Invoice Line Items" },
-    { table: "productions", column: "npdId", label: "Productions" },
     { table: "sample_requests", column: "npdId", label: "Sample Requests" },
-    { table: "consumptions", column: "npdId", label: "Consumptions" }
+    { table: "consumptions", column: "itemId", label: "Consumptions" },
+    { table: "consumptions", column: "npdId", label: "Consumptions" },
   ],
   orders: [{ table: "orders_schedule", column: "orderId", label: "Order Schedule" }],
   orders_schedule: [
@@ -797,9 +795,9 @@ async function ensureBestEffortForeignKeys(db, database) {
     {
       table: "invoice_line_items",
       column: "itemId",
-      refTable: "items",
+      refTable: "npd",
       refColumn: "id",
-      constraintName: "fk_invoice_line_items_itemId_items",
+      constraintName: "fk_invoice_line_items_itemId_npd",
       indexName: "idx_invoice_line_items_itemId"
     },
     {
@@ -2984,6 +2982,18 @@ async function initDb(retries = 5) {
         } catch (err) {
           console.warn(`[DB] Could not drop column ${m.column} from ${m.table}:`, err.message);
         }
+      }
+      try {
+        const [rows] = await db.query(
+          "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'invoice_line_items' AND CONSTRAINT_NAME = 'fk_invoice_line_items_itemId_items'",
+          [database]
+        );
+        if ((rows as any[]).length > 0) {
+          console.log("[DB] Dropping legacy foreign key fk_invoice_line_items_itemId_items...");
+          await db.query("ALTER TABLE `invoice_line_items` DROP FOREIGN KEY `fk_invoice_line_items_itemId_items` ");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not drop legacy foreign key:", err.message);
       }
       try {
         await ensureNpdSchemaColumns(db, database);
