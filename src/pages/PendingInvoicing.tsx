@@ -452,6 +452,7 @@ export function PendingInvoicing() {
               invoiceId,
               loadingSlipId: part.loadingSlipId,
               itemId: itemRow.itemId,
+              npdId: itemRow.itemId,
               qty: part.qty,
               rate,
               amount,
