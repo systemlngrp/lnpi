@@ -680,20 +680,37 @@ export function ProductionMaster() {
                           value={p.closeBy || ""}
                           disabled={!Number(p.actualPaperUsed || 0) || !Number(p.prodFromFFG || 0)}
                           onChange={(e) => {
-                            const nextValue = e.target.value;
-                            const today = new Date().toISOString().split("T")[0];
-                            void setProductions((prev) =>
-                              prev.map((row) =>
-                                row.id === p.id
-                                  ? {
-                                      ...row,
-                                      closeBy: nextValue,
-                                      closeDate: nextValue === "Yes" ? row.closeDate || today : row.closeDate,
-                                    }
-                                  : row
-                              )
-                            );
-                          }}
+                             const nextValue = e.target.value;
+                             const today = new Date().toISOString().split("T")[0];
+                             if (nextValue === "Yes") {
+                               const confirmSave = window.confirm("Set close date to today and save?");
+                               if (!confirmSave) {
+                                 return;
+                               }
+                               void setProductions((prev) =>
+                                 prev.map((row) =>
+                                   row.id === p.id
+                                     ? {
+                                         ...row,
+                                         closeBy: "Yes",
+                                         closeDate: today,
+                                       }
+                                     : row
+                                 )
+                               );
+                             } else {
+                               void setProductions((prev) =>
+                                 prev.map((row) =>
+                                   row.id === p.id
+                                     ? {
+                                         ...row,
+                                         closeBy: nextValue,
+                                       }
+                                     : row
+                                 )
+                               );
+                             }
+                           }}
                           onBlur={(e) => void updateCloseMeta(p.id, { closeBy: e.target.value, closeDate: p.closeDate })}
                           className="w-24 border border-black rounded px-2 py-1 text-xs bg-white disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
