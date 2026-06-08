@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier } from "../types";
-import { Edit2, Check, X, Search } from "lucide-react";
+import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip } from "../types";
+import { Edit2, Check, X, Search, Package, Layers, Disc } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
@@ -9,6 +9,7 @@ import { useNpdItems } from "../hooks/useNpdItems";
 
 export function MaterialInItemMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
@@ -18,6 +19,11 @@ export function MaterialInItemMaster() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [activeTab, setActiveTab] = useState<"others" | "reel-summary" | "reel-details">("others");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
 
   const handleEditClick = (lineId: string, currentQty: number) => {
     setEditingLineId(lineId);
@@ -42,11 +48,11 @@ export function MaterialInItemMaster() {
           return {
             ...line,
             qty: Number(editQty),
-            value: Number(editQty) * line.rate
+            value: Number(editQty) * (line.rate || 0)
           };
         });
 
-        const newTotalAmount = updatedLines.reduce((sum, line) => sum + line.value, 0);
+        const newTotalAmount = updatedLines.reduce((sum, line) => sum + (line.value || 0), 0);
 
         return {
           ...m,
@@ -63,195 +69,362 @@ export function MaterialInItemMaster() {
 
   const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
 
-  // Flatten the data for display
-  const statusOptions = ["All", ...Array.from(new Set(materialIn.map((entry) => entry.status).filter(Boolean)))];
+  const processedData = useMemo(() => {
+    const q = searchTerm.toLowerCase().trim();
 
-  const allLines = materialIn.flatMap(m => {
-    const safeLines = Array.isArray(m.lines) ? m.lines : [];
-    return safeLines.map(line => {
-      if (!line) return null;
+    // 1. Base Flattening for Line Items
+    const allLineItems = materialIn.flatMap(m => {
+      const safeLines = Array.isArray(m.lines) ? m.lines : [];
+      return safeLines.map(line => {
+        if (!line) return null;
+        
+        // Date range filter
+        const entryDate = m.date || "";
+        if (fromDate && entryDate < fromDate) return null;
+        if (toDate && entryDate > toDate) return null;
+
+        // Status filter
+        if (statusFilter !== "All" && m.status !== statusFilter) return null;
+
+        return {
+          ...line,
+          parentStatus: m.status,
+          parentTransactionNo: m.transactionNo,
+          parentDate: m.date,
+          parentSupplierId: m.supplierId,
+          parentId: m.id,
+          timestamp: m.timestamp,
+          mrrType: m.mrrType || "Others"
+        };
+      }).filter((l): l is NonNullable<typeof l> => l !== null);
+    });
+
+    // 2. Reel Details Flattening
+    const reelDetails = packingSlips.map(slip => {
+      const parent = materialIn.find(m => m.id === slip.materialInId);
+      if (!parent) return null;
+
+      // Date range filter
+      const entryDate = parent.date || "";
+      if (fromDate && entryDate < fromDate) return null;
+      if (toDate && entryDate > toDate) return null;
+
+      // Status filter
+      if (statusFilter !== "All" && parent.status !== statusFilter) return null;
+
+      const material = materialMap.get(slip.materialId);
+      const specs = material ? `${material.gsm || "-"} GSM / ${material.bf || "-"} BF / ${material.size || "-"} ${material.sizeUom || ""}` : "Unknown";
+
       return {
-        ...line,
-        parentStatus: m.status,
-        parentTransactionNo: m.transactionNo,
-        parentDate: m.date,
-        parentSupplierId: m.supplierId,
-        parentId: m.id,
-        timestamp: m.timestamp
+        ...slip,
+        parentTransactionNo: parent.transactionNo,
+        parentDate: parent.date,
+        parentSupplierId: parent.supplierId,
+        parentStatus: parent.status,
+        timestamp: parent.timestamp,
+        specs
       };
     }).filter((l): l is NonNullable<typeof l> => l !== null);
-  }).filter(line => {
-    const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "";
-    const supplierName = getSupplierName(line.parentSupplierId);
-    const matchesSearch =
-      itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (line.parentTransactionNo || "").toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "All" || line.parentStatus === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material In</h2>
-        </div>
-        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text"
-              placeholder="Search items, trn, supplier..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full rounded border border-black px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-52"
-          >
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        {/* Mobile View - Cards */}
-        <div className="block md:hidden space-y-4 p-2">
-            {allLines.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((lineComponent) => {
-               const itemName = materials.find(i => i.id === lineComponent.itemId)?.name || npdItems.find(i => i.id === lineComponent.itemId)?.name || "Unknown";
-               const isEditing = editingLineId === lineComponent.id;
-               return (
-                <div key={lineComponent.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
-                    <div className="flex justify-between items-center">
-                        <div className="font-bold text-sm">{lineComponent.parentTransactionNo}</div>
-                        <span className={cn(
-                          "px-2 py-[2px] rounded text-[11px] font-bold border whitespace-nowrap uppercase tracking-wider",
-                          lineComponent.parentStatus === 'Pending PH' ? 'bg-amber-100 text-amber-900 border-amber-900' : 
-                          lineComponent.parentStatus === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' :
-                          'bg-slate-100 text-slate-900 border-slate-900'
-                        )}>
-                          {lineComponent.parentStatus}
-                        </span>
-                    </div>
-                    <div className="text-xs text-slate-600">{formatDate(lineComponent.parentDate)} | {getSupplierName(lineComponent.parentSupplierId)}</div>
-                    <div className="font-bold">{itemName}</div>
-                    <div className="flex justify-between items-center text-sm">
-                        <span>{lineComponent.qty} {lineComponent.uom} @ {lineComponent.rate}</span>
-                        <span className="font-bold">₹{lineComponent.value.toLocaleString()}</span>
-                    </div>
-                </div>
-               )
-            })}
-        </div>
+    const filterFn = (item: any) => {
+      if (!q) return true;
+      const itemName = materials.find(i => i.id === item.itemId || i.id === item.materialId)?.name || npdItems.find(i => i.id === item.itemId || i.id === item.materialId)?.name || "";
+      const supplierName = getSupplierName(item.parentSupplierId);
+      return (
+        itemName.toLowerCase().includes(q) ||
+        supplierName.toLowerCase().includes(q) ||
+        (item.parentTransactionNo || "").toLowerCase().includes(q) ||
+        (item.ourReelNo || "").toLowerCase().includes(q) ||
+        (item.supplierReelNo || "").toLowerCase().includes(q)
+      );
+    };
 
-        <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
+    const others = allLineItems.filter(l => l.mrrType !== "Reel").filter(filterFn);
+    const reelSummary = allLineItems.filter(l => l.mrrType === "Reel").filter(filterFn);
+    const filteredReelDetails = reelDetails.filter(filterFn);
+
+    // Calculate Metrics
+    const metrics = {
+      totalReceipts: materialIn.filter(m => {
+        if (fromDate && m.date < fromDate) return false;
+        if (toDate && m.date > toDate) return false;
+        if (statusFilter !== "All" && m.status !== statusFilter) return false;
+        return true;
+      }).length,
+      totalReelWeight: reelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
+      othersValue: others.reduce((sum, l) => sum + Number(l.value || 0), 0),
+      reelValue: reelSummary.reduce((sum, l) => sum + Number(l.value || 0), 0)
+    };
+
+    return {
+      others: others.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+      reelSummary: reelSummary.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+      reelDetails: filteredReelDetails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+      metrics
+    };
+  }, [materialIn, packingSlips, materials, npdItems, suppliers, searchTerm, statusFilter, fromDate, toDate, materialMap]);
+
+  const statusOptions = ["All", ...Array.from(new Set(materialIn.map((entry) => entry.status).filter(Boolean)))];
+
+  const renderTable = () => {
+    const data = activeTab === "others" ? processedData.others : 
+                 activeTab === "reel-summary" ? processedData.reelSummary : 
+                 processedData.reelDetails;
+
+    if (data.length === 0) {
+      return (
+        <div className="px-4 py-8 text-center text-black font-medium italic">No items found for the current filters.</div>
+      );
+    }
+
+    if (activeTab === "reel-details") {
+      return (
+        <table className="min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Trn No</th>
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Supplier</th>
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Status</th>
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Qty</th>
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Rate</th>
-              <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Value</th>
-              <th className="px-4 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Trn No</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Date</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Material Specs</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our Reel No</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier Reel No</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Weight (KG)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
-            {allLines.length === 0 ? (
-              <tr>
-                 <td colSpan={10} className="px-4 py-8 text-center text-black font-medium italic">No line items found.</td>
+            {data.map((reel: any) => (
+              <tr key={reel.id} className="hover:bg-slate-50 divide-x divide-black transition-colors text-sm">
+                <td className="px-4 py-3 font-medium text-indigo-700 border border-black">{reel.parentTransactionNo}</td>
+                <td className="px-4 py-3 border border-black">{formatDate(reel.parentDate)}</td>
+                <td className="px-4 py-3 border border-black">{getSupplierName(reel.parentSupplierId)}</td>
+                <td className="px-4 py-3 border border-black">{reel.specs}</td>
+                <td className="px-4 py-3 font-bold border border-black">{reel.ourReelNo}</td>
+                <td className="px-4 py-3 border border-black">{reel.supplierReelNo || "-"}</td>
+                <td className="px-4 py-3 text-right font-black text-amber-600 border border-black">{reel.weightKg.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>
-            ) : allLines.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((lineComponent) => {
-              const itemName = materials.find(i => i.id === lineComponent.itemId)?.name || npdItems.find(i => i.id === lineComponent.itemId)?.name || "Unknown";
-              const canEdit = lineComponent.parentStatus === "Pending PH";
-              const isEditing = editingLineId === lineComponent.id;
-
-              return (
-                <tr key={lineComponent.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
-                  <td className="px-4 py-4 text-sm font-medium text-black border border-black whitespace-nowrap">
-                     {lineComponent.parentTransactionNo}
-                  </td>
-                  <td className="px-4 py-4 text-sm text-black border border-black whitespace-nowrap">
-                     {formatDate(lineComponent.parentDate)}
-                  </td>
-                  <td className="px-4 py-4 text-sm text-black border border-black">
-                     {getSupplierName(lineComponent.parentSupplierId)}
-                  </td>
-                  <td className="px-4 py-4 text-sm text-black border border-black">{itemName}</td>
-                  <td className="px-4 py-4 text-sm border border-black">
-                    <span className={cn(
-                      "px-2 py-[2px] rounded text-[11px] font-bold border whitespace-nowrap uppercase tracking-wider",
-                      lineComponent.parentStatus === 'Pending PH' ? 'bg-amber-100 text-amber-900 border-amber-900' : 
-                      lineComponent.parentStatus === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' :
-                      'bg-slate-100 text-slate-900 border-slate-900'
-                    )}>
-                      {lineComponent.parentStatus}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-sm font-bold text-indigo-700 border border-black text-right">
-                    {isEditing ? (
-                      <input 
-                        type="number"
-                        value={editQty}
-                        onChange={(e) => setEditQty(e.target.value === "" ? "" : parseFloat(e.target.value))}
-                        className="w-20 border-2 border-indigo-600 rounded p-1 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600 text-right"
-                        autoFocus
-                      />
-                    ) : (
-                      lineComponent.qty
-                    )}
-                  </td>
-                  <td className="px-4 py-4 text-sm text-black border border-black text-center">{lineComponent.uom}</td>
-                  <td className="px-4 py-4 text-sm text-black border border-black text-right">{lineComponent.rate}</td>
-                  <td className="px-4 py-4 text-sm font-medium text-black border border-black text-right whitespace-nowrap">₹{lineComponent.value.toLocaleString()}</td>
-                  <td className="px-4 py-4 text-right text-sm border border-black whitespace-nowrap">
-                    {isEditing ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => handleSaveQty(lineComponent.parentId, lineComponent.id)}
-                          disabled={isSubmitting}
-                          className="p-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition disabled:opacity-50 border border-emerald-700"
-                          title="Save"
-                        >
-                          {isSubmitting ? <Spinner size={16} /> : <Check size={18} />}
-                        </button>
-                        <button 
-                          onClick={handleCancelEdit}
-                          disabled={isSubmitting}
-                          className="p-1 rounded bg-red-100 text-red-700 hover:bg-red-200 transition disabled:opacity-50 border border-red-700"
-                          title="Cancel"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-                    ) : (
-                      canEdit ? (
-                        <button 
-                           onClick={() => handleEditClick(lineComponent.id, lineComponent.qty)}
-                           className="inline-flex items-center text-indigo-600 hover:text-indigo-800 font-bold"
-                        >
-                          <Edit2 size={16} className="mr-1" /> Edit Qty
-                        </button>
-                      ) : (
-                        <span className="text-xs text-slate-500 italic font-medium">Locked</span>
-                      )
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
+            ))}
           </tbody>
         </table>
+      );
+    }
+
+    return (
+      <table className="min-w-full divide-y divide-black border-collapse border border-black">
+        <thead className="bg-slate-100 divide-x divide-black">
+          <tr className="divide-x divide-black">
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Trn No</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Date</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Item Name</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Status</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Qty</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Rate</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Value</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-black bg-white">
+          {data.map((line: any) => {
+            const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
+            const canEdit = line.parentStatus === "Pending MRR" || line.parentStatus === "Pending PH";
+            const isEditing = editingLineId === line.id;
+
+            return (
+              <tr key={line.id} className="hover:bg-slate-50 divide-x divide-black transition-colors text-sm">
+                <td className="px-4 py-3 font-medium text-black border border-black whitespace-nowrap">{line.parentTransactionNo}</td>
+                <td className="px-4 py-3 border border-black whitespace-nowrap">{formatDate(line.parentDate)}</td>
+                <td className="px-4 py-3 border border-black">{getSupplierName(line.parentSupplierId)}</td>
+                <td className="px-4 py-3 border border-black">{itemName}</td>
+                <td className="px-4 py-3 border border-black">
+                  <span className={cn(
+                    "px-2 py-[2px] rounded text-[10px] font-bold border uppercase tracking-wider",
+                    line.parentStatus === 'Pending PH' ? 'bg-amber-100 text-amber-900 border-amber-900' : 
+                    line.parentStatus === 'Completed' ? 'bg-emerald-100 text-emerald-900 border-emerald-900' :
+                    'bg-slate-100 text-slate-900 border-slate-900'
+                  )}>
+                    {line.parentStatus}
+                  </span>
+                </td>
+                <td className="px-4 py-3 font-bold text-indigo-700 border border-black text-right">
+                  {isEditing ? (
+                    <input 
+                      type="number"
+                      value={editQty}
+                      onChange={(e) => setEditQty(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                      className="w-20 border-2 border-indigo-600 rounded p-1 text-black focus:outline-none focus:ring-1 focus:ring-indigo-600 text-right"
+                      autoFocus
+                    />
+                  ) : (
+                    line.qty.toLocaleString()
+                  )}
+                </td>
+                <td className="px-4 py-3 text-black border border-black text-center uppercase">{line.uom}</td>
+                <td className="px-4 py-3 text-black border border-black text-right">{line.rate?.toLocaleString()}</td>
+                <td className="px-4 py-3 font-medium text-black border border-black text-right whitespace-nowrap">₹{line.value?.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right border border-black whitespace-nowrap">
+                  {isEditing ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => handleSaveQty(line.parentId, line.id)}
+                        disabled={isSubmitting}
+                        className="p-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition disabled:opacity-50 border border-emerald-700"
+                      >
+                        {isSubmitting ? <Spinner size={16} /> : <Check size={18} />}
+                      </button>
+                      <button 
+                        onClick={handleCancelEdit}
+                        disabled={isSubmitting}
+                        className="p-1 rounded bg-red-100 text-red-700 hover:bg-red-200 transition disabled:opacity-50 border border-red-700"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  ) : (
+                    canEdit ? (
+                      <button 
+                         onClick={() => handleEditClick(line.id, line.qty)}
+                         className="inline-flex items-center text-indigo-600 hover:text-indigo-800 font-bold"
+                      >
+                        <Edit2 size={14} className="mr-1" /> Edit
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-500 italic font-medium uppercase">Locked</span>
+                    )
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center pb-4 border-b border-black">
+        <div>
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material Receipt Item Master</h2>
+          <div className="text-xs text-slate-500 font-medium font-mono">Detailed analysis of material receipts and reel arrivals.</div>
+        </div>
+      </div>
+
+      {/* Colorful Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Receipts</div>
+          <div className="text-3xl font-black">{processedData.metrics.totalReceipts.toLocaleString()}</div>
+        </div>
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Reel Weight</div>
+          <div className="text-3xl font-black">{processedData.metrics.totalReelWeight.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs">KG</span></div>
+        </div>
+        <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Others Value</div>
+          <div className="text-3xl font-black">₹{processedData.metrics.othersValue.toLocaleString()}</div>
+        </div>
+        <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Reel Value</div>
+          <div className="text-3xl font-black">₹{processedData.metrics.reelValue.toLocaleString()}</div>
+        </div>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="flex flex-wrap items-end gap-4 bg-slate-50 p-4 border border-black rounded shadow-sm">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">From Date</label>
+          <input 
+            type="date"
+            value={fromDate} 
+            onChange={(e) => setFromDate(e.target.value)}
+            className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">To Date</label>
+          <input 
+            type="date"
+            value={toDate} 
+            onChange={(e) => setToDate(e.target.value)}
+            className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">Status</label>
+          <select 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none min-w-[120px]"
+          >
+            {statusOptions.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex-1 min-w-[200px] flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">Search</label>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <input 
+              type="text"
+              placeholder="Search Trn No, Supplier, Reel No..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full border border-black rounded pl-8 pr-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+        </div>
+
+        {(fromDate || toDate || statusFilter !== "All" || searchTerm) && (
+          <button 
+            onClick={() => {
+              setFromDate("");
+              setToDate("");
+              setStatusFilter("All");
+              setSearchTerm("");
+            }}
+            className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
+          >
+            Reset Filters
+          </button>
+        )}
+      </div>
+
+      <div className="flex border-b border-black mt-2">
+        <button
+          onClick={() => setActiveTab("others")}
+          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest border-t border-l border-r border-black -mb-[1px] flex items-center gap-2 transition-all ${
+            activeTab === "others" ? "bg-white border-b-transparent text-indigo-700 shadow-[0_-2px_0_0_#4f46e5]" : "bg-slate-50 text-slate-400 opacity-70 hover:opacity-100"
+          }`}
+        >
+          <Package size={14} /> General Material ({processedData.others.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("reel-summary")}
+          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest border-t border-l border-r border-black -mb-[1px] ml-1 flex items-center gap-2 transition-all ${
+            activeTab === "reel-summary" ? "bg-white border-b-transparent text-emerald-700 shadow-[0_-2px_0_0_#059669]" : "bg-slate-50 text-slate-400 opacity-70 hover:opacity-100"
+          }`}
+        >
+          <Layers size={14} /> Reel Summary ({processedData.reelSummary.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("reel-details")}
+          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest border-t border-l border-r border-black -mb-[1px] ml-1 flex items-center gap-2 transition-all ${
+            activeTab === "reel-details" ? "bg-white border-b-transparent text-amber-700 shadow-[0_-2px_0_0_#d97706]" : "bg-slate-50 text-slate-400 opacity-70 hover:opacity-100"
+          }`}
+        >
+          <Disc size={14} /> Reel Details ({processedData.reelDetails.length})
+        </button>
+      </div>
+
+      <div className="bg-white rounded-b shadow-sm overflow-hidden border border-black">
+        <div className="overflow-x-auto">
+          {renderTable()}
+        </div>
       </div>
     </div>
   );
