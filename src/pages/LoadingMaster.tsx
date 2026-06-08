@@ -84,7 +84,7 @@ export function LoadingMaster() {
   const handleDownloadPdf = async (slip: LoadingSlip) => {
     setIsDownloading(slip.id);
     try {
-      const orgSetting = settings.find(s => s.id === 'org_details');
+      const orgSetting = settings[0];
       await downloadLoadingSlipPdf({
         slip,
         setting: orgSetting,
