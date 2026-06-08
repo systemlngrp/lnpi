@@ -107,8 +107,10 @@ export function Materials() {
   const [units, setUnits] = useData<UnitMaster>("units", []);
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
+  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [issueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [reelIssueLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
+  const [materialReturnsHeader] = useData<MaterialReturn>("material-returns", []);
   const [returnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [reelReturnLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
@@ -145,25 +147,56 @@ export function Materials() {
 
   const movementSummaryMap = useMemo(() => {
     const map = new Map<string, { receipts: number; issues: number; returns: number }>();
+    const materialTypeMap = new Map(materials.map(m => [m.id, m.type]));
     materials.forEach(m => map.set(m.id, { receipts: 0, issues: 0, returns: 0 }));
 
-    const filteredMaterialIn = materialIn.filter(r => {
-      const d = r.date || "";
-      if (fromDate && d < fromDate) return false;
-      if (toDate && d > toDate) return false;
-      return true;
-    });
-    const receiptIds = new Set(filteredMaterialIn.map(r => r.id));
+    // 1. Receipts Filtering
+    const filteredReceiptIds = new Set(
+      materialIn
+        .filter(r => {
+          const d = r.date || "";
+          if (fromDate && d < fromDate) return false;
+          if (toDate && d > toDate) return false;
+          return true;
+        })
+        .map(r => r.id)
+    );
 
+    // 2. Issues Filtering
+    const filteredIssueIds = new Set(
+      materialIssues
+        .filter(i => {
+          const d = i.date || "";
+          if (fromDate && d < fromDate) return false;
+          if (toDate && d > toDate) return false;
+          return true;
+        })
+        .map(i => i.id)
+    );
+
+    // 3. Returns Filtering
+    const filteredReturnIds = new Set(
+      materialReturnsHeader
+        .filter(r => {
+          const d = r.date || "";
+          if (fromDate && d < fromDate) return false;
+          if (toDate && d > toDate) return false;
+          return true;
+        })
+        .map(r => r.id)
+    );
+
+    // Aggregate Receipts
     packingSlips.forEach(slip => {
-      if (!receiptIds.has(slip.materialInId)) return;
+      if (!filteredReceiptIds.has(slip.materialInId)) return;
       const current = map.get(slip.materialId) || { receipts: 0, issues: 0, returns: 0 };
       current.receipts += Number(slip.weightKg || 0);
       map.set(slip.materialId, current);
     });
 
-    filteredMaterialIn.forEach(receipt => {
-      if (receipt.mrrType === "Others") {
+    materialIn.forEach(receipt => {
+      if (!filteredReceiptIds.has(receipt.id)) return;
+      if (receipt.mrrType !== "Reel") {
         receipt.lines.forEach(line => {
           const current = map.get(line.itemId) || { receipts: 0, issues: 0, returns: 0 };
           current.receipts += Number(line.qty || 0);
@@ -172,30 +205,44 @@ export function Materials() {
       }
     });
 
+    // Aggregate Issues
     reelIssueLines.forEach(l => {
+      if (!filteredIssueIds.has(l.materialIssueId)) return;
       const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
       current.issues += Number(l.weightKg || 0);
       map.set(l.materialId, current);
     });
+
     issueLines.forEach(l => {
+      if (!filteredIssueIds.has(l.materialIssueId)) return;
+      // SKIP REELS to avoid double counting from reelIssueLines
+      if (materialTypeMap.get(l.materialId) === "Reel") return;
+      
       const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
       current.issues += Number(l.qty || 0);
       map.set(l.materialId, current);
     });
 
+    // Aggregate Returns
     reelReturnLines.forEach(l => {
+      if (!filteredReturnIds.has(l.materialReturnId)) return;
       const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
       current.returns += Number(l.weightKg || 0);
       map.set(l.materialId, current);
     });
+
     returnLines.forEach(l => {
+      if (!filteredReturnIds.has(l.materialReturnId)) return;
+      // SKIP REELS to avoid double counting from reelReturnLines
+      if (materialTypeMap.get(l.materialId) === "Reel") return;
+
       const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
       current.returns += Number(l.qty || 0);
       map.set(l.materialId, current);
     });
 
     return map;
-  }, [materials, packingSlips, materialIn, issueLines, reelIssueLines, returnLines, reelReturnLines, fromDate, toDate]);
+  }, [materials, packingSlips, materialIn, materialIssues, issueLines, reelIssueLines, materialReturnsHeader, returnLines, reelReturnLines, fromDate, toDate]);
 
   const metrics = useMemo(() => {
     let totalReelWeight = 0;
