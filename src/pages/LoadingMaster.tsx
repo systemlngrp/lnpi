@@ -22,11 +22,12 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
 
 export function LoadingMaster() {
   const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [trucks] = useData<Truck>("trucks", []);
-  const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
   const [companies] = useData<Company>("companies", []);
@@ -38,20 +39,68 @@ export function LoadingMaster() {
   const [expandedSlipIds, setExpandedSlipIds] = useState<Set<string>>(new Set());
   const [editingSlipIds, setEditingSlipIds] = useState<Set<string>>(new Set());
   const [draftBySlipId, setDraftBySlipId] = useState<Record<string, LoadingSlip>>({});
+  const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
   const getTruckNo = (id: string) => trucks.find(t => t.id === id)?.truckNo || "Unknown";
 
   const processedSlips = useMemo(() => {
     return loadingSlips.map(slip => {
       const totalQty = slip.lines.reduce((sum, line) => sum + line.loadedQty, 0);
+      
+      // Extract aggregated info for the main table
+      const uniqueItemNames = new Set<string>();
+      const uniqueCompanies = new Set<string>();
+      const uniqueErpCodes = new Set<string>();
+
+      slip.lines.forEach(line => {
+        const plan = plans.find(p => p.id === line.dispatchPlanId);
+        const order = orders.find(o => o.id === plan?.orderId);
+        const item = npdItems.find(i => i.id === order?.itemId);
+        const company = companies.find(c => c.id === order?.companyId);
+        
+        if (item?.name) uniqueItemNames.add(item.name);
+        if (company?.name) uniqueCompanies.add(company.name);
+        if (item?.erpCode) uniqueErpCodes.add(item.erpCode);
+      });
+
       return {
         ...slip,
-        totalQty
+        totalQty,
+        itemNames: Array.from(uniqueItemNames).join(", "),
+        companyNames: Array.from(uniqueCompanies).join(", "),
+        erpCodes: Array.from(uniqueErpCodes).join(", ")
       };
     }).filter(slip => {
-      return slip.slipNo.toLowerCase().includes(searchTerm.toLowerCase());
+      const q = searchTerm.toLowerCase();
+      return (
+        slip.slipNo.toLowerCase().includes(q) ||
+        slip.itemNames.toLowerCase().includes(q) ||
+        slip.companyNames.toLowerCase().includes(q) ||
+        slip.erpCodes.toLowerCase().includes(q)
+      );
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [loadingSlips, searchTerm]);
+  }, [loadingSlips, plans, orders, npdItems, companies, searchTerm]);
+
+  const handleDownloadPdf = async (slip: LoadingSlip) => {
+    setIsDownloading(slip.id);
+    try {
+      const orgSetting = settings.find(s => s.id === 'org_details');
+      await downloadLoadingSlipPdf({
+        slip,
+        setting: orgSetting,
+        trucks,
+        plans,
+        orders,
+        npdItems,
+        companies
+      });
+    } catch (err) {
+      console.error("Failed to download PDF:", err);
+      alert("Failed to generate PDF. Please check console for details.");
+    } finally {
+      setIsDownloading(null);
+    }
+  };
 
   const getSlipLines = (slip: LoadingSlip) =>
     slip.lines.map((line) => {
@@ -302,6 +351,8 @@ export function LoadingMaster() {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Slip No</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Company</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Items (ERP)</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border-b border-black">Total Qty</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider border-b border-black">Actions</th>
             </tr>
@@ -309,7 +360,7 @@ export function LoadingMaster() {
           <tbody className="bg-white divide-y divide-slate-200">
             {processedSlips.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
+                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
               </tr>
             ) : processedSlips.map((slip) => (
               <tr key={slip.id} className="hover:bg-slate-50 transition-colors">
@@ -335,11 +386,31 @@ export function LoadingMaster() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   {formatDate(slip.date)}
                 </td>
+                <td className="px-6 py-4 text-sm text-black">
+                  <div className="max-w-xs truncate font-medium" title={slip.companyNames}>
+                    {slip.companyNames || "-"}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-slate-600">
+                  <div className="max-w-md truncate" title={slip.itemNames}>
+                    {slip.itemNames} <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">({slip.erpCodes})</span>
+                  </div>
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-600">
                   {slip.totalQty.toLocaleString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                   <div className="flex justify-end items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPdf(slip)}
+                      disabled={isDownloading === slip.id}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-indigo-600 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors uppercase disabled:opacity-50"
+                      title="Download PDF"
+                    >
+                      {isDownloading === slip.id ? <Spinner size={14} /> : <Download size={14} />}
+                      PDF
+                    </button>
                     {slip.status !== "Cancelled" ? (
                       <button
                         type="button"
@@ -379,7 +450,7 @@ export function LoadingMaster() {
               const lines = getSlipLines(draft);
               return (
                 <tr key={`${slip.id}-details`} className="bg-white">
-                  <td colSpan={4} className="px-6 pb-6 pt-2 border-t border-black">
+                  <td colSpan={6} className="px-6 pb-6 pt-2 border-t border-black">
                     <div className="rounded border border-black overflow-hidden">
                       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3 border-b border-black">
                         <div className="text-sm font-bold text-black">
