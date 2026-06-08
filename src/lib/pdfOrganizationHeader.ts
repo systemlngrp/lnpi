@@ -54,11 +54,20 @@ export async function renderOrganizationHeader(
   if (organizationLogoUrl) {
     try {
       const imageDataUrl = await getImageDataUrl(organizationLogoUrl);
+      const props = doc.getImageProperties(imageDataUrl);
+      
+      // Target width 32mm (~90px), height auto
+      const targetWidth = 32;
+      const targetHeight = (props.height * targetWidth) / props.width;
+      const x = 105 - (targetWidth / 2);
+
       // Ensure white background behind the logo
       doc.setFillColor(255, 255, 255);
-      doc.rect(90, currentY, 30, 18, "F");
-      doc.addImage(imageDataUrl, "PNG", 90, currentY, 30, 18, undefined, "FAST");
-      currentY += 22;
+      doc.rect(x, currentY, targetWidth, targetHeight, "F");
+      
+      // Add image with transparency support (PNG)
+      doc.addImage(imageDataUrl, "PNG", x, currentY, targetWidth, targetHeight, undefined, "FAST");
+      currentY += targetHeight + 5;
     } catch (error) {
       console.warn("Organization logo could not be added to PDF:", error);
     }
