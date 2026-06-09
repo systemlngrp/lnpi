@@ -7,7 +7,7 @@ import { useNpdItems } from "../hooks/useNpdItems";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/utils";
-import { Company, DispatchPlan, LoadingSlip, Order, OrderSchedule, User } from "../types";
+import { Company, DispatchPlan, LoadingSlip, Order, OrderSchedule, User, Supplier } from "../types";
 
 type SortDirection = "asc" | "desc";
 
@@ -48,6 +48,7 @@ export function OrdersMaster() {
   const navigate = useNavigate();
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [suppliers] = useData<Supplier>("suppliers", []);
   const [users] = useData<User>("users", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
@@ -65,8 +66,15 @@ export function OrdersMaster() {
   const [quantityGreaterThan, setQuantityGreaterThan] = useState<number | "">("");
 
   const companyMap = useMemo(
-    () => new Map(companies.map((company) => [company.id, company.name || ""])),
-    [companies]
+    () => {
+      const map = new Map<string, string>();
+      companies.forEach(c => map.set(c.id, c.name || ""));
+      suppliers.forEach(s => {
+        if (!map.has(s.id)) map.set(s.id, s.name || "");
+      });
+      return map;
+    },
+    [companies, suppliers]
   );
   const itemMap = useMemo(
     () => new Map(npdItems.map((item) => [item.id, item.name || ""])),
