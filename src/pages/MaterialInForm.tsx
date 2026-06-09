@@ -56,6 +56,7 @@ export function MaterialInForm() {
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
   const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
   const [purchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
 
@@ -89,7 +90,13 @@ export function MaterialInForm() {
     [editId, materialIn]
   );
 
-  const linkedSupplierName = suppliers.find((supplier) => supplier.id === supplierId)?.name || "";
+  const linkedSupplierName = useMemo(() => {
+    const s = suppliers.find((supplier) => supplier.id === supplierId);
+    if (s) return s.name;
+    const c = companies.find((company) => company.id === supplierId);
+    if (c) return c.name;
+    return "";
+  }, [suppliers, companies, supplierId]);
 
   const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
 
@@ -116,12 +123,14 @@ export function MaterialInForm() {
   );
 
   const supplierOptions = useMemo(
-    () =>
-      suppliers
-        .filter((supplier) => supplier.active !== "No")
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((supplier) => ({ value: supplier.id, label: supplier.name })),
-    [suppliers]
+    () => {
+      const combined = [
+        ...suppliers.filter(s => s.active !== "No").map(s => ({ value: s.id, label: s.name })),
+        ...companies.map(c => ({ value: c.id, label: c.name }))
+      ];
+      return combined.sort((a, b) => a.label.localeCompare(b.label));
+    },
+    [suppliers, companies]
   );
 
   const mrrTypeOptions = [
