@@ -2396,6 +2396,8 @@ async function initDb(retries = 5) {
           \`totalPoValue\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`totalInvoiceValue\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`totalActualValue\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`insurance\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`otherCharges\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`totalAmount\` DECIMAL(15, 2) NOT NULL,
           \`lines\` JSON NOT NULL,
           \`phTimestamp\` VARCHAR(255),
@@ -2410,9 +2412,6 @@ async function initDb(retries = 5) {
           \`mdTimestamp\` VARCHAR(255),
           \`mdEmailId\` VARCHAR(255),
           \`md_approval_remark\` TEXT,
-          \`debitNote\` VARCHAR(100),
-          \`debitNoteDate\` VARCHAR(50),
-          \`debitNoteAmount\` DECIMAL(15,2),
           \`tallyTimestamp\` VARCHAR(255),
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending PH',
           \`updatedBy\` VARCHAR(255),
@@ -3311,6 +3310,8 @@ async function initDb(retries = 5) {
         { table: "material_in", column: "mdEmailId", type: "VARCHAR(255)" },
         { table: "material_in", column: "md_approval_remark", type: "TEXT" },
         { table: "material_in", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "insurance", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_in", column: "otherCharges", type: "DECIMAL(15,2) DEFAULT 0" },
       ];
 
 
