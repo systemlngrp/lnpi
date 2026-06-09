@@ -359,7 +359,7 @@ export function PurchaseOrderPendingIndentLines() {
                       <input
                         type="number"
                         min={0}
-                        value={rowInputs[row.indentLineId]?.rate || String(Number(row.suggestedRate || 0))}
+                        value={rowInputs[row.indentLineId]?.rate ?? String(Number(row.suggestedRate || 0))}
                         onChange={(e) => updateInput(row.indentLineId, { rate: e.target.value })}
                         disabled={!selectedIds.has(row.indentLineId)}
                         className={`w-24 rounded border ${!rowInputs[row.indentLineId]?.rate || Number(rowInputs[row.indentLineId]?.rate) <= 0 ? 'border-red-500' : 'border-black'} bg-white px-2 py-1 text-right text-sm disabled:opacity-50`}
