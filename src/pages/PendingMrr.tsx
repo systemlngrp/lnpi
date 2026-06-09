@@ -13,6 +13,7 @@ export function PendingMrr() {
   const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const [gateEntryPhotos] = useData<GateEntryPhoto>("gate-entry-photos", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
@@ -21,7 +22,9 @@ export function PendingMrr() {
       [...gateEntries]
         .filter((entry) => !hasMaterialReceipt(entry))
         .filter((entry) => {
-          const supplierName = suppliers.find((supplier) => supplier.id === entry.supplierId)?.name || "";
+          const s = suppliers.find((supplier) => supplier.id === entry.supplierId);
+          const c = companies.find((company) => company.id === entry.supplierId);
+          const supplierName = s ? s.name : (c ? c.name : "");
           const haystack = [entry.gateEntryNo, supplierName, entry.invoiceNo, entry.truckNo]
             .filter(Boolean)
             .join(" ")
@@ -33,7 +36,7 @@ export function PendingMrr() {
           const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
           return timeB - timeA;
         }),
-    [gateEntries, searchTerm, suppliers]
+    [gateEntries, searchTerm, suppliers, companies]
   );
 
   const selectedEntry = pendingEntries.find((entry) => entry.id === selectedEntryId) || null;
@@ -41,7 +44,13 @@ export function PendingMrr() {
     ? gateEntryPhotos.filter((photo) => photo.gateEntryId === selectedEntry.id).sort((a, b) => a.slotNo - b.slotNo)
     : [];
 
-  const getSupplierName = (supplierId: string) => suppliers.find((supplier) => supplier.id === supplierId)?.name || "";
+  const getSupplierName = (supplierId: string) => {
+    const s = suppliers.find((supplier) => supplier.id === supplierId);
+    if (s) return s.name;
+    const c = companies.find((company) => company.id === supplierId);
+    if (c) return c.name;
+    return "";
+  };
   const getPhotoCount = (gateEntryId: string) => gateEntryPhotos.filter((photo) => photo.gateEntryId === gateEntryId).length;
 
   return (
