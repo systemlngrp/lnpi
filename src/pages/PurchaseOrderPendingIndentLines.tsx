@@ -149,7 +149,7 @@ export function PurchaseOrderPendingIndentLines() {
       const qty = Number(input.qty || 0);
       const rate = Number(input.rate || 0);
       if (!Number.isFinite(qty) || qty <= 0) return false;
-      if (!Number.isFinite(rate) || rate < 0) return false;
+      if (!Number.isFinite(rate) || rate <= 0) return false;
     }
     return true;
   }, [creating, filteredRowIds, rowInputs, selectedIds]);
@@ -271,11 +271,11 @@ export function PurchaseOrderPendingIndentLines() {
               <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">ERP</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black min-w-[320px]">Item Name</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">UOM</th>
-              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Supplier</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-left text-xs font-bold uppercase text-black whitespace-nowrap">Supplier <span className="text-red-500">*</span></th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Rate</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Date</th>
-              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Indent Qty</th>
-              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Rate</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Indent Qty <span className="text-red-500">*</span></th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Rate <span className="text-red-500">*</span></th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Qty</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Cancelled</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">PO Created</th>
@@ -325,7 +325,7 @@ export function PurchaseOrderPendingIndentLines() {
                         value={rowInputs[row.indentLineId]?.supplierId || ""}
                         onChange={(e) => updateInput(row.indentLineId, { supplierId: e.target.value })}
                         disabled={!selectedIds.has(row.indentLineId)}
-                        className="w-48 rounded border border-black bg-white px-2 py-1 text-sm disabled:opacity-50"
+                        className={`w-48 rounded border ${!rowInputs[row.indentLineId]?.supplierId && selectedIds.has(row.indentLineId) ? 'border-red-500' : 'border-black'} bg-white px-2 py-1 text-sm disabled:opacity-50`}
                       >
                         <option value="">-- Supplier --</option>
                         {suppliers
@@ -352,7 +352,7 @@ export function PurchaseOrderPendingIndentLines() {
                         value={rowInputs[row.indentLineId]?.qty || String(Number(row.pendingQty || 0))}
                         onChange={(e) => updateInput(row.indentLineId, { qty: e.target.value })}
                         disabled={!selectedIds.has(row.indentLineId)}
-                        className="w-24 rounded border border-black bg-white px-2 py-1 text-right text-sm disabled:opacity-50"
+                        className={`w-24 rounded border ${!rowInputs[row.indentLineId]?.qty || Number(rowInputs[row.indentLineId]?.qty) <= 0 ? 'border-red-500' : 'border-black'} bg-white px-2 py-1 text-right text-sm disabled:opacity-50`}
                       />
                     </td>
                     <td className="border border-black px-4 py-3 text-sm text-black text-right whitespace-nowrap">
@@ -362,7 +362,7 @@ export function PurchaseOrderPendingIndentLines() {
                         value={rowInputs[row.indentLineId]?.rate || String(Number(row.suggestedRate || 0))}
                         onChange={(e) => updateInput(row.indentLineId, { rate: e.target.value })}
                         disabled={!selectedIds.has(row.indentLineId)}
-                        className="w-24 rounded border border-black bg-white px-2 py-1 text-right text-sm disabled:opacity-50"
+                        className={`w-24 rounded border ${!rowInputs[row.indentLineId]?.rate || Number(rowInputs[row.indentLineId]?.rate) <= 0 ? 'border-red-500' : 'border-black'} bg-white px-2 py-1 text-right text-sm disabled:opacity-50`}
                       />
                     </td>
                     <td className="border border-black px-4 py-3 text-sm text-black text-right">{Number(row.qty || 0).toLocaleString()}</td>
