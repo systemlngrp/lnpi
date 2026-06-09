@@ -43,7 +43,7 @@ type ReelUploadRow = {
 };
 
 function formatReelNo(value: number) {
-  return `R${String(value).padStart(5, "0")}`;
+  return String(value).padStart(5, "0");
 }
 
 export function MaterialInForm() {
