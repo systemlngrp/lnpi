@@ -351,15 +351,19 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                       </td>
                       <td className="px-4 py-4">
                         <div className="font-bold text-sm text-black uppercase">{order.poNo || "DRAFT"}</div>
-                        <div className="text-[10px] text-slate-500 font-bold uppercase">{formatDate(order.date)}</div>
-                        <div className={cn(
-                          "mt-1 inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase",
-                          order.status === "Approved" ? "border-emerald-700 bg-emerald-100 text-emerald-800" :
-                          order.status === "Rejected" ? "border-red-700 bg-red-100 text-red-800" :
-                          "border-amber-700 bg-amber-100 text-amber-800"
-                        )}>
-                          {order.status}
-                        </div>
+                        {mode !== "pending-approval" && (
+                          <>
+                            <div className="text-[10px] text-slate-500 font-bold uppercase">{formatDate(order.date)}</div>
+                            <div className={cn(
+                              "mt-1 inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase",
+                              order.status === "Approved" ? "border-emerald-700 bg-emerald-100 text-emerald-800" :
+                              order.status === "Rejected" ? "border-red-700 bg-red-100 text-red-800" :
+                              "border-amber-700 bg-amber-100 text-amber-800"
+                            )}>
+                              {order.status}
+                            </div>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-sm text-black font-medium">{supplierMap.get(order.supplierId) || "Unknown"}</td>
                       <td className="px-4 py-4">
