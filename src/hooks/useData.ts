@@ -20,7 +20,30 @@ function safeSetLocalStorage(key: string, value: string) {
     window.localStorage.setItem(key, value);
     return true;
   } catch (error) {
-    console.warn(`[useData] Failed to write localStorage key "${key}":`, error);
+    const isQuotaError = 
+      error instanceof DOMException && (
+        error.name === 'QuotaExceededError' || 
+        error.name === 'NS_ERROR_DOM_QUOTA_REACHED' || 
+        (error as any).code === 22 || 
+        (error as any).code === 1014
+      );
+
+    if (isQuotaError) {
+      console.warn(`[useData] LocalStorage quota exceeded while writing "${key}". Clearing caches to make room...`);
+      try {
+        const token = window.localStorage.getItem("authToken");
+        window.localStorage.clear();
+        if (token) window.localStorage.setItem("authToken", token);
+        // Try again after clearing
+        window.localStorage.setItem(key, value);
+        console.info(`[useData] Cache cleared and "${key}" successfully saved.`);
+        return true;
+      } catch (retryError) {
+        console.warn(`[useData] Even after clearing, data for "${key}" exceeds the 5MB quota. Skipping cache.`, retryError);
+      }
+    } else {
+      console.warn(`[useData] Failed to write localStorage key "${key}":`, error);
+    }
     return false;
   }
 }
@@ -34,7 +57,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const isItemAlias = entity === "items" && !options?.endpointOverride;
   const resolvedEntity = isItemAlias ? "npd" : entity;
   const endpoint = options?.endpointOverride || `/api/${resolvedEntity.replace(/_/g, "-")}`;
-  const storageKey = options?.storageKey || resolvedEntity;
+  const storageKey = `udc_${options?.storageKey || resolvedEntity}`;
   const syncEvent = options?.syncEventKey || `sync-data-${resolvedEntity}`;
 
   // Keep ref in sync
