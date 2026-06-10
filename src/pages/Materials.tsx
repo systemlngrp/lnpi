@@ -712,10 +712,9 @@ export function Materials() {
                           bf: prev.bf,
                         });
                       }
-                      return {
+                      return syncReelDefaults(nextType, {
                         ...prev,
                         type: nextType,
-                        erpCode: prev.erpCode || "",
                         name: prev.type === "Reel" ? "" : prev.name,
                         uom: prev.uom || "CM",
                         materialGroupId: "",
@@ -726,7 +725,7 @@ export function Materials() {
                         openingRate: prev.openingRate,
                         openingValue: prev.openingValue,
                         remarks: prev.remarks || "",
-                      };
+                      });
                     });
                   }}
                   className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
