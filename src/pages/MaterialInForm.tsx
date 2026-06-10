@@ -872,8 +872,8 @@ export function MaterialInForm() {
       setCurrentInvoiceRate("");
       alert(
         editingEntry
-          ? `Material In updated: ${transactionNo}`
-          : `Material In created with Transaction No: ${transactionNo}`
+          ? `MRR updated: ${transactionNo}`
+          : `MRR created with MRR No: ${transactionNo}`
       );
       navigate("/material-receipt/approvals");
     } catch (err) {
@@ -887,7 +887,7 @@ export function MaterialInForm() {
   return (
     <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
       <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">
-        {editingEntry ? "Edit Material In" : "Material In Form"}
+        {editingEntry ? "Edit MRR" : "Material Receipt Report (MRR) Form"}
       </h2>
       <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
         {linkedGateEntry ? (
@@ -921,7 +921,7 @@ export function MaterialInForm() {
             />
           </div>
           <div className="flex flex-col space-y-1">
-            <label className="font-bold text-black">Transaction No</label>
+            <label className="font-bold text-black">MRR No</label>
             <input
               type="text"
               value={editingEntry?.transactionNo || "Generated on Submit"}

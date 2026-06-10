@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip, GateEntry } from "../types";
+import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip, GateEntry, Company } from "../types";
 import { Edit2, Check, X, Search, Package, Layers, Disc, ExternalLink } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
@@ -23,12 +23,21 @@ export function MaterialInItemMaster() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [supplierFilter, setSupplierFilter] = useState("All");
   const [activeTab, setActiveTab] = useState<"others" | "reel-summary" | "reel-details">("others");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
   const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
   const gateEntryMap = useMemo(() => new Map(gateEntries.map(ge => [ge.id, ge])), [gateEntries]);
+
+  const supplierOptions = useMemo(() => {
+    const combined = [
+      ...suppliers.filter(s => s.active !== "No").map(s => ({ value: s.id, label: s.name })),
+      ...companies.map(c => ({ value: c.id, label: c.name }))
+    ];
+    return combined.sort((a, b) => a.label.localeCompare(b.label));
+  }, [suppliers, companies]);
 
   const handleEditClick = (lineId: string, currentQty: number) => {
     setEditingLineId(lineId);
@@ -82,6 +91,7 @@ export function MaterialInItemMaster() {
 
   const processedData = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
+    const sf = supplierFilter;
 
     // 1. Base Flattening for Line Items
     const allLineItems = materialIn.flatMap(m => {
@@ -98,6 +108,9 @@ export function MaterialInItemMaster() {
 
         // Status filter
         if (statusFilter !== "All" && m.status !== statusFilter) return null;
+
+        // Supplier filter
+        if (sf !== "All" && m.supplierId !== sf) return null;
 
         return {
           ...line,
@@ -126,6 +139,9 @@ export function MaterialInItemMaster() {
 
       // Status filter
       if (statusFilter !== "All" && parent.status !== statusFilter) return null;
+
+      // Supplier filter
+      if (sf !== "All" && parent.supplierId !== sf) return null;
 
       const gateEntry = parent.gateEntryId ? gateEntryMap.get(parent.gateEntryId) : null;
       const material = materialMap.get(slip.materialId);
@@ -169,6 +185,7 @@ export function MaterialInItemMaster() {
         if (fromDate && m.date < fromDate) return false;
         if (toDate && m.date > toDate) return false;
         if (statusFilter !== "All" && m.status !== statusFilter) return false;
+        if (sf !== "All" && m.supplierId !== sf) return false;
         return true;
       }).length,
       totalReelWeight: reelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
@@ -182,7 +199,7 @@ export function MaterialInItemMaster() {
       reelDetails: filteredReelDetails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
       metrics
     };
-  }, [materialIn, packingSlips, materials, npdItems, suppliers, searchTerm, statusFilter, fromDate, toDate, materialMap, gateEntryMap]);
+  }, [materialIn, packingSlips, materials, npdItems, suppliers, searchTerm, statusFilter, supplierFilter, fromDate, toDate, materialMap, gateEntryMap]);
 
   const statusOptions = ["All", ...Array.from(new Set(materialIn.map((entry) => entry.status).filter(Boolean)))];
 
@@ -203,7 +220,7 @@ export function MaterialInItemMaster() {
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GE No</th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Trn No</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">MRR No</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Date</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Vehicle No</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier</th>
@@ -237,7 +254,7 @@ export function MaterialInItemMaster() {
         <thead className="bg-slate-100 divide-x divide-black">
           <tr className="divide-x divide-black">
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GE No</th>
-            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">TRN No</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">MRR No</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Date</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Vehicle No</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier / Customer</th>
@@ -410,7 +427,7 @@ export function MaterialInItemMaster() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input 
               type="text"
-              placeholder="Search Trn No, Supplier, Reel No..."
+              placeholder="Search MRR No, Supplier, Reel No..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full border border-black rounded pl-8 pr-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -418,12 +435,13 @@ export function MaterialInItemMaster() {
           </div>
         </div>
 
-        {(fromDate || toDate || statusFilter !== "All" || searchTerm) && (
+        {(fromDate || toDate || statusFilter !== "All" || searchTerm || supplierFilter !== "All") && (
           <button 
             onClick={() => {
               setFromDate("");
               setToDate("");
               setStatusFilter("All");
+              setSupplierFilter("All");
               setSearchTerm("");
             }}
             className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
@@ -463,6 +481,31 @@ export function MaterialInItemMaster() {
       <div className="bg-white rounded-b shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           {renderTable()}
+        </div>
+      </div>
+
+      {/* Supplier Filter at the Bottom */}
+      <div className="flex flex-wrap items-center justify-center gap-4 bg-slate-50 p-4 border border-black rounded shadow-sm">
+        <div className="flex items-center gap-3">
+          <label className="text-[10px] font-black uppercase text-slate-500 whitespace-nowrap">Filter by Supplier / Customer</label>
+          <select 
+            value={supplierFilter} 
+            onChange={(e) => setSupplierFilter(e.target.value)}
+            className="border border-black rounded px-3 py-2 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none min-w-[300px]"
+          >
+            <option value="All">All Suppliers / Customers</option>
+            {supplierOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          {supplierFilter !== "All" && (
+            <button 
+              onClick={() => setSupplierFilter("All")}
+              className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline"
+            >
+              Clear Filter
+            </button>
+          )}
         </div>
       </div>
     </div>
