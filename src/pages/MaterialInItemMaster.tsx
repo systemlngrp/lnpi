@@ -1,16 +1,19 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip } from "../types";
-import { Edit2, Check, X, Search, Package, Layers, Disc } from "lucide-react";
+import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip, GateEntry } from "../types";
+import { Edit2, Check, X, Search, Package, Layers, Disc, ExternalLink } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useNavigate } from "react-router-dom";
 
 export function MaterialInItemMaster() {
+  const navigate = useNavigate();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [materials] = useData<Material>("materials", []);
+  const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
 
@@ -24,6 +27,7 @@ export function MaterialInItemMaster() {
   const [toDate, setToDate] = useState("");
 
   const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
+  const gateEntryMap = useMemo(() => new Map(gateEntries.map(ge => [ge.id, ge])), [gateEntries]);
 
   const handleEditClick = (lineId: string, currentQty: number) => {
     setEditingLineId(lineId);
@@ -75,6 +79,8 @@ export function MaterialInItemMaster() {
     // 1. Base Flattening for Line Items
     const allLineItems = materialIn.flatMap(m => {
       const safeLines = Array.isArray(m.lines) ? m.lines : [];
+      const gateEntry = m.gateEntryId ? gateEntryMap.get(m.gateEntryId) : null;
+      
       return safeLines.map(line => {
         if (!line) return null;
         
@@ -93,6 +99,8 @@ export function MaterialInItemMaster() {
           parentDate: m.date,
           parentSupplierId: m.supplierId,
           parentId: m.id,
+          parentGateEntryNo: m.gateEntryNo || gateEntry?.gateEntryNo || "-",
+          parentVehicleNo: gateEntry?.truckNo || "-",
           timestamp: m.timestamp,
           mrrType: m.mrrType || "Others"
         };
@@ -112,6 +120,7 @@ export function MaterialInItemMaster() {
       // Status filter
       if (statusFilter !== "All" && parent.status !== statusFilter) return null;
 
+      const gateEntry = parent.gateEntryId ? gateEntryMap.get(parent.gateEntryId) : null;
       const material = materialMap.get(slip.materialId);
       const specs = material ? `${material.gsm || "-"} GSM / ${material.bf || "-"} BF / ${material.size || "-"} ${material.sizeUom || ""}` : "Unknown";
 
@@ -121,6 +130,8 @@ export function MaterialInItemMaster() {
         parentDate: parent.date,
         parentSupplierId: parent.supplierId,
         parentStatus: parent.status,
+        parentGateEntryNo: parent.gateEntryNo || gateEntry?.gateEntryNo || "-",
+        parentVehicleNo: gateEntry?.truckNo || "-",
         timestamp: parent.timestamp,
         specs
       };
@@ -135,7 +146,9 @@ export function MaterialInItemMaster() {
         supplierName.toLowerCase().includes(q) ||
         (item.parentTransactionNo || "").toLowerCase().includes(q) ||
         (item.ourReelNo || "").toLowerCase().includes(q) ||
-        (item.supplierReelNo || "").toLowerCase().includes(q)
+        (item.supplierReelNo || "").toLowerCase().includes(q) ||
+        (item.parentGateEntryNo || "").toLowerCase().includes(q) ||
+        (item.parentVehicleNo || "").toLowerCase().includes(q)
       );
     };
 
@@ -162,7 +175,7 @@ export function MaterialInItemMaster() {
       reelDetails: filteredReelDetails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
       metrics
     };
-  }, [materialIn, packingSlips, materials, npdItems, suppliers, searchTerm, statusFilter, fromDate, toDate, materialMap]);
+  }, [materialIn, packingSlips, materials, npdItems, suppliers, searchTerm, statusFilter, fromDate, toDate, materialMap, gateEntryMap]);
 
   const statusOptions = ["All", ...Array.from(new Set(materialIn.map((entry) => entry.status).filter(Boolean)))];
 
@@ -182,8 +195,10 @@ export function MaterialInItemMaster() {
         <table className="min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GE No</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Trn No</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Date</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Vehicle No</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Material Specs</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our Reel No</th>
@@ -194,8 +209,10 @@ export function MaterialInItemMaster() {
           <tbody className="divide-y divide-black bg-white">
             {data.map((reel: any) => (
               <tr key={reel.id} className="hover:bg-slate-50 divide-x divide-black transition-colors text-sm">
+                <td className="px-4 py-3 border border-black font-medium">{reel.parentGateEntryNo}</td>
                 <td className="px-4 py-3 font-medium text-indigo-700 border border-black">{reel.parentTransactionNo}</td>
                 <td className="px-4 py-3 border border-black">{formatDate(reel.parentDate)}</td>
+                <td className="px-4 py-3 border border-black font-medium">{reel.parentVehicleNo}</td>
                 <td className="px-4 py-3 border border-black">{getSupplierName(reel.parentSupplierId)}</td>
                 <td className="px-4 py-3 border border-black">{reel.specs}</td>
                 <td className="px-4 py-3 font-bold border border-black">{reel.ourReelNo}</td>
@@ -212,28 +229,32 @@ export function MaterialInItemMaster() {
       <table className="min-w-full divide-y divide-black border-collapse border border-black">
         <thead className="bg-slate-100 divide-x divide-black">
           <tr className="divide-x divide-black">
-            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Trn No</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GE No</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">TRN No</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Date</th>
-            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Vehicle No</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier / Customer</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Item Name</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Status</th>
             <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Qty</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
             <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Rate</th>
             <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Value</th>
-            <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Actions</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-black bg-white">
           {data.map((line: any) => {
             const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
-            const canEdit = line.parentStatus === "Pending MRR" || line.parentStatus === "Pending PH";
+            const canEditInline = line.parentStatus === "Pending MRR" || line.parentStatus === "Pending PH";
             const isEditing = editingLineId === line.id;
 
             return (
               <tr key={line.id} className="hover:bg-slate-50 divide-x divide-black transition-colors text-sm">
+                <td className="px-4 py-3 border border-black font-medium">{line.parentGateEntryNo}</td>
                 <td className="px-4 py-3 font-medium text-black border border-black whitespace-nowrap">{line.parentTransactionNo}</td>
                 <td className="px-4 py-3 border border-black whitespace-nowrap">{formatDate(line.parentDate)}</td>
+                <td className="px-4 py-3 border border-black font-medium">{line.parentVehicleNo}</td>
                 <td className="px-4 py-3 border border-black">{getSupplierName(line.parentSupplierId)}</td>
                 <td className="px-4 py-3 border border-black">{itemName}</td>
                 <td className="px-4 py-3 border border-black">
@@ -281,16 +302,27 @@ export function MaterialInItemMaster() {
                       </button>
                     </div>
                   ) : (
-                    canEdit ? (
-                      <button 
-                         onClick={() => handleEditClick(line.id, line.qty)}
-                         className="inline-flex items-center text-indigo-600 hover:text-indigo-800 font-bold"
-                      >
-                        <Edit2 size={14} className="mr-1" /> Edit
-                      </button>
-                    ) : (
-                      <span className="text-[10px] text-slate-500 italic font-medium uppercase">Locked</span>
-                    )
+                    <div className="flex items-center justify-end gap-2">
+                       <button 
+                          onClick={() => navigate(`/material-in/form?edit=${line.parentId}`)}
+                          className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-xs"
+                          title="Edit MRR Entry"
+                       >
+                         <ExternalLink size={14} className="mr-1" /> Edit MRR
+                       </button>
+
+                       {canEditInline ? (
+                        <button 
+                           onClick={() => handleEditClick(line.id, line.qty)}
+                           className="inline-flex items-center text-indigo-600 hover:text-indigo-800 font-bold text-xs"
+                           title="Edit Qty Inline"
+                        >
+                          <Edit2 size={14} className="mr-1" /> Qty
+                        </button>
+                       ) : (
+                         <span className="text-[9px] text-slate-400 italic font-medium uppercase">Locked</span>
+                       )}
+                    </div>
                   )}
                 </td>
               </tr>
