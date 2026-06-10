@@ -76,11 +76,14 @@ def send_error_report(errors):
             pass
 
 def tally_request(xml_content):
+    print(f"[DEBUG] Sending request to Tally at {TALLY_URL}")
     try:
         response = requests.post(TALLY_URL, data=xml_content, headers={'Content-Type': 'text/xml'})
         if response.status_code == 200:
+            print(f"[DEBUG] Tally response status: 200")
             return response.text
         else:
+            print(f"[DEBUG] Tally response status: {response.status_code}")
             return None
     except Exception as e:
         print(f"Tally connection error: {e}")
@@ -349,7 +352,10 @@ def create_or_update_item(item_name, erp_code, target_group, action="Create"):
     if "cannot alter" in res.lower():
         # Attempt to fetch existing GUID (item already exists)
         exists, _, guid = query_tally_item(item_name)
-        return True, guid if exists else True, "Existing item with unit mismatch"
+        if exists:
+            return True, guid
+        else:
+            return True, "Existing item with unit mismatch"
     # Other errors
     import re
     err = re.search(r'<LINEERROR>(.*?)</LINEERROR>', res)
@@ -402,7 +408,8 @@ def main():
         material_id = item['id']
         material_type = str(item['type'] or "").strip().lower()
         
-        target_group = REEL_GROUP if material_type == "reel" else OTHER_GROUP
+        target_group_map = {"reel": REEL_GROUP}
+        target_group = target_group_map.get(material_type, OTHER_GROUP)
 
         if target_group.upper() not in tally_groups:
             remark = f"Group '{target_group}' missing."
