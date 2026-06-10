@@ -1059,7 +1059,7 @@ export function Materials() {
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white divide-x divide-indigo-800">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Tally Sync", "Actions"].map((heading) => (
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Tally Sync", "Tally ID", "Actions"].map((heading) => (
                       <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
@@ -1069,7 +1069,7 @@ export function Materials() {
                 <tbody className="divide-y divide-black">
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={15} className="px-6 py-10 text-center text-slate-500 font-medium italic">
+                      <td colSpan={16} className="px-6 py-10 text-center text-slate-500 font-medium italic">
                         No materials matching your search criteria.
                       </td>
                     </tr>
@@ -1108,6 +1108,9 @@ export function Materials() {
                                 )}
                               </div>
                             )}
+                          </td>
+                          <td className="px-4 py-3 text-black text-[8px] font-mono break-all max-w-[100px]">
+                            {material.tallyMaterialId || "-"}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-2">
