@@ -16,6 +16,7 @@ export function MaterialInItemMaster() {
   const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
 
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState<number | "">("");
@@ -71,7 +72,13 @@ export function MaterialInItemMaster() {
     }, 500);
   };
 
-  const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
+  const getSupplierName = (id: string) => {
+    const s = suppliers.find(s => s.id === id);
+    if (s) return s.name;
+    const c = companies.find(c => c.id === id);
+    if (c) return c.name;
+    return id;
+  };
 
   const processedData = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
