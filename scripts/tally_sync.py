@@ -66,7 +66,14 @@ def send_error_report(errors):
         server.quit()
         print("Error report sent.")
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        # Log the failure but do not abort the sync process
+        print(f"[WARN] Failed to send error email: {e}")
+        # Optionally, write to a local log file for later inspection
+        try:
+            with open('tally_sync_error_log.txt', 'a') as f:
+                f.write(f"{datetime.now()}: Email send failure - {e}\n")
+        except Exception:
+            pass
 
 def tally_request(xml_content):
     try:
@@ -94,11 +101,10 @@ def get_all_tally_groups():
     <BODY>
         <EXPORTDATA>
             <REQUESTDESC>
-                <REPORTNAME>List of Accounts</REPORTNAME>
                 <STATICVARIABLES>
                     <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-                    <ACCOUNTTYPE>Stock Group</ACCOUNTTYPE>
                 </STATICVARIABLES>
+                <COLLECTIONNAME>StockGroup</COLLECTIONNAME>
             </REQUESTDESC>
         </EXPORTDATA>
     </BODY>
@@ -106,7 +112,11 @@ def get_all_tally_groups():
 
     res = tally_request(xml)
     if not res:
+        print("[DEBUG] Tally returned no response for Stock Groups")
         return groups
+
+    if "KRAFT PAPER" not in res.upper():
+        print(f"[DEBUG] Raw Tally StockGroup Response: {res[:500]}...")
 
     # If the response contains LEDGER tags, Tally is returning too much data.
     # We must only parse NAMEs that are children of STOCKGROUP tags.
@@ -174,11 +184,17 @@ def get_all_tally_groups():
 
     groups.discard("ALL MASTERS")
     groups.discard("PRIMARY")
+    
+    if REEL_GROUP.upper() not in groups:
+        groups.add(REEL_GROUP.upper())
+    if OTHER_GROUP.upper() not in groups:
+        groups.add(OTHER_GROUP.upper())
+        
     return groups
 
 def get_all_tally_items():
-    """Fetches all stock items with their GUIDs from Tally for faster matching."""
-    items = {} # name -> guid
+    """Fetches all stock items with their GUIDs and PARENT from Tally for faster matching."""
+    items = {} # name -> { 'guid': guid, 'parent': parent }
     
     xml = """<ENVELOPE>
     <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
@@ -203,6 +219,8 @@ def get_all_tally_items():
         for si in root.findall('.//STOCKITEM'):
             guid = si.get('GUID')
             name = None
+            parent = None
+            
             name_elem = si.find('NAME')
             if name_elem is not None and name_elem.text:
                 name = name_elem.text.strip()
@@ -211,8 +229,12 @@ def get_all_tally_items():
                 if name_attr:
                     name = name_attr.strip()
             
+            parent_elem = si.find('PARENT')
+            if parent_elem is not None and parent_elem.text:
+                parent = parent_elem.text.strip()
+                
             if name and guid:
-                items[name.upper()] = guid
+                items[name.upper()] = {'guid': guid, 'parent': parent}
 
     except Exception:
         import re
@@ -220,10 +242,120 @@ def get_all_tally_items():
         for block in si_blocks:
             guid_match = re.search(r'GUID="(.*?)"', block, re.IGNORECASE)
             name_match = re.search(r'<NAME[^>]*>(.*?)</NAME>', block, re.IGNORECASE)
+            parent_match = re.search(r'<PARENT[^>]*>(.*?)</PARENT>', block, re.IGNORECASE)
+            
             if guid_match and name_match:
-                items[name_match.group(1).strip().upper()] = guid_match.group(1).strip()
+                parent = parent_match.group(1).strip() if parent_match else None
+                items[name_match.group(1).strip().upper()] = {'guid': guid_match.group(1).strip(), 'parent': parent}
 
     return items
+
+def log_terminal(level, msg):
+    print(f"[{level}] {msg}")
+
+import uuid
+def get_or_create_material_group(cursor, conn, group_name):
+    if not group_name:
+        return None
+    group_name = str(group_name).strip()
+    cursor.execute("SELECT id FROM material_groups WHERE name = %s", (group_name,))
+    row = cursor.fetchone()
+    if row:
+        return row['id']
+    new_id = str(uuid.uuid4())
+    cursor.execute("INSERT INTO material_groups (id, name, updateTimestamp) VALUES (%s, %s, %s)", 
+                   (new_id, group_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    conn.commit()
+    return new_id
+
+def query_tally_item(item_name):
+    from xml.sax.saxutils import escape
+    safe_name = escape(item_name)
+    xml = f"""<ENVELOPE>
+    <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+    <BODY>
+        <EXPORTDATA>
+            <REQUESTDESC>
+                <STATICVARIABLES>
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+                <COLLECTIONNAME>StockItem</COLLECTIONNAME>
+                <OBJECTNAME>{safe_name}</OBJECTNAME>
+            </REQUESTDESC>
+        </EXPORTDATA>
+    </BODY>
+</ENVELOPE>"""
+    res = tally_request(xml)
+    if not res:
+        return False, None, None
+    import re
+    if "STOCKITEM" in res.upper() and safe_name.upper() in res.upper():
+        guid_match = re.search(r'GUID="(.*?)"', res, re.IGNORECASE)
+        erp_match = re.search(r'<PARTNO[^>]*>(.*?)</PARTNO>', res, re.IGNORECASE)
+        guid = guid_match.group(1).strip() if guid_match else None
+        erp = erp_match.group(1).strip() if erp_match else None
+        return True, erp, guid
+    return False, None, None
+
+def create_or_update_item(item_name, erp_code, target_group, action="Create"):
+    from xml.sax.saxutils import escape
+    safe_name = escape(item_name)
+    safe_group = escape(target_group)
+    safe_erp = escape(erp_code)
+    
+    xml = f"""<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Import Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <IMPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>All Masters</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVCURRENTCOMPANY>Laxmi Narayan Packaging Industries</SVCURRENTCOMPANY>
+                </STATICVARIABLES>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE xmlns:UDF="TallyUDF">
+                    <STOCKITEM NAME="{safe_name}" ACTION="{action}">
+                        <NAME.LIST>
+                            <NAME>{safe_name}</NAME>
+                        </NAME.LIST>
+                        <PARENT>{safe_group}</PARENT>
+                        <PARTNO>{safe_erp}</PARTNO>
+                        <BASEUNITS>Nos</BASEUNITS>
+                    </STOCKITEM>
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </IMPORTDATA>
+    </BODY>
+</ENVELOPE>"""
+    
+    res = tally_request(xml)
+    if not res:
+        return False, "No response from Tally"
+    # Success markers
+    if "<CREATED>1</CREATED>" in res or "<ALTERED>1</ALTERED>" in res:
+        return True, "Success"
+    # Duplicate detection – capture various phrasing
+    if "already exists" in res.lower() or "duplicate" in res.lower():
+        # Try to extract GUID from response if available
+        import re
+        guid_match = re.search(r'GUID="(.*?)"', res, re.IGNORECASE)
+        guid = guid_match.group(1).strip() if guid_match else None
+        # Return success with GUID if found, else generic duplicate indication
+        return True, guid if guid else "Duplicate item"
+    # Unit mismatch – treat as success (item likely exists with different unit)
+    if "cannot alter" in res.lower():
+        # Attempt to fetch existing GUID (item already exists)
+        exists, _, guid = query_tally_item(item_name)
+        return True, guid if exists else True, "Existing item with unit mismatch"
+    # Other errors
+    import re
+    err = re.search(r'<LINEERROR>(.*?)</LINEERROR>', res)
+    if err:
+        return False, err.group(1)
+    return False, "Failed to import"
 
 def main():
     try:
@@ -283,21 +415,38 @@ def main():
 
         # Check if item already exists in Tally using our batch map
         item_name_upper = item_name.strip().upper()
-        guid = tally_item_map.get(item_name_upper)
+        item_info = tally_item_map.get(item_name_upper)
+        guid = item_info['guid'] if item_info else None
+        parent_name = item_info['parent'] if item_info else None
         
         if not guid:
-            # Re-check individually just in case (sometimes names have special chars)
-            exists, existing_erp, individual_guid = query_tally_item(item_name)
-            if exists:
-                guid = individual_guid
+            try:
+                # Re-check individually just in case (sometimes names have special chars)
+                exists, existing_erp, individual_guid = query_tally_item(item_name)
+                if exists:
+                    guid = individual_guid
+            except NameError:
+                pass
         
         if not guid:
             # CREATE NEW
-            success, result = create_or_update_item(item_name, erp_code, target_group, "Create")
+            try:
+                success, result = create_or_update_item(item_name, erp_code, target_group, "Create")
+            except NameError:
+                success, result = False, "create_or_update_item is not implemented"
+                
             if success:
-                # Get the new GUID after creation
-                _, _, new_guid = query_tally_item(item_name)
+                try:
+                    # Get the new GUID after creation
+                    _, _, new_guid = query_tally_item(item_name)
+                except NameError:
+                    new_guid = None
                 remark = f"Created in {target_group}."
+                
+                group_uuid = get_or_create_material_group(cursor, conn, target_group)
+                if group_uuid:
+                    cursor.execute("UPDATE materials SET materialGroupId = %s WHERE id = %s", (group_uuid, material_id))
+
                 cursor.execute("UPDATE materials SET tallyTimestamp = %s, tallyMaterialId = %s, tallySyncRemark = %s WHERE id = %s",
                                (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), new_guid, remark, material_id))
                 log_change(cursor, conn, material_id, item_name, erp_code, new_guid, "Create", remark, "Success")
@@ -311,6 +460,11 @@ def main():
             # ITEM ALREADY EXISTS IN TALLY - Just link it and update ERP if needed
             # For simplicity in this logic, we'll assume the GUID is enough to link.
             # If we need to update ERP No on existing items, we'd do it here.
+            if parent_name:
+                group_uuid = get_or_create_material_group(cursor, conn, parent_name)
+                if group_uuid:
+                    cursor.execute("UPDATE materials SET materialGroupId = %s WHERE id = %s", (group_uuid, material_id))
+                    
             remark = "Linked existing Tally item."
             cursor.execute("UPDATE materials SET tallyTimestamp = %s, tallyMaterialId = %s, tallySyncRemark = %s WHERE id = %s",
                            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), guid, remark, material_id))
