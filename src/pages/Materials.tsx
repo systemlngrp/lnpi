@@ -69,17 +69,13 @@ function getNextNumericErpCode(materials: Material[]) {
 }
 
 function getNextOtherErpCode(materials: Material[]) {
-  const otherValues = materials
+  const numericValues = materials
     .filter((material) => material.type === "Other")
-    .map((material) => String(material.erpCode || "").trim().toUpperCase())
-    .map((erpCode) => {
-      const match = erpCode.match(/^OTH(\d+)$/);
-      return match ? Number(match[1]) : NaN;
-    })
+    .map((material) => Number(material.erpCode))
     .filter((value) => Number.isFinite(value) && value > 0);
 
-  const nextValue = otherValues.length === 0 ? 100001 : Math.max(...otherValues) + 1;
-  return `OTH${nextValue}`;
+  if (numericValues.length === 0) return "1";
+  return String(Math.max(...numericValues) + 1);
 }
 
 function createInitialFormState(materials: Material[], reelGroupId = "") {

@@ -29,6 +29,10 @@ export function Companies() {
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("INTRA_STATE");
   const [deviationAllowed, setDeviationAllowed] = useState<number | "">("");
   const [toleranceAllowed, setToleranceAllowed] = useState<number | "">("");
+  const [pin, setPin] = useState("");
+  const [salesPerson, setSalesPerson] = useState("");
+  const [gstType, setGstType] = useState("");
+  const [panNo, setPanNo] = useState("");
 
   const resetForm = () => {
     setName("");
@@ -42,6 +46,10 @@ export function Companies() {
     setGstSupplyType("INTRA_STATE");
     setDeviationAllowed("");
     setToleranceAllowed("");
+    setPin("");
+    setSalesPerson("");
+    setGstType("");
+    setPanNo("");
     setEditingId(null);
   };
 
@@ -58,7 +66,11 @@ export function Companies() {
         "GST NO": "27AAAAA0000A1Z5",
         "GST Supply Type": "INTRA_STATE",
         "Deviation Allowed (%)": 5,
-        "Tolerance Allowed (%)": 2
+        "Tolerance Allowed (%)": 2,
+        "PIN": "400001",
+        "Sales Person": "Jane Smith",
+        "GST Type": "Regular",
+        "PAN No": "ABCDE1234F"
       }
     ];
 
@@ -101,6 +113,10 @@ export function Companies() {
           gstSupplyType: (row["GST Supply Type"] === "INTER_STATE" ? "INTER_STATE" : "INTRA_STATE") as any,
           deviationAllowed: row["Deviation Allowed (%)"] ? Number(row["Deviation Allowed (%)"]) : undefined,
           toleranceAllowed: row["Tolerance Allowed (%)"] ? Math.max(0, Math.min(10, Number(row["Tolerance Allowed (%)"]))) : undefined,
+          pin: String(row["PIN"] || "").trim() || undefined,
+          salesPerson: String(row["Sales Person"] || "").trim() || undefined,
+          gstType: String(row["GST Type"] || "").trim() || undefined,
+          panNo: String(row["PAN No"] || "").trim() || undefined,
           ...audit,
         })).filter(c => c.name);
 
@@ -144,7 +160,11 @@ export function Companies() {
       "GST NO": c.gstNo || "",
       "GST Supply Type": c.gstSupplyType || "INTRA_STATE",
       "Deviation Allowed (%)": c.deviationAllowed ?? "",
-      "Tolerance Allowed (%)": c.toleranceAllowed ?? ""
+      "Tolerance Allowed (%)": c.toleranceAllowed ?? "",
+      "PIN": c.pin || "",
+      "Sales Person": c.salesPerson || "",
+      "GST Type": c.gstType || "",
+      "PAN No": c.panNo || ""
     }));
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -185,6 +205,10 @@ export function Companies() {
         gstSupplyType: gstSupplyType || undefined,
         deviationAllowed: deviationAllowed === "" ? undefined : Number(deviationAllowed),
         toleranceAllowed: toleranceAllowed === "" ? undefined : Number(toleranceAllowed),
+        pin: pin.trim() || undefined,
+        salesPerson: salesPerson.trim() || undefined,
+        gstType: gstType.trim() || undefined,
+        panNo: panNo.trim() || undefined,
         ...audit,
       };
 
@@ -234,6 +258,10 @@ export function Companies() {
     setGstSupplyType((company.gstSupplyType as any) || "INTRA_STATE");
     setDeviationAllowed(company.deviationAllowed ?? "");
     setToleranceAllowed(company.toleranceAllowed ?? "");
+    setPin(company.pin || "");
+    setSalesPerson(company.salesPerson || "");
+    setGstType(company.gstType || "");
+    setPanNo(company.panNo || "");
     setEditingId(company.id);
     setIsFormOpen(true);
   };
@@ -255,7 +283,9 @@ export function Companies() {
         (c.contactNumber || "").toLowerCase().includes(q) ||
         (c.email || "").toLowerCase().includes(q) ||
         (c.district || "").toLowerCase().includes(q) ||
-        (c.state || "").toLowerCase().includes(q)
+        (c.state || "").toLowerCase().includes(q) ||
+        (c.salesPerson || "").toLowerCase().includes(q) ||
+        (c.panNo || "").toLowerCase().includes(q)
       );
     });
   }, [sortedCompanies, searchTerm]);
@@ -378,6 +408,26 @@ export function Companies() {
             </div>
 
             <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">PIN</label>
+              <input value={pin} onChange={(e) => setPin(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Sales Person</label>
+              <input value={salesPerson} onChange={(e) => setSalesPerson(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">GST Type</label>
+              <input value={gstType} onChange={(e) => setGstType(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">PAN No</label>
+              <input value={panNo} onChange={(e) => setPanNo(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Deviation Allowed (%)</label>
               <input
                 type="number"
@@ -435,8 +485,9 @@ export function Companies() {
                   <div className="text-sm font-bold">{c.name}</div>
                   <div className="text-xs text-slate-700">{c.contactPerson} {c.contactNumber ? `| ${c.contactNumber}` : ""}</div>
                   <div className="text-xs text-slate-700">{c.email}</div>
-                  <div className="text-xs text-slate-700">{c.district} {c.state ? `| ${c.state}` : ""}</div>
-                  <div className="text-xs text-slate-700">GST Supply Type: {c.gstSupplyType || "INTRA_STATE"}</div>
+                  <div className="text-xs text-slate-700">{c.district} {c.state ? `| ${c.state}` : ""} {c.pin ? `| ${c.pin}` : ""}</div>
+                  <div className="text-xs text-slate-700">GST Supply Type: {c.gstSupplyType || "INTRA_STATE"} {c.gstType ? `| Type: ${c.gstType}` : ""}</div>
+                  <div className="text-xs text-slate-700">PAN: {c.panNo || "-"} | Sales Person: {c.salesPerson || "-"}</div>
                   <div className="text-xs text-slate-700">Deviation Allowed: {c.deviationAllowed ?? "-"}%</div>
                   <div className="text-xs text-slate-700">Tolerance Allowed: {c.toleranceAllowed ?? "-"}%</div>
                 </div>
@@ -461,8 +512,12 @@ export function Companies() {
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Address</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">District</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">State</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">PIN</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">GST NO</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">GST Type</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">GST Supply Type</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">PAN No</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Sales Person</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Deviation Allowed</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Tolerance Allowed</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
@@ -471,7 +526,7 @@ export function Companies() {
             <tbody className="divide-y divide-black bg-white">
               {sortedCompanies.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                  <td colSpan={16} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                     {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found. Click "Add New" to create one.'}
                   </td>
                 </tr>
@@ -489,8 +544,12 @@ export function Companies() {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.address}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.district}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.state}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.pin}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.gstNo}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.gstType}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.gstSupplyType || "INTRA_STATE"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.panNo}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.salesPerson}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.deviationAllowed ?? "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.toleranceAllowed ?? "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium border border-black">
