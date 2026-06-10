@@ -15,6 +15,7 @@ DB_HOST = os.getenv('DB_HOST')
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME')
+DB_PORT = os.getenv('DB_PORT', '3306')
 TALLY_URL = os.getenv('TALLY_URL', 'http://localhost:9000')
 ERROR_EMAIL = "bizskill17@gmail.com"
 EMAIL_SENDER = os.getenv('EMAIL_SENDER')
@@ -22,7 +23,8 @@ EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 EMAIL_SMTP_SERVER = os.getenv('EMAIL_SMTP_SERVER', 'smtp.gmail.com')
 EMAIL_SMTP_PORT = int(os.getenv('EMAIL_SMTP_PORT', '587'))
 
-STOCK_GROUP_NAME = "Kraft Paper"
+REEL_GROUP = "Kraft Paper"
+OTHER_GROUP = "Other"
 
 def log_change(cursor, conn, material_id, item_name, erp_code, tally_material_id, action, remark, status, error_message=None):
     sql = """
@@ -86,34 +88,8 @@ def check_stock_group(group_name):
 </ENVELOPE>"""
     res = tally_request(xml)
     if res:
-        return group_name.upper() in res.upper()
+        return f'<NAME>{group_name}</NAME>'.upper() in res.upper()
     return False
-
-def get_stock_item_details(item_name):
-    xml = f"""<ENVELOPE>
-    <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
-    <BODY>
-        <EXPORTDATA>
-            <REQUESTDESC>
-                <REPORTNAME>List of Accounts</REPORTNAME>
-                <STATICVARIABLES>
-                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-                    <ACCOUNTTYPE>StockItem</ACCOUNTTYPE>
-                </STATICVARIABLES>
-            </REQUESTDESC>
-        </EXPORTDATA>
-    </BODY>
-</ENVELOPE>"""
-    res = tally_request(xml)
-    if res:
-        # Simple string check for now, can be improved with XML parsing
-        if f'<NAME>{item_name}</NAME>' in res:
-            # Try to extract ERP Code (PARTNO)
-            # This is a bit complex with raw XML response of all items.
-            # Better to use a specific item query if Tally supports it easily.
-            return True, "" # Found, unknown ERP
-        return False, None
-    return None, None
 
 def query_tally_item(item_name):
     # Specific query for one item
@@ -133,16 +109,19 @@ def query_tally_item(item_name):
 </ENVELOPE>"""
     res = tally_request(xml)
     if res and '<STOCKITEM' in res:
-        root = ET.fromstring(res)
-        # Tally XML structure is nested
-        item = root.find(".//STOCKITEM")
-        if item is not None:
-            part_no = item.findtext("PARTNO") or ""
-            guid = item.get("GUID") or ""
-            return True, part_no, guid
+        try:
+            root = ET.fromstring(res)
+            item = root.find(".//STOCKITEM")
+            if item is not None:
+                part_no = item.findtext("PARTNO") or ""
+                guid = item.get("GUID") or ""
+                return True, part_no, guid
+        except:
+            if f'<NAME>{item_name}</NAME>' in res:
+                return True, "", ""
     return False, None, None
 
-def create_or_update_item(item_name, erp_code, action="Create"):
+def create_or_update_item(item_name, erp_code, group_name, action="Create"):
     xml = f"""<ENVELOPE>
     <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>
     <BODY>
@@ -156,7 +135,7 @@ def create_or_update_item(item_name, erp_code, action="Create"):
                         <NAME.LIST>
                             <NAME>{item_name}</NAME>
                         </NAME.LIST>
-                        <PARENT>{STOCK_GROUP_NAME}</PARENT>
+                        <PARENT>{group_name}</PARENT>
                         <PARTNO>{erp_code}</PARTNO>
                         <BASEUNITS>Nos</BASEUNITS>
                     </STOCKITEM>
@@ -186,27 +165,11 @@ def main():
         print(f"Database connection error: {e}")
         return
 
-    # Check Stock Group
-    if not check_stock_group(STOCK_GROUP_NAME):
-        print(f"Stock group '{STOCK_GROUP_NAME}' not found in Tally.")
-        # We need to log this for ALL pending materials
-        cursor.execute("SELECT * FROM materials WHERE tallyTimestamp IS NULL OR tallyTimestamp = ''")
-        pending = cursor.fetchall()
-        errors = []
-        for item in pending:
-            remark = "No stock group found."
-            cursor.execute("UPDATE materials SET tallySyncRemark = %s WHERE id = %s", (remark, item['id']))
-            log_change(cursor, conn, item['id'], item['name'], item['erpCode'], None, "Check Group", remark, "Failed")
-            errors.append({
-                'item_name': item['name'],
-                'erp_code': item['erpCode'],
-                'action': "Check Group",
-                'status': "Failed",
-                'remark': remark
-            })
-        send_error_report(errors)
-        conn.close()
-        return
+    # Check Required Stock Groups
+    groups_status = {
+        REEL_GROUP: check_stock_group(REEL_GROUP),
+        OTHER_GROUP: check_stock_group(OTHER_GROUP)
+    }
 
     cursor.execute("SELECT * FROM materials WHERE tallyTimestamp IS NULL OR tallyTimestamp = ''")
     pending = cursor.fetchall()
@@ -217,18 +180,36 @@ def main():
         item_name = item['name']
         erp_code = str(item['erpCode']) if item['erpCode'] else ""
         material_id = item['id']
+        material_type = str(item['type'] or "").strip().lower()
         
-        print(f"Processing: {item_name}")
+        # Determine target group
+        target_group = REEL_GROUP if material_type == "reel" else OTHER_GROUP
         
+        print(f"Processing: {item_name} (Type: {material_type} -> Group: {target_group})")
+        
+        if not groups_status.get(target_group):
+            remark = f"Stock group '{target_group}' not found in Tally."
+            print(remark)
+            cursor.execute("UPDATE materials SET tallySyncRemark = %s WHERE id = %s", (remark, material_id))
+            log_change(cursor, conn, material_id, item_name, erp_code, None, "Check Group", remark, "Failed")
+            sync_errors.append({
+                'item_name': item_name,
+                'erp_code': erp_code,
+                'action': "Check Group",
+                'status': "Failed",
+                'remark': remark
+            })
+            conn.commit()
+            continue
+
         exists, existing_erp, guid = query_tally_item(item_name)
         
         if not exists:
             # Create new
-            success, result = create_or_update_item(item_name, erp_code, "Create")
+            success, result = create_or_update_item(item_name, erp_code, target_group, "Create")
             if success:
-                # Re-query to get GUID
                 _, _, new_guid = query_tally_item(item_name)
-                remark = "New stock item created."
+                remark = f"New stock item created in {target_group}."
                 cursor.execute("UPDATE materials SET tallyTimestamp = %s, tallyMaterialId = %s, tallySyncRemark = %s WHERE id = %s",
                                (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), new_guid, remark, material_id))
                 log_change(cursor, conn, material_id, item_name, erp_code, new_guid, "Create", remark, "Success")
@@ -247,7 +228,7 @@ def main():
             # Exists
             if not existing_erp:
                 # Update ERP No.
-                success, result = create_or_update_item(item_name, erp_code, "Alter")
+                success, result = create_or_update_item(item_name, erp_code, target_group, "Alter")
                 if success:
                     remark = "ERP No. updated in Tally."
                     cursor.execute("UPDATE materials SET tallyTimestamp = %s, tallyMaterialId = %s, tallySyncRemark = %s WHERE id = %s",
@@ -265,7 +246,6 @@ def main():
                         'error': result
                     })
             else:
-                # Already has ERP No. (or it matches/doesn't match, prompt says "if ERP No. is missing")
                 remark = "Item exists with ERP No. Skipping."
                 cursor.execute("UPDATE materials SET tallyTimestamp = %s, tallyMaterialId = %s, tallySyncRemark = %s WHERE id = %s",
                                (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), guid, remark, material_id))
