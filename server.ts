@@ -6,6 +6,10 @@ import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 import fs from "fs";
 import crypto from "crypto";
+import { exec } from "child_process";
+import util from "util";
+
+const execPromise = util.promisify(exec);
 
 dotenv.config();
 
@@ -764,6 +768,37 @@ app.post("/api/npd-sync", async (req, res) => {
     res.status(500).json({ error: (error as Error).message });
   } finally {
     conn.release();
+  }
+});
+
+app.post("/api/tally/sync", async (req, res) => {
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    
+    console.log("[Tally Sync] Starting sync process...");
+    // Run the python script and capture output
+    const { stdout, stderr } = await execPromise("python scripts/tally_sync.py");
+    
+    console.log("[Tally Sync] Output:", stdout);
+    if (stderr) {
+      console.warn("[Tally Sync] Stderr:", stderr);
+    }
+    
+    return res.json({ 
+      success: true,
+      message: "Sync process executed.",
+      output: stdout,
+      error: stderr || null
+    });
+  } catch (err) {
+    console.error("[Tally Sync] Execution Error:", err);
+    return res.status(500).json({ 
+      error: "Failed to execute sync script. Please ensure Python and required modules are installed.",
+      details: (err as Error).message,
+      output: (err as any).stdout,
+      stderr: (err as any).stderr
+    });
   }
 });
 

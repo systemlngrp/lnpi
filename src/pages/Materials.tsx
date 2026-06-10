@@ -318,6 +318,32 @@ export function Materials() {
     };
   }
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  async function handleTallySync() {
+    if (!window.confirm("Do you want to start Tally synchronization now?")) return;
+    setIsSyncing(true);
+    try {
+      const response = await fetch("/api/tally/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        alert("Sync process completed! Refreshing data...");
+        // Reload materials to see updated sync status
+        window.location.reload();
+      } else {
+        alert("Sync failed: " + (data.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Tally Sync Error:", error);
+      alert("An error occurred during sync. Check console for details.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
   function handleOpenNew() {
     setEditingId(null);
     setFormData(createInitialFormState(materials, reelGroup?.id || ""));
@@ -923,6 +949,15 @@ export function Materials() {
                     onChange={handleBulkUpload}
                   />
                 </label>
+                <button
+                  type="button"
+                  onClick={handleTallySync}
+                  disabled={isSyncing}
+                  className="inline-flex items-center justify-center gap-2 rounded border border-black bg-amber-500 px-4 py-2 text-xs font-bold text-black transition hover:bg-amber-600 whitespace-nowrap shadow disabled:opacity-50"
+                >
+                  {isSyncing ? <Spinner size={14} /> : <Disc size={14} />} 
+                  {isSyncing ? "Syncing..." : "Sync with Tally"}
+                </button>
                 <button
                   type="button"
                   onClick={handleOpenNew}
