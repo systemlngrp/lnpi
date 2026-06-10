@@ -16,7 +16,7 @@ const COMPANY_SYNC_CONFIG = {
   secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
   tabName: 'Companies',
   spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
-  idHeader: 'Company Name',
+  idHeader: 'Id',
   hostingerSyncHeader: 'NPD Hostinger Sync',
   flushDelayMs: 15000,
   pendingRowsPropertyKey: 'COMPANY_PENDING_ROWS',
@@ -83,14 +83,17 @@ function performFullSync_(config, skipAlreadySynced) {
     headers.forEach((header, index) => {
       mapped[header] = row[index] ?? '';
     });
-    const name = String(mapped[config.idHeader] || '').trim();
-    if (!name) continue;
 
-    if (nameMap.has(name)) {
+    const rowKey = String(
+      mapped[config.idHeader] || mapped["Id"] || mapped["Company"] || mapped["Company Name"] || mapped["name"] || ''
+    ).trim();
+    if (!rowKey) continue;
+
+    if (nameMap.has(rowKey)) {
       duplicateRowIndices.push(i + 1); // sheet row index (1-based)
       continue;
     }
-    nameMap.set(name, i + 1);
+    nameMap.set(rowKey, i + 1);
     allRowsToSync.push(mapped);
     allRowIndicesToUpdate.push(i + 1);
   }

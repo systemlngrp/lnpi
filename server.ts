@@ -194,20 +194,22 @@ const NPD_SYNC_REQUIRED_HEADERS = ["NPD ID"] as const;
 
 const COMPANY_SYNC_HEADER_MAP = {
   "Id": "id",
-  "Company Name": "name",
-  "Contact Person": "contactPerson",
-  "Contact Number": "contactNumber",
-  "Email": "email",
+  "Company": "name",
   "Address": "address",
   "District": "district",
   "State": "state",
-  "GST No": "gstNo",
-  "GST Supply Type": "gstSupplyType",
-  "Deviation Allowed": "deviationAllowed",
-  "Tolerance Allowed": "toleranceAllowed",
+  "GST NO": "gstNo",
+  "Email": "email",
+  "Contact Person": "contactPerson",
+  "Contact Number": "contactNumber",
+  "PIN": "pin",
+  "NPD Hostinger Sync": "npdHostingerSync",
+  "Sales Person": "salesPerson",
+  "GST Type": "gstType",
+  "PAN No": "panNo",
 } as const;
 
-const COMPANY_SYNC_REQUIRED_HEADERS = ["Id", "Company Name"] as const;
+const COMPANY_SYNC_REQUIRED_HEADERS = ["Id", "Company"] as const;
 
 const NPD_SYNC_NUMERIC_KEYS = new Set([
   "erp",
@@ -279,6 +281,14 @@ const NPD_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
   })),
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+];
+
+const COMPANY_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
+  { column: "pin", type: "VARCHAR(50)" },
+  { column: "npdHostingerSync", type: "VARCHAR(255)" },
+  { column: "salesPerson", type: "VARCHAR(255)" },
+  { column: "gstType", type: "VARCHAR(100)" },
+  { column: "panNo", type: "VARCHAR(100)" },
 ];
 
 function base64UrlEncode(input: Buffer | string) {
@@ -550,31 +560,27 @@ app.post("/api/npd-sync", async (req, res) => {
       mapFn: (row: Record<string, any>) => {
         const mapped: Record<string, any> = {};
         
-        // Find company name using either "Company Name" or "Company"
-        const nameVal = stringOrEmpty(row["Company Name"] || row["Company"]);
-        mapped.name = nameVal;
-
-        // Find GST no using "GST No", "GST NO", or "GST No."
-        const gstVal = stringOrEmpty(row["GST No"] || row["GST NO"] || row["GST No."]);
-        if (gstVal) {
-          mapped.gstNo = gstVal;
-        }
-
-        // Map other headers
+        // Map all headers based on the map
         Object.entries(COMPANY_SYNC_HEADER_MAP).forEach(([header, key]) => {
-          if (header === "Company Name" || header === "GST No") return; // Already handled above
           if (!Object.prototype.hasOwnProperty.call(row, header)) return;
           mapped[key] = normalizeSheetCellValue(key, row[header]);
         });
 
-        // Find or generate ID
-        const idVal = stringOrEmpty(row["Id"] || row["id"] || row["ID"]);
-        if (idVal) {
-          mapped.id = idVal;
-        } else if (nameVal) {
-          // Generate stable UUID based on company name
-          const hash = crypto.createHash("md5").update(nameVal.trim().toUpperCase()).digest("hex");
-          mapped.id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+        // Ensure name is present even if header was different
+        if (!mapped.name) {
+          mapped.name = stringOrEmpty(row["Company"] || row["Company Name"] || row["name"]);
+        }
+
+        // Ensure id is present or generate it
+        if (!mapped.id) {
+          const idVal = stringOrEmpty(row["Id"] || row["id"] || row["ID"]);
+          if (idVal) {
+            mapped.id = idVal;
+          } else if (mapped.name) {
+            // Generate stable UUID based on company name
+            const hash = crypto.createHash("md5").update(String(mapped.name).trim().toUpperCase()).digest("hex");
+            mapped.id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+          }
         }
         
         return mapped;
@@ -606,12 +612,20 @@ app.post("/api/npd-sync", async (req, res) => {
 
   let missingRequiredHeaders: string[] = [];
   if (tabName === "Companies") {
-    const hasCompanyHeader = rowsPayload.some((row) => 
-      Object.prototype.hasOwnProperty.call(row || {}, "Company Name") ||
-      Object.prototype.hasOwnProperty.call(row || {}, "Company")
+    const hasIdHeader = rowsPayload.some((row) =>
+      Object.prototype.hasOwnProperty.call(row || {}, "Id") ||
+      Object.prototype.hasOwnProperty.call(row || {}, "id") ||
+      Object.prototype.hasOwnProperty.call(row || {}, "ID")
     );
+    const hasCompanyHeader = rowsPayload.some((row) =>
+      Object.prototype.hasOwnProperty.call(row || {}, "Company") ||
+      Object.prototype.hasOwnProperty.call(row || {}, "Company Name")
+    );
+    if (!hasIdHeader) {
+      missingRequiredHeaders.push("Id");
+    }
     if (!hasCompanyHeader) {
-      missingRequiredHeaders.push("Company Name");
+      missingRequiredHeaders.push("Company or Company Name");
     }
   } else {
     missingRequiredHeaders = config.requiredHeaders.filter((header) =>
@@ -1437,6 +1451,12 @@ async function ensureColumnExists(db: mysql.Pool, database: string, table: strin
   );
   if ((rows as any[]).length > 0) return;
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
+}
+
+async function ensureCompaniesSchemaColumns(db: mysql.Pool, database: string) {
+  for (const { column, type } of COMPANY_SCHEMA_COLUMNS) {
+    await ensureColumnExists(db, database, "companies", column, type);
+  }
 }
 
 async function getExistingColumnNames(db: mysql.Pool, database: string, table: string) {
@@ -2419,9 +2439,46 @@ async function initDb(retries = 5) {
           \`syncSource\` VARCHAR(50),
           \`syncStatus\` VARCHAR(20) DEFAULT 'active',
           \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
+          \`updateTimestamp\` VARCHAR(255),
+          \`gstType\` VARCHAR(50),
+          \`panNo\` VARCHAR(50),
+          \`pin\` VARCHAR(20),
+          \`npdHostingerSync\` VARCHAR(255),
+          \`salesPerson\` VARCHAR(255)
         )
       `);
+
+      // Migration: Add new columns to companies table
+      try {
+        const [columns] = await db.query(
+          "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'companies'",
+          [database]
+        );
+        const existingColumns = (columns as any[]).map((c: any) => c.COLUMN_NAME);
+        
+        if (!existingColumns.includes("gstType")) {
+          console.log("[DB] Adding gstType to companies...");
+          await db.query("ALTER TABLE \`companies\` ADD COLUMN \`gstType\` VARCHAR(50)");
+        }
+        if (!existingColumns.includes("panNo")) {
+          console.log("[DB] Adding panNo to companies...");
+          await db.query("ALTER TABLE \`companies\` ADD COLUMN \`panNo\` VARCHAR(50)");
+        }
+        if (!existingColumns.includes("pin")) {
+          console.log("[DB] Adding pin to companies...");
+          await db.query("ALTER TABLE \`companies\` ADD COLUMN \`pin\` VARCHAR(20)");
+        }
+        if (!existingColumns.includes("npdHostingerSync")) {
+          console.log("[DB] Adding npdHostingerSync to companies...");
+          await db.query("ALTER TABLE \`companies\` ADD COLUMN \`npdHostingerSync\` VARCHAR(255)");
+        }
+        if (!existingColumns.includes("salesPerson")) {
+          console.log("[DB] Adding salesPerson to companies...");
+          await db.query("ALTER TABLE \`companies\` ADD COLUMN \`salesPerson\` VARCHAR(255)");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not alter companies table:", (err as Error).message);
+      }
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`machines\` (
@@ -2838,6 +2895,22 @@ async function initDb(retries = 5) {
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
+
+      // Migration: Add uom to npd table if missing
+      try {
+        const [columns] = await db.query(
+          "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'npd'",
+          [database]
+        );
+        const existingColumns = (columns as any[]).map((c: any) => c.COLUMN_NAME);
+        
+        if (!existingColumns.includes("uom")) {
+          console.log("[DB] Adding uom to npd...");
+          await db.query("ALTER TABLE \`npd\` ADD COLUMN \`uom\` LONGTEXT");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not alter npd table:", (err as Error).message);
+      }
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`settings\` (
@@ -3458,6 +3531,12 @@ async function initDb(retries = 5) {
         await ensureNpdSchemaColumns(db, database);
       } catch (err) {
         console.warn("[DB] Could not ensure npd schema columns:", (err as Error).message);
+      }
+
+      try {
+        await ensureCompaniesSchemaColumns(db, database);
+      } catch (err) {
+        console.warn("[DB] Could not ensure companies schema columns:", (err as Error).message);
       }
 
       try {

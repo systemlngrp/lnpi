@@ -6,6 +6,9 @@ import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 import fs from "fs";
 import crypto from "crypto";
+import { exec } from "child_process";
+import util from "util";
+const execPromise = util.promisify(exec);
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -166,19 +169,21 @@ const NPD_SYNC_HEADER_MAP = {
 const NPD_SYNC_REQUIRED_HEADERS = ["NPD ID"];
 const COMPANY_SYNC_HEADER_MAP = {
   "Id": "id",
-  "Company Name": "name",
-  "Contact Person": "contactPerson",
-  "Contact Number": "contactNumber",
-  "Email": "email",
+  "Company": "name",
   "Address": "address",
   "District": "district",
   "State": "state",
-  "GST No": "gstNo",
-  "GST Supply Type": "gstSupplyType",
-  "Deviation Allowed": "deviationAllowed",
-  "Tolerance Allowed": "toleranceAllowed"
+  "GST NO": "gstNo",
+  "Email": "email",
+  "Contact Person": "contactPerson",
+  "Contact Number": "contactNumber",
+  "PIN": "pin",
+  "NPD Hostinger Sync": "npdHostingerSync",
+  "Sales Person": "salesPerson",
+  "GST Type": "gstType",
+  "PAN No": "panNo"
 };
-const COMPANY_SYNC_REQUIRED_HEADERS = ["Id", "Company Name"];
+const COMPANY_SYNC_REQUIRED_HEADERS = ["Id", "Company"];
 const NPD_SYNC_NUMERIC_KEYS = /* @__PURE__ */ new Set([
   "erp",
   "rate",
@@ -248,6 +253,13 @@ const NPD_SCHEMA_COLUMNS = [
   })),
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" }
+];
+const COMPANY_SCHEMA_COLUMNS = [
+  { column: "pin", type: "VARCHAR(50)" },
+  { column: "npdHostingerSync", type: "VARCHAR(255)" },
+  { column: "salesPerson", type: "VARCHAR(255)" },
+  { column: "gstType", type: "VARCHAR(100)" },
+  { column: "panNo", type: "VARCHAR(100)" }
 ];
 function base64UrlEncode(input) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
@@ -473,23 +485,21 @@ app.post("/api/npd-sync", async (req, res) => {
       requiredHeaders: COMPANY_SYNC_REQUIRED_HEADERS,
       mapFn: (row) => {
         const mapped = {};
-        const nameVal = stringOrEmpty(row["Company Name"] || row["Company"]);
-        mapped.name = nameVal;
-        const gstVal = stringOrEmpty(row["GST No"] || row["GST NO"] || row["GST No."]);
-        if (gstVal) {
-          mapped.gstNo = gstVal;
-        }
         Object.entries(COMPANY_SYNC_HEADER_MAP).forEach(([header, key]) => {
-          if (header === "Company Name" || header === "GST No") return;
           if (!Object.prototype.hasOwnProperty.call(row, header)) return;
           mapped[key] = normalizeSheetCellValue(key, row[header]);
         });
-        const idVal = stringOrEmpty(row["Id"] || row["id"] || row["ID"]);
-        if (idVal) {
-          mapped.id = idVal;
-        } else if (nameVal) {
-          const hash = crypto.createHash("md5").update(nameVal.trim().toUpperCase()).digest("hex");
-          mapped.id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+        if (!mapped.name) {
+          mapped.name = stringOrEmpty(row["Company"] || row["Company Name"] || row["name"]);
+        }
+        if (!mapped.id) {
+          const idVal = stringOrEmpty(row["Id"] || row["id"] || row["ID"]);
+          if (idVal) {
+            mapped.id = idVal;
+          } else if (mapped.name) {
+            const hash = crypto.createHash("md5").update(String(mapped.name).trim().toUpperCase()).digest("hex");
+            mapped.id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+          }
         }
         return mapped;
       }
@@ -516,11 +526,17 @@ app.post("/api/npd-sync", async (req, res) => {
   );
   let missingRequiredHeaders = [];
   if (tabName === "Companies") {
-    const hasCompanyHeader = rowsPayload.some(
-      (row) => Object.prototype.hasOwnProperty.call(row || {}, "Company Name") || Object.prototype.hasOwnProperty.call(row || {}, "Company")
+    const hasIdHeader = rowsPayload.some(
+      (row) => Object.prototype.hasOwnProperty.call(row || {}, "Id") || Object.prototype.hasOwnProperty.call(row || {}, "id") || Object.prototype.hasOwnProperty.call(row || {}, "ID")
     );
+    const hasCompanyHeader = rowsPayload.some(
+      (row) => Object.prototype.hasOwnProperty.call(row || {}, "Company") || Object.prototype.hasOwnProperty.call(row || {}, "Company Name")
+    );
+    if (!hasIdHeader) {
+      missingRequiredHeaders.push("Id");
+    }
     if (!hasCompanyHeader) {
-      missingRequiredHeaders.push("Company Name");
+      missingRequiredHeaders.push("Company or Company Name");
     }
   } else {
     missingRequiredHeaders = config.requiredHeaders.filter(
@@ -655,6 +671,32 @@ app.post("/api/npd-sync", async (req, res) => {
     res.status(500).json({ error: error.message });
   } finally {
     conn.release();
+  }
+});
+app.post("/api/tally/sync", async (req, res) => {
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    console.log("[Tally Sync] Starting sync process...");
+    const { stdout, stderr } = await execPromise("python scripts/tally_sync.py");
+    console.log("[Tally Sync] Output:", stdout);
+    if (stderr) {
+      console.warn("[Tally Sync] Stderr:", stderr);
+    }
+    return res.json({
+      success: true,
+      message: "Sync process executed.",
+      output: stdout,
+      error: stderr || null
+    });
+  } catch (err) {
+    console.error("[Tally Sync] Execution Error:", err);
+    return res.status(500).json({
+      error: "Failed to execute sync script. Please ensure Python and required modules are installed.",
+      details: err.message,
+      output: err.stdout,
+      stderr: err.stderr
+    });
   }
 });
 let pool = null;
@@ -1216,6 +1258,11 @@ async function ensureColumnExists(db, database, table, column, type) {
   if (rows.length > 0) return;
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
 }
+async function ensureCompaniesSchemaColumns(db, database) {
+  for (const { column, type } of COMPANY_SCHEMA_COLUMNS) {
+    await ensureColumnExists(db, database, "companies", column, type);
+  }
+}
 async function getExistingColumnNames(db, database, table) {
   const [rows] = await db.query(
     "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?",
@@ -1762,8 +1809,25 @@ async function initDb(retries = 5) {
           \`openingValue\` DECIMAL(15,2),
           \`remarks\` TEXT,
           \`active\` VARCHAR(10) DEFAULT 'Yes',
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyMaterialId\` VARCHAR(255),
+          \`tallySyncRemark\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`tally_change_log\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`material_id\` VARCHAR(36),
+          \`item_name\` VARCHAR(255),
+          \`erp_code\` VARCHAR(100),
+          \`tally_material_id\` VARCHAR(255),
+          \`action\` VARCHAR(100),
+          \`remark\` TEXT,
+          \`status\` VARCHAR(50),
+          \`error_message\` TEXT,
+          \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
       await db.query(`
@@ -2077,9 +2141,43 @@ async function initDb(retries = 5) {
           \`syncSource\` VARCHAR(50),
           \`syncStatus\` VARCHAR(20) DEFAULT 'active',
           \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
+          \`updateTimestamp\` VARCHAR(255),
+          \`gstType\` VARCHAR(50),
+          \`panNo\` VARCHAR(50),
+          \`pin\` VARCHAR(20),
+          \`npdHostingerSync\` VARCHAR(255),
+          \`salesPerson\` VARCHAR(255)
         )
       `);
+      try {
+        const [columns] = await db.query(
+          "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'companies'",
+          [database]
+        );
+        const existingColumns = columns.map((c) => c.COLUMN_NAME);
+        if (!existingColumns.includes("gstType")) {
+          console.log("[DB] Adding gstType to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `gstType` VARCHAR(50)");
+        }
+        if (!existingColumns.includes("panNo")) {
+          console.log("[DB] Adding panNo to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `panNo` VARCHAR(50)");
+        }
+        if (!existingColumns.includes("pin")) {
+          console.log("[DB] Adding pin to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `pin` VARCHAR(20)");
+        }
+        if (!existingColumns.includes("npdHostingerSync")) {
+          console.log("[DB] Adding npdHostingerSync to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `npdHostingerSync` VARCHAR(255)");
+        }
+        if (!existingColumns.includes("salesPerson")) {
+          console.log("[DB] Adding salesPerson to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `salesPerson` VARCHAR(255)");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not alter companies table:", err.message);
+      }
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`machines\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
@@ -2483,6 +2581,19 @@ async function initDb(retries = 5) {
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
+      try {
+        const [columns] = await db.query(
+          "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'npd'",
+          [database]
+        );
+        const existingColumns = columns.map((c) => c.COLUMN_NAME);
+        if (!existingColumns.includes("uom")) {
+          console.log("[DB] Adding uom to npd...");
+          await db.query("ALTER TABLE `npd` ADD COLUMN `uom` LONGTEXT");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not alter npd table:", err.message);
+      }
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`settings\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
@@ -2550,6 +2661,9 @@ async function initDb(retries = 5) {
         { table: "materials", column: "openingValue", type: "DECIMAL(15,2)" },
         { table: "materials", column: "remarks", type: "TEXT" },
         { table: "materials", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
+        { table: "materials", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "materials", column: "tallyMaterialId", type: "VARCHAR(255)" },
+        { table: "materials", column: "tallySyncRemark", type: "TEXT" },
         { table: "indents", column: "indentNo", type: "VARCHAR(30)" },
         { table: "indents", column: "requestedBy", type: "VARCHAR(255) NOT NULL" },
         { table: "indents", column: "requisitionDate", type: "VARCHAR(50) NOT NULL" },
@@ -3084,6 +3198,11 @@ async function initDb(retries = 5) {
         console.warn("[DB] Could not ensure npd schema columns:", err.message);
       }
       try {
+        await ensureCompaniesSchemaColumns(db, database);
+      } catch (err) {
+        console.warn("[DB] Could not ensure companies schema columns:", err.message);
+      }
+      try {
         await ensureIndianStatesSeed(db);
       } catch (err) {
         console.warn("[DB] Could not seed official India states:", err.message);
@@ -3585,7 +3704,7 @@ Exceeds by: ${nextTotal - plannedQty}`
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
 app.get("/api/legacy-items", async (req, res) => {
   try {
     const user = await getRequestUser(req);

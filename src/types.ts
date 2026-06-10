@@ -386,6 +386,11 @@ export interface Company {
   gstSupplyType?: "INTRA_STATE" | "INTER_STATE";
   deviationAllowed?: number;
   toleranceAllowed?: number;
+  pin?: string;
+  npdHostingerSync?: string;
+  salesPerson?: string;
+  gstType?: string;
+  panNo?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
