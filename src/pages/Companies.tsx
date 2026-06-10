@@ -305,44 +305,11 @@ export function Companies() {
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Companies Master</h2>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={downloadTemplate}
-            className="bg-white text-black border-2 border-black px-3 py-2 rounded font-bold hover:bg-slate-100 transition flex items-center text-sm"
-            title="Download Excel Template"
-          >
-            <Download size={18} className="mr-2" /> Template
-          </button>
-          
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-white text-black border-2 border-black px-3 py-2 rounded font-bold hover:bg-slate-100 transition flex items-center text-sm"
-            title="Upload Bulk Data"
-          >
-            <Upload size={18} className="mr-2" /> Bulk Upload
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleBulkUpload}
-            accept=".xlsx, .xls"
-            className="hidden"
-          />
-
-          <button
             onClick={exportToExcel}
             className="bg-emerald-50 text-emerald-700 border-2 border-emerald-700 px-3 py-2 rounded font-bold hover:bg-emerald-100 transition flex items-center text-sm"
             title="Export to Excel"
           >
             <FileSpreadsheet size={18} className="mr-2" /> Export
-          </button>
-
-          <button
-            onClick={() => {
-              setIsFormOpen(!isFormOpen);
-              if (isFormOpen) resetForm();
-            }}
-            className="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 transition flex items-center text-sm"
-          >
-            {isFormOpen ? "Close Form" : <><Plus size={20} className="mr-2" /> Add New</>}
           </button>
         </div>
       </div>
@@ -527,7 +494,7 @@ export function Companies() {
               {sortedCompanies.length === 0 ? (
                 <tr>
                   <td colSpan={16} className="px-6 py-8 text-center text-black font-medium tracking-wide">
-                    {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found. Click "Add New" to create one.'}
+                    {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found.'}
                   </td>
                 </tr>
               ) : (
