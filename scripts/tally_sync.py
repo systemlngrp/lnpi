@@ -8,23 +8,31 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 # Configuration
-DB_HOST = os.getenv('DB_HOST')
+DB_HOST = os.getenv('DB_HOST', '193.203.184.152').strip()
+if DB_HOST in ('.', 'localhost'):
+    DB_HOST = '127.0.0.1'
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME')
-DB_PORT = os.getenv('DB_PORT', '3306')
-TALLY_URL = os.getenv('TALLY_URL', 'http://localhost:9000')
+DB_PORT = int(os.getenv('DB_PORT', '3306'))
+TALLY_URL = os.getenv('TALLY_URL', 'http://127.0.0.1:9009').strip()
 ERROR_EMAIL = "bizskill17@gmail.com"
 EMAIL_SENDER = os.getenv('EMAIL_SENDER')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 EMAIL_SMTP_SERVER = os.getenv('EMAIL_SMTP_SERVER', 'smtp.gmail.com')
 EMAIL_SMTP_PORT = int(os.getenv('EMAIL_SMTP_PORT', '587'))
 
-REEL_GROUP = "Kraft Paper"
-OTHER_GROUP = "Other"
+if not all([DB_HOST, DB_USER, DB_PASSWORD, DB_NAME]):
+    raise RuntimeError("Missing required database configuration in .env: DB_HOST, DB_USER, DB_PASSWORD, DB_NAME")
+
+print(f"Using DB_HOST={DB_HOST}, DB_PORT={DB_PORT}, DB_USER={DB_USER}, DB_NAME={DB_NAME}")
+print(f"Using TALLY_URL={TALLY_URL}")
+
+REEL_GROUP = "KRAFT PAPER"
+OTHER_GROUP = "OTHER"
 
 def log_change(cursor, conn, material_id, item_name, erp_code, tally_material_id, action, remark, status, error_message=None):
     sql = """
