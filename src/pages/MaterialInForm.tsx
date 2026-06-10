@@ -1289,7 +1289,14 @@ export function MaterialInForm() {
           </div>
         </div>
 
-        <div className="pt-4 flex justify-end">
+        <div className="pt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="px-6 py-3 rounded font-bold border-2 border-black text-black hover:bg-slate-50 transition"
+          >
+            Cancel
+          </button>
           <button
             type="submit"
             disabled={isSubmitting || lines.length === 0}
