@@ -450,7 +450,9 @@ export function Materials() {
         await setMaterialGroups([...materialGroups, nextReelGroup]);
         reelGroupId = nextReelGroup.id;
       }
+      const existing = editingId ? materials.find(m => m.id === editingId) : null;
       const nextMaterial: Material = {
+        ...existing,
         id: editingId || crypto.randomUUID(),
         type: normalizedType,
         erpCode: erpCode || undefined,
@@ -1022,7 +1024,7 @@ export function Materials() {
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white divide-x divide-indigo-800">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Actions"].map((heading) => (
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Tally Sync", "Actions"].map((heading) => (
                       <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
@@ -1032,7 +1034,7 @@ export function Materials() {
                 <tbody className="divide-y divide-black">
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={14} className="px-6 py-10 text-center text-slate-500 font-medium italic">
+                      <td colSpan={15} className="px-6 py-10 text-center text-slate-500 font-medium italic">
                         No materials matching your search criteria.
                       </td>
                     </tr>
@@ -1057,6 +1059,21 @@ export function Materials() {
                             {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-black text-[10px] font-black uppercase">{material.uom || ""}</td>
+                          <td className="px-4 py-3 text-black text-[10px] font-bold">
+                            {material.tallyTimestamp ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-emerald-600 font-bold uppercase">Synced</span>
+                                <span className="text-[8px] text-slate-500 whitespace-nowrap">{material.tallyTimestamp}</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-rose-600 font-bold uppercase">Pending</span>
+                                {material.tallySyncRemark && (
+                                  <span className="text-[8px] text-rose-500 font-medium">{material.tallySyncRemark}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-2">
                               <button

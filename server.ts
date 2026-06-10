@@ -2028,8 +2028,26 @@ async function initDb(retries = 5) {
           \`openingValue\` DECIMAL(15,2),
           \`remarks\` TEXT,
           \`active\` VARCHAR(10) DEFAULT 'Yes',
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyMaterialId\` VARCHAR(255),
+          \`tallySyncRemark\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`tally_change_log\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`material_id\` VARCHAR(36),
+          \`item_name\` VARCHAR(255),
+          \`erp_code\` VARCHAR(100),
+          \`tally_material_id\` VARCHAR(255),
+          \`action\` VARCHAR(100),
+          \`remark\` TEXT,
+          \`status\` VARCHAR(50),
+          \`error_message\` TEXT,
+          \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
 
@@ -2858,6 +2876,9 @@ async function initDb(retries = 5) {
         { table: "materials", column: "openingValue", type: "DECIMAL(15,2)" },
         { table: "materials", column: "remarks", type: "TEXT" },
         { table: "materials", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
+        { table: "materials", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "materials", column: "tallyMaterialId", type: "VARCHAR(255)" },
+        { table: "materials", column: "tallySyncRemark", type: "TEXT" },
         { table: "indents", column: "indentNo", type: "VARCHAR(30)" },
         { table: "indents", column: "requestedBy", type: "VARCHAR(255) NOT NULL" },
         { table: "indents", column: "requisitionDate", type: "VARCHAR(50) NOT NULL" },
@@ -3991,7 +4012,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
 
 app.get("/api/legacy-items", async (req, res) => {
   try {

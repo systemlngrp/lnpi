@@ -27,6 +27,9 @@ export interface Material {
   openingValue?: number;
   remarks?: string;
   active?: "Yes" | "No";
+  tallyTimestamp?: string;
+  tallyMaterialId?: string;
+  tallySyncRemark?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
