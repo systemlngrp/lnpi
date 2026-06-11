@@ -1,15 +1,32 @@
 import os
+import sys
 import mysql.connector
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from xml.sax.saxutils import escape
+import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+def load_runtime_env():
+    bundled_dir = getattr(sys, "_MEIPASS", "")
+    candidate_paths = [
+        os.path.join(bundled_dir, ".env") if bundled_dir else "",
+        os.path.join(os.getcwd(), ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+    ]
+
+    for env_path in candidate_paths:
+        if env_path and os.path.exists(env_path):
+            load_dotenv(env_path, override=True)
+            return
+
+    load_dotenv(override=True)
+
+load_runtime_env()
 
 # Configuration
 DB_HOST = os.getenv('DB_HOST', '193.203.184.152').strip()
@@ -114,6 +131,40 @@ def parse_simple_names_from_response(response_text):
                 names.add(text.upper())
 
     return names
+
+def sanitize_tally_xml(xml_text):
+    if not xml_text:
+        return xml_text
+    cleaned = re.sub(r"&#x0*([0-8BCEF]|1[0-9A-F]);", "", xml_text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"&#([0-8]|1[0-9]|2[0-9]|30|31);", "", cleaned, flags=re.IGNORECASE)
+    return cleaned
+
+def extract_stock_items_from_text(response_text):
+    items = {}
+    if not response_text:
+        return items
+
+    blocks = re.findall(r"<STOCKITEM\b[^>]*>.*?</STOCKITEM>", response_text, re.IGNORECASE | re.DOTALL)
+    for block in blocks:
+        name_match = re.search(r"<NAME[^>]*>(.*?)</NAME>", block, re.IGNORECASE | re.DOTALL)
+        if not name_match:
+            continue
+        name = " ".join(name_match.group(1).split()).strip()
+        if not name:
+            continue
+
+        parent_match = re.search(r"<PARENT[^>]*>(.*?)</PARENT>", block, re.IGNORECASE | re.DOTALL)
+        guid_attr_match = re.search(r'GUID="(.*?)"', block, re.IGNORECASE)
+        guid_tag_match = re.search(r"<GUID[^>]*>(.*?)</GUID>", block, re.IGNORECASE | re.DOTALL)
+        partno_match = re.search(r"<PARTNO[^>]*>(.*?)</PARTNO>", block, re.IGNORECASE | re.DOTALL)
+
+        items[name.upper()] = {
+            "guid": (guid_attr_match.group(1).strip() if guid_attr_match else (guid_tag_match.group(1).strip() if guid_tag_match else None)),
+            "parent": " ".join(parent_match.group(1).split()).strip() if parent_match else None,
+            "erp": " ".join(partno_match.group(1).split()).strip() if partno_match else None,
+        }
+
+    return items
 
 def is_guid(s):
     """Checks if a string is a Tally GUID (e.g. 27FC4EF2-EE5B-4FBD-A5C1-A188D2320B9A)."""
@@ -266,11 +317,15 @@ def get_all_tally_items():
             continue
 
         try:
-            root = ET.fromstring(res)
+            root = ET.fromstring(sanitize_tally_xml(res))
             for si in root.findall('.//STOCKITEM'):
                 guid = si.get('GUID')
+                if not guid:
+                    guid_elem = si.find('GUID')
+                    guid = guid_elem.text.strip() if guid_elem is not None and guid_elem.text else None
                 name = None
                 parent = None
+                erp = None
 
                 name_elem = si.find('NAME')
                 if name_elem is not None and name_elem.text:
@@ -284,20 +339,14 @@ def get_all_tally_items():
                 if parent_elem is not None and parent_elem.text:
                     parent = parent_elem.text.strip()
 
-                if name:
-                    items[name.upper()] = {'guid': guid, 'parent': parent}
-        except Exception:
-            import re
-            si_blocks = re.findall(r'<STOCKITEM[^>]*>(.*?)</STOCKITEM>', res, re.DOTALL | re.IGNORECASE)
-            for block in si_blocks:
-                guid_match = re.search(r'GUID="(.*?)"', block, re.IGNORECASE)
-                name_match = re.search(r'<NAME[^>]*>(.*?)</NAME>', block, re.IGNORECASE)
-                parent_match = re.search(r'<PARENT[^>]*>(.*?)</PARENT>', block, re.IGNORECASE)
+                erp_elem = si.find('PARTNO')
+                if erp_elem is not None and erp_elem.text:
+                    erp = erp_elem.text.strip()
 
-                if name_match:
-                    parent = parent_match.group(1).strip() if parent_match else None
-                    guid = guid_match.group(1).strip() if guid_match else None
-                    items[name_match.group(1).strip().upper()] = {'guid': guid, 'parent': parent}
+                if name:
+                    items[name.upper()] = {'guid': guid, 'parent': parent, 'erp': erp}
+        except Exception:
+            items.update(extract_stock_items_from_text(res))
 
         if items:
             break
@@ -363,18 +412,37 @@ def query_tally_item(item_name):
 </ENVELOPE>""",
     ]
 
-    import re
     for xml in requests_to_try:
         res = tally_request(xml)
         if not res or is_unknown_tally_response(res):
             continue
 
-        if "STOCKITEM" in res.upper() and safe_name.upper() in res.upper():
-            guid_match = re.search(r'GUID="(.*?)"', res, re.IGNORECASE)
-            erp_match = re.search(r'<PARTNO[^>]*>(.*?)</PARTNO>', res, re.IGNORECASE)
-            guid = guid_match.group(1).strip() if guid_match else None
-            erp = erp_match.group(1).strip() if erp_match else None
-            return True, erp, guid
+        try:
+            root = ET.fromstring(sanitize_tally_xml(res))
+            stock_items = root.findall('.//STOCKITEM')
+            if stock_items:
+                for si in stock_items:
+                    name_elem = si.find('NAME')
+                    name_attr = si.get('NAME')
+                    found_name = (name_elem.text.strip() if name_elem is not None and name_elem.text else (name_attr.strip() if name_attr else ""))
+                    if found_name.upper() != item_name.strip().upper():
+                        continue
+
+                    guid = si.get('GUID')
+                    if not guid:
+                        guid_elem = si.find('GUID')
+                        guid = guid_elem.text.strip() if guid_elem is not None and guid_elem.text else None
+
+                    erp_elem = si.find('PARTNO')
+                    erp = erp_elem.text.strip() if erp_elem is not None and erp_elem.text else None
+                    return True, erp, guid
+        except Exception:
+            pass
+
+        text_items = extract_stock_items_from_text(res)
+        matched = text_items.get(item_name.strip().upper())
+        if matched:
+            return True, matched.get("erp"), matched.get("guid")
 
         if item_name.strip().upper() in parse_simple_names_from_response(res):
             return True, None, None
@@ -512,7 +580,15 @@ def main():
     tally_item_map = get_all_tally_items()
     log_terminal("INFO", f"Found {len(tally_item_map)} existing items in Tally.")
 
-    cursor.execute("SELECT * FROM materials WHERE tallyTimestamp IS NULL OR tallyTimestamp = ''")
+    cursor.execute("""
+        SELECT *
+        FROM materials
+        WHERE
+            tallyTimestamp IS NULL
+            OR tallyTimestamp = ''
+            OR tallyMaterialId IS NULL
+            OR TRIM(tallyMaterialId) = ''
+    """)
     pending = cursor.fetchall()
     
     if not pending:
