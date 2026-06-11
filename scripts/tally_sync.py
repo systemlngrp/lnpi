@@ -438,12 +438,26 @@ def create_or_update_item(item_name, erp_code, target_group, action="Create"):
             return True, guid
         else:
             return True, "Existing item with unit mismatch"
+    # Some Tally setups return an import summary without explicit CREATED/ALTERED markers.
+    # Re-check the item before treating the import as failed.
+    exists, _, guid = query_tally_item(item_name)
+    if exists:
+        return True, guid if guid else "Linked after import verification"
     # Other errors
     import re
     err = re.search(r'<LINEERROR>(.*?)</LINEERROR>', res)
     if err:
         return False, err.group(1)
     return False, response_error_message(res)
+
+def parse_import_summary(response_text):
+    import re
+    summary = {}
+    for tag in ["CREATED", "ALTERED", "COMBINED", "IGNORED", "DELETED", "CANCELLED", "ERRORS", "EXCEPTIONS"]:
+        match = re.search(rf'<{tag}>(.*?)</{tag}>', response_text or "", re.IGNORECASE)
+        if match:
+            summary[tag.lower()] = match.group(1).strip()
+    return summary
 
 def response_error_message(response_text):
     response_text = (response_text or "").strip()
@@ -457,6 +471,11 @@ def response_error_message(response_text):
     line_error = re.search(r'<LINEERROR>(.*?)</LINEERROR>', response_text, re.IGNORECASE)
     if line_error:
         return line_error.group(1).strip()
+
+    summary = parse_import_summary(response_text)
+    if summary:
+        details = ", ".join(f"{key}={value}" for key, value in summary.items())
+        return f"Tally import failed without LINEERROR ({details})"
 
     cleaned = re.sub(r"<[^>]+>", " ", response_text)
     cleaned = " ".join(cleaned.split())
@@ -486,6 +505,7 @@ def main():
         return
 
     log_terminal("INFO", f"Found {len(tally_groups)} stock groups in Tally.")
+    log_terminal("INFO", f"Tally Stock Groups: {', '.join(sorted(tally_groups))}")
 
     # STEP 2: Fetch all Stock Items for faster matching
     log_terminal("INFO", "Fetching all Stock Items for batch matching...")
