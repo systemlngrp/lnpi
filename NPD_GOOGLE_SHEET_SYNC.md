@@ -12,8 +12,9 @@ NPD_SYNC_ALLOWED_TAB=NPD
 The app now exposes:
 
 - `POST /api/npd-sync`
+- `GET /api/npd-sync/rates`
 
-Authentication for this endpoint uses the `x-npd-sync-secret` header.
+Authentication for both endpoints uses the `x-npd-sync-secret` header.
 
 ## Payload shape
 
@@ -40,19 +41,22 @@ Authentication for this endpoint uses the `x-npd-sync-secret` header.
 - Marks missing previously synced Google Sheet rows as `syncStatus = removed`
 - Keeps removed rows in MySQL for history
 - Filters removed rows out of active `npd` reads
+- Supports reverse sync of `Rate` only from Hostinger app to Google Sheet by matching `NPD ID`
 
 ## Apps Script setup
 
 Use `D:\lnpi\scripts\npd_google_sheet_sync.gs`.
 
 1. Open the Google Sheet.
-2. Go to `Extensions` → `Apps Script`.
+2. Go to `Extensions` -> `Apps Script`.
 3. Paste the script contents.
-4. Set `apiUrl`, `secret`, and `tabName`.
-5. Run `installNpdSyncTrigger()` once to create the installable change trigger.
-6. Run `syncNpdSheetToHostinger()` once for the initial sync.
+4. Set `apiUrl`, `rateApiUrl`, `secret`, and `tabName`.
+5. Run `installSyncTriggers()` once to create the installable triggers.
+6. Run `syncNpdSheetToHostinger()` once for the initial push sync.
+7. Run `syncNpdRatesFromHostinger()` any time you want to pull latest app `Rate` values into the sheet.
 
 ## Notes
 
-- The sync is one-way: Google Sheets → Hostinger app → MySQL.
+- Row sync is Google Sheets -> Hostinger app -> MySQL.
+- Reverse sync is rate-only: Hostinger app -> Google Sheet `Rate` column.
 - The server uses `syncSource = google_sheets` internally so soft-removals only affect sheet-owned NPD rows.

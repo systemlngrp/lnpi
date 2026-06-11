@@ -459,7 +459,7 @@ app.post("/api/auth/logout", requireAuth, async (_req, res) => {
 
 // Protect all /api routes except auth + db-status
 app.use("/api", (req, res, next) => {
-  if (req.path.startsWith("/auth/") || req.path === "/db-status" || req.path === "/npd-sync") return next();
+  if (req.path.startsWith("/auth/") || req.path === "/db-status" || req.path.startsWith("/npd-sync")) return next();
   return requireAuth(req, res, next);
 });
 
@@ -782,6 +782,44 @@ app.post("/api/npd-sync", async (req, res) => {
     res.status(500).json({ error: (error as Error).message });
   } finally {
     conn.release();
+  }
+});
+
+app.get("/api/npd-sync/rates", async (req, res) => {
+  const providedSecret = stringOrEmpty(
+    req.headers["x-npd-sync-secret"] ||
+      req.headers["x-sync-secret"] ||
+      req.query.secret
+  );
+
+  if (!NPD_SYNC_SECRET) {
+    return res.status(503).json({ error: "NPD sync is not configured." });
+  }
+
+  if (!providedSecret || providedSecret !== NPD_SYNC_SECRET) {
+    return res.status(401).json({ error: "Invalid sync secret." });
+  }
+
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const rows = await fetchActiveNpdItems(db) as any[];
+    const rateRows = rows
+      .map((row) => ({
+        npdId: stringOrEmpty(row?.npdId || row?.id),
+        rate: row?.rate == null || row?.rate === "" ? null : Number(row.rate),
+      }))
+      .filter((row) => row.npdId);
+
+    return res.json({
+      ok: true,
+      total: rateRows.length,
+      rows: rateRows,
+    });
+  } catch (error) {
+    console.error(`${NPD_SYNC_LOG_PREFIX} Rate sync fetch failed:`, error);
+    return res.status(500).json({ error: (error as Error).message });
   }
 });
 

@@ -1,9 +1,11 @@
 const NPD_SYNC_CONFIG = {
   apiUrl: 'https://darkred-lobster-409686.hostingersite.com/api/npd-sync',
+  rateApiUrl: 'https://darkred-lobster-409686.hostingersite.com/api/npd-sync/rates',
   secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
   tabName: 'NPD',
   spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
   npdIdHeader: 'NPD ID',
+  rateHeader: 'Rate',
   hostingerSyncHeader: 'HOSTINGER SYNC',
   flushDelayMs: 15000,
   pendingRowsPropertyKey: 'NPD_PENDING_ROWS',
@@ -25,7 +27,9 @@ const COMPANY_SYNC_CONFIG = {
 };
 
 function syncNpdSheetToHostinger() {
-  return forceFullNpdSync();
+  const result = forceFullNpdSync();
+  syncNpdRatesFromHostinger();
+  return result;
 }
 
 function syncCompaniesSheetToHostinger() {
@@ -38,6 +42,68 @@ function formatDate_(date) {
 
 function forceFullNpdSync() {
   return performFullSync_(NPD_SYNC_CONFIG, true);
+}
+
+function syncNpdRatesFromHostinger() {
+  const spreadsheet = SpreadsheetApp.openById(NPD_SYNC_CONFIG.spreadsheetId);
+  const sheet = spreadsheet.getSheetByName(NPD_SYNC_CONFIG.tabName);
+  if (!sheet) {
+    throw new Error(`Sheet tab not found: ${NPD_SYNC_CONFIG.tabName}`);
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  if (!values.length) {
+    throw new Error('Sheet is empty.');
+  }
+
+  const headers = values[0].map((header) => String(header || '').trim());
+  const idIndex = headers.indexOf(NPD_SYNC_CONFIG.npdIdHeader);
+  const rateIndex = headers.indexOf(NPD_SYNC_CONFIG.rateHeader);
+
+  if (idIndex === -1) {
+    throw new Error(`Column "${NPD_SYNC_CONFIG.npdIdHeader}" not found in sheet.`);
+  }
+  if (rateIndex === -1) {
+    throw new Error(`Column "${NPD_SYNC_CONFIG.rateHeader}" not found in sheet.`);
+  }
+
+  const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.rateApiUrl, {
+    method: 'get',
+    muteHttpExceptions: true,
+    headers: {
+      'x-npd-sync-secret': NPD_SYNC_CONFIG.secret,
+    },
+  });
+
+  if (response.getResponseCode() >= 400) {
+    throw new Error(`Rate sync failed: ${response.getContentText()}`);
+  }
+
+  const result = JSON.parse(response.getContentText() || '{}');
+  const rows = Array.isArray(result.rows) ? result.rows : [];
+  const rateMap = new Map(
+    rows
+      .map((row) => [String(row.npdId || '').trim(), row.rate])
+      .filter(([npdId]) => npdId)
+  );
+
+  if (values.length <= 1) {
+    return { ok: true, updatedRows: 0, fetchedRates: rateMap.size };
+  }
+
+  const nextRateValues = values.slice(1).map((row) => {
+    const npdId = String(row[idIndex] || '').trim();
+    if (!npdId || !rateMap.has(npdId)) {
+      return [row[rateIndex] ?? ''];
+    }
+    const nextRate = rateMap.get(npdId);
+    return [nextRate == null || nextRate === '' ? '' : nextRate];
+  });
+
+  sheet.getRange(2, rateIndex + 1, nextRateValues.length, 1).setValues(nextRateValues);
+  SpreadsheetApp.flush();
+
+  return { ok: true, updatedRows: nextRateValues.length, fetchedRates: rateMap.size };
 }
 
 function forceFullCompanySync() {
@@ -273,6 +339,10 @@ function performFlush_(config, idHeader) {
   }
 
   updateTimestamps_(sheet, pendingRows, idHeader, config.hostingerSyncHeader, syncTimestamp);
+
+  if (config.tabName === 'NPD') {
+    syncNpdRatesFromHostinger();
+  }
 
   clearPendingQueue_(config);
   deleteFlushTriggers_(config);
