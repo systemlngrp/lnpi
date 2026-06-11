@@ -624,16 +624,6 @@ export function OrderForm() {
       {isFormOpen && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-lg border border-slate-200 space-y-6 max-w-4xl mx-auto">
           <div className="space-y-4">
-            <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <input
-                type="checkbox"
-                checked={isUniversal}
-                onChange={(e) => setIsUniversal(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              Universal
-            </label>
-
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Order Date</label>
               <input type="date" value={orderDate} onChange={(e)=>setOrderDate(e.target.value)} className="w-full border border-slate-300 rounded-md p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
@@ -662,6 +652,16 @@ export function OrderForm() {
               <label className="block text-sm font-semibold text-slate-700 mb-1">PO Number</label>
               <input value={poNumber} onChange={(e)=>setPoNumber(e.target.value)} className={`w-full border rounded-md p-3 ${poType === 'Verbal' ? 'bg-slate-100 border-slate-200 text-slate-600' : 'border-slate-300 text-slate-900'}`} disabled={poType === 'Verbal'} />
             </div>
+
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={isUniversal}
+                onChange={(e) => setIsUniversal(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              Show All Items
+            </label>
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Item</label>
