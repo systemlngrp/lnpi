@@ -178,11 +178,13 @@ function PhotoCard({ filename, slotNo }: { filename: string; slotNo: number }) {
           <a href={href} target="_blank" rel="noreferrer" className="mt-2 text-[10px] bg-red-700 text-white px-3 py-1 rounded-full uppercase tracking-wider hover:bg-red-800 transition">View PDF</a>
         </div>
       ) : (
-        <img
-          src={href}
-          alt={`Gate entry slot ${slotNo}`}
-          className="h-44 w-full object-cover"
-        />
+        <a href={href} target="_blank" rel="noreferrer" className="block border-b border-slate-200">
+          <img
+            src={href}
+            alt={`Gate entry slot ${slotNo}`}
+            className="h-44 w-full object-cover cursor-zoom-in"
+          />
+        </a>
       )}
       <div className="px-4 py-3 text-sm font-semibold text-slate-600">Pic {slotNo}</div>
     </div>
