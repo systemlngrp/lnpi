@@ -3,6 +3,7 @@ import mysql.connector
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from xml.sax.saxutils import escape
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -81,6 +82,8 @@ def tally_request(xml_content):
         response = requests.post(TALLY_URL, data=xml_content, headers={'Content-Type': 'text/xml'})
         if response.status_code == 200:
             print(f"[DEBUG] Tally response status: 200")
+            if is_unknown_tally_response(response.text):
+                print(f"[DEBUG] Tally returned unknown request: {response.text[:200]}")
             return response.text
         else:
             print(f"[DEBUG] Tally response status: {response.status_code}")
@@ -89,77 +92,75 @@ def tally_request(xml_content):
         print(f"Tally connection error: {e}")
         return None
 
+def is_unknown_tally_response(response_text):
+    return "UNKNOWN REQUEST" in (response_text or "").upper()
+
+def parse_simple_names_from_response(response_text):
+    names = set()
+    if not response_text or is_unknown_tally_response(response_text):
+        return names
+
+    try:
+        root = ET.fromstring(response_text)
+        for name_elem in root.findall(".//NAME"):
+            text = (name_elem.text or "").strip()
+            if text and not is_guid(text):
+                names.add(text.upper())
+    except Exception:
+        import re
+        for match in re.findall(r'<NAME[^>]*>(.*?)</NAME>', response_text, re.IGNORECASE):
+            text = match.strip()
+            if text and not is_guid(text):
+                names.add(text.upper())
+
+    return names
+
 def is_guid(s):
     """Checks if a string is a Tally GUID (e.g. 27FC4EF2-EE5B-4FBD-A5C1-A188D2320B9A)."""
     import re
     return bool(re.match(r'^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$', s.strip(), re.I))
 
 def get_all_tally_groups():
-    """Strictly fetches Stock Groups, avoiding Ledgers by using specific account type filtering."""
+    """Fetches Stock Groups using multiple Tally-compatible request formats."""
     groups = set()
-    
-    # Query 1: List of Accounts with explicit Stock Group type
-    xml = """<ENVELOPE>
+
+    requests_to_try = [
+        """<ENVELOPE>
     <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
     <BODY>
         <EXPORTDATA>
             <REQUESTDESC>
+                <REPORTNAME>List of Stock Groups</REPORTNAME>
                 <STATICVARIABLES>
                     <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
                 </STATICVARIABLES>
-                <COLLECTIONNAME>StockGroup</COLLECTIONNAME>
             </REQUESTDESC>
         </EXPORTDATA>
     </BODY>
-</ENVELOPE>"""
+</ENVELOPE>""",
+        """<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Collection</TYPE>
+        <ID>StockGroup</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>""",
+    ]
 
-    res = tally_request(xml)
-    if not res:
-        print("[DEBUG] Tally returned no response for Stock Groups")
-        return groups
-
-    if "KRAFT PAPER" not in res.upper():
-        print(f"[DEBUG] Raw Tally StockGroup Response: {res[:500]}...")
-
-    # If the response contains LEDGER tags, Tally is returning too much data.
-    # We must only parse NAMEs that are children of STOCKGROUP tags.
-    try:
-        root = ET.fromstring(res)
-        # 1. Direct search for STOCKGROUP elements
-        for sg in root.findall('.//STOCKGROUP'):
-            name_elem = sg.find('NAME')
-            if name_elem is not None and name_elem.text:
-                groups.add(name_elem.text.strip().upper())
-            else:
-                # Some versions put it in NAME attribute
-                name_attr = sg.get('NAME')
-                if name_attr:
-                    groups.add(name_attr.strip().upper())
-        
-        # 2. Check for Collection-style response
-        if not groups:
-            for elem in root.iter():
-                if 'STOCKGROUP' in elem.tag.upper():
-                    text = (elem.text or "").strip()
-                    if text and not is_guid(text):
-                        groups.add(text.upper())
-
-    except Exception:
-        # Fallback Regex - but ONLY within STOCKGROUP blocks
-        import re
-        sg_blocks = re.findall(r'<STOCKGROUP[^>]*>(.*?)</STOCKGROUP>', res, re.DOTALL | re.IGNORECASE)
-        for block in sg_blocks:
-            names = re.findall(r'<NAME[^>]*>(.*?)</NAME>', block, re.IGNORECASE)
-            for n in names:
-                n = n.strip()
-                if n and not is_guid(n):
-                    groups.add(n.upper())
-
-    # Final safeguard: Try multiple common report names for stock groups
-    if not groups or (REEL_GROUP.upper() not in groups):
-        fallback_reports = ["Stock Summary", "Stock Group Summary", "Stock Group Analysis", "Stock Status"]
-        for report in fallback_reports:
-            xml_fallback = f"""<ENVELOPE>
+    fallback_reports = ["Stock Summary", "Stock Group Summary", "Stock Group Analysis", "Stock Status"]
+    requests_to_try.extend(
+        f"""<ENVELOPE>
     <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
     <BODY>
         <EXPORTDATA>
@@ -172,84 +173,134 @@ def get_all_tally_groups():
         </EXPORTDATA>
     </BODY>
 </ENVELOPE>"""
-            res_fb = tally_request(xml_fallback)
-            if res_fb:
-                import re
-                # Try to extract anything that looks like a name
-                names = re.findall(r'<DSPDISPNAME>(.*?)</DSPDISPNAME>', res_fb, re.IGNORECASE)
-                names.extend(re.findall(r'<NAME[^>]*>(.*?)</NAME>', res_fb, re.IGNORECASE))
-                for n in names:
-                    n = n.strip()
-                    if n and not is_guid(n) and n.upper() not in ["ALL MASTERS", "PRIMARY", "YES", "NO"]:
-                        groups.add(n.upper())
-            if REEL_GROUP.upper() in groups:
-                break
+        for report in fallback_reports
+    )
+
+    for xml in requests_to_try:
+        res = tally_request(xml)
+        if not res:
+            continue
+
+        if not is_unknown_tally_response(res) and "KRAFT PAPER" not in res.upper():
+            print(f"[DEBUG] Raw Tally StockGroup Response: {res[:500]}...")
+
+        try:
+            root = ET.fromstring(res)
+            for sg in root.findall('.//STOCKGROUP'):
+                name_elem = sg.find('NAME')
+                if name_elem is not None and name_elem.text:
+                    groups.add(name_elem.text.strip().upper())
+                else:
+                    name_attr = sg.get('NAME')
+                    if name_attr:
+                        groups.add(name_attr.strip().upper())
+
+            if not groups:
+                for elem in root.iter():
+                    if 'STOCKGROUP' in elem.tag.upper():
+                        text = (elem.text or "").strip()
+                        if text and not is_guid(text):
+                            groups.add(text.upper())
+        except Exception:
+            pass
+
+        if not groups:
+            parsed_names = parse_simple_names_from_response(res)
+            groups.update(
+                name for name in parsed_names
+                if name not in {"ALL MASTERS", "PRIMARY", "YES", "NO"}
+            )
+
+        if groups:
+            break
 
     groups.discard("ALL MASTERS")
     groups.discard("PRIMARY")
-    
-    if REEL_GROUP.upper() not in groups:
-        groups.add(REEL_GROUP.upper())
-    if OTHER_GROUP.upper() not in groups:
-        groups.add(OTHER_GROUP.upper())
-        
+
     return groups
 
 def get_all_tally_items():
     """Fetches all stock items with their GUIDs and PARENT from Tally for faster matching."""
     items = {} # name -> { 'guid': guid, 'parent': parent }
-    
-    xml = """<ENVELOPE>
+
+    requests_to_try = [
+        """<ENVELOPE>
     <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
     <BODY>
         <EXPORTDATA>
             <REQUESTDESC>
+                <REPORTNAME>List of Stock Items</REPORTNAME>
                 <STATICVARIABLES>
                     <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
                 </STATICVARIABLES>
-                <COLLECTIONNAME>StockItem</COLLECTIONNAME>
             </REQUESTDESC>
         </EXPORTDATA>
     </BODY>
-</ENVELOPE>"""
+</ENVELOPE>""",
+        """<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Collection</TYPE>
+        <ID>StockItem</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+                <FETCH>Parent</FETCH>
+                <FETCH>GUID</FETCH>
+                <FETCH>PartNo</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>""",
+    ]
 
-    res = tally_request(xml)
-    if not res:
-        return items
+    for xml in requests_to_try:
+        res = tally_request(xml)
+        if not res or is_unknown_tally_response(res):
+            continue
 
-    try:
-        root = ET.fromstring(res)
-        for si in root.findall('.//STOCKITEM'):
-            guid = si.get('GUID')
-            name = None
-            parent = None
-            
-            name_elem = si.find('NAME')
-            if name_elem is not None and name_elem.text:
-                name = name_elem.text.strip()
-            else:
-                name_attr = si.get('NAME')
-                if name_attr:
-                    name = name_attr.strip()
-            
-            parent_elem = si.find('PARENT')
-            if parent_elem is not None and parent_elem.text:
-                parent = parent_elem.text.strip()
-                
-            if name and guid:
-                items[name.upper()] = {'guid': guid, 'parent': parent}
+        try:
+            root = ET.fromstring(res)
+            for si in root.findall('.//STOCKITEM'):
+                guid = si.get('GUID')
+                name = None
+                parent = None
 
-    except Exception:
-        import re
-        si_blocks = re.findall(r'<STOCKITEM[^>]*>(.*?)</STOCKITEM>', res, re.DOTALL | re.IGNORECASE)
-        for block in si_blocks:
-            guid_match = re.search(r'GUID="(.*?)"', block, re.IGNORECASE)
-            name_match = re.search(r'<NAME[^>]*>(.*?)</NAME>', block, re.IGNORECASE)
-            parent_match = re.search(r'<PARENT[^>]*>(.*?)</PARENT>', block, re.IGNORECASE)
-            
-            if guid_match and name_match:
-                parent = parent_match.group(1).strip() if parent_match else None
-                items[name_match.group(1).strip().upper()] = {'guid': guid_match.group(1).strip(), 'parent': parent}
+                name_elem = si.find('NAME')
+                if name_elem is not None and name_elem.text:
+                    name = name_elem.text.strip()
+                else:
+                    name_attr = si.get('NAME')
+                    if name_attr:
+                        name = name_attr.strip()
+
+                parent_elem = si.find('PARENT')
+                if parent_elem is not None and parent_elem.text:
+                    parent = parent_elem.text.strip()
+
+                if name:
+                    items[name.upper()] = {'guid': guid, 'parent': parent}
+        except Exception:
+            import re
+            si_blocks = re.findall(r'<STOCKITEM[^>]*>(.*?)</STOCKITEM>', res, re.DOTALL | re.IGNORECASE)
+            for block in si_blocks:
+                guid_match = re.search(r'GUID="(.*?)"', block, re.IGNORECASE)
+                name_match = re.search(r'<NAME[^>]*>(.*?)</NAME>', block, re.IGNORECASE)
+                parent_match = re.search(r'<PARENT[^>]*>(.*?)</PARENT>', block, re.IGNORECASE)
+
+                if name_match:
+                    parent = parent_match.group(1).strip() if parent_match else None
+                    guid = guid_match.group(1).strip() if guid_match else None
+                    items[name_match.group(1).strip().upper()] = {'guid': guid, 'parent': parent}
+
+        if items:
+            break
 
     return items
 
@@ -272,9 +323,32 @@ def get_or_create_material_group(cursor, conn, group_name):
     return new_id
 
 def query_tally_item(item_name):
-    from xml.sax.saxutils import escape
     safe_name = escape(item_name)
-    xml = f"""<ENVELOPE>
+
+    requests_to_try = [
+        f"""<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Object</TYPE>
+        <SUBTYPE>Stock Item</SUBTYPE>
+        <ID TYPE="Name">{safe_name}</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+                <FETCH>Parent</FETCH>
+                <FETCH>GUID</FETCH>
+                <FETCH>PartNo</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>""",
+        f"""<ENVELOPE>
     <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
     <BODY>
         <EXPORTDATA>
@@ -282,26 +356,32 @@ def query_tally_item(item_name):
                 <STATICVARIABLES>
                     <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
                 </STATICVARIABLES>
-                <COLLECTIONNAME>StockItem</COLLECTIONNAME>
-                <OBJECTNAME>{safe_name}</OBJECTNAME>
+                <REPORTNAME>List of Stock Items</REPORTNAME>
             </REQUESTDESC>
         </EXPORTDATA>
     </BODY>
-</ENVELOPE>"""
-    res = tally_request(xml)
-    if not res:
-        return False, None, None
+</ENVELOPE>""",
+    ]
+
     import re
-    if "STOCKITEM" in res.upper() and safe_name.upper() in res.upper():
-        guid_match = re.search(r'GUID="(.*?)"', res, re.IGNORECASE)
-        erp_match = re.search(r'<PARTNO[^>]*>(.*?)</PARTNO>', res, re.IGNORECASE)
-        guid = guid_match.group(1).strip() if guid_match else None
-        erp = erp_match.group(1).strip() if erp_match else None
-        return True, erp, guid
+    for xml in requests_to_try:
+        res = tally_request(xml)
+        if not res or is_unknown_tally_response(res):
+            continue
+
+        if "STOCKITEM" in res.upper() and safe_name.upper() in res.upper():
+            guid_match = re.search(r'GUID="(.*?)"', res, re.IGNORECASE)
+            erp_match = re.search(r'<PARTNO[^>]*>(.*?)</PARTNO>', res, re.IGNORECASE)
+            guid = guid_match.group(1).strip() if guid_match else None
+            erp = erp_match.group(1).strip() if erp_match else None
+            return True, erp, guid
+
+        if item_name.strip().upper() in parse_simple_names_from_response(res):
+            return True, None, None
+
     return False, None, None
 
 def create_or_update_item(item_name, erp_code, target_group, action="Create"):
-    from xml.sax.saxutils import escape
     safe_name = escape(item_name)
     safe_group = escape(target_group)
     safe_erp = escape(erp_code)
@@ -337,6 +417,8 @@ def create_or_update_item(item_name, erp_code, target_group, action="Create"):
     res = tally_request(xml)
     if not res:
         return False, "No response from Tally"
+    if is_unknown_tally_response(res):
+        return False, response_error_message(res)
     # Success markers
     if "<CREATED>1</CREATED>" in res or "<ALTERED>1</ALTERED>" in res:
         return True, "Success"
@@ -361,7 +443,24 @@ def create_or_update_item(item_name, erp_code, target_group, action="Create"):
     err = re.search(r'<LINEERROR>(.*?)</LINEERROR>', res)
     if err:
         return False, err.group(1)
-    return False, "Failed to import"
+    return False, response_error_message(res)
+
+def response_error_message(response_text):
+    response_text = (response_text or "").strip()
+    if not response_text:
+        return "Empty response from Tally"
+
+    if is_unknown_tally_response(response_text):
+        return "Unknown Request from Tally"
+
+    import re
+    line_error = re.search(r'<LINEERROR>(.*?)</LINEERROR>', response_text, re.IGNORECASE)
+    if line_error:
+        return line_error.group(1).strip()
+
+    cleaned = re.sub(r"<[^>]+>", " ", response_text)
+    cleaned = " ".join(cleaned.split())
+    return cleaned[:200] if cleaned else "Failed to import"
 
 def main():
     try:
@@ -385,6 +484,8 @@ def main():
         log_terminal("ERROR", "No Stock Groups found. Check if Tally is open.")
         conn.close()
         return
+
+    log_terminal("INFO", f"Found {len(tally_groups)} stock groups in Tally.")
 
     # STEP 2: Fetch all Stock Items for faster matching
     log_terminal("INFO", "Fetching all Stock Items for batch matching...")
