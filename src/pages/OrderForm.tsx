@@ -37,6 +37,7 @@ export function OrderForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [orderDate, setOrderDate] = useState<string>(new Date().toISOString().slice(0,10));
+  const [isUniversal, setIsUniversal] = useState(false);
   const [companyId, setCompanyId] = useState("");
   const [poType, setPoType] = useState<"Verbal"|"Ref No.">("Verbal");
   const [poNumber, setPoNumber] = useState("");
@@ -169,11 +170,11 @@ export function OrderForm() {
   const itemOptions = useMemo(() => {
     const selectedCompanyName = normalizeCompanyName(companies.find((company) => company.id === companyId)?.name);
     return allItems
-      .filter((item) => !companyId || getItemCustomerName(item) === selectedCompanyName)
+      .filter((item) => isUniversal || !companyId || getItemCustomerName(item) === selectedCompanyName)
       .slice()
       .sort((a,b) => getItemDisplayName(a).localeCompare(getItemDisplayName(b)))
       .map(i => ({ value: i.id, label: getItemDisplayName(i) }));
-  }, [allItems, companyId, companies]);
+  }, [allItems, companyId, companies, isUniversal]);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const location = useLocation();
@@ -409,6 +410,7 @@ export function OrderForm() {
   };
 
   const handleEdit = (o: Order) => {
+    setIsUniversal(false);
     setEditingId(o.id);
     setOrderDate(o.orderDate || "");
     setCompanyId(o.companyId);
@@ -424,6 +426,7 @@ export function OrderForm() {
   };
 
   const resetForm = () => {
+    setIsUniversal(false);
     setEditingId(null);
     setOrderDate(new Date().toISOString().slice(0,10));
     setCompanyId("");
@@ -518,7 +521,7 @@ export function OrderForm() {
     setItemId(id);
     const it = allItems.find(i => i.id === id);
     const linkedCompanyId = resolveItemCompanyId(it);
-    if (!companyId && linkedCompanyId) {
+    if (!isUniversal && !companyId && linkedCompanyId) {
       setCompanyId(linkedCompanyId);
     }
     if (it && typeof it.erp !== 'undefined') setErpCode((it.erp || "").toString());
@@ -531,9 +534,14 @@ export function OrderForm() {
   const handleCompanyChange = (id: string) => {
     setCompanyId(id);
     if (!id) {
-      setItemId("");
+      if (!isUniversal) {
+        setItemId("");
+        setErpCode("");
+        setRate("");
+      }
       return;
     }
+    if (isUniversal) return;
     if (!itemId) return;
     const selectedItem = allItems.find((item) => item.id === itemId);
     const resolvedCompanyId = resolveItemCompanyId(selectedItem);
@@ -544,6 +552,17 @@ export function OrderForm() {
     }
   };
 
+  useEffect(() => {
+    if (isUniversal || !companyId || !itemId) return;
+    const selectedItem = allItems.find((item) => item.id === itemId);
+    const resolvedCompanyId = resolveItemCompanyId(selectedItem);
+    if (resolvedCompanyId && resolvedCompanyId !== companyId) {
+      setItemId("");
+      setErpCode("");
+      setRate("");
+    }
+  }, [allItems, companyId, isUniversal, itemId]);
+
   // Auto-open edit when ?edit=<id> in URL (used by Plant Head edit link)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -553,6 +572,7 @@ export function OrderForm() {
       if (o) {
         // populate form
         setIsFormOpen(true);
+        setIsUniversal(false);
         setEditingId(o.id);
         setOrderDate(o.orderDate || "");
         setCompanyId(o.companyId);
@@ -604,6 +624,16 @@ export function OrderForm() {
       {isFormOpen && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-lg border border-slate-200 space-y-6 max-w-4xl mx-auto">
           <div className="space-y-4">
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={isUniversal}
+                onChange={(e) => setIsUniversal(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              Universal
+            </label>
+
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Order Date</label>
               <input type="date" value={orderDate} onChange={(e)=>setOrderDate(e.target.value)} className="w-full border border-slate-300 rounded-md p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />

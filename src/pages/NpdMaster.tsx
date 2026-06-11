@@ -16,6 +16,7 @@ const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "production", label: "Production" },
   { key: "invoiced", label: "Invoiced" },
   { key: "balance", label: "Balance" },
+  { key: "stockValue", label: "Value" },
   { key: "erp", label: "ERP" },
   { key: "rate", label: "Rate" },
   { key: "uom", label: "UOM" },
@@ -140,6 +141,13 @@ function formatCellValue(value: NpdRecord[string]) {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
+}
+
+function formatStockValue(rate: NpdRecord[string], balance: NpdRecord[string]) {
+  const rateNumber = Number(rate);
+  const balanceNumber = Number(balance);
+  if (!Number.isFinite(rateNumber) || !Number.isFinite(balanceNumber)) return "-";
+  return (rateNumber * balanceNumber).toFixed(2);
 }
 
 export function NpdMaster() {
@@ -312,7 +320,10 @@ export function NpdMaster() {
                   <tr key={row.id} className="divide-x divide-black transition-colors hover:bg-slate-50">
                     {NPD_COLUMNS.map((column) => {
                       const isWrappedText = column.key === "itemName" || column.key === "customerName";
-                      const rawValue = row[column.key];
+                      const rawValue =
+                        column.key === "stockValue"
+                          ? formatStockValue(row.rate, row.balance)
+                          : row[column.key];
                       return (
                         <td
                           key={column.key}

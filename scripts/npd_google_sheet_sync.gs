@@ -65,6 +65,7 @@ function performFullSync_(config, skipAlreadySynced) {
 
   const allRowsToSync = [];
   const allRowIndicesToUpdate = [];
+  const idHeader = getSyncIdHeader_(config);
 
   const nameMap = new Map();
   const duplicateRowIndices = [];
@@ -85,7 +86,7 @@ function performFullSync_(config, skipAlreadySynced) {
     });
 
     const rowKey = String(
-      mapped[config.idHeader] || mapped["Id"] || mapped["Company"] || mapped["Company Name"] || mapped["name"] || ''
+      mapped[idHeader] || mapped["Id"] || mapped["Company"] || mapped["Company Name"] || mapped["name"] || ''
     ).trim();
     if (!rowKey) continue;
 
@@ -276,6 +277,10 @@ function performFlush_(config, idHeader) {
   clearPendingQueue_(config);
   deleteFlushTriggers_(config);
   return JSON.parse(response.getContentText());
+}
+
+function getSyncIdHeader_(config) {
+  return String(config.idHeader || config.npdIdHeader || '').trim();
 }
 
 function updateTimestamps_(sheet, pendingRows, idHeader, syncHeader, timestamp) {
