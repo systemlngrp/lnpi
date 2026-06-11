@@ -13,6 +13,7 @@ export function GateEntryMaster() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<{ filename: string; slotNo: number } | null>(null);
 
   const filteredEntries = useMemo(
     () =>
@@ -154,10 +155,34 @@ export function GateEntryMaster() {
                 </div>
               ) : (
                 selectedPhotos.map((photo) => (
-                  <PhotoCard key={photo.id} filename={photo.photo} slotNo={photo.slotNo} />
+                  <PhotoCard
+                    key={photo.id}
+                    filename={photo.photo}
+                    slotNo={photo.slotNo}
+                    onPreview={(filename, photoSlotNo) => setPreviewPhoto({ filename, slotNo: photoSlotNo })}
+                  />
                 ))
               )}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {previewPhoto ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4">
+          <div className="relative w-full max-w-5xl rounded-2xl bg-white p-3 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute right-3 top-3 rounded-full border border-slate-300 bg-white p-2 text-slate-700 transition hover:bg-slate-100"
+            >
+              <X size={18} />
+            </button>
+            <img
+              src={`/uploads/${previewPhoto.filename}`}
+              alt={`Gate entry slot ${previewPhoto.slotNo}`}
+              className="max-h-[80vh] w-full rounded-xl object-contain"
+            />
           </div>
         </div>
       ) : null}
@@ -165,7 +190,15 @@ export function GateEntryMaster() {
   );
 }
 
-function PhotoCard({ filename, slotNo }: { filename: string; slotNo: number }) {
+function PhotoCard({
+  filename,
+  slotNo,
+  onPreview,
+}: {
+  filename: string;
+  slotNo: number;
+  onPreview: (filename: string, slotNo: number) => void;
+}) {
   const isPdf = filename.toLowerCase().endsWith(".pdf");
   const href = `/uploads/${filename}`;
 
@@ -178,13 +211,17 @@ function PhotoCard({ filename, slotNo }: { filename: string; slotNo: number }) {
           <a href={href} target="_blank" rel="noreferrer" className="mt-2 text-[10px] bg-red-700 text-white px-3 py-1 rounded-full uppercase tracking-wider hover:bg-red-800 transition">View PDF</a>
         </div>
       ) : (
-        <a href={href} target="_blank" rel="noreferrer" className="block border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => onPreview(filename, slotNo)}
+          className="block w-full border-b border-slate-200"
+        >
           <img
             src={href}
             alt={`Gate entry slot ${slotNo}`}
             className="h-44 w-full object-cover cursor-zoom-in"
           />
-        </a>
+        </button>
       )}
       <div className="px-4 py-3 text-sm font-semibold text-slate-600">Pic {slotNo}</div>
     </div>
