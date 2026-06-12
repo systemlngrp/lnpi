@@ -54,8 +54,8 @@ function getMaterialRapcFromSize(size: string | number | undefined | null) {
   return String(numericSize * 10);
 }
 
-function getReelDisplayName(erpCode: string | number, size: number, uom: string, gsm: number, bf: number) {
-  return `${erpCode} - Size: ${size} ${uom} X GSM: ${gsm} X BF: ${bf}`;
+function getReelDisplayName(erpCode: string | number, size: number, uom: string, gsm: number, bf: number, color: string) {
+  return `${erpCode} - Size: ${size} ${uom} X GSM: ${gsm} X BF: ${bf}   Color - ${color}`;
 }
 
 function getNextNumericErpCode(materials: Material[]) {
@@ -119,6 +119,7 @@ export function Materials() {
   }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasNormalizedExistingReelNamesRef = useRef(false);
 
   const reelGroup = useMemo(
     () => materialGroups.find((group) => group.name.trim().toLowerCase() === "reel") || null,
@@ -300,6 +301,48 @@ export function Materials() {
         .map((color) => ({ value: color.name, label: color.name })),
     [colors]
   );
+
+  useEffect(() => {
+    if (hasNormalizedExistingReelNamesRef.current) return;
+    if (materials.length === 0) return;
+
+    const timestamp = new Date().toISOString();
+    let hasChanges = false;
+
+    const nextMaterials = materials.map((material) => {
+      if (material.type !== "Reel") return material;
+
+      const erpCode = String(material.erpCode || "").trim();
+      const uom = String(material.uom || "").trim();
+      const color = String(material.color || "").trim();
+      const size = Number(material.size);
+      const gsm = Number(material.gsm);
+      const bf = Number(material.bf);
+
+      if (!erpCode || !uom || !color || !Number.isFinite(size) || !Number.isFinite(gsm) || !Number.isFinite(bf)) {
+        return material;
+      }
+
+      const expectedName = getReelDisplayName(erpCode, size, uom, gsm, bf, color);
+      if (material.name === expectedName) return material;
+
+      hasChanges = true;
+      return {
+        ...material,
+        name: expectedName,
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+      };
+    });
+
+    hasNormalizedExistingReelNamesRef.current = true;
+    if (!hasChanges) return;
+
+    void setMaterials(nextMaterials).catch((error) => {
+      console.error("Failed to normalize existing reel material names:", error);
+      hasNormalizedExistingReelNamesRef.current = false;
+    });
+  }, [materials, setMaterials]);
 
   function resetForm(nextMaterials = materials, nextReelGroupId = reelGroup?.id || "") {
     setFormData(createInitialFormState(nextMaterials, nextReelGroupId));
@@ -497,7 +540,7 @@ export function Materials() {
         id: editingId || crypto.randomUUID(),
         type: normalizedType,
         erpCode: erpCode || undefined,
-        name: normalizedType === "Reel" ? getReelDisplayName(erpCode, Number(size), uom, Number(gsm), Number(bf)) : formData.name.trim(),
+        name: normalizedType === "Reel" ? getReelDisplayName(erpCode, Number(size), uom, Number(gsm), Number(bf), color) : formData.name.trim(),
         uom,
         materialGroupId: normalizedType === "Reel" ? reelGroupId || undefined : formData.materialGroupId || undefined,
         color: normalizedType === "Reel" ? color : null,
@@ -534,7 +577,7 @@ export function Materials() {
 
   function downloadTemplate() {
     const templateData = [
-      { "Type": "Reel", "ERP Code": "1001", "Item Name": "", "Item Group": "Reel", "MRR No.": "MI/26-27/00001", "MRR Date": "2026-06-02", "Supplier Name": "Bizskill", "Our Reel No.": "10001", "Reel Qty": 250.5, "Unit": "CM", "Size": 120, "GSM": 150, "BF": 18, "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" },
+      { "Type": "Reel", "ERP Code": "1001", "Item Name": "", "Item Group": "Reel", "MRR No.": "MI/26-27/00001", "MRR Date": "2026-06-02", "Supplier Name": "Bizskill", "Our Reel No.": "10001", "Reel Qty": 250.5, "Unit": "CM", "Size": 120, "GSM": 150, "BF": 18, "Color": "LG", "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" },
       { "Type": "Other", "ERP Code": "2001", "Item Name": "Service", "Item Group": "Consumable", "MRR No.": "", "MRR Date": "", "Supplier Name": "", "Our Reel No.": "", "Reel Qty": "", "Unit": "CM", "Size": "", "GSM": "", "BF": "", "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" }
     ];
     const ws = XLSX.utils.json_to_sheet(templateData);
@@ -603,12 +646,13 @@ export function Materials() {
           const sizeValue = parseNumericInput(String(row["Size"] ?? ""));
           const gsmValue = parseNumericInput(String(row["GSM"] ?? ""));
           const bfValue = parseNumericInput(String(row["BF"] ?? ""));
+          const colorValue = String(row["Color"] ?? "").trim();
           const openingQtyValue = parseNumericInput(String(row["Opening Qty"] ?? ""));
           const openingRateValue = parseNumericInput(String(row["Opening Rate"] ?? ""));
           const openingValueInput = parseNumericInput(String(row["Opening Value"] ?? ""));
           const remarks = String(row["Remarks"] ?? "").trim();
           const activeValue = String(row["Active"] || "Yes").trim() === "No" ? "No" : "Yes";
-          if (type === "Reel" && (sizeValue === "" || gsmValue === "" || bfValue === "")) throw new Error(`Row ${index + 2}: Reel rows require Size, GSM, and BF.`);
+          if (type === "Reel" && (sizeValue === "" || gsmValue === "" || bfValue === "" || !colorValue)) throw new Error(`Row ${index + 2}: Reel rows require Size, GSM, BF, and Color.`);
           if (type === "Reel") if (!mrrNo || !mrrDate || !supplierName || !ourReelNo || reelQtyValue === "") throw new Error(`Row ${index + 2}: Reel rows require MRR No., MRR Date, Supplier Name, Our Reel No., and Reel Qty.`);
           if (type === "Other" && !itemName) throw new Error(`Row ${index + 2}: Other rows require Item Name.`);
           let materialGroupId: string | undefined = undefined;
@@ -621,10 +665,10 @@ export function Materials() {
             materialGroupId = matchedGroup.id;
           }
           const openingValue = openingValueInput !== "" ? Number(openingValueInput) : openingQtyValue !== "" && openingRateValue !== "" ? Number(openingQtyValue) * Number(openingRateValue) : undefined;
-          const generatedName = type === "Reel" ? getReelDisplayName(erpCode, Number(sizeValue), unit, Number(gsmValue), Number(bfValue)) : itemName;
+          const generatedName = type === "Reel" ? getReelDisplayName(erpCode, Number(sizeValue), unit, Number(gsmValue), Number(bfValue), colorValue) : itemName;
           const existing = nextMaterials.find((material) => type === "Reel" ? normalizeText(material.erpCode) === normalizeText(erpCode) : normalizeText(material.name) === normalizeText(generatedName));
           const nextMaterial: Material = {
-            id: existing?.id || crypto.randomUUID(), type, erpCode: erpCode || undefined, name: generatedName, uom: unit, materialGroupId, size: type === "Reel" && sizeValue !== "" ? Number(sizeValue) : undefined, gsm: type === "Reel" && gsmValue !== "" ? Number(gsmValue) : undefined, bf: type === "Reel" && bfValue !== "" ? Number(bfValue) : undefined,
+            id: existing?.id || crypto.randomUUID(), type, erpCode: erpCode || undefined, name: generatedName, uom: unit, materialGroupId, color: type === "Reel" ? colorValue : null, size: type === "Reel" && sizeValue !== "" ? Number(sizeValue) : undefined, gsm: type === "Reel" && gsmValue !== "" ? Number(gsmValue) : undefined, bf: type === "Reel" && bfValue !== "" ? Number(bfValue) : undefined,
             openingQty: type === "Reel" ? Number((reelOpeningQtyByErp.get(erpCode) || 0) + (reelOpeningBalanceByErp.get(erpCode) || 0)) || undefined : openingQtyValue === "" ? undefined : Number(openingQtyValue),
             openingRate: openingRateValue === "" ? undefined : Number(openingRateValue),
             openingValue: type === "Reel" ? (openingValueInput !== "" ? Number(openingValueInput) : Number((Number(reelOpeningQtyByErp.get(erpCode) || 0) + (reelOpeningBalanceByErp.get(erpCode) || 0)) * Number(openingRateValue || 0))) || undefined : openingValue,
