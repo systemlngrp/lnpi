@@ -73,7 +73,7 @@ const formulaCards = [
     description: "This is the TYPE Based Logic option for Cutting Size in Settings.",
   },
   {
-    title: "Line Required (Nos)",
+    title: "Liner Required (Nos)",
     formula: "If ERP Code is blank, keep blank. If PLY is 3, use the same value as Paper Required (Nos). If PLY is 5, use Paper Required (Nos) x 2. If PLY is 2 and TYPE is 2 PLY LINER, use Planned Quantity divided by (UPS x No. of ups in Cutting (For Plates)).",
     description: "This field is auto-calculated in Production Form from the selected item type, ply, planned quantity, UPS, and No. of ups in Cutting (For Plates).",
   },
@@ -284,7 +284,7 @@ const fieldRules = [
     validation: "Read-only in Production Form.",
   },
   {
-    field: "Line Required (Nos)",
+    field: "Liner Required (Nos)",
     source: "Auto-calculated",
     formula: "If ERP Code is blank, keep blank. If PLY is 3, use the same value as Paper Required (Nos). If PLY is 5, use Paper Required (Nos) x 2. If PLY is 2 and TYPE is 2 PLY LINER, use Planned Quantity divided by (UPS x No. of ups in Cutting (For Plates)).",
     validation: "Read-only in Production Form.",

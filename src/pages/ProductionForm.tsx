@@ -983,8 +983,8 @@ export function ProductionForm() {
                 step="0.00001"
                 helpText="Formula: Top Paper Weight (KG) + Liner Weight (KG)."
               /> : null}
-              {showField("Line Required (Nos)") ? <FormInput
-                label="Line Required (Nos)"
+              {(showField("Liner Required (Nos)") || showField("Line Required (Nos)")) ? <FormInput
+                label="Liner Required (Nos)"
                 value={formData.lineRequiredNos}
                 readOnly
                 type="number"

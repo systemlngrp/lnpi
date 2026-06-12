@@ -358,7 +358,39 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const counts: Record<string, number> = {
     "/material-receipt/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
     "/material-receipt/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
-    "/production/pending": schedules.filter(s => Number(s.qty || 0) > Number(s.producedQty || 0) + Number(s.canceledQty || 0)).length,
+    "/production/pending": (() => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const cutoffDate = new Date(today);
+      cutoffDate.setDate(cutoffDate.getDate() + 2);
+      cutoffDate.setHours(23, 59, 59, 999);
+
+      const getPendingProductionQty = (schedule: OrderSchedule) =>
+        Math.max(
+          Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
+          0
+        );
+
+      const parseLocalYmd = (dateStr?: string) => {
+        if (!dateStr) return null;
+        const match = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!match) return null;
+        const year = Number(match[1]);
+        const monthIndex = Number(match[2]) - 1;
+        const day = Number(match[3]);
+        const date = new Date(year, monthIndex, day);
+        if (Number.isNaN(date.getTime())) return null;
+        date.setHours(0, 0, 0, 0);
+        return date;
+      };
+
+      return schedules.filter((schedule) => {
+        if (getPendingProductionQty(schedule) <= 0) return false;
+        const scheduledDate = parseLocalYmd(schedule.scheduledDate);
+        if (!scheduledDate) return false;
+        return scheduledDate.getTime() <= cutoffDate.getTime();
+      }).length;
+    })(),
     "/production/pending-npd": schedules.filter((schedule) => {
       const order = orders.find((row) => row.id === schedule.orderId);
       if (!order || order.status === "Cancelled") return false;

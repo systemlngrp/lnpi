@@ -40,7 +40,7 @@ export const PRODUCTION_FORM_COLUMN_OPTIONS = [
   "Top Paper Weight (KG)",
   "Liner Weight (KG)",
   "Total Job Weight",
-  "Line Required (Nos)",
+  "Liner Required (Nos)",
   "Sheet Weight",
   "Plate/PHP Weight",
   "Total Paper Wt",
@@ -65,7 +65,10 @@ export function parseProductionFormVisibleColumns(raw?: string | null) {
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      const valid = parsed.filter((value): value is string =>
+      const normalized = parsed.map((value) =>
+        value === "Line Required (Nos)" ? "Liner Required (Nos)" : value
+      );
+      const valid = normalized.filter((value): value is string =>
         typeof value === "string" && PRODUCTION_FORM_COLUMN_OPTIONS.includes(value as (typeof PRODUCTION_FORM_COLUMN_OPTIONS)[number])
       );
       return valid.length > 0 ? valid : [...PRODUCTION_FORM_COLUMN_OPTIONS];

@@ -388,7 +388,7 @@ export function OperationDashboard() {
       "Top Paper Wt (KG)": r.production.topPaperWeightKg ?? "-",
       "Liner Wt (KG)": r.production.linerWeightKg ?? "-",
       "Total Job Wt": r.production.totalJobWeight ?? "-",
-      "Line Req.": r.production.lineRequiredNos ?? "-",
+      "Liner Req.": r.production.lineRequiredNos ?? "-",
       "Total Wt": r.production.totalPaperWeight ?? "-",
       "Avg Wt": r.production.avgWeight ?? "-",
       Wastage: r.production.wastage ?? "-",

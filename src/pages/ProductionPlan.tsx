@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, OrderSchedule, Order, Company, SampleRequest } from "../types";
+import { Production, OrderSchedule, Order, Company, SampleRequest, Item } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
 import { ClientPagination } from "../components/ClientPagination";
+import { Spinner } from "../components/Spinner";
 import { FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -13,20 +14,23 @@ import { fetchNpdItems } from "../lib/npdItems";
 import { useClientPagination } from "../hooks/useClientPagination";
 
 export function ProductionPlan() {
-  const [productions] = useData<Production>("productions", []);
-  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
-  const [orders] = useData<Order>("orders", []);
-  const [companies] = useData<Company>("companies", []);
-  const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
+  const [productions, , productionsLoading] = useData<Production>("productions", []);
+  const [schedules, , schedulesLoading] = useData<OrderSchedule>("orders_schedule", []);
+  const [orders, , ordersLoading] = useData<Order>("orders", []);
+  const [companies, , companiesLoading] = useData<Company>("companies", []);
+  const [sampleRequests, , sampleRequestsLoading] = useData<SampleRequest>("sample_requests", []);
   const [npdItems, setNpdItems] = useState<Item[]>([]);
+  const [npdLoading, setNpdLoading] = useState(true);
 
   useEffect(() => {
+    setNpdLoading(true);
     fetchNpdItems()
       .then(setNpdItems)
       .catch((error) => {
         console.error("Failed to fetch NPD items for Production Plan:", error);
         setNpdItems([]);
-      });
+      })
+      .finally(() => setNpdLoading(false));
   }, []);
 
   const todayStr = useMemo(() => {
@@ -37,6 +41,13 @@ export function ProductionPlan() {
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [searchTerm, setSearchTerm] = useState("");
   const allowExports = exportsAllowed();
+  const isLoading =
+    productionsLoading ||
+    schedulesLoading ||
+    ordersLoading ||
+    companiesLoading ||
+    sampleRequestsLoading ||
+    npdLoading;
 
   const normalizeDate = (dStr: string) => {
     if (!dStr) return "";
@@ -108,10 +119,12 @@ export function ProductionPlan() {
         "L3": format2(p.l3),
         "GSM": format2(p.gsm),
         "Least GSM": format2(p.leastGsm),
+        "Paper Required (Nos)": format2(p.paperRequiredNos),
         "Reel As Per Calculation": format2(p.reelAsPerCalc),
         "Reel Actual Trim": format2(p.reelActualWithTrimming),
         "Cutting Trim": format2(p.cuttingWithTrimming),
         "Planned Production (Meter)": format2(p.plannedProductionInMeter),
+        "Liner Required (Nos)": format2(p.lineRequiredNos),
         "Sheet Weight": format2(p.sheetWeight),
         "Total Paper Weight": format2(p.totalPaperWeight),
         "Realization Per Kg": format2(p.realizationPerKg),
@@ -181,6 +194,14 @@ export function ProductionPlan() {
       />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+        {isLoading ? (
+          <div className="flex min-h-[220px] items-center justify-center px-6 py-12">
+            <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
+              <Spinner size={28} />
+              <span>Loading production plan...</span>
+            </div>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100">
@@ -203,10 +224,12 @@ export function ProductionPlan() {
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">L3</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">GSM</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Least GSM</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Paper Required (Nos)</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Reel As Per Calculation</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Reel Actual Trim</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Cutting Trim</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Planned Production (Meter)</th>
+                <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Liner Required (Nos)</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Sheet Weight</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Total Paper Weight</th>
                 <th className="px-4 py-3 text-right text-[10px] font-bold text-black uppercase border border-black whitespace-nowrap">Realization Per Kg</th>
@@ -218,7 +241,7 @@ export function ProductionPlan() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={28} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
+                  <td colSpan={30} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
                 </tr>
               ) : (
                 paginatedList.map((p, index) => {
@@ -253,10 +276,12 @@ export function ProductionPlan() {
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.l3)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.gsm)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.leastGsm)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.paperRequiredNos)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.reelAsPerCalc)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.reelActualWithTrimming)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.cuttingWithTrimming)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.plannedProductionInMeter)}</td>
+                      <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.lineRequiredNos)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.sheetWeight)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.totalPaperWeight)}</td>
                       <td className="px-4 py-3 text-right text-[11px] text-black border border-black whitespace-nowrap">{format2(p.realizationPerKg)}</td>
@@ -270,6 +295,7 @@ export function ProductionPlan() {
             </tbody>
           </table>
         </div>
+        )}
         <ClientPagination
           page={page}
           pageSize={pageSize}
