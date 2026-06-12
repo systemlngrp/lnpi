@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Edit, Plus, Trash2, Search, Upload, Download, CheckCircle, Package, Layers, Disc } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine, MaterialReturn, MaterialReturnLine, MaterialReturnReelLine, Supplier, UnitMaster, Item } from "../types";
+import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine, MaterialReturn, MaterialReturnLine, MaterialReturnReelLine, Supplier, UnitMaster, Item, ColorMaster } from "../types";
 import { Spinner } from "../components/Spinner";
 import { ClientPagination } from "../components/ClientPagination";
 import { Select } from "../components/Select";
@@ -85,6 +85,7 @@ function createInitialFormState(materials: Material[], reelGroupId = "") {
     name: "",
     uom: "CM",
     materialGroupId: reelGroupId,
+    color: "",
     size: "",
     gsm: "",
     bf: "",
@@ -100,6 +101,7 @@ export function Materials() {
   const navigate = useNavigate();
   const [materials, setMaterials] = useData<Material>("materials", []);
   const [materialGroups, setMaterialGroups] = useData<MaterialGroup>("material-groups", []);
+  const [colors] = useData<ColorMaster>("color_masters", []);
   const [units, setUnits] = useData<UnitMaster>("units", []);
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
@@ -140,6 +142,10 @@ export function Materials() {
   const [newUnitName, setNewUnitName] = useState("");
   const [savingUnit, setSavingUnit] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([]);
+  const [showBulkColorModal, setShowBulkColorModal] = useState(false);
+  const [bulkColor, setBulkColor] = useState("");
+  const [isApplyingBulkColor, setIsApplyingBulkColor] = useState(false);
 
   const movementSummaryMap = useMemo(() => {
     const map = new Map<string, { receipts: number; issues: number; returns: number }>();
@@ -286,6 +292,15 @@ export function Materials() {
     [units]
   );
 
+  const colorOptions = useMemo(
+    () =>
+      colors
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((color) => ({ value: color.name, label: color.name })),
+    [colors]
+  );
+
   function resetForm(nextMaterials = materials, nextReelGroupId = reelGroup?.id || "") {
     setFormData(createInitialFormState(nextMaterials, nextReelGroupId));
     setEditingId(null);
@@ -303,6 +318,7 @@ export function Materials() {
         type: "Reel" as MaterialType,
         uom: "CM",
         materialGroupId: reelGroup?.id || current.materialGroupId,
+        color: current.color || "",
         erpCode: editingId ? current.erpCode : getNextNumericErpCode(materials),
       };
     }
@@ -310,6 +326,7 @@ export function Materials() {
       ...current,
       type: "Other" as MaterialType,
       uom: "CM",
+      color: "",
       erpCode: editingId ? current.erpCode : getNextOtherErpCode(materials),
     };
   }
@@ -354,6 +371,7 @@ export function Materials() {
       name: material.type === "Other" ? material.name : "",
       uom: material.uom || "CM",
       materialGroupId: material.materialGroupId || (material.type === "Reel" ? reelGroup?.id || "" : ""),
+      color: material.color || "",
       size: formatOptionalNumber(material.size),
       gsm: formatOptionalNumber(material.gsm),
       bf: formatOptionalNumber(material.bf),
@@ -448,12 +466,13 @@ export function Materials() {
     const size = parseNumericInput(formData.size);
     const gsm = parseNumericInput(formData.gsm);
     const bf = parseNumericInput(formData.bf);
+    const color = String(formData.color || "").trim();
     const openingQty = parseNumericInput(formData.openingQty);
     const openingRate = parseNumericInput(formData.openingRate);
     const openingValueInput = parseNumericInput(formData.openingValue);
     const openingValue = openingValueInput !== "" ? Number(openingValueInput) : openingQty !== "" && openingRate !== "" ? Number(openingQty) * Number(openingRate) : undefined;
-    if (normalizedType === "Reel" && (size === "" || gsm === "" || bf === "")) {
-      alert("Size, GSM, and BF are required for Reel.");
+    if (normalizedType === "Reel" && (size === "" || gsm === "" || bf === "" || !color)) {
+      alert("Size, GSM, BF, and Color are required for Reel.");
       return;
     }
     if (normalizedType === "Other" && !formData.materialGroupId) {
@@ -481,6 +500,7 @@ export function Materials() {
         name: normalizedType === "Reel" ? getReelDisplayName(erpCode, Number(size), uom, Number(gsm), Number(bf)) : formData.name.trim(),
         uom,
         materialGroupId: normalizedType === "Reel" ? reelGroupId || undefined : formData.materialGroupId || undefined,
+        color: normalizedType === "Reel" ? color : null,
         size: normalizedType === "Reel" ? Number(size) : undefined,
         gsm: normalizedType === "Reel" ? Number(gsm) : undefined,
         bf: normalizedType === "Reel" ? Number(bf) : undefined,
@@ -671,6 +691,76 @@ export function Materials() {
     setToDate("");
   }
 
+  function toggleMaterialSelection(materialId: string) {
+    setSelectedMaterialIds((prev) =>
+      prev.includes(materialId) ? prev.filter((id) => id !== materialId) : [...prev, materialId]
+    );
+  }
+
+  function togglePageSelection() {
+    const currentPageReelIds = paginatedMaterials.filter((material) => material.type === "Reel").map((material) => material.id);
+    if (currentPageReelIds.length === 0) return;
+    const allSelected = currentPageReelIds.every((id) => selectedMaterialIds.includes(id));
+    setSelectedMaterialIds((prev) =>
+      allSelected
+        ? prev.filter((id) => !currentPageReelIds.includes(id))
+        : Array.from(new Set([...prev, ...currentPageReelIds]))
+    );
+  }
+
+  function openBulkColorModal() {
+    if (selectedMaterialIds.length === 0) {
+      alert("Select at least one reel material to update color.");
+      return;
+    }
+    setBulkColor("");
+    setShowBulkColorModal(true);
+  }
+
+  async function applyBulkColorUpdate() {
+    const normalizedColor = String(bulkColor || "").trim();
+    if (!normalizedColor) {
+      alert("Select a color to apply.");
+      return;
+    }
+
+    const selectedMaterials = materials.filter((material) => selectedMaterialIds.includes(material.id));
+    const nonReelSelected = selectedMaterials.filter((material) => material.type !== "Reel");
+    if (nonReelSelected.length > 0) {
+      alert("Bulk color update is allowed only for reel materials.");
+      return;
+    }
+
+    if (selectedMaterials.length === 0) {
+      alert("No valid reel materials selected.");
+      return;
+    }
+
+    setIsApplyingBulkColor(true);
+    try {
+      const timestamp = new Date().toISOString();
+      const nextMaterials = materials.map((material) =>
+        selectedMaterialIds.includes(material.id)
+          ? {
+              ...material,
+              color: normalizedColor,
+              updatedBy: "System User",
+              updateTimestamp: timestamp,
+            }
+          : material
+      );
+      await setMaterials(nextMaterials);
+      setSelectedMaterialIds([]);
+      setShowBulkColorModal(false);
+      setBulkColor("");
+    } catch (error) {
+      console.error("Failed to apply bulk color update:", error);
+      alert("Failed to update selected material colors.");
+    } finally {
+      setIsApplyingBulkColor(false);
+    }
+  }
+
   const groupOptions = materialGroups
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -826,6 +916,17 @@ export function Materials() {
                       className="w-full rounded border-2 border-black px-4 py-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-blue-700 font-bold">
+                      Color <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      value={formData.color}
+                      onChange={(value) => setFormData((prev) => ({ ...prev, color: value }))}
+                      options={colorOptions}
+                      placeholder="Select color"
+                    />
+                  </div>
                 </>
               ) : (
                 <div className="space-y-2 md:col-span-2">
@@ -955,6 +1056,14 @@ export function Materials() {
                 </button>
                 <button
                   type="button"
+                  onClick={openBulkColorModal}
+                  className="inline-flex items-center justify-center gap-2 rounded border border-black bg-violet-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-violet-700 whitespace-nowrap shadow"
+                >
+                  <Layers size={14} /> Bulk Color Update
+                  {selectedMaterialIds.length > 0 ? ` (${selectedMaterialIds.length})` : ""}
+                </button>
+                <button
+                  type="button"
                   onClick={handleOpenNew}
                   className="inline-flex items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 whitespace-nowrap border border-black shadow"
                 >
@@ -1054,7 +1163,16 @@ export function Materials() {
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white divide-x divide-indigo-800">
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Tally Sync", "Tally ID", "Actions"].map((heading) => (
+                    <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={paginatedMaterials.filter((material) => material.type === "Reel").length > 0 && paginatedMaterials.filter((material) => material.type === "Reel").every((material) => selectedMaterialIds.includes(material.id))}
+                        onChange={togglePageSelection}
+                        className="h-4 w-4 accent-white"
+                        title="Select reel materials on this page"
+                      />
+                    </th>
+                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Color", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Tally Sync", "Tally ID", "Actions"].map((heading) => (
                       <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
                         {heading}
                       </th>
@@ -1064,7 +1182,7 @@ export function Materials() {
                 <tbody className="divide-y divide-black">
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={16} className="px-6 py-10 text-center text-slate-500 font-medium italic">
+                      <td colSpan={18} className="px-6 py-10 text-center text-slate-500 font-medium italic">
                         No materials matching your search criteria.
                       </td>
                     </tr>
@@ -1074,6 +1192,16 @@ export function Materials() {
                       const balance = Number(material.openingQty || 0) + mvt.receipts + mvt.returns - mvt.issues;
                       return (
                         <tr key={material.id} className={`hover:bg-indigo-50/30 transition-colors divide-x divide-black ${material.active === "No" ? "opacity-50 grayscale" : ""}`}>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedMaterialIds.includes(material.id)}
+                              disabled={material.type !== "Reel"}
+                              onChange={() => toggleMaterialSelection(material.id)}
+                              className="h-4 w-4 accent-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+                              title={material.type === "Reel" ? "Select reel material" : "Bulk color update is only for reel materials"}
+                            />
+                          </td>
                           <td className="px-4 py-3 text-black font-bold text-xs">{(page - 1) * pageSize + index + 1}</td>
                           <td className="px-4 py-3 text-black text-[10px] font-bold uppercase">{material.type}</td>
                           <td className="px-4 py-3 text-black text-xs font-black tracking-tight">{material.erpCode || ""}</td>
@@ -1081,6 +1209,7 @@ export function Materials() {
                           <td className="px-4 py-3 text-black text-xs">{material.size ?? "-"}</td>
                           <td className="px-4 py-3 text-black text-xs">{material.gsm ?? "-"}</td>
                           <td className="px-4 py-3 text-black text-xs">{material.bf ?? "-"}</td>
+                          <td className="px-4 py-3 text-black text-xs font-bold">{material.type === "Reel" ? material.color || "-" : "-"}</td>
                           <td className="px-4 py-3 text-black text-xs font-medium bg-slate-50">{material.openingQty?.toLocaleString() ?? "0"}</td>
                           <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/30">{mvt.receipts.toLocaleString()}</td>
                           <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/30">{mvt.issues.toLocaleString()}</td>
@@ -1164,6 +1293,49 @@ export function Materials() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showBulkColorModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl border-2 border-black bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-black text-black uppercase">Bulk Color Update</h3>
+            <p className="mt-2 text-sm font-medium text-slate-600">
+              Apply one color to {selectedMaterialIds.length} selected reel material{selectedMaterialIds.length === 1 ? "" : "s"}.
+            </p>
+            <div className="mt-5 space-y-2">
+              <label className="text-blue-700 font-bold">
+                Color <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={bulkColor}
+                onChange={setBulkColor}
+                options={colorOptions}
+                placeholder="Select color"
+                disabled={isApplyingBulkColor}
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBulkColorModal(false);
+                  setBulkColor("");
+                }}
+                className="rounded border border-black px-4 py-2 text-sm font-bold text-black transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applyBulkColorUpdate}
+                disabled={isApplyingBulkColor}
+                className="rounded border border-black bg-violet-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-violet-700 disabled:opacity-50"
+              >
+                {isApplyingBulkColor ? <Spinner size={18} className="text-white" /> : "Apply Color"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

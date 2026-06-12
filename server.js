@@ -404,7 +404,7 @@ app.post("/api/auth/logout", requireAuth, async (_req, res) => {
   res.json({ success: true });
 });
 app.use("/api", (req, res, next) => {
-  if (req.path.startsWith("/auth/") || req.path === "/db-status" || req.path === "/npd-sync") return next();
+  if (req.path.startsWith("/auth/") || req.path === "/db-status" || req.path.startsWith("/npd-sync")) return next();
   return requireAuth(req, res, next);
 });
 if (!fs.existsSync(path.join(process.cwd(), "uploads"))) {
@@ -671,6 +671,34 @@ app.post("/api/npd-sync", async (req, res) => {
     res.status(500).json({ error: error.message });
   } finally {
     conn.release();
+  }
+});
+app.get("/api/npd-sync/rates", async (req, res) => {
+  const providedSecret = stringOrEmpty(
+    req.headers["x-npd-sync-secret"] || req.headers["x-sync-secret"] || req.query.secret
+  );
+  if (!NPD_SYNC_SECRET) {
+    return res.status(503).json({ error: "NPD sync is not configured." });
+  }
+  if (!providedSecret || providedSecret !== NPD_SYNC_SECRET) {
+    return res.status(401).json({ error: "Invalid sync secret." });
+  }
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  try {
+    const rows = await fetchActiveNpdItems(db);
+    const rateRows = rows.map((row) => ({
+      npdId: stringOrEmpty(row?.npdId || row?.id),
+      rate: row?.rate == null || row?.rate === "" ? null : Number(row.rate)
+    })).filter((row) => row.npdId);
+    return res.json({
+      ok: true,
+      total: rateRows.length,
+      rows: rateRows
+    });
+  } catch (error) {
+    console.error(`${NPD_SYNC_LOG_PREFIX} Rate sync fetch failed:`, error);
+    return res.status(500).json({ error: error.message });
   }
 });
 app.post("/api/tally/sync", async (req, res) => {
@@ -1801,6 +1829,7 @@ async function initDb(retries = 5) {
           \`name\` VARCHAR(255) NOT NULL,
           \`uom\` VARCHAR(50),
           \`materialGroupId\` VARCHAR(36),
+          \`color\` VARCHAR(255),
           \`size\` DECIMAL(15,2),
           \`gsm\` DECIMAL(15,2),
           \`bf\` DECIMAL(15,2),
@@ -2653,6 +2682,7 @@ async function initDb(retries = 5) {
         { table: "materials", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "materials", column: "uom", type: "VARCHAR(50)" },
         { table: "materials", column: "materialGroupId", type: "VARCHAR(36)" },
+        { table: "materials", column: "color", type: "VARCHAR(255)" },
         { table: "materials", column: "size", type: "DECIMAL(15,2)" },
         { table: "materials", column: "gsm", type: "DECIMAL(15,2)" },
         { table: "materials", column: "bf", type: "DECIMAL(15,2)" },
@@ -3310,6 +3340,18 @@ const createHandlers = (tableName) => {
           const rateNumber = Number(data.rate);
           if (!Number.isFinite(rateNumber) || rateNumber <= 0) {
             return res.status(400).json({ error: "Rate must be greater than 0." });
+          }
+        }
+        if (tableName === "materials") {
+          const normalizedType = String(data.type || "").trim();
+          if (normalizedType === "Reel") {
+            const normalizedColor = String(data.color || "").trim();
+            if (!normalizedColor) {
+              return res.status(400).json({ error: "Color is required for Reel materials." });
+            }
+            data.color = normalizedColor;
+          } else {
+            data.color = null;
           }
         }
         if (tableName === "users") {

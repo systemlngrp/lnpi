@@ -19,6 +19,7 @@ export interface Material {
   name: string;
   uom?: string;
   materialGroupId?: string;
+  color?: string | null;
   size?: number;
   gsm?: number;
   bf?: number;

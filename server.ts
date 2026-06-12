@@ -2113,6 +2113,7 @@ async function initDb(retries = 5) {
           \`name\` VARCHAR(255) NOT NULL,
           \`uom\` VARCHAR(50),
           \`materialGroupId\` VARCHAR(36),
+          \`color\` VARCHAR(255),
           \`size\` DECIMAL(15,2),
           \`gsm\` DECIMAL(15,2),
           \`bf\` DECIMAL(15,2),
@@ -3014,6 +3015,7 @@ async function initDb(retries = 5) {
         { table: "materials", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "materials", column: "uom", type: "VARCHAR(50)" },
         { table: "materials", column: "materialGroupId", type: "VARCHAR(36)" },
+        { table: "materials", column: "color", type: "VARCHAR(255)" },
         { table: "materials", column: "size", type: "DECIMAL(15,2)" },
         { table: "materials", column: "gsm", type: "DECIMAL(15,2)" },
         { table: "materials", column: "bf", type: "DECIMAL(15,2)" },
@@ -3700,6 +3702,19 @@ const createHandlers = (tableName: string) => {
           const rateNumber = Number(data.rate);
           if (!Number.isFinite(rateNumber) || rateNumber <= 0) {
             return res.status(400).json({ error: "Rate must be greater than 0." });
+          }
+        }
+
+        if (tableName === "materials") {
+          const normalizedType = String(data.type || "").trim();
+          if (normalizedType === "Reel") {
+            const normalizedColor = String(data.color || "").trim();
+            if (!normalizedColor) {
+              return res.status(400).json({ error: "Color is required for Reel materials." });
+            }
+            data.color = normalizedColor;
+          } else {
+            data.color = null;
           }
         }
 
