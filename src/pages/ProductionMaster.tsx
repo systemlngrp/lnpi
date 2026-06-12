@@ -12,6 +12,7 @@ import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { getProductionDisplayStatus } from "../lib/productionStageFilters";
 import { fetchNpdItems } from "../lib/npdItems";
+import { cn } from "../lib/utils";
 import { useClientPagination } from "../hooks/useClientPagination";
 
 export function ProductionMaster() {
