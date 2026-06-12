@@ -591,6 +591,15 @@ export function ProductionMaster() {
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                   const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
+                  const plannedQty = Number(p.qty || 0);
+                  const ups = Number(p.ups || (item as any)?.ups || 0);
+                  const targetQty = ups > 0 ? plannedQty / ups : 0;
+                  const lowerLimit = targetQty * 0.9;
+                  const upperLimit = targetQty * 1.1;
+                  const isPaperOutOfRange =
+                    targetQty > 0 && (procTotals.paper < lowerLimit || procTotals.paper > upperLimit);
+                  const isLinerOutOfRange =
+                    targetQty > 0 && (procTotals.liner < lowerLimit || procTotals.liner > upperLimit);
                   
                     return (
                     <tr key={p.id} className={`${isHighGsm ? "bg-amber-50" : "hover:bg-slate-50"} divide-x divide-black transition-colors`}>
@@ -623,8 +632,22 @@ export function ProductionMaster() {
                         {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}
                       </td>
 
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.paper.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.liner.toLocaleString()}</td>
+                      <td
+                        className={cn(
+                          "px-4 py-4 text-right text-xs font-bold border border-black whitespace-nowrap",
+                          isPaperOutOfRange ? "bg-red-100 text-red-700" : "bg-indigo-50/30 text-indigo-700"
+                        )}
+                      >
+                        {procTotals.paper.toLocaleString()}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-4 py-4 text-right text-xs font-bold border border-black whitespace-nowrap",
+                          isLinerOutOfRange ? "bg-red-100 text-red-700" : "bg-indigo-50/30 text-indigo-700"
+                        )}
+                      >
+                        {procTotals.liner.toLocaleString()}
+                      </td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.printing.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.pasting.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.stitching.toLocaleString()}</td>
