@@ -242,6 +242,14 @@ export function PendingDispatchPlanning() {
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
+      const nextRowPlannedQty = { ...rowPlannedQty };
+      filteredSchedules.forEach((schedule) => {
+        if (nextRowPlannedQty[schedule.id] !== undefined) return;
+        const effectivePlanned = getEffectivePlannedForSchedule(schedule.id);
+        const balance = Math.max(0, Number(schedule.qty || 0) - effectivePlanned);
+        nextRowPlannedQty[schedule.id] = balance;
+      });
+      setRowPlannedQty(nextRowPlannedQty);
       setSelectedIds(new Set(filteredSchedules.map(s => s.id)));
     } else {
       setSelectedIds(new Set());
@@ -253,6 +261,14 @@ export function PendingDispatchPlanning() {
     if (newSelected.has(id)) {
       newSelected.delete(id);
     } else {
+      if (rowPlannedQty[id] === undefined) {
+        const schedule = schedules.find((row) => row.id === id);
+        if (schedule) {
+          const effectivePlanned = getEffectivePlannedForSchedule(id);
+          const balance = Math.max(0, Number(schedule.qty || 0) - effectivePlanned);
+          setRowPlannedQty((prev) => ({ ...prev, [id]: balance }));
+        }
+      }
       newSelected.add(id);
     }
     setSelectedIds(newSelected);

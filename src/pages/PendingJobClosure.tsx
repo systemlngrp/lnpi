@@ -41,6 +41,8 @@ export function PendingJobClosure() {
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [cancelSubmittingId, setCancelSubmittingId] = useState<string | null>(null);
+  const [editingProductionDateId, setEditingProductionDateId] = useState<string | null>(null);
+  const [productionDateDraft, setProductionDateDraft] = useState("");
 
   const updateCloseMeta = async (id: string, patch: Partial<Pick<Production, "closeBy" | "closeDate">>) => {
     const resolvedPatch = { ...patch };
@@ -61,6 +63,38 @@ export function PendingJobClosure() {
           : p
       )
     );
+  };
+
+  const startEditingProductionDate = (production: Production) => {
+    setEditingProductionDateId(production.id);
+    setProductionDateDraft((production.date || "").split("T")[0]);
+  };
+
+  const cancelEditingProductionDate = () => {
+    setEditingProductionDateId(null);
+    setProductionDateDraft("");
+  };
+
+  const saveProductionDate = async (id: string) => {
+    const nextDate = productionDateDraft.trim();
+    if (!nextDate) {
+      alert("Production Date is mandatory.");
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    await setProductions((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              date: nextDate,
+              updateTimestamp: timestamp,
+              updatedBy: user?.name || "System User",
+            }
+          : row
+      )
+    );
+    cancelEditingProductionDate();
   };
 
   const processingTotalsMap = useMemo(() => {
@@ -423,6 +457,35 @@ export function PendingJobClosure() {
                         >
                           <ClipboardList size={14} className="mr-1" /> Report Proc.
                         </button>
+                        {editingProductionDateId === p.id ? (
+                          <>
+                            <input
+                              type="date"
+                              value={productionDateDraft}
+                              onChange={(e) => setProductionDateDraft(e.target.value)}
+                              className="min-w-[140px] border border-black rounded px-2 py-1 text-xs bg-white"
+                            />
+                            <button
+                              onClick={() => void saveProductionDate(p.id)}
+                              className="font-bold inline-flex items-center justify-center p-2 border border-black text-xs bg-white hover:bg-slate-100"
+                            >
+                              Save Date
+                            </button>
+                            <button
+                              onClick={cancelEditingProductionDate}
+                              className="font-bold inline-flex items-center justify-center p-2 border border-black text-xs bg-white hover:bg-slate-100"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => startEditingProductionDate(p)}
+                            className="font-bold inline-flex items-center justify-center p-2 border border-black text-xs bg-white hover:bg-slate-100"
+                          >
+                            Change Date
+                          </button>
+                        )}
                         {jobClosureStatusMap.get(p.id)?.canClose ? (
                           <button
                             onClick={() => handleCloseJob(p.id)}
@@ -667,6 +730,38 @@ export function PendingJobClosure() {
                           >
                             <ClipboardList size={16} />
                           </button>
+                          {editingProductionDateId === p.id ? (
+                            <>
+                              <input
+                                type="date"
+                                value={productionDateDraft}
+                                onChange={(e) => setProductionDateDraft(e.target.value)}
+                                className="w-36 border border-black rounded px-2 py-1 text-xs bg-white"
+                              />
+                              <button
+                                onClick={() => void saveProductionDate(p.id)}
+                                title="Save production date"
+                                className="text-slate-700 hover:text-slate-900 transition-all px-2 py-1 border border-black rounded text-[11px] font-bold bg-white"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={cancelEditingProductionDate}
+                                title="Cancel date edit"
+                                className="text-slate-700 hover:text-slate-900 transition-all px-2 py-1 border border-black rounded text-[11px] font-bold bg-white"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => startEditingProductionDate(p)}
+                              title="Change production date"
+                              className="text-slate-700 hover:text-slate-900 transition-all px-2 py-1 border border-black rounded text-[11px] font-bold bg-white"
+                            >
+                              Date
+                            </button>
+                          )}
                           {p.status !== "Completed" && p.status !== "Cancelled" && jobClosureStatusMap.get(p.id)?.canClose ? (
                             <button
                               onClick={() => handleCloseJob(p.id)}

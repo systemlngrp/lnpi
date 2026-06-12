@@ -99,9 +99,9 @@ function getScheduleInvoicedQty(scheduleId: string, plans: DispatchPlan[], loadi
   return invoiced;
 }
 
-function createInitialFormData(todayStr: string) {
+function createInitialFormData(initialDate: string) {
   return {
-    date: todayStr,
+    date: initialDate,
     qty: "" as number | "",
     remarks: "",
     noOfParts: "" as number | "",
@@ -375,6 +375,15 @@ export function ProductionForm() {
   }, [selectedItem, selectedCompany, selectedOrder]);
 
   useEffect(() => {
+    if (!selectedScheduleId) {
+      setFormData((prev) => ({ ...prev, date: todayStr }));
+      return;
+    }
+    if (!selectedSchedule) return;
+    setFormData((prev) => ({ ...prev, date: selectedSchedule.scheduledDate || todayStr }));
+  }, [selectedScheduleId, selectedSchedule?.id, todayStr]);
+
+  useEffect(() => {
     setFormData((prev) => ({
       ...prev,
       qty: isSampleItem ? sampleItemQty : "",
@@ -639,7 +648,7 @@ export function ProductionForm() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.date || formData.date < todayStr) return;
+    if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.date) return;
 
     const qty = Number(formData.qty);
     if (qty <= 0 || quantityDeviationError || maximumAllowedProductionError || gsmValidationError) return;
@@ -699,7 +708,7 @@ export function ProductionForm() {
         )
       );
 
-      setFormData(createInitialFormData(todayStr));
+      setFormData(createInitialFormData(selectedSchedule.scheduledDate || todayStr));
 
       if (nextPendingQty <= 0) {
         setSelectedScheduleId("");
@@ -763,22 +772,15 @@ export function ProductionForm() {
               <LabelWithHelp
                 label="Production Date"
                 required
-                helpText="This date cannot be earlier than today. Only today or future dates are allowed."
+                helpText="This defaults from the selected schedule date. Back-dated production entries are allowed and you can change it if needed."
               />
               <input
                 type="date"
                 value={formData.date}
-                min={todayStr}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 required
-                className={cn(
-                  "border-2 border-black rounded p-2 text-black bg-yellow-100 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm",
-                  formData.date && formData.date < todayStr && "border-red-500"
-                )}
+                className="border-2 border-black rounded p-2 text-black bg-yellow-100 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm"
               />
-              {formData.date && formData.date < todayStr && (
-                <span className="text-red-600 text-xs font-bold">Date must be today or future.</span>
-              )}
             </div>}
 
             {showField("Pending Order Quantity") && <ReadOnlyNumberField
@@ -1022,7 +1024,6 @@ export function ProductionForm() {
                 isSubmitting ||
                 !selectedSchedule ||
                 !formData.date ||
-                formData.date < todayStr ||
                 currentQty <= 0 ||
                 quantityDeviationError ||
                 maximumAllowedProductionError ||

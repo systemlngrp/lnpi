@@ -4,12 +4,10 @@ import { useNpdItems } from "../hooks/useNpdItems";
 import { 
   LoadingSlip, 
   Company, 
-  Item, 
   Invoice, 
   InvoiceLineItem,
   DispatchPlan,
-  Order,
-  Truck
+  Order
 } from "../types";
 import {
   FileText, 
@@ -30,8 +28,7 @@ import { cn } from "../lib/utils";
 interface GroupedLoading {
   companyId: string;
   companyName: string;
-  slips: (LoadingSlip & { 
-    truckNo: string;
+  slips: (LoadingSlip & {
     totalQty: number;
     items: string[];
   })[];
@@ -56,7 +53,6 @@ export function PendingInvoicing() {
   const [loadingSlips, updateSlips] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
-  const [trucks] = useData<Truck>("trucks", []);
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const [invoices, updateInvoices] = useData<Invoice>("invoices", []);
@@ -106,7 +102,6 @@ export function PendingInvoicing() {
       }
 
       const totalQty = s.lines.reduce((sum, l) => sum + Number(l.loadedQty || 0), 0);
-      const truck = trucks.find(t => t.id === s.truckId);
       const slipItems = s.lines.map(l => {
         const lp = plans.find(p => p.id === l.dispatchPlanId);
         const lo = orders.find(o => o.id === lp?.orderId);
@@ -115,7 +110,6 @@ export function PendingInvoicing() {
 
       companyMap.get(company.id)!.slips.push({
         ...s,
-        truckNo: truck?.truckNo || "Unknown",
         totalQty,
         items: Array.from(new Set(slipItems))
       });
@@ -124,7 +118,7 @@ export function PendingInvoicing() {
     return Array.from(companyMap.values())
       .filter(g => g.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
       .sort((a, b) => a.companyName.localeCompare(b.companyName));
-  }, [loadingSlips, companies, plans, orders, trucks, npdItems, searchTerm]);
+  }, [loadingSlips, companies, plans, orders, npdItems, searchTerm]);
 
   useEffect(() => {
     if (didInitExpand.current) return;
@@ -552,7 +546,6 @@ export function PendingInvoicing() {
                       {billingMode === group.companyId && <th className="w-10 px-2 py-2"></th>}
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Slip No</th>
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Date</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Truck</th>
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Items</th>
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Total Qty</th>
                     </tr>
@@ -572,7 +565,6 @@ export function PendingInvoicing() {
                         )}
                         <td className="px-3 py-2 text-xs font-bold">{s.slipNo}</td>
                         <td className="px-3 py-2 text-xs">{formatDate(s.date)}</td>
-                        <td className="px-3 py-2 text-xs">{s.truckNo}</td>
                         <td className="px-3 py-2 text-xs truncate max-w-[200px]">{s.items.join(", ")}</td>
                         <td className="px-3 py-2 text-xs text-right font-medium">{s.totalQty.toLocaleString()}</td>
                       </tr>
