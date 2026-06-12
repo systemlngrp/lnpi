@@ -35,7 +35,7 @@ export function PendingDispatchPlanning() {
 
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [rowPlannedQty, setRowPlannedQty] = useState<Record<string, number>>({});
+  const [rowPlannedQty, setRowPlannedQty] = useState<Record<string, number | "">>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("scheduledDate");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -639,7 +639,12 @@ export function PendingDispatchPlanning() {
                         <input
                           type="number"
                           value={rowPlannedQty[s.id] !== undefined ? rowPlannedQty[s.id] : balance}
-                          onChange={(e) => setRowPlannedQty({...rowPlannedQty, [s.id]: Number(e.target.value)})}
+                          onChange={(e) =>
+                            setRowPlannedQty({
+                              ...rowPlannedQty,
+                              [s.id]: e.target.value === "" ? "" : Number(e.target.value),
+                            })
+                          }
                           className="w-full border border-slate-300 rounded p-1 text-right text-[11px] focus:outline-none focus:border-indigo-600 font-bold"
                         />
                       </td>
