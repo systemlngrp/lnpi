@@ -79,6 +79,9 @@ export function ReelwiseStockReport() {
   const [stockYetToIssueOnly, setStockYetToIssueOnly] = useState(false);
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
+  const [gsmFilter, setGsmFilter] = useState("");
+  const [sizeFilter, setSizeFilter] = useState("");
+  const [bfFilter, setBfFilter] = useState("");
 
   const rows = useMemo<ReelwiseStockRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -157,6 +160,13 @@ export function ReelwiseStockReport() {
         if (minAge && row.ageDays < minAgeNumber) return false;
         if (maxAge && row.ageDays > maxAgeNumber) return false;
 
+        const gsmFilterNumber = Number(gsmFilter || 0);
+        const sizeFilterNumber = Number(sizeFilter || 0);
+        const bfFilterNumber = Number(bfFilter || 0);
+        if (gsmFilter && row.gsm !== gsmFilterNumber) return false;
+        if (sizeFilter && row.size !== sizeFilterNumber) return false;
+        if (bfFilter && row.bf !== bfFilterNumber) return false;
+
         return true;
       })
       .sort((a, b) => {
@@ -171,11 +181,14 @@ export function ReelwiseStockReport() {
     materialIssues,
     materialReturns,
     materials,
+    bfFilter,
+    gsmFilter,
     maxAge,
     minAge,
     packingSlips,
     returnReelLines,
     searchTerm,
+    sizeFilter,
     stockYetToIssueOnly,
     suppliers,
   ]);
@@ -195,6 +208,9 @@ export function ReelwiseStockReport() {
     setStockYetToIssueOnly(false);
     setMinAge("");
     setMaxAge("");
+    setGsmFilter("");
+    setSizeFilter("");
+    setBfFilter("");
   };
 
   return (
@@ -233,7 +249,7 @@ export function ReelwiseStockReport() {
           </div>
 
           <div className="relative mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 md:p-5">
-            <div className="grid flex-1 items-end gap-4 border-t-0 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.35fr)_minmax(180px,0.9fr)_minmax(120px,0.65fr)_minmax(120px,0.65fr)_minmax(180px,0.9fr)_140px]">
+            <div className="grid flex-1 items-end gap-4 border-t-0 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.2fr)_minmax(180px,0.9fr)_minmax(120px,0.62fr)_minmax(120px,0.62fr)_minmax(120px,0.62fr)_minmax(120px,0.62fr)_minmax(120px,0.62fr)_minmax(180px,0.9fr)_140px]">
               <label className="space-y-2">
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <Search size={14} />
@@ -286,6 +302,39 @@ export function ReelwiseStockReport() {
                   ))}
                 </div>
               </div>
+
+              <label className="space-y-2">
+                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">GSM</span>
+                <input
+                  type="number"
+                  value={gsmFilter}
+                  onChange={(e) => setGsmFilter(e.target.value)}
+                  placeholder="Filter GSM"
+                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Size</span>
+                <input
+                  type="number"
+                  value={sizeFilter}
+                  onChange={(e) => setSizeFilter(e.target.value)}
+                  placeholder="Filter size"
+                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">BF</span>
+                <input
+                  type="number"
+                  value={bfFilter}
+                  onChange={(e) => setBfFilter(e.target.value)}
+                  placeholder="Filter BF"
+                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                />
+              </label>
 
               <label className="space-y-2">
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Age &gt;=</span>

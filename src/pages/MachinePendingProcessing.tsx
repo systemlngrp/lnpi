@@ -49,6 +49,11 @@ export function MachinePendingProcessing() {
 
   const machineGroups = useMemo(() => {
     const groups: Map<string, MachineGroup> = new Map();
+    const reportedProductionIds = new Set(
+      processing
+        .map((entry) => String(entry.productionId || "").trim())
+        .filter(Boolean)
+    );
 
     // Initialize groups for relevant machines
     machines.forEach(m => {
@@ -61,7 +66,8 @@ export function MachinePendingProcessing() {
       p.status !== "Completed" && 
       p.status !== "Cancelled" && 
       !p.cancelTimestamp &&
-      !p.tallyTimestamp
+      !p.tallyTimestamp &&
+      !reportedProductionIds.has(String(p.id || "").trim())
     );
 
     activeProductions.forEach(p => {

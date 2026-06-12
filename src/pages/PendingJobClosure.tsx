@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
+import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, MaterialIssue } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
@@ -24,6 +24,7 @@ export function PendingJobClosure() {
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [npdItems, setNpdItems] = useState<Item[]>([]);
 
   useEffect(() => {
@@ -65,7 +66,22 @@ export function PendingJobClosure() {
     );
   };
 
+  const issuedProductionIds = useMemo(() => {
+    const ids = new Set<string>();
+    materialIssues.forEach((issue) => {
+      const productionId = String(issue.productionId || "").trim();
+      if (productionId) ids.add(productionId);
+    });
+    return ids;
+  }, [materialIssues]);
+
+  const hasMaterialIssue = (productionId: string) => issuedProductionIds.has(String(productionId || "").trim());
+
   const startEditingProductionDate = (production: Production) => {
+    if (hasMaterialIssue(production.id)) {
+      alert("Production Date cannot be changed after Material Issue is created for this job.");
+      return;
+    }
     setEditingProductionDateId(production.id);
     setProductionDateDraft((production.date || "").split("T")[0]);
   };
@@ -76,6 +92,11 @@ export function PendingJobClosure() {
   };
 
   const saveProductionDate = async (id: string) => {
+    if (hasMaterialIssue(id)) {
+      alert("Production Date cannot be changed after Material Issue is created for this job.");
+      cancelEditingProductionDate();
+      return;
+    }
     const nextDate = productionDateDraft.trim();
     if (!nextDate) {
       alert("Production Date is mandatory.");
@@ -481,7 +502,9 @@ export function PendingJobClosure() {
                         ) : (
                           <button
                             onClick={() => startEditingProductionDate(p)}
-                            className="font-bold inline-flex items-center justify-center p-2 border border-black text-xs bg-white hover:bg-slate-100"
+                            disabled={hasMaterialIssue(p.id)}
+                            title={hasMaterialIssue(p.id) ? "Date change is blocked after Material Issue" : "Change production date"}
+                            className="font-bold inline-flex items-center justify-center p-2 border border-black text-xs bg-white hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                           >
                             Change Date
                           </button>
@@ -756,8 +779,9 @@ export function PendingJobClosure() {
                           ) : (
                             <button
                               onClick={() => startEditingProductionDate(p)}
-                              title="Change production date"
-                              className="text-slate-700 hover:text-slate-900 transition-all px-2 py-1 border border-black rounded text-[11px] font-bold bg-white"
+                              disabled={hasMaterialIssue(p.id)}
+                              title={hasMaterialIssue(p.id) ? "Date change is blocked after Material Issue" : "Change production date"}
+                              className="text-slate-700 hover:text-slate-900 transition-all px-2 py-1 border border-black rounded text-[11px] font-bold bg-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             >
                               Date
                             </button>
