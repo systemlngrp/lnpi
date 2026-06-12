@@ -76,6 +76,10 @@ function round2(value: number) {
   return parseFloat(value.toFixed(2));
 }
 
+function roundUpWhole(value: number) {
+  return Math.ceil(value);
+}
+
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
     Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
@@ -580,11 +584,11 @@ export function ProductionForm() {
       fluteBatches,
       leastGsm: leastGsmValue,
       printingColor,
-      paperRequiredNos: paperRequiredNos === "" ? "" : round2(paperRequiredNos),
+      paperRequiredNos: paperRequiredNos === "" ? "" : roundUpWhole(paperRequiredNos),
       topPaperWeightKg: topPaperWeightKg === "" ? "" : round2(topPaperWeightKg),
       linerWeightKg: linerWeightKg === "" ? "" : round2(linerWeightKg),
       totalJobWeight: totalJobWeight === "" ? "" : round2(totalJobWeight),
-      lineRequiredNos: lineRequiredNos === "" ? "" : round2(lineRequiredNos),
+      lineRequiredNos: lineRequiredNos === "" ? "" : roundUpWhole(lineRequiredNos),
     }));
   }, [
     formData.color1,
