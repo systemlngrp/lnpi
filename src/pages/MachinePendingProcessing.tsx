@@ -79,7 +79,7 @@ export function MachinePendingProcessing() {
         
         const pending = Math.max(0, Number(p.qty || 0) - reportedForThisMachine);
 
-        if (pending > 0) {
+        if (reportedForThisMachine <= 0 && pending > 0) {
           const group = groups.get(machine.id);
           if (group) {
             group.jobs.push({
