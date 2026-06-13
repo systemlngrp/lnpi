@@ -1,6 +1,8 @@
 const MACHINE_NAME_MAP: Record<string, string> = {
   "Corrugation Finger": "Corrugation Paper",
   "Corrugation Linear": "Corrugation Liner",
+  "Sloting": "Slotting",
+  "Slotter": "Slotting",
 };
 
 export function normalizeMachineName(name?: string | null) {

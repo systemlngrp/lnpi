@@ -7,7 +7,7 @@ export const PROCESSING_MACHINE_COLUMNS = [
   { key: "printing", label: "Printing", machineNames: ["Printing"] },
   { key: "pasting", label: "Pasting", machineNames: ["Pasting"] },
   { key: "stitching", label: "Stitching", machineNames: ["Stitching"] },
-  { key: "punching", label: "Punching", machineNames: ["Punching", "Rotary"] },
+  { key: "punching", label: "Punching", machineNames: ["Punching", "Rotary", "Slotting"] },
   { key: "gluing", label: "Gluing", machineNames: ["Gluing"] }
 ] as const;
 
