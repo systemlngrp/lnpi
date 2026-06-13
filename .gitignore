@@ -10,3 +10,4 @@ coverage/
 *.xls
 *.xlsx
 *.env
+*.py

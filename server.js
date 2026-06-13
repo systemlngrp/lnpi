@@ -2986,6 +2986,7 @@ async function initDb(retries = 5) {
         { table: "material_in", column: "mdTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "mdEmailId", type: "VARCHAR(255)" },
         { table: "material_in", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "material_in", column: "tallySyncRemark", type: "TEXT" },
         { table: "material_in", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
         { table: "productions", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "productions", column: "date", type: "VARCHAR(50) NOT NULL" },
