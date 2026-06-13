@@ -20,7 +20,7 @@ import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
 import { useNpdItems } from "../hooks/useNpdItems";
-import { recalculateMaterialLine, summarizeMaterialInLines } from "../lib/materialInTaxes";
+import { applySupplyTypeTaxRates, recalculateMaterialLine, summarizeMaterialInLines } from "../lib/materialInTaxes";
 
 type PackingSlipDraft = {
   id: string;
@@ -102,6 +102,15 @@ export function MaterialInForm() {
     if (c) return c.name;
     return "";
   }, [suppliers, companies, supplierId]);
+
+  const supplierGstSupplyType = useMemo(() => {
+    const supplier = suppliers.find((entry) => entry.id === supplierId);
+    if (supplier?.gstSupplyType) return supplier.gstSupplyType;
+    const company = companies.find((entry) => entry.id === supplierId);
+    return company?.gstSupplyType || "INTRA_STATE";
+  }, [companies, supplierId, suppliers]);
+
+  const isInterState = supplierGstSupplyType === "INTER_STATE";
 
   const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
 
@@ -187,6 +196,13 @@ export function MaterialInForm() {
     setPackingSlipDrafts(nextDrafts);
     resetLineDrafts();
   }, [editingEntry, packingSlips]);
+
+  useEffect(() => {
+    if (!lines.length) return;
+    setLines((prev) =>
+      prev.map((line) => applySupplyTypeTaxRates(line, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true }))
+    );
+  }, [isInterState]);
 
   const getMaterial = (materialId: string) => {
     if (isFgType) return npdItems.find((item) => item.id === materialId);
@@ -346,7 +362,7 @@ export function MaterialInForm() {
     const invoiceRate = resolvedInvoiceRate;
     const selectedPo = selectedPoLine ? getPurchaseOrder(selectedPoLine.purchaseOrderId) : undefined;
     
-    const newLine = recalculateMaterialLine({
+    const newLine = applySupplyTypeTaxRates({
       id: crypto.randomUUID(),
       itemId: currentItemId,
       qty,
@@ -364,7 +380,7 @@ export function MaterialInForm() {
       cgstRate: 0,
       sgstRate: 0,
       igstRate: 0,
-    });
+    }, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
 
     setLines((prev) => [...prev, newLine]);
     if (mrrType === "Reel") {
@@ -384,7 +400,7 @@ export function MaterialInForm() {
           patch.invoiceRate !== undefined
             ? Number(patch.invoiceRate || 0)
             : (line.invoiceRate ? Number(line.invoiceRate) : 0) || Number(poLine?.rate || 0);
-        return recalculateMaterialLine({
+        const nextLine = recalculateMaterialLine({
           ...line,
           ...patch,
           poLineId,
@@ -393,6 +409,10 @@ export function MaterialInForm() {
           poRate: poLine ? Number(poLine.rate || 0) : Number(patch.poRate ?? line.poRate ?? 0),
           invoiceRate: resolvedInvoiceRate,
         });
+        if (Object.prototype.hasOwnProperty.call(patch, "gstRate")) {
+          return applySupplyTypeTaxRates(nextLine, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
+        }
+        return applySupplyTypeTaxRates(nextLine, isInterState ? "INTER_STATE" : "INTRA_STATE");
       })
     );
   };
@@ -553,7 +573,7 @@ export function MaterialInForm() {
             : Number(poLine?.rate || 0);
 
       const lineId = existingLine?.id || crypto.randomUUID();
-      const computedLine = recalculateMaterialLine({
+      const computedLine = applySupplyTypeTaxRates({
         id: lineId,
         itemId: materialId,
         qty: totalWeight,
@@ -571,7 +591,7 @@ export function MaterialInForm() {
         cgstRate: existingLine?.cgstRate || 0,
         sgstRate: existingLine?.sgstRate || 0,
         igstRate: existingLine?.igstRate || 0,
-      });
+      }, isInterState ? "INTER_STATE" : "INTRA_STATE");
 
       if (existingLine) {
         const targetIndex = nextLines.findIndex((line) => line.id === existingLine.id);
@@ -1111,9 +1131,9 @@ export function MaterialInForm() {
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Rate</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GST %</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">CGST %</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">SGST %</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">IGST %</th>
+                      {!isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">CGST %</th> : null}
+                      {!isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">SGST %</th> : null}
+                      {isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">IGST %</th> : null}
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isFgType ? "Kanta Weight" : "Kanta Weight"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Actual Value</th>
@@ -1164,21 +1184,27 @@ export function MaterialInForm() {
                           <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
                             <Select
                               options={gstRateOptions}
-                              value={String(Number(line.gstRate || 0))}
+                              value={Number(line.gstRate || 0) > 0 ? String(Number(line.gstRate || 0)) : ""}
                               onChange={(value) => updateLine(line.id, { gstRate: Number(value || 0) })}
                               placeholder="Select GST..."
                             />
                           </td>
                           <td className="px-4 py-3 text-sm font-medium text-black border border-black">{Number(line.invoiceValue || 0).toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm text-black border border-black">
-                            <input type="number" min="0" step="0.01" value={line.cgstRate ?? 0} onChange={(e) => updateLine(line.id, { cgstRate: Number(e.target.value || 0) })} className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
-                          </td>
-                          <td className="px-4 py-3 text-sm text-black border border-black">
-                            <input type="number" min="0" step="0.01" value={line.sgstRate ?? 0} onChange={(e) => updateLine(line.id, { sgstRate: Number(e.target.value || 0) })} className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
-                          </td>
-                          <td className="px-4 py-3 text-sm text-black border border-black">
-                            <input type="number" min="0" step="0.01" value={line.igstRate ?? 0} onChange={(e) => updateLine(line.id, { igstRate: Number(e.target.value || 0) })} className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
-                          </td>
+                          {!isInterState ? (
+                            <td className="px-4 py-3 text-sm text-black border border-black">
+                              <input type="number" min="0" step="0.01" value={Number(line.cgstRate || 0) > 0 ? line.cgstRate : ""} onChange={(e) => updateLine(line.id, { cgstRate: Number(e.target.value || 0) })} className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
+                            </td>
+                          ) : null}
+                          {!isInterState ? (
+                            <td className="px-4 py-3 text-sm text-black border border-black">
+                              <input type="number" min="0" step="0.01" value={Number(line.sgstRate || 0) > 0 ? line.sgstRate : ""} onChange={(e) => updateLine(line.id, { sgstRate: Number(e.target.value || 0) })} className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
+                            </td>
+                          ) : null}
+                          {isInterState ? (
+                            <td className="px-4 py-3 text-sm text-black border border-black">
+                              <input type="number" min="0" step="0.01" value={Number(line.igstRate || 0) > 0 ? line.igstRate : ""} onChange={(e) => updateLine(line.id, { igstRate: Number(e.target.value || 0) })} className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
+                            </td>
+                          ) : null}
                           <td className="px-4 py-3 text-sm text-black border border-black">
                             <input
                               type="number"

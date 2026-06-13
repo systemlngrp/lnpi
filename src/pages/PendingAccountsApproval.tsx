@@ -1,5 +1,5 @@
 import { useData } from "../hooks/useData";
-import { GstRateMaster, Material, MaterialIn, Item, Supplier } from "../types";
+import { Company, GstRateMaster, Material, MaterialIn, Item, Supplier } from "../types";
 import { useState, useMemo, useEffect } from "react";
 import { Spinner } from "../components/Spinner";
 
@@ -8,7 +8,7 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, Edit2, X, Save } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
-import { normalizeMaterialInRecord, recalculateMaterialLine } from "../lib/materialInTaxes";
+import { applySupplyTypeTaxRates, normalizeMaterialInRecord, recalculateMaterialLine } from "../lib/materialInTaxes";
 
 export function PendingAccountsApproval() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +27,7 @@ export function PendingAccountsApproval() {
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
   const [gstRateMasters] = useData<GstRateMaster>("gst_rate_masters", []);
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
@@ -58,7 +59,16 @@ export function PendingAccountsApproval() {
 
   const handleEdit = (m: MaterialIn) => {
     setEditingId(m.id);
-    setEditForm(normalizeMaterialInRecord(JSON.parse(JSON.stringify(m))));
+    const supplyType = getGstSupplyType(m.supplierId);
+    const cloned = JSON.parse(JSON.stringify(m)) as MaterialIn;
+    setEditForm(
+      normalizeMaterialInRecord({
+        ...cloned,
+        lines: (cloned.lines || []).map((line) =>
+          applySupplyTypeTaxRates(line, supplyType === "INTER_STATE" ? "INTER_STATE" : "INTRA_STATE")
+        ),
+      })
+    );
   };
 
   const handleCancelEdit = () => {
@@ -69,7 +79,10 @@ export function PendingAccountsApproval() {
   const handleUpdateLine = (idx: number, field: string, value: any) => {
     if (!editForm) return;
     const next = { ...editForm };
-    next.lines[idx] = recalculateMaterialLine({ ...next.lines[idx], [field]: value });
+    const baseLine = recalculateMaterialLine({ ...next.lines[idx], [field]: value });
+    next.lines[idx] = Object.prototype.hasOwnProperty.call({ [field]: value }, "gstRate")
+      ? applySupplyTypeTaxRates(baseLine, editFormIsInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true })
+      : applySupplyTypeTaxRates(baseLine, editFormIsInterState ? "INTER_STATE" : "INTRA_STATE");
     setEditForm(normalizeMaterialInRecord(next));
   };
 
@@ -151,6 +164,15 @@ export function PendingAccountsApproval() {
         .map((entry) => ({ value: String(Number(entry.rate || 0)), label: `${entry.name} (${Number(entry.rate || 0).toFixed(2)}%)` })),
     [gstRateMasters]
   );
+
+  const getGstSupplyType = (supplierId: string) => {
+    const supplier = suppliers.find((entry) => entry.id === supplierId);
+    if (supplier?.gstSupplyType) return supplier.gstSupplyType;
+    const company = companies.find((entry) => entry.id === supplierId);
+    return company?.gstSupplyType || "INTRA_STATE";
+  };
+
+  const editFormIsInterState = (editForm ? getGstSupplyType(editForm.supplierId) : "INTRA_STATE") === "INTER_STATE";
 
   const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
 
@@ -248,22 +270,28 @@ export function PendingAccountsApproval() {
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] text-slate-500">GST %:</span>
-                                    <select value={l.gstRate || 0} onChange={(e) => handleUpdateLine(idx, "gstRate", Number(e.target.value))} className="border border-black rounded text-[10px]">
+                                    <select value={Number(l.gstRate || 0) > 0 ? l.gstRate : ""} onChange={(e) => handleUpdateLine(idx, "gstRate", Number(e.target.value))} className="border border-black rounded text-[10px]">
                                       {gstRateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                                     </select>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-slate-500">CGST %:</span>
-                                    <input type="number" value={l.cgstRate || 0} onChange={(e) => handleUpdateLine(idx, "cgstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-slate-500">SGST %:</span>
-                                    <input type="number" value={l.sgstRate || 0} onChange={(e) => handleUpdateLine(idx, "sgstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-slate-500">IGST %:</span>
-                                    <input type="number" value={l.igstRate || 0} onChange={(e) => handleUpdateLine(idx, "igstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
-                                  </div>
+                                  {!editFormIsInterState ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-slate-500">CGST %:</span>
+                                      <input type="number" value={Number(l.cgstRate || 0) > 0 ? l.cgstRate : ""} onChange={(e) => handleUpdateLine(idx, "cgstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
+                                    </div>
+                                  ) : null}
+                                  {!editFormIsInterState ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-slate-500">SGST %:</span>
+                                      <input type="number" value={Number(l.sgstRate || 0) > 0 ? l.sgstRate : ""} onChange={(e) => handleUpdateLine(idx, "sgstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
+                                    </div>
+                                  ) : null}
+                                  {editFormIsInterState ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-slate-500">IGST %:</span>
+                                      <input type="number" value={Number(l.igstRate || 0) > 0 ? l.igstRate : ""} onChange={(e) => handleUpdateLine(idx, "igstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
+                                    </div>
+                                  ) : null}
                                </div>
                              );
                            })}

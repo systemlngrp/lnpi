@@ -1,5 +1,7 @@
 import { MaterialIn, MaterialLine } from "../types";
 
+export type MaterialInSupplyType = "INTRA_STATE" | "INTER_STATE";
+
 function round2(value: number) {
   return Number(Number(value || 0).toFixed(2));
 }
@@ -41,6 +43,39 @@ export function recalculateMaterialLine(line: MaterialLine): MaterialLine {
     igst,
     totalAmount: round2(taxableAmount + gstAmount),
   };
+}
+
+export function applySupplyTypeTaxRates(
+  line: MaterialLine,
+  supplyType: MaterialInSupplyType,
+  options?: { forceFromGstRate?: boolean }
+): MaterialLine {
+  const gstRate = Number(line.gstRate || 0);
+  const currentCgstRate = Number(line.cgstRate || 0);
+  const currentSgstRate = Number(line.sgstRate || 0);
+  const currentIgstRate = Number(line.igstRate || 0);
+  const hasStoredSplit = currentCgstRate > 0 || currentSgstRate > 0 || currentIgstRate > 0;
+  const forceFromGstRate = options?.forceFromGstRate === true;
+
+  if (supplyType === "INTER_STATE") {
+    return recalculateMaterialLine({
+      ...line,
+      cgstRate: 0,
+      sgstRate: 0,
+      igstRate: forceFromGstRate || !hasStoredSplit ? gstRate : currentIgstRate,
+      cgst: 0,
+      sgst: 0,
+    });
+  }
+
+  const defaultHalf = gstRate > 0 ? gstRate / 2 : 0;
+  return recalculateMaterialLine({
+    ...line,
+    cgstRate: forceFromGstRate || !hasStoredSplit ? defaultHalf : currentCgstRate,
+    sgstRate: forceFromGstRate || !hasStoredSplit ? defaultHalf : currentSgstRate,
+    igstRate: 0,
+    igst: 0,
+  });
 }
 
 export function summarizeMaterialInLines(
