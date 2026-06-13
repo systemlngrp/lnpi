@@ -16,11 +16,13 @@ export function ProductionProcessingForm() {
   const [searchParams] = useSearchParams();
   const initialProductionId = searchParams.get("productionId") || "";
   const initialMachineId = searchParams.get("machineId") || "";
+  const initialQty = searchParams.get("qty") || "";
+  const initialShift = searchParams.get("shift") || "";
   const lockMachine = searchParams.get("lockMachine") === "1";
   const lockJob = searchParams.get("lockJob") === "1";
   
   const [productions] = useData<Production>("productions", []);
-  const [machines] = useData<Machine>("machines", []);
+  const [machines, , machinesLoading] = useData<Machine>("machines", []);
   const [users] = useData<User>("users", []);
   const [processing, setProcessing] = useData<ProductionProcessing>("production_processing", []);
 
@@ -28,8 +30,8 @@ export function ProductionProcessingForm() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [productionId, setProductionId] = useState(initialProductionId);
   const [machineId, setMachineId] = useState(initialMachineId);
-  const [shift, setShift] = useState<"" | "Day" | "Night">("");
-  const [qty, setQty] = useState<string>("");
+  const [shift, setShift] = useState<"" | "Day" | "Night">(initialShift as any || "");
+  const [qty, setQty] = useState<string>(initialQty);
   const [operatorId, setOperatorId] = useState(user?.role === "Operator" ? user.id : "");
 
   const isMachineAssignedToOperator = (machine: Machine) => {
@@ -96,7 +98,8 @@ export function ProductionProcessingForm() {
   useEffect(() => {
     if (user?.role === "Operator") {
       setOperatorId(user.id);
-      if (machineId && assignedMachineIdsForUser && !assignedMachineIdsForUser.has(machineId)) {
+      // Only clear machineId if machines are LOADED and it's not in the assigned list
+      if (!machinesLoading && machines.length > 0 && machineId && assignedMachineIdsForUser && !assignedMachineIdsForUser.has(machineId)) {
         setMachineId("");
       }
       return;
@@ -105,7 +108,7 @@ export function ProductionProcessingForm() {
     if (operatorId && !operatorOptions.some((option) => option.value === operatorId)) {
       setOperatorId("");
     }
-  }, [assignedMachineIdsForUser, machineId, operatorId, operatorOptions, user]);
+  }, [assignedMachineIdsForUser, machineId, machines.length, machinesLoading, operatorId, operatorOptions, user]);
 
   const isCorrugationLiner = (machineName: string) =>
     String(machineName || "").trim().toLowerCase() === "corrugation liner";

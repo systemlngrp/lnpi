@@ -231,7 +231,12 @@ export function MachinePendingProcessing() {
                             <td className="px-3 py-2 text-right text-indigo-700 bg-indigo-50/30 font-black">{job.pendingQty.toLocaleString()}</td>
                             <td className="px-3 py-2 text-center">
                               <button
-                                onClick={() => navigate(`/production-processing/form?productionId=${job.production.id}&machineId=${group.machineId}&lockMachine=1&lockJob=1`)}
+                                onClick={() => {
+                                  const now = new Date();
+                                  const hour = now.getHours();
+                                  const shift = (hour >= 8 && hour < 20) ? "Day" : "Night";
+                                  navigate(`/production-processing/form?productionId=${job.production.id}&machineId=${group.machineId}&lockMachine=1&lockJob=1&qty=${job.pendingQty}&shift=${shift}`);
+                                }}
                                 className="inline-flex items-center gap-1 bg-indigo-600 text-white px-3 py-1 rounded text-[10px] font-black uppercase hover:bg-indigo-700 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none"
                               >
                                 <ClipboardList size={12} />
