@@ -135,6 +135,7 @@ export function Materials() {
   const [typeFilter, setTypeFilter] = useState("All");
   const [sizeFilter, setSizeFilter] = useState("All");
   const [gsmFilter, setGsmFilter] = useState("All");
+  const [colorFilter, setColorFilter] = useState("All");
   const [sortKey, setSortKey] = useState<MaterialSortKey>("updated");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [fromDate, setFromDate] = useState("");
@@ -263,7 +264,8 @@ export function Materials() {
         const matchesType = typeFilter === "All" || material.type === typeFilter;
         const matchesSize = sizeFilter === "All" || formatOptionalNumber(material.size) === sizeFilter;
         const matchesGsm = gsmFilter === "All" || formatOptionalNumber(material.gsm) === gsmFilter;
-        return matchesSearch && matchesType && matchesSize && matchesGsm;
+        const matchesColor = colorFilter === "All" || String(material.color || "").trim() === colorFilter;
+        return matchesSearch && matchesType && matchesSize && matchesGsm && matchesColor;
       })
       .sort((a, b) => {
         let compare = 0;
@@ -285,7 +287,7 @@ export function Materials() {
 
         return sortDirection === "asc" ? compare : -compare;
       });
-  }, [gsmFilter, materials, searchTerm, sizeFilter, sortDirection, sortKey, typeFilter]);
+  }, [colorFilter, gsmFilter, materials, searchTerm, sizeFilter, sortDirection, sortKey, typeFilter]);
 
   const metrics = useMemo(() => {
     let totalReelWeight = 0;
@@ -370,7 +372,7 @@ export function Materials() {
 
   useEffect(() => {
     setPage(1);
-  }, [gsmFilter, searchTerm, setPage, sizeFilter, sortDirection, sortKey, typeFilter]);
+  }, [colorFilter, gsmFilter, searchTerm, setPage, sizeFilter, sortDirection, sortKey, typeFilter]);
 
   function resetForm(nextMaterials = materials, nextReelGroupId = reelGroup?.id || "") {
     setFormData(createInitialFormState(nextMaterials, nextReelGroupId));
@@ -626,6 +628,17 @@ export function Materials() {
     return values.sort((a, b) => Number(a) - Number(b));
   }, [materials]);
 
+  const colorFilterOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        materials
+          .map((material) => String(material.color || "").trim())
+          .filter(Boolean)
+      )
+    );
+    return values.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [materials]);
+
   function downloadTemplate() {
     const templateData = [
       { "Type": "Reel", "ERP Code": "1001", "Item Name": "", "Item Group": "Reel", "MRR No.": "MI/26-27/00001", "MRR Date": "2026-06-02", "Supplier Name": "Bizskill", "Our Reel No.": "10001", "Reel Qty": 250.5, "Unit": "CM", "Size": 120, "GSM": 150, "BF": 18, "Color": "LG", "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" },
@@ -782,6 +795,7 @@ export function Materials() {
     setTypeFilter("All");
     setSizeFilter("All");
     setGsmFilter("All");
+    setColorFilter("All");
     setFromDate("");
     setToDate("");
   }
@@ -1232,6 +1246,7 @@ export function Materials() {
                 <FilterSelect compact label="Material Type" value={typeFilter} onChange={setTypeFilter} options={["All", ...TYPE_OPTIONS.map((option) => option.value)]} />
                 <FilterSelect compact label="Size Filter" value={sizeFilter} onChange={setSizeFilter} options={["All", ...sizeOptions]} />
                 <FilterSelect compact label="GSM Filter" value={gsmFilter} onChange={setGsmFilter} options={["All", ...gsmOptions]} />
+                <FilterSelect compact label="Color Filter" value={colorFilter} onChange={setColorFilter} options={["All", ...colorFilterOptions]} />
 
                 <div className="flex items-center gap-2 ml-auto">
                   <button
