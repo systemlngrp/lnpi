@@ -465,10 +465,15 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   consumptions.filter(c => isPendingPH(c.status)).length
   };
 
-  const navigation =
-    user?.role === "Operator"
-      ? NAVIGATION_WITH_SORTED_MASTERS.filter((group) => group.section === "Production Processing")
-      : NAVIGATION_WITH_SORTED_MASTERS;
+  const navigation = useMemo(() => {
+    if (user?.role !== "Operator") return NAVIGATION_WITH_SORTED_MASTERS;
+    return NAVIGATION_WITH_SORTED_MASTERS
+      .filter((group) => group.section === "Production Processing")
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => item.name === "Pending Processing"),
+      }));
+  }, [user?.role]);
 
   useEffect(() => {
     const next: Record<string, boolean> = {};
