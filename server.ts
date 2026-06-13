@@ -377,20 +377,10 @@ function normalizeUserRole(raw: unknown): AuthUser["role"] {
   return "Employee";
 }
 
-const OPERATOR_ALLOWED_PERMISSIONS = new Set([
-  "/production-processing",
-  "/production",
-  "/masters/machines",
-  "/masters/settings",
-  "/masters/items",
-]);
-
 function hasPermission(user: AuthUser, required: string) {
   if (user.role === "Admin") return true;
   if (user.status !== "Active") return false;
-  if (user.role === "Operator") {
-    return OPERATOR_ALLOWED_PERMISSIONS.has(required);
-  }
+  if (user.role === "Operator") return true;
   const list = user.menuAccess || [];
   if (list.includes("*")) return true;
   if (!required) return false;

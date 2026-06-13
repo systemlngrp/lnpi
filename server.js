@@ -333,19 +333,10 @@ function normalizeUserRole(raw) {
   if (role === "Operator") return "Operator";
   return "Employee";
 }
-const OPERATOR_ALLOWED_PERMISSIONS = /* @__PURE__ */ new Set([
-  "/production-processing",
-  "/production",
-  "/masters/machines",
-  "/masters/settings",
-  "/masters/items"
-]);
 function hasPermission(user, required) {
   if (user.role === "Admin") return true;
   if (user.status !== "Active") return false;
-  if (user.role === "Operator") {
-    return OPERATOR_ALLOWED_PERMISSIONS.has(required);
-  }
+  if (user.role === "Operator") return true;
   const list = user.menuAccess || [];
   if (list.includes("*")) return true;
   if (!required) return false;
