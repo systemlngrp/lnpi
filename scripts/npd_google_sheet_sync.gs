@@ -5,14 +5,16 @@ const NPD_SYNC_CONFIG = {
   tabName: 'NPD',
   spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
   npdIdHeader: 'NPD ID',
-  rateHeader: 'Last Approved Order rate',
-  lastOrderRateHeader: 'Last Order rate',
-  legacyRateHeader: 'Rate',
+  erpHeader: 'ERP',
+  rateHeaders: ['Rate', 'Last Approved Order Rate', 'Last Approved Order rate'],
+  historyTabName: 'NPD_RATE_SYNC_HISTORY',
   hostingerSyncHeader: 'HOSTINGER SYNC',
   flushDelayMs: 15000,
   pendingRowsPropertyKey: 'NPD_PENDING_ROWS',
   pendingFullSyncPropertyKey: 'NPD_PENDING_FULL_SYNC',
   flushTriggerHandler: 'flushQueuedNpdSync',
+  rateSyncTriggerHandler: 'syncNpdRatesFromHostinger',
+  rateSyncIntervalMinutes: 30,
 };
 
 const COMPANY_SYNC_CONFIG = {
@@ -59,13 +61,15 @@ function syncNpdRatesFromHostinger() {
   }
 
   const headers = values[0].map((header) => String(header || '').trim().toLowerCase());
-  const idIndex = headers.indexOf(NPD_SYNC_CONFIG.npdIdHeader.toLowerCase());
-  const approvedRateIndex = headers.indexOf(NPD_SYNC_CONFIG.rateHeader.toLowerCase());
-  const orderRateIndex = headers.indexOf(NPD_SYNC_CONFIG.lastOrderRateHeader.toLowerCase());
-  const legacyRateIndex = headers.indexOf(NPD_SYNC_CONFIG.legacyRateHeader.toLowerCase());
+  const erpIndex = headers.indexOf(NPD_SYNC_CONFIG.erpHeader.toLowerCase());
+  const rateIndex = findHeaderIndex_(headers, NPD_SYNC_CONFIG.rateHeaders);
 
-  if (idIndex === -1) {
-    throw new Error(`Column "${NPD_SYNC_CONFIG.npdIdHeader}" not found in sheet.`);
+  if (erpIndex === -1) {
+    throw new Error(`Column "${NPD_SYNC_CONFIG.erpHeader}" not found in sheet.`);
+  }
+
+  if (rateIndex === -1) {
+    throw new Error(`Rate column not found in sheet. Checked: ${NPD_SYNC_CONFIG.rateHeaders.join(', ')}`);
   }
 
   const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.rateApiUrl, {
@@ -77,51 +81,85 @@ function syncNpdRatesFromHostinger() {
   });
 
   if (response.getResponseCode() >= 400) {
-    throw new Error(`Rate sync failed: ${response.getContentText()}`);
+    const errorMessage = `Rate sync failed: ${response.getContentText()}`;
+    writeRateSyncHistory_([], [
+      buildHistoryRow_('', '', '', '', 'error', errorMessage)
+    ]);
+    throw new Error(errorMessage);
   }
 
   const result = JSON.parse(response.getContentText() || '{}');
   const rows = Array.isArray(result.rows) ? result.rows : [];
-  
   const rateMap = new Map();
   rows.forEach((row) => {
-    const npdId = String(row.npdId || '').trim();
-    if (npdId) {
-      rateMap.set(npdId, {
-        rate: row.rate,
-        orderRate: row.orderRate
+    const erp = String(row.erp || '').trim();
+    const rate = normalizeSheetNumber_(row.rate);
+    if (erp && rate !== '') {
+      rateMap.set(erp, {
+        erp: erp,
+        rate: rate,
+        orderNo: String(row.orderNo || row.order_no || '').trim(),
+        orderDate: String(row.orderDate || row.order_date || '').trim(),
+        approvedAt: String(row.approvedAt || row.approved_at || '').trim(),
+        status: String(row.status || 'approved').trim() || 'approved'
       });
     }
   });
 
   if (values.length <= 1) {
+    writeRateSyncHistory_([], []);
     return { ok: true, updatedRows: 0, fetchedRates: rateMap.size };
   }
 
-  // Helper to update a column if it exists
-  const updateColumn = (index, fieldName) => {
-    if (index === -1) return;
-    
-    const nextValues = values.slice(1).map((row) => {
-      const npdId = String(row[idIndex] || '').trim();
-      if (!npdId || !rateMap.has(npdId)) {
-        return [row[index] ?? ''];
+  const currentRates = values.slice(1).map((row) => [row[rateIndex] ?? '']);
+  const nextRates = [];
+  const historyRows = [];
+  let changedRows = 0;
+  const processedErps = new Set();
+
+  values.slice(1).forEach((row) => {
+    const erp = String(row[erpIndex] || '').trim();
+    const currentValue = row[rateIndex] ?? '';
+
+    if (!erp) {
+      nextRates.push([currentValue]);
+      return;
+    }
+
+    const latest = rateMap.get(erp);
+    if (!latest) {
+      nextRates.push([currentValue]);
+      if (!processedErps.has(erp)) {
+        processedErps.add(erp);
+        historyRows.push(buildHistoryRow_(erp, '', '', currentValue, 'no approved order found', ''));
       }
-      const data = rateMap.get(npdId);
-      const val = data[fieldName];
-      return [val == null || val === '' ? '' : val];
-    });
+      return;
+    }
 
-    sheet.getRange(2, index + 1, nextValues.length, 1).setValues(nextValues);
-  };
+    const nextValue = latest.rate;
+    nextRates.push([nextValue]);
+    if (String(currentValue) !== String(nextValue)) {
+      changedRows += 1;
+    }
 
-  updateColumn(approvedRateIndex, 'rate');
-  updateColumn(legacyRateIndex, 'rate');
-  updateColumn(orderRateIndex, 'orderRate');
+    if (!processedErps.has(erp)) {
+      processedErps.add(erp);
+      const syncStatus = String(currentValue) === String(nextValue) ? 'unchanged' : 'updated';
+      historyRows.push(
+        buildHistoryRow_(erp, latest.orderNo, latest.approvedAt || latest.orderDate, nextValue, syncStatus, '')
+      );
+    }
+  });
+
+  if (changedRows > 0) {
+    sheet.getRange(2, rateIndex + 1, nextRates.length, 1).setValues(nextRates);
+  }
+
+  writeRateSyncHistory_(Array.from(processedErps), historyRows);
 
   SpreadsheetApp.flush();
 
-  return { ok: true, updatedRows: values.length - 1, fetchedRates: rateMap.size };
+  return { ok: true, updatedRows: changedRows, fetchedRates: rateMap.size };
 }
 
 function forceFullCompanySync() {
@@ -480,4 +518,110 @@ function installSyncTriggers() {
     .forSpreadsheet(spreadsheet)
     .onEdit()
     .create();
+
+  installRateSyncTrigger();
+}
+
+function installRateSyncTrigger() {
+  deleteRateSyncTriggers_();
+  ScriptApp.newTrigger(NPD_SYNC_CONFIG.rateSyncTriggerHandler)
+    .timeBased()
+    .everyMinutes(NPD_SYNC_CONFIG.rateSyncIntervalMinutes)
+    .create();
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('LNPI Sync')
+    .addItem('Sync NPD to LNPI', 'syncNpdSheetToHostinger')
+    .addItem('Sync Latest Rates', 'syncNpdRatesFromHostinger')
+    .addItem('Install Rate Trigger', 'installRateSyncTrigger')
+    .addToUi();
+}
+
+function deleteRateSyncTriggers_() {
+  ScriptApp.getProjectTriggers()
+    .filter((trigger) => trigger.getHandlerFunction() === NPD_SYNC_CONFIG.rateSyncTriggerHandler)
+    .forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+}
+
+function findHeaderIndex_(headers, candidates) {
+  for (let i = 0; i < candidates.length; i += 1) {
+    const normalized = String(candidates[i] || '').trim().toLowerCase();
+    const index = headers.indexOf(normalized);
+    if (index !== -1) return index;
+  }
+  return -1;
+}
+
+function normalizeSheetNumber_(value) {
+  if (value == null || value === '') return '';
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : '';
+}
+
+function getRateHistorySheet_() {
+  const spreadsheet = SpreadsheetApp.openById(NPD_SYNC_CONFIG.spreadsheetId);
+  let sheet = spreadsheet.getSheetByName(NPD_SYNC_CONFIG.historyTabName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(NPD_SYNC_CONFIG.historyTabName);
+    sheet.hideSheet();
+  }
+
+  const headers = ['ERP', 'Last Approved Order No', 'Last Approved Order Date', 'Last Synced Rate', 'Last Sync Time', 'Sync Status', 'Message'];
+  const currentHeaders = sheet.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
+  const needsHeaderWrite = headers.some((header, index) => String(currentHeaders[index] || '').trim() !== header);
+  if (needsHeaderWrite) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  return sheet;
+}
+
+function buildHistoryRow_(erp, orderNo, orderDate, rate, status, message) {
+  return {
+    erp: String(erp || '').trim(),
+    orderNo: String(orderNo || '').trim(),
+    orderDate: String(orderDate || '').trim(),
+    rate: rate == null ? '' : rate,
+    syncTime: formatDate_(new Date()),
+    status: String(status || '').trim(),
+    message: String(message || '').trim(),
+  };
+}
+
+function writeRateSyncHistory_(erpKeys, historyRows) {
+  const sheet = getRateHistorySheet_();
+  const existingValues = sheet.getLastRow() > 1
+    ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues()
+    : [];
+  const rowIndexByErp = new Map();
+
+  existingValues.forEach((row, index) => {
+    const erp = String(row[0] || '').trim();
+    if (erp && !rowIndexByErp.has(erp)) {
+      rowIndexByErp.set(erp, index + 2);
+    }
+  });
+
+  historyRows.forEach((entry) => {
+    const rowValues = [[
+      entry.erp,
+      entry.orderNo,
+      entry.orderDate,
+      entry.rate,
+      entry.syncTime,
+      entry.status,
+      entry.message,
+    ]];
+
+    if (entry.erp && rowIndexByErp.has(entry.erp)) {
+      sheet.getRange(rowIndexByErp.get(entry.erp), 1, 1, 7).setValues(rowValues);
+      return;
+    }
+
+    sheet.appendRow(rowValues[0]);
+    if (entry.erp) {
+      rowIndexByErp.set(entry.erp, sheet.getLastRow());
+    }
+  });
 }

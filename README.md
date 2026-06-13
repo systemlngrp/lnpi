@@ -34,11 +34,13 @@ The repo includes the Sheet-side automation script at `scripts/npd_google_sheet_
    - `tabName`
 5. Run `installNpdSyncTrigger()` once to create the installable triggers.
 6. Approve the requested Apps Script permissions.
+7. Use `Sync Latest Rates` or the installed 30-minute trigger to refresh the `Rate` column from the latest approved LNPI order by ERP.
 
 ### Trigger behavior
 
 - `onNpdSheetEdit(e)` queues changed NPD rows and sends them in a short delayed batch.
 - `onNpdSheetChange(e)` queues a full sync when structural sheet changes happen, such as row insert/delete or bulk changes.
+- `syncNpdRatesFromHostinger()` updates the sheet `Rate` column from the newest approved LNPI order for the same `ERP`.
 - `flushQueuedNpdSync()` sends queued row batches to `/api/npd-sync`.
 - `forceFullNpdSync()` sends the whole tab as a recovery sync.
 

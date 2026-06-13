@@ -1,5 +1,5 @@
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier } from "../types";
+import { GstRateMaster, Material, MaterialIn, Item, Supplier } from "../types";
 import { useState, useMemo, useEffect } from "react";
 import { Spinner } from "../components/Spinner";
 
@@ -8,6 +8,7 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, Edit2, X, Save } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { normalizeMaterialInRecord, recalculateMaterialLine } from "../lib/materialInTaxes";
 
 export function PendingAccountsApproval() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,6 +27,7 @@ export function PendingAccountsApproval() {
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [gstRateMasters] = useData<GstRateMaster>("gst_rate_masters", []);
 
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export function PendingAccountsApproval() {
 
   const handleEdit = (m: MaterialIn) => {
     setEditingId(m.id);
-    setEditForm(JSON.parse(JSON.stringify(m)));
+    setEditForm(normalizeMaterialInRecord(JSON.parse(JSON.stringify(m))));
   };
 
   const handleCancelEdit = () => {
@@ -67,25 +69,8 @@ export function PendingAccountsApproval() {
   const handleUpdateLine = (idx: number, field: string, value: any) => {
     if (!editForm) return;
     const next = { ...editForm };
-    next.lines[idx] = { ...next.lines[idx], [field]: value };
-    
-    // Recalculate amounts
-    const line = next.lines[idx];
-    const qty = Number(line.qty || 0);
-    const rate = Number(line.rate || 0);
-    const gstRate = Number(line.gstRate || 0);
-    
-    const taxable = qty * rate;
-    const gstAmount = (taxable * gstRate) / 100;
-    
-    line.taxableAmount = taxable;
-    line.gstAmount = gstAmount;
-    line.totalAmount = taxable + gstAmount;
-    
-    // Recalculate header totals
-    next.totalAmount = next.lines.reduce((sum, l) => sum + Number(l.totalAmount || 0), 0);
-    
-    setEditForm(next);
+    next.lines[idx] = recalculateMaterialLine({ ...next.lines[idx], [field]: value });
+    setEditForm(normalizeMaterialInRecord(next));
   };
 
   const handleSaveEdit = async () => {
@@ -150,13 +135,22 @@ export function PendingAccountsApproval() {
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>
               <span className="ml-2 text-black">[{l.qty} {l.uom} @ ₹{l.rate}]</span>
-              {l.gstRate !== undefined && <span className="ml-1 text-[10px] text-slate-500">GST {l.gstRate}%</span>}
+              {l.gstRate !== undefined && <span className="ml-1 text-[10px] text-slate-500">GST {l.gstRate}% | CGST {Number(l.cgst || 0).toFixed(2)} | SGST {Number(l.sgst || 0).toFixed(2)} | IGST {Number(l.igst || 0).toFixed(2)}</span>}
             </li>
           );
         })}
       </ul>
     );
   };
+
+  const gstRateOptions = useMemo(
+    () =>
+      [...gstRateMasters]
+        .filter((entry) => entry.active !== "No")
+        .sort((a, b) => Number(a.rate || 0) - Number(b.rate || 0))
+        .map((entry) => ({ value: String(Number(entry.rate || 0)), label: `${entry.name} (${Number(entry.rate || 0).toFixed(2)}%)` })),
+    [gstRateMasters]
+  );
 
   const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
 
@@ -254,13 +248,21 @@ export function PendingAccountsApproval() {
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] text-slate-500">GST %:</span>
-                                    <select 
-                                      value={l.gstRate || 0}
-                                      onChange={(e) => handleUpdateLine(idx, "gstRate", Number(e.target.value))}
-                                      className="border border-black rounded text-[10px]"
-                                    >
-                                      {[0, 5, 12, 18, 28].map(v => <option key={v} value={v}>{v}%</option>)}
+                                    <select value={l.gstRate || 0} onChange={(e) => handleUpdateLine(idx, "gstRate", Number(e.target.value))} className="border border-black rounded text-[10px]">
+                                      {gstRateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                                     </select>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500">CGST %:</span>
+                                    <input type="number" value={l.cgstRate || 0} onChange={(e) => handleUpdateLine(idx, "cgstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500">SGST %:</span>
+                                    <input type="number" value={l.sgstRate || 0} onChange={(e) => handleUpdateLine(idx, "sgstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500">IGST %:</span>
+                                    <input type="number" value={l.igstRate || 0} onChange={(e) => handleUpdateLine(idx, "igstRate", Number(e.target.value))} className="w-16 border border-black rounded px-1 text-xs" />
                                   </div>
                                </div>
                              );

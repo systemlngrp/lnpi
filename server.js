@@ -154,7 +154,6 @@ const NPD_SYNC_HEADER_MAP = {
   "Customer PO Date": "customerPoDate",
   "Order Quantity": "orderQuantity",
   "Order Rate": "orderRate",
-  "Last Order rate": "orderRate",
   "Customer PO Amount": "customerPoAmount",
   "No. of Boxes per Sheet in case of Die Cut Box": "boxesPerSheetDieCut",
   "Reel Size": "reelSize",
@@ -709,12 +708,79 @@ app.get("/api/npd-sync/rates", async (req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
   try {
-    const rows = await fetchActiveNpdItems(db);
-    const rateRows = rows.map((row) => ({
-      npdId: stringOrEmpty(row?.npdId || row?.id),
-      rate: row?.rate == null || row?.rate === "" ? null : Number(row.rate),
-      orderRate: row?.orderRate == null || row?.orderRate === "" ? null : Number(row.orderRate)
-    })).filter((row) => row.npdId);
+    const approvedStatuses = /* @__PURE__ */ new Set(["Approved", "Pending Scheduling", "Scheduled"]);
+    const [orderRows] = await db.query(
+      `
+      SELECT
+        id,
+        orderNo,
+        orderDate,
+        erpCode,
+        rate,
+        status,
+        approvedTimestamp,
+        approvedEmail
+      FROM \`orders\`
+      WHERE COALESCE(NULLIF(TRIM(erpCode), ''), '') <> ''
+        AND rate IS NOT NULL
+        AND (
+          COALESCE(NULLIF(TRIM(approvedTimestamp), ''), '') <> ''
+          OR COALESCE(NULLIF(TRIM(approvedEmail), ''), '') <> ''
+          OR COALESCE(NULLIF(TRIM(status), ''), '') IN ('Approved', 'Pending Scheduling', 'Scheduled')
+        )
+      `
+    );
+    const parseDateValue = (value) => {
+      const raw = stringOrEmpty(value);
+      if (!raw) return 0;
+      const direct = Date.parse(raw);
+      if (!Number.isNaN(direct)) return direct;
+      const ddmmyyyy = raw.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+      if (ddmmyyyy) {
+        const [, dd, mm, yyyy] = ddmmyyyy;
+        const normalized = `${yyyy}-${mm}-${dd}T00:00:00Z`;
+        const parsed = Date.parse(normalized);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+      return 0;
+    };
+    const getOrderNumberRank = (value) => {
+      const raw = stringOrEmpty(value);
+      if (!raw) return 0;
+      const match = raw.match(/(\d+)(?!.*\d)/);
+      return match ? Number(match[1]) : 0;
+    };
+    const latestByErp = /* @__PURE__ */ new Map();
+    for (const row of orderRows) {
+      const erp = stringOrEmpty(row?.erpCode);
+      const rate = Number(row?.rate);
+      const status = stringOrEmpty(row?.status);
+      const approvedAt = stringOrEmpty(row?.approvedTimestamp);
+      const approvedBy = stringOrEmpty(row?.approvedEmail);
+      const isApproved = approvedStatuses.has(status) || hasWorkflowValue(approvedAt) || hasWorkflowValue(approvedBy);
+      if (!erp || !Number.isFinite(rate) || !isApproved) continue;
+      const candidate = {
+        erp,
+        rate,
+        orderNo: stringOrEmpty(row?.orderNo),
+        orderDate: stringOrEmpty(row?.orderDate),
+        approvedAt,
+        status: "approved",
+        sortApprovedAt: parseDateValue(approvedAt),
+        sortOrderDate: parseDateValue(row?.orderDate),
+        sortOrderNo: getOrderNumberRank(row?.orderNo)
+      };
+      const existing = latestByErp.get(erp);
+      if (!existing) {
+        latestByErp.set(erp, candidate);
+        continue;
+      }
+      const candidateWins = candidate.sortApprovedAt > existing.sortApprovedAt || candidate.sortApprovedAt === existing.sortApprovedAt && (candidate.sortOrderDate > existing.sortOrderDate || candidate.sortOrderDate === existing.sortOrderDate && candidate.sortOrderNo > existing.sortOrderNo);
+      if (candidateWins) {
+        latestByErp.set(erp, candidate);
+      }
+    }
+    const rateRows = Array.from(latestByErp.values()).sort((a, b) => a.erp.localeCompare(b.erp, void 0, { numeric: true, sensitivity: "base" })).map(({ sortApprovedAt, sortOrderDate, sortOrderNo, ...row }) => row);
     return res.json({
       ok: true,
       total: rateRows.length,
@@ -2249,6 +2315,16 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`gst_rate_masters\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`rate\` DECIMAL(5,2) NOT NULL DEFAULT 0,
+          \`active\` VARCHAR(10) DEFAULT 'Yes',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`material_in\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
@@ -2264,8 +2340,13 @@ async function initDb(retries = 5) {
           \`totalPoValue\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`totalInvoiceValue\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`totalActualValue\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`totalCgst\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`totalSgst\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`totalIgst\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`totalInvoiceValueAfterGst\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`insurance\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`otherCharges\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`roundOff\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`totalAmount\` DECIMAL(15, 2) NOT NULL,
           \`lines\` JSON NOT NULL,
           \`phTimestamp\` VARCHAR(255),
@@ -2872,6 +2953,11 @@ async function initDb(retries = 5) {
         { table: "states", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "states", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
         { table: "color_masters", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "gst_rate_masters", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "gst_rate_masters", column: "rate", type: "DECIMAL(5,2) NOT NULL DEFAULT 0" },
+        { table: "gst_rate_masters", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
+        { table: "gst_rate_masters", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "gst_rate_masters", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "material_in", column: "mrrType", type: "VARCHAR(50)" },
         { table: "material_in", column: "gateEntryId", type: "VARCHAR(36)" },
@@ -2886,6 +2972,13 @@ async function initDb(retries = 5) {
         { table: "material_in", column: "totalPoValue", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "totalInvoiceValue", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "totalActualValue", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "totalCgst", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "totalSgst", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "totalIgst", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "totalInvoiceValueAfterGst", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "insurance", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "otherCharges", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "roundOff", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "totalAmount", type: "DECIMAL(15, 2) NOT NULL" },
         { table: "material_in", column: "phTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "phEmailId", type: "VARCHAR(255)" },
@@ -3786,7 +3879,7 @@ Exceeds by: ${nextTotal - plannedQty}`
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
 app.get("/api/legacy-items", async (req, res) => {
   try {
     const user = await getRequestUser(req);

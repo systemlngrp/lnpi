@@ -119,8 +119,14 @@ export interface MaterialLine {
   rate: number;
   value: number;
   gstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+  igstRate?: number;
   taxableAmount?: number;
   gstAmount?: number;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
   totalAmount?: number;
 }
 
@@ -348,6 +354,15 @@ export interface ColorMaster {
   updateTimestamp?: string;
 }
 
+export interface GstRateMaster {
+  id: string;
+  name: string;
+  rate: number;
+  active?: "Yes" | "No";
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Machine {
   id: string;
   name: string;
@@ -448,8 +463,13 @@ export interface MaterialIn {
   totalPoValue?: number;
   totalInvoiceValue?: number;
   totalActualValue?: number;
+  totalCgst?: number;
+  totalSgst?: number;
+  totalIgst?: number;
+  totalInvoiceValueAfterGst?: number;
   insurance?: number;
   otherCharges?: number;
+  roundOff?: number;
   totalAmount: number;
   lines: MaterialLine[];
   phTimestamp?: string;

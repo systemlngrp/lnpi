@@ -37,6 +37,7 @@ import { Suppliers } from "./pages/Suppliers";
 import { States } from "./pages/States";
 import { Units } from "./pages/Units";
 import { ColorMasters } from "./pages/ColorMasters";
+import { GstRateMasters } from "./pages/GstRateMasters";
 import { Companies } from "./pages/Companies";
 import { Trucks } from "./pages/Trucks";
 import { Machines } from "./pages/Machines";
@@ -136,6 +137,7 @@ export default function App() {
           <Route path="masters/states" element={<States />} />
           <Route path="masters/units" element={<Units />} />
           <Route path="masters/colors" element={<ColorMasters />} />
+          <Route path="masters/gst-rates" element={<GstRateMasters />} />
           <Route path="masters/companies" element={<Companies />} />
           <Route path="masters/trucks" element={<Trucks />} />
           <Route path="masters/machines" element={<Machines />} />
