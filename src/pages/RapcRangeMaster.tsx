@@ -180,9 +180,9 @@ export function RapcRangeMaster() {
       </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <div className="table-scroll-shell">
+        <div className="table-scroll-shell max-h-[70vh] overflow-auto">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
-            <thead className="bg-slate-100">
+            <thead className="bg-slate-100 sticky top-0 z-10">
               <tr className="divide-x divide-black">
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">From</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">To</th>

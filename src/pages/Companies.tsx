@@ -468,9 +468,9 @@ export function Companies() {
           ))}
         </div>
 
-        <div className="table-scroll-shell hidden md:block">
+        <div className="table-scroll-shell hidden md:block max-h-[70vh] overflow-auto">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
-            <thead className="bg-slate-100 divide-x divide-black">
+            <thead className="bg-slate-100 divide-x divide-black sticky top-0 z-10">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Company</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Contact Person</th>

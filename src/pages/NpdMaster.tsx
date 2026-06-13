@@ -282,9 +282,9 @@ export function NpdMaster() {
           </div>
         </div>
 
-        <div className="table-scroll-shell">
+        <div className="table-scroll-shell max-h-[70vh] overflow-auto">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
-            <thead className="bg-slate-100 divide-x divide-black">
+            <thead className="bg-slate-100 divide-x divide-black sticky top-0 z-10">
               <tr className="divide-x divide-black">
                 {NPD_COLUMNS.map((column) => (
                   <th key={column.key} className="border border-black px-3 py-3 text-left text-xs font-bold uppercase text-black align-top min-w-[92px] max-w-[180px] whitespace-normal break-words">
