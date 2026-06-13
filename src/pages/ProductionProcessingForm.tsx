@@ -5,7 +5,6 @@ import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { normalizeMachineName } from "../lib/productionMachineNames";
-import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
 import { isMandatoryField } from "../lib/mandatoryFields";
 import { useAuth } from "../auth/AuthContext";
@@ -110,8 +109,46 @@ export function ProductionProcessingForm() {
     }
   }, [assignedMachineIdsForUser, machineId, machines.length, machinesLoading, operatorId, operatorOptions, user]);
 
-  const isCorrugationLiner = (machineName: string) =>
-    String(machineName || "").trim().toLowerCase() === "corrugation liner";
+  const selectedProduction = useMemo(
+    () => productions.find((production) => production.id === productionId),
+    [productions, productionId]
+  );
+
+  const selectedMachine = useMemo(
+    () => machines.find((machine) => machine.id === machineId),
+    [machineId, machines]
+  );
+
+  const qtyContext = useMemo(() => {
+    if (!selectedProduction || !selectedMachine) {
+      return null;
+    }
+
+    const plannedQty = Number(selectedProduction.qty || 0);
+    const normalizedMachineName = normalizeMachineName(selectedMachine.name);
+    const alreadyProcessedQty = processing
+      .filter(
+        (entry) =>
+          entry.productionId === selectedProduction.id &&
+          normalizeMachineName(entry.machineName) === normalizedMachineName
+      )
+      .reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
+    const pendingQty = Math.max(0, plannedQty - alreadyProcessedQty);
+
+    return {
+      plannedQty,
+      normalizedMachineName,
+      alreadyProcessedQty,
+      pendingQty,
+    };
+  }, [processing, selectedMachine, selectedProduction]);
+
+  useEffect(() => {
+    if (initialQty) return;
+    if (!qtyContext || qty) return;
+    if (qtyContext.pendingQty <= 0) return;
+    setQty(String(qtyContext.pendingQty));
+  }, [initialQty, qty, qtyContext]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,8 +166,6 @@ export function ProductionProcessingForm() {
       return;
     }
 
-    const selectedProduction = productions.find(p => p.id === productionId);
-    const selectedMachine = machines.find(m => m.id === machineId);
     const selectedOperator = users.find(u => u.id === operatorId);
 
     if (!selectedProduction || !selectedMachine) return;
@@ -146,29 +181,7 @@ export function ProductionProcessingForm() {
       return;
     }
 
-    const plannedQty = Number(selectedProduction.qty || 0);
-    const normalizedMachineName = normalizeMachineName(selectedMachine.name);
-    const machineColumn = PROCESSING_MACHINE_COLUMNS.find((column) =>
-      (column.machineNames as readonly string[]).includes(normalizedMachineName)
-    );
-
-    if (!machineColumn) {
-      alert("Selected machine is not mapped for processing. Please contact admin.");
-      return;
-    }
-
-    if (!isCorrugationLiner(normalizedMachineName) && plannedQty > 0) {
-      const alreadyProcessedQty = processing
-        .filter((entry) => entry.productionId === productionId && normalizeMachineName(entry.machineName) === normalizedMachineName)
-        .reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
-      const nextTotal = alreadyProcessedQty + qtyNumber;
-      if (nextTotal > plannedQty) {
-        alert(
-          `Cannot report more than planned qty.\nJob: ${selectedProduction.jobCardNo || selectedProduction.transactionNo}\nStep/Machine: ${machineColumn.label}\nPlan Qty: ${plannedQty}\nAlready reported: ${alreadyProcessedQty}\nNow: ${qtyNumber}\nExceeds by: ${nextTotal - plannedQty}`
-        );
-        return;
-      }
-    }
+    const normalizedMachineName = qtyContext?.normalizedMachineName ?? normalizeMachineName(selectedMachine.name);
 
     setIsSubmitting(true);
     setTimeout(() => {
@@ -270,9 +283,15 @@ export function ProductionProcessingForm() {
                 value={qty} 
                 onChange={(e) => setQty(e.target.value)} 
                 placeholder="Enter processed quantity"
+                min="0"
                 required 
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600" 
               />
+              {qtyContext && selectedProduction && selectedMachine ? (
+                <div className="text-[11px] font-bold text-slate-600">
+                  Plan: {qtyContext.plannedQty.toLocaleString()} | Reported: {qtyContext.alreadyProcessedQty.toLocaleString()} | Pending: {qtyContext.pendingQty.toLocaleString()}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-col space-y-1">
