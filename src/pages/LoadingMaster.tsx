@@ -313,7 +313,8 @@ export function LoadingMaster() {
       );
 
       const roundOff = Number(invoice.roundOff || 0);
-      const nextTotalAfterGst = totals.totalBeforeGst + totals.cgst + totals.sgst + totals.igst + roundOff;
+      const otherCharges = Number(invoice.otherCharges || 0);
+      const nextTotalAfterGst = totals.totalBeforeGst + totals.cgst + totals.sgst + totals.igst;
 
       await setInvoices((prev) =>
         prev.map((inv) =>
@@ -325,6 +326,8 @@ export function LoadingMaster() {
                 sgst: totals.sgst,
                 igst: totals.igst,
                 totalAfterGst: nextTotalAfterGst,
+                otherCharges,
+                roundOff,
                 updatedBy: "System User",
                 updateTimestamp: now,
               }

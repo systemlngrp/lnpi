@@ -84,7 +84,7 @@ export function BillingPendingTally() {
           ...inv,
           companyName: company?.name || "Unknown",
           poNumbers,
-          grandTotal: Number(inv.totalAfterGst || 0) + Number(inv.roundOff || 0),
+          grandTotal: Number(inv.totalAfterGst || 0) + Number(inv.otherCharges || 0) + Number(inv.roundOff || 0),
           details: invLines.map(li => ({
             ...li,
             itemName: npdItems.find(i => i.id === li.itemId)?.name || "Unknown",

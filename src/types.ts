@@ -707,6 +707,7 @@ export interface Invoice {
   sgst: number;
   igst: number;
   totalAfterGst: number;
+  otherCharges?: number;
   roundOff: number;
   tallyTimestamp?: string;
   tallyBy?: string;

@@ -447,18 +447,33 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       if (!s?.scheduledDate) return false;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(23, 59, 59, 999);
-      const schedDate = new Date(s.scheduledDate);
-      
-      const alreadyPlanned = dispatchPlans
-        .filter(plan => plan.scheduleId === s.id)
-        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
-      
-      const balance = Number(s.qty || 0) - alreadyPlanned;
+      const cutoffDate = new Date(today);
+      cutoffDate.setDate(cutoffDate.getDate() + 2);
+      cutoffDate.setHours(23, 59, 59, 999);
 
-      return !isNaN(schedDate.getTime()) && schedDate > tomorrow && balance > 0;
+      const parseLocalYmd = (dateStr?: string) => {
+        if (!dateStr) return null;
+        const match = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!match) return null;
+        const year = Number(match[1]);
+        const monthIndex = Number(match[2]) - 1;
+        const day = Number(match[3]);
+        const date = new Date(year, monthIndex, day);
+        if (Number.isNaN(date.getTime())) return null;
+        date.setHours(0, 0, 0, 0);
+        return date;
+      };
+
+      const getPendingProductionQty = (schedule: OrderSchedule) =>
+        Math.max(
+          Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
+          0
+        );
+
+      const scheduledDate = parseLocalYmd(s.scheduledDate);
+      if (!scheduledDate) return false;
+
+      return scheduledDate.getTime() > cutoffDate.getTime() && getPendingProductionQty(s) > 0;
     }).length,
     "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
                   productions.filter(isProductionPendingPH).length +

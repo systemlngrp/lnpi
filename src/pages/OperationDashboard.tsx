@@ -28,6 +28,7 @@ import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
 import { exportsAllowed } from "../lib/exportPolicy";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import { normalizeMachineName } from "../lib/productionMachineNames";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { formatDate } from "../lib/serial";
 import { cn, formatCurrency, formatNumber } from "../lib/utils";
@@ -109,6 +110,18 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
     ],
   },
 ];
+
+const PROCESSING_MACHINE_CARD_ORDER = [
+  "Corrugation Paper",
+  "Corrugation Liner",
+  "Printing",
+  "Pasting",
+  "Rotary",
+  "Slotting",
+  "Stitching",
+  "Punching",
+  "Gluing",
+] as const;
 
 function getPlanPaper(p: Production) {
   const total = Number(p.totalJobWeight || 0);
@@ -344,6 +357,47 @@ export function OperationDashboard() {
     ]
   );
 
+  const processingMachineCards = useMemo(() => {
+    const machineMap = new Map<string, { qty: number; entries: number }>();
+
+    processing
+      .filter((entry) => (safeRange ? isDateWithinRange(entry.date, safeRange) : true))
+      .forEach((entry) => {
+        const machineName = normalizeMachineName(entry.machineName || "").trim();
+        if (!machineName) return;
+        const current = machineMap.get(machineName) || { qty: 0, entries: 0 };
+        current.qty += Number(entry.qty || 0);
+        current.entries += 1;
+        machineMap.set(machineName, current);
+      });
+
+    const cards = PROCESSING_MACHINE_CARD_ORDER.map((machineName) => {
+      const totals = machineMap.get(machineName) || { qty: 0, entries: 0 };
+      return {
+        id: `processing-${machineName.toLowerCase().replace(/\s+/g, "-")}`,
+        label: machineName,
+        value: totals.qty,
+        format: "number" as const,
+        note: `${totals.entries} entr${totals.entries === 1 ? "y" : "ies"}`,
+        status: "ready" as const,
+      };
+    });
+
+    machineMap.forEach((totals, machineName) => {
+      if (PROCESSING_MACHINE_CARD_ORDER.includes(machineName as (typeof PROCESSING_MACHINE_CARD_ORDER)[number])) return;
+      cards.push({
+        id: `processing-${machineName.toLowerCase().replace(/\s+/g, "-")}`,
+        label: machineName,
+        value: totals.qty,
+        format: "number" as const,
+        note: `${totals.entries} entr${totals.entries === 1 ? "y" : "ies"}`,
+        status: "ready" as const,
+      });
+    });
+
+    return cards;
+  }, [processing, safeRange]);
+
   const exportData = useMemo(() => {
     return rows.map((r) => ({
       "Sr. No.": r.srNo,
@@ -484,6 +538,25 @@ export function OperationDashboard() {
           );
         })}
       </div>
+
+      <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
+          Production Processing
+        </div>
+        <div className="flex overflow-x-auto divide-x divide-slate-900 scrollbar-thin">
+          {processingMachineCards.map((card, index) => (
+            <SummaryMetricCard
+              key={card.id}
+              card={card}
+              config={{
+                id: card.id,
+                tone: index % 2 === 0 ? "bg-cyan-50" : "bg-emerald-50",
+                valueTone: index % 2 === 0 ? "text-cyan-800" : "text-emerald-800",
+              }}
+            />
+          ))}
+        </div>
+      </section>
 
       {/* Search Input Controls */}
       <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center">

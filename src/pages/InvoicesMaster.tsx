@@ -43,7 +43,8 @@ export function InvoicesMaster() {
   };
 
   const getRoundOff = (invoice: Invoice) => Number(invoice.roundOff || 0);
-  const getGrandTotal = (invoice: Invoice) => Number(invoice.totalAfterGst || 0) + getRoundOff(invoice);
+  const getOtherCharges = (invoice: Invoice) => Number(invoice.otherCharges || 0);
+  const getGrandTotal = (invoice: Invoice) => Number(invoice.totalAfterGst || 0) + getOtherCharges(invoice) + getRoundOff(invoice);
 
   const processedInvoices = useMemo(() => {
     return invoices.map(inv => {
@@ -54,7 +55,7 @@ export function InvoicesMaster() {
         return item?.name || "Unknown";
       });
       const roundOff = getRoundOff(inv);
-      const grandTotal = Number(inv.totalAfterGst || 0) + roundOff;
+      const grandTotal = Number(inv.totalAfterGst || 0) + getOtherCharges(inv) + roundOff;
       
       return {
         ...inv,
@@ -195,7 +196,9 @@ export function InvoicesMaster() {
                           </thead>
                           <tbody className="bg-white divide-y divide-black">
                             {inv.details.map((line: any, idx: number) => {
+                              const amount = Number(line.amount) || 0;
                               const tax = (Number(line.cgst) || 0) + (Number(line.sgst) || 0) + (Number(line.igst) || 0);
+                              const total = amount + tax;
                               return (
                                 <tr key={idx} className="divide-x divide-black">
                                   <td className="px-3 py-2 text-xs font-bold uppercase">{line.itemName}</td>
@@ -204,7 +207,7 @@ export function InvoicesMaster() {
                                   <td className="px-3 py-2 text-xs text-right">{line.qty.toLocaleString()}</td>
                                   <td className="px-3 py-2 text-xs text-right">{Number(line.rate || 0).toFixed(2)}</td>
                                   <td className="px-3 py-2 text-xs text-right">{line.gstRate}%</td>
-                                  <td className="px-3 py-2 text-xs text-right font-bold">{(line.amount + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                  <td className="px-3 py-2 text-xs text-right font-bold">{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 </tr>
                               );
                             })}
@@ -270,7 +273,9 @@ export function InvoicesMaster() {
                   </thead>
                   <tbody className="divide-y divide-black bg-white">
                     {invoiceDetails.map((line, idx) => {
-                      const tax = (line.cgst || 0) + (line.sgst || 0) + (line.igst || 0);
+                      const amount = Number(line.amount) || 0;
+                      const tax = (Number(line.cgst) || 0) + (Number(line.sgst) || 0) + (Number(line.igst) || 0);
+                      const total = amount + tax;
                       return (
                         <tr key={idx} className="divide-x divide-black">
                           <td className="px-4 py-3">
@@ -284,7 +289,7 @@ export function InvoicesMaster() {
                           <td className="px-4 py-3 text-right text-sm">{Number(line.rate || 0).toFixed(2)}</td>
                           <td className="px-4 py-3 text-right text-sm">{line.gstRate}%</td>
                           <td className="px-4 py-3 text-right text-sm">{tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-right text-sm font-medium">{(line.amount + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-right text-sm font-medium">{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         </tr>
                       );
                     })}
@@ -311,6 +316,10 @@ export function InvoicesMaster() {
 	                      <td className="px-4 py-3 text-right text-lg font-bold">
 	                        {selectedInvoice.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
 	                      </td>
+	                    </tr>
+	                    <tr className="divide-x divide-black">
+	                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Other Charges</td>
+	                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{getOtherCharges(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
 	                    </tr>
 	                    <tr className="divide-x divide-black">
 	                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Round Off</td>

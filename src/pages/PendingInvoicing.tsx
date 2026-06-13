@@ -74,6 +74,8 @@ export function PendingInvoicing() {
   
   const [invoiceRows, setInvoiceRows] = useState<InvoiceItemRow[]>([]);
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
+  const [otherCharges, setOtherCharges] = useState<number | "">("");
+  const [roundOff, setRoundOff] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleCompany = (id: string) => {
@@ -175,6 +177,8 @@ export function PendingInvoicing() {
     
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
+    setOtherCharges("");
+    setRoundOff("");
     
     const itemMap = new Map<string, InvoiceItemRow>();
     const itemOrderQtyMap = new Map<string, Map<string, number>>(); // itemId -> orderId -> qty
@@ -293,6 +297,8 @@ export function PendingInvoicing() {
     let totalCgst = 0;
     let totalSgst = 0;
     let totalIgst = 0;
+    const otherChargesValue = Number(otherCharges || 0);
+    const roundOffValue = Number(roundOff || 0);
 
     invoiceRows.forEach((itemRow) => {
       itemRow.allocations.forEach((alloc) => {
@@ -313,9 +319,7 @@ export function PendingInvoicing() {
     });
 
     const totalAfterGst = totalBeforeGst + totalCgst + totalSgst + totalIgst;
-    // Nearest 0.5 rounding
-    const roundedTotal = Math.round(totalAfterGst * 2) / 2;
-    const roundOff = roundedTotal - totalAfterGst;
+    const grandTotal = totalAfterGst + otherChargesValue + roundOffValue;
 
     return { 
       totalBeforeGst, 
@@ -323,10 +327,11 @@ export function PendingInvoicing() {
       sgst: totalSgst, 
       igst: totalIgst, 
       totalAfterGst, 
-      roundOff, 
-      grandTotal: roundedTotal 
+      otherCharges: otherChargesValue,
+      roundOff: roundOffValue, 
+      grandTotal
     };
-  }, [invoiceRows, gstSupplyType, orders]);
+  }, [invoiceRows, gstSupplyType, orders, otherCharges, roundOff]);
 
   const handleSubmitInvoice = async () => {
     if (!invoiceModal || isSubmitting) return;
@@ -401,7 +406,8 @@ export function PendingInvoicing() {
         cgst: calculations.cgst,
         sgst: calculations.sgst,
         igst: calculations.igst,
-        totalAfterGst: calculations.grandTotal,
+        totalAfterGst: calculations.totalAfterGst,
+        otherCharges: calculations.otherCharges,
         roundOff: calculations.roundOff
       };
 
@@ -759,8 +765,29 @@ export function PendingInvoicing() {
                       </>
                     )}
                     <tr className="divide-x divide-black">
-                      <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase italic text-slate-400">Round Off (to nearest 0.5)</td>
-                      <td className="px-3 py-2 text-right text-[11px] text-slate-400">{format2(calculations.roundOff)}</td>
+                      <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">Other Charges</td>
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={otherCharges}
+                          onChange={(e) => setOtherCharges(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                          className="w-28 px-2 py-1 border border-black rounded text-right text-[11px] font-bold"
+                        />
+                      </td>
+                      <td></td>
+                    </tr>
+                    <tr className="divide-x divide-black">
+                      <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase italic text-slate-400">Round Off</td>
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={roundOff}
+                          onChange={(e) => setRoundOff(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                          className="w-28 px-2 py-1 border border-black rounded text-right text-[11px] font-bold"
+                        />
+                      </td>
                       <td></td>
                     </tr>
                     <tr className="divide-x divide-black bg-slate-900 text-white">
