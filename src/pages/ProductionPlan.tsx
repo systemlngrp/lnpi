@@ -125,10 +125,7 @@ export function ProductionPlan() {
         "Planned Production (Meter)": format2(p.plannedProductionInMeter),
         "Sheet Weight": format2(p.sheetWeight),
         "Total Paper Weight": format2(p.totalPaperWeight),
-        "Realization Per Kg": format2(p.realizationPerKg),
         "Flute Batch": p.fluteBatches || "-",
-        "Rate": format2(p.rate),
-        "Value": format2(value),
         "Paper Required (Nos)": format2(p.paperRequiredNos),
         "Liner Required (Nos)": format2(p.lineRequiredNos),
       } as Record<string, string | number>;
