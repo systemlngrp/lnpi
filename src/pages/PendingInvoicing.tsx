@@ -7,7 +7,8 @@ import {
   Invoice, 
   InvoiceLineItem,
   DispatchPlan,
-  Order
+  Order,
+  Truck
 } from "../types";
 import {
   FileText, 
@@ -19,7 +20,8 @@ import {
   Receipt,
   Building2,
   Package,
-  Plus
+  Plus,
+  Truck as TruckIcon
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
@@ -57,6 +59,7 @@ export function PendingInvoicing() {
   const [orders] = useData<Order>("orders", []);
   const [invoices, updateInvoices] = useData<Invoice>("invoices", []);
   const [invoiceLineItems, updateLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [trucks] = useData<Truck>("trucks", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -546,6 +549,7 @@ export function PendingInvoicing() {
                       {billingMode === group.companyId && <th className="w-10 px-2 py-2"></th>}
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Slip No</th>
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Date</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Truck No</th>
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Items</th>
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Total Qty</th>
                     </tr>
@@ -565,6 +569,9 @@ export function PendingInvoicing() {
                         )}
                         <td className="px-3 py-2 text-xs font-bold">{s.slipNo}</td>
                         <td className="px-3 py-2 text-xs">{formatDate(s.date)}</td>
+                        <td className="px-3 py-2 text-xs font-bold text-indigo-700">
+                          {trucks.find(t => t.id === s.truckId)?.truckNo || "N/A"}
+                        </td>
                         <td className="px-3 py-2 text-xs truncate max-w-[200px]">{s.items.join(", ")}</td>
                         <td className="px-3 py-2 text-xs text-right font-medium">{s.totalQty.toLocaleString()}</td>
                       </tr>

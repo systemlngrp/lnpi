@@ -6,7 +6,8 @@ import {
   InvoiceLineItem,
   Company,
   Item,
-  LoadingSlip
+  LoadingSlip,
+  Truck
 } from "../types";
 import { 
   Search, 
@@ -16,7 +17,8 @@ import {
   ChevronRight,
   ChevronDown,
   X,
-  FileText
+  FileText,
+  Truck as TruckIcon
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
@@ -27,6 +29,7 @@ export function InvoicesMaster() {
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
   const [slips] = useData<LoadingSlip>("loading_slips", []);
+  const [trucks] = useData<Truck>("trucks", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -61,18 +64,23 @@ export function InvoicesMaster() {
         itemSummary: Array.from(new Set(invItems)).join(", "),
         roundOff,
         grandTotal,
-        details: invLines.map(li => ({
-          ...li,
-          itemName: npdItems.find(i => i.id === li.itemId)?.name || "Unknown",
-          slipNo: slips.find(s => s.id === li.loadingSlipId)?.slipNo || "N/A"
-        }))
+        details: invLines.map(li => {
+          const slip = slips.find(s => s.id === li.loadingSlipId);
+          const truck = trucks.find(t => t.id === slip?.truckId);
+          return {
+            ...li,
+            itemName: npdItems.find(i => i.id === li.itemId)?.name || "Unknown",
+            slipNo: slip?.slipNo || "N/A",
+            truckNo: truck?.truckNo || "N/A"
+          };
+        })
       };
     }).filter(inv => {
       return inv.invoiceNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
              inv.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
              inv.itemSummary.toLowerCase().includes(searchTerm.toLowerCase());
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [invoices, companies, lineItems, npdItems, slips, searchTerm]);
+  }, [invoices, companies, lineItems, npdItems, slips, trucks, searchTerm]);
 
   const invoiceDetails = useMemo(() => {
     if (!selectedInvoice) return [];
@@ -81,13 +89,15 @@ export function InvoicesMaster() {
       .map(li => {
         const item = npdItems.find(i => i.id === li.itemId);
         const slip = slips.find(s => s.id === li.loadingSlipId);
+        const truck = trucks.find(t => t.id === slip?.truckId);
         return {
           ...li,
           itemName: item?.name || "Unknown",
-          slipNo: slip?.slipNo || "N/A"
+          slipNo: slip?.slipNo || "N/A",
+          truckNo: truck?.truckNo || "N/A"
         };
       });
-  }, [selectedInvoice, lineItems, npdItems, slips]);
+  }, [selectedInvoice, lineItems, npdItems, slips, trucks]);
 
   return (
     <div className="space-y-6">
@@ -176,6 +186,7 @@ export function InvoicesMaster() {
                             <tr className="divide-x divide-black">
                               <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
                               <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Slip No</th>
+                              <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Truck No</th>
                               <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-24">Qty</th>
                               <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-24">Rate</th>
                               <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-20">GST %</th>
@@ -189,6 +200,7 @@ export function InvoicesMaster() {
                                 <tr key={idx} className="divide-x divide-black">
                                   <td className="px-3 py-2 text-xs font-bold uppercase">{line.itemName}</td>
                                   <td className="px-3 py-2 text-xs">{line.slipNo}</td>
+                                  <td className="px-3 py-2 text-xs font-bold text-indigo-700">{line.truckNo}</td>
                                   <td className="px-3 py-2 text-xs text-right">{line.qty.toLocaleString()}</td>
                                   <td className="px-3 py-2 text-xs text-right">{Number(line.rate || 0).toFixed(2)}</td>
                                   <td className="px-3 py-2 text-xs text-right">{line.gstRate}%</td>
@@ -263,7 +275,10 @@ export function InvoicesMaster() {
                         <tr key={idx} className="divide-x divide-black">
                           <td className="px-4 py-3">
                             <div className="font-bold text-sm uppercase">{line.itemName}</div>
-                            <div className="text-[10px] text-slate-500">Slip: {line.slipNo}</div>
+                            <div className="flex gap-2">
+                                <div className="text-[10px] text-slate-500 font-bold">Slip: {line.slipNo}</div>
+                                <div className="text-[10px] text-indigo-500 font-black">Truck: {line.truckNo}</div>
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-right text-sm">{line.qty.toLocaleString()}</td>
                           <td className="px-4 py-3 text-right text-sm">{Number(line.rate || 0).toFixed(2)}</td>

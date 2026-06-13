@@ -215,6 +215,7 @@ export function PendingLoading() {
 
     const totalPending = modal.plans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
+    if (!modalTruckId) errors.push("Please select a truck.");
     if (rowLoadedQty <= 0) errors.push("Loaded qty must be greater than 0.");
     if (rowLoadedQty > totalPending + 0.0001) errors.push("Loaded qty cannot exceed total pending for loading.");
 
@@ -598,6 +599,23 @@ export function PendingLoading() {
                 <div className="bg-slate-50 p-4 border border-black rounded shadow-inner">
                   <div className="text-[10px] text-slate-500 uppercase font-black mb-1">Loading Date</div>
                   <div className="font-bold text-black text-sm">{formatDate(new Date().toISOString())}</div>
+                </div>
+
+                <div className="bg-slate-50 p-4 border border-black rounded shadow-inner flex flex-col justify-center">
+                  <div className="text-[10px] text-slate-500 uppercase font-black mb-1">Truck Number *</div>
+                  <select
+                    value={modalTruckId}
+                    onChange={(e) => setModalTruckId(e.target.value)}
+                    className="w-full border-2 border-black rounded p-1 text-sm font-bold focus:outline-none focus:border-indigo-600 bg-white"
+                  >
+                    <option value="">-- Select Truck --</option>
+                    {trucks
+                      .sort((a, b) => a.truckNo.localeCompare(b.truckNo))
+                      .map(truck => (
+                        <option key={truck.id} value={truck.id}>{truck.truckNo}</option>
+                      ))
+                    }
+                  </select>
                 </div>
               </div>
 
