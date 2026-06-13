@@ -7,6 +7,7 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useAuth } from "../auth/AuthContext";
 
 interface PendingMachineJob {
   production: Production;
@@ -28,6 +29,7 @@ interface MachineGroup {
 export function MachinePendingProcessing() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   const filterMachineId = searchParams.get("machineId") || "";
 
   const [productions] = useData<Production>("productions", []);
@@ -49,9 +51,17 @@ export function MachinePendingProcessing() {
 
   const machineGroups = useMemo(() => {
     const groups: Map<string, MachineGroup> = new Map();
+    const operatorAssignedMachineIds = new Set(
+      user?.role === "Operator"
+        ? machines
+            .filter((machine) => (Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : []).includes(user.id))
+            .map((machine) => machine.id)
+        : []
+    );
 
     // Initialize groups for relevant machines
     machines.forEach(m => {
+      if (user?.role === "Operator" && !operatorAssignedMachineIds.has(m.id)) return;
       if (filterMachineId && m.id !== filterMachineId) return;
       groups.set(m.id, { machineId: m.id, machineName: m.name, jobs: [] });
     });
@@ -109,7 +119,7 @@ export function MachinePendingProcessing() {
       }))
       .filter(g => g.jobs.length > 0)
       .sort((a, b) => a.machineName.localeCompare(b.machineName));
-  }, [productions, npdItems, machines, processing, mandatoryMachinesMapping, searchTerm, filterMachineId]);
+  }, [productions, npdItems, machines, processing, mandatoryMachinesMapping, searchTerm, filterMachineId, user]);
 
   const toggleMachine = (id: string) => {
     const next = new Set(expandedMachines);

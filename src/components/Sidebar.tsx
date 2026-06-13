@@ -259,7 +259,7 @@ const NAVIGATION_WITH_SORTED_MASTERS: NavGroup[] = NAVIGATION.map((group) =>
 
 export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
-  const { hasAccess } = useAuth();
+  const { hasAccess, user } = useAuth();
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
@@ -465,7 +465,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   consumptions.filter(c => isPendingPH(c.status)).length
   };
 
-  const navigation = NAVIGATION_WITH_SORTED_MASTERS;
+  const navigation =
+    user?.role === "Operator"
+      ? NAVIGATION_WITH_SORTED_MASTERS.filter((group) => group.section === "Production Processing")
+      : NAVIGATION_WITH_SORTED_MASTERS;
 
   useEffect(() => {
     const next: Record<string, boolean> = {};

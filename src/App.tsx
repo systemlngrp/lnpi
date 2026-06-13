@@ -4,6 +4,7 @@
  */
 
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./auth/AuthContext";
 import { Layout } from "./components/Layout";
 import { RequireAuth } from "./auth/RequireAuth";
 import { LoginPage } from "./pages/Login";
@@ -101,6 +102,14 @@ function BlankPage({ title }: { title: string }) {
   );
 }
 
+function HomeRedirect() {
+  const { user } = useAuth();
+  if (user?.role === "Operator") {
+    return <Navigate to="/production/pending-machine-processing" replace />;
+  }
+  return <Navigate to="/operations-dashboard" replace />;
+}
+
 export default function App() {
   return (
     <HashRouter>
@@ -115,7 +124,7 @@ export default function App() {
             </RequireAuth>
           }
         >
-          <Route index element={<Navigate to="/operations-dashboard" replace />} />
+          <Route index element={<HomeRedirect />} />
           <Route path="plant-head" element={<PlantHeadUnified />} />
           
           {/* Masters */}

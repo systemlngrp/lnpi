@@ -5,7 +5,7 @@ export type AuthUser = {
   userId: string;
   name: string;
   email?: string | null;
-  role: "Admin" | "Employee";
+  role: "Admin" | "Employee" | "Operator";
   status: "Active" | "Inactive";
   menuAccess: string[];
 };
@@ -13,12 +13,17 @@ export type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
-  login: (identifier: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   hasAccess: (href: string) => boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const OPERATOR_ALLOWED_PATHS = [
+  "/production-processing/master",
+  "/production-processing/form",
+  "/production/pending-machine-processing",
+];
 
 function normalizeMenuAccess(raw: unknown): string[] {
   if (!raw) return [];
@@ -48,11 +53,25 @@ function normalizeMenuAccess(raw: unknown): string[] {
   return [];
 }
 
+function normalizeRole(raw: unknown): AuthUser["role"] {
+  const role = String(raw || "Employee").trim();
+  if (role === "Admin") return "Admin";
+  if (role === "Operator") return "Operator";
+  return "Employee";
+}
+
+function getEffectiveMenuAccess(user: AuthUser | null) {
+  if (!user) return [];
+  if (user.role === "Operator") return OPERATOR_ALLOWED_PATHS;
+  return normalizeMenuAccess(user.menuAccess);
+}
+
 function isAllowed(user: AuthUser | null, href: string) {
   if (!user) return false;
+  if (href === "/") return true;
   if (user.role === "Admin") return true;
   if (user.status !== "Active") return false;
-  const list = normalizeMenuAccess(user.menuAccess);
+  const list = getEffectiveMenuAccess(user);
   if (list.includes("*")) return true;
   if (!href) return false;
   return list.some((entry) => {
@@ -88,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await authFetch("/api/auth/me");
       if (!res.ok) throw new Error(await res.text());
       const me = (await res.json()) as AuthUser;
-      setUser({ ...me, menuAccess: normalizeMenuAccess(me.menuAccess) });
+      setUser({ ...me, role: normalizeRole(me.role), menuAccess: normalizeMenuAccess(me.menuAccess) });
     } catch {
       window.localStorage.removeItem("authToken");
       setUser(null);
@@ -119,7 +138,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const data = await res.json();
     window.localStorage.setItem("authToken", String(data.token || ""));
-    setUser(data.user as AuthUser);
+    const nextUser = {
+      ...(data.user as AuthUser),
+      role: normalizeRole(data.user?.role),
+      menuAccess: normalizeMenuAccess(data.user?.menuAccess),
+    };
+    setUser(nextUser);
+    return nextUser;
   }, []);
 
   const logout = useCallback(async () => {

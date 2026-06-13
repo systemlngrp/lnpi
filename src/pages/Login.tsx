@@ -22,8 +22,9 @@ export function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(identifier.trim(), password);
-      navigate(next, { replace: true });
+      const loggedInUser = await login(identifier.trim(), password);
+      const nextPath = next === "/" && loggedInUser.role === "Operator" ? "/production/pending-machine-processing" : next;
+      navigate(nextPath, { replace: true });
     } catch (err) {
       setError((err as Error).message || "Login failed");
     } finally {

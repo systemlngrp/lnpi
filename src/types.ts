@@ -352,6 +352,8 @@ export interface Machine {
   id: string;
   name: string;
   maxOutputPerHour?: number;
+  assignedOperatorIds?: string[];
+  assignedOperatorNames?: string[];
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -476,7 +478,7 @@ export interface User {
   email?: string;
   password?: string;
   designation?: string;
-  role?: "Admin" | "Employee";
+  role?: "Admin" | "Employee" | "Operator";
   status?: "Active" | "Inactive";
   menuAccess?: string[];
   updatedBy?: string;

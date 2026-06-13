@@ -313,9 +313,39 @@ function normalizeMenuAccess(raw) {
   }
   return [];
 }
+function normalizeStringArray(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((value) => String(value || "").trim()).filter(Boolean);
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map((value) => String(value || "").trim()).filter(Boolean);
+    } catch {
+    }
+  }
+  return [];
+}
+function normalizeUserRole(raw) {
+  const role = String(raw || "Employee").trim();
+  if (role === "Admin") return "Admin";
+  if (role === "Operator") return "Operator";
+  return "Employee";
+}
+const OPERATOR_ALLOWED_PERMISSIONS = /* @__PURE__ */ new Set([
+  "/production-processing",
+  "/production",
+  "/masters/machines",
+  "/masters/settings",
+  "/masters/items"
+]);
 function hasPermission(user, required) {
   if (user.role === "Admin") return true;
   if (user.status !== "Active") return false;
+  if (user.role === "Operator") {
+    return OPERATOR_ALLOWED_PERMISSIONS.has(required);
+  }
   const list = user.menuAccess || [];
   if (list.includes("*")) return true;
   if (!required) return false;
@@ -365,7 +395,7 @@ app.post("/api/auth/login", async (req, res) => {
       userId: String(row.userId || ""),
       name: String(row.name || ""),
       email: row.email ? String(row.email) : null,
-      role: String(row.role || "Employee") === "Admin" ? "Admin" : "Employee",
+      role: normalizeUserRole(row.role),
       status,
       menuAccess: normalizeMenuAccess(row.menuAccess)
     };
@@ -1125,6 +1155,12 @@ function normalizeFetchedRow(tableName, row) {
     if (newRow.menuAccess === void 0 && newRow.menuaccess !== void 0) {
       newRow.menuAccess = newRow.menuaccess;
     }
+    newRow.role = normalizeUserRole(newRow.role);
+    newRow.menuAccess = normalizeMenuAccess(newRow.menuAccess);
+  }
+  if (tableName === "machines") {
+    newRow.assignedOperatorIds = normalizeStringArray(newRow.assignedOperatorIds);
+    newRow.assignedOperatorNames = normalizeStringArray(newRow.assignedOperatorNames);
   }
   return newRow;
 }
@@ -1597,7 +1633,7 @@ async function loadAuthUserById(userId) {
     userId: String(row.userId || ""),
     name: String(row.name || ""),
     email: row.email ? String(row.email) : null,
-    role: String(row.role || "Employee") === "Admin" ? "Admin" : "Employee",
+    role: normalizeUserRole(row.role),
     status: String(row.status || "Active") === "Inactive" ? "Inactive" : "Active",
     menuAccess: normalizeMenuAccess(row.menuAccess)
   };
@@ -2212,6 +2248,8 @@ async function initDb(retries = 5) {
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
           \`maxOutputPerHour\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`assignedOperatorIds\` JSON,
+          \`assignedOperatorNames\` JSON,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -2990,6 +3028,8 @@ async function initDb(retries = 5) {
         { table: "companies", column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
         { table: "machines", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "machines", column: "maxOutputPerHour", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "machines", column: "assignedOperatorIds", type: "JSON" },
+        { table: "machines", column: "assignedOperatorNames", type: "JSON" },
         { table: "machines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "machines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "production_processing", column: "productionId", type: "VARCHAR(36) NOT NULL" },
@@ -3393,7 +3433,7 @@ const createHandlers = (tableName) => {
             email: data.email ? String(data.email).trim() : null,
             password: data.password ? String(data.password) : null,
             designation: data.designation ? String(data.designation).trim() : null,
-            role: String(data.role || "Employee") === "Admin" ? "Admin" : "Employee",
+            role: normalizeUserRole(data.role),
             status: String(data.status || "Active") === "Inactive" ? "Inactive" : "Active",
             menuAccess: JSON.stringify(normalizeMenuAccess(data.menuAccess)),
             updatedBy: data.updatedBy,
@@ -4392,6 +4432,13 @@ entities.forEach((entity) => {
       if (!required) {
         if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
         return next();
+      }
+      if (user.role === "Operator") {
+        if (entity === "production_processing") {
+          if (req.method === "DELETE") return res.status(403).json({ error: "Forbidden" });
+        } else if (req.method !== "GET") {
+          return res.status(403).json({ error: "Forbidden" });
+        }
       }
       if (!hasPermission(user, required)) return res.status(403).json({ error: "Forbidden" });
       return next();

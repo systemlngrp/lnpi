@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Production, Machine, User, ProductionProcessing } from "../types";
 import { Spinner } from "../components/Spinner";
@@ -8,9 +8,11 @@ import { normalizeMachineName } from "../lib/productionMachineNames";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
 import { isMandatoryField } from "../lib/mandatoryFields";
+import { useAuth } from "../auth/AuthContext";
 
 export function ProductionProcessingForm() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const initialProductionId = searchParams.get("productionId") || "";
   const initialMachineId = searchParams.get("machineId") || "";
@@ -28,7 +30,19 @@ export function ProductionProcessingForm() {
   const [machineId, setMachineId] = useState(initialMachineId);
   const [shift, setShift] = useState<"" | "Day" | "Night">("");
   const [qty, setQty] = useState<string>("");
-  const [operatorId, setOperatorId] = useState("");
+  const [operatorId, setOperatorId] = useState(user?.role === "Operator" ? user.id : "");
+
+  const assignedMachineIdsForUser = useMemo(
+    () =>
+      user?.role === "Operator"
+        ? new Set(
+            machines
+              .filter((machine) => (Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : []).includes(user.id))
+              .map((machine) => machine.id)
+          )
+        : null,
+    [machines, user]
+  );
 
   const jobOptions = useMemo(() => {
     return productions
@@ -40,14 +54,46 @@ export function ProductionProcessingForm() {
   }, [productions]);
 
   const machineOptions = useMemo(() => {
-    return [...machines]
+    const visibleMachines =
+      user?.role === "Operator" && assignedMachineIdsForUser
+        ? machines.filter((machine) => assignedMachineIdsForUser.has(machine.id))
+        : machines;
+
+    return [...visibleMachines]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(m => ({ value: m.id, label: normalizeMachineName(m.name) }));
-  }, [machines]);
+  }, [assignedMachineIdsForUser, machines, user]);
 
   const operatorOptions = useMemo(() => {
-    return users.map(u => ({ value: u.id, label: u.name }));
-  }, [users]);
+    if (user?.role === "Operator") {
+      return [{ value: user.id, label: user.name }];
+    }
+
+    const selectedMachine = machines.find((machine) => machine.id === machineId);
+    const assignedIds = Array.isArray(selectedMachine?.assignedOperatorIds) ? selectedMachine.assignedOperatorIds : [];
+    const candidateUsers =
+      assignedIds.length > 0
+        ? users.filter((machineUser) => assignedIds.includes(machineUser.id))
+        : users.filter((machineUser) => machineUser.status !== "Inactive" && machineUser.role === "Operator");
+
+    return candidateUsers
+      .map((machineUser) => ({ value: machineUser.id, label: machineUser.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [machineId, machines, user, users]);
+
+  useEffect(() => {
+    if (user?.role === "Operator") {
+      setOperatorId(user.id);
+      if (machineId && assignedMachineIdsForUser && !assignedMachineIdsForUser.has(machineId)) {
+        setMachineId("");
+      }
+      return;
+    }
+
+    if (operatorId && !operatorOptions.some((option) => option.value === operatorId)) {
+      setOperatorId("");
+    }
+  }, [assignedMachineIdsForUser, machineId, operatorId, operatorOptions, user]);
 
   const isCorrugationLiner = (machineName: string) =>
     String(machineName || "").trim().toLowerCase() === "corrugation liner";
@@ -72,7 +118,13 @@ export function ProductionProcessingForm() {
     const selectedMachine = machines.find(m => m.id === machineId);
     const selectedOperator = users.find(u => u.id === operatorId);
 
-    if (!selectedProduction || !selectedMachine || !selectedOperator) return;
+    if (!selectedProduction || !selectedMachine) return;
+    if (user?.role === "Operator" && assignedMachineIdsForUser && !assignedMachineIdsForUser.has(selectedMachine.id)) {
+      alert("You are not assigned to this machine.");
+      return;
+    }
+    const operatorName = user?.role === "Operator" ? user.name : selectedOperator?.name;
+    if (!operatorName) return;
     const qtyNumber = Number(qty);
     if (!Number.isFinite(qtyNumber) || qtyNumber <= 0) {
       alert("Please enter a quantity greater than 0.");
@@ -114,7 +166,7 @@ export function ProductionProcessingForm() {
         shift: shift as "Day" | "Night",
         qty: qtyNumber,
         operatorId,
-        operatorName: selectedOperator.name,
+        operatorName,
         date,
         updatedBy: "System User",
         updateTimestamp: new Date().toISOString()
@@ -214,7 +266,8 @@ export function ProductionProcessingForm() {
                 onChange={setOperatorId} 
                 options={operatorOptions} 
                 placeholder="Select Operator..." 
-                required 
+                required
+                disabled={user?.role === "Operator"} 
               />
             </div>
           </div>

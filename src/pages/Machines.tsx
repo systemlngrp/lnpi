@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
-import { Machine } from "../types";
+import { Machine, User } from "../types";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
 import { normalizeMachineName } from "../lib/productionMachineNames";
@@ -19,13 +19,25 @@ const DEFAULT_MACHINES = [
 
 export function Machines() {
   const [machines, setMachines, machinesLoading] = useData<Machine>("machines", []);
+  const [users] = useData<User>("users", []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [name, setName] = useState("");
   const [maxOutputPerHour, setMaxOutputPerHour] = useState<number | "">("");
+  const [selectedOperatorIds, setSelectedOperatorIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const operatorUsers = useMemo(
+    () =>
+      users
+        .filter((user) => user.status !== "Inactive" && user.role === "Operator")
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+    [users]
+  );
+
+  const operatorNameById = useMemo(() => new Map(users.map((user) => [user.id, user.name])), [users]);
 
   // Seed defaults once data has finished loading, and only for missing names.
   useEffect(() => {
@@ -82,9 +94,14 @@ export function Machines() {
     setIsSubmitting(true);
     setTimeout(() => {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
+      const assignedOperatorNames = selectedOperatorIds
+        .map((operatorId) => operatorNameById.get(operatorId) || "")
+        .filter(Boolean);
       const machineData = { 
         name: normalizedName, 
         maxOutputPerHour: maxOutputPerHour === "" ? 0 : Number(maxOutputPerHour),
+        assignedOperatorIds: selectedOperatorIds,
+        assignedOperatorNames,
         ...audit 
       };
 
@@ -95,6 +112,7 @@ export function Machines() {
       }
       setName("");
       setMaxOutputPerHour("");
+      setSelectedOperatorIds([]);
       setEditingId(null);
       setIsFormOpen(false);
       setIsSubmitting(false);
@@ -113,19 +131,27 @@ export function Machines() {
 
   const filtered = machines.filter(m => normalizeMachineName(m.name).toLowerCase().includes(searchTerm.toLowerCase()));
 
+  const getAssignedOperatorNames = (machine: Machine) => {
+    const savedNames = Array.isArray(machine.assignedOperatorNames) ? machine.assignedOperatorNames.filter(Boolean) : [];
+    if (savedNames.length > 0) return savedNames;
+    return (Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : [])
+      .map((operatorId) => operatorNameById.get(operatorId) || "")
+      .filter(Boolean);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Machines Master</h2>
         {!isFormOpen && (
-          <button onClick={() => setIsFormOpen(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 transition shadow">
+          <button onClick={() => { setSelectedOperatorIds([]); setIsFormOpen(true); }} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 transition shadow">
             <Plus size={18} /> Add Machine
           </button>
         )}
       </div>
 
       {isFormOpen && (
-        <div className="bg-white p-6 rounded shadow-sm border border-black max-w-md">
+        <div className="bg-white p-6 rounded shadow-sm border border-black max-w-2xl">
           <h3 className="text-lg font-bold text-black mb-6 uppercase">{editingId ? "Edit Machine" : "Create Machine"}</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex flex-col space-y-1">
@@ -148,11 +174,41 @@ export function Machines() {
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600" 
               />
             </div>
+            <div className="flex flex-col space-y-2">
+              <label className="font-bold text-black text-sm">Assigned Operators</label>
+              <div className="max-h-52 overflow-auto rounded border-2 border-black bg-slate-50 p-3">
+                {operatorUsers.length === 0 ? (
+                  <div className="text-xs font-bold text-slate-500">No active operator users available.</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {operatorUsers.map((operator) => {
+                      const checked = selectedOperatorIds.includes(operator.id);
+                      return (
+                        <label key={operator.id} className="flex items-center gap-2 text-sm font-bold text-black">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setSelectedOperatorIds((prev) =>
+                                e.target.checked
+                                  ? Array.from(new Set([...prev, operator.id]))
+                                  : prev.filter((id) => id !== operator.id)
+                              );
+                            }}
+                          />
+                          <span>{operator.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="flex space-x-3 pt-4 border-t border-black">
               <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-8 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all">
                 {isSubmitting ? <Spinner size={20} className="text-white" /> : "Save"}
               </button>
-              <button type="button" onClick={() => { setIsFormOpen(false); setName(""); setMaxOutputPerHour(""); setEditingId(null); }} className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none">
+              <button type="button" onClick={() => { setIsFormOpen(false); setName(""); setMaxOutputPerHour(""); setSelectedOperatorIds([]); setEditingId(null); }} className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none">
                 Cancel
               </button>
             </div>
@@ -169,6 +225,7 @@ export function Machines() {
               <tr className="divide-x divide-black">
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine Name</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Maximum Output</th>
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Assigned Operators</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated By</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated Timestamp</th>
                 <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
@@ -177,7 +234,7 @@ export function Machines() {
             <tbody className="bg-white divide-y divide-black">
               {machinesLoading ? (
                 <tr>
-                  <td colSpan={5} className="border border-black px-6 py-8 text-center text-black">
+                  <td colSpan={6} className="border border-black px-6 py-8 text-center text-black">
                     <div className="flex justify-center">
                       <Spinner />
                     </div>
@@ -185,7 +242,7 @@ export function Machines() {
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="border border-black px-6 py-8 text-center text-black font-medium">
+                  <td colSpan={6} className="border border-black px-6 py-8 text-center text-black font-medium">
                     No machines found.
                   </td>
                 </tr>
@@ -194,10 +251,11 @@ export function Machines() {
                   <tr key={machine.id} className="divide-x divide-black hover:bg-slate-50">
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{normalizeMachineName(machine.name)}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{machine.maxOutputPerHour || 0}</td>
+                    <td className="border border-black px-6 py-4 text-sm text-black">{getAssignedOperatorNames(machine).length > 0 ? getAssignedOperatorNames(machine).join(", ") : "-"}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{machine.updatedBy || "-"}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{machine.updateTimestamp ? new Date(machine.updateTimestamp).toLocaleString() : "-"}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button onClick={() => { setName(normalizeMachineName(machine.name)); setMaxOutputPerHour(machine.maxOutputPerHour || ""); setEditingId(machine.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center">
+                      <button onClick={() => { setName(normalizeMachineName(machine.name)); setMaxOutputPerHour(machine.maxOutputPerHour || ""); setSelectedOperatorIds(Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : []); setEditingId(machine.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center">
                         <Edit size={16} className="mr-1" /> Edit
                       </button>
                       <button 

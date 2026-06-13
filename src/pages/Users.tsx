@@ -45,7 +45,7 @@ export function Users() {
     email: string;
     password: string;
     designation: string;
-    role: "Admin" | "Employee";
+    role: "Admin" | "Employee" | "Operator";
     status: "Active" | "Inactive";
     menuAccess: string[];
   }>({
@@ -137,6 +137,7 @@ export function Users() {
         mobile: formData.mobile.trim(),
         email: formData.email.trim() || null,
         designation: formData.designation.trim() || null,
+        menuAccess: formData.role === "Operator" ? [] : formData.menuAccess,
       };
       if (editingId && !String(payload.password || "").trim()) {
         delete payload.password;
@@ -205,6 +206,8 @@ export function Users() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [isFormOpen, isSubmitting]);
+
+  const isOperatorRole = formData.role === "Operator";
 
   return (
     <div className="space-y-6">
@@ -316,11 +319,18 @@ export function Users() {
                 <label className="font-bold text-black text-sm">Role *</label>
                 <select
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      role: e.target.value as any,
+                      menuAccess: e.target.value === "Operator" ? [] : prev.menuAccess,
+                    }))
+                  }
                   className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 >
                   <option value="Admin">Admin</option>
                   <option value="Employee">Employee</option>
+                  <option value="Operator">Operator</option>
                 </select>
               </div>
               <div className="flex flex-col space-y-1">
@@ -360,67 +370,74 @@ export function Users() {
             <div className="border-2 border-black rounded p-3 bg-slate-50">
               <div className="flex items-center justify-between">
                 <div className="font-black text-black text-sm uppercase">Menu Access</div>
-                <div className="flex gap-2">
-                  <button type="button" onClick={setAllMenus} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-black hover:bg-indigo-700">
-                    Select All
-                  </button>
-                  <button type="button" onClick={clearAllMenus} className="bg-white text-black border border-black px-3 py-1 rounded text-xs font-black hover:bg-slate-100">
-                    Clear
-                  </button>
-                </div>
+                {!isOperatorRole ? (
+                  <div className="flex gap-2">
+                    <button type="button" onClick={setAllMenus} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-black hover:bg-indigo-700">
+                      Select All
+                    </button>
+                    <button type="button" onClick={clearAllMenus} className="bg-white text-black border border-black px-3 py-1 rounded text-xs font-black hover:bg-slate-100">
+                      Clear
+                    </button>
+                  </div>
+                ) : null}
               </div>
-
-              <div className="mt-3 space-y-3 max-h-[360px] overflow-auto pr-1">
-                {allMenuItems.map((group) => (
-                  <div key={group.section} className="bg-white border border-black rounded p-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-black uppercase text-slate-600">{group.section}</div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const keys = group.items.map((i) => i.key);
-                            setFormData((prev) => ({ ...prev, menuAccess: Array.from(new Set([...prev.menuAccess, ...keys])) }));
-                          }}
-                          className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black hover:bg-indigo-700"
-                        >
-                          Select
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const remove = new Set(group.items.map((i) => i.key));
-                            setFormData((prev) => ({ ...prev, menuAccess: prev.menuAccess.filter((k) => !remove.has(k)) }));
-                          }}
-                          className="bg-white text-black border border-black px-2 py-0.5 rounded text-[10px] font-black hover:bg-slate-100"
-                        >
-                          Clear
-                        </button>
+              {isOperatorRole ? (
+                <div className="mt-3 rounded border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700">
+                  Operator users automatically get only `Production Processing` access at runtime.
+                </div>
+              ) : (
+                <div className="mt-3 space-y-3 max-h-[360px] overflow-auto pr-1">
+                  {allMenuItems.map((group) => (
+                    <div key={group.section} className="bg-white border border-black rounded p-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-black uppercase text-slate-600">{group.section}</div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const keys = group.items.map((i) => i.key);
+                              setFormData((prev) => ({ ...prev, menuAccess: Array.from(new Set([...prev.menuAccess, ...keys])) }));
+                            }}
+                            className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black hover:bg-indigo-700"
+                          >
+                            Select
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const remove = new Set(group.items.map((i) => i.key));
+                              setFormData((prev) => ({ ...prev, menuAccess: prev.menuAccess.filter((k) => !remove.has(k)) }));
+                            }}
+                            className="bg-white text-black border border-black px-2 py-0.5 rounded text-[10px] font-black hover:bg-slate-100"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {group.items.map((item) => {
+                          const checked = formData.menuAccess.includes(item.key);
+                          return (
+                            <label key={item.key} className="flex items-center gap-2 text-xs font-bold text-black">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? Array.from(new Set([...formData.menuAccess, item.key]))
+                                    : formData.menuAccess.filter((k) => k !== item.key);
+                                  setFormData({ ...formData, menuAccess: next });
+                                }}
+                              />
+                              <span>{item.name}</span>
+                            </label>
+                          );
+                        })}
                       </div>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      {group.items.map((item) => {
-                        const checked = formData.menuAccess.includes(item.key);
-                        return (
-                          <label key={item.key} className="flex items-center gap-2 text-xs font-bold text-black">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                const next = e.target.checked
-                                  ? Array.from(new Set([...formData.menuAccess, item.key]))
-                                  : formData.menuAccess.filter((k) => k !== item.key);
-                                setFormData({ ...formData, menuAccess: next });
-                              }}
-                            />
-                            <span>{item.name}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-            </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
                   </div>
 
             <div className="flex space-x-3 pt-2">
