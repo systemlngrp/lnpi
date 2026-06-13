@@ -184,8 +184,8 @@ export const NAVIGATION: NavGroup[] = [
     section: "Production Processing",
     color: "bg-teal-800",
     items: [
-      { name: "Reporting Master", href: "/production-processing/master", icon: Database },
       { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
+      { name: "Reporting Master", href: "/production-processing/master", icon: Database },
     ],
   },
   {

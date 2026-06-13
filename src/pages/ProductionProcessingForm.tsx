@@ -189,7 +189,8 @@ export function ProductionProcessingForm() {
 
       setProcessing((prev) => [...prev, newEntry]);
       setIsSubmitting(false);
-      navigate("/production-processing/master");
+      const backUrl = initialMachineId ? `/production/pending-machine-processing?machineId=${initialMachineId}` : "/production/pending-machine-processing";
+      navigate(backUrl);
     }, 500);
   };
 
@@ -297,7 +298,10 @@ export function ProductionProcessingForm() {
             </button>
             <button 
               type="button" 
-              onClick={() => navigate("/production-processing/master")} 
+              onClick={() => {
+                const backUrl = initialMachineId ? `/production/pending-machine-processing?machineId=${initialMachineId}` : "/production/pending-machine-processing";
+                navigate(backUrl);
+              }} 
               className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none"
             >
               Cancel
