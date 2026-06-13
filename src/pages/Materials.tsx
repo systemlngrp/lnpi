@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Edit, Plus, Trash2, Search, Upload, Download, CheckCircle, Package, Layers, Disc } from "lucide-react";
+import { Edit, Plus, Trash2, Search, Upload, Download, CheckCircle, Package, Layers, Disc, ArrowUpDown } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Material, MaterialGroup, MaterialIn, MaterialInPackingSlip, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine, MaterialReturn, MaterialReturnLine, MaterialReturnReelLine, Supplier, UnitMaster, Item, ColorMaster } from "../types";
 import { Spinner } from "../components/Spinner";
@@ -12,6 +12,8 @@ import { fetchNpdItems } from "../lib/npdItems";
 
 type MaterialType = Material["type"];
 type ActiveValue = NonNullable<Material["active"]>;
+type MaterialSortKey = "updated" | "size" | "gsm";
+type SortDirection = "asc" | "desc";
 
 const TYPE_OPTIONS = [
   { value: "Reel", label: "Reel" },
@@ -133,6 +135,8 @@ export function Materials() {
   const [typeFilter, setTypeFilter] = useState("All");
   const [sizeFilter, setSizeFilter] = useState("All");
   const [gsmFilter, setGsmFilter] = useState("All");
+  const [sortKey, setSortKey] = useState<MaterialSortKey>("updated");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
@@ -248,6 +252,11 @@ export function Materials() {
   }, [materials, packingSlips, materialIn, materialIssues, issueLines, reelIssueLines, materialReturnsHeader, returnLines, reelReturnLines, fromDate, toDate]);
 
   const filteredMaterials = useMemo(() => {
+    const getSortNumber = (value: number | undefined | null) => {
+      const numericValue = Number(value);
+      return Number.isFinite(numericValue) ? numericValue : -Infinity;
+    };
+
     return [...materials]
       .filter((material) => {
         const matchesSearch = !searchTerm || normalizeText(material.erpCode).includes(searchTerm.toLowerCase()) || normalizeText(material.name).includes(searchTerm.toLowerCase());
@@ -257,11 +266,26 @@ export function Materials() {
         return matchesSearch && matchesType && matchesSize && matchesGsm;
       })
       .sort((a, b) => {
-        const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-        const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-        return timeB - timeA || a.name.localeCompare(b.name);
+        let compare = 0;
+
+        if (sortKey === "size") {
+          compare =
+            getSortNumber(a.size) - getSortNumber(b.size) ||
+            a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        } else if (sortKey === "gsm") {
+          compare =
+            getSortNumber(a.gsm) - getSortNumber(b.gsm) ||
+            a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        } else {
+          const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
+          const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
+          compare = timeB - timeA || a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+          return sortDirection === "asc" ? -compare : compare;
+        }
+
+        return sortDirection === "asc" ? compare : -compare;
       });
-  }, [gsmFilter, materials, searchTerm, sizeFilter, typeFilter]);
+  }, [gsmFilter, materials, searchTerm, sizeFilter, sortDirection, sortKey, typeFilter]);
 
   const metrics = useMemo(() => {
     let totalReelWeight = 0;
@@ -344,6 +368,10 @@ export function Materials() {
     });
   }, [materials, setMaterials]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [gsmFilter, searchTerm, setPage, sizeFilter, sortDirection, sortKey, typeFilter]);
+
   function resetForm(nextMaterials = materials, nextReelGroupId = reelGroup?.id || "") {
     setFormData(createInitialFormState(nextMaterials, nextReelGroupId));
     setEditingId(null);
@@ -375,6 +403,29 @@ export function Materials() {
   }
 
   const [isSyncing, setIsSyncing] = useState(false);
+
+  function handleSort(key: MaterialSortKey) {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection(key === "updated" ? "desc" : "asc");
+  }
+
+  function renderSortableHeader(label: string, key: MaterialSortKey) {
+    const active = sortKey === key;
+    return (
+      <button
+        type="button"
+        onClick={() => handleSort(key)}
+        className="inline-flex items-center gap-1 font-black uppercase tracking-wider"
+      >
+        <span>{label}</span>
+        <ArrowUpDown size={12} className={active ? "text-white" : "text-indigo-200"} />
+      </button>
+    );
+  }
 
   async function handleTallySync() {
     if (!window.confirm("Do you want to start Tally synchronization now?")) return;
@@ -1203,11 +1254,11 @@ export function Materials() {
           </div>
 
           <div className="bg-white rounded shadow-sm border border-black overflow-hidden mt-6">
-            <div className="overflow-x-auto">
+            <div className="max-h-[70vh] overflow-auto">
               <table className="min-w-full border-collapse">
-                <thead>
+                <thead className="sticky top-0 z-20">
                   <tr className="bg-indigo-700 text-white divide-x divide-indigo-800">
-                    <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={paginatedMaterials.filter((material) => material.type === "Reel").length > 0 && paginatedMaterials.filter((material) => material.type === "Reel").every((material) => selectedMaterialIds.includes(material.id))}
@@ -1216,11 +1267,27 @@ export function Materials() {
                         title="Select reel materials on this page"
                       />
                     </th>
-                    {["SL", "Type", "ERP Code", "Item Name", "Size", "GSM", "BF", "Color", "Opening", "Receipts", "Issues", "Returns", "Balance", "Unit", "Tally Sync", "Tally ID", "Actions"].map((heading) => (
-                      <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
-                        {heading}
-                      </th>
-                    ))}
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">SL</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Type</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">ERP Code</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Item Name</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
+                      {renderSortableHeader("Size", "size")}
+                    </th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">
+                      {renderSortableHeader("GSM", "gsm")}
+                    </th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">BF</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Color</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Opening</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Receipts</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Issues</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Returns</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Balance</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Unit</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Tally Sync</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Tally ID</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
