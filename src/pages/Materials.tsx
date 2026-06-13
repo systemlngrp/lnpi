@@ -264,7 +264,10 @@ export function Materials() {
         const matchesType = typeFilter === "All" || material.type === typeFilter;
         const matchesSize = sizeFilter === "All" || formatOptionalNumber(material.size) === sizeFilter;
         const matchesGsm = gsmFilter === "All" || formatOptionalNumber(material.gsm) === gsmFilter;
-        const matchesColor = colorFilter === "All" || String(material.color || "").trim() === colorFilter;
+        const normalizedColor = String(material.color || "").trim();
+        const matchesColor =
+          colorFilter === "All" ||
+          (colorFilter === "Blank" ? normalizedColor === "" : normalizedColor === colorFilter);
         return matchesSearch && matchesType && matchesSize && matchesGsm && matchesColor;
       })
       .sort((a, b) => {
@@ -632,11 +635,17 @@ export function Materials() {
     const values = Array.from(
       new Set(
         materials
-          .map((material) => String(material.color || "").trim())
-          .filter(Boolean)
+          .map((material) => {
+            const color = String(material.color || "").trim();
+            return color || "Blank";
+          })
       )
     );
-    return values.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return values.sort((a, b) => {
+      if (a === "Blank") return -1;
+      if (b === "Blank") return 1;
+      return a.localeCompare(b, undefined, { sensitivity: "base" });
+    });
   }, [materials]);
 
   function downloadTemplate() {
