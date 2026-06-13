@@ -32,12 +32,24 @@ export function ProductionProcessingForm() {
   const [qty, setQty] = useState<string>("");
   const [operatorId, setOperatorId] = useState(user?.role === "Operator" ? user.id : "");
 
+  const isMachineAssignedToOperator = (machine: Machine) => {
+    if (user?.role !== "Operator") return true;
+    const assignedIds = Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : [];
+    const assignedNames = Array.isArray(machine.assignedOperatorNames) ? machine.assignedOperatorNames : [];
+    const normalizedUserName = String(user.name || "").trim().toLowerCase();
+
+    return (
+      assignedIds.includes(user.id) ||
+      assignedNames.some((name) => String(name || "").trim().toLowerCase() === normalizedUserName)
+    );
+  };
+
   const assignedMachineIdsForUser = useMemo(
     () =>
       user?.role === "Operator"
         ? new Set(
             machines
-              .filter((machine) => (Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : []).includes(user.id))
+              .filter((machine) => isMachineAssignedToOperator(machine))
               .map((machine) => machine.id)
           )
         : null,

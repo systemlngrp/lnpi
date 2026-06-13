@@ -51,10 +51,21 @@ export function MachinePendingProcessing() {
 
   const machineGroups = useMemo(() => {
     const groups: Map<string, MachineGroup> = new Map();
+    const isMachineAssignedToOperator = (machine: Machine) => {
+      if (user?.role !== "Operator") return true;
+      const assignedIds = Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : [];
+      const assignedNames = Array.isArray(machine.assignedOperatorNames) ? machine.assignedOperatorNames : [];
+      const normalizedUserName = String(user.name || "").trim().toLowerCase();
+
+      return (
+        assignedIds.includes(user.id) ||
+        assignedNames.some((name) => String(name || "").trim().toLowerCase() === normalizedUserName)
+      );
+    };
     const operatorAssignedMachineIds = new Set(
       user?.role === "Operator"
         ? machines
-            .filter((machine) => (Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : []).includes(user.id))
+            .filter((machine) => isMachineAssignedToOperator(machine))
             .map((machine) => machine.id)
         : []
     );
