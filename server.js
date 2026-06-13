@@ -53,6 +53,7 @@ const NPD_SYNC_HEADER_MAP = {
   "Item Name": "itemName",
   ERP: "erp",
   Rate: "rate",
+  "Last Approved Order rate": "rate",
   UOM: "uom",
   "Flute Type": "fluteType",
   Ply: "ply",
@@ -153,6 +154,7 @@ const NPD_SYNC_HEADER_MAP = {
   "Customer PO Date": "customerPoDate",
   "Order Quantity": "orderQuantity",
   "Order Rate": "orderRate",
+  "Last Order rate": "orderRate",
   "Customer PO Amount": "customerPoAmount",
   "No. of Boxes per Sheet in case of Die Cut Box": "boxesPerSheetDieCut",
   "Reel Size": "reelSize",
@@ -710,7 +712,8 @@ app.get("/api/npd-sync/rates", async (req, res) => {
     const rows = await fetchActiveNpdItems(db);
     const rateRows = rows.map((row) => ({
       npdId: stringOrEmpty(row?.npdId || row?.id),
-      rate: row?.rate == null || row?.rate === "" ? null : Number(row.rate)
+      rate: row?.rate == null || row?.rate === "" ? null : Number(row.rate),
+      orderRate: row?.orderRate == null || row?.orderRate === "" ? null : Number(row.orderRate)
     })).filter((row) => row.npdId);
     return res.json({
       ok: true,
@@ -3734,6 +3737,12 @@ Exceeds by: ${nextTotal - plannedQty}`
             if (shouldUpdateItemRate) {
               await conn.query(
                 "UPDATE `npd` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                [rateNumber, updatedBy, now, itemId]
+              );
+            }
+            if (itemId && Number.isFinite(rateNumber) && rateNumber > 0) {
+              await conn.query(
+                "UPDATE `npd` SET `orderRate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
                 [rateNumber, updatedBy, now, itemId]
               );
             }

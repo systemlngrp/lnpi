@@ -5,7 +5,9 @@ const NPD_SYNC_CONFIG = {
   tabName: 'NPD',
   spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
   npdIdHeader: 'NPD ID',
-  rateHeader: 'Rate',
+  rateHeader: 'Last Approved Order rate',
+  lastOrderRateHeader: 'Last Order rate',
+  legacyRateHeader: 'Rate',
   hostingerSyncHeader: 'HOSTINGER SYNC',
   flushDelayMs: 15000,
   pendingRowsPropertyKey: 'NPD_PENDING_ROWS',
@@ -56,15 +58,14 @@ function syncNpdRatesFromHostinger() {
     throw new Error('Sheet is empty.');
   }
 
-  const headers = values[0].map((header) => String(header || '').trim());
-  const idIndex = headers.indexOf(NPD_SYNC_CONFIG.npdIdHeader);
-  const rateIndex = headers.indexOf(NPD_SYNC_CONFIG.rateHeader);
+  const headers = values[0].map((header) => String(header || '').trim().toLowerCase());
+  const idIndex = headers.indexOf(NPD_SYNC_CONFIG.npdIdHeader.toLowerCase());
+  const approvedRateIndex = headers.indexOf(NPD_SYNC_CONFIG.rateHeader.toLowerCase());
+  const orderRateIndex = headers.indexOf(NPD_SYNC_CONFIG.lastOrderRateHeader.toLowerCase());
+  const legacyRateIndex = headers.indexOf(NPD_SYNC_CONFIG.legacyRateHeader.toLowerCase());
 
   if (idIndex === -1) {
     throw new Error(`Column "${NPD_SYNC_CONFIG.npdIdHeader}" not found in sheet.`);
-  }
-  if (rateIndex === -1) {
-    throw new Error(`Column "${NPD_SYNC_CONFIG.rateHeader}" not found in sheet.`);
   }
 
   const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.rateApiUrl, {
@@ -81,29 +82,46 @@ function syncNpdRatesFromHostinger() {
 
   const result = JSON.parse(response.getContentText() || '{}');
   const rows = Array.isArray(result.rows) ? result.rows : [];
-  const rateMap = new Map(
-    rows
-      .map((row) => [String(row.npdId || '').trim(), row.rate])
-      .filter(([npdId]) => npdId)
-  );
+  
+  const rateMap = new Map();
+  rows.forEach((row) => {
+    const npdId = String(row.npdId || '').trim();
+    if (npdId) {
+      rateMap.set(npdId, {
+        rate: row.rate,
+        orderRate: row.orderRate
+      });
+    }
+  });
 
   if (values.length <= 1) {
     return { ok: true, updatedRows: 0, fetchedRates: rateMap.size };
   }
 
-  const nextRateValues = values.slice(1).map((row) => {
-    const npdId = String(row[idIndex] || '').trim();
-    if (!npdId || !rateMap.has(npdId)) {
-      return [row[rateIndex] ?? ''];
-    }
-    const nextRate = rateMap.get(npdId);
-    return [nextRate == null || nextRate === '' ? '' : nextRate];
-  });
+  // Helper to update a column if it exists
+  const updateColumn = (index, fieldName) => {
+    if (index === -1) return;
+    
+    const nextValues = values.slice(1).map((row) => {
+      const npdId = String(row[idIndex] || '').trim();
+      if (!npdId || !rateMap.has(npdId)) {
+        return [row[index] ?? ''];
+      }
+      const data = rateMap.get(npdId);
+      const val = data[fieldName];
+      return [val == null || val === '' ? '' : val];
+    });
 
-  sheet.getRange(2, rateIndex + 1, nextRateValues.length, 1).setValues(nextRateValues);
+    sheet.getRange(2, index + 1, nextValues.length, 1).setValues(nextValues);
+  };
+
+  updateColumn(approvedRateIndex, 'rate');
+  updateColumn(legacyRateIndex, 'rate');
+  updateColumn(orderRateIndex, 'orderRate');
+
   SpreadsheetApp.flush();
 
-  return { ok: true, updatedRows: nextRateValues.length, fetchedRates: rateMap.size };
+  return { ok: true, updatedRows: values.length - 1, fetchedRates: rateMap.size };
 }
 
 function forceFullCompanySync() {

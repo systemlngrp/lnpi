@@ -76,6 +76,7 @@ const NPD_SYNC_HEADER_MAP = {
   "Item Name": "itemName",
   ERP: "erp",
   Rate: "rate",
+  "Last Approved Order rate": "rate",
   UOM: "uom",
   "Flute Type": "fluteType",
   Ply: "ply",
@@ -833,6 +834,7 @@ app.get("/api/npd-sync/rates", async (req, res) => {
       .map((row) => ({
         npdId: stringOrEmpty(row?.npdId || row?.id),
         rate: row?.rate == null || row?.rate === "" ? null : Number(row.rate),
+        orderRate: row?.orderRate == null || row?.orderRate === "" ? null : Number(row.orderRate),
       }))
       .filter((row) => row.npdId);
 
@@ -4166,6 +4168,13 @@ const createHandlers = (tableName: string) => {
             if (shouldUpdateItemRate) {
               await conn.query(
                 "UPDATE `npd` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                [rateNumber, updatedBy, now, itemId]
+              );
+            }
+
+            if (itemId && Number.isFinite(rateNumber) && rateNumber > 0) {
+              await conn.query(
+                "UPDATE `npd` SET `orderRate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
                 [rateNumber, updatedBy, now, itemId]
               );
             }
