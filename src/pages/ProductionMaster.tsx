@@ -592,15 +592,20 @@ export function ProductionMaster() {
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                   const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-                  const plannedQty = Number(p.qty || 0);
-                  const ups = Number(p.ups || (item as any)?.ups || 0);
-                  const targetQty = ups > 0 ? plannedQty / ups : 0;
-                  const lowerLimit = targetQty * 0.9;
-                  const upperLimit = targetQty * 1.1;
+                  const paperRequiredNos = Number(p.paperRequiredNos || 0);
+                  const linerRequiredNos = Number(p.lineRequiredNos || 0);
+                  const paperLowerLimit = paperRequiredNos * 0.9;
+                  const paperUpperLimit = paperRequiredNos * 1.1;
+                  const linerLowerLimit = linerRequiredNos * 0.9;
+                  const linerUpperLimit = linerRequiredNos * 1.1;
                   const isPaperOutOfRange =
-                    targetQty > 0 && (procTotals.paper < lowerLimit || procTotals.paper > upperLimit);
+                    paperRequiredNos <= 0 ||
+                    procTotals.paper < paperLowerLimit ||
+                    procTotals.paper > paperUpperLimit;
                   const isLinerOutOfRange =
-                    targetQty > 0 && (procTotals.liner < lowerLimit || procTotals.liner > upperLimit);
+                    linerRequiredNos <= 0 ||
+                    procTotals.liner < linerLowerLimit ||
+                    procTotals.liner > linerUpperLimit;
                   
                     return (
                     <tr key={p.id} className={`${isHighGsm ? "bg-amber-50" : "hover:bg-slate-50"} divide-x divide-black transition-colors`}>
