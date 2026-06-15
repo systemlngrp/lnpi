@@ -3618,6 +3618,8 @@ async function initDb(retries = 5) {
         { table: "invoices", column: "totalAfterGst", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoices", column: "otherCharges", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoices", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "invoices", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "invoices", column: "tallyBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_passes", column: "gatePassNo", type: "VARCHAR(100) NOT NULL" },
