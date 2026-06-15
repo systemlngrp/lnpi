@@ -220,8 +220,17 @@ def get_db_connection():
     return mysql.connector.connect(**DB_CONFIG)
 
 
+def get_db_cursor(conn, dictionary=False):
+    try:
+        if conn and hasattr(conn, "ping"):
+            conn.ping(reconnect=True, attempts=3, delay=2)
+    except Exception:
+        pass
+    return conn.cursor(dictionary=dictionary)
+
+
 def column_exists(conn, table_name, column_name):
-    cursor = conn.cursor()
+    cursor = get_db_cursor(conn)
     cursor.execute(
         """
         SELECT 1
@@ -239,7 +248,7 @@ def column_exists(conn, table_name, column_name):
 
 
 def ensure_invoice_sync_columns(conn):
-    cursor = conn.cursor()
+    cursor = get_db_cursor(conn)
     try:
         if not column_exists(conn, "invoices", "tallySyncRemark"):
             cursor.execute("ALTER TABLE invoices ADD COLUMN tallySyncRemark TEXT")
@@ -266,7 +275,7 @@ def get_pending_invoice_rows(conn):
            OR tallyTimestamp = ''
     """
 
-    cursor = conn.cursor(dictionary=True)
+    cursor = get_db_cursor(conn, dictionary=True)
     cursor.execute(sql)
     rows = cursor.fetchall()
     cursor.close()
@@ -279,7 +288,7 @@ def tally_request(xml_data):
             TALLY_URL,
             data=xml_data.encode("utf-8"),
             headers={"Content-Type": "text/xml"},
-            timeout=30,
+            timeout=60,
         )
         if response.status_code == 200:
             return response.text
@@ -354,7 +363,7 @@ def get_company_details(conn, company_id):
     if not company_id:
         return {}
 
-    cursor = conn.cursor(dictionary=True)
+    cursor = get_db_cursor(conn, dictionary=True)
     cursor.execute(
         """
         SELECT name, gstSupplyType, state
@@ -370,7 +379,7 @@ def get_company_details(conn, company_id):
 
 
 def get_invoice_lines(conn, invoice_id):
-    cursor = conn.cursor(dictionary=True)
+    cursor = get_db_cursor(conn, dictionary=True)
     cursor.execute(
         """
         SELECT *
@@ -748,8 +757,7 @@ def update_invoice_tally_status(
     tally_inv_date=None,
     tally_inv_id=None,
 ):
-    ensure_invoice_sync_columns(conn)
-    cursor = conn.cursor()
+    cursor = get_db_cursor(conn)
     if success:
         sql = """
             UPDATE invoices
@@ -828,6 +836,23 @@ def sync_invoices_to_tally():
                     continue
 
                 sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row)
+
+                # Check if already exists in Tally to prevent duplicates and handle recovery
+                tally_reference = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
+                if tally_reference and tally_reference.get("tallyInvNo"):
+                    remark = "Voucher already exists in Tally. Fetched reference."
+                    update_invoice_tally_status(
+                        conn,
+                        invoice_id,
+                        True,
+                        remark,
+                        invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
+                        tally_reference.get("tallyInvNo"),
+                        format_iso_date(tally_reference.get("tallyInvDate")),
+                        tally_reference.get("tallyInvId"),
+                    )
+                    print(f"Skipping creation: {remark} | {tally_reference}")
+                    continue
 
                 for line in item_lines:
                     print(
