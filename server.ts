@@ -3663,6 +3663,12 @@ async function initDb(retries = 5) {
       }
 
       try {
+        await db.query("ALTER TABLE `material_in` MODIFY COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'Pending PH'");
+      } catch (err) {
+        console.warn("[DB] Could not normalize material_in.status column:", (err as Error).message);
+      }
+
+      try {
         await db.query(`
           UPDATE \`orders\`
           SET \`orderAmount\` = ROUND(COALESCE(\`qty\`, 0) * COALESCE(\`rate\`, 0), 2)
