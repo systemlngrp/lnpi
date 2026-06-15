@@ -61,7 +61,7 @@ export async function downloadGatePassPdf({
       3: { cellWidth: 58 },
     },
     didParseCell: (hookData) => {
-      if (hookData.column.index === 0 || hookData.column.index === 2) {
+      if ((hookData.column.index === 0 || hookData.column.index === 2) && String(hookData.cell.raw || "").trim()) {
         hookData.cell.text = [`${hookData.cell.raw || ""}:`];
       }
     },
