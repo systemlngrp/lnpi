@@ -1467,7 +1467,9 @@ async function fetchLegacyItems(db: mysql.Pool) {
         '$[*]' COLUMNS (
           itemId VARCHAR(36) PATH '$.itemId',
           qty DECIMAL(15,2) PATH '$.qty',
-          invoiceQty DECIMAL(15,2) PATH '$.invoiceQty'
+          invoiceQty DECIMAL(15,2) PATH '$.invoiceQty',
+          rate DECIMAL(15,2) PATH '$.rate',
+          invoiceRate DECIMAL(15,2) PATH '$.invoiceRate'
         )
       ) jt
       WHERE mi.status = 'Completed' AND mi.mrrType IN ('Rejection In', 'FG Purchase')
@@ -3993,28 +3995,6 @@ const createHandlers = (tableName: string) => {
           }
 
           data.machineName = normalizeMachineName(String(data.machineName || ""));
-
-          const normalizedMachineNameLower = String(data.machineName || "").trim().toLowerCase();
-          const isCorrugationLiner = normalizedMachineNameLower === "corrugation liner";
-
-          const [prodRows] = await db.query("SELECT qty FROM `productions` WHERE id = ? LIMIT 1", [
-            String(data.productionId),
-          ]);
-          const plannedQty = Number((prodRows as any[])[0]?.qty || 0);
-
-          if (!isCorrugationLiner && plannedQty > 0) {
-            const [sumRows] = await db.query(
-              "SELECT SUM(qty) as total FROM `production_processing` WHERE productionId = ? AND LOWER(TRIM(machineName)) = LOWER(TRIM(?)) AND id <> ?",
-              [String(data.productionId), String(data.machineName), String(data.id || "")]
-            );
-            const alreadyReported = Number((sumRows as any[])[0]?.total || 0);
-            const nextTotal = alreadyReported + qtyNumber;
-            if (nextTotal > plannedQty) {
-              return res.status(400).json({
-                error: `Cannot report more than planned qty for ${data.machineName}.\nPlan: ${plannedQty}\nAlready reported: ${alreadyReported}\nNow: ${qtyNumber}\nExceeds by: ${nextTotal - plannedQty}`,
-              });
-            }
-          }
         }
 
         // Auto-generate orderNo for orders when not provided
