@@ -4,6 +4,7 @@ import mysql.connector
 import requests
 from datetime import datetime, date
 import xml.sax.saxutils as saxutils
+import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 
 
@@ -39,11 +40,16 @@ TALLY_URL = os.getenv("TALLY_URL", "http://localhost:9000").strip()
 TALLY_COMPANY_NAME = os.getenv("TALLY_COMPANY_NAME", "Laxmi Narayan Packaging Industries")
 VOUCHER_TYPE_NAME = os.getenv("SALES_VOUCHER_TYPE_NAME", "Sales")
 SALES_LEDGER_NAME = os.getenv("SALES_LEDGER_NAME", "Sales")
+SALES_WITHIN_STATE_LEDGER_NAME = os.getenv("SALES_WITHIN_STATE_LEDGER_NAME", "SALES WITHIN STATE")
+SALES_OUTSIDE_LEDGER_NAME = os.getenv("SALES_OUTSIDE_LEDGER_NAME", "Sales Outside")
 OTHER_CHARGES_LEDGER_NAME = os.getenv("SALES_OTHER_CHARGES_LEDGER_NAME", "Other Charges")
 ROUND_OFF_LEDGER_NAME = os.getenv("SALES_ROUND_OFF_LEDGER_NAME", "Round Off")
 CGST_LEDGER_NAME = os.getenv("OUTPUT_CGST_LEDGER_NAME", "Output CGST")
 SGST_LEDGER_NAME = os.getenv("OUTPUT_SGST_LEDGER_NAME", "Output SGST")
 IGST_LEDGER_NAME = os.getenv("OUTPUT_IGST_LEDGER_NAME", "Output IGST")
+CGST_LEDGER_PREFIX = os.getenv("CGST_LEDGER_PREFIX", "Tax - CGST @")
+SGST_LEDGER_PREFIX = os.getenv("SGST_LEDGER_PREFIX", "Tax - SGST @")
+IGST_LEDGER_PREFIX = os.getenv("IGST_LEDGER_PREFIX", "Tax - IGST @")
 DEBUG_TALLY_XML = os.getenv("DEBUG_TALLY_XML", "0").strip() == "1"
 DEFAULT_UPDATED_BY = os.getenv("TALLY_SYNC_USER", "system")
 TALLY_UOM_ALIASES = {
@@ -56,6 +62,11 @@ TALLY_UOM_ALIASES = {
     "PCS": os.getenv("TALLY_UOM_PCS", "PCS"),
     "PC": os.getenv("TALLY_UOM_PC", "PCS"),
 }
+TALLY_MASTER_CACHE = {}
+
+
+def log_terminal(level, message):
+    print(f"[{level}] {message}")
 
 
 def esc(value):
@@ -104,8 +115,147 @@ def normalize_uom(value):
     return TALLY_UOM_ALIASES.get(normalized.upper(), normalized)
 
 
+def sanitize_tally_xml(xml_text):
+    if not xml_text:
+        return xml_text
+    cleaned = re.sub(r"&#x0*([0-8BCEF]|1[0-9A-F]);", "", xml_text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"&#([0-8]|1[0-9]|2[0-9]|30|31);", "", cleaned, flags=re.IGNORECASE)
+    return cleaned
+
+
+def format_iso_date(value):
+    if value is None or value == "":
+        return ""
+
+    if isinstance(value, (datetime, date)):
+        return value.strftime("%Y-%m-%d")
+
+    raw_value = str(value).strip()
+    for fmt in ("%Y%m%d", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(raw_value, fmt).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+
+    return raw_value
+
+
+def parse_tally_voucher_response(response_text):
+    if not response_text:
+        return {}
+
+    cleaned = sanitize_tally_xml(response_text)
+    result = {}
+
+    try:
+        root = ET.fromstring(cleaned)
+        voucher = root.find('.//VOUCHER')
+        if voucher is not None:
+            result["tallyInvNo"] = voucher.get("VOUCHERNUMBER") or next(
+                (child.text for child in voucher if child.tag.upper() == "VOUCHERNUMBER" and child.text),
+                "",
+            )
+            result["tallyInvDate"] = voucher.get("DATE") or next(
+                (child.text for child in voucher if child.tag.upper() == "DATE" and child.text),
+                "",
+            )
+            result["tallyInvId"] = voucher.get("GUID") or voucher.get("VOUCHERKEY") or voucher.get("REMOTEID") or next(
+                (child.text for child in voucher if child.tag.upper() in {"GUID", "VOUCHERKEY", "REMOTEID"} and child.text),
+                "",
+            )
+        else:
+            # Fallback search in entire response for common identifiers
+            if "VOUCHERNUMBER" in cleaned.upper():
+                match = re.search(r"<VOUCHERNUMBER>([^<]+)</VOUCHERNUMBER>", cleaned, re.IGNORECASE)
+                if match:
+                    result["tallyInvNo"] = match.group(1).strip()
+            if "<DATE>" in cleaned.upper():
+                match = re.search(r"<DATE>([^<]+)</DATE>", cleaned, re.IGNORECASE)
+                if match:
+                    result["tallyInvDate"] = match.group(1).strip()
+            for key in ("GUID", "VOUCHERKEY", "REMOTEID"):
+                pattern = rf"<{key}>([^<]+)</{key}>"
+                match = re.search(pattern, cleaned, re.IGNORECASE)
+                if match:
+                    result["tallyInvId"] = match.group(1).strip()
+                    break
+    except Exception:
+        pass
+
+    return {k: v for k, v in result.items() if v}
+
+
+def fetch_tally_voucher_reference(invoice_no, voucher_type=None):
+    if not invoice_no:
+        return {}
+
+    voucher_type_attr = f' VOUCHERTYPENAME="{esc(voucher_type)}"' if voucher_type else ""
+    xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Export Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <EXPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>Voucher Register</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE>
+                    <VOUCHER VOUCHERNUMBER="{esc(invoice_no)}"{voucher_type_attr} ACTION="Get" />
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </EXPORTDATA>
+    </BODY>
+</ENVELOPE>
+"""
+    response_text = tally_request(xml)
+    return parse_tally_voucher_response(response_text)
+
+
 def get_db_connection():
     return mysql.connector.connect(**DB_CONFIG)
+
+
+def column_exists(conn, table_name, column_name):
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT 1
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = %s
+          AND TABLE_NAME = %s
+          AND COLUMN_NAME = %s
+        LIMIT 1
+        """,
+        (DB_CONFIG["database"], table_name, column_name),
+    )
+    exists = cursor.fetchone() is not None
+    cursor.close()
+    return exists
+
+
+def ensure_invoice_sync_columns(conn):
+    cursor = conn.cursor()
+    try:
+        if not column_exists(conn, "invoices", "tallySyncRemark"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN tallySyncRemark TEXT")
+        if not column_exists(conn, "invoices", "tallyBy"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN tallyBy VARCHAR(255)")
+        if not column_exists(conn, "invoices", "tallyTimestamp"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN tallyTimestamp VARCHAR(255)")
+        if not column_exists(conn, "invoices", "tallyInvNo"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN tallyInvNo VARCHAR(255)")
+        if not column_exists(conn, "invoices", "tallyInvDate"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN tallyInvDate VARCHAR(255)")
+        if not column_exists(conn, "invoices", "tallyInvId"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN tallyInvId VARCHAR(255)")
+        conn.commit()
+    finally:
+        cursor.close()
 
 
 def get_pending_invoice_rows(conn):
@@ -123,14 +273,91 @@ def get_pending_invoice_rows(conn):
     return rows
 
 
-def get_company_name(conn, company_id):
+def tally_request(xml_data):
+    try:
+        response = requests.post(
+            TALLY_URL,
+            data=xml_data.encode("utf-8"),
+            headers={"Content-Type": "text/xml"},
+            timeout=30,
+        )
+        if response.status_code == 200:
+            return response.text
+        return f"HTTP error from Tally: {response.status_code}"
+    except Exception as error:
+        return f"Connection error: {error}"
+
+
+def check_tally_object_exists(object_type, object_name):
+    if not object_name:
+        return False, "Empty name"
+
+    cache_key = (object_type.upper(), object_name.strip().upper())
+    if cache_key in TALLY_MASTER_CACHE:
+        return TALLY_MASTER_CACHE[cache_key]
+
+    xml = f"""<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Object</TYPE>
+        <SUBTYPE>{esc(object_type)}</SUBTYPE>
+        <ID TYPE="Name">{esc(object_name)}</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>"""
+
+    response_text = tally_request(xml)
+    if not response_text:
+        result = (False, "Empty response from Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    upper_response = response_text.upper()
+    if "CONNECTION ERROR:" in upper_response or "HTTP ERROR FROM TALLY:" in upper_response:
+        result = (False, response_text)
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    if "UNKNOWN REQUEST" in upper_response or "<LINEERROR>" in upper_response:
+        result = (False, f"{object_type} '{object_name}' not found in Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    try:
+        root = ET.fromstring(sanitize_tally_xml(response_text))
+        found = root.find(f".//{object_type.upper().replace(' ', '')}")
+        if found is not None or object_name.upper() in upper_response:
+            result = (True, "")
+        else:
+            result = (False, f"{object_type} '{object_name}' not found in Tally")
+    except Exception:
+        if object_name.upper() in upper_response:
+            result = (True, "")
+        else:
+            result = (False, f"{object_type} '{object_name}' not found in Tally")
+
+    TALLY_MASTER_CACHE[cache_key] = result
+    return result
+
+
+def get_company_details(conn, company_id):
     if not company_id:
-        return ""
+        return {}
 
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
         """
-        SELECT name
+        SELECT name, gstSupplyType, state
         FROM companies
         WHERE id = %s
         LIMIT 1
@@ -139,7 +366,7 @@ def get_company_name(conn, company_id):
     )
     row = cursor.fetchone()
     cursor.close()
-    return (row or {}).get("name", "")
+    return row or {}
 
 
 def get_invoice_lines(conn, invoice_id):
@@ -181,7 +408,7 @@ def get_invoice_lines(conn, invoice_id):
         if not item_name and npd_id:
             cursor.execute(
                 """
-                SELECT itemName
+                SELECT itemName, uom
                 FROM npd
                 WHERE id = %s
                 LIMIT 1
@@ -191,6 +418,8 @@ def get_invoice_lines(conn, invoice_id):
             npd_row = cursor.fetchone()
             if npd_row:
                 item_name = npd_row.get("itemName") or ""
+                if not uom:
+                    uom = npd_row.get("uom") or ""
 
         processed_lines.append(
             {
@@ -235,7 +464,66 @@ def validate_invoice_lines(item_lines):
     return errors
 
 
-def create_sales_voucher_xml(invoice_row, customer_name, item_lines):
+def resolve_sales_ledger_name(invoice_row, company_row):
+    gst_supply_type = str((company_row or {}).get("gstSupplyType") or "").strip().upper()
+    igst_amount = round(to_float(invoice_row.get("igst")), 2)
+
+    if gst_supply_type == "INTER_STATE" or igst_amount > 0:
+        return SALES_OUTSIDE_LEDGER_NAME
+
+    if gst_supply_type == "INTRA_STATE":
+        return SALES_WITHIN_STATE_LEDGER_NAME
+
+    return SALES_LEDGER_NAME
+
+
+def format_tax_rate(rate):
+    value = to_float(rate)
+    if value.is_integer():
+        return f"{value:.1f}%"
+    return f"{value:g}%"
+
+
+def resolve_tax_ledger_name(prefix, rate, fallback_name):
+    rate_value = round(to_float(rate), 2)
+    if rate_value <= 0:
+        return fallback_name
+    return f"{prefix} {format_tax_rate(rate_value)}"
+
+
+def derive_tax_rates(invoice_row, item_lines):
+    header_gst_rate = round(to_float(invoice_row.get("gstRate")), 2)
+    if header_gst_rate > 0:
+        return {
+            "cgst_rate": header_gst_rate / 2,
+            "sgst_rate": header_gst_rate / 2,
+            "igst_rate": header_gst_rate,
+        }
+
+    line_gst_rates = sorted(
+        {
+            round(to_float(line.get("gstRate")), 2)
+            for line in item_lines
+            if round(to_float(line.get("gstRate")), 2) > 0
+        }
+    )
+
+    if line_gst_rates:
+        primary_rate = line_gst_rates[0]
+        return {
+            "cgst_rate": primary_rate / 2,
+            "sgst_rate": primary_rate / 2,
+            "igst_rate": primary_rate,
+        }
+
+    return {
+        "cgst_rate": 0,
+        "sgst_rate": 0,
+        "igst_rate": 0,
+    }
+
+
+def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledger_name):
     invoice_no = invoice_row.get("invoiceNo") or ""
     invoice_date = format_tally_date(invoice_row.get("date"))
     customer_name = customer_name or "Unknown Customer"
@@ -245,6 +533,13 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines):
     igst = round(to_float(invoice_row.get("igst")), 2)
     other_charges = round(to_float(invoice_row.get("otherCharges")), 2)
     round_off = round(to_float(invoice_row.get("roundOff")), 2)
+    derived_tax_rates = derive_tax_rates(invoice_row, item_lines)
+    cgst_rate = derived_tax_rates["cgst_rate"] if cgst > 0 else 0
+    sgst_rate = derived_tax_rates["sgst_rate"] if sgst > 0 else 0
+    igst_rate = derived_tax_rates["igst_rate"] if igst > 0 else 0
+    cgst_ledger_name = resolve_tax_ledger_name(CGST_LEDGER_PREFIX, cgst_rate, CGST_LEDGER_NAME)
+    sgst_ledger_name = resolve_tax_ledger_name(SGST_LEDGER_PREFIX, sgst_rate, SGST_LEDGER_NAME)
+    igst_ledger_name = resolve_tax_ledger_name(IGST_LEDGER_PREFIX, igst_rate, IGST_LEDGER_NAME)
 
     inventory_xml = ""
     total_item_amount = 0.0
@@ -270,7 +565,7 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines):
                             <RATE>{rate_text}</RATE>
                             <AMOUNT>{amount:.2f}</AMOUNT>
                             <ACCOUNTINGALLOCATIONS.LIST>
-                                <LEDGERNAME>{esc(SALES_LEDGER_NAME)}</LEDGERNAME>
+                                <LEDGERNAME>{esc(sales_ledger_name)}</LEDGERNAME>
                                 <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
                                 <AMOUNT>{amount:.2f}</AMOUNT>
                             </ACCOUNTINGALLOCATIONS.LIST>
@@ -296,7 +591,7 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines):
     if cgst > 0:
         ledger_entries_xml += f"""
                         <LEDGERENTRIES.LIST>
-                            <LEDGERNAME>{esc(CGST_LEDGER_NAME)}</LEDGERNAME>
+                            <LEDGERNAME>{esc(cgst_ledger_name)}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
                             <AMOUNT>{cgst:.2f}</AMOUNT>
                         </LEDGERENTRIES.LIST>
@@ -305,7 +600,7 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines):
     if sgst > 0:
         ledger_entries_xml += f"""
                         <LEDGERENTRIES.LIST>
-                            <LEDGERNAME>{esc(SGST_LEDGER_NAME)}</LEDGERNAME>
+                            <LEDGERNAME>{esc(sgst_ledger_name)}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
                             <AMOUNT>{sgst:.2f}</AMOUNT>
                         </LEDGERENTRIES.LIST>
@@ -314,7 +609,7 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines):
     if igst > 0:
         ledger_entries_xml += f"""
                         <LEDGERENTRIES.LIST>
-                            <LEDGERNAME>{esc(IGST_LEDGER_NAME)}</LEDGERNAME>
+                            <LEDGERNAME>{esc(igst_ledger_name)}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
                             <AMOUNT>{igst:.2f}</AMOUNT>
                         </LEDGERENTRIES.LIST>
@@ -375,13 +670,7 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines):
 
 
 def post_to_tally(xml_data):
-    response = requests.post(
-        TALLY_URL,
-        data=xml_data.encode("utf-8"),
-        headers={"Content-Type": "text/xml"},
-        timeout=30,
-    )
-    return response.text
+    return tally_request(xml_data)
 
 
 def is_tally_success(response_text):
@@ -404,22 +693,84 @@ def extract_tally_error(response_text):
     return response_text[:200]
 
 
-def update_invoice_tally_status(conn, invoice_id, success, remark, tally_by=None):
+def validate_tally_masters(customer_name, sales_ledger_name, item_lines, invoice_row):
+    errors = []
+
+    master_checks = [("Ledger", customer_name), ("Ledger", sales_ledger_name)]
+
+    other_charges = round(to_float(invoice_row.get("otherCharges")), 2)
+    round_off = round(to_float(invoice_row.get("roundOff")), 2)
+    cgst = round(to_float(invoice_row.get("cgst")), 2)
+    sgst = round(to_float(invoice_row.get("sgst")), 2)
+    igst = round(to_float(invoice_row.get("igst")), 2)
+    derived_tax_rates = derive_tax_rates(invoice_row, item_lines)
+
+    if other_charges != 0:
+        master_checks.append(("Ledger", OTHER_CHARGES_LEDGER_NAME))
+    if round_off != 0:
+        master_checks.append(("Ledger", ROUND_OFF_LEDGER_NAME))
+    if cgst > 0:
+        master_checks.append(
+            ("Ledger", resolve_tax_ledger_name(CGST_LEDGER_PREFIX, derived_tax_rates["cgst_rate"], CGST_LEDGER_NAME))
+        )
+    if sgst > 0:
+        master_checks.append(
+            ("Ledger", resolve_tax_ledger_name(SGST_LEDGER_PREFIX, derived_tax_rates["sgst_rate"], SGST_LEDGER_NAME))
+        )
+    if igst > 0:
+        master_checks.append(
+            ("Ledger", resolve_tax_ledger_name(IGST_LEDGER_PREFIX, derived_tax_rates["igst_rate"], IGST_LEDGER_NAME))
+        )
+
+    for line in item_lines:
+        master_checks.append(("Stock Item", line.get("itemName") or ""))
+
+    checked = set()
+    for object_type, object_name in master_checks:
+        key = (object_type, object_name)
+        if key in checked or not object_name:
+            continue
+        checked.add(key)
+        exists, message = check_tally_object_exists(object_type, object_name)
+        if not exists:
+            errors.append(message)
+
+    return errors
+
+
+def update_invoice_tally_status(
+    conn,
+    invoice_id,
+    success,
+    remark,
+    tally_by=None,
+    tally_inv_no=None,
+    tally_inv_date=None,
+    tally_inv_id=None,
+):
+    ensure_invoice_sync_columns(conn)
     cursor = conn.cursor()
     if success:
-        cursor.execute(
-            """
+        sql = """
             UPDATE invoices
             SET
                 tallyTimestamp = %s,
                 tallyBy = %s,
-                tallySyncRemark = %s
+                tallySyncRemark = %s,
+                tallyInvNo = %s,
+                tallyInvDate = %s,
+                tallyInvId = %s
             WHERE id = %s
-            """,
+            """
+        cursor.execute(
+            sql,
             (
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 tally_by or DEFAULT_UPDATED_BY,
                 remark,
+                tally_inv_no,
+                tally_inv_date,
+                tally_inv_id,
                 invoice_id,
             ),
         )
@@ -440,6 +791,7 @@ def sync_invoices_to_tally():
     conn = get_db_connection()
 
     try:
+        ensure_invoice_sync_columns(conn)
         pending_invoice_rows = get_pending_invoice_rows(conn)
 
         print("==========================================")
@@ -453,7 +805,8 @@ def sync_invoices_to_tally():
             print(f"\nProcessing Invoice ID: {invoice_id} | Invoice No: {invoice_no}")
 
             try:
-                company_name = get_company_name(conn, invoice_row.get("companyId"))
+                company_row = get_company_details(conn, invoice_row.get("companyId"))
+                company_name = (company_row or {}).get("name") or ""
                 if not company_name:
                     remark = "Company ledger not found in companies table"
                     update_invoice_tally_status(conn, invoice_id, False, remark)
@@ -471,8 +824,10 @@ def sync_invoices_to_tally():
                 if line_errors:
                     remark = " | ".join(line_errors[:10])
                     update_invoice_tally_status(conn, invoice_id, False, remark)
-                    print(f"Validation failed: {remark}")
+                    log_terminal("VALIDATION", remark)
                     continue
+
+                sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row)
 
                 for line in item_lines:
                     print(
@@ -483,8 +838,26 @@ def sync_invoices_to_tally():
                         f"rate={line.get('rate')}, "
                         f"amount={line.get('amount')}"
                     )
+                print(f"Using sales ledger: {sales_ledger_name}")
 
-                tally_xml = create_sales_voucher_xml(invoice_row, company_name, item_lines)
+                tally_master_errors = validate_tally_masters(
+                    company_name,
+                    sales_ledger_name,
+                    item_lines,
+                    invoice_row,
+                )
+                if tally_master_errors:
+                    remark = " | ".join(tally_master_errors[:10])
+                    update_invoice_tally_status(conn, invoice_id, False, remark)
+                    log_terminal("PRECHECK", remark)
+                    continue
+
+                tally_xml = create_sales_voucher_xml(
+                    invoice_row,
+                    company_name,
+                    item_lines,
+                    sales_ledger_name,
+                )
 
                 if DEBUG_TALLY_XML:
                     print("Generated Tally XML:")
@@ -497,13 +870,19 @@ def sync_invoices_to_tally():
 
                 if is_tally_success(tally_response):
                     remark = "Posted successfully to Tally"
+                    tally_reference = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
                     update_invoice_tally_status(
                         conn,
                         invoice_id,
                         True,
                         remark,
                         invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
+                        tally_reference.get("tallyInvNo"),
+                        format_iso_date(tally_reference.get("tallyInvDate")),
+                        tally_reference.get("tallyInvId"),
                     )
+                    if tally_reference:
+                        print(f"Fetched Tally invoice reference: {tally_reference}")
                     print(remark)
                 else:
                     error_detail = extract_tally_error(tally_response)

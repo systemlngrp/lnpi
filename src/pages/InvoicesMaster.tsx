@@ -133,6 +133,7 @@ export function InvoicesMaster() {
             <tr className="divide-x divide-black">
               <th className="w-10 px-4 py-3"></th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Invoice / Company</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Tally Details</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Items Summary</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Total Amount</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
@@ -141,7 +142,7 @@ export function InvoicesMaster() {
           <tbody className="bg-white divide-y divide-black">
             {processedInvoices.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500 italic">No invoices found.</td>
+                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">No invoices found.</td>
               </tr>
             ) : processedInvoices.map((inv) => (
               <React.Fragment key={inv.id}>
@@ -166,6 +167,16 @@ export function InvoicesMaster() {
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{formatDate(inv.date)}</div>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {inv.tallyInvNo ? (
+                      <div className="flex flex-col">
+                        <div className="text-xs font-bold text-emerald-700">{inv.tallyInvNo}</div>
+                        <div className="text-[10px] text-emerald-600">{inv.tallyInvDate}</div>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 text-[10px] italic">Not Synced</span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-xs text-slate-600 line-clamp-2 max-w-xs uppercase font-medium">
@@ -268,12 +279,29 @@ export function InvoicesMaster() {
                   <div className="font-bold text-emerald-600 uppercase text-xs">Generated</div>
                 </div>
 	                <div>
-	                  <div className="text-[10px] text-slate-500 uppercase font-bold">Grand Total</div>
-	                  <div className="font-bold text-indigo-700 text-lg">
-	                    {getGrandTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-	                  </div>
-	                </div>
+                  <div className="text-[10px] text-slate-500 uppercase font-bold">Grand Total</div>
+                  <div className="font-bold text-indigo-700 text-lg">
+                    {getGrandTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
               </div>
+
+              {selectedInvoice.tallyInvNo && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-emerald-50 p-4 border border-emerald-200 rounded">
+                  <div>
+                    <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Inv No</div>
+                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyInvNo}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Inv Date</div>
+                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyInvDate}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Inv Id</div>
+                    <div className="font-mono text-[10px] break-all text-emerald-800">{selectedInvoice.tallyInvId}</div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end">
                 <button

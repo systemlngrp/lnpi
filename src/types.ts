@@ -725,6 +725,9 @@ export interface Invoice {
   tallyTimestamp?: string;
   tallyBy?: string;
   tallySyncRemark?: string;
+  tallyInvNo?: string;
+  tallyInvDate?: string;
+  tallyInvId?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
