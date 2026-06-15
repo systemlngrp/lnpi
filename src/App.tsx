@@ -80,6 +80,8 @@ import { LoadingMaster } from "./pages/LoadingMaster";
 import { PendingInvoicing } from "./pages/PendingInvoicing";
 import { BillingPendingTally } from "./pages/BillingPendingTally";
 import { InvoicesMaster } from "./pages/InvoicesMaster";
+import { GatePassForm } from "./pages/GatePassForm";
+import { GatePassMaster } from "./pages/GatePassMaster";
 import { CanceledOrders } from "./pages/CanceledOrders";
 import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
 import { PlansItems } from "./pages/PlansItems";
@@ -233,6 +235,10 @@ export default function App() {
           <Route path="billing/pending" element={<PendingInvoicing />} />
           <Route path="billing/pending-tally" element={<BillingPendingTally />} />
           <Route path="billing/master" element={<InvoicesMaster />} />
+
+          {/* Gate Pass */}
+          <Route path="gate-pass/form" element={<GatePassForm />} />
+          <Route path="gate-pass/master" element={<GatePassMaster />} />
 
           {/* Reports */}
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />

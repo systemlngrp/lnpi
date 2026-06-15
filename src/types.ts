@@ -730,6 +730,38 @@ export interface InvoiceLineItem {
   igst: number;
 }
 
+export interface GatePassLine {
+  id: string;
+  itemId: string;
+  itemName: string;
+  qty: number;
+  rate: number;
+  amount: number;
+  loadingSlipIds: string[];
+  loadingSlipNos: string[];
+}
+
+export interface GatePass {
+  id: string;
+  gatePassNo: string;
+  date: string;
+  invoiceId: string;
+  invoiceNo: string;
+  companyId: string;
+  companyName: string;
+  truckId?: string;
+  truckNo?: string;
+  loadingSlipIds: string[];
+  loadingSlipNos: string[];
+  status: "Generated" | "Dispatched" | "Cancelled";
+  remarks?: string;
+  totalQty: number;
+  totalAmount: number;
+  lines: GatePassLine[];
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface Setting {
   id: string;
   reelAsPerCalculation?: string;
