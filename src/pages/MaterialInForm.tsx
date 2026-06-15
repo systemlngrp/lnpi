@@ -787,6 +787,30 @@ export function MaterialInForm() {
     e.preventDefault();
     if (!date || !invoiceNo || !invDate || !supplierId || lines.length === 0) return;
 
+    const linesForSubmit =
+      mrrType === "Reel"
+        ? lines.map((line) => {
+            const totalWeight = Number(
+              (packingSlipDrafts[line.id] || []).reduce((sum, slip) => sum + Number(slip.weightKg || 0), 0).toFixed(2)
+            );
+            const invoiceRate = Number(line.invoiceRate ?? line.rate ?? 0);
+            return recalculateMaterialLine({
+              ...line,
+              qty: totalWeight,
+              invoiceQty: totalWeight,
+              actualQty: totalWeight,
+              invoiceRate,
+              rate: invoiceRate,
+              uom: line.uom || "KG",
+            });
+          })
+        : lines.map((line) => recalculateMaterialLine({ ...line }));
+
+    if (linesForSubmit.some((line) => Number(line.invoiceRate ?? line.rate ?? 0) <= 0)) {
+      alert("Invoice rate must be greater than 0 for every MRR line.");
+      return;
+    }
+
     if (mrrType === "Reel") {
       for (const line of lines) {
         const slips = packingSlipDrafts[line.id] || [];
@@ -800,6 +824,8 @@ export function MaterialInForm() {
         }
       }
     }
+
+    const submitSummary = summarizeMaterialInLines(linesForSubmit, insurance, otherCharges, roundOff);
 
     setIsSubmitting(true);
     try {
@@ -824,17 +850,17 @@ export function MaterialInForm() {
           invoiceNo,
           invDate,
           supplierId,
-          totalInvoiceValue,
-          totalActualValue,
-          totalCgst,
-          totalSgst,
-          totalIgst,
-          totalInvoiceValueAfterGst,
-          insurance: insuranceValue,
-          otherCharges: otherChargesValue,
-          roundOff: roundOffValue,
-          totalAmount,
-          lines: summarizeMaterialInLines(lines, insurance, otherCharges, roundOff).lines,
+          totalInvoiceValue: submitSummary.totalInvoiceValue,
+          totalActualValue: submitSummary.totalActualValue,
+          totalCgst: submitSummary.totalCgst,
+          totalSgst: submitSummary.totalSgst,
+          totalIgst: submitSummary.totalIgst,
+          totalInvoiceValueAfterGst: submitSummary.totalInvoiceValueAfterGst,
+          insurance: submitSummary.insuranceValue,
+          otherCharges: submitSummary.otherChargesValue,
+          roundOff: submitSummary.roundOffValue,
+          totalAmount: submitSummary.totalAmount,
+          lines: submitSummary.lines,
           status: editingEntry?.status || "Pending MRR",
           updatedBy: "System User",
           updateTimestamp: timestamp,
