@@ -2961,6 +2961,7 @@ async function initDb(retries = 5) {
           \`roundOff\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`tallyTimestamp\` VARCHAR(255),
           \`tallyBy\` VARCHAR(255),
+          \`tallySyncRemark\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -3622,6 +3623,7 @@ async function initDb(retries = 5) {
         { table: "invoices", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoices", column: "tallyTimestamp", type: "VARCHAR(255)" },
         { table: "invoices", column: "tallyBy", type: "VARCHAR(255)" },
+        { table: "invoices", column: "tallySyncRemark", type: "TEXT" },
         { table: "invoices", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_passes", column: "gatePassNo", type: "VARCHAR(100) NOT NULL" },

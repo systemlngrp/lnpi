@@ -711,6 +711,7 @@ export interface Invoice {
   roundOff: number;
   tallyTimestamp?: string;
   tallyBy?: string;
+  tallySyncRemark?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
