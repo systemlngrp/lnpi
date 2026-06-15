@@ -96,6 +96,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "RAPC Range Master", href: "/masters/rapc-ranges", icon: Database },
       { name: "NPD Items", href: "/masters/npd", icon: Database },
       { name: "Users", href: "/masters/users", icon: Users },
+      { name: "Services", href: "/masters/services", icon: Database },
       { name: "Settings", href: "/masters/settings", icon: Database },
     ],
   },
@@ -230,6 +231,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { name: "Gate Pass Form", href: "/gate-pass/form", icon: ClipboardList },
       { name: "Gate Pass Master", href: "/gate-pass/master", icon: Database },
+      { name: "Pending Returnable Items", href: "/gate-pass/pending-returnable", icon: Activity },
     ],
   },
   {

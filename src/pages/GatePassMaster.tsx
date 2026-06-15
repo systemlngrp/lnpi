@@ -1,16 +1,17 @@
-import { useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { Download, Eye, FilePlus2, Pencil, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { downloadGatePassPdf } from "../lib/gatePassPdf";
-import { GatePass, Setting } from "../types";
+import { deriveGatePassState, getGatePassLinesWithReturns, getGatePassPrimaryPartyName, isReturnableGatePass } from "../lib/gatePassState";
+import { GatePass, MaterialIn, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 
 export function GatePassMaster() {
   const navigate = useNavigate();
   const [gatePasses] = useData<GatePass>("gate_passes", []);
   const [settings] = useData<Setting>("settings", []);
+  const [materialIn] = useData<MaterialIn>("material-in", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGatePassId, setSelectedGatePassId] = useState<string | null>(null);
@@ -23,21 +24,18 @@ export function GatePassMaster() {
           const haystack = [
             gatePass.gatePassNo,
             gatePass.invoiceNo,
-            gatePass.companyName,
+            getGatePassPrimaryPartyName(gatePass),
             gatePass.truckNo,
-            gatePass.status,
+            gatePass.gatePassType,
+            isReturnableGatePass(gatePass) ? deriveGatePassState(gatePass, materialIn) : "",
           ]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
           return haystack.includes(searchTerm.toLowerCase());
         })
-        .sort((a, b) => {
-          const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
-          const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
-          return timeB - timeA;
-        }),
-    [gatePasses, searchTerm]
+        .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime()),
+    [gatePasses, materialIn, searchTerm]
   );
 
   const selectedGatePass = filteredGatePasses.find((gatePass) => gatePass.id === selectedGatePassId) || null;
@@ -45,13 +43,10 @@ export function GatePassMaster() {
   const handleDownloadPdf = async (gatePass: GatePass) => {
     setIsDownloading(gatePass.id);
     try {
-      await downloadGatePassPdf({
-        gatePass,
-        setting: settings[0],
-      });
+      await downloadGatePassPdf({ gatePass, setting: settings[0] });
     } catch (error) {
       console.error("Failed to generate Gate Pass PDF:", error);
-      alert("Failed to generate Gate Pass PDF. Please check console for details.");
+      alert("Failed to generate Gate Pass PDF.");
     } finally {
       setIsDownloading(null);
     }
@@ -62,85 +57,52 @@ export function GatePassMaster() {
       <div className="flex items-center justify-between gap-4 border-b border-black pb-4">
         <div>
           <h2 className="text-xl font-bold uppercase tracking-tight text-black">Gate Pass Master</h2>
-          <p className="text-sm text-slate-500">View and update the single gate pass generated for each invoice.</p>
+          <p className="text-sm text-slate-500">Both invoice-linked non-returnable and manual returnable gate passes are managed here.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate("/gate-pass/form")}
-          className="inline-flex items-center gap-2 rounded bg-indigo-600 px-4 py-2 font-bold text-white transition hover:bg-indigo-700"
-        >
+        <button type="button" onClick={() => navigate("/gate-pass/form")} className="inline-flex items-center gap-2 rounded bg-indigo-600 px-4 py-2 font-bold text-white transition hover:bg-indigo-700">
           <FilePlus2 size={16} />
-          Open Gate Pass Form
+          New Returnable Gate Pass
         </button>
       </div>
 
       <div className="rounded border border-black bg-white p-4 shadow-sm">
-        <input
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search gate pass no, invoice no, company, truck..."
-          className="w-full max-w-xl rounded border border-black px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-        />
+        <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search gate pass no, invoice no, recipient/company, truck..." className="w-full max-w-xl rounded border border-black px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black" />
       </div>
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
           <thead className="bg-slate-100">
             <tr className="divide-x divide-black">
-              {["Gate Pass No", "Date", "Invoice No", "Company", "Truck", "Total Qty", "Total Amount", "Status", "Actions"].map(
-                (heading) => (
-                  <th key={heading} className="border-b border-black px-4 py-3 text-left text-xs font-black uppercase text-black">
-                    {heading}
-                  </th>
-                )
-              )}
+              {["Gate Pass No", "Type", "Date", "Invoice / Recipient", "Truck", "Total Qty", "Total Amount", "Derived State", "Actions"].map((heading) => (
+                <th key={heading} className="border-b border-black px-4 py-3 text-left text-xs font-black uppercase text-black">{heading}</th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
             {filteredGatePasses.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">
-                  No gate passes found.
-                </td>
+                <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">No gate passes found.</td>
               </tr>
             ) : (
               filteredGatePasses.map((gatePass) => (
                 <tr key={gatePass.id} className="divide-x divide-black hover:bg-slate-50">
                   <td className="px-4 py-3 text-sm font-bold text-black">{gatePass.gatePassNo || "Pending"}</td>
+                  <td className="px-4 py-3 text-sm text-black">{gatePass.gatePassType || "Non-Returnable"}</td>
                   <td className="px-4 py-3 text-sm text-black">{formatDate(gatePass.date)}</td>
-                  <td className="px-4 py-3 text-sm text-black">{gatePass.invoiceNo}</td>
-                  <td className="px-4 py-3 text-sm text-black">{gatePass.companyName}</td>
+                  <td className="px-4 py-3 text-sm text-black">{isReturnableGatePass(gatePass) ? getGatePassPrimaryPartyName(gatePass) : gatePass.invoiceNo || "-"}</td>
                   <td className="px-4 py-3 text-sm text-black">{gatePass.truckNo || "-"}</td>
-                  <td className="px-4 py-3 text-right text-sm font-medium text-black">{gatePass.totalQty.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-sm font-medium text-black">
-                    {gatePass.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-bold text-indigo-700">{gatePass.status}</td>
+                  <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalQty || 0).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-sm font-bold text-indigo-700">{isReturnableGatePass(gatePass) ? deriveGatePassState(gatePass, materialIn) : "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedGatePassId(gatePass.id)}
-                        className="rounded border border-black p-2 text-black hover:bg-slate-100"
-                        title="View"
-                      >
+                      <button type="button" onClick={() => setSelectedGatePassId(gatePass.id)} className="rounded border border-black p-2 text-black hover:bg-slate-100" title="View">
                         <Eye size={15} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/gate-pass/form?id=${gatePass.id}`)}
-                        className="rounded border border-black p-2 text-black hover:bg-slate-100"
-                        title="Edit"
-                      >
+                      <button type="button" onClick={() => navigate(`/gate-pass/form?id=${gatePass.id}`)} className="rounded border border-black p-2 text-black hover:bg-slate-100" title="Edit">
                         <Pencil size={15} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadPdf(gatePass)}
-                        disabled={isDownloading === gatePass.id}
-                        className="rounded border border-black p-2 text-black hover:bg-slate-100 disabled:opacity-50"
-                        title="Download PDF"
-                      >
+                      <button type="button" onClick={() => handleDownloadPdf(gatePass)} disabled={isDownloading === gatePass.id} className="rounded border border-black p-2 text-black hover:bg-slate-100 disabled:opacity-50" title="Download PDF">
                         {isDownloading === gatePass.id ? <span className="text-xs font-bold">...</span> : <Download size={15} />}
                       </button>
                     </div>
@@ -158,15 +120,9 @@ export function GatePassMaster() {
             <div className="flex items-start justify-between border-b border-black bg-slate-900 px-6 py-4 text-white">
               <div>
                 <h3 className="text-xl font-black">{selectedGatePass.gatePassNo || "Gate Pass"}</h3>
-                <p className="mt-1 text-sm text-slate-300">
-                  Invoice {selectedGatePass.invoiceNo} | {selectedGatePass.companyName}
-                </p>
+                <p className="mt-1 text-sm text-slate-300">{selectedGatePass.gatePassType || "Non-Returnable"} | {getGatePassPrimaryPartyName(selectedGatePass)}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedGatePassId(null)}
-                className="rounded border border-white/20 p-2 hover:bg-white/10"
-              >
+              <button type="button" onClick={() => setSelectedGatePassId(null)} className="rounded border border-white/20 p-2 hover:bg-white/10">
                 <X size={18} />
               </button>
             </div>
@@ -175,52 +131,40 @@ export function GatePassMaster() {
               <div className="grid gap-4 md:grid-cols-4">
                 <InfoCard label="Date" value={formatDate(selectedGatePass.date)} />
                 <InfoCard label="Truck" value={selectedGatePass.truckNo || "-"} />
-                <InfoCard label="Status" value={selectedGatePass.status} />
-                <InfoCard
-                  label="Total Amount"
-                  value={selectedGatePass.totalAmount.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                />
-              </div>
-
-              <div className="rounded border border-black p-4">
-                <div className="text-xs font-black uppercase text-slate-500">Linked Loading Slips</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedGatePass.loadingSlipNos.length === 0 ? (
-                    <div className="text-sm text-slate-500">No loading slips linked.</div>
-                  ) : (
-                    selectedGatePass.loadingSlipNos.map((slipNo) => (
-                      <span key={slipNo} className="rounded border border-black px-3 py-1 text-xs font-bold">
-                        {slipNo}
-                      </span>
-                    ))
-                  )}
-                </div>
+                <InfoCard label="Type" value={selectedGatePass.gatePassType || "Non-Returnable"} />
+                <InfoCard label="Derived State" value={isReturnableGatePass(selectedGatePass) ? deriveGatePassState(selectedGatePass, materialIn) : "-"} />
               </div>
 
               <div className="overflow-hidden rounded border border-black">
                 <table className="min-w-full border-collapse">
                   <thead className="bg-slate-100">
                     <tr className="divide-x divide-black">
-                      {["Item", "Qty", "Rate", "Amount", "Slip Nos"].map((heading) => (
-                        <th key={heading} className="border-b border-black px-3 py-2 text-left text-[10px] font-black uppercase">
-                          {heading}
-                        </th>
+                      {(isReturnableGatePass(selectedGatePass)
+                        ? ["Item", "Qty", "Returned Qty", "Pending Qty", "UOM"]
+                        : ["Item", "Qty", "Rate", "Amount", "Loading Slip Nos"]
+                      ).map((heading) => (
+                        <th key={heading} className="border-b border-black px-3 py-2 text-left text-[10px] font-black uppercase">{heading}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black bg-white">
-                    {selectedGatePass.lines.map((line) => (
+                    {(isReturnableGatePass(selectedGatePass) ? getGatePassLinesWithReturns(selectedGatePass, materialIn) : selectedGatePass.lines).map((line: any) => (
                       <tr key={line.id} className="divide-x divide-black">
-                        <td className="px-3 py-2 text-xs font-bold uppercase">{line.itemName}</td>
-                        <td className="px-3 py-2 text-right text-xs">{line.qty.toLocaleString()}</td>
-                        <td className="px-3 py-2 text-right text-xs">{Number(line.rate || 0).toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right text-xs">
-                          {line.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-3 py-2 text-xs">{line.loadingSlipNos.join(", ") || "-"}</td>
+                        <td className="px-3 py-2 text-xs font-bold">{line.itemDescription || line.itemName}</td>
+                        <td className="px-3 py-2 text-right text-xs">{Number(line.qty || 0).toLocaleString()}</td>
+                        {isReturnableGatePass(selectedGatePass) ? (
+                          <>
+                            <td className="px-3 py-2 text-right text-xs">{Number(line.returnedQty || 0).toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right text-xs font-bold text-amber-700">{Number(line.pendingQty || 0).toLocaleString()}</td>
+                            <td className="px-3 py-2 text-xs">{line.uom || "-"}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-2 text-right text-xs">{Number(line.rate || 0).toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right text-xs">{Number(line.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="px-3 py-2 text-xs">{(line.loadingSlipNos || []).join(", ") || "-"}</td>
+                          </>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -233,19 +177,10 @@ export function GatePassMaster() {
               </div>
 
               <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadPdf(selectedGatePass)}
-                  disabled={isDownloading === selectedGatePass.id}
-                  className="rounded border-2 border-black px-4 py-2 text-sm font-black uppercase hover:bg-slate-50 disabled:opacity-50"
-                >
+                <button type="button" onClick={() => handleDownloadPdf(selectedGatePass)} disabled={isDownloading === selectedGatePass.id} className="rounded border-2 border-black px-4 py-2 text-sm font-black uppercase hover:bg-slate-50 disabled:opacity-50">
                   {isDownloading === selectedGatePass.id ? "Generating PDF..." : "Download PDF"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/gate-pass/form?id=${selectedGatePass.id}`)}
-                  className="rounded bg-indigo-600 px-4 py-2 text-sm font-black uppercase text-white hover:bg-indigo-700"
-                >
+                <button type="button" onClick={() => navigate(`/gate-pass/form?id=${selectedGatePass.id}`)} className="rounded bg-indigo-600 px-4 py-2 text-sm font-black uppercase text-white hover:bg-indigo-700">
                   Edit Gate Pass
                 </button>
               </div>

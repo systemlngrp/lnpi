@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, Plus, X } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { GateEntry, GateEntryPhoto, Supplier } from "../types";
+import { Company, GateEntry, GateEntryPhoto, Supplier } from "../types";
 
 export function GateEntryMaster() {
   const navigate = useNavigate();

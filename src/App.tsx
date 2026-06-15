@@ -66,6 +66,7 @@ import { PendingSamples } from "./pages/PendingSamples";
 import { SamplesProduced } from "./pages/SamplesProduced";
 import { SampleMaster } from "./pages/SampleMaster";
 import { Users } from "./pages/Users";
+import { Services } from "./pages/Services";
 import { PlantHeadUnified } from "./pages/PlantHeadUnified";
 import { OrderForm } from "./pages/OrderForm";
 import { OrdersPendingPH } from "./pages/OrdersPendingPH";
@@ -82,6 +83,7 @@ import { BillingPendingTally } from "./pages/BillingPendingTally";
 import { InvoicesMaster } from "./pages/InvoicesMaster";
 import { GatePassForm } from "./pages/GatePassForm";
 import { GatePassMaster } from "./pages/GatePassMaster";
+import { PendingReturnableItems } from "./pages/PendingReturnableItems";
 import { CanceledOrders } from "./pages/CanceledOrders";
 import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
 import { PlansItems } from "./pages/PlansItems";
@@ -146,6 +148,7 @@ export default function App() {
           <Route path="masters/rapc-ranges" element={<RapcRangeMaster />} />
           <Route path="masters/npd" element={<NpdMaster />} />
           <Route path="masters/users" element={<Users />} />
+          <Route path="masters/services" element={<Services />} />
           <Route path="masters/settings" element={<SettingsPage />} />
 
           {/* Indent */}
@@ -239,6 +242,7 @@ export default function App() {
           {/* Gate Pass */}
           <Route path="gate-pass/form" element={<GatePassForm />} />
           <Route path="gate-pass/master" element={<GatePassMaster />} />
+          <Route path="gate-pass/pending-returnable" element={<PendingReturnableItems />} />
 
           {/* Reports */}
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />

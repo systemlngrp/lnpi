@@ -5,6 +5,7 @@ import { useData } from "../hooks/useData";
 import {
   Company,
   GateEntry,
+  GatePass,
   GstRateMaster,
   Item,
   Material,
@@ -13,6 +14,7 @@ import {
   MaterialLine,
   PurchaseOrder,
   PurchaseOrderLine,
+  Service,
   Supplier,
 } from "../types";
 import { generateTransactionNo } from "../lib/serial";
@@ -21,6 +23,7 @@ import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { applySupplyTypeTaxRates, recalculateMaterialLine, summarizeMaterialInLines } from "../lib/materialInTaxes";
+import { getGatePassLinesWithReturns } from "../lib/gatePassState";
 
 type PackingSlipDraft = {
   id: string;
@@ -56,7 +59,9 @@ export function MaterialInForm() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
+  const [gatePasses] = useData<GatePass>("gate_passes", []);
   const [materials] = useData<Material>("materials", []);
+  const [services] = useData<Service>("services", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
@@ -75,6 +80,7 @@ export function MaterialInForm() {
 
   const [lines, setLines] = useState<MaterialLine[]>([]);
   const [currentItemId, setCurrentItemId] = useState("");
+  const [currentSourceGatePassLineId, setCurrentSourceGatePassLineId] = useState("");
   const [currentQty, setCurrentQty] = useState<number | "">("");
   const [currentReceiptQty, setCurrentReceiptQty] = useState<number | "">("");
   const [currentInvoiceRate, setCurrentInvoiceRate] = useState<number | "">("");
@@ -89,6 +95,10 @@ export function MaterialInForm() {
   const linkedGateEntry = useMemo(
     () => gateEntries.find((entry) => entry.id === gateEntryId),
     [gateEntries, gateEntryId]
+  );
+  const linkedSourceGatePass = useMemo(
+    () => gatePasses.find((entry) => entry.id === linkedGateEntry?.sourceGatePassId),
+    [gatePasses, linkedGateEntry?.sourceGatePassId]
   );
   const editingEntry = useMemo(
     () => materialIn.find((entry) => entry.id === editId) || null,
@@ -113,6 +123,7 @@ export function MaterialInForm() {
   const isInterState = supplierGstSupplyType === "INTER_STATE";
 
   const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
+  const isServiceReturn = mrrType === "Service Return";
 
   const materialOptions = useMemo(
     () => {
@@ -136,6 +147,15 @@ export function MaterialInForm() {
     [materials, npdItems, mrrType, isFgType]
   );
 
+  const serviceOptions = useMemo(
+    () =>
+      services
+        .filter((service) => service.active !== "No")
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((service) => ({ value: service.id, label: service.name })),
+    [services]
+  );
+
   const supplierOptions = useMemo(
     () => {
       const combined = [
@@ -152,6 +172,7 @@ export function MaterialInForm() {
     { value: "Others", label: "Others" },
     { value: "Rejection In", label: "Rejection In" },
     { value: "FG Purchase", label: "FG Purchase" },
+    { value: "Service Return", label: "Service Return" },
   ];
 
   useEffect(() => {
@@ -161,6 +182,9 @@ export function MaterialInForm() {
     setInvoiceNo(linkedGateEntry.invoiceNo || "");
     setInvDate(linkedGateEntry.date || "");
     setSupplierId(linkedGateEntry.supplierId || "");
+    if (linkedGateEntry.purpose === "Returnable Receipt" && linkedGateEntry.sourceGatePassId) {
+      setMrrType("Service Return");
+    }
   }, [editingEntry, linkedGateEntry]);
 
   useEffect(() => {
@@ -204,7 +228,13 @@ export function MaterialInForm() {
     );
   }, [isInterState]);
 
+  const pendingGatePassLines = useMemo(() => {
+    if (!linkedSourceGatePass) return [];
+    return getGatePassLinesWithReturns(linkedSourceGatePass, materialIn, editingEntry?.id).filter((line) => Number(line.pendingQty || 0) > 0);
+  }, [editingEntry?.id, linkedSourceGatePass, materialIn]);
+
   const getMaterial = (materialId: string) => {
+    if (isServiceReturn) return services.find((service) => service.id === materialId);
     if (isFgType) return npdItems.find((item) => item.id === materialId);
     return materials.find((material) => material.id === materialId);
   };
@@ -317,6 +347,7 @@ export function MaterialInForm() {
 
   const resetLineDrafts = () => {
     setCurrentItemId("");
+    setCurrentSourceGatePassLineId("");
     setCurrentQty("");
     setCurrentReceiptQty("");
     setCurrentInvoiceRate("");
@@ -340,6 +371,42 @@ export function MaterialInForm() {
 
   const handleAddLine = () => {
     if (!currentItemId) return;
+
+    if (isServiceReturn) {
+      const service = services.find((entry) => entry.id === currentItemId);
+      const sourceLine = pendingGatePassLines.find((line) => line.id === currentSourceGatePassLineId);
+      const qty = Number(currentQty || 0);
+      const invoiceRate = Number(currentInvoiceRate || 0);
+      if (!service || !sourceLine || qty <= 0 || qty > Number(sourceLine.pendingQty || 0) || invoiceRate <= 0) return;
+
+      const newLine = applySupplyTypeTaxRates({
+        id: crypto.randomUUID(),
+        itemId: service.id,
+        itemName: service.name,
+        lineType: "Service",
+        serviceId: service.id,
+        serviceName: service.name,
+        sourceGatePassId: linkedSourceGatePass?.id,
+        sourceGatePassNo: linkedSourceGatePass?.gatePassNo,
+        sourceGatePassLineId: sourceLine.id,
+        sourceGatePassItemDescription: sourceLine.itemDescription || sourceLine.itemName,
+        qty,
+        uom: sourceLine.uom || "",
+        invoiceQty: qty,
+        invoiceRate,
+        actualQty: qty,
+        rate: invoiceRate,
+        value: qty * invoiceRate,
+        gstRate: 0,
+        cgstRate: 0,
+        sgstRate: 0,
+        igstRate: 0,
+      }, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
+
+      setLines((prev) => [...prev, newLine]);
+      resetLineDrafts();
+      return;
+    }
 
     const selectedPoLine = currentPoLineId ? getPurchaseOrderLine(currentPoLineId) : undefined;
     const resolvedInvoiceRate =
@@ -811,6 +878,21 @@ export function MaterialInForm() {
       return;
     }
 
+    if (isServiceReturn) {
+      for (const line of linesForSubmit) {
+        const sourceLine = pendingGatePassLines.find((entry) => entry.id === line.sourceGatePassLineId);
+        const actualQty = Number(line.actualQty ?? line.qty ?? 0);
+        if (!sourceLine) {
+          alert("Each service return line must be linked to a returnable gate pass item.");
+          return;
+        }
+        if (actualQty <= 0 || actualQty > Number(sourceLine.pendingQty || 0)) {
+          alert(`Returned quantity cannot exceed pending quantity for ${sourceLine.itemDescription || sourceLine.itemName}.`);
+          return;
+        }
+      }
+    }
+
     if (mrrType === "Reel") {
       for (const line of lines) {
         const slips = packingSlipDrafts[line.id] || [];
@@ -844,6 +926,8 @@ export function MaterialInForm() {
           mrrType,
           gateEntryId: editingEntry?.gateEntryId || linkedGateEntry?.id,
           gateEntryNo: editingEntry?.gateEntryNo || linkedGateEntry?.gateEntryNo,
+          sourceGatePassId: editingEntry?.sourceGatePassId || linkedGateEntry?.sourceGatePassId,
+          sourceGatePassNo: editingEntry?.sourceGatePassNo || linkedGateEntry?.sourceGatePassNo,
           timestamp: editingEntry?.timestamp || timestamp,
           entryEmailId: editingEntry?.entryEmailId || "system@lngrp.in",
           date,
@@ -970,6 +1054,12 @@ export function MaterialInForm() {
               <label className="font-bold text-black text-sm">Truck No</label>
               <input type="text" value={linkedGateEntry.truckNo || ""} disabled className="border-2 border-emerald-700 rounded p-2 text-black bg-white font-semibold" />
             </div>
+            {linkedSourceGatePass ? (
+              <div className="flex flex-col space-y-1 md:col-span-3">
+                <label className="font-bold text-black text-sm">Linked Returnable Gate Pass</label>
+                <input type="text" value={linkedSourceGatePass.gatePassNo || ""} disabled className="border-2 border-emerald-700 rounded p-2 text-black bg-white font-semibold" />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -999,7 +1089,11 @@ export function MaterialInForm() {
             <label className="font-bold text-black">
               MRR Type <span className="text-red-500">*</span>
             </label>
-            <Select options={mrrTypeOptions} value={mrrType} onChange={handleMrrTypeChange} required />
+            {linkedGateEntry?.purpose === "Returnable Receipt" ? (
+              <input value="Service Return" disabled className="border-2 border-black rounded p-2 text-black bg-slate-50 w-full font-semibold opacity-80" />
+            ) : (
+              <Select options={mrrTypeOptions} value={mrrType} onChange={handleMrrTypeChange} required />
+            )}
           </div>
           <div className="flex flex-col space-y-1">
             <label className="font-bold text-black">
@@ -1071,7 +1165,7 @@ export function MaterialInForm() {
 
         <div className="mt-6 border-t border-black pt-4">
           <h3 className="text-lg font-bold text-black mb-4 uppercase">
-            {isFgType ? "FG Items" : (mrrType === "Reel" ? "Reel Items" : "Line Items")}
+            {isServiceReturn ? "Service Return Lines" : isFgType ? "FG Items" : (mrrType === "Reel" ? "Reel Items" : "Line Items")}
           </h3>
           {mrrType === "Reel" ? (
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded border border-black bg-indigo-50 px-4 py-3">
@@ -1100,13 +1194,27 @@ export function MaterialInForm() {
           <div className="flex flex-wrap gap-4 items-end mb-4 bg-slate-50 p-4 rounded border border-black">
             <div className="flex flex-col space-y-1 w-full md:w-80">
               <label className="text-sm font-bold text-black">
-                {isFgType ? "FG Item" : "Material"} <span className="text-red-600">*</span>
+                {isServiceReturn ? "Service" : isFgType ? "FG Item" : "Material"} <span className="text-red-600">*</span>
               </label>
-              <Select options={materialOptions} value={currentItemId} onChange={setCurrentItemId} placeholder={isFgType ? "Select Item..." : "Select Material..."} />
+              <Select options={isServiceReturn ? serviceOptions : materialOptions} value={currentItemId} onChange={setCurrentItemId} placeholder={isServiceReturn ? "Select Service..." : isFgType ? "Select Item..." : "Select Material..."} />
             </div>
+            {isServiceReturn ? (
+              <div className="flex flex-col space-y-1 w-full md:w-80">
+                <label className="text-sm font-bold text-black">Returned Item <span className="text-red-600">*</span></label>
+                <Select
+                  options={pendingGatePassLines.map((line) => ({
+                    value: line.id,
+                    label: `${line.itemDescription || line.itemName} | Pending ${Number(line.pendingQty || 0).toLocaleString()} ${line.uom || ""}`.trim(),
+                  }))}
+                  value={currentSourceGatePassLineId}
+                  onChange={setCurrentSourceGatePassLineId}
+                  placeholder="Select returned item..."
+                />
+              </div>
+            ) : null}
             {mrrType === "Others" || isFgType ? (
               <div className="flex flex-col space-y-1 w-full md:w-24">
-                <label className="text-sm font-bold text-black">{isFgType ? "Item Receipt" : "Invoice Qty"}</label>
+                <label className="text-sm font-bold text-black">{isServiceReturn ? "Return Qty" : isFgType ? "Item Receipt" : "Invoice Qty"}</label>
                 <input
                   type="number"
                   value={(isFgType ? currentReceiptQty : currentQty) || ""}
@@ -1115,6 +1223,17 @@ export function MaterialInForm() {
                     if (isFgType) setCurrentReceiptQty(val);
                     else setCurrentQty(val);
                   }}
+                  className="border-2 border-black rounded p-[6px] text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-white"
+                />
+              </div>
+            ) : null}
+            {isServiceReturn ? (
+              <div className="flex flex-col space-y-1 w-full md:w-24">
+                <label className="text-sm font-bold text-black">Return Qty</label>
+                <input
+                  type="number"
+                  value={currentQty || ""}
+                  onChange={(e) => setCurrentQty(e.target.value === "" ? "" : parseFloat(e.target.value))}
                   className="border-2 border-black rounded p-[6px] text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-white"
                 />
               </div>
@@ -1150,17 +1269,18 @@ export function MaterialInForm() {
                 <table className="min-w-full divide-y divide-black border-collapse border border-black">
                   <thead className="bg-slate-100 divide-x divide-black">
                     <tr className="divide-x divide-black">
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isFgType ? "Item" : "Material"}</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Service" : isFgType ? "Item" : "Material"}</th>
+                      {isServiceReturn ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Returned Item</th> : null}
                       {!isFgType && mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th> : null}
                       {!isFgType && mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th> : null}
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isFgType ? "Item Receipt" : "Invoice Qty"}</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Return Qty" : isFgType ? "Item Receipt" : "Invoice Qty"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Rate</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GST %</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value</th>
                       {!isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">CGST %</th> : null}
                       {!isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">SGST %</th> : null}
                       {isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">IGST %</th> : null}
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isFgType ? "Kanta Weight" : "Kanta Weight"}</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Accepted Qty" : "Kanta Weight"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Actual Value</th>
                       <th className="px-4 py-3 text-right border border-black"></th>
@@ -1168,10 +1288,11 @@ export function MaterialInForm() {
                   </thead>
                   <tbody className="divide-y divide-black bg-white">
                     {lines.map((line) => {
-                      const materialName = getMaterial(line.itemId)?.name || "Unknown";
+                      const materialName = (line.itemName || getMaterial(line.itemId)?.name || "Unknown");
                       return (
                         <tr key={line.id} className="divide-x divide-black">
                           <td className="px-4 py-3 text-sm text-black border border-black">{materialName}</td>
+                          {isServiceReturn ? <td className="px-4 py-3 text-sm text-black border border-black">{line.sourceGatePassItemDescription || "-"}</td> : null}
                           {!isFgType && mrrType === "Others" ? (
                             <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
                               <Select

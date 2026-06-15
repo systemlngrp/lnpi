@@ -2082,9 +2082,12 @@ async function initDb(retries = 5) {
           \`gateEntryNo\` VARCHAR(100),
           \`date\` VARCHAR(50) NOT NULL,
           \`supplierId\` VARCHAR(36) NOT NULL,
+          \`purpose\` VARCHAR(50),
           \`invoiceNo\` VARCHAR(100) NOT NULL,
           \`invoiceValue\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`truckNo\` VARCHAR(100) NOT NULL,
+          \`sourceGatePassId\` VARCHAR(36),
+          \`sourceGatePassNo\` VARCHAR(100),
           \`mrrId\` VARCHAR(36),
           \`mrrDate\` VARCHAR(50),
           \`mrrNo\` VARCHAR(100),
@@ -2367,6 +2370,8 @@ async function initDb(retries = 5) {
           \`mrrType\` VARCHAR(50),
           \`gateEntryId\` VARCHAR(36),
           \`gateEntryNo\` VARCHAR(100),
+          \`sourceGatePassId\` VARCHAR(36),
+          \`sourceGatePassNo\` VARCHAR(100),
           \`timestamp\` VARCHAR(255) NOT NULL,
           \`entryEmailId\` VARCHAR(255) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
@@ -2607,25 +2612,56 @@ async function initDb(retries = 5) {
           \`roundOff\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`tallyTimestamp\` VARCHAR(255),
           \`tallyBy\` VARCHAR(255),
+          \`tallySyncRemark\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`services\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`active\` VARCHAR(10) DEFAULT 'Yes',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      try {
+        const [existingServiceRows] = await db.query("SELECT COUNT(*) as count FROM `services`");
+        const existingServiceCount = Number(existingServiceRows[0]?.count || 0);
+        if (existingServiceCount === 0) {
+          const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+          await db.query(
+            "INSERT INTO `services` (`id`,`name`,`active`,`updatedBy`,`updateTimestamp`) VALUES (UUID(),'Repairing','Yes','System User',?), (UUID(),'Other Charges','Yes','System User',?)",
+            [timestamp, timestamp]
+          );
+        }
+      } catch (seedError) {
+        console.warn("[DB] Could not seed services table:", seedError.message);
+      }
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`gate_passes\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`gatePassNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
-          \`invoiceId\` VARCHAR(36) NOT NULL,
-          \`invoiceNo\` VARCHAR(100) NOT NULL,
-          \`companyId\` VARCHAR(36) NOT NULL,
-          \`companyName\` VARCHAR(255) NOT NULL,
+          \`gatePassType\` VARCHAR(30) NOT NULL DEFAULT 'Non-Returnable',
+          \`invoiceId\` VARCHAR(36),
+          \`invoiceNo\` VARCHAR(100),
+          \`companyId\` VARCHAR(36),
+          \`companyName\` VARCHAR(255),
+          \`recipientId\` VARCHAR(36),
+          \`recipientName\` VARCHAR(255),
+          \`recipientType\` VARCHAR(30),
+          \`sentByUserId\` VARCHAR(36),
+          \`sentByUserName\` VARCHAR(255),
           \`truckId\` VARCHAR(36),
           \`truckNo\` VARCHAR(255),
           \`loadingSlipIds\` JSON NOT NULL,
           \`loadingSlipNos\` JSON NOT NULL,
-          \`status\` VARCHAR(30) NOT NULL DEFAULT 'Generated',
           \`remarks\` TEXT,
+          \`clearOffReason\` TEXT,
+          \`clearedOffAt\` VARCHAR(255),
+          \`clearedOffBy\` VARCHAR(255),
           \`totalQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`totalAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`lines\` JSON NOT NULL,
@@ -2926,9 +2962,12 @@ async function initDb(retries = 5) {
         { table: "gate_entries", column: "gateEntryNo", type: "VARCHAR(100)" },
         { table: "gate_entries", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "gate_entries", column: "supplierId", type: "VARCHAR(36) NOT NULL" },
+        { table: "gate_entries", column: "purpose", type: "VARCHAR(50)" },
         { table: "gate_entries", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
         { table: "gate_entries", column: "invoiceValue", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "gate_entries", column: "truckNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "gate_entries", column: "sourceGatePassId", type: "VARCHAR(36)" },
+        { table: "gate_entries", column: "sourceGatePassNo", type: "VARCHAR(100)" },
         { table: "gate_entries", column: "mrrId", type: "VARCHAR(36)" },
         { table: "gate_entries", column: "mrrDate", type: "VARCHAR(50)" },
         { table: "gate_entries", column: "mrrNo", type: "VARCHAR(100)" },
@@ -3017,10 +3056,16 @@ async function initDb(retries = 5) {
         { table: "gst_rate_masters", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
         { table: "gst_rate_masters", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "gst_rate_masters", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "services", column: "name", type: "VARCHAR(255) NOT NULL" },
+        { table: "services", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
+        { table: "services", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "services", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "material_in", column: "mrrType", type: "VARCHAR(50)" },
         { table: "material_in", column: "gateEntryId", type: "VARCHAR(36)" },
         { table: "material_in", column: "gateEntryNo", type: "VARCHAR(100)" },
+        { table: "material_in", column: "sourceGatePassId", type: "VARCHAR(36)" },
+        { table: "material_in", column: "sourceGatePassNo", type: "VARCHAR(100)" },
         { table: "material_in", column: "timestamp", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "entryEmailId", type: "VARCHAR(255) NOT NULL" },
         { table: "material_in", column: "date", type: "VARCHAR(50) NOT NULL" },
@@ -3257,20 +3302,29 @@ async function initDb(retries = 5) {
         { table: "invoices", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoices", column: "tallyTimestamp", type: "VARCHAR(255)" },
         { table: "invoices", column: "tallyBy", type: "VARCHAR(255)" },
+        { table: "invoices", column: "tallySyncRemark", type: "TEXT" },
         { table: "invoices", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_passes", column: "gatePassNo", type: "VARCHAR(100) NOT NULL" },
         { table: "gate_passes", column: "date", type: "VARCHAR(50) NOT NULL" },
-        { table: "gate_passes", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
-        { table: "gate_passes", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
-        { table: "gate_passes", column: "companyId", type: "VARCHAR(36) NOT NULL" },
-        { table: "gate_passes", column: "companyName", type: "VARCHAR(255) NOT NULL" },
+        { table: "gate_passes", column: "gatePassType", type: "VARCHAR(30) NOT NULL DEFAULT 'Non-Returnable'" },
+        { table: "gate_passes", column: "invoiceId", type: "VARCHAR(36)" },
+        { table: "gate_passes", column: "invoiceNo", type: "VARCHAR(100)" },
+        { table: "gate_passes", column: "companyId", type: "VARCHAR(36)" },
+        { table: "gate_passes", column: "companyName", type: "VARCHAR(255)" },
+        { table: "gate_passes", column: "recipientId", type: "VARCHAR(36)" },
+        { table: "gate_passes", column: "recipientName", type: "VARCHAR(255)" },
+        { table: "gate_passes", column: "recipientType", type: "VARCHAR(30)" },
+        { table: "gate_passes", column: "sentByUserId", type: "VARCHAR(36)" },
+        { table: "gate_passes", column: "sentByUserName", type: "VARCHAR(255)" },
         { table: "gate_passes", column: "truckId", type: "VARCHAR(36)" },
         { table: "gate_passes", column: "truckNo", type: "VARCHAR(255)" },
         { table: "gate_passes", column: "loadingSlipIds", type: "JSON NOT NULL" },
         { table: "gate_passes", column: "loadingSlipNos", type: "JSON NOT NULL" },
-        { table: "gate_passes", column: "status", type: "VARCHAR(30) NOT NULL DEFAULT 'Generated'" },
         { table: "gate_passes", column: "remarks", type: "TEXT" },
+        { table: "gate_passes", column: "clearOffReason", type: "TEXT" },
+        { table: "gate_passes", column: "clearedOffAt", type: "VARCHAR(255)" },
+        { table: "gate_passes", column: "clearedOffBy", type: "VARCHAR(255)" },
         { table: "gate_passes", column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "gate_passes", column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "gate_passes", column: "lines", type: "JSON NOT NULL" },
@@ -3883,19 +3937,18 @@ const createHandlers = (tableName) => {
         });
         if (tableName === "gate_passes") {
           const invoiceId = String(data.invoiceId || "").trim();
-          if (!invoiceId) {
-            return res.status(400).json({ error: "Invoice is required for Gate Pass." });
-          }
-          const currentId = String(data.id || "").trim();
-          const [existingRows] = await db.query(
-            "SELECT id, gatePassNo FROM `gate_passes` WHERE invoiceId = ? AND id <> ? LIMIT 1",
-            [invoiceId, currentId]
-          );
-          const existingGatePass = existingRows[0];
-          if (existingGatePass) {
-            return res.status(409).json({
-              error: `Only one gate pass is allowed per invoice. Existing Gate Pass: ${existingGatePass.gatePassNo || existingGatePass.id}`
-            });
+          if (invoiceId) {
+            const currentId = String(data.id || "").trim();
+            const [existingRows] = await db.query(
+              "SELECT id, gatePassNo FROM `gate_passes` WHERE invoiceId = ? AND id <> ? LIMIT 1",
+              [invoiceId, currentId]
+            );
+            const existingGatePass = existingRows[0];
+            if (existingGatePass) {
+              return res.status(409).json({
+                error: `Only one gate pass is allowed per invoice. Existing Gate Pass: ${existingGatePass.gatePassNo || existingGatePass.id}`
+              });
+            }
           }
         }
         const keys = Object.keys(data);
@@ -3984,7 +4037,7 @@ const createHandlers = (tableName) => {
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "npd", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "settings"];
 app.get("/api/legacy-items", async (req, res) => {
   try {
     const user = await getRequestUser(req);

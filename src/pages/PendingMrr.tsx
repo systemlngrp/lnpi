@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Eye } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { GateEntry, GateEntryPhoto, Supplier } from "../types";
+import { Company, GateEntry, GateEntryPhoto, Supplier } from "../types";
 import { useNavigate } from "react-router-dom";
 
 function hasMaterialReceipt(entry: GateEntry) {

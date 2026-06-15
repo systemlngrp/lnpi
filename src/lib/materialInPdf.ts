@@ -1,19 +1,21 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "./serial";
-import { MaterialIn, Material, Item, Supplier, Setting } from "../types";
+import { MaterialIn, Material, Item, Service, Supplier, Setting } from "../types";
 import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
 export async function downloadMaterialInPdf({
   mrr,
   materials,
   npdItems,
+  services,
   suppliers,
   setting,
 }: {
   mrr: MaterialIn;
   materials: Material[];
   npdItems: Item[];
+  services?: Service[];
   suppliers: Supplier[];
   setting?: Setting | null;
 }) {
@@ -51,10 +53,16 @@ export async function downloadMaterialInPdf({
   currentY += 35;
 
   const lineTableRows = mrr.lines.map((line, index) => {
-    const itemName = materials.find(m => m.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
+    const itemName =
+      line.itemName ||
+      line.serviceName ||
+      services?.find((service) => service.id === line.itemId)?.name ||
+      materials.find(m => m.id === line.itemId)?.name ||
+      npdItems.find(i => i.id === line.itemId)?.name ||
+      "Unknown";
     return [
       index + 1,
-      itemName,
+      line.sourceGatePassItemDescription ? `${itemName} (${line.sourceGatePassItemDescription})` : itemName,
       line.uom,
       Number(line.invoiceQty || 0).toFixed(2),
       Number(line.actualQty || line.qty || 0).toFixed(2),

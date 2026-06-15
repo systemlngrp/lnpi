@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, Loader2, Trash2 } from "lucide-react";
 import { Select } from "../components/Select";
@@ -271,7 +271,7 @@ function Field({
   label: string;
   required?: boolean;
   className?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className={className || ""}>
