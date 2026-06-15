@@ -16,7 +16,6 @@ type BuildGatePassOptions = {
   remarks?: string;
   selectedLoadingSlipIds: string[];
   slips: LoadingSlip[];
-  status?: GatePass["status"];
   trucks: Truck[];
   updatedBy?: string;
   updateTimestamp?: string;
@@ -38,7 +37,6 @@ export function buildGatePassFromInvoice({
   remarks,
   selectedLoadingSlipIds,
   slips,
-  status,
   trucks,
   updatedBy,
   updateTimestamp,
@@ -73,6 +71,8 @@ export function buildGatePassFromInvoice({
       id: crypto.randomUUID(),
       itemId,
       itemName,
+      itemDescription: itemName,
+      uom: "PCS",
       qty: nextQty,
       rate: nextRate,
       amount: Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0),
@@ -106,15 +106,18 @@ export function buildGatePassFromInvoice({
     id: existingId || crypto.randomUUID(),
     gatePassNo: gatePassNo || "",
     date: date || invoice.date || new Date().toISOString().slice(0, 10),
+    gatePassType: "Non-Returnable",
     invoiceId: invoice.id,
     invoiceNo: invoice.invoiceNo,
     companyId: invoice.companyId,
     companyName: company?.name || "",
+    recipientId: invoice.companyId,
+    recipientName: company?.name || "",
+    recipientType: "Customer",
     truckId: truckId || undefined,
     truckNo: truckNo || undefined,
     loadingSlipIds: selectedSlips.map((slip) => slip.id),
     loadingSlipNos: selectedSlipNos,
-    status: status || "Generated",
     remarks: remarks || "",
     totalQty: relevantLineItems.reduce((sum, line) => sum + Number(line.qty || 0), 0),
     totalAmount: Number(getInvoiceGrandTotal(invoice).toFixed(2)),

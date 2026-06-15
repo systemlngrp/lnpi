@@ -3,6 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { GatePass, Setting } from "../types";
 import { formatDate } from "./serial";
+import { getGatePassLineLabel, getGatePassPrimaryPartyName, isReturnableGatePass } from "./gatePassState";
 import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
 export async function downloadGatePassPdf({
@@ -14,17 +15,19 @@ export async function downloadGatePassPdf({
 }) {
   const doc = new jsPDF("p", "mm", "a4");
   let currentY = (await renderOrganizationHeader(doc, setting)).currentY;
+  const isReturnable = isReturnableGatePass(gatePass);
+  const heading = isReturnable ? "RETURNABLE GATE PASS" : "NON RETURNABLE GATE PASS";
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text("NON RETURNABLE GATE PASS", 105, currentY, { align: "center" });
+  doc.text(heading, 105, currentY, { align: "center" });
   currentY += 9;
 
   const details: Array<[string, string]> = [
     ["Gate Pass No", gatePass.gatePassNo || "-"],
     ["Date", formatDate(gatePass.date)],
-    ["Invoice No", gatePass.invoiceNo || "-"],
-    ["Company", gatePass.companyName || "-"],
+    [isReturnable ? "Recipient" : "Invoice No", isReturnable ? getGatePassPrimaryPartyName(gatePass) : gatePass.invoiceNo || "-"],
+    [isReturnable ? "Sent By" : "Company", isReturnable ? gatePass.sentByUserName || "-" : getGatePassPrimaryPartyName(gatePass)],
     ["Truck", gatePass.truckNo || "-"],
     ["Total Qty", Number(gatePass.totalQty || 0).toLocaleString()],
     [
@@ -75,14 +78,14 @@ export async function downloadGatePassPdf({
     head: [["SL", "Item Name", "Qty", "Rate", "Amount", "Loading Slip Nos"]],
     body: gatePass.lines.map((line, index) => [
       index + 1,
-      line.itemName || "Unknown",
+      getGatePassLineLabel(line),
       Number(line.qty || 0).toLocaleString(),
       Number(line.rate || 0).toFixed(2),
       Number(line.amount || 0).toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
-      Array.isArray(line.loadingSlipNos) ? line.loadingSlipNos.join(", ") : "-",
+      isReturnable ? "-" : (Array.isArray(line.loadingSlipNos) ? line.loadingSlipNos.join(", ") : "-"),
     ]),
     theme: "grid",
     styles: { fontSize: 8.2, cellPadding: 2.2, textColor: 0, overflow: "linebreak" },

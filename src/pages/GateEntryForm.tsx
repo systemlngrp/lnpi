@@ -1,10 +1,9 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, Loader2, Trash2 } from "lucide-react";
-import { useData } from "../hooks/useData";
-import { GateEntry, GateEntryPhoto, Supplier } from "../types";
 import { Select } from "../components/Select";
-import { Spinner } from "../components/Spinner";
+import { useData } from "../hooks/useData";
+import { Company, GateEntry, GateEntryPhoto, GatePass, Supplier } from "../types";
 
 const PHOTO_SLOTS = 8;
 
@@ -26,38 +25,45 @@ function toInputDate(value?: string) {
 
 export function GateEntryForm() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sourceGatePassId = searchParams.get("sourceGatePassId") || "";
+  const purposeFromQuery = searchParams.get("purpose") === "Returnable Receipt" ? "Returnable Receipt" : "Material Receipt";
+
   const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
   const [gateEntryPhotos, setGateEntryPhotos] = useData<GateEntryPhoto>("gate-entry-photos", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
+  const [gatePasses] = useData<GatePass>("gate_passes", []);
+
+  const sourceGatePass = gatePasses.find((gatePass) => gatePass.id === sourceGatePassId) || null;
 
   const [date, setDate] = useState(toInputDate());
-  const [supplierId, setSupplierId] = useState("");
+  const [supplierId, setSupplierId] = useState(sourceGatePass?.recipientId || "");
+  const [purpose, setPurpose] = useState<GateEntry["purpose"]>(purposeFromQuery);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [invoiceValue, setInvoiceValue] = useState("");
-  const [truckNo, setTruckNo] = useState("");
+  const [truckNo, setTruckNo] = useState(sourceGatePass?.truckNo || "");
   const [photoSlots, setPhotoSlots] = useState<PhotoSlot[]>(createInitialSlots);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const supplierOptions = useMemo(
-    () => {
-      const combined = [
-        ...suppliers.filter(s => s.active !== "No").map(s => ({ value: s.id, label: s.name })),
-        ...companies.map(c => ({ value: c.id, label: c.name }))
-      ];
-      return combined.sort((a, b) => a.label.localeCompare(b.label));
-    },
-    [suppliers, companies]
-  );
+  const supplierOptions = useMemo(() => {
+    const combined = [
+      ...suppliers.filter((s) => s.active !== "No").map((s) => ({ value: s.id, label: s.name })),
+      ...companies.map((c) => ({ value: c.id, label: c.name })),
+    ];
+    return combined.sort((a, b) => a.label.localeCompare(b.label));
+  }, [suppliers, companies]);
 
   const hasUploadingPhoto = photoSlots.some((slot) => slot.uploading);
+  const purposeLocked = Boolean(sourceGatePassId);
 
   const resetForm = () => {
     setDate(toInputDate());
-    setSupplierId("");
+    setSupplierId(sourceGatePass?.recipientId || "");
+    setPurpose(purposeFromQuery);
     setInvoiceNo("");
     setInvoiceValue("");
-    setTruckNo("");
+    setTruckNo(sourceGatePass?.truckNo || "");
     setPhotoSlots(createInitialSlots());
   };
 
@@ -67,7 +73,6 @@ export function GateEntryForm() {
 
   const handlePhotoUpload = async (index: number, file?: File | null) => {
     if (!file) return;
-
     updateSlot(index, { uploading: true });
     const reader = new FileReader();
     reader.onload = async () => {
@@ -75,9 +80,9 @@ export function GateEntryForm() {
         const token = window.localStorage.getItem("authToken");
         const response = await fetch("/api/upload-artwork", {
           method: "POST",
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
-            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ base64: reader.result, filename: file.name }),
         });
@@ -113,9 +118,12 @@ export function GateEntryForm() {
         id: gateEntryId,
         date,
         supplierId,
+        purpose,
         invoiceNo: invoiceNo.trim(),
         invoiceValue: Number(invoiceValue || 0),
         truckNo: truckNo.trim(),
+        sourceGatePassId: sourceGatePass?.id,
+        sourceGatePassNo: sourceGatePass?.gatePassNo,
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
@@ -154,107 +162,98 @@ export function GateEntryForm() {
     <div className="space-y-6">
       <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-8 flex items-start justify-between gap-4">
-          <h2 className="text-3xl font-black text-blue-700">Add Gate Entry</h2>
-          <button
-            type="button"
-            onClick={() => navigate("/gate-entry/master")}
-            className="rounded-2xl border border-slate-300 px-6 py-3 font-bold text-indigo-700 transition hover:bg-slate-50"
-          >
+          <div>
+            <h2 className="text-3xl font-black text-blue-700">Add Gate Entry</h2>
+            <p className="mt-1 text-sm text-slate-500">Use `Returnable Receipt` only when items are coming back against a returnable gate pass.</p>
+          </div>
+          <button type="button" onClick={() => navigate("/gate-entry/master")} className="rounded-2xl border border-slate-300 px-6 py-3 font-bold text-indigo-700 transition hover:bg-slate-50">
             Back
           </button>
         </div>
 
+        {sourceGatePass ? (
+          <div className="mb-6 rounded-2xl border border-emerald-700 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">
+            Linked Returnable Gate Pass: <span className="font-bold">{sourceGatePass.gatePassNo}</span>
+          </div>
+        ) : null}
+
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="Date" required>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-                className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </Field>
+
+            <Field label="Purpose" required>
+              {purposeLocked ? (
+                <input value={purpose || "Material Receipt"} disabled className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg bg-slate-50" />
+              ) : (
+                <select value={purpose || "Material Receipt"} onChange={(e) => setPurpose(e.target.value as GateEntry["purpose"])} className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="Material Receipt">Material Receipt</option>
+                  <option value="Returnable Receipt">Returnable Receipt</option>
+                </select>
+              )}
             </Field>
 
             <Field label="Supplier / Customer Name" required>
-              <Select
-                value={supplierId}
-                onChange={setSupplierId}
-                options={supplierOptions}
-                placeholder="Search or Select Supplier / Customer..."
-                required
-              />
+              <Select value={supplierId} onChange={setSupplierId} options={supplierOptions} placeholder="Search or Select Supplier / Customer..." required />
             </Field>
 
             <Field label="Invoice No" required>
-              <input
-                value={invoiceNo}
-                onChange={(e) => setInvoiceNo(e.target.value)}
-                required
-                placeholder="INV-001"
-                className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} required placeholder="INV-001" className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </Field>
 
             <Field label="Invoice Value" required>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={invoiceValue}
-                onChange={(e) => setInvoiceValue(e.target.value)}
-                required
-                placeholder="0.00"
-                className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <input type="number" min="0" step="0.01" value={invoiceValue} onChange={(e) => setInvoiceValue(e.target.value)} required placeholder="0.00" className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </Field>
 
             <Field label="Truck No" required className="md:max-w-[420px]">
-              <input
-                value={truckNo}
-                onChange={(e) => setTruckNo(e.target.value.toUpperCase())}
-                required
-                placeholder="AS-01-XXXX"
-                className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <input value={truckNo} onChange={(e) => setTruckNo(e.target.value.toUpperCase())} required placeholder="AS-01-XXXX" className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </Field>
           </div>
 
-          <div className="space-y-4 rounded-[24px] border border-slate-200 p-4">
+          <div className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-              <h3 className="text-sm font-bold text-blue-700">Upload Photos (Up to 8)</h3>
-              <span className="text-xs font-semibold text-slate-500">
-                {photoSlots.filter((slot) => slot.filename).length} / {PHOTO_SLOTS} uploaded
-              </span>
+              <h3 className="text-xl font-black text-blue-700">Photos / Documents</h3>
+              <div className="text-sm text-slate-500">Up to {PHOTO_SLOTS} files</div>
             </div>
-
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {photoSlots.map((slot, index) => (
-                <PhotoUploadCard
-                  key={index}
-                  slot={slot}
-                  index={index}
-                  onUpload={handlePhotoUpload}
-                  onRemove={() => updateSlot(index, { filename: "", uploading: false })}
-                />
+                <div key={index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-sm font-bold text-slate-700">Pic {index + 1}</span>
+                    {slot.filename ? (
+                      <button type="button" onClick={() => updateSlot(index, { filename: "" })} className="rounded-full border border-slate-300 p-2 text-slate-600 hover:bg-white">
+                        <Trash2 size={15} />
+                      </button>
+                    ) : null}
+                  </div>
+                  <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40">
+                    {slot.uploading ? (
+                      <div className="flex flex-col items-center gap-3 text-indigo-700">
+                        <Loader2 className="animate-spin" size={22} />
+                        <span className="text-sm font-semibold">Uploading...</span>
+                      </div>
+                    ) : slot.filename ? (
+                      <div className="flex flex-col items-center gap-3 text-slate-700">
+                        <Camera size={22} />
+                        <span className="line-clamp-3 text-sm font-semibold">{slot.filename}</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 text-slate-500">
+                        <Camera size={22} />
+                        <span className="text-sm font-semibold">Upload File</span>
+                      </div>
+                    )}
+                    <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => handlePhotoUpload(index, e.target.files?.[0])} />
+                  </label>
+                </div>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
-            <button
-              type="button"
-              onClick={() => navigate("/gate-entry/master")}
-              className="rounded-2xl border border-slate-300 px-6 py-3 font-bold text-indigo-700 transition hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || hasUploadingPhoto}
-              className="rounded-2xl bg-indigo-700 px-8 py-3 font-bold text-white transition hover:bg-indigo-800 disabled:opacity-50"
-            >
-              {isSubmitting ? <Spinner size={18} className="text-white" /> : "Save Entry"}
+          <div className="flex justify-end">
+            <button type="submit" disabled={isSubmitting || hasUploadingPhoto} className="rounded-2xl bg-indigo-700 px-8 py-3 font-bold text-white transition hover:bg-indigo-800 disabled:opacity-50">
+              {isSubmitting ? "Saving..." : "Save Gate Entry"}
             </button>
           </div>
         </form>
@@ -263,87 +262,20 @@ export function GateEntryForm() {
   );
 }
 
-function PhotoUploadCard({
-  slot,
-  index,
-  onUpload,
-  onRemove,
-}: {
-  slot: PhotoSlot;
-  index: number;
-  onUpload: (index: number, file?: File | null) => Promise<void>;
-  onRemove: () => void;
-}) {
-  const isPdf = slot.filename.toLowerCase().endsWith(".pdf");
-
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-slate-50">
-      <div className="flex h-40 flex-col items-center justify-center gap-3 p-4 text-center">
-        {slot.filename ? (
-          <>
-            {isPdf ? (
-              <div className="h-24 w-full flex flex-col items-center justify-center bg-red-50 text-red-700 gap-1 rounded-xl">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                <span className="text-[10px] font-bold uppercase">PDF</span>
-              </div>
-            ) : (
-              <img
-                src={`/uploads/${slot.filename}`}
-                alt={`Gate entry photo ${index + 1}`}
-                className="h-24 w-full rounded-xl object-cover"
-              />
-            )}
-            <span className="text-xs font-medium text-slate-500">Pic {index + 1}</span>
-          </>
-        ) : (
-          <>
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm">
-              {slot.uploading ? <Loader2 size={22} className="animate-spin" /> : <Camera size={22} />}
-            </div>
-            <span className="text-sm font-medium text-slate-500">Pic {index + 1}</span>
-          </>
-        )}
-      </div>
-
-      <div className="absolute bottom-3 right-3 flex items-center gap-2">
-        {slot.filename ? (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="rounded-full bg-white p-2 text-red-600 shadow transition hover:bg-red-50"
-            title="Remove photo"
-          >
-            <Trash2 size={16} />
-          </button>
-        ) : null}
-        <label className="cursor-pointer rounded-full bg-white p-2 text-slate-700 shadow transition hover:bg-slate-100">
-          <Camera size={16} />
-          <input
-            type="file"
-            accept="image/*,application/pdf"
-            className="hidden"
-            onChange={(e) => void onUpload(index, e.target.files?.[0])}
-          />
-        </label>
-      </div>
-    </div>
-  );
-}
-
 function Field({
   label,
+  required,
+  className,
   children,
-  required = false,
-  className = "",
 }: {
   label: string;
-  children: React.ReactNode;
   required?: boolean;
   className?: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div className={`space-y-2 ${className}`}>
-      <label className="font-bold text-blue-700">
+    <div className={className || ""}>
+      <label className="mb-2 block text-blue-700 font-bold">
         {label} {required ? <span className="text-red-500">*</span> : null}
       </label>
       {children}

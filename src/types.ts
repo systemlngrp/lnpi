@@ -104,7 +104,15 @@ export interface Item {
 export interface MaterialLine {
   id: string;
   itemId: string;
+  itemName?: string;
   npdId?: string;
+  lineType?: "Material" | "Service";
+  serviceId?: string;
+  serviceName?: string;
+  sourceGatePassId?: string;
+  sourceGatePassNo?: string;
+  sourceGatePassLineId?: string;
+  sourceGatePassItemDescription?: string;
   qty: number;
   uom: string;
   poId?: string;
@@ -295,9 +303,12 @@ export interface GateEntry {
   gateEntryNo?: string;
   date: string;
   supplierId: string;
+  purpose?: "Material Receipt" | "Returnable Receipt";
   invoiceNo: string;
   invoiceValue: number;
   truckNo: string;
+  sourceGatePassId?: string;
+  sourceGatePassNo?: string;
   mrrId?: string;
   mrrDate?: string;
   mrrNo?: string;
@@ -451,9 +462,11 @@ export interface OrderSchedule {
 export interface MaterialIn {
   id: string;
   transactionNo: string;
-  mrrType?: "Reel" | "Others" | "Rejection In" | "FG Purchase";
+  mrrType?: "Reel" | "Others" | "Rejection In" | "FG Purchase" | "Service Return";
   gateEntryId?: string;
   gateEntryNo?: string;
+  sourceGatePassId?: string;
+  sourceGatePassNo?: string;
   timestamp: string;
   entryEmailId: string;
   date: string;
@@ -733,32 +746,51 @@ export interface InvoiceLineItem {
 
 export interface GatePassLine {
   id: string;
-  itemId: string;
+  itemId?: string;
   itemName: string;
+  itemDescription?: string;
   qty: number;
+  uom?: string;
   rate: number;
   amount: number;
   loadingSlipIds: string[];
   loadingSlipNos: string[];
+  remarks?: string;
 }
 
 export interface GatePass {
   id: string;
   gatePassNo: string;
   date: string;
-  invoiceId: string;
-  invoiceNo: string;
-  companyId: string;
-  companyName: string;
+  gatePassType?: "Non-Returnable" | "Returnable";
+  invoiceId?: string;
+  invoiceNo?: string;
+  companyId?: string;
+  companyName?: string;
+  recipientId?: string;
+  recipientName?: string;
+  recipientType?: "Supplier" | "Customer" | "Unknown";
+  sentByUserId?: string;
+  sentByUserName?: string;
   truckId?: string;
   truckNo?: string;
   loadingSlipIds: string[];
   loadingSlipNos: string[];
-  status: "Generated" | "Dispatched" | "Cancelled";
   remarks?: string;
+  clearOffReason?: string;
+  clearedOffAt?: string;
+  clearedOffBy?: string;
   totalQty: number;
   totalAmount: number;
   lines: GatePassLine[];
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  active?: "Yes" | "No";
   updatedBy?: string;
   updateTimestamp?: string;
 }
