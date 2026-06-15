@@ -1,17 +1,20 @@
 import { useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
-import { Eye, FilePlus2, Pencil, X } from "lucide-react";
+import { Download, Eye, FilePlus2, Pencil, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
-import { GatePass } from "../types";
+import { downloadGatePassPdf } from "../lib/gatePassPdf";
+import { GatePass, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 
 export function GatePassMaster() {
   const navigate = useNavigate();
   const [gatePasses] = useData<GatePass>("gate_passes", []);
+  const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGatePassId, setSelectedGatePassId] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
   const filteredGatePasses = useMemo(
     () =>
@@ -38,6 +41,21 @@ export function GatePassMaster() {
   );
 
   const selectedGatePass = filteredGatePasses.find((gatePass) => gatePass.id === selectedGatePassId) || null;
+
+  const handleDownloadPdf = async (gatePass: GatePass) => {
+    setIsDownloading(gatePass.id);
+    try {
+      await downloadGatePassPdf({
+        gatePass,
+        setting: settings[0],
+      });
+    } catch (error) {
+      console.error("Failed to generate Gate Pass PDF:", error);
+      alert("Failed to generate Gate Pass PDF. Please check console for details.");
+    } finally {
+      setIsDownloading(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -115,6 +133,15 @@ export function GatePassMaster() {
                         title="Edit"
                       >
                         <Pencil size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPdf(gatePass)}
+                        disabled={isDownloading === gatePass.id}
+                        className="rounded border border-black p-2 text-black hover:bg-slate-100 disabled:opacity-50"
+                        title="Download PDF"
+                      >
+                        {isDownloading === gatePass.id ? <span className="text-xs font-bold">...</span> : <Download size={15} />}
                       </button>
                     </div>
                   </td>
@@ -206,6 +233,14 @@ export function GatePassMaster() {
               </div>
 
               <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(selectedGatePass)}
+                  disabled={isDownloading === selectedGatePass.id}
+                  className="rounded border-2 border-black px-4 py-2 text-sm font-black uppercase hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {isDownloading === selectedGatePass.id ? "Generating PDF..." : "Download PDF"}
+                </button>
                 <button
                   type="button"
                   onClick={() => navigate(`/gate-pass/form?id=${selectedGatePass.id}`)}

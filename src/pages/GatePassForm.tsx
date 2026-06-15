@@ -290,17 +290,24 @@ export function GatePassForm() {
                 </select>
               </Field>
 
-              <Field label="Status" required>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as GatePass["status"])}
-                  className="w-full rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-                >
-                  <option value="Generated">Generated</option>
-                  <option value="Dispatched">Dispatched</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
-              </Field>
+              {editingGatePass ? (
+                <Field label="Status" required>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as GatePass["status"])}
+                    className="w-full rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+                  >
+                    <option value="Generated">Generated</option>
+                    <option value="Dispatched">Dispatched</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </Field>
+              ) : (
+                <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[10px] font-black uppercase text-slate-500">Status</div>
+                  <div className="mt-1 text-sm font-bold text-black">Generated automatically</div>
+                </div>
+              )}
             </div>
 
             {existingGatePassForInvoice ? (
