@@ -42,6 +42,7 @@ export async function downloadGatePassPdf({
       [details[0][0], details[0][1], details[1][0], details[1][1]],
       [details[2][0], details[2][1], details[3][0], details[3][1]],
       [details[4][0], details[4][1], details[5][0], details[5][1]],
+      ["", "", details[6][0], details[6][1]],
     ],
     theme: "plain",
     styles: {
