@@ -821,7 +821,8 @@ let pool = null;
 const DELETE_REFERENCES = {
   companies: [
     { table: "orders", column: "companyId", label: "Orders" },
-    { table: "invoices", column: "companyId", label: "Invoices" }
+    { table: "invoices", column: "companyId", label: "Invoices" },
+    { table: "gate_passes", column: "companyId", label: "Gate Passes" }
   ],
   items: [
     { table: "item_groups", column: "groupId", label: "Item Groups" }
@@ -877,7 +878,8 @@ const DELETE_REFERENCES = {
   loading_slips: [{ table: "invoice_line_items", column: "loadingSlipId", label: "Invoice Line Items" }],
   invoices: [
     { table: "invoice_line_items", column: "invoiceId", label: "Invoice Line Items" },
-    { table: "loading_slips", column: "invoiceId", label: "Loading Slips" }
+    { table: "loading_slips", column: "invoiceId", label: "Loading Slips" },
+    { table: "gate_passes", column: "invoiceId", label: "Gate Passes" }
   ],
   productions: [
     { table: "production_processing", column: "productionId", label: "Production Processing" },
@@ -889,7 +891,8 @@ const DELETE_REFERENCES = {
   machines: [{ table: "production_processing", column: "machineId", label: "Production Processing" }],
   trucks: [
     { table: "dispatch_plans", column: "truckId", label: "Dispatch Plans" },
-    { table: "loading_slips", column: "truckId", label: "Loading Slips" }
+    { table: "loading_slips", column: "truckId", label: "Loading Slips" },
+    { table: "gate_passes", column: "truckId", label: "Gate Passes" }
   ],
   material_issues: [
     { table: "material_issue_lines", column: "materialIssueId", label: "Material Issue Lines" },
@@ -1026,6 +1029,30 @@ async function ensureBestEffortForeignKeys(db, database) {
       refColumn: "id",
       constraintName: "fk_invoice_line_items_itemId_npd",
       indexName: "idx_invoice_line_items_itemId"
+    },
+    {
+      table: "gate_passes",
+      column: "invoiceId",
+      refTable: "invoices",
+      refColumn: "id",
+      constraintName: "fk_gate_passes_invoiceId_invoices",
+      indexName: "idx_gate_passes_invoiceId"
+    },
+    {
+      table: "gate_passes",
+      column: "companyId",
+      refTable: "companies",
+      refColumn: "id",
+      constraintName: "fk_gate_passes_companyId_companies",
+      indexName: "idx_gate_passes_companyId"
+    },
+    {
+      table: "gate_passes",
+      column: "truckId",
+      refTable: "trucks",
+      refColumn: "id",
+      constraintName: "fk_gate_passes_truckId_trucks",
+      indexName: "idx_gate_passes_truckId"
     },
     {
       table: "material_issue_lines",
@@ -1195,6 +1222,11 @@ function normalizeFetchedRow(tableName, row) {
       }
     }
   });
+  if (tableName === "gate_passes") {
+    newRow.loadingSlipIds = normalizeStringArray(newRow.loadingSlipIds);
+    newRow.loadingSlipNos = normalizeStringArray(newRow.loadingSlipNos);
+    if (!Array.isArray(newRow.lines)) newRow.lines = [];
+  }
   if (tableName === "material_in" && Array.isArray(newRow.lines)) {
     newRow.lines = newRow.lines.map((line) => normalizeMaterialLineNpdLink(line));
   }
@@ -1794,6 +1826,8 @@ function entityPermissionKey(entity) {
       return "/dispatch";
     case "loading_slips":
       return "/loading";
+    case "gate_passes":
+      return "/gate-pass";
     case "material_visit":
       return "/material-visit";
     case "invoices":
@@ -2576,6 +2610,28 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`gate_passes\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`gatePassNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`invoiceId\` VARCHAR(36) NOT NULL,
+          \`invoiceNo\` VARCHAR(100) NOT NULL,
+          \`companyId\` VARCHAR(36) NOT NULL,
+          \`companyName\` VARCHAR(255) NOT NULL,
+          \`truckId\` VARCHAR(36),
+          \`truckNo\` VARCHAR(255),
+          \`loadingSlipIds\` JSON NOT NULL,
+          \`loadingSlipNos\` JSON NOT NULL,
+          \`status\` VARCHAR(30) NOT NULL DEFAULT 'Generated',
+          \`remarks\` TEXT,
+          \`totalQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`totalAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`lines\` JSON NOT NULL,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`invoice_line_items\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`invoiceId\` VARCHAR(36) NOT NULL,
@@ -3199,6 +3255,23 @@ async function initDb(retries = 5) {
         { table: "invoices", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "invoices", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "invoices", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "gate_passes", column: "gatePassNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "gate_passes", column: "date", type: "VARCHAR(50) NOT NULL" },
+        { table: "gate_passes", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
+        { table: "gate_passes", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "gate_passes", column: "companyId", type: "VARCHAR(36) NOT NULL" },
+        { table: "gate_passes", column: "companyName", type: "VARCHAR(255) NOT NULL" },
+        { table: "gate_passes", column: "truckId", type: "VARCHAR(36)" },
+        { table: "gate_passes", column: "truckNo", type: "VARCHAR(255)" },
+        { table: "gate_passes", column: "loadingSlipIds", type: "JSON NOT NULL" },
+        { table: "gate_passes", column: "loadingSlipNos", type: "JSON NOT NULL" },
+        { table: "gate_passes", column: "status", type: "VARCHAR(30) NOT NULL DEFAULT 'Generated'" },
+        { table: "gate_passes", column: "remarks", type: "TEXT" },
+        { table: "gate_passes", column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "gate_passes", column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "gate_passes", column: "lines", type: "JSON NOT NULL" },
+        { table: "gate_passes", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "gate_passes", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "invoice_line_items", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
         { table: "invoice_line_items", column: "loadingSlipId", type: "VARCHAR(36) NOT NULL" },
         { table: "invoice_line_items", column: "itemId", type: "VARCHAR(36) NOT NULL" },
@@ -3770,6 +3843,32 @@ Exceeds by: ${nextTotal - plannedQty}`
             console.warn("[DB] Could not auto-generate invoiceNo:", err.message);
           }
         }
+        if (tableName === "gate_passes") {
+          try {
+            if (!data.gatePassNo) {
+              const dateStr = data.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+              const d = new Date(dateStr);
+              let fyStart = d.getFullYear();
+              const month = d.getMonth() + 1;
+              if (month < 4) fyStart = fyStart - 1;
+              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
+              const likePattern = `GP/${fyLabel}/%`;
+              const [rows] = await db.query(`SELECT gatePassNo FROM \`gate_passes\` WHERE gatePassNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(gatePassNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`, [likePattern]);
+              let lastNum = 0;
+              if (rows.length > 0) {
+                const lastGatePassNo = rows[0].gatePassNo;
+                const parts = lastGatePassNo.split("/");
+                const suffix = parts[parts.length - 1];
+                lastNum = parseInt(suffix || "0", 10) || 0;
+              }
+              const nextNum = lastNum + 1;
+              const padded = String(nextNum).padStart(5, "0");
+              data.gatePassNo = `GP/${fyLabel}/${padded}`;
+            }
+          } catch (err) {
+            console.warn("[DB] Could not auto-generate gatePassNo:", err.message);
+          }
+        }
         if (tableName === "gate_entries") {
           try {
             if (!data.gateEntryNo) {
@@ -3801,6 +3900,23 @@ Exceeds by: ${nextTotal - plannedQty}`
           status: data.status,
           transactionNo: data.transactionNo || data.transaction_no
         });
+        if (tableName === "gate_passes") {
+          const invoiceId = String(data.invoiceId || "").trim();
+          if (!invoiceId) {
+            return res.status(400).json({ error: "Invoice is required for Gate Pass." });
+          }
+          const currentId = String(data.id || "").trim();
+          const [existingRows] = await db.query(
+            "SELECT id, gatePassNo FROM `gate_passes` WHERE invoiceId = ? AND id <> ? LIMIT 1",
+            [invoiceId, currentId]
+          );
+          const existingGatePass = existingRows[0];
+          if (existingGatePass) {
+            return res.status(409).json({
+              error: `Only one gate pass is allowed per invoice. Existing Gate Pass: ${existingGatePass.gatePassNo || existingGatePass.id}`
+            });
+          }
+        }
         const keys = Object.keys(data);
         const values = Object.values(data).map(
           (v) => typeof v === "object" && v !== null ? JSON.stringify(v) : v
@@ -3887,7 +4003,7 @@ Exceeds by: ${nextTotal - plannedQty}`
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "npd", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "npd", "settings"];
 app.get("/api/legacy-items", async (req, res) => {
   try {
     const user = await getRequestUser(req);

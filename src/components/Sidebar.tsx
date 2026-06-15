@@ -225,6 +225,14 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
+    section: "Gate Pass",
+    color: "bg-cyan-800",
+    items: [
+      { name: "Gate Pass Form", href: "/gate-pass/form", icon: ClipboardList },
+      { name: "Gate Pass Master", href: "/gate-pass/master", icon: Database },
+    ],
+  },
+  {
     section: "Reports",
     color: "bg-sky-700",
     items: [

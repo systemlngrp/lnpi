@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useNavigate } from "react-router-dom";
 import { 
   Invoice, 
   InvoiceLineItem,
+  GatePass,
   Company,
   Item,
   LoadingSlip,
@@ -24,8 +26,10 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 
 export function InvoicesMaster() {
+  const navigate = useNavigate();
   const [invoices] = useData<Invoice>("invoices", []);
   const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [gatePasses] = useData<GatePass>("gate_passes", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
   const [slips] = useData<LoadingSlip>("loading_slips", []);
@@ -45,6 +49,10 @@ export function InvoicesMaster() {
   const getRoundOff = (invoice: Invoice) => Number(invoice.roundOff || 0);
   const getOtherCharges = (invoice: Invoice) => Number(invoice.otherCharges || 0);
   const getGrandTotal = (invoice: Invoice) => Number(invoice.totalAfterGst || 0) + getOtherCharges(invoice) + getRoundOff(invoice);
+  const openGatePass = (invoiceId: string) => {
+    const existingGatePass = gatePasses.find((gatePass) => gatePass.invoiceId === invoiceId);
+    navigate(existingGatePass ? `/gate-pass/form?id=${existingGatePass.id}` : `/gate-pass/form?invoiceId=${invoiceId}`);
+  };
 
   const processedInvoices = useMemo(() => {
     return invoices.map(inv => {
@@ -175,6 +183,13 @@ export function InvoicesMaster() {
                       >
                         <FileText size={18} />
                       </button>
+                      <button
+                        onClick={() => openGatePass(inv.id)}
+                        className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"
+                        title={gatePasses.some((gatePass) => gatePass.invoiceId === inv.id) ? "Open Gate Pass" : "Create Gate Pass"}
+                      >
+                        <TruckIcon size={18} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -257,6 +272,17 @@ export function InvoicesMaster() {
 	                    {getGrandTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
 	                  </div>
 	                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => openGatePass(selectedInvoice.id)}
+                  className="inline-flex items-center gap-2 rounded border-2 border-black px-4 py-2 text-xs font-black uppercase hover:bg-slate-50"
+                >
+                  <TruckIcon size={16} />
+                  {gatePasses.some((gatePass) => gatePass.invoiceId === selectedInvoice.id) ? "Open Gate Pass" : "Create Gate Pass"}
+                </button>
               </div>
 
               <div className="overflow-x-auto border border-black">

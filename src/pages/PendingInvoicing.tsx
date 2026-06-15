@@ -6,6 +6,7 @@ import {
   Company, 
   Invoice, 
   InvoiceLineItem,
+  GatePass,
   DispatchPlan,
   Order,
   Truck
@@ -26,6 +27,7 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
+import { buildGatePassFromInvoice } from "../lib/gatePasses";
 
 interface GroupedLoading {
   companyId: string;
@@ -52,13 +54,14 @@ interface InvoiceItemRow {
 }
 
 export function PendingInvoicing() {
-  const [loadingSlips, updateSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [loadingSlips, , , loadingSlipApi] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
-  const [invoices, updateInvoices] = useData<Invoice>("invoices", []);
-  const [invoiceLineItems, updateLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [, , , invoiceApi] = useData<Invoice>("invoices", []);
+  const [invoiceLineItems, , , invoiceLineItemApi] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [, , , gatePassApi] = useData<GatePass>("gate_passes", []);
   const [trucks] = useData<Truck>("trucks", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -77,6 +80,46 @@ export function PendingInvoicing() {
   const [otherCharges, setOtherCharges] = useState<number | "">("");
   const [roundOff, setRoundOff] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getAuthHeaders = () => {
+    const token = window.localStorage.getItem("authToken") || "";
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const postEntity = async (entity: string, payload: unknown) => {
+    const response = await fetch(`/api/${entity.replace(/_/g, "-")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to save ${entity}`);
+    }
+  };
+
+  const fetchEntities = async <T,>(entity: string): Promise<T[]> => {
+    const response = await fetch(`/api/${entity.replace(/_/g, "-")}`, {
+      headers: { ...getAuthHeaders() },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to fetch ${entity}`);
+    }
+    const result = await response.json();
+    return Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
+  };
+
+  const deleteEntity = async (entity: string, id: string) => {
+    const response = await fetch(`/api/${entity.replace(/_/g, "-")}/${id}`, {
+      method: "DELETE",
+      headers: { ...getAuthHeaders() },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to delete ${entity}`);
+    }
+  };
 
   const toggleCompany = (id: string) => {
     const next = new Set(expandedCompanies);
@@ -395,6 +438,7 @@ export function PendingInvoicing() {
 
     setIsSubmitting(true);
     try {
+      const timestamp = new Date().toISOString();
       const invoiceId = crypto.randomUUID();
       const newInvoice: Invoice = {
         id: invoiceId,
@@ -408,10 +452,10 @@ export function PendingInvoicing() {
         igst: calculations.igst,
         totalAfterGst: calculations.totalAfterGst,
         otherCharges: calculations.otherCharges,
-        roundOff: calculations.roundOff
+        roundOff: calculations.roundOff,
+        updatedBy: "System User",
+        updateTimestamp: timestamp
       };
-
-      await updateInvoices(prev => [...prev, newInvoice]);
 
       const buildPool = (sources: Array<{ loadingSlipId: string; qty: number }>) =>
         sources.map((s) => ({ loadingSlipId: s.loadingSlipId, remaining: Number(s.qty || 0) }));
@@ -468,22 +512,98 @@ export function PendingInvoicing() {
         }
       }
 
-      await updateLineItems(prev => [...prev, ...lineItems]);
-
-      await updateSlips(prev => prev.map(s => {
-        if (invoiceModal.slips.some(os => os.id === s.id)) {
-          return { ...s, invoiceId };
-        }
-        return s;
+      const updatedSlips = invoiceModal.slips.map((slip: LoadingSlip) => ({
+        ...slip,
+        invoiceId,
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
       }));
+
+      const createdLineItemIds: string[] = [];
+      let invoiceCreated = false;
+      let gatePassCreated = false;
+      const slipIdsUpdated = new Set<string>();
+      let initialGatePass: GatePass | null = null;
+
+      try {
+        await postEntity("invoices", newInvoice);
+        invoiceCreated = true;
+
+        const persistedInvoice =
+          (await fetchEntities<Invoice>("invoices")).find((invoice) => invoice.id === invoiceId) || newInvoice;
+
+        for (const lineItem of lineItems) {
+          await postEntity("invoice_line_items", lineItem);
+          createdLineItemIds.push(lineItem.id);
+        }
+
+        for (const slip of updatedSlips) {
+          await postEntity("loading_slips", slip);
+          slipIdsUpdated.add(slip.id);
+        }
+
+        initialGatePass = buildGatePassFromInvoice({
+          company,
+          date: persistedInvoice.date,
+          invoice: persistedInvoice,
+          lineItems,
+          npdItems,
+          selectedLoadingSlipIds: updatedSlips.map((slip) => slip.id),
+          slips: updatedSlips,
+          trucks,
+          updatedBy: "System User",
+          updateTimestamp: timestamp,
+        });
+
+        await postEntity("gate_passes", initialGatePass);
+        gatePassCreated = true;
+      } catch (saveError) {
+        for (const originalSlip of invoiceModal.slips as LoadingSlip[]) {
+          if (!slipIdsUpdated.has(originalSlip.id)) continue;
+          try {
+            await postEntity("loading_slips", originalSlip);
+          } catch (rollbackError) {
+            console.error("Failed to rollback loading slip:", rollbackError);
+          }
+        }
+        if (gatePassCreated && initialGatePass) {
+          try {
+            await deleteEntity("gate_passes", initialGatePass.id);
+          } catch (rollbackError) {
+            console.error("Failed to rollback gate pass:", rollbackError);
+          }
+        }
+        for (const lineItemId of [...createdLineItemIds].reverse()) {
+          try {
+            await deleteEntity("invoice_line_items", lineItemId);
+          } catch (rollbackError) {
+            console.error("Failed to rollback invoice line item:", rollbackError);
+          }
+        }
+        if (invoiceCreated) {
+          try {
+            await deleteEntity("invoices", invoiceId);
+          } catch (rollbackError) {
+            console.error("Failed to rollback invoice:", rollbackError);
+          }
+        }
+        throw saveError;
+      }
+
+      await Promise.all([
+        loadingSlipApi.refresh(),
+        invoiceApi.refresh(),
+        invoiceLineItemApi.refresh(),
+        gatePassApi.refresh(),
+      ]);
 
       setInvoiceModal(null);
       setBillingMode(null);
       setSelectedSlips(new Set());
-      alert("Invoice generated successfully! Showing Pending Tally Posting...");
+      alert("Invoice and Gate Pass generated successfully! Showing Pending Tally Posting...");
     } catch (err) {
       console.error("Failed to generate invoice:", err);
-      alert("Failed to generate invoice. Please check the console for details.");
+      alert(`Failed to generate invoice and gate pass: ${(err as Error).message}`);
     } finally {
       setIsSubmitting(false);
     }
