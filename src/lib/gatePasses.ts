@@ -1,5 +1,4 @@
 import { Company, GatePass, GatePassLine, Invoice, InvoiceLineItem, LoadingSlip, Truck } from "../types";
-
 type NpdLike = {
   id: string;
   name: string;
@@ -50,20 +49,6 @@ export function buildGatePassFromInvoice({
   const relevantLineItems = lineItems.filter(
     (line) => line.invoiceId === invoice.id && selectedIds.has(line.loadingSlipId)
   );
-  const allInvoiceLineItems = lineItems.filter((line) => line.invoiceId === invoice.id);
-
-  const allLineGrandTotal = allInvoiceLineItems.reduce(
-    (sum, line) => sum + Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0),
-    0
-  );
-  const selectedLineGrandTotal = relevantLineItems.reduce(
-    (sum, line) => sum + Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0),
-    0
-  );
-  const invoiceExtras = Number(invoice.otherCharges || 0) + Number(invoice.roundOff || 0);
-  const extraAllocation =
-    allLineGrandTotal > 0 ? (invoiceExtras * selectedLineGrandTotal) / allLineGrandTotal : 0;
-
   const lineMap = new Map<string, GatePassLine>();
   relevantLineItems.forEach((line) => {
     const itemId = String(line.itemId || "").trim();
@@ -132,7 +117,7 @@ export function buildGatePassFromInvoice({
     status: status || "Generated",
     remarks: remarks || "",
     totalQty: relevantLineItems.reduce((sum, line) => sum + Number(line.qty || 0), 0),
-    totalAmount: Number((selectedLineGrandTotal + extraAllocation).toFixed(2)),
+    totalAmount: Number(getInvoiceGrandTotal(invoice).toFixed(2)),
     lines: Array.from(lineMap.values()),
     updatedBy,
     updateTimestamp,

@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { GatePass, Setting } from "../types";
 import { formatDate } from "./serial";
@@ -16,7 +17,7 @@ export async function downloadGatePassPdf({
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text("GATE PASS", 105, currentY, { align: "center" });
+  doc.text("NON RETURNABLE GATE PASS", 105, currentY, { align: "center" });
   currentY += 9;
 
   const details: Array<[string, string]> = [
@@ -25,10 +26,9 @@ export async function downloadGatePassPdf({
     ["Invoice No", gatePass.invoiceNo || "-"],
     ["Company", gatePass.companyName || "-"],
     ["Truck", gatePass.truckNo || "-"],
-    ["Status", gatePass.status || "Generated"],
     ["Total Qty", Number(gatePass.totalQty || 0).toLocaleString()],
     [
-      "Total Amount",
+      "Total Invoice Amount",
       Number(gatePass.totalAmount || 0).toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -42,7 +42,6 @@ export async function downloadGatePassPdf({
       [details[0][0], details[0][1], details[1][0], details[1][1]],
       [details[2][0], details[2][1], details[3][0], details[3][1]],
       [details[4][0], details[4][1], details[5][0], details[5][1]],
-      [details[6][0], details[6][1], details[7][0], details[7][1]],
     ],
     theme: "plain",
     styles: {
@@ -70,20 +69,9 @@ export async function downloadGatePassPdf({
 
   currentY = (doc as any).lastAutoTable.finalY + 4;
 
-  if (Array.isArray(gatePass.loadingSlipNos) && gatePass.loadingSlipNos.length > 0) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text("Loading Slips:", 14, currentY);
-    doc.setFont("helvetica", "normal");
-    const loadingSlipText = gatePass.loadingSlipNos.join(", ");
-    const wrappedSlipText = doc.splitTextToSize(loadingSlipText, 145);
-    doc.text(wrappedSlipText, 38, currentY);
-    currentY += Math.max(6, wrappedSlipText.length * 4.5 + 2);
-  }
-
   autoTable(doc, {
     startY: currentY,
-    head: [["SL", "Item Name", "Qty", "Rate", "Amount", "Slip Nos"]],
+    head: [["SL", "Item Name", "Qty", "Rate", "Amount", "Loading Slip Nos"]],
     body: gatePass.lines.map((line, index) => [
       index + 1,
       line.itemName || "Unknown",
