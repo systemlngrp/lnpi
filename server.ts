@@ -1434,7 +1434,8 @@ function normalizeFetchedRow(tableName: string, row: any) {
     }
   });
 
-  if (tableName === "gate_passes") {
+    if (tableName === "gate_passes") {
+      const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
     newRow.loadingSlipIds = normalizeStringArray(newRow.loadingSlipIds);
     newRow.loadingSlipNos = normalizeStringArray(newRow.loadingSlipNos);
     if (!Array.isArray(newRow.lines)) newRow.lines = [];
@@ -4384,6 +4385,40 @@ const createHandlers = (tableName: string) => {
         });
 
         if (tableName === "gate_passes") {
+          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+          const gatePassColumns = [
+            { column: "gatePassType", type: "VARCHAR(30) NOT NULL DEFAULT 'Non-Returnable'" },
+            { column: "invoiceId", type: "VARCHAR(36)" },
+            { column: "invoiceNo", type: "VARCHAR(100)" },
+            { column: "companyId", type: "VARCHAR(36)" },
+            { column: "companyName", type: "VARCHAR(255)" },
+            { column: "recipientId", type: "VARCHAR(36)" },
+            { column: "recipientName", type: "VARCHAR(255)" },
+            { column: "recipientType", type: "VARCHAR(30)" },
+            { column: "sentByUserId", type: "VARCHAR(36)" },
+            { column: "sentByUserName", type: "VARCHAR(255)" },
+            { column: "truckId", type: "VARCHAR(36)" },
+            { column: "truckNo", type: "VARCHAR(255)" },
+            { column: "loadingSlipIds", type: "JSON NOT NULL" },
+            { column: "loadingSlipNos", type: "JSON NOT NULL" },
+            { column: "remarks", type: "TEXT" },
+            { column: "clearOffReason", type: "TEXT" },
+            { column: "clearedOffAt", type: "VARCHAR(255)" },
+            { column: "clearedOffBy", type: "VARCHAR(255)" },
+            { column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+            { column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+            { column: "lines", type: "JSON NOT NULL" },
+            { column: "updatedBy", type: "VARCHAR(255)" },
+            { column: "updateTimestamp", type: "VARCHAR(255)" },
+          ];
+          for (const gatePassColumn of gatePassColumns) {
+            try {
+              await ensureColumnExists(db, schemaName, "gate_passes", gatePassColumn.column, gatePassColumn.type);
+            } catch (error) {
+              console.warn(`[DB] Could not ensure gate_passes.${gatePassColumn.column}:`, (error as Error).message);
+            }
+          }
+
           const invoiceId = String(data.invoiceId || "").trim();
           if (invoiceId) {
             const currentId = String(data.id || "").trim();
