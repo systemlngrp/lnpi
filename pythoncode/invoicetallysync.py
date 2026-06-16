@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import mysql.connector
 import requests
 from datetime import datetime, date
@@ -24,24 +25,21 @@ def load_runtime_env():
 load_runtime_env()
 
 
-DB_HOST = os.getenv("DB_HOST", "193.203.184.152").strip()
-if DB_HOST in (".", "localhost"):
-    DB_HOST = "127.0.0.1"
-
 DB_CONFIG = {
-    "host": DB_HOST,
-    "user": os.getenv("DB_USER", "u380633007_Inpidata"),
-    "password": os.getenv("DB_PASSWORD", "!Office1@"),
-    "database": os.getenv("DB_NAME", "u380633007_Inpidata"),
-    "port": int(os.getenv("DB_PORT", "3306")),
+    "host": "193.203.184.152",
+    "user": "u380633007_lnpidata",
+    "password": "!Office1@",
+    "database": "u380633007_lnpidata",
+    "port": 3306,
+    "use_pure": True,
 }
 
-TALLY_URL = os.getenv("TALLY_URL", "http://localhost:9000").strip()
+TALLY_URL = "http://127.0.0.1:9004"
 TALLY_COMPANY_NAME = os.getenv("TALLY_COMPANY_NAME", "Laxmi Narayan Packaging Industries")
 VOUCHER_TYPE_NAME = os.getenv("SALES_VOUCHER_TYPE_NAME", "Sales")
 SALES_LEDGER_NAME = os.getenv("SALES_LEDGER_NAME", "Sales")
-SALES_WITHIN_STATE_LEDGER_NAME = os.getenv("SALES_WITHIN_STATE_LEDGER_NAME", "SALES WITHIN STATE")
-SALES_OUTSIDE_LEDGER_NAME = os.getenv("SALES_OUTSIDE_LEDGER_NAME", "Sales Outside")
+SALES_5_LEDGER_NAME = os.getenv("SALES_5_LEDGER_NAME", "SALES 5%")
+SALES_18_LEDGER_NAME = os.getenv("SALES_18_LEDGER_NAME", "SALES 18%")
 OTHER_CHARGES_LEDGER_NAME = os.getenv("SALES_OTHER_CHARGES_LEDGER_NAME", "Other Charges")
 ROUND_OFF_LEDGER_NAME = os.getenv("SALES_ROUND_OFF_LEDGER_NAME", "Round Off")
 CGST_LEDGER_NAME = os.getenv("OUTPUT_CGST_LEDGER_NAME", "Output CGST")
@@ -737,15 +735,27 @@ def validate_invoice_lines(item_lines):
     return errors
 
 
-def resolve_sales_ledger_name(invoice_row, company_row):
+def resolve_sales_ledger_name(invoice_row, company_row, item_lines):
     gst_supply_type = str((company_row or {}).get("gstSupplyType") or "").strip().upper()
     igst_amount = round(to_float(invoice_row.get("igst")), 2)
 
-    if gst_supply_type == "INTER_STATE" or igst_amount > 0:
-        return SALES_OUTSIDE_LEDGER_NAME
+    candidate_rates = []
+    header_gst_rate = round(to_float(invoice_row.get("gstRate")), 2)
+    if header_gst_rate > 0:
+        candidate_rates.append(header_gst_rate)
 
-    if gst_supply_type == "INTRA_STATE":
-        return SALES_WITHIN_STATE_LEDGER_NAME
+    for line in item_lines:
+        line_gst_rate = round(to_float(line.get("gstRate")), 2)
+        if line_gst_rate > 0:
+            candidate_rates.append(line_gst_rate)
+
+    effective_gst_rate = max(candidate_rates) if candidate_rates else 0.0
+
+    if abs(effective_gst_rate - 5.0) < 0.01:
+        return SALES_5_LEDGER_NAME
+
+    if abs(effective_gst_rate - 18.0) < 0.01:
+        return SALES_18_LEDGER_NAME
 
     return SALES_LEDGER_NAME
 
@@ -1104,7 +1114,7 @@ def sync_invoices_to_tally():
                     log_terminal("VALIDATION", remark)
                     continue
 
-                sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row)
+                sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row, item_lines)
                 dispatch_details = get_invoice_dispatch_details(conn, invoice_id, item_lines)
                 narration_text = build_invoice_narration(dispatch_details)
 

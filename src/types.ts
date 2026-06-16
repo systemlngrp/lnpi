@@ -806,6 +806,7 @@ export interface Setting {
   gsmAsPerCalculation?: string;
   productionFormVisibleColumns?: string;
   realizationPerKgTargets?: string;
+  invoiceNumberSeries?: string;
   mandatoryMachinesByType?: string;
   designations?: string;
   organizationName?: string;

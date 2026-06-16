@@ -99,6 +99,35 @@ const MONTH_OPTIONS = [
   "Dec",
 ];
 
+type InvoiceSeriesRow = {
+  fy: string;
+  prefix: string;
+  startingNumber: number | "";
+  paddingLength: number | "";
+  separator: string;
+  active: "Yes" | "No";
+};
+
+function parseInvoiceNumberSeries(raw?: string): InvoiceSeriesRow[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((row) => ({
+        fy: String(row?.fy || "").trim(),
+        prefix: String(row?.prefix || "").trim(),
+        startingNumber: Number(row?.startingNumber || 1),
+        paddingLength: Number(row?.paddingLength || 5),
+        separator: String(row?.separator || "/") || "/",
+        active: String(row?.active || "Yes").trim() === "No" ? "No" : "Yes",
+      }))
+      .filter((row) => row.fy.length > 0 || row.prefix.length > 0);
+  } catch {
+    return [];
+  }
+}
+
 export function SettingsPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -125,6 +154,7 @@ export function SettingsPage() {
     organizationGstDetails: "",
     organizationLogo: "",
   });
+  const [invoiceSeriesDraft, setInvoiceSeriesDraft] = useState<InvoiceSeriesRow[]>([]);
 
   const currentSetting = settings[0];
 
@@ -204,6 +234,10 @@ export function SettingsPage() {
       }))
     );
   }, [realizationTargets]);
+
+  useEffect(() => {
+    setInvoiceSeriesDraft(parseInvoiceNumberSeries(currentSetting?.invoiceNumberSeries));
+  }, [currentSetting?.invoiceNumberSeries]);
   const selectedReelFormula = currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value;
   const selectedReelOption = useMemo(
     () => REEL_FORMULA_OPTIONS.find((option) => option.value === selectedReelFormula) || REEL_FORMULA_OPTIONS[0],
@@ -285,6 +319,7 @@ export function SettingsPage() {
         gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
         productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
         realizationPerKgTargets: currentSetting?.realizationPerKgTargets || JSON.stringify([]),
+        invoiceNumberSeries: currentSetting?.invoiceNumberSeries || JSON.stringify([]),
         mandatoryMachinesByType: currentSetting?.mandatoryMachinesByType || JSON.stringify({}),
         designations: currentSetting?.designations || JSON.stringify([]),
         organizationName: currentSetting?.organizationName || "",
@@ -365,9 +400,9 @@ export function SettingsPage() {
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-5">
-        <div className="space-y-4 border-b border-dashed border-black pb-5">
-          <div>
-            <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Realization Setup (Year wise)</h3>
+          <div className="space-y-4 border-b border-dashed border-black pb-5">
+            <div>
+              <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Realization Setup (Year wise)</h3>
             <p className="text-sm text-black leading-6">
               Store year-wise target values for Realization/KG (used for reporting/benchmarking).
             </p>
@@ -491,11 +526,175 @@ export function SettingsPage() {
               className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all"
             >
               {saving ? <Spinner size={18} className="text-white" /> : "Save Realization Setup"}
-            </button>
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-4 border-b border-dashed border-black pb-5">
+          <div className="space-y-4 border-b border-dashed border-black pb-5">
+            <div>
+              <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Invoice Number Series</h3>
+              <p className="text-sm text-black leading-6">
+                Configure FY-wise invoice numbering format like <span className="font-bold">LNPI/26-27/00289</span>.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto border border-black rounded">
+              <table className="min-w-full divide-y divide-black border-collapse">
+                <thead className="bg-slate-100">
+                  <tr className="divide-x divide-black">
+                    <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">FY</th>
+                    <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prefix</th>
+                    <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Starting No</th>
+                    <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Padding</th>
+                    <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Separator</th>
+                    <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Active</th>
+                    <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-black">
+                  {invoiceSeriesDraft.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-4 text-sm text-slate-500 text-center">
+                        No invoice series configured.
+                      </td>
+                    </tr>
+                  ) : (
+                    invoiceSeriesDraft.map((row, idx) => (
+                      <tr key={`${row.fy}-${row.prefix}-${idx}`} className="divide-x divide-black">
+                        <td className="px-4 py-2 border border-black">
+                          <select
+                            value={row.fy}
+                            onChange={(e) => setInvoiceSeriesDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, fy: e.target.value } : r)))}
+                            disabled={loading || saving}
+                            className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
+                          >
+                            {fyOptions.map((fy) => (
+                              <option key={fy} value={fy}>{fy}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-4 py-2 border border-black">
+                          <input
+                            value={row.prefix}
+                            onChange={(e) => setInvoiceSeriesDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, prefix: e.target.value.toUpperCase() } : r)))}
+                            disabled={loading || saving}
+                            placeholder="LNPI"
+                            className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
+                          />
+                        </td>
+                        <td className="px-4 py-2 border border-black">
+                          <input
+                            type="number"
+                            min={1}
+                            value={row.startingNumber}
+                            onChange={(e) => setInvoiceSeriesDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, startingNumber: e.target.value === "" ? "" : Number(e.target.value) } : r)))}
+                            disabled={loading || saving}
+                            className="w-full border border-black rounded px-2 py-1 text-sm text-right font-semibold text-black outline-none bg-white"
+                          />
+                        </td>
+                        <td className="px-4 py-2 border border-black">
+                          <input
+                            type="number"
+                            min={1}
+                            value={row.paddingLength}
+                            onChange={(e) => setInvoiceSeriesDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, paddingLength: e.target.value === "" ? "" : Number(e.target.value) } : r)))}
+                            disabled={loading || saving}
+                            className="w-full border border-black rounded px-2 py-1 text-sm text-right font-semibold text-black outline-none bg-white"
+                          />
+                        </td>
+                        <td className="px-4 py-2 border border-black">
+                          <input
+                            value={row.separator}
+                            onChange={(e) => setInvoiceSeriesDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, separator: e.target.value || "/" } : r)))}
+                            disabled={loading || saving}
+                            className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
+                          />
+                        </td>
+                        <td className="px-4 py-2 border border-black">
+                          <select
+                            value={row.active}
+                            onChange={(e) => setInvoiceSeriesDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, active: e.target.value === "No" ? "No" : "Yes" } : r)))}
+                            disabled={loading || saving}
+                            className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
+                          >
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-2 border border-black text-right">
+                          <button
+                            type="button"
+                            onClick={() => setInvoiceSeriesDraft((prev) => prev.filter((_, i) => i !== idx))}
+                            disabled={loading || saving}
+                            className="px-3 py-1 border-2 border-black rounded bg-white text-black text-xs font-bold hover:bg-slate-50"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setInvoiceSeriesDraft((prev) => [
+                    ...prev,
+                    {
+                      fy: getFinancialYear(new Date().toISOString()),
+                      prefix: "",
+                      startingNumber: 1,
+                      paddingLength: 5,
+                      separator: "/",
+                      active: "Yes",
+                    },
+                  ])
+                }
+                disabled={loading || saving}
+                className="bg-white text-black px-4 py-2 rounded font-bold border-2 border-black hover:bg-slate-50"
+              >
+                Add Invoice Series
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const cleaned = invoiceSeriesDraft
+                    .map((row) => ({
+                      fy: String(row.fy || "").trim(),
+                      prefix: String(row.prefix || "").trim().toUpperCase(),
+                      startingNumber: Math.max(1, Number(row.startingNumber || 1)),
+                      paddingLength: Math.max(1, Number(row.paddingLength || 5)),
+                      separator: String(row.separator || "/") || "/",
+                      active: row.active === "No" ? "No" : "Yes",
+                    }))
+                    .filter((row) => row.fy.length > 0 && row.prefix.length > 0);
+
+                  const activeByFy = new Set<string>();
+                  for (const row of cleaned) {
+                    if (row.active !== "Yes") continue;
+                    if (activeByFy.has(row.fy)) {
+                      alert(`Only one active invoice series is allowed for FY ${row.fy}.`);
+                      return;
+                    }
+                    activeByFy.add(row.fy);
+                  }
+
+                  void handleChange({ invoiceNumberSeries: JSON.stringify(cleaned) });
+                }}
+                disabled={loading || saving}
+                className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all"
+              >
+                {saving ? <Spinner size={18} className="text-white" /> : "Save Invoice Series"}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4 border-b border-dashed border-black pb-5">
           <div>
             <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Designation Setup</h3>
             <p className="text-sm text-black leading-6">
