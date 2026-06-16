@@ -1,5 +1,4 @@
-import React, { useState, useMemo } from "react";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useNavigate } from "react-router-dom";
@@ -169,14 +168,29 @@ export function InvoicesMaster() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {inv.tallyInvNo ? (
-                      <div className="flex flex-col">
-                        <div className="text-xs font-bold text-emerald-700">{inv.tallyInvNo}</div>
-                        <div className="text-[10px] text-emerald-600">{inv.tallyInvDate}</div>
+                    <div className="flex flex-col gap-0.5">
+                      <div className={`text-[10px] font-black uppercase ${inv.tallyTimestamp ? "text-emerald-700" : "text-slate-400"}`}>
+                        {inv.tallyTimestamp ? "Posted to Tally" : "Not Synced"}
                       </div>
-                    ) : (
-                      <span className="text-slate-400 text-[10px] italic">Not Synced</span>
-                    )}
+                      <div className="text-[10px] text-slate-600">
+                        <span className="font-bold">Tally No:</span> {inv.tallyInvNo || "-"}
+                      </div>
+                      <div className="text-[10px] text-slate-600">
+                        <span className="font-bold">Tally Date:</span> {inv.tallyInvDate ? formatDate(inv.tallyInvDate) : "-"}
+                      </div>
+                      <div className="text-[10px] text-slate-600">
+                        <span className="font-bold">Posted At:</span> {inv.tallyTimestamp ? formatDate(inv.tallyTimestamp) : "-"}
+                      </div>
+                      <div className="text-[10px] text-slate-600">
+                        <span className="font-bold">Posted By:</span> {inv.tallyBy || "-"}
+                      </div>
+                      <div className="text-[10px] text-slate-600 max-w-[240px] truncate" title={inv.tallySyncRemark || ""}>
+                        <span className="font-bold">Remark:</span> {inv.tallySyncRemark || "-"}
+                      </div>
+                      <div className="font-mono text-[9px] text-slate-500 max-w-[240px] truncate" title={inv.tallyInvId || ""}>
+                        <span className="font-bold not-italic font-sans">Tally ID:</span> {inv.tallyInvId || "-"}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-xs text-slate-600 line-clamp-2 max-w-xs uppercase font-medium">
@@ -286,19 +300,31 @@ export function InvoicesMaster() {
                 </div>
               </div>
 
-              {selectedInvoice.tallyInvNo && (
+              {(selectedInvoice.tallyTimestamp || selectedInvoice.tallyInvNo || selectedInvoice.tallyInvId || selectedInvoice.tallySyncRemark) && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-emerald-50 p-4 border border-emerald-200 rounded">
                   <div>
                     <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Inv No</div>
-                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyInvNo}</div>
+                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyInvNo || "-"}</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Inv Date</div>
-                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyInvDate}</div>
+                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyInvDate ? formatDate(selectedInvoice.tallyInvDate) : "-"}</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Inv Id</div>
-                    <div className="font-mono text-[10px] break-all text-emerald-800">{selectedInvoice.tallyInvId}</div>
+                    <div className="font-mono text-[10px] break-all text-emerald-800">{selectedInvoice.tallyInvId || "-"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Timestamp</div>
+                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyTimestamp ? formatDate(selectedInvoice.tallyTimestamp) : "-"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally By</div>
+                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyBy || "-"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Remark</div>
+                    <div className="text-[11px] text-emerald-900 break-words">{selectedInvoice.tallySyncRemark || "-"}</div>
                   </div>
                 </div>
               )}

@@ -4,18 +4,32 @@ import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { downloadGatePassPdf } from "../lib/gatePassPdf";
 import { deriveGatePassState, getGatePassLinesWithReturns, getGatePassPrimaryPartyName, isReturnableGatePass } from "../lib/gatePassState";
-import { GatePass, MaterialIn, Setting } from "../types";
+import { GatePass, Invoice, MaterialIn, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 
 export function GatePassMaster() {
   const navigate = useNavigate();
   const [gatePasses] = useData<GatePass>("gate_passes", []);
+  const [invoices] = useData<Invoice>("invoices", []);
   const [settings] = useData<Setting>("settings", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGatePassId, setSelectedGatePassId] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
+
+  const getLinkedInvoice = (gatePass: GatePass) =>
+    gatePass.invoiceId ? invoices.find((invoice) => invoice.id === gatePass.invoiceId) || null : null;
+
+  const getGatePassInvoiceDisplayNo = (gatePass: GatePass) => {
+    if (isReturnableGatePass(gatePass)) return getGatePassPrimaryPartyName(gatePass);
+    return getLinkedInvoice(gatePass)?.tallyInvNo || "Tally Invoice Pending";
+  };
+
+  const canDownloadGatePassPdf = (gatePass: GatePass) => {
+    if (isReturnableGatePass(gatePass)) return true;
+    return Boolean(getLinkedInvoice(gatePass)?.tallyInvNo);
+  };
 
   const filteredGatePasses = useMemo(
     () =>
@@ -24,6 +38,7 @@ export function GatePassMaster() {
           const haystack = [
             gatePass.gatePassNo,
             gatePass.invoiceNo,
+            getLinkedInvoice(gatePass)?.tallyInvNo,
             getGatePassPrimaryPartyName(gatePass),
             gatePass.truckNo,
             gatePass.gatePassType,
@@ -35,15 +50,23 @@ export function GatePassMaster() {
           return haystack.includes(searchTerm.toLowerCase());
         })
         .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime()),
-    [gatePasses, materialIn, searchTerm]
+    [gatePasses, invoices, materialIn, searchTerm]
   );
 
   const selectedGatePass = filteredGatePasses.find((gatePass) => gatePass.id === selectedGatePassId) || null;
 
   const handleDownloadPdf = async (gatePass: GatePass) => {
+    if (!canDownloadGatePassPdf(gatePass)) {
+      alert("PDF is available only after Tally invoice number is generated.");
+      return;
+    }
     setIsDownloading(gatePass.id);
     try {
-      await downloadGatePassPdf({ gatePass, setting: settings[0] });
+      await downloadGatePassPdf({
+        gatePass,
+        setting: settings[0],
+        invoiceDisplayNo: isReturnableGatePass(gatePass) ? undefined : getLinkedInvoice(gatePass)?.tallyInvNo || "-",
+      });
     } catch (error) {
       console.error("Failed to generate Gate Pass PDF:", error);
       alert("Failed to generate Gate Pass PDF.");
@@ -89,7 +112,7 @@ export function GatePassMaster() {
                   <td className="px-4 py-3 text-sm font-bold text-black">{gatePass.gatePassNo || "Pending"}</td>
                   <td className="px-4 py-3 text-sm text-black">{gatePass.gatePassType || "Non-Returnable"}</td>
                   <td className="px-4 py-3 text-sm text-black">{formatDate(gatePass.date)}</td>
-                  <td className="px-4 py-3 text-sm text-black">{isReturnableGatePass(gatePass) ? getGatePassPrimaryPartyName(gatePass) : gatePass.invoiceNo || "-"}</td>
+                  <td className="px-4 py-3 text-sm text-black">{getGatePassInvoiceDisplayNo(gatePass)}</td>
                   <td className="px-4 py-3 text-sm text-black">{gatePass.truckNo || "-"}</td>
                   <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalQty || 0).toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -102,7 +125,7 @@ export function GatePassMaster() {
                       <button type="button" onClick={() => navigate(`/gate-pass/form?id=${gatePass.id}`)} className="rounded border border-black p-2 text-black hover:bg-slate-100" title="Edit">
                         <Pencil size={15} />
                       </button>
-                      <button type="button" onClick={() => handleDownloadPdf(gatePass)} disabled={isDownloading === gatePass.id} className="rounded border border-black p-2 text-black hover:bg-slate-100 disabled:opacity-50" title="Download PDF">
+                      <button type="button" onClick={() => handleDownloadPdf(gatePass)} disabled={isDownloading === gatePass.id || !canDownloadGatePassPdf(gatePass)} className="rounded border border-black p-2 text-black hover:bg-slate-100 disabled:opacity-50" title={canDownloadGatePassPdf(gatePass) ? "Download PDF" : "PDF available after Tally invoice number is generated"}>
                         {isDownloading === gatePass.id ? <span className="text-xs font-bold">...</span> : <Download size={15} />}
                       </button>
                     </div>
@@ -134,6 +157,14 @@ export function GatePassMaster() {
                 <InfoCard label="Type" value={selectedGatePass.gatePassType || "Non-Returnable"} />
                 <InfoCard label="Derived State" value={isReturnableGatePass(selectedGatePass) ? deriveGatePassState(selectedGatePass, materialIn) : "-"} />
               </div>
+
+              {!isReturnableGatePass(selectedGatePass) && (
+                <div className="grid gap-4 md:grid-cols-3">
+                  <InfoCard label="Tally Invoice No" value={getLinkedInvoice(selectedGatePass)?.tallyInvNo || "Tally Invoice Pending"} />
+                  <InfoCard label="Tally Invoice Date" value={getLinkedInvoice(selectedGatePass)?.tallyInvDate ? formatDate(getLinkedInvoice(selectedGatePass)?.tallyInvDate || "") : "-"} />
+                  <InfoCard label="Tally Status" value={getLinkedInvoice(selectedGatePass)?.tallySyncRemark || "Pending Tally Sync"} />
+                </div>
+              )}
 
               <div className="overflow-hidden rounded border border-black">
                 <table className="min-w-full border-collapse">
@@ -177,7 +208,7 @@ export function GatePassMaster() {
               </div>
 
               <div className="flex justify-end gap-3">
-                <button type="button" onClick={() => handleDownloadPdf(selectedGatePass)} disabled={isDownloading === selectedGatePass.id} className="rounded border-2 border-black px-4 py-2 text-sm font-black uppercase hover:bg-slate-50 disabled:opacity-50">
+                <button type="button" onClick={() => handleDownloadPdf(selectedGatePass)} disabled={isDownloading === selectedGatePass.id || !canDownloadGatePassPdf(selectedGatePass)} className="rounded border-2 border-black px-4 py-2 text-sm font-black uppercase hover:bg-slate-50 disabled:opacity-50" title={canDownloadGatePassPdf(selectedGatePass) ? "Download PDF" : "PDF available after Tally invoice number is generated"}>
                   {isDownloading === selectedGatePass.id ? "Generating PDF..." : "Download PDF"}
                 </button>
                 <button type="button" onClick={() => navigate(`/gate-pass/form?id=${selectedGatePass.id}`)} className="rounded bg-indigo-600 px-4 py-2 text-sm font-black uppercase text-white hover:bg-indigo-700">

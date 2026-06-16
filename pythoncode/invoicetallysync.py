@@ -151,18 +151,7 @@ def parse_tally_voucher_response(response_text):
         root = ET.fromstring(cleaned)
         voucher = root.find('.//VOUCHER')
         if voucher is not None:
-            result["tallyInvNo"] = voucher.get("VOUCHERNUMBER") or next(
-                (child.text for child in voucher if child.tag.upper() == "VOUCHERNUMBER" and child.text),
-                "",
-            )
-            result["tallyInvDate"] = voucher.get("DATE") or next(
-                (child.text for child in voucher if child.tag.upper() == "DATE" and child.text),
-                "",
-            )
-            result["tallyInvId"] = voucher.get("GUID") or voucher.get("VOUCHERKEY") or voucher.get("REMOTEID") or next(
-                (child.text for child in voucher if child.tag.upper() in {"GUID", "VOUCHERKEY", "REMOTEID"} and child.text),
-                "",
-            )
+            result.update(extract_voucher_summary(voucher))
         else:
             # Fallback search in entire response for common identifiers
             if "VOUCHERNUMBER" in cleaned.upper():
@@ -179,10 +168,61 @@ def parse_tally_voucher_response(response_text):
                 if match:
                     result["tallyInvId"] = match.group(1).strip()
                     break
+            for key, output_key in (("LASTVCHID", "lastVchId"), ("LASTMID", "lastMasterId")):
+                pattern = rf"<{key}>([^<]+)</{key}>"
+                match = re.search(pattern, cleaned, re.IGNORECASE)
+                if match:
+                    result[output_key] = match.group(1).strip()
     except Exception:
         pass
 
     return {k: v for k, v in result.items() if v}
+
+
+def extract_voucher_summary(voucher):
+    summary = {
+        "tallyInvNo": voucher.get("VOUCHERNUMBER") or "",
+        "tallyInvDate": voucher.get("DATE") or "",
+        "tallyInvId": voucher.get("GUID") or voucher.get("VOUCHERKEY") or voucher.get("REMOTEID") or "",
+        "partyLedgerName": voucher.get("PARTYLEDGERNAME") or "",
+        "narration": "",
+    }
+
+    for child in voucher:
+        tag = child.tag.upper()
+        text = (child.text or "").strip()
+        if not text:
+            continue
+        if tag == "VOUCHERNUMBER" and not summary["tallyInvNo"]:
+            summary["tallyInvNo"] = text
+        elif tag == "DATE" and not summary["tallyInvDate"]:
+            summary["tallyInvDate"] = text
+        elif tag in {"GUID", "VOUCHERKEY", "REMOTEID"} and not summary["tallyInvId"]:
+            summary["tallyInvId"] = text
+        elif tag == "PARTYLEDGERNAME" and not summary["partyLedgerName"]:
+            summary["partyLedgerName"] = text
+        elif tag == "NARRATION" and not summary["narration"]:
+            summary["narration"] = text
+
+    return {key: value for key, value in summary.items() if value}
+
+
+def parse_tally_voucher_collection(response_text):
+    if not response_text:
+        return []
+
+    cleaned = sanitize_tally_xml(response_text)
+    try:
+        root = ET.fromstring(cleaned)
+    except Exception:
+        return []
+
+    vouchers = []
+    for voucher in root.findall(".//VOUCHER"):
+        summary = extract_voucher_summary(voucher)
+        if summary:
+            vouchers.append(summary)
+    return vouchers
 
 
 def fetch_tally_voucher_reference(invoice_no, voucher_type=None):
@@ -220,8 +260,8 @@ def fetch_tally_voucher_by_id(tally_inv_id):
     if not tally_inv_id:
         return {}
 
-    request_variants = ("GUID", "MasterID", "VoucherKey")
-    for id_type in request_variants:
+    object_request_variants = ("GUID", "MasterID", "VoucherKey")
+    for id_type in object_request_variants:
         xml = f"""
 <ENVELOPE>
     <HEADER>
@@ -251,6 +291,123 @@ def fetch_tally_voucher_by_id(tally_inv_id):
         result = parse_tally_voucher_response(response_text)
         if result.get("tallyInvId") or result.get("tallyInvNo"):
             return result
+
+    action_get_variants = (
+        f'<VOUCHER MASTERID="{esc(tally_inv_id)}" ACTION="Get"></VOUCHER>',
+        f'<VOUCHER GUID="{esc(tally_inv_id)}" ACTION="Get"></VOUCHER>',
+        f'<VOUCHER VCHKEY="{esc(tally_inv_id)}" ACTION="Get"></VOUCHER>',
+        f'<VOUCHER REMOTEID="{esc(tally_inv_id)}" ACTION="Get"></VOUCHER>',
+    )
+
+    for voucher_tag in action_get_variants:
+        xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Export Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <EXPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>Voucher Register</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE>
+                    {voucher_tag}
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </EXPORTDATA>
+    </BODY>
+</ENVELOPE>
+"""
+        response_text = tally_request(xml)
+        result = parse_tally_voucher_response(response_text)
+        if result.get("tallyInvId") or result.get("tallyInvNo"):
+            return result
+
+    return {}
+
+
+def fetch_created_tally_voucher(response_text):
+    parsed_response = parse_tally_voucher_response(response_text)
+    for candidate in (
+        parsed_response.get("tallyInvId"),
+        parsed_response.get("lastVchId"),
+        parsed_response.get("lastMasterId"),
+    ):
+        if not candidate:
+            continue
+        voucher = fetch_tally_voucher_by_id(candidate)
+        if voucher:
+            if not voucher.get("tallyInvId"):
+                voucher["tallyInvId"] = candidate
+            return voucher
+    if parsed_response.get("lastVchId") and not parsed_response.get("tallyInvId"):
+        parsed_response["tallyInvId"] = parsed_response.get("lastVchId")
+    elif parsed_response.get("lastMasterId") and not parsed_response.get("tallyInvId"):
+        parsed_response["tallyInvId"] = parsed_response.get("lastMasterId")
+    return parsed_response
+
+
+def fetch_tally_voucher_by_context(invoice_row, customer_name, narration_text):
+    tally_date = format_tally_date(invoice_row.get("date"))
+    xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Export Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <EXPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>Voucher Register</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVFROMDATE>{esc(tally_date)}</SVFROMDATE>
+                    <SVTODATE>{esc(tally_date)}</SVTODATE>
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+                <FETCHLIST>
+                    <FETCH>Date</FETCH>
+                    <FETCH>VoucherNumber</FETCH>
+                    <FETCH>GUID</FETCH>
+                    <FETCH>VoucherKey</FETCH>
+                    <FETCH>RemoteID</FETCH>
+                    <FETCH>PartyLedgerName</FETCH>
+                    <FETCH>Narration</FETCH>
+                </FETCHLIST>
+            </REQUESTDESC>
+        </EXPORTDATA>
+    </BODY>
+</ENVELOPE>
+"""
+    response_text = tally_request(xml)
+    vouchers = parse_tally_voucher_collection(response_text)
+    if not vouchers:
+        return {}
+
+    normalized_date = format_iso_date(tally_date)
+    normalized_party = str(customer_name or "").strip().upper()
+    normalized_narration = str(narration_text or "").strip().upper()
+
+    exact_matches = [
+        voucher
+        for voucher in vouchers
+        if format_iso_date(voucher.get("tallyInvDate")) == normalized_date
+        and str(voucher.get("partyLedgerName") or "").strip().upper() == normalized_party
+        and str(voucher.get("narration") or "").strip().upper() == normalized_narration
+    ]
+    if exact_matches:
+        return exact_matches[-1]
+
+    party_matches = [
+        voucher
+        for voucher in vouchers
+        if format_iso_date(voucher.get("tallyInvDate")) == normalized_date
+        and str(voucher.get("partyLedgerName") or "").strip().upper() == normalized_party
+    ]
+    if party_matches:
+        return party_matches[-1]
 
     return {}
 
@@ -1011,17 +1168,45 @@ def sync_invoices_to_tally():
                 print(tally_response)
 
                 if is_tally_success(tally_response):
-                    remark = "Posted successfully to Tally"
+                    created_tally_voucher = fetch_created_tally_voucher(tally_response)
+                    if not (
+                        created_tally_voucher.get("tallyInvNo")
+                        and created_tally_voucher.get("tallyInvDate")
+                        and created_tally_voucher.get("tallyInvId")
+                    ):
+                        context_voucher = fetch_tally_voucher_by_context(
+                            invoice_row,
+                            company_name,
+                            narration_text,
+                        )
+                        if context_voucher:
+                            created_tally_voucher = {
+                                **created_tally_voucher,
+                                **context_voucher,
+                            }
+
+                    has_complete_reference = (
+                        bool(created_tally_voucher.get("tallyInvNo"))
+                        and bool(created_tally_voucher.get("tallyInvDate"))
+                        and bool(created_tally_voucher.get("tallyInvId"))
+                    )
+                    remark = (
+                        "Posted successfully to Tally"
+                        if has_complete_reference
+                        else "Posted to Tally but voucher reference fetch incomplete"
+                    )
                     update_invoice_tally_status(
                         conn,
                         invoice_id,
                         True,
                         remark,
                         invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
-                        invoice_row.get("tallyInvNo"),
-                        format_iso_date(invoice_row.get("tallyInvDate")),
-                        invoice_row.get("tallyInvId"),
+                        created_tally_voucher.get("tallyInvNo") if has_complete_reference else None,
+                        format_iso_date(created_tally_voucher.get("tallyInvDate")) if has_complete_reference else None,
+                        created_tally_voucher.get("tallyInvId") if has_complete_reference else None,
                     )
+                    if created_tally_voucher:
+                        print(f"Fetched Tally invoice reference: {created_tally_voucher}")
                     print(remark)
                 else:
                     error_detail = extract_tally_error(tally_response)

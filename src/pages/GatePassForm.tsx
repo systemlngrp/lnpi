@@ -362,7 +362,7 @@ export function GatePassForm() {
               </div>
             ) : previewGatePass ? (
               <div className="space-y-3 text-sm">
-                <SummaryRow label="Invoice No" value={previewGatePass.invoiceNo || "-"} />
+                <SummaryRow label="Tally Invoice No" value={selectedInvoice?.tallyInvNo || "Tally Invoice Pending"} />
                 <SummaryRow label="Company" value={previewGatePass.companyName || "-"} />
                 <SummaryRow label="Truck" value={previewGatePass.truckNo || "-"} />
                 <SummaryRow label="Total Qty" value={previewGatePass.totalQty.toLocaleString()} />
