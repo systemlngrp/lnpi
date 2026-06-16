@@ -45,28 +45,50 @@ export function BillingPendingTally() {
     setExpandedRows(next);
   };
 
-  const getPoNumbers = (invoiceId: string) => {
-    const invLines = lineItems.filter(li => li.invoiceId === invoiceId);
-    const poNums = new Set<string>();
-    
-    invLines.forEach(li => {
-      const slip = slips.find(s => s.id === li.loadingSlipId);
-      if (slip) {
-        slip.lines.forEach(slipLine => {
-          // In loading slips, lines often reference dispatch plans
-          // If we have dispatchPlanId in loading slip lines (based on previous edits)
-          // or we can match via jobId/productionId if it's derived.
-          // Let's assume loading slip lines have dispatchPlanId or we match via orders.
-          
-          // Try to find the dispatch plan that corresponds to this slip line
-          // Often loading slips are created from dispatch plans
-          const plan = dispatchPlans.find(dp => dp.id === slipLine.dispatchPlanId);
-          if (plan) {
-            const order = orders.find(o => o.id === plan.orderId);
-            if (order?.poNumber) poNums.add(order.poNumber);
-          }
+  const getInvoiceSlips = (invoiceId: string) =>
+    slips.filter((slip) => slip.invoiceId === invoiceId && slip.status !== "Cancelled");
+
+  const buildSlipDerivedDetails = (invoiceId: string) => {
+    const invoiceSlips = getInvoiceSlips(invoiceId);
+    const rows: Array<{
+      itemName: string;
+      slipNo: string;
+      qty: number;
+      rate: number;
+      amount: number;
+    }> = [];
+
+    invoiceSlips.forEach((slip) => {
+      slip.lines.forEach((slipLine: any, index: number) => {
+        const plan = dispatchPlans.find((dp) => dp.id === slipLine.dispatchPlanId);
+        const order = orders.find((o) => o.id === plan?.orderId);
+        const item = npdItems.find((i) => i.id === order?.itemId);
+        const qty = Number(slipLine.loadedQty || 0);
+        const rate = Number(order?.rate || 0);
+
+        rows.push({
+          itemName: item?.name || order?.poNumber || "Unknown",
+          slipNo: slip.slipNo || `Slip ${index + 1}`,
+          qty,
+          rate,
+          amount: qty * rate,
         });
-      }
+      });
+    });
+
+    return rows;
+  };
+
+  const getPoNumbers = (invoiceId: string) => {
+    const invoiceSlips = getInvoiceSlips(invoiceId);
+    const poNums = new Set<string>();
+
+    invoiceSlips.forEach((slip) => {
+      slip.lines.forEach((slipLine: any) => {
+        const plan = dispatchPlans.find((dp) => dp.id === slipLine.dispatchPlanId);
+        const order = plan ? orders.find((o) => o.id === plan.orderId) : undefined;
+        if (order?.poNumber) poNums.add(order.poNumber);
+      });
     });
 
     return Array.from(poNums);
@@ -78,18 +100,23 @@ export function BillingPendingTally() {
       .map(inv => {
         const company = companies.find(c => c.id === inv.companyId);
         const invLines = lineItems.filter(li => li.invoiceId === inv.id);
+        const invoiceSlips = getInvoiceSlips(inv.id);
         const poNumbers = getPoNumbers(inv.id);
+        const details = invLines.length > 0
+          ? invLines.map((li) => ({
+              ...li,
+              itemName: npdItems.find((i) => i.id === li.itemId)?.name || "Unknown",
+              slipNo: slips.find((s) => s.id === li.loadingSlipId)?.slipNo || "N/A"
+            }))
+          : buildSlipDerivedDetails(inv.id);
         
         return {
           ...inv,
           companyName: company?.name || "Unknown",
           poNumbers,
           grandTotal: Number(inv.totalAfterGst || 0) + Number(inv.otherCharges || 0) + Number(inv.roundOff || 0),
-          details: invLines.map(li => ({
-            ...li,
-            itemName: npdItems.find(i => i.id === li.itemId)?.name || "Unknown",
-            slipNo: slips.find(s => s.id === li.loadingSlipId)?.slipNo || "N/A"
-          }))
+          details,
+          slipCount: invoiceSlips.length
         };
       })
       .filter(inv => {
@@ -218,18 +245,26 @@ export function BillingPendingTally() {
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-black">
-                              {inv.details.map((line: any, idx: number) => {
-                                const tax = (Number(line.cgst) || 0) + (Number(line.sgst) || 0) + (Number(line.igst) || 0);
-                                return (
-                                  <tr key={idx} className="divide-x divide-black text-[11px]">
-                                    <td className="px-3 py-2 font-bold uppercase">{line.itemName}</td>
-                                    <td className="px-3 py-2">{line.slipNo}</td>
-                                    <td className="px-3 py-2 text-right">{line.qty.toLocaleString()}</td>
-                                    <td className="px-3 py-2 text-right">{Number(line.rate || 0).toFixed(2)}</td>
-                                    <td className="px-3 py-2 text-right font-bold">₹{(line.amount + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                  </tr>
-                                );
-                              })}
+                              {inv.details.length === 0 ? (
+                                <tr className="divide-x divide-black text-[11px]">
+                                  <td colSpan={5} className="px-3 py-4 text-center text-slate-500 italic">
+                                    No item breakup found for this invoice.
+                                  </td>
+                                </tr>
+                              ) : (
+                                inv.details.map((line: any, idx: number) => {
+                                  const tax = (Number(line.cgst) || 0) + (Number(line.sgst) || 0) + (Number(line.igst) || 0);
+                                  return (
+                                    <tr key={idx} className="divide-x divide-black text-[11px]">
+                                      <td className="px-3 py-2 font-bold uppercase">{line.itemName}</td>
+                                      <td className="px-3 py-2">{line.slipNo}</td>
+                                      <td className="px-3 py-2 text-right">{Number(line.qty || 0).toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-right">{Number(line.rate || 0).toFixed(2)}</td>
+                                      <td className="px-3 py-2 text-right font-bold">₹{(Number(line.amount || 0) + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                  );
+                                })
+                              )}
                             </tbody>
                           </table>
                         </div>
