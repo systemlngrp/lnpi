@@ -78,7 +78,6 @@ export function PendingInvoicing() {
   const [invoiceRows, setInvoiceRows] = useState<InvoiceItemRow[]>([]);
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
   const [otherCharges, setOtherCharges] = useState<number | "">("");
-  const [roundOff, setRoundOff] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getAuthHeaders = () => {
@@ -221,7 +220,6 @@ export function PendingInvoicing() {
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
     setOtherCharges("");
-    setRoundOff("");
     
     const itemMap = new Map<string, InvoiceItemRow>();
     const itemOrderQtyMap = new Map<string, Map<string, number>>(); // itemId -> orderId -> qty
@@ -341,7 +339,6 @@ export function PendingInvoicing() {
     let totalSgst = 0;
     let totalIgst = 0;
     const otherChargesValue = Number(otherCharges || 0);
-    const roundOffValue = Number(roundOff || 0);
 
     invoiceRows.forEach((itemRow) => {
       itemRow.allocations.forEach((alloc) => {
@@ -362,7 +359,10 @@ export function PendingInvoicing() {
     });
 
     const totalAfterGst = totalBeforeGst + totalCgst + totalSgst + totalIgst;
-    const grandTotal = totalAfterGst + otherChargesValue + roundOffValue;
+    const baseTotal = totalAfterGst + otherChargesValue;
+    const roundedGrandTotal = Math.round(baseTotal);
+    const roundOffValue = Number((roundedGrandTotal - baseTotal).toFixed(2));
+    const grandTotal = Number((baseTotal + roundOffValue).toFixed(2));
 
     return { 
       totalBeforeGst, 
@@ -374,7 +374,7 @@ export function PendingInvoicing() {
       roundOff: roundOffValue, 
       grandTotal
     };
-  }, [invoiceRows, gstSupplyType, orders, otherCharges, roundOff]);
+  }, [invoiceRows, gstSupplyType, orders, otherCharges]);
 
   const handleSubmitInvoice = async () => {
     if (!invoiceModal || isSubmitting) return;
@@ -899,14 +899,9 @@ export function PendingInvoicing() {
                     </tr>
                     <tr className="divide-x divide-black">
                       <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase italic text-slate-400">Round Off</td>
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={roundOff}
-                          onChange={(e) => setRoundOff(e.target.value === "" ? "" : parseFloat(e.target.value))}
-                          className="w-28 px-2 py-1 border border-black rounded text-right text-[11px] font-bold"
-                        />
+                      <td className="px-3 py-2 text-right text-[11px] font-bold">
+                        {calculations.roundOff > 0 ? "+" : ""}
+                        {format2(calculations.roundOff)}
                       </td>
                       <td></td>
                     </tr>

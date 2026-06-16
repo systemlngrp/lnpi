@@ -216,6 +216,45 @@ def fetch_tally_voucher_reference(invoice_no, voucher_type=None):
     return parse_tally_voucher_response(response_text)
 
 
+def fetch_tally_voucher_by_id(tally_inv_id):
+    if not tally_inv_id:
+        return {}
+
+    request_variants = ("GUID", "MasterID", "VoucherKey")
+    for id_type in request_variants:
+        xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Object</TYPE>
+        <SUBTYPE>Voucher</SUBTYPE>
+        <ID TYPE="{esc(id_type)}">{esc(tally_inv_id)}</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Date</FETCH>
+                <FETCH>VoucherNumber</FETCH>
+                <FETCH>GUID</FETCH>
+                <FETCH>VoucherKey</FETCH>
+                <FETCH>RemoteID</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>
+"""
+        response_text = tally_request(xml)
+        result = parse_tally_voucher_response(response_text)
+        if result.get("tallyInvId") or result.get("tallyInvNo"):
+            return result
+
+    return {}
+
+
 def get_db_connection():
     return mysql.connector.connect(**DB_CONFIG)
 
@@ -453,6 +492,74 @@ def get_invoice_lines(conn, invoice_id):
     return processed_lines
 
 
+def get_invoice_dispatch_details(conn, invoice_id, item_lines):
+    loading_slip_ids = sorted(
+        {
+            str(line.get("loadingSlipId") or "").strip()
+            for line in item_lines
+            if str(line.get("loadingSlipId") or "").strip()
+        }
+    )
+
+    slip_nos = []
+    truck_nos = []
+    cursor = get_db_cursor(conn, dictionary=True)
+
+    try:
+        if loading_slip_ids:
+            placeholders = ", ".join(["%s"] * len(loading_slip_ids))
+            cursor.execute(
+                f"""
+                SELECT ls.id, ls.slipNo, tr.truckNo
+                FROM loading_slips ls
+                LEFT JOIN trucks tr ON tr.id = ls.truckId
+                WHERE ls.id IN ({placeholders})
+                """,
+                tuple(loading_slip_ids),
+            )
+            for row in cursor.fetchall():
+                slip_no = str(row.get("slipNo") or "").strip()
+                truck_no = str(row.get("truckNo") or "").strip()
+                if slip_no and slip_no not in slip_nos:
+                    slip_nos.append(slip_no)
+                if truck_no and truck_no not in truck_nos:
+                    truck_nos.append(truck_no)
+
+        if not truck_nos:
+            cursor.execute(
+                """
+                SELECT truckNo
+                FROM gate_passes
+                WHERE invoiceId = %s
+                """,
+                (invoice_id,),
+            )
+            for row in cursor.fetchall():
+                truck_no = str(row.get("truckNo") or "").strip()
+                if truck_no and truck_no not in truck_nos:
+                    truck_nos.append(truck_no)
+    finally:
+        cursor.close()
+
+    return {
+        "loadingSlipNos": slip_nos,
+        "truckNos": truck_nos,
+    }
+
+
+def build_invoice_narration(dispatch_details):
+    parts = []
+    slip_nos = dispatch_details.get("loadingSlipNos") or []
+    truck_nos = dispatch_details.get("truckNos") or []
+
+    if slip_nos:
+        parts.append(f"Loading Slips: {', '.join(slip_nos)}")
+    if truck_nos:
+        parts.append(f"Truck No: {', '.join(truck_nos)}")
+
+    return " | ".join(parts)
+
+
 def validate_invoice_lines(item_lines):
     errors = []
 
@@ -532,8 +639,7 @@ def derive_tax_rates(invoice_row, item_lines):
     }
 
 
-def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledger_name):
-    invoice_no = invoice_row.get("invoiceNo") or ""
+def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledger_name, narration_text=""):
     invoice_date = format_tally_date(invoice_row.get("date"))
     customer_name = customer_name or "Unknown Customer"
 
@@ -589,11 +695,6 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledge
                             <LEDGERNAME>{esc(customer_name)}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
                             <AMOUNT>-{total_invoice_amount:.2f}</AMOUNT>
-                            <BILLALLOCATIONS.LIST>
-                                <NAME>{esc(invoice_no)}</NAME>
-                                <BILLTYPE>New Ref</BILLTYPE>
-                                <AMOUNT>-{total_invoice_amount:.2f}</AMOUNT>
-                            </BILLALLOCATIONS.LIST>
                         </LEDGERENTRIES.LIST>
     """
 
@@ -662,11 +763,10 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledge
                     <VOUCHER VCHTYPE="{esc(VOUCHER_TYPE_NAME)}" ACTION="Create">
                         <DATE>{invoice_date}</DATE>
                         <VOUCHERTYPENAME>{esc(VOUCHER_TYPE_NAME)}</VOUCHERTYPENAME>
-                        <VOUCHERNUMBER>{esc(invoice_no)}</VOUCHERNUMBER>
-                        <REFERENCE>{esc(invoice_no)}</REFERENCE>
                         <PARTYLEDGERNAME>{esc(customer_name)}</PARTYLEDGERNAME>
                         <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
                         <ISINVOICE>Yes</ISINVOICE>
+                        <NARRATION>{esc(narration_text)}</NARRATION>
                         {inventory_xml}
                         {ledger_entries_xml}
                     </VOUCHER>
@@ -679,7 +779,19 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledge
 
 
 def post_to_tally(xml_data):
-    return tally_request(xml_data)
+    response_text = tally_request(xml_data)
+
+    if response_text and "Could not set &apos;SVCurrentCompany&apos;" in response_text:
+        fallback_xml = re.sub(
+            r"\s*<STATICVARIABLES>\s*<SVCURRENTCOMPANY>.*?</SVCURRENTCOMPANY>\s*</STATICVARIABLES>",
+            "",
+            xml_data,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        log_terminal("RETRY", "Retrying Tally post without SVCURRENTCOMPANY")
+        return tally_request(fallback_xml)
+
+    return response_text
 
 
 def is_tally_success(response_text):
@@ -836,20 +948,22 @@ def sync_invoices_to_tally():
                     continue
 
                 sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row)
+                dispatch_details = get_invoice_dispatch_details(conn, invoice_id, item_lines)
+                narration_text = build_invoice_narration(dispatch_details)
 
-                # Check if already exists in Tally to prevent duplicates and handle recovery
-                tally_reference = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
-                if tally_reference and tally_reference.get("tallyInvNo"):
-                    remark = "Voucher already exists in Tally. Fetched reference."
+                existing_tally_id = str(invoice_row.get("tallyInvId") or "").strip()
+                tally_reference = fetch_tally_voucher_by_id(existing_tally_id) if existing_tally_id else {}
+                if existing_tally_id and tally_reference:
+                    remark = "Voucher already exists in Tally. Matched by saved Tally ID."
                     update_invoice_tally_status(
                         conn,
                         invoice_id,
                         True,
                         remark,
                         invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
-                        tally_reference.get("tallyInvNo"),
+                        tally_reference.get("tallyInvNo") or invoice_row.get("tallyInvNo"),
                         format_iso_date(tally_reference.get("tallyInvDate")),
-                        tally_reference.get("tallyInvId"),
+                        existing_tally_id,
                     )
                     print(f"Skipping creation: {remark} | {tally_reference}")
                     continue
@@ -864,6 +978,8 @@ def sync_invoices_to_tally():
                         f"amount={line.get('amount')}"
                     )
                 print(f"Using sales ledger: {sales_ledger_name}")
+                if narration_text:
+                    print(f"Narration: {narration_text}")
 
                 tally_master_errors = validate_tally_masters(
                     company_name,
@@ -882,6 +998,7 @@ def sync_invoices_to_tally():
                     company_name,
                     item_lines,
                     sales_ledger_name,
+                    narration_text,
                 )
 
                 if DEBUG_TALLY_XML:
@@ -895,19 +1012,16 @@ def sync_invoices_to_tally():
 
                 if is_tally_success(tally_response):
                     remark = "Posted successfully to Tally"
-                    tally_reference = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
                     update_invoice_tally_status(
                         conn,
                         invoice_id,
                         True,
                         remark,
                         invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
-                        tally_reference.get("tallyInvNo"),
-                        format_iso_date(tally_reference.get("tallyInvDate")),
-                        tally_reference.get("tallyInvId"),
+                        invoice_row.get("tallyInvNo"),
+                        format_iso_date(invoice_row.get("tallyInvDate")),
+                        invoice_row.get("tallyInvId"),
                     )
-                    if tally_reference:
-                        print(f"Fetched Tally invoice reference: {tally_reference}")
                     print(remark)
                 else:
                     error_detail = extract_tally_error(tally_response)
