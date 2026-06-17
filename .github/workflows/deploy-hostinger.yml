@@ -1,6 +1,8 @@
 name: Build and Deploy to Hostinger (FTP)
 
 on:
+  push:
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -11,12 +13,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Explain deployment limitation
+      - name: Explain deployment target
         run: |
-          echo "This workflow only uploads static dist/ files via FTP."
-          echo "This application also needs the Node/Express backend from server.ts for /api/* routes."
-          echo "Use Hostinger Node.js Web App deployment for production if you need live data."
-          exit 1
+          echo "Building the app and uploading dist/ to Hostinger via FTP."
+          echo "This deploy updates the frontend assets served from public_html."
+          echo "If your Hostinger setup runs the Node backend separately, it must be deployed there too."
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
