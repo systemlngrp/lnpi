@@ -61,6 +61,7 @@ TALLY_UOM_ALIASES = {
     "PC": os.getenv("TALLY_UOM_PC", "PCS"),
 }
 TALLY_MASTER_CACHE = {}
+TALLY_STOCK_ITEM_UOM_CACHE = {}
 
 
 def log_terminal(level, message):
@@ -553,6 +554,74 @@ def check_tally_object_exists(object_type, object_name):
     return result
 
 
+def fetch_tally_stock_item_uom(item_name):
+    if not item_name:
+        return "", "Empty stock item name"
+
+    cache_key = item_name.strip().upper()
+    if cache_key in TALLY_STOCK_ITEM_UOM_CACHE:
+        return TALLY_STOCK_ITEM_UOM_CACHE[cache_key]
+
+    xml = f"""<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Object</TYPE>
+        <SUBTYPE>Stock Item</SUBTYPE>
+        <ID TYPE="Name">{esc(item_name)}</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+                <FETCH>BaseUnits</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>"""
+
+    response_text = tally_request(xml)
+    if not response_text:
+        result = ("", "Empty response from Tally")
+        TALLY_STOCK_ITEM_UOM_CACHE[cache_key] = result
+        return result
+
+    upper_response = response_text.upper()
+    if "CONNECTION ERROR:" in upper_response or "HTTP ERROR FROM TALLY:" in upper_response:
+        result = ("", response_text)
+        TALLY_STOCK_ITEM_UOM_CACHE[cache_key] = result
+        return result
+
+    try:
+        root = ET.fromstring(sanitize_tally_xml(response_text))
+        stock_item = root.find(".//STOCKITEM")
+        if stock_item is not None:
+            base_units = stock_item.get("BASEUNITS") or ""
+            if not base_units:
+                base_units_elem = stock_item.find("BASEUNITS")
+                if base_units_elem is not None and base_units_elem.text:
+                    base_units = base_units_elem.text.strip()
+            if base_units:
+                result = (normalize_uom(base_units), "")
+                TALLY_STOCK_ITEM_UOM_CACHE[cache_key] = result
+                return result
+    except Exception:
+        pass
+
+    match = re.search(r"<BASEUNITS>([^<]+)</BASEUNITS>", response_text, re.IGNORECASE)
+    if match:
+        result = (normalize_uom(match.group(1).strip()), "")
+        TALLY_STOCK_ITEM_UOM_CACHE[cache_key] = result
+        return result
+
+    result = ("", f"Unable to fetch Tally UOM for Stock Item '{item_name}'")
+    TALLY_STOCK_ITEM_UOM_CACHE[cache_key] = result
+    return result
+
+
 def get_company_details(conn, company_id):
     if not company_id:
         return {}
@@ -1024,6 +1093,26 @@ def validate_tally_masters(customer_name, sales_ledger_name, item_lines, invoice
         exists, message = check_tally_object_exists(object_type, object_name)
         if not exists:
             errors.append(message)
+
+    checked_uoms = set()
+    for line in item_lines:
+        item_name = str(line.get("itemName") or "").strip()
+        line_uom = normalize_uom(line.get("uom"))
+        if not item_name or not line_uom:
+            continue
+        if item_name.upper() in checked_uoms:
+            continue
+        checked_uoms.add(item_name.upper())
+
+        tally_uom, uom_error = fetch_tally_stock_item_uom(item_name)
+        if uom_error:
+            errors.append(uom_error)
+            continue
+        if not tally_uom:
+            errors.append(f"{item_name}: Tally UOM not found")
+            continue
+        if tally_uom != line_uom:
+            errors.append(f"{item_name}: UOM mismatch. ERP={line_uom}, Tally={tally_uom}")
 
     return errors
 
