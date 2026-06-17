@@ -56,4 +56,6 @@ env/
 *.swo
 *~
 .idea/
-.txt
+*.txt
+
+*.yml
