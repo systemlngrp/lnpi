@@ -808,6 +808,7 @@ def derive_tax_rates(invoice_row, item_lines):
 
 def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledger_name, narration_text=""):
     invoice_date = format_tally_date(invoice_row.get("date"))
+    invoice_no = str(invoice_row.get("invoiceNo") or "").strip()
     customer_name = customer_name or "Unknown Customer"
 
     cgst = round(to_float(invoice_row.get("cgst")), 2)
@@ -929,6 +930,7 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledge
                 <TALLYMESSAGE xmlns:UDF="TallyUDF">
                     <VOUCHER VCHTYPE="{esc(VOUCHER_TYPE_NAME)}" ACTION="Create">
                         <DATE>{invoice_date}</DATE>
+                        <VOUCHERNUMBER>{esc(invoice_no)}</VOUCHERNUMBER>
                         <VOUCHERTYPENAME>{esc(VOUCHER_TYPE_NAME)}</VOUCHERTYPENAME>
                         <PARTYLEDGERNAME>{esc(customer_name)}</PARTYLEDGERNAME>
                         <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
@@ -1087,7 +1089,7 @@ def sync_invoices_to_tally():
 
         for invoice_row in pending_invoice_rows:
             invoice_id = invoice_row.get("id")
-            invoice_no = invoice_row.get("invoiceNo")
+            invoice_no = str(invoice_row.get("invoiceNo") or "").strip()
 
             print(f"\nProcessing Invoice ID: {invoice_id} | Invoice No: {invoice_no}")
 
@@ -1114,6 +1116,12 @@ def sync_invoices_to_tally():
                     log_terminal("VALIDATION", remark)
                     continue
 
+                if not invoice_no:
+                    remark = "Invoice No missing"
+                    update_invoice_tally_status(conn, invoice_id, False, remark)
+                    log_terminal("VALIDATION", remark)
+                    continue
+
                 sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row, item_lines)
                 dispatch_details = get_invoice_dispatch_details(conn, invoice_id, item_lines)
                 narration_text = build_invoice_narration(dispatch_details)
@@ -1128,11 +1136,27 @@ def sync_invoices_to_tally():
                         True,
                         remark,
                         invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
-                        tally_reference.get("tallyInvNo") or invoice_row.get("tallyInvNo"),
+                        tally_reference.get("tallyInvNo") or invoice_no,
                         format_iso_date(tally_reference.get("tallyInvDate")),
                         existing_tally_id,
                     )
                     print(f"Skipping creation: {remark} | {tally_reference}")
+                    continue
+
+                voucher_by_number = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
+                if voucher_by_number:
+                    remark = "Voucher already exists in Tally. Matched by Invoice No."
+                    update_invoice_tally_status(
+                        conn,
+                        invoice_id,
+                        True,
+                        remark,
+                        invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
+                        voucher_by_number.get("tallyInvNo") or invoice_no,
+                        format_iso_date(voucher_by_number.get("tallyInvDate")),
+                        voucher_by_number.get("tallyInvId"),
+                    )
+                    print(f"Skipping creation: {remark} | {voucher_by_number}")
                     continue
 
                 for line in item_lines:
@@ -1179,9 +1203,23 @@ def sync_invoices_to_tally():
 
                 if is_tally_success(tally_response):
                     created_tally_voucher = fetch_created_tally_voucher(tally_response)
+                    if not created_tally_voucher.get("tallyInvNo"):
+                        created_tally_voucher["tallyInvNo"] = invoice_no
                     if not (
-                        created_tally_voucher.get("tallyInvNo")
-                        and created_tally_voucher.get("tallyInvDate")
+                        created_tally_voucher.get("tallyInvDate")
+                        and created_tally_voucher.get("tallyInvId")
+                    ):
+                        voucher_by_number = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
+                        if voucher_by_number:
+                            created_tally_voucher = {
+                                **created_tally_voucher,
+                                **voucher_by_number,
+                            }
+                            if not created_tally_voucher.get("tallyInvNo"):
+                                created_tally_voucher["tallyInvNo"] = invoice_no
+
+                    if not (
+                        created_tally_voucher.get("tallyInvDate")
                         and created_tally_voucher.get("tallyInvId")
                     ):
                         context_voucher = fetch_tally_voucher_by_context(
@@ -1194,16 +1232,16 @@ def sync_invoices_to_tally():
                                 **created_tally_voucher,
                                 **context_voucher,
                             }
+                            if not created_tally_voucher.get("tallyInvNo"):
+                                created_tally_voucher["tallyInvNo"] = invoice_no
 
                     has_complete_reference = (
                         bool(created_tally_voucher.get("tallyInvNo"))
-                        and bool(created_tally_voucher.get("tallyInvDate"))
-                        and bool(created_tally_voucher.get("tallyInvId"))
                     )
                     remark = (
                         "Posted successfully to Tally"
                         if has_complete_reference
-                        else "Posted to Tally but voucher reference fetch incomplete"
+                        else "Posted to Tally but voucher number unavailable"
                     )
                     update_invoice_tally_status(
                         conn,

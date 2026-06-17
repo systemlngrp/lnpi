@@ -9,7 +9,7 @@ package-lock.json
 .npm-cache/
 
 # Build output
-dist/
+
 build/
 
 # TypeScript
