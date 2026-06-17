@@ -223,8 +223,8 @@ export function InvoicesMaster() {
         </div>
       </div>
 
-      <div className="bg-white border border-black rounded shadow-sm overflow-hidden">
-        <table className="min-w-full divide-y divide-black border-collapse">
+      <div className="bg-white border border-black rounded shadow-sm overflow-x-auto overflow-y-hidden">
+        <table className="min-w-[1600px] divide-y divide-black border-collapse">
           <thead className="bg-slate-100">
             <tr className="divide-x divide-black">
               <th className="w-10 px-4 py-3"></th>
@@ -317,8 +317,8 @@ export function InvoicesMaster() {
                   {expandedRows.has(invoice.id) && (
                     <tr className="bg-slate-50">
                       <td colSpan={13} className="px-12 py-4">
-                        <div className="border-2 border-black rounded overflow-hidden shadow-sm">
-                          <table className="min-w-full divide-y divide-black">
+                        <div className="border-2 border-black rounded overflow-x-auto overflow-y-hidden shadow-sm">
+                          <table className="min-w-[1100px] divide-y divide-black">
                             <thead className="bg-slate-200">
                               <tr className="divide-x divide-black">
                                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
