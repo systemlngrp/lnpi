@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
 
 type NpdRecord = {
   id: string;
@@ -205,6 +206,34 @@ export function NpdMaster() {
       cancelled = true;
     };
   }, [page, pageSize, searchTerm]);
+
+  useAutoRefreshEffect(() => {
+    setLoading(true);
+    const token = window.localStorage.getItem("authToken") || "";
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (searchTerm) params.set("search", searchTerm);
+
+    void fetch(`/api/npd?${params.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to fetch NPD rows.");
+        return response.json();
+      })
+      .then((result) => {
+        setRows(Array.isArray(result.rows) ? result.rows : []);
+        setTotal(Number(result.total || 0));
+      })
+      .catch((error) => {
+        console.error("Failed to auto-refresh NPD rows:", error);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  });
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const pageLabel = useMemo(() => {

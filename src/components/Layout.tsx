@@ -3,12 +3,21 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import { useAppAutoRefresh, useAutoRefreshStatus, useAutoRefreshPause, useIsAutoRefreshPaused } from "../hooks/useAutoRefresh";
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const location = useLocation();
   const { user, hasAccess, logout } = useAuth();
+  const isFormRoute =
+    /\/form(\/|$)/.test(location.pathname) ||
+    /\/create(\/|$)/.test(location.pathname);
+
+  useAutoRefreshPause(isFormRoute);
+  useAppAutoRefresh(Boolean(user));
+  const autoRefreshStatus = useAutoRefreshStatus(Boolean(user));
+  const isAutoRefreshPaused = useIsAutoRefreshPaused(Boolean(user));
 
   useEffect(() => {
     const saved = window.localStorage.getItem("layout-sidebar-collapsed");
@@ -28,6 +37,28 @@ export function Layout() {
   }
 
   const avatar = (user?.name || user?.userId || "U").trim().slice(0, 1).toUpperCase();
+  const lastRefreshLabel = autoRefreshStatus.at
+    ? new Date(autoRefreshStatus.at).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "Not yet";
+  const lastRefreshReasonLabel = autoRefreshStatus.reason
+    ? autoRefreshStatus.reason === "visibility"
+      ? "Tab Return"
+      : autoRefreshStatus.reason === "focus"
+        ? "Focus"
+        : "Idle"
+    : null;
+  const refreshStatusLabel = isAutoRefreshPaused
+    ? "Paused"
+    : lastRefreshReasonLabel
+      ? `Last Refresh (${lastRefreshReasonLabel})`
+      : "Last Refresh";
+  const refreshValueLabel = isAutoRefreshPaused
+    ? "Editing in progress"
+    : lastRefreshLabel;
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans">
@@ -65,6 +96,14 @@ export function Layout() {
                  </button>
                </div>
                <div className="flex items-center space-x-4">
+                  {user && (
+                    <div className="hidden lg:flex flex-col items-end leading-tight rounded border border-slate-300 bg-slate-50 px-3 py-1">
+                      <div className="text-[10px] font-black uppercase text-slate-500">
+                        {refreshStatusLabel}
+                      </div>
+                      <div className="text-[11px] font-bold text-black">{refreshValueLabel}</div>
+                    </div>
+                  )}
                   {user && (
                     <div className="hidden sm:flex flex-col items-end leading-tight">
                       <div className="text-[11px] font-black text-black">{user.name}</div>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Boxes,
@@ -51,6 +51,7 @@ import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { withIndentTotals } from "../lib/indentTotals";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -340,31 +341,32 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
 
   const [pendingJobClosureCount, setPendingJobClosureCount] = useState<number>(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = window.localStorage.getItem("authToken") || "";
-        const response = await fetch("/api/get-pending-job-closure", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({}),
-        });
-        if (!response.ok) throw new Error(await response.text());
-        const rows = await response.json();
-        const nextCount = Array.isArray(rows) ? rows.length : 0;
-        if (!cancelled) setPendingJobClosureCount(nextCount);
-      } catch {
-        if (!cancelled) setPendingJobClosureCount(0);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const refreshPendingJobClosureCount = useCallback(async () => {
+    try {
+      const token = window.localStorage.getItem("authToken") || "";
+      const response = await fetch("/api/get-pending-job-closure", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const rows = await response.json();
+      setPendingJobClosureCount(Array.isArray(rows) ? rows.length : 0);
+    } catch {
+      setPendingJobClosureCount(0);
+    }
   }, []);
+
+  useEffect(() => {
+    void refreshPendingJobClosureCount();
+  }, [refreshPendingJobClosureCount]);
+
+  useAutoRefreshEffect(() => {
+    void refreshPendingJobClosureCount();
+  });
 
   const counts: Record<string, number> = {
     "/material-receipt/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,

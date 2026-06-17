@@ -28,6 +28,7 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { buildGatePassFromInvoice } from "../lib/gatePasses";
+import { useAutoRefreshPause } from "../hooks/useAutoRefresh";
 
 interface GroupedLoading {
   companyId: string;
@@ -79,6 +80,13 @@ export function PendingInvoicing() {
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
   const [otherCharges, setOtherCharges] = useState<number | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useAutoRefreshPause(
+    Boolean(billingMode) ||
+    selectedSlips.size > 0 ||
+    invoiceModal !== null ||
+    isSubmitting
+  );
 
   const getAuthHeaders = () => {
     const token = window.localStorage.getItem("authToken") || "";

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { Supplier, Material } from "../types";
 import { formatDate } from "../lib/serial";
 import { Spinner } from "../components/Spinner";
 import { Search, ChevronDown, ChevronUp, CheckSquare, Square } from "lucide-react";
+import { useAutoRefreshEffect, useAutoRefreshPause } from "../hooks/useAutoRefresh";
 
 interface PendingProcurementSource {
   indentLineId: string;
@@ -44,7 +45,14 @@ export function PurchaseOrderPending() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchPending = async () => {
+  useAutoRefreshPause(
+    selectedIds.size > 0 ||
+    supplierId.trim().length > 0 ||
+    Object.keys(rowInputs).length > 0 ||
+    isSubmitting
+  );
+
+  const fetchPending = useCallback(async () => {
     try {
       setLoading(true);
       const token = window.localStorage.getItem("authToken") || "";
@@ -71,11 +79,15 @@ export function PurchaseOrderPending() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchPending();
-  }, []);
+    void fetchPending();
+  }, [fetchPending]);
+
+  useAutoRefreshEffect(() => {
+    void fetchPending();
+  });
 
   const filteredRows = useMemo(() => {
     return rows.filter(row => 

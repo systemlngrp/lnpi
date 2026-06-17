@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Eye } from "lucide-react";
 import { useData } from "../hooks/useData";
@@ -6,6 +6,7 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { ExcelExport } from "../components/ExcelExport";
 import type { Supplier } from "../types";
+import { useAutoRefreshEffect, useAutoRefreshPause } from "../hooks/useAutoRefresh";
 
 type PendingIndentLineRow = {
   indentLineId: string;
@@ -38,7 +39,13 @@ export function PurchaseOrderPendingIndentLines() {
   const [rowInputs, setRowInputs] = useState<Record<string, { supplierId: string; qty: string; rate: string }>>({});
   const [creating, setCreating] = useState(false);
 
-  const fetchRows = async () => {
+  useAutoRefreshPause(
+    selectedIds.size > 0 ||
+    Object.keys(rowInputs).length > 0 ||
+    creating
+  );
+
+  const fetchRows = useCallback(async () => {
     try {
       setLoading(true);
       const token = window.localStorage.getItem("authToken") || "";
@@ -54,11 +61,15 @@ export function PurchaseOrderPendingIndentLines() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchRows();
-  }, []);
+    void fetchRows();
+  }, [fetchRows]);
+
+  useAutoRefreshEffect(() => {
+    void fetchRows();
+  });
 
   useEffect(() => {
     setSelectedIds(new Set());

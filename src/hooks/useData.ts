@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useAutoRefreshEffect } from "./useAutoRefresh";
 
 type UseDataOptions = {
   endpointOverride?: string;
@@ -53,6 +54,8 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const dataRef = useRef<T[]>(initialValue);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isFetchingRef = useRef(false);
+  const lastFetchAtRef = useRef(0);
 
   const isItemAlias = entity === "items" && !options?.endpointOverride;
   const resolvedEntity = isItemAlias ? "npd" : entity;
@@ -65,9 +68,17 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
     dataRef.current = data;
   }, [data]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (config?: { background?: boolean; force?: boolean }) => {
+    const background = Boolean(config?.background);
+    const force = Boolean(config?.force);
+    const now = Date.now();
+
+    if (isFetchingRef.current) return;
+    if (!force && now - lastFetchAtRef.current < 10_000) return;
+
+    isFetchingRef.current = true;
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       const token = window.localStorage.getItem("authToken") || "";
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -81,6 +92,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       setDataState(finalData);
       dataRef.current = finalData;
       setError(null);
+      lastFetchAtRef.current = Date.now();
       safeSetLocalStorage(storageKey, JSON.stringify(finalData));
     } catch (err) {
       console.error(`Error fetching ${entity}:`, err);
@@ -92,21 +104,26 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
         dataRef.current = parsed;
       }
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
+      isFetchingRef.current = false;
     }
   }, [endpoint, entity, storageKey]);
 
   useEffect(() => {
-    fetchData();
+    fetchData({ force: true });
 
     // Listen for sync events from other hook instances
     const handleSync = () => {
-      fetchData();
+      fetchData({ background: true, force: true });
     };
     
     window.addEventListener(syncEvent, handleSync);
     return () => window.removeEventListener(syncEvent, handleSync);
   }, [fetchData, syncEvent]);
+
+  useAutoRefreshEffect(() => {
+    void fetchData({ background: true });
+  });
 
   const updateData = useCallback(async (newData: T[] | ((prev: T[]) => T[])) => {
     const currentData = dataRef.current;
