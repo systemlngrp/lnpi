@@ -1235,23 +1235,24 @@ def sync_invoices_to_tally():
                             if not created_tally_voucher.get("tallyInvNo"):
                                 created_tally_voucher["tallyInvNo"] = invoice_no
 
-                    has_complete_reference = (
-                        bool(created_tally_voucher.get("tallyInvNo"))
-                    )
-                    remark = (
-                        "Posted successfully to Tally"
-                        if has_complete_reference
-                        else "Posted to Tally but voucher number unavailable"
-                    )
+                    has_voucher_no = bool(created_tally_voucher.get("tallyInvNo"))
+                    has_voucher_date = bool(created_tally_voucher.get("tallyInvDate"))
+                    has_voucher_id = bool(created_tally_voucher.get("tallyInvId"))
+                    if has_voucher_no and has_voucher_date and has_voucher_id:
+                        remark = "Posted successfully to Tally"
+                    elif has_voucher_no:
+                        remark = "Posted to Tally; voucher number saved, date/id fetch incomplete"
+                    else:
+                        remark = "Posted to Tally but voucher number unavailable"
                     update_invoice_tally_status(
                         conn,
                         invoice_id,
                         True,
                         remark,
                         invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
-                        created_tally_voucher.get("tallyInvNo") if has_complete_reference else None,
-                        format_iso_date(created_tally_voucher.get("tallyInvDate")) if has_complete_reference else None,
-                        created_tally_voucher.get("tallyInvId") if has_complete_reference else None,
+                        created_tally_voucher.get("tallyInvNo"),
+                        format_iso_date(created_tally_voucher.get("tallyInvDate")),
+                        created_tally_voucher.get("tallyInvId"),
                     )
                     if created_tally_voucher:
                         print(f"Fetched Tally invoice reference: {created_tally_voucher}")
