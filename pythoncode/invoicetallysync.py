@@ -1234,7 +1234,7 @@ def sync_invoices_to_tally():
 
                 voucher_by_number = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
                 if voucher_by_number:
-                    remark = "Voucher already exists in Tally. Matched by Invoice No."
+                    remark = "This Invoice already exists in tally."
                     update_invoice_tally_status(
                         conn,
                         invoice_id,
