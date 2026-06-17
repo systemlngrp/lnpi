@@ -2,28 +2,42 @@ import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useNavigate } from "react-router-dom";
-import { 
-  Invoice, 
+import {
+  Invoice,
   InvoiceLineItem,
   GatePass,
   Company,
-  Item,
   LoadingSlip,
-  Truck
+  Truck,
+  DispatchPlan,
+  Order,
 } from "../types";
-import { 
-  Search, 
-  Receipt, 
-  Calendar, 
-  Building2,
+import {
+  Search,
+  Receipt,
   ChevronRight,
   ChevronDown,
   X,
   FileText,
-  Truck as TruckIcon
+  Truck as TruckIcon,
 } from "lucide-react";
-import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
+
+type InvoiceDetailRow = {
+  id: string;
+  itemId: string;
+  itemName: string;
+  erp: string;
+  slipNo: string;
+  truckNo: string;
+  qty: number;
+  rate: number;
+  gstRate: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  amount: number;
+};
 
 export function InvoicesMaster() {
   const navigate = useNavigate();
@@ -34,6 +48,8 @@ export function InvoicesMaster() {
   const npdItems = useNpdItems();
   const [slips] = useData<LoadingSlip>("loading_slips", []);
   const [trucks] = useData<Truck>("trucks", []);
+  const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [orders] = useData<Order>("orders", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -48,65 +64,146 @@ export function InvoicesMaster() {
 
   const getRoundOff = (invoice: Invoice) => Number(invoice.roundOff || 0);
   const getOtherCharges = (invoice: Invoice) => Number(invoice.otherCharges || 0);
-  const getGrandTotal = (invoice: Invoice) => Number(invoice.totalAfterGst || 0) + getOtherCharges(invoice) + getRoundOff(invoice);
+  const getGrandTotal = (invoice: Invoice) =>
+    Number(invoice.totalAfterGst || 0) + getOtherCharges(invoice) + getRoundOff(invoice);
+
+  const getInvoiceSlips = (invoiceId: string) =>
+    slips.filter((slip) => slip.invoiceId === invoiceId && slip.status !== "Cancelled");
+
+  const resolveInvoiceLineItemMasterId = (line: InvoiceLineItem) =>
+    String(line.npdId || line.itemId || "").trim();
+
+  const buildInvoiceDetails = (invoice: Invoice): InvoiceDetailRow[] => {
+    const invLines = lineItems.filter((line) => line.invoiceId === invoice.id);
+    const invoiceSlips = getInvoiceSlips(invoice.id);
+
+    const storedLineQueues = new Map<string, InvoiceLineItem[]>();
+    const storedSlipQueues = new Map<string, InvoiceLineItem[]>();
+
+    invLines.forEach((line) => {
+      const masterId = resolveInvoiceLineItemMasterId(line);
+      const exactKey = `${String(line.loadingSlipId || "").trim()}__${masterId}`;
+      if (!storedLineQueues.has(exactKey)) storedLineQueues.set(exactKey, []);
+      storedLineQueues.get(exactKey)!.push(line);
+
+      const slipKey = String(line.loadingSlipId || "").trim();
+      if (!storedSlipQueues.has(slipKey)) storedSlipQueues.set(slipKey, []);
+      storedSlipQueues.get(slipKey)!.push(line);
+    });
+
+    if (invoiceSlips.length > 0) {
+      const derivedRows = invoiceSlips.flatMap((slip) => {
+        const truck = trucks.find((row) => row.id === slip.truckId);
+        return (slip.lines || []).map((slipLine: any, index: number) => {
+          const plan = dispatchPlans.find((row) => row.id === slipLine.dispatchPlanId);
+          const order = orders.find((row) => row.id === plan?.orderId);
+          let masterId = String(order?.itemId || "").trim();
+
+          const exactKey = `${slip.id}__${masterId}`;
+          let storedLine = masterId ? storedLineQueues.get(exactKey)?.shift() : undefined;
+          if (!storedLine) {
+            storedLine = storedSlipQueues.get(slip.id)?.shift();
+            if (storedLine && !masterId) masterId = resolveInvoiceLineItemMasterId(storedLine);
+          }
+
+          const item = npdItems.find((row) => row.id === masterId);
+          const qty = Number(slipLine.loadedQty || storedLine?.qty || 0);
+          const rate = Number(storedLine?.rate ?? order?.rate ?? 0);
+          const amountFromLine = Number(storedLine?.amount || 0);
+          const amount = amountFromLine > 0 ? amountFromLine : qty * rate;
+
+          return {
+            id: storedLine?.id || `${slip.id}-${index}-${masterId || "line"}`,
+            itemId: masterId,
+            itemName: item?.name || order?.poNumber || "Unknown",
+            erp: String(order?.erpCode || (item as any)?.erp || "").trim(),
+            slipNo: slip.slipNo || `Slip ${index + 1}`,
+            truckNo: truck?.truckNo || "N/A",
+            qty,
+            rate,
+            gstRate: Number(storedLine?.gstRate ?? invoice.gstRate ?? 0),
+            cgst: Number(storedLine?.cgst || 0),
+            sgst: Number(storedLine?.sgst || 0),
+            igst: Number(storedLine?.igst || 0),
+            amount,
+          };
+        });
+      });
+
+      if (derivedRows.length > 0) return derivedRows;
+    }
+
+    return invLines.map((line, index) => {
+      const masterId = resolveInvoiceLineItemMasterId(line);
+      const item = npdItems.find((row) => row.id === masterId);
+      const slip = slips.find((row) => row.id === line.loadingSlipId);
+      const truck = trucks.find((row) => row.id === slip?.truckId);
+      return {
+        id: line.id || `${invoice.id}-${index}`,
+        itemId: masterId,
+        itemName: item?.name || "Unknown",
+        erp: String((item as any)?.erp || "").trim(),
+        slipNo: slip?.slipNo || "N/A",
+        truckNo: truck?.truckNo || "N/A",
+        qty: Number(line.qty || 0),
+        rate: Number(line.rate || 0),
+        gstRate: Number(line.gstRate || invoice.gstRate || 0),
+        cgst: Number(line.cgst || 0),
+        sgst: Number(line.sgst || 0),
+        igst: Number(line.igst || 0),
+        amount: Number(line.amount || 0),
+      };
+    });
+  };
+
   const openGatePass = (invoiceId: string) => {
     const existingGatePass = gatePasses.find((gatePass) => gatePass.invoiceId === invoiceId);
     navigate(existingGatePass ? `/gate-pass/form?id=${existingGatePass.id}` : `/gate-pass/form?invoiceId=${invoiceId}`);
   };
 
   const processedInvoices = useMemo(() => {
-    return invoices.map(inv => {
-      const company = companies.find(c => c.id === inv.companyId);
-      const invLines = lineItems.filter(li => li.invoiceId === inv.id);
-      const invItems = invLines.map(li => {
-        const item = npdItems.find(i => i.id === li.itemId);
-        return item?.name || "Unknown";
-      });
-      const roundOff = getRoundOff(inv);
-      const grandTotal = Number(inv.totalAfterGst || 0) + getOtherCharges(inv) + roundOff;
-      
-      return {
-        ...inv,
-        companyName: company?.name || "Unknown",
-        address: company?.address || "",
-        gstNo: company?.gstNo || "N/A",
-        itemSummary: Array.from(new Set(invItems)).join(", "),
-        roundOff,
-        grandTotal,
-        details: invLines.map(li => {
-          const slip = slips.find(s => s.id === li.loadingSlipId);
-          const truck = trucks.find(t => t.id === slip?.truckId);
-          return {
-            ...li,
-            itemName: npdItems.find(i => i.id === li.itemId)?.name || "Unknown",
-            slipNo: slip?.slipNo || "N/A",
-            truckNo: truck?.truckNo || "N/A"
-          };
-        })
-      };
-    }).filter(inv => {
-      return inv.invoiceNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             inv.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             inv.itemSummary.toLowerCase().includes(searchTerm.toLowerCase());
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [invoices, companies, lineItems, npdItems, slips, trucks, searchTerm]);
+    return invoices
+      .map((invoice) => {
+        const company = companies.find((row) => row.id === invoice.companyId);
+        const details = buildInvoiceDetails(invoice);
+        const itemSummary =
+          Array.from(
+            new Set(
+              details
+                .map((line) => String(line.itemName || "").trim())
+                .filter(Boolean)
+            )
+          ).join(", ") || "-";
+
+        return {
+          ...invoice,
+          companyName: company?.name || "Unknown",
+          address: company?.address || "",
+          gstNo: company?.gstNo || "N/A",
+          itemSummary,
+          roundOff: getRoundOff(invoice),
+          grandTotal: getGrandTotal(invoice),
+          details,
+        };
+      })
+      .filter((invoice) => {
+        const needle = searchTerm.toLowerCase();
+        return (
+          invoice.invoiceNo.toLowerCase().includes(needle) ||
+          invoice.companyName.toLowerCase().includes(needle) ||
+          invoice.itemSummary.toLowerCase().includes(needle) ||
+          String(invoice.tallyInvNo || "").toLowerCase().includes(needle) ||
+          String(invoice.tallyInvId || "").toLowerCase().includes(needle) ||
+          String(invoice.tallySyncRemark || "").toLowerCase().includes(needle)
+        );
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [invoices, companies, searchTerm, lineItems, npdItems, slips, trucks, dispatchPlans, orders]);
 
   const invoiceDetails = useMemo(() => {
     if (!selectedInvoice) return [];
-    return lineItems
-      .filter(li => li.invoiceId === selectedInvoice.id)
-      .map(li => {
-        const item = npdItems.find(i => i.id === li.itemId);
-        const slip = slips.find(s => s.id === li.loadingSlipId);
-        const truck = trucks.find(t => t.id === slip?.truckId);
-        return {
-          ...li,
-          itemName: item?.name || "Unknown",
-          slipNo: slip?.slipNo || "N/A",
-          truckNo: truck?.truckNo || "N/A"
-        };
-      });
-  }, [selectedInvoice, lineItems, npdItems, slips, trucks]);
+    return buildInvoiceDetails(selectedInvoice);
+  }, [selectedInvoice, lineItems, npdItems, slips, trucks, dispatchPlans, orders]);
 
   return (
     <div className="space-y-6">
@@ -116,7 +213,7 @@ export function InvoicesMaster() {
         </div>
         <div className="relative w-full md:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
+          <input
             type="text"
             placeholder="Search invoice, company..."
             value={searchTerm}
@@ -131,140 +228,151 @@ export function InvoicesMaster() {
           <thead className="bg-slate-100">
             <tr className="divide-x divide-black">
               <th className="w-10 px-4 py-3"></th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Invoice / Company</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Tally Details</th>
-              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Items Summary</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Invoice</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Company</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Inv Date</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Tally No</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Tally Date</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Posted At</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Posted By</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Remark</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Tally Id</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Item Summary</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Total Amount</th>
-              <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-center text-xs font-bold text-black uppercase tracking-wider">Action</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-black">
             {processedInvoices.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">No invoices found.</td>
+                <td colSpan={13} className="px-6 py-12 text-center text-slate-500 italic">
+                  No invoices found.
+                </td>
               </tr>
-            ) : processedInvoices.map((inv) => (
-              <React.Fragment key={inv.id}>
-                <tr className="hover:bg-slate-50 transition-colors divide-x divide-black">
-                  <td className="px-4 py-4 text-center">
-                    <button 
-                      onClick={() => toggleRow(inv.id)}
-                      className="p-1 hover:bg-slate-200 rounded transition"
-                    >
-                      {expandedRows.has(inv.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col">
+            ) : (
+              processedInvoices.map((invoice) => (
+                <React.Fragment key={invoice.id}>
+                  <tr className="hover:bg-slate-50 transition-colors divide-x divide-black">
+                    <td className="px-4 py-4 text-center">
+                      <button
+                        onClick={() => toggleRow(invoice.id)}
+                        className="p-1 hover:bg-slate-200 rounded transition"
+                      >
+                        {expandedRows.has(invoice.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                      </button>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <Receipt size={14} className="text-indigo-600 mr-2" />
-                        <span className="font-bold text-sm">{inv.invoiceNo}</span>
+                        <span className="font-bold text-sm">{invoice.invoiceNo}</span>
                       </div>
-                      <div className="flex items-center text-xs text-slate-500 mt-1">
-                        <Building2 size={12} className="mr-1" />
-                        {inv.companyName}
+                    </td>
+                    <td className="px-4 py-4 text-sm font-medium">{invoice.companyName}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-xs text-slate-600">{formatDate(invoice.date)}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-xs">{invoice.tallyInvNo || "-"}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-xs">
+                      {invoice.tallyInvDate ? formatDate(invoice.tallyInvDate) : "-"}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-xs">
+                      {invoice.tallyTimestamp ? formatDate(invoice.tallyTimestamp) : "-"}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-xs">{invoice.tallyBy || "-"}</td>
+                    <td className="px-4 py-4 text-xs max-w-[220px]">
+                      <div className="truncate" title={invoice.tallySyncRemark || ""}>
+                        {invoice.tallySyncRemark || "-"}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{formatDate(inv.date)}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col gap-0.5">
-                      <div className={`text-[10px] font-black uppercase ${inv.tallyTimestamp ? "text-emerald-700" : "text-slate-400"}`}>
-                        {inv.tallyTimestamp ? "Posted to Tally" : "Not Synced"}
+                    </td>
+                    <td className="px-4 py-4 text-[10px] font-mono max-w-[200px]">
+                      <div className="truncate" title={invoice.tallyInvId || ""}>
+                        {invoice.tallyInvId || "-"}
                       </div>
-                      <div className="text-[10px] text-slate-600">
-                        <span className="font-bold">Tally No:</span> {inv.tallyInvNo || "-"}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="text-xs text-slate-600 line-clamp-2 max-w-xs uppercase font-medium">
+                        {invoice.itemSummary}
                       </div>
-                      <div className="text-[10px] text-slate-600">
-                        <span className="font-bold">Tally Date:</span> {inv.tallyInvDate ? formatDate(inv.tallyInvDate) : "-"}
-                      </div>
-                      <div className="text-[10px] text-slate-600">
-                        <span className="font-bold">Posted At:</span> {inv.tallyTimestamp ? formatDate(inv.tallyTimestamp) : "-"}
-                      </div>
-                      <div className="text-[10px] text-slate-600">
-                        <span className="font-bold">Posted By:</span> {inv.tallyBy || "-"}
-                      </div>
-                      <div className="text-[10px] text-slate-600 max-w-[240px] truncate" title={inv.tallySyncRemark || ""}>
-                        <span className="font-bold">Remark:</span> {inv.tallySyncRemark || "-"}
-                      </div>
-                      <div className="font-mono text-[9px] text-slate-500 max-w-[240px] truncate" title={inv.tallyInvId || ""}>
-                        <span className="font-bold not-italic font-sans">Tally ID:</span> {inv.tallyInvId || "-"}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-xs text-slate-600 line-clamp-2 max-w-xs uppercase font-medium">
-                      {inv.itemSummary}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-700">
-                    {getGrandTotal(inv).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                    <div className="flex justify-end gap-2">
-                      <button 
-                        onClick={() => setSelectedInvoice(inv)}
-                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
-                        title="View Full Details"
-                      >
-                        <FileText size={18} />
-                      </button>
-                      <button
-                        onClick={() => openGatePass(inv.id)}
-                        className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"
-                        title={gatePasses.some((gatePass) => gatePass.invoiceId === inv.id) ? "Open Gate Pass" : "Create Gate Pass"}
-                      >
-                        <TruckIcon size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                {expandedRows.has(inv.id) && (
-                  <tr className="bg-slate-50">
-                    <td colSpan={5} className="px-12 py-4">
-                      <div className="border-2 border-black rounded overflow-hidden shadow-sm">
-                        <table className="min-w-full divide-y divide-black">
-                          <thead className="bg-slate-200">
-                            <tr className="divide-x divide-black">
-                              <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Slip No</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Truck No</th>
-                              <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-24">Qty</th>
-                              <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-24">Rate</th>
-                              <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-20">GST %</th>
-                              <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-32">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-black">
-                            {inv.details.map((line: any, idx: number) => {
-                              const amount = Number(line.amount) || 0;
-                              const tax = (Number(line.cgst) || 0) + (Number(line.sgst) || 0) + (Number(line.igst) || 0);
-                              const total = amount + tax;
-                              return (
-                                <tr key={idx} className="divide-x divide-black">
-                                  <td className="px-3 py-2 text-xs font-bold uppercase">{line.itemName}</td>
-                                  <td className="px-3 py-2 text-xs">{line.slipNo}</td>
-                                  <td className="px-3 py-2 text-xs font-bold text-indigo-700">{line.truckNo}</td>
-                                  <td className="px-3 py-2 text-xs text-right">{line.qty.toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-xs text-right">{Number(line.rate || 0).toFixed(2)}</td>
-                                  <td className="px-3 py-2 text-xs text-right">{line.gstRate}%</td>
-                                  <td className="px-3 py-2 text-xs text-right font-bold">{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-700">
+                      {getGrandTotal(invoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex justify-center gap-2">
+                        <button
+                          onClick={() => setSelectedInvoice(invoice)}
+                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
+                          title="View Full Details"
+                        >
+                          <FileText size={18} />
+                        </button>
+                        <button
+                          onClick={() => openGatePass(invoice.id)}
+                          className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"
+                          title={gatePasses.some((gatePass) => gatePass.invoiceId === invoice.id) ? "Open Gate Pass" : "Create Gate Pass"}
+                        >
+                          <TruckIcon size={18} />
+                        </button>
                       </div>
                     </td>
                   </tr>
-                )}
-              </React.Fragment>
-            ))}
+                  {expandedRows.has(invoice.id) && (
+                    <tr className="bg-slate-50">
+                      <td colSpan={13} className="px-12 py-4">
+                        <div className="border-2 border-black rounded overflow-hidden shadow-sm">
+                          <table className="min-w-full divide-y divide-black">
+                            <thead className="bg-slate-200">
+                              <tr className="divide-x divide-black">
+                                <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
+                                <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Slip No</th>
+                                <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Truck No</th>
+                                <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-24">Qty</th>
+                                <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-24">Rate</th>
+                                <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-20">GST %</th>
+                                <th className="px-3 py-2 text-right text-[10px] font-black uppercase w-32">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-black">
+                              {invoice.details.length === 0 ? (
+                                <tr>
+                                  <td colSpan={7} className="px-3 py-4 text-center text-xs text-slate-500 italic">
+                                    No item breakup found for this invoice.
+                                  </td>
+                                </tr>
+                              ) : (
+                                invoice.details.map((line, index) => {
+                                  const amount = Number(line.amount) || 0;
+                                  const tax =
+                                    (Number(line.cgst) || 0) +
+                                    (Number(line.sgst) || 0) +
+                                    (Number(line.igst) || 0);
+                                  const total = amount + tax;
+                                  return (
+                                    <tr key={line.id || index} className="divide-x divide-black">
+                                      <td className="px-3 py-2 text-xs font-bold uppercase">{line.itemName}</td>
+                                      <td className="px-3 py-2 text-xs">{line.slipNo}</td>
+                                      <td className="px-3 py-2 text-xs font-bold text-indigo-700">{line.truckNo}</td>
+                                      <td className="px-3 py-2 text-xs text-right">{Number(line.qty || 0).toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-xs text-right">{Number(line.rate || 0).toFixed(2)}</td>
+                                      <td className="px-3 py-2 text-xs text-right">{Number(line.gstRate || 0)}%</td>
+                                      <td className="px-3 py-2 text-xs text-right font-bold">
+                                        {total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* Invoice Details Modal */}
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white w-full max-w-4xl border-2 border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
@@ -277,12 +385,12 @@ export function InvoicesMaster() {
                 <X size={24} />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 bg-slate-50 p-4 border border-black rounded">
                 <div>
                   <div className="text-[10px] text-slate-500 uppercase font-bold">Company</div>
-                  <div className="font-bold">{companies.find(c => c.id === selectedInvoice.companyId)?.name}</div>
+                  <div className="font-bold">{companies.find((row) => row.id === selectedInvoice.companyId)?.name}</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-500 uppercase font-bold">Date</div>
@@ -292,7 +400,7 @@ export function InvoicesMaster() {
                   <div className="text-[10px] text-slate-500 uppercase font-bold">Status</div>
                   <div className="font-bold text-emerald-600 uppercase text-xs">Generated</div>
                 </div>
-	                <div>
+                <div>
                   <div className="text-[10px] text-slate-500 uppercase font-bold">Grand Total</div>
                   <div className="font-bold text-indigo-700 text-lg">
                     {getGrandTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -308,7 +416,9 @@ export function InvoicesMaster() {
                   </div>
                   <div>
                     <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Inv Date</div>
-                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyInvDate ? formatDate(selectedInvoice.tallyInvDate) : "-"}</div>
+                    <div className="font-bold text-emerald-900">
+                      {selectedInvoice.tallyInvDate ? formatDate(selectedInvoice.tallyInvDate) : "-"}
+                    </div>
                   </div>
                   <div>
                     <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Inv Id</div>
@@ -316,7 +426,9 @@ export function InvoicesMaster() {
                   </div>
                   <div>
                     <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally Timestamp</div>
-                    <div className="font-bold text-emerald-900">{selectedInvoice.tallyTimestamp ? formatDate(selectedInvoice.tallyTimestamp) : "-"}</div>
+                    <div className="font-bold text-emerald-900">
+                      {selectedInvoice.tallyTimestamp ? formatDate(selectedInvoice.tallyTimestamp) : "-"}
+                    </div>
                   </div>
                   <div>
                     <div className="text-[10px] text-emerald-600 uppercase font-bold">Tally By</div>
@@ -353,71 +465,100 @@ export function InvoicesMaster() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black bg-white">
-                    {invoiceDetails.map((line, idx) => {
-                      const amount = Number(line.amount) || 0;
-                      const tax = (Number(line.cgst) || 0) + (Number(line.sgst) || 0) + (Number(line.igst) || 0);
-                      const total = amount + tax;
-                      return (
-                        <tr key={idx} className="divide-x divide-black">
-                          <td className="px-4 py-3">
-                            <div className="font-bold text-sm uppercase">{line.itemName}</div>
-                            <div className="flex gap-2">
+                    {invoiceDetails.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-500 italic">
+                          No item breakup found for this invoice.
+                        </td>
+                      </tr>
+                    ) : (
+                      invoiceDetails.map((line, index) => {
+                        const amount = Number(line.amount) || 0;
+                        const tax =
+                          (Number(line.cgst) || 0) +
+                          (Number(line.sgst) || 0) +
+                          (Number(line.igst) || 0);
+                        const total = amount + tax;
+                        return (
+                          <tr key={line.id || index} className="divide-x divide-black">
+                            <td className="px-4 py-3">
+                              <div className="font-bold text-sm uppercase">{line.itemName}</div>
+                              <div className="flex gap-2">
                                 <div className="text-[10px] text-slate-500 font-bold">Slip: {line.slipNo}</div>
                                 <div className="text-[10px] text-indigo-500 font-black">Truck: {line.truckNo}</div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right text-sm">{line.qty.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right text-sm">{Number(line.rate || 0).toFixed(2)}</td>
-                          <td className="px-4 py-3 text-right text-sm">{line.gstRate}%</td>
-                          <td className="px-4 py-3 text-right text-sm">{tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-right text-sm font-medium">{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                      );
-                    })}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm">{Number(line.qty || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right text-sm">{Number(line.rate || 0).toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right text-sm">{Number(line.gstRate || 0)}%</td>
+                            <td className="px-4 py-3 text-right text-sm">
+                              {tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm font-medium">
+                              {total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                   <tfoot className="bg-slate-50 font-bold border-t border-black divide-y divide-black">
                     <tr className="divide-x divide-black">
                       <td colSpan={5} className="px-4 py-2 text-right text-xs uppercase">Before GST</td>
-                      <td className="px-4 py-2 text-right text-xs">{selectedInvoice.totalBeforeGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-2 text-right text-xs">
+                        {selectedInvoice.totalBeforeGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
                     </tr>
                     <tr className="divide-x divide-black">
                       <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">CGST</td>
-                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{selectedInvoice.cgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">
+                        {selectedInvoice.cgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
                     </tr>
                     <tr className="divide-x divide-black">
                       <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">SGST</td>
-                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{selectedInvoice.sgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">
+                        {selectedInvoice.sgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
                     </tr>
                     <tr className="divide-x divide-black">
                       <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">IGST</td>
-                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{selectedInvoice.igst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">
+                        {selectedInvoice.igst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
                     </tr>
-	                    <tr className="divide-x divide-black bg-indigo-600 text-white">
-	                      <td colSpan={5} className="px-4 py-3 text-right text-sm uppercase tracking-wider">Total Amount After GST</td>
-	                      <td className="px-4 py-3 text-right text-lg font-bold">
-	                        {selectedInvoice.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-	                      </td>
-	                    </tr>
-	                    <tr className="divide-x divide-black">
-	                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Other Charges</td>
-	                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{getOtherCharges(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-	                    </tr>
-	                    <tr className="divide-x divide-black">
-	                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Round Off</td>
-	                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">{getRoundOff(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-	                    </tr>
-	                    <tr className="divide-x divide-black bg-emerald-700 text-white border-t-2 border-black">
-	                      <td colSpan={5} className="px-4 py-3 text-right text-sm uppercase tracking-wider">Grand Total</td>
-	                      <td className="px-4 py-3 text-right text-lg font-black">
-	                        {getGrandTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-	                      </td>
-	                    </tr>
-	                  </tfoot>
-	                </table>
-	              </div>
+                    <tr className="divide-x divide-black bg-indigo-600 text-white">
+                      <td colSpan={5} className="px-4 py-3 text-right text-sm uppercase tracking-wider">
+                        Total Amount After GST
+                      </td>
+                      <td className="px-4 py-3 text-right text-lg font-bold">
+                        {selectedInvoice.totalAfterGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                    <tr className="divide-x divide-black">
+                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Other Charges</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">
+                        {getOtherCharges(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                    <tr className="divide-x divide-black">
+                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Round Off</td>
+                      <td className="px-4 py-2 text-right text-[10px] text-slate-500">
+                        {getRoundOff(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                    <tr className="divide-x divide-black bg-emerald-700 text-white border-t-2 border-black">
+                      <td colSpan={5} className="px-4 py-3 text-right text-sm uppercase tracking-wider">Grand Total</td>
+                      <td className="px-4 py-3 text-right text-lg font-black">
+                        {getGrandTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
 
               <div className="flex justify-end gap-3 pt-2">
-                <button 
+                <button
                   onClick={() => setSelectedInvoice(null)}
                   className="px-8 py-2 bg-slate-900 text-white border-2 border-black font-bold uppercase text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-black transition active:shadow-none active:translate-x-1 active:translate-y-1"
                 >

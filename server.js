@@ -1223,6 +1223,7 @@ function normalizeFetchedRow(tableName, row) {
     }
   });
   if (tableName === "gate_passes") {
+    const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
     newRow.loadingSlipIds = normalizeStringArray(newRow.loadingSlipIds);
     newRow.loadingSlipNos = normalizeStringArray(newRow.loadingSlipNos);
     if (!Array.isArray(newRow.lines)) newRow.lines = [];
@@ -1840,6 +1841,73 @@ function entityPermissionKey(entity) {
     default:
       return "";
   }
+}
+function getShortFinancialYear(dateStr) {
+  const date = dateStr ? new Date(dateStr) : /* @__PURE__ */ new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  if (month >= 3) {
+    return `${String(year).slice(-2)}-${String(year + 1).slice(-2)}`;
+  }
+  return `${String(year - 1).slice(-2)}-${String(year).slice(-2)}`;
+}
+function parseInvoiceNumberSeries(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((row) => ({
+      fy: String(row?.fy || "").trim(),
+      prefix: String(row?.prefix || "").trim(),
+      startingNumber: Math.max(1, Number(row?.startingNumber || 1)),
+      paddingLength: Math.max(1, Number(row?.paddingLength || 5)),
+      separator: String(row?.separator || "/") || "/",
+      active: String(row?.active || "Yes").trim() || "Yes"
+    })).filter((row) => row.fy && row.prefix);
+  } catch {
+    return [];
+  }
+}
+function escapeLikePattern(value) {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+function buildInvoiceNumber(prefix, fy, separator, nextNumber, paddingLength) {
+  return `${prefix}${separator}${fy}${separator}${String(nextNumber).padStart(paddingLength, "0")}`;
+}
+async function generateDynamicInvoiceNo(db, dateStr) {
+  const fy = getShortFinancialYear(dateStr);
+  if (!fy) throw new Error("Invoice date is invalid for invoice series generation.");
+  const [settingsRows] = await db.query("SELECT invoiceNumberSeries FROM `settings` LIMIT 1");
+  const settingsRow = settingsRows[0] || {};
+  const seriesRows = parseInvoiceNumberSeries(settingsRow.invoiceNumberSeries);
+  const series = seriesRows.find(
+    (row) => row.fy === fy && String(row.active || "Yes").toLowerCase() === "yes"
+  );
+  if (!series) {
+    throw new Error(`Invoice numbering series not configured for FY ${fy}.`);
+  }
+  const separator = series.separator || "/";
+  const prefix = series.prefix.trim();
+  const startingNumber = Math.max(1, Number(series.startingNumber || 1));
+  const paddingLength = Math.max(1, Number(series.paddingLength || 5));
+  const likePattern = `${escapeLikePattern(prefix)}${escapeLikePattern(separator)}${escapeLikePattern(fy)}${escapeLikePattern(separator)}%`;
+  const [invoiceRows] = await db.query(
+    "SELECT invoiceNo FROM `invoices` WHERE invoiceNo LIKE ? ESCAPE '\\\\'",
+    [likePattern]
+  );
+  let lastNumber = startingNumber - 1;
+  for (const row of invoiceRows) {
+    const invoiceNo = String(row?.invoiceNo || "").trim();
+    const expectedPrefix = `${prefix}${separator}${fy}${separator}`;
+    if (!invoiceNo.startsWith(expectedPrefix)) continue;
+    const suffix = invoiceNo.slice(expectedPrefix.length).trim();
+    const parsedNumber = Number.parseInt(suffix, 10);
+    if (Number.isFinite(parsedNumber) && parsedNumber > lastNumber) {
+      lastNumber = parsedNumber;
+    }
+  }
+  return buildInvoiceNumber(prefix, fy, separator, lastNumber + 1, paddingLength);
 }
 app.get("/api/db-status", async (req, res) => {
   const db = await getPool();
@@ -2840,6 +2908,7 @@ async function initDb(retries = 5) {
           \`gsmAsPerCalculation\` TEXT,
           \`productionFormVisibleColumns\` LONGTEXT,
           \`realizationPerKgTargets\` LONGTEXT,
+          \`invoiceNumberSeries\` LONGTEXT,
           \`mandatoryMachinesByType\` LONGTEXT,
           \`designations\` LONGTEXT,
           \`organizationName\` VARCHAR(255),
@@ -3384,6 +3453,7 @@ async function initDb(retries = 5) {
         { table: "settings", column: "gsmAsPerCalculation", type: "TEXT" },
         { table: "settings", column: "productionFormVisibleColumns", type: "LONGTEXT" },
         { table: "settings", column: "realizationPerKgTargets", type: "LONGTEXT" },
+        { table: "settings", column: "invoiceNumberSeries", type: "LONGTEXT" },
         { table: "settings", column: "mandatoryMachinesByType", type: "LONGTEXT" },
         { table: "settings", column: "designations", type: "LONGTEXT" },
         { table: "settings", column: "organizationName", type: "VARCHAR(255)" },
@@ -3556,6 +3626,23 @@ const createHandlers = (tableName) => {
         }
         if (tableName === "items") {
           rows = await fetchActiveNpdItems(db);
+        } else if (tableName === "invoice_line_items") {
+          [rows] = await db.query(`
+            SELECT
+              ili.*,
+              COALESCE(
+                NULLIF(TRIM(ili.itemName), ''),
+                NULLIF(TRIM(i.name), ''),
+                NULLIF(TRIM(n.itemName), ''),
+                NULLIF(TRIM(n.name), ''),
+                'UNKNOWN'
+              ) AS resolvedItemName
+            FROM \`invoice_line_items\` ili
+            LEFT JOIN \`items\` i
+              ON i.id = ili.itemId
+            LEFT JOIN \`npd\` n
+              ON n.id = COALESCE(NULLIF(ili.npdId, ''), NULLIF(ili.itemId, ''))
+          `);
         } else if (tableName === "npd") {
           const page = Math.max(1, Number(req.query.page || 1));
           const pageSize = Math.min(1e4, Math.max(25, Number(req.query.pageSize || 1e4)));
@@ -3584,7 +3671,20 @@ const createHandlers = (tableName) => {
         } else {
           [rows] = await db.query(`SELECT * FROM \`${tableName}\``);
         }
-        const processedRows = rows.map((row) => normalizeFetchedRow(tableName, row));
+        const processedRows = rows.map((row) => {
+          const normalizedRow = normalizeFetchedRow(tableName, row);
+          if (tableName === "invoice_line_items") {
+            const resolvedItemName = String(
+              row?.resolvedItemName || normalizedRow?.itemName || normalizedRow?.name || "UNKNOWN"
+            ).trim();
+            return {
+              ...normalizedRow,
+              itemName: resolvedItemName || "UNKNOWN",
+              name: resolvedItemName || "UNKNOWN"
+            };
+          }
+          return normalizedRow;
+        });
         res.json(processedRows);
       } catch (error) {
         console.error(`[DB] Error fetching from ${tableName}:`, error);
@@ -3855,27 +3955,12 @@ const createHandlers = (tableName) => {
         if (tableName === "invoices") {
           try {
             if (!data.invoiceNo) {
-              const dateStr = data.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-              const d = new Date(dateStr);
-              let fyStart = d.getFullYear();
-              const month = d.getMonth() + 1;
-              if (month < 4) fyStart = fyStart - 1;
-              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
-              const likePattern = `INV/${fyLabel}/%`;
-              const [rows] = await db.query(`SELECT invoiceNo FROM \`invoices\` WHERE invoiceNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(invoiceNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`, [likePattern]);
-              let lastNum = 0;
-              if (rows.length > 0) {
-                const lastInvoiceNo = rows[0].invoiceNo;
-                const parts = lastInvoiceNo.split("/");
-                const suffix = parts[parts.length - 1];
-                lastNum = parseInt(suffix || "0", 10) || 0;
-              }
-              const nextNum = lastNum + 1;
-              const padded = String(nextNum).padStart(5, "0");
-              data.invoiceNo = `INV/${fyLabel}/${padded}`;
+              data.invoiceNo = await generateDynamicInvoiceNo(db, data.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
             }
           } catch (err) {
-            console.warn("[DB] Could not auto-generate invoiceNo:", err.message);
+            const message = err.message || "Could not auto-generate invoiceNo.";
+            console.warn("[DB] Could not auto-generate invoiceNo:", message);
+            return res.status(400).json({ error: message });
           }
         }
         if (tableName === "gate_passes") {
@@ -3935,7 +4020,77 @@ const createHandlers = (tableName) => {
           status: data.status,
           transactionNo: data.transactionNo || data.transaction_no
         });
+        if (tableName === "loading_slips") {
+          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+          const loadingSlipColumns = [
+            { column: "dispatchPlanId", type: "VARCHAR(36)" },
+            { column: "slipNo", type: "VARCHAR(100)" },
+            { column: "date", type: "VARCHAR(50)" },
+            { column: "companyId", type: "VARCHAR(36)" },
+            { column: "companyName", type: "VARCHAR(255)" },
+            { column: "truckId", type: "VARCHAR(36)" },
+            { column: "truckNo", type: "VARCHAR(255)" },
+            { column: "invoiceId", type: "VARCHAR(36)" },
+            { column: "invoiceNo", type: "VARCHAR(100)" },
+            { column: "items", type: "LONGTEXT" },
+            { column: "lines", type: "LONGTEXT" },
+            { column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+            { column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+            { column: "remarks", type: "TEXT" },
+            { column: "updatedBy", type: "VARCHAR(255)" },
+            { column: "updateTimestamp", type: "VARCHAR(255)" }
+          ];
+          for (const loadingSlipColumn of loadingSlipColumns) {
+            try {
+              await ensureColumnExists(db, schemaName, "loading_slips", loadingSlipColumn.column, loadingSlipColumn.type);
+            } catch (error) {
+              console.warn(
+                `[DB] Could not ensure loading_slips.${loadingSlipColumn.column}:`,
+                error.message
+              );
+            }
+          }
+          if (data.items == null && data.lines != null) {
+            data.items = data.lines;
+          }
+          if (data.lines == null && data.items != null) {
+            data.lines = data.items;
+          }
+        }
         if (tableName === "gate_passes") {
+          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+          const gatePassColumns = [
+            { column: "gatePassType", type: "VARCHAR(30) NOT NULL DEFAULT 'Non-Returnable'" },
+            { column: "invoiceId", type: "VARCHAR(36)" },
+            { column: "invoiceNo", type: "VARCHAR(100)" },
+            { column: "companyId", type: "VARCHAR(36)" },
+            { column: "companyName", type: "VARCHAR(255)" },
+            { column: "recipientId", type: "VARCHAR(36)" },
+            { column: "recipientName", type: "VARCHAR(255)" },
+            { column: "recipientType", type: "VARCHAR(30)" },
+            { column: "sentByUserId", type: "VARCHAR(36)" },
+            { column: "sentByUserName", type: "VARCHAR(255)" },
+            { column: "truckId", type: "VARCHAR(36)" },
+            { column: "truckNo", type: "VARCHAR(255)" },
+            { column: "loadingSlipIds", type: "JSON NOT NULL" },
+            { column: "loadingSlipNos", type: "JSON NOT NULL" },
+            { column: "remarks", type: "TEXT" },
+            { column: "clearOffReason", type: "TEXT" },
+            { column: "clearedOffAt", type: "VARCHAR(255)" },
+            { column: "clearedOffBy", type: "VARCHAR(255)" },
+            { column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+            { column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+            { column: "lines", type: "JSON NOT NULL" },
+            { column: "updatedBy", type: "VARCHAR(255)" },
+            { column: "updateTimestamp", type: "VARCHAR(255)" }
+          ];
+          for (const gatePassColumn of gatePassColumns) {
+            try {
+              await ensureColumnExists(db, schemaName, "gate_passes", gatePassColumn.column, gatePassColumn.type);
+            } catch (error) {
+              console.warn(`[DB] Could not ensure gate_passes.${gatePassColumn.column}:`, error.message);
+            }
+          }
           const invoiceId = String(data.invoiceId || "").trim();
           if (invoiceId) {
             const currentId = String(data.id || "").trim();
