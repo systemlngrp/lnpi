@@ -409,7 +409,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       if (!item) return false;
       const boxType = String((item as any)?.boxType || "").trim();
       const rapcValue = String((item as any)?.rapc ?? "").trim();
-      return !boxType || !rapcValue;
+      return !boxType && !rapcValue;
     }).length,
     "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
     "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,

@@ -653,6 +653,7 @@ export function ProductionForm() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.date) return;
+    if (showField("L1") && formData.l1 === "") return;
 
     const qty = Number(formData.qty);
     if (qty <= 0 || quantityDeviationError || maximumAllowedProductionError || gsmValidationError) return;
@@ -938,7 +939,7 @@ export function ProductionForm() {
             )}
 
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mt-4">
-              {showField("L1") ? <FormInput label="L1" value={formData.l1} onChange={(v) => setFormData({ ...formData, l1: v })} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
+              {showField("L1") ? <FormInput label="L1" value={formData.l1} onChange={(v) => setFormData({ ...formData, l1: v })} type="number" required helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
               {showField("F1") ? <FormInput label="F1" value={formData.f1} onChange={(v) => setFormData({ ...formData, f1: v })} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
               {showField("L2") ? <FormInput label="L2" value={formData.l2} onChange={(v) => setFormData({ ...formData, l2: v })} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
               {showField("F2") ? <FormInput label="F2" value={formData.f2} onChange={(v) => setFormData({ ...formData, f2: v })} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
@@ -1134,6 +1135,7 @@ function FormInput({
   type = "text",
   step = "any",
   readOnly = false,
+  required = false,
   helpText,
 }: {
   label: string;
@@ -1142,16 +1144,18 @@ function FormInput({
   type?: string;
   step?: string;
   readOnly?: boolean;
+  required?: boolean;
   helpText?: string;
 }) {
   return (
     <div className="flex flex-col space-y-1">
       <div className="text-[10px] font-black text-slate-500 uppercase inline-flex items-center gap-1">
-        <span>{label}</span>
+        <span>{label} {required ? <span className="text-red-500">*</span> : null}</span>
         {helpText ? <TooltipIcon helpText={helpText} size={12} /> : null}
       </div>
       <input
         readOnly={readOnly}
+        required={required}
         type={type}
         step={type === "number" ? step : undefined}
         value={value}
