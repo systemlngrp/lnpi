@@ -52,6 +52,7 @@ export function BillingPendingTally() {
     const invoiceSlips = getInvoiceSlips(invoiceId);
     const rows: Array<{
       itemName: string;
+      erp: string;
       slipNo: string;
       qty: number;
       rate: number;
@@ -68,6 +69,7 @@ export function BillingPendingTally() {
 
         rows.push({
           itemName: item?.name || order?.poNumber || "Unknown",
+          erp: String(order?.erpCode || (item as any)?.erp || "").trim(),
           slipNo: slip.slipNo || `Slip ${index + 1}`,
           qty,
           rate,
@@ -103,11 +105,15 @@ export function BillingPendingTally() {
         const invoiceSlips = getInvoiceSlips(inv.id);
         const poNumbers = getPoNumbers(inv.id);
         const details = invLines.length > 0
-          ? invLines.map((li) => ({
-              ...li,
-              itemName: npdItems.find((i) => i.id === li.itemId)?.name || "Unknown",
-              slipNo: slips.find((s) => s.id === li.loadingSlipId)?.slipNo || "N/A"
-            }))
+          ? invLines.map((li) => {
+              const item = npdItems.find((i) => i.id === li.itemId);
+              return {
+                ...li,
+                itemName: item?.name || "Unknown",
+                erp: String((item as any)?.erp || "").trim(),
+                slipNo: slips.find((s) => s.id === li.loadingSlipId)?.slipNo || "N/A"
+              };
+            })
           : buildSlipDerivedDetails(inv.id);
         
         return {
@@ -238,6 +244,7 @@ export function BillingPendingTally() {
                             <thead className="bg-slate-200">
                               <tr className="divide-x divide-black text-[10px] font-black uppercase">
                                 <th className="px-3 py-2 text-left">Item Name</th>
+                                <th className="px-3 py-2 text-left">ERP</th>
                                 <th className="px-3 py-2 text-left">Slip No</th>
                                 <th className="px-3 py-2 text-right">Qty</th>
                                 <th className="px-3 py-2 text-right">Rate</th>
@@ -247,7 +254,7 @@ export function BillingPendingTally() {
                             <tbody className="bg-white divide-y divide-black">
                               {inv.details.length === 0 ? (
                                 <tr className="divide-x divide-black text-[11px]">
-                                  <td colSpan={5} className="px-3 py-4 text-center text-slate-500 italic">
+                                  <td colSpan={6} className="px-3 py-4 text-center text-slate-500 italic">
                                     No item breakup found for this invoice.
                                   </td>
                                 </tr>
@@ -257,6 +264,7 @@ export function BillingPendingTally() {
                                   return (
                                     <tr key={idx} className="divide-x divide-black text-[11px]">
                                       <td className="px-3 py-2 font-bold uppercase">{line.itemName}</td>
+                                      <td className="px-3 py-2">{line.erp || "-"}</td>
                                       <td className="px-3 py-2">{line.slipNo}</td>
                                       <td className="px-3 py-2 text-right">{Number(line.qty || 0).toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right">{Number(line.rate || 0).toFixed(2)}</td>
