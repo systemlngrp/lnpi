@@ -217,6 +217,131 @@ const COMPANY_SYNC_HEADER_MAP = {
 
 const COMPANY_SYNC_REQUIRED_HEADERS = ["Id", "Company"] as const;
 
+const PHP_ITEM_MASTER_HEADER_MAP = {
+  "Timestamp": "timestamp",
+  "NPD_ID": "npdId",
+  "ERP Item Code": "erpItemCode",
+  "Master Item Name ERP Code": "masterItemNameErpCode",
+  "Item Name": "itemName",
+  "Company": "company",
+  "Rate": "rate",
+  "Length": "length",
+  "Breadth": "breadth",
+  "Height": "height",
+  "Creasor 1": "creasor1",
+  "Creasor 2": "creasor2",
+  "No. of Ply": "noOfPly",
+  "Number of Holes in PHP": "numberOfHolesInPhp",
+  "Number of Sets/ Pcs per Box": "numberOfSetsPerBox",
+  "Flute Type": "fluteType",
+  "Take Up": "takeUp",
+  "L1": "l1",
+  "L1 BF": "l1Bf",
+  "F1": "f1",
+  "F1 BF": "f1Bf",
+  "L2": "l2",
+  "L2 BF": "l2Bf",
+  "F2": "f2",
+  "F2 BF": "f2Bf",
+  "L3": "l3",
+  "L3 BF": "l3Bf",
+  "Board GSM (req) GM/m2": "boardGsmReq",
+  "Brusting Strength (Req) KG/cm2": "brustingStrengthReq",
+  "Weight Per Pc/ Set (req)": "weightPerPcReq",
+  "Calculated Weight Per PC/Set(req)": "calculatedWeightPerPcReq",
+  "Item Id": "itemId",
+  "CATEGORY": "category",
+  "Holes Oreintation (L )": "holesOrientationL",
+  "Holes Oreintation (W)": "holesOrientationW",
+  "No. of Length Plates": "noOfLengthPlates",
+  "No. of Length  Plates": "noOfLengthPlates",
+  "No. of Width Plates": "noOfWidthPlates",
+  "No. of Width  Plates": "noOfWidthPlates",
+  "No. of Ups for RAPC": "noOfUpsForRapc",
+  "RAPC": "rapc",
+  "No. of Ups for Cutting Length (Length piece)": "noOfUpsForCuttingLengthPiece",
+  "Cutting Size (Length Piece)": "cuttingSizeLengthPiece",
+  "No. of Ups for Cutting Length (Width Piece)": "noOfUpsForCuttingWidthPiece",
+  "Cutting Size (Width Piece)": "cuttingSizeWidthPiece",
+  "Plan Qty": "planQty",
+  "Sheet Required to Produce (Length Piece)": "sheetRequiredLengthPiece",
+  "Sheet Required to Produce (Width Piece)": "sheetRequiredWidthPiece",
+  "Cutter Location": "cutterLocation",
+  "FOC or non FOC": "focOrNonFoc",
+  "If Non FOC then Rate": "nonFocRate",
+  "Deviation": "deviation",
+  "Approval Timestamp": "approvalTimestamp",
+  "Approval Email": "approvalEmail",
+  "BOX TYPE": "boxType",
+  "SYNC IN ITEM MASTER": "syncInItemMaster",
+  "Total Weight (Grams": "totalWeightGrams",
+  "Total Weight (Grams)": "totalWeightGrams",
+  "Calculated B GSM": "calculatedBGsm",
+  "Calcuted B GSM": "calculatedBGsm",
+  "Calculted B GSM": "calculatedBGsm",
+  "Hostinger Sync": "hostingerSync",
+} as const;
+
+const PHP_ITEM_MASTER_REQUIRED_HEADERS = ["Item Id"] as const;
+
+const PLATE_ITEM_MASTER_HEADER_MAP = {
+  "Timestamp": "timestamp",
+  "NPD_ID": "npdId",
+  "ERP Item Code": "erpItemCode",
+  "Master Item Name ERP Code": "masterItemNameErpCode",
+  "Item Name": "itemName",
+  "Company": "company",
+  "Rate": "rate",
+  "Type of Plate": "typeOfPlate",
+  "Length": "length",
+  "Breadth": "breadth",
+  "Height": "height",
+  "Creasor 1": "creasor1",
+  "Creasor 2": "creasor2",
+  "No. of Ply": "noOfPly",
+  "Number of Sets/ Pcs per Box": "numberOfSetsPerBox",
+  "Flute Type": "fluteType",
+  "Take Up": "takeUp",
+  "L1": "l1",
+  "L1 BF": "l1Bf",
+  "F1": "f1",
+  "F1 BF": "f1Bf",
+  "L2": "l2",
+  "L2 BF": "l2Bf",
+  "F2": "f2",
+  "F2 BF": "f2Bf",
+  "L3": "l3",
+  "L3 BF": "l3Bf",
+  "Board GSM (req) GM/m2": "boardGsmReq",
+  "Brusting Strength (Req) KG/cm2": "brustingStrengthReq",
+  "Weight Per Pc/ Set (req)": "weightPerPcReq",
+  "Calculated Weight Per PC/Set(req)": "calculatedWeightPerPcReq",
+  "Item Id": "itemId",
+  "CATEGORY": "category",
+  "No. of Ups for RAPC": "noOfUpsForRapc",
+  "RAPC": "rapc",
+  "No. of Ups for Cutting": "noOfUpsForCutting",
+  "Cutting Size (Length Piece)": "cuttingSizeLengthPiece",
+  "Plan Qty": "planQty",
+  "Sheet Required to Produce (Length Piece)": "sheetRequiredLengthPiece",
+  "Cutter Location": "cutterLocation",
+  "FOC or non FOC": "focOrNonFoc",
+  "If Non FOC then Rate": "nonFocRate",
+  "Deviation": "deviation",
+  "Approval Timestamp": "approvalTimestamp",
+  "Approval Email": "approvalEmail",
+  "BOX TYPE": "boxType",
+  "SYNC IN ITEM MASTER": "syncInItemMaster",
+  "Calculated B GSM": "calculatedBGsm",
+  "Calcuted B GSM": "calculatedBGsm",
+  "Calculted B GSM": "calculatedBGsm",
+  "Total Weight (Grams": "totalWeightGrams",
+  "Total Weight (Grams)": "totalWeightGrams",
+  "Hostinger Sync": "hostingerSync",
+} as const;
+
+const PLATE_ITEM_MASTER_REQUIRED_HEADERS = ["Item Id"] as const;
+
 const NPD_SYNC_NUMERIC_KEYS = new Set([
   "erp",
   "rate",
@@ -282,6 +407,24 @@ const NPD_SYNC_NUMERIC_KEYS = new Set([
 
 const NPD_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
   ...[...new Set(Object.values(NPD_SYNC_HEADER_MAP))].map((column) => ({
+    column,
+    type: "LONGTEXT",
+  })),
+  { column: "syncSource", type: "VARCHAR(50) NULL" },
+  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+];
+
+const PHP_ITEM_MASTER_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
+  ...[...new Set(Object.values(PHP_ITEM_MASTER_HEADER_MAP))].map((column) => ({
+    column,
+    type: "LONGTEXT",
+  })),
+  { column: "syncSource", type: "VARCHAR(50) NULL" },
+  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+];
+
+const PLATE_ITEM_MASTER_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
+  ...[...new Set(Object.values(PLATE_ITEM_MASTER_HEADER_MAP))].map((column) => ({
     column,
     type: "LONGTEXT",
   })),
@@ -581,6 +724,28 @@ app.post("/api/npd-sync", async (req, res) => {
       headerMap: NPD_SYNC_HEADER_MAP,
       requiredHeaders: NPD_SYNC_REQUIRED_HEADERS,
       mapFn: mapSheetRowToNpdRow,
+    },
+    "PHP ITEM MASTER": {
+      table: "php_item_master",
+      idColumn: "itemId",
+      headerMap: PHP_ITEM_MASTER_HEADER_MAP,
+      requiredHeaders: PHP_ITEM_MASTER_REQUIRED_HEADERS,
+      mapFn: (row: Record<string, any>) => {
+        const mapped = mapSheetRowByHeaderMap_(row, PHP_ITEM_MASTER_HEADER_MAP as Record<string, string>);
+        mapped.itemId = stringOrEmpty(mapped.itemId);
+        return mapped;
+      },
+    },
+    "PLATE ITEM MASTER": {
+      table: "plate_item_master",
+      idColumn: "itemId",
+      headerMap: PLATE_ITEM_MASTER_HEADER_MAP,
+      requiredHeaders: PLATE_ITEM_MASTER_REQUIRED_HEADERS,
+      mapFn: (row: Record<string, any>) => {
+        const mapped = mapSheetRowByHeaderMap_(row, PLATE_ITEM_MASTER_HEADER_MAP as Record<string, string>);
+        mapped.itemId = stringOrEmpty(mapped.itemId);
+        return mapped;
+      },
     },
     "Companies": {
       table: "companies",
@@ -1329,14 +1494,26 @@ function normalizeSheetCellValue(key: string, value: any) {
   return trimmed;
 }
 
-function mapSheetRowToNpdRow(row: Record<string, any>) {
+function mapSheetRowByHeaderMap_(
+  row: Record<string, any>,
+  headerMap: Record<string, string>,
+  numericKeys: Set<string> = new Set()
+) {
   const mapped: Record<string, any> = {};
 
-  Object.entries(NPD_SYNC_HEADER_MAP).forEach(([header, key]) => {
+  Object.entries(headerMap).forEach(([header, key]) => {
     if (!Object.prototype.hasOwnProperty.call(row, header)) return;
-    mapped[key] = normalizeSheetCellValue(key, row[header]);
+    const normalizedValue = normalizeSheetCellValue(key, row[header]);
+    if (numericKeys.has(key) || normalizedValue !== null) {
+      mapped[key] = normalizedValue;
+    }
   });
 
+  return mapped;
+}
+
+function mapSheetRowToNpdRow(row: Record<string, any>) {
+  const mapped = mapSheetRowByHeaderMap_(row, NPD_SYNC_HEADER_MAP as Record<string, string>, NPD_SYNC_NUMERIC_KEYS);
   mapped.npdId = stringOrEmpty(mapped.npdId);
   return mapped;
 }
@@ -1715,6 +1892,17 @@ async function ensureUsersCanonicalData(db: mysql.Pool, database: string) {
 async function ensureNpdSchemaColumns(db: mysql.Pool, database: string) {
   for (const { column, type } of NPD_SCHEMA_COLUMNS) {
     await ensureColumnExists(db, database, "npd", column, type);
+  }
+}
+
+async function ensureSheetMasterSchemaColumns(
+  db: mysql.Pool,
+  database: string,
+  table: string,
+  schemaColumns: Array<{ column: string; type: string }>
+) {
+  for (const { column, type } of schemaColumns) {
+    await ensureColumnExists(db, database, table, column, type);
   }
 }
 
@@ -2097,6 +2285,10 @@ function entityPermissionKey(entity: string): string {
       return "/masters/machines";
     case "npd":
       return "/masters/npd";
+    case "php_item_master":
+      return "/masters/php-item-master";
+    case "plate_item_master":
+      return "/masters/plate-item-master";
     case "settings":
       return "/masters/settings";
     case "material_in":
@@ -3287,6 +3479,42 @@ async function initDb(retries = 5) {
       } catch (err) {
         console.warn("[DB] Could not alter npd table:", (err as Error).message);
       }
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`php_item_master\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`itemId\` LONGTEXT,
+          \`timestamp\` LONGTEXT,
+          \`npdId\` LONGTEXT,
+          \`itemName\` LONGTEXT,
+          \`company\` LONGTEXT,
+          \`hostingerSync\` LONGTEXT,
+          \`syncSource\` VARCHAR(50),
+          \`syncStatus\` VARCHAR(20) DEFAULT 'active',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`plate_item_master\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`itemId\` LONGTEXT,
+          \`timestamp\` LONGTEXT,
+          \`npdId\` LONGTEXT,
+          \`itemName\` LONGTEXT,
+          \`company\` LONGTEXT,
+          \`hostingerSync\` LONGTEXT,
+          \`syncSource\` VARCHAR(50),
+          \`syncStatus\` VARCHAR(20) DEFAULT 'active',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await ensureNpdSchemaColumns(db, database);
+      await ensureSheetMasterSchemaColumns(db, database, "php_item_master", PHP_ITEM_MASTER_SCHEMA_COLUMNS);
+      await ensureSheetMasterSchemaColumns(db, database, "plate_item_master", PLATE_ITEM_MASTER_SCHEMA_COLUMNS);
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`settings\` (
@@ -4701,7 +4929,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "settings"];
 
 app.get("/api/legacy-items", async (req, res) => {
   try {

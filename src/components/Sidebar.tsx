@@ -96,6 +96,8 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Machine Master", href: "/masters/machines", icon: Hammer },
       { name: "RAPC Range Master", href: "/masters/rapc-ranges", icon: Database },
       { name: "NPD Items", href: "/masters/npd", icon: Database },
+      { name: "PHP Item Master", href: "/masters/php-item-master", icon: Database },
+      { name: "Plate Item Master", href: "/masters/plate-item-master", icon: Database },
       { name: "Users", href: "/masters/users", icon: Users },
       { name: "Services", href: "/masters/services", icon: Database },
       { name: "Settings", href: "/masters/settings", icon: Database },
@@ -542,7 +544,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
             <X size={20} />
         </button>
       </div>
-      <nav className="flex-1 space-y-3 px-2 py-4 overflow-y-auto border-r border-white/5">
+      <nav className="flex-1 space-y-3 overflow-x-auto overflow-y-auto px-2 py-4 border-r border-white/5">
         {navigation.map((group) => {
           const visibleItems = group.items.filter((item) => hasAccess(item.href));
           if (visibleItems.length === 0) return null;
@@ -591,7 +593,11 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                           )}
                           aria-hidden="true"
                         />
-                        {!isCollapsed && <span className="truncate max-w-[160px]">{item.name}</span>}
+                        {!isCollapsed && (
+                          <span className="block max-w-[190px] overflow-x-auto whitespace-nowrap scrollbar-thin">
+                            {item.name}
+                          </span>
+                        )}
                       </div>
                       {count > 0 && !isCollapsed && (
                         <span className={cn(

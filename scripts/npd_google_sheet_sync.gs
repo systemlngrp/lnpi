@@ -138,11 +138,9 @@ function onNpdSheetEdit(e) {
 
   const sheet = e.range.getSheet();
   const sheetName = sheet.getName();
-
-  if (sheetName === NPD_SYNC_CONFIG.tabName) {
-    handleSheetEdit_(e, NPD_SYNC_CONFIG, false);
-  } else if (sheetName === COMPANY_SYNC_CONFIG.tabName) {
-    handleSheetEdit_(e, COMPANY_SYNC_CONFIG, false);
+  const config = getAllSheetSyncConfigs_().find((entry) => entry.tabName === sheetName);
+  if (config) {
+    handleSheetEdit_(e, config, false);
   }
 }
 
@@ -171,11 +169,10 @@ function onNpdSheetChange(e) {
     return;
   }
 
-  queueFullSync_(NPD_SYNC_CONFIG);
-  scheduleFlush_(NPD_SYNC_CONFIG);
-
-  queueFullSync_(COMPANY_SYNC_CONFIG);
-  scheduleFlush_(COMPANY_SYNC_CONFIG);
+  getAllSheetSyncConfigs_().forEach((config) => {
+    queueFullSync_(config);
+    scheduleFlush_(config);
+  });
 }
 
 function performFlush_(config, idHeader) {
@@ -349,6 +346,17 @@ function installSyncTriggers() {
   installRateSyncTrigger();
 }
 
+function getAllSheetSyncConfigs_() {
+  const configs = [NPD_SYNC_CONFIG, COMPANY_SYNC_CONFIG];
+  if (typeof PHP_ITEM_MASTER_SYNC_CONFIG !== 'undefined') {
+    configs.push(PHP_ITEM_MASTER_SYNC_CONFIG);
+  }
+  if (typeof PLATE_ITEM_MASTER_SYNC_CONFIG !== 'undefined') {
+    configs.push(PLATE_ITEM_MASTER_SYNC_CONFIG);
+  }
+  return configs;
+}
+
 function installRateSyncTrigger() {
   deleteRateSyncTriggers_();
   ScriptApp.newTrigger(NPD_SYNC_CONFIG.rateSyncTriggerHandler)
@@ -358,10 +366,19 @@ function installRateSyncTrigger() {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi()
+  const menu = SpreadsheetApp.getUi()
     .createMenu('LNPI Sync')
     .addItem('Sync NPD to LNPI', 'syncNpdSheetToHostinger')
-    .addItem('Sync Companies to LNPI', 'syncCompaniesSheetToHostinger')
+    .addItem('Sync Companies to LNPI', 'syncCompaniesSheetToHostinger');
+
+  if (typeof syncPhpItemMasterSheetToHostinger === 'function') {
+    menu.addItem('Sync PHP Item Master to LNPI', 'syncPhpItemMasterSheetToHostinger');
+  }
+  if (typeof syncPlateItemMasterSheetToHostinger === 'function') {
+    menu.addItem('Sync Plate Item Master to LNPI', 'syncPlateItemMasterSheetToHostinger');
+  }
+
+  menu
     .addItem('Sync Latest Rates', 'syncNpdRatesFromHostinger')
     .addItem('Install Rate Trigger', 'installRateSyncTrigger')
     .addToUi();
