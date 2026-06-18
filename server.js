@@ -162,6 +162,7 @@ const NPD_SYNC_HEADER_MAP = {
   "No Of Die Cut Ups(No Of Boxes In One Die Sheet)": "dieCutUps",
   "SYNC IN ITEM MASTER": "syncInItemMaster",
   "PLATE/PHP WEIGHT": "platePhpWeight",
+  "NPD Update Timestamp": "npdUpdateTimestamp",
   "GSM Least Cost": "gsmLeastCost",
   "Backing Paper Shade": "backingPaperShade",
   "9001": "item9001",

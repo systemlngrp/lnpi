@@ -8,6 +8,7 @@ const NPD_SYNC_CONFIG = {
   erpHeader: 'ERP',
   rateHeaders: ['Rate', 'Last Approved Order Rate', 'Last Approved Order rate'],
   itemHeaders: ['9001', '9002', '9003', '9004'],
+  npdUpdateTimestampHeader: 'NPD Update Timestamp',
   historyTabName: 'NPD_RATE_SYNC_HISTORY',
   hostingerSyncHeader: 'HOSTINGER SYNC',
   flushDelayMs: 15000,
