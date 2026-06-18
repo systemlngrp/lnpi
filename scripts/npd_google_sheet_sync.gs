@@ -1,169 +1,5 @@
-const NPD_SYNC_CONFIG = {
-  apiUrl: 'https://darkred-lobster-409686.hostingersite.com/api/npd-sync',
-  rateApiUrl: 'https://darkred-lobster-409686.hostingersite.com/api/npd-sync/rates',
-  secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
-  tabName: 'NPD',
-  spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
-  npdIdHeader: 'NPD ID',
-  erpHeader: 'ERP',
-  rateHeaders: ['Rate', 'Last Approved Order Rate', 'Last Approved Order rate'],
-  historyTabName: 'NPD_RATE_SYNC_HISTORY',
-  hostingerSyncHeader: 'HOSTINGER SYNC',
-  flushDelayMs: 15000,
-  pendingRowsPropertyKey: 'NPD_PENDING_ROWS',
-  pendingFullSyncPropertyKey: 'NPD_PENDING_FULL_SYNC',
-  flushTriggerHandler: 'flushQueuedNpdSync',
-  rateSyncTriggerHandler: 'syncNpdRatesFromHostinger',
-  rateSyncIntervalMinutes: 30,
-};
-
-const COMPANY_SYNC_CONFIG = {
-  apiUrl: 'https://darkred-lobster-409686.hostingersite.com/api/npd-sync',
-  secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
-  tabName: 'Companies',
-  spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
-  idHeader: 'Id',
-  hostingerSyncHeader: 'NPD Hostinger Sync',
-  flushDelayMs: 15000,
-  pendingRowsPropertyKey: 'COMPANY_PENDING_ROWS',
-  pendingFullSyncPropertyKey: 'COMPANY_PENDING_FULL_SYNC',
-  flushTriggerHandler: 'flushQueuedCompanySync',
-};
-
-function syncNpdSheetToHostinger() {
-  const result = forceFullNpdSync();
-  syncNpdRatesFromHostinger();
-  return result;
-}
-
-function syncCompaniesSheetToHostinger() {
-  return forceFullCompanySync();
-}
-
 function formatDate_(date) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
-}
-
-function forceFullNpdSync() {
-  return performFullSync_(NPD_SYNC_CONFIG, true);
-}
-
-function syncNpdRatesFromHostinger() {
-  const spreadsheet = SpreadsheetApp.openById(NPD_SYNC_CONFIG.spreadsheetId);
-  const sheet = spreadsheet.getSheetByName(NPD_SYNC_CONFIG.tabName);
-  if (!sheet) {
-    throw new Error(`Sheet tab not found: ${NPD_SYNC_CONFIG.tabName}`);
-  }
-
-  const values = sheet.getDataRange().getDisplayValues();
-  if (!values.length) {
-    throw new Error('Sheet is empty.');
-  }
-
-  const headers = values[0].map((header) => String(header || '').trim().toLowerCase());
-  const erpIndex = headers.indexOf(NPD_SYNC_CONFIG.erpHeader.toLowerCase());
-  const rateIndex = findHeaderIndex_(headers, NPD_SYNC_CONFIG.rateHeaders);
-
-  if (erpIndex === -1) {
-    throw new Error(`Column "${NPD_SYNC_CONFIG.erpHeader}" not found in sheet.`);
-  }
-
-  if (rateIndex === -1) {
-    throw new Error(`Rate column not found in sheet. Checked: ${NPD_SYNC_CONFIG.rateHeaders.join(', ')}`);
-  }
-
-  const response = UrlFetchApp.fetch(NPD_SYNC_CONFIG.rateApiUrl, {
-    method: 'get',
-    muteHttpExceptions: true,
-    headers: {
-      'x-npd-sync-secret': NPD_SYNC_CONFIG.secret,
-    },
-  });
-
-  if (response.getResponseCode() >= 400) {
-    const errorMessage = `Rate sync failed: ${response.getContentText()}`;
-    writeRateSyncHistory_([], [
-      buildHistoryRow_('', '', '', '', 'error', errorMessage)
-    ]);
-    throw new Error(errorMessage);
-  }
-
-  const result = JSON.parse(response.getContentText() || '{}');
-  const rows = Array.isArray(result.rows) ? result.rows : [];
-  const rateMap = new Map();
-  rows.forEach((row) => {
-    const erp = String(row.erp || '').trim();
-    const rate = normalizeSheetNumber_(row.rate);
-    if (erp && rate !== '') {
-      rateMap.set(erp, {
-        erp: erp,
-        rate: rate,
-        orderNo: String(row.orderNo || row.order_no || '').trim(),
-        orderDate: String(row.orderDate || row.order_date || '').trim(),
-        approvedAt: String(row.approvedAt || row.approved_at || '').trim(),
-        status: String(row.status || 'approved').trim() || 'approved'
-      });
-    }
-  });
-
-  if (values.length <= 1) {
-    writeRateSyncHistory_([], []);
-    return { ok: true, updatedRows: 0, fetchedRates: rateMap.size };
-  }
-
-  const currentRates = values.slice(1).map((row) => [row[rateIndex] ?? '']);
-  const nextRates = [];
-  const historyRows = [];
-  let changedRows = 0;
-  const processedErps = new Set();
-
-  values.slice(1).forEach((row) => {
-    const erp = String(row[erpIndex] || '').trim();
-    const currentValue = row[rateIndex] ?? '';
-
-    if (!erp) {
-      nextRates.push([currentValue]);
-      return;
-    }
-
-    const latest = rateMap.get(erp);
-    if (!latest) {
-      nextRates.push([currentValue]);
-      if (!processedErps.has(erp)) {
-        processedErps.add(erp);
-        historyRows.push(buildHistoryRow_(erp, '', '', currentValue, 'no approved order found', ''));
-      }
-      return;
-    }
-
-    const nextValue = latest.rate;
-    nextRates.push([nextValue]);
-    if (String(currentValue) !== String(nextValue)) {
-      changedRows += 1;
-    }
-
-    if (!processedErps.has(erp)) {
-      processedErps.add(erp);
-      const syncStatus = String(currentValue) === String(nextValue) ? 'unchanged' : 'updated';
-      historyRows.push(
-        buildHistoryRow_(erp, latest.orderNo, latest.approvedAt || latest.orderDate, nextValue, syncStatus, '')
-      );
-    }
-  });
-
-  if (changedRows > 0) {
-    sheet.getRange(2, rateIndex + 1, nextRates.length, 1).setValues(nextRates);
-  }
-
-  writeRateSyncHistory_(Array.from(processedErps), historyRows);
-
-  SpreadsheetApp.flush();
-
-  return { ok: true, updatedRows: changedRows, fetchedRates: rateMap.size };
-}
-
-function forceFullCompanySync() {
-  return performFullSync_(COMPANY_SYNC_CONFIG, false);
 }
 
 function performFullSync_(config, skipAlreadySynced) {
@@ -188,7 +24,6 @@ function performFullSync_(config, skipAlreadySynced) {
   const allRowsToSync = [];
   const allRowIndicesToUpdate = [];
   const idHeader = getSyncIdHeader_(config);
-
   const nameMap = new Map();
   const duplicateRowIndices = [];
 
@@ -208,20 +43,20 @@ function performFullSync_(config, skipAlreadySynced) {
     });
 
     const rowKey = String(
-      mapped[idHeader] || mapped["Id"] || mapped["Company"] || mapped["Company Name"] || mapped["name"] || ''
+      mapped[idHeader] || mapped['Id'] || mapped['Company'] || mapped['Company Name'] || mapped['name'] || ''
     ).trim();
     if (!rowKey) continue;
 
     if (nameMap.has(rowKey)) {
-      duplicateRowIndices.push(i + 1); // sheet row index (1-based)
+      duplicateRowIndices.push(i + 1);
       continue;
     }
+
     nameMap.set(rowKey, i + 1);
     allRowsToSync.push(mapped);
     allRowIndicesToUpdate.push(i + 1);
   }
 
-  // Delete duplicate rows from bottom to top to avoid shifting indices
   if (duplicateRowIndices.length > 0) {
     duplicateRowIndices.sort((a, b) => b - a);
     duplicateRowIndices.forEach((rowIdx) => {
@@ -303,9 +138,9 @@ function onNpdSheetEdit(e) {
 
   const sheet = e.range.getSheet();
   const sheetName = sheet.getName();
-  
+
   if (sheetName === NPD_SYNC_CONFIG.tabName) {
-    handleSheetEdit_(e, NPD_SYNC_CONFIG, true);
+    handleSheetEdit_(e, NPD_SYNC_CONFIG, false);
   } else if (sheetName === COMPANY_SYNC_CONFIG.tabName) {
     handleSheetEdit_(e, COMPANY_SYNC_CONFIG, false);
   }
@@ -314,7 +149,7 @@ function onNpdSheetEdit(e) {
 function handleSheetEdit_(e, config, skipIfSynced) {
   const sheet = e.range.getSheet();
   const rowIndex = e.range.getRow();
-  
+
   if (rowIndex <= 1) {
     queueFullSync_(config);
     scheduleFlush_(config);
@@ -338,17 +173,9 @@ function onNpdSheetChange(e) {
 
   queueFullSync_(NPD_SYNC_CONFIG);
   scheduleFlush_(NPD_SYNC_CONFIG);
-  
+
   queueFullSync_(COMPANY_SYNC_CONFIG);
   scheduleFlush_(COMPANY_SYNC_CONFIG);
-}
-
-function flushQueuedNpdSync() {
-  return performFlush_(NPD_SYNC_CONFIG, NPD_SYNC_CONFIG.npdIdHeader);
-}
-
-function flushQueuedCompanySync() {
-  return performFlush_(COMPANY_SYNC_CONFIG, COMPANY_SYNC_CONFIG.idHeader);
 }
 
 function performFlush_(config, idHeader) {
@@ -361,7 +188,7 @@ function performFlush_(config, idHeader) {
   const pendingRows = getPendingRows_(config);
 
   if (runFullSync) {
-    const result = (config.tabName === 'NPD') ? forceFullNpdSync() : forceFullCompanySync();
+    const result = config.tabName === NPD_SYNC_CONFIG.tabName ? forceFullNpdSync() : forceFullCompanySync();
     clearPendingQueue_(config);
     deleteFlushTriggers_(config);
     return result;
@@ -396,7 +223,7 @@ function performFlush_(config, idHeader) {
 
   updateTimestamps_(sheet, pendingRows, idHeader, config.hostingerSyncHeader, syncTimestamp);
 
-  if (config.tabName === 'NPD') {
+  if (config.tabName === NPD_SYNC_CONFIG.tabName) {
     syncNpdRatesFromHostinger();
   }
 
@@ -440,7 +267,7 @@ function buildRowPayload_(sheet, rowIndex, config, skipIfSynced) {
   const dataRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   const payload = {};
 
-  headerRow.forEach(function(header, index) {
+  headerRow.forEach((header, index) => {
     const normalizedHeader = String(header || '').trim();
     if (!normalizedHeader) return;
     payload[normalizedHeader] = dataRow[index] ?? '';
@@ -534,6 +361,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('LNPI Sync')
     .addItem('Sync NPD to LNPI', 'syncNpdSheetToHostinger')
+    .addItem('Sync Companies to LNPI', 'syncCompaniesSheetToHostinger')
     .addItem('Sync Latest Rates', 'syncNpdRatesFromHostinger')
     .addItem('Install Rate Trigger', 'installRateSyncTrigger')
     .addToUi();

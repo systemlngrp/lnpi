@@ -1,0 +1,24 @@
+const COMPANY_SYNC_CONFIG = {
+  apiUrl: 'https://darkred-lobster-409686.hostingersite.com/api/npd-sync',
+  secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
+  tabName: 'Companies',
+  spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
+  idHeader: 'Id',
+  hostingerSyncHeader: 'NPD Hostinger Sync',
+  flushDelayMs: 15000,
+  pendingRowsPropertyKey: 'COMPANY_PENDING_ROWS',
+  pendingFullSyncPropertyKey: 'COMPANY_PENDING_FULL_SYNC',
+  flushTriggerHandler: 'flushQueuedCompanySync',
+};
+
+function syncCompaniesSheetToHostinger() {
+  return forceFullCompanySync();
+}
+
+function forceFullCompanySync() {
+  return performFullSync_(COMPANY_SYNC_CONFIG, false);
+}
+
+function flushQueuedCompanySync() {
+  return performFlush_(COMPANY_SYNC_CONFIG, COMPANY_SYNC_CONFIG.idHeader);
+}

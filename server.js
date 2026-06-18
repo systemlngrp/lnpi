@@ -164,6 +164,10 @@ const NPD_SYNC_HEADER_MAP = {
   "PLATE/PHP WEIGHT": "platePhpWeight",
   "GSM Least Cost": "gsmLeastCost",
   "Backing Paper Shade": "backingPaperShade",
+  "9001": "item9001",
+  "9002": "item9002",
+  "9003": "item9003",
+  "9004": "item9004",
   Artwork: "artwork",
   Spec: "spec"
 };
