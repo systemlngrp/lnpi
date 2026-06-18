@@ -381,6 +381,22 @@ const NPD_SCHEMA_COLUMNS = [
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" }
 ];
+const PHP_ITEM_MASTER_SCHEMA_COLUMNS = [
+  ...[...new Set(Object.values(PHP_ITEM_MASTER_HEADER_MAP))].map((column) => ({
+    column,
+    type: "LONGTEXT"
+  })),
+  { column: "syncSource", type: "VARCHAR(50) NULL" },
+  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" }
+];
+const PLATE_ITEM_MASTER_SCHEMA_COLUMNS = [
+  ...[...new Set(Object.values(PLATE_ITEM_MASTER_HEADER_MAP))].map((column) => ({
+    column,
+    type: "LONGTEXT"
+  })),
+  { column: "syncSource", type: "VARCHAR(50) NULL" },
+  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" }
+];
 const COMPANY_SCHEMA_COLUMNS = [
   { column: "pin", type: "VARCHAR(50)" },
   { column: "npdHostingerSync", type: "VARCHAR(255)" },
@@ -625,6 +641,28 @@ app.post("/api/npd-sync", async (req, res) => {
       headerMap: NPD_SYNC_HEADER_MAP,
       requiredHeaders: NPD_SYNC_REQUIRED_HEADERS,
       mapFn: mapSheetRowToNpdRow
+    },
+    "PHP ITEM MASTER": {
+      table: "php_item_master",
+      idColumn: "itemId",
+      headerMap: PHP_ITEM_MASTER_HEADER_MAP,
+      requiredHeaders: PHP_ITEM_MASTER_REQUIRED_HEADERS,
+      mapFn: (row) => {
+        const mapped = mapSheetRowByHeaderMap_(row, PHP_ITEM_MASTER_HEADER_MAP);
+        mapped.itemId = stringOrEmpty(mapped.itemId);
+        return mapped;
+      }
+    },
+    "PLATE ITEM MASTER": {
+      table: "plate_item_master",
+      idColumn: "itemId",
+      headerMap: PLATE_ITEM_MASTER_HEADER_MAP,
+      requiredHeaders: PLATE_ITEM_MASTER_REQUIRED_HEADERS,
+      mapFn: (row) => {
+        const mapped = mapSheetRowByHeaderMap_(row, PLATE_ITEM_MASTER_HEADER_MAP);
+        mapped.itemId = stringOrEmpty(mapped.itemId);
+        return mapped;
+      }
     },
     "Companies": {
       table: "companies",
@@ -1252,12 +1290,19 @@ function normalizeSheetCellValue(key, value) {
   }
   return trimmed;
 }
-function mapSheetRowToNpdRow(row) {
+function mapSheetRowByHeaderMap_(row, headerMap, numericKeys = /* @__PURE__ */ new Set()) {
   const mapped = {};
-  Object.entries(NPD_SYNC_HEADER_MAP).forEach(([header, key]) => {
+  Object.entries(headerMap).forEach(([header, key]) => {
     if (!Object.prototype.hasOwnProperty.call(row, header)) return;
-    mapped[key] = normalizeSheetCellValue(key, row[header]);
+    const normalizedValue = normalizeSheetCellValue(key, row[header]);
+    if (numericKeys.has(key) || normalizedValue !== null) {
+      mapped[key] = normalizedValue;
+    }
   });
+  return mapped;
+}
+function mapSheetRowToNpdRow(row) {
+  const mapped = mapSheetRowByHeaderMap_(row, NPD_SYNC_HEADER_MAP, NPD_SYNC_NUMERIC_KEYS);
   mapped.npdId = stringOrEmpty(mapped.npdId);
   return mapped;
 }
@@ -1595,6 +1640,11 @@ async function ensureNpdSchemaColumns(db, database) {
     await ensureColumnExists(db, database, "npd", column, type);
   }
 }
+async function ensureSheetMasterSchemaColumns(db, database, table, schemaColumns) {
+  for (const { column, type } of schemaColumns) {
+    await ensureColumnExists(db, database, table, column, type);
+  }
+}
 async function buildItemToNpdIdMap(db) {
   const [npdRows] = await db.query("SELECT id, itemName, erp FROM `npd`");
   const mapping = /* @__PURE__ */ new Map();
@@ -1920,6 +1970,10 @@ function entityPermissionKey(entity) {
       return "/masters/machines";
     case "npd":
       return "/masters/npd";
+    case "php_item_master":
+      return "/masters/php-item-master";
+    case "plate_item_master":
+      return "/masters/plate-item-master";
     case "settings":
       return "/masters/settings";
     case "material_in":
@@ -3025,6 +3079,39 @@ async function initDb(retries = 5) {
       } catch (err) {
         console.warn("[DB] Could not alter npd table:", err.message);
       }
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`php_item_master\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`itemId\` LONGTEXT,
+          \`timestamp\` LONGTEXT,
+          \`npdId\` LONGTEXT,
+          \`itemName\` LONGTEXT,
+          \`company\` LONGTEXT,
+          \`hostingerSync\` LONGTEXT,
+          \`syncSource\` VARCHAR(50),
+          \`syncStatus\` VARCHAR(20) DEFAULT 'active',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`plate_item_master\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`itemId\` LONGTEXT,
+          \`timestamp\` LONGTEXT,
+          \`npdId\` LONGTEXT,
+          \`itemName\` LONGTEXT,
+          \`company\` LONGTEXT,
+          \`hostingerSync\` LONGTEXT,
+          \`syncSource\` VARCHAR(50),
+          \`syncStatus\` VARCHAR(20) DEFAULT 'active',
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await ensureNpdSchemaColumns(db, database);
+      await ensureSheetMasterSchemaColumns(db, database, "php_item_master", PHP_ITEM_MASTER_SCHEMA_COLUMNS);
+      await ensureSheetMasterSchemaColumns(db, database, "plate_item_master", PLATE_ITEM_MASTER_SCHEMA_COLUMNS);
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`settings\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
@@ -4318,7 +4405,7 @@ const createHandlers = (tableName) => {
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "settings"];
 app.get("/api/legacy-items", async (req, res) => {
   try {
     const user = await getRequestUser(req);

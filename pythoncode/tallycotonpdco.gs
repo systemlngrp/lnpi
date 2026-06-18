@@ -108,15 +108,18 @@ function syncCompaniesFromPython(records, onlyBlankUpdates) {
     throw new Error("No company data found in Companies sheet");
   }
 
-  const data = sh.getRange(1, 1, lastRow, COL_PAN_NO).getValues();
+  const headerRange = sh.getRange(1, 1, 1, COL_PAN_NO);
+  const bodyRange = sh.getRange(2, 1, lastRow - 1, COL_PAN_NO);
+  const data = bodyRange.getValues();
+  const backgrounds = bodyRange.getBackgrounds();
 
   const companyMap = {};
 
-  for (let r = 1; r < data.length; r++) {
-    const companyName = normalize(data[r][COL_COMPANY - 1]);
+  for (let r = 0; r < data.length; r++) {
+    const companyName = normalizeCompanyKey(data[r][COL_COMPANY - 1]);
 
     if (companyName) {
-      companyMap[companyName] = r + 1;
+      companyMap[companyName] = r;
     }
   }
 
@@ -126,74 +129,77 @@ function syncCompaniesFromPython(records, onlyBlankUpdates) {
   let cellsUpdated = 0;
   let cellsSame = 0;
   let cellsSkippedBlank = 0;
+  const unmatchedCompanies = [];
 
   records.forEach(record => {
     checked++;
 
-    const company = normalize(record.company);
+    const company = normalizeCompanyKey(record.company);
+    const hasMatch = Object.prototype.hasOwnProperty.call(companyMap, company);
 
-    if (!company || !companyMap[company]) {
+    if (!company || !hasMatch) {
       notFound++;
+      unmatchedCompanies.push(String(record.company || ""));
       return;
     }
 
     matched++;
 
-    const rowNo = companyMap[company];
+    const rowIndex = companyMap[company];
 
     let result;
 
-    result = updateCellSafe(sh, rowNo, COL_ADDRESS, record.address, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_ADDRESS, record.address, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_DISTRICT, record.district, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_DISTRICT, record.district, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_STATE, record.state, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_STATE, record.state, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_GST_NO, record.gstNo, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_GST_NO, record.gstNo, false);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_EMAIL, record.email, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_EMAIL, record.email, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_CONTACT_PERSON, record.contactPerson, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_CONTACT_PERSON, record.contactPerson, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_CONTACT_NUMBER, record.contactNumber, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_CONTACT_NUMBER, record.contactNumber, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_ID, record.id, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_ID, record.id, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_PIN, record.pinCode, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_PIN, record.pinCode, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_GST_TYPE, record.gstType, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_GST_TYPE, record.gstType, false);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
 
-    result = updateCellSafe(sh, rowNo, COL_PAN_NO, record.panNo, onlyBlankUpdates);
+    result = updateCellSafe(data, backgrounds, rowIndex, COL_PAN_NO, record.panNo, onlyBlankUpdates);
     cellsUpdated += result.updated;
     cellsSame += result.same;
     cellsSkippedBlank += result.skipped;
@@ -203,11 +209,15 @@ function syncCompaniesFromPython(records, onlyBlankUpdates) {
     // L = Sales Person
   });
 
+  bodyRange.setValues(data);
+  bodyRange.setBackgrounds(backgrounds);
+
   return {
     totalRecordsReceived: records.length,
     checked: checked,
     matched: matched,
     notFound: notFound,
+    unmatchedCompanies: unmatchedCompanies,
     cellsUpdated: cellsUpdated,
     cellsSame: cellsSame,
     cellsSkippedBlank: cellsSkippedBlank
@@ -215,16 +225,16 @@ function syncCompaniesFromPython(records, onlyBlankUpdates) {
 }
 
 
-function updateCellSafe(sh, rowNo, colNo, newValue, onlyBlankUpdates) {
+function updateCellSafe(data, backgrounds, rowIndex, colNo, newValue, onlyBlankUpdates) {
   newValue = cleanValue(newValue);
 
-  const cell = sh.getRange(rowNo, colNo);
-  const oldValue = cleanValue(cell.getValue());
+  const colIndex = colNo - 1;
+  const oldValue = cleanValue(data[rowIndex][colIndex]);
 
   // Tally value blank, so do not overwrite existing value
   if (!newValue) {
     if (oldValue) {
-      cell.setBackground(COLOR_SKIPPED);
+      backgrounds[rowIndex][colIndex] = COLOR_SKIPPED;
       return {
         updated: 0,
         same: 0,
@@ -241,7 +251,7 @@ function updateCellSafe(sh, rowNo, colNo, newValue, onlyBlankUpdates) {
 
   if (onlyBlankUpdates && oldValue) {
     if (normalize(oldValue) === normalize(newValue)) {
-      cell.setBackground(COLOR_SAME);
+      backgrounds[rowIndex][colIndex] = COLOR_SAME;
       return {
         updated: 0,
         same: 1,
@@ -249,7 +259,7 @@ function updateCellSafe(sh, rowNo, colNo, newValue, onlyBlankUpdates) {
       };
     }
 
-    cell.setBackground(COLOR_SKIPPED);
+    backgrounds[rowIndex][colIndex] = COLOR_SKIPPED;
     return {
       updated: 0,
       same: 0,
@@ -259,7 +269,7 @@ function updateCellSafe(sh, rowNo, colNo, newValue, onlyBlankUpdates) {
 
   // Same value
   if (normalize(oldValue) === normalize(newValue)) {
-    cell.setBackground(COLOR_SAME);
+    backgrounds[rowIndex][colIndex] = COLOR_SAME;
     return {
       updated: 0,
       same: 1,
@@ -268,8 +278,8 @@ function updateCellSafe(sh, rowNo, colNo, newValue, onlyBlankUpdates) {
   }
 
   // Different value, update from Tally
-  cell.setValue(newValue);
-  cell.setBackground(COLOR_UPDATED);
+  data[rowIndex][colIndex] = newValue;
+  backgrounds[rowIndex][colIndex] = COLOR_UPDATED;
 
   return {
     updated: 1,
@@ -283,6 +293,15 @@ function normalize(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/\s+/g, " ")
+    .trim();
+}
+
+
+function normalizeCompanyKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "")
     .trim();
 }
 

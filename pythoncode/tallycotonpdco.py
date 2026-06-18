@@ -2,7 +2,34 @@
 import requests
 import json
 import re
+import logging
+import time
 from xml.etree import ElementTree as ET
+
+
+GSTIN_PATTERN = re.compile(r"\b\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]Z[A-Z0-9]\b", re.IGNORECASE)
+LOGGER = logging.getLogger("tallycotonpdco")
+WEB_APP_CONNECT_TIMEOUT = 30
+WEB_APP_READ_TIMEOUT = 300
+WEB_APP_BATCH_SIZE = 200
+WEB_APP_MAX_RETRIES = 3
+TARGET_LEDGER_GROUP = "Sundry Debtors"
+
+
+def configure_logging():
+    if LOGGER.handlers:
+        return
+
+    LOGGER.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    LOGGER.addHandler(stream_handler)
+
+    file_handler = logging.FileHandler("tallycotonpdco.log", encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    LOGGER.addHandler(file_handler)
 
 
 def remove_invalid_xml_chars(xml_text):
@@ -55,6 +82,16 @@ def clean_text(value):
     return value
 
 
+def normalize_name_key(value):
+    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+
+
+def normalize_gstin(value):
+    value = clean_text(value).upper().replace(" ", "")
+    match = GSTIN_PATTERN.search(value)
+    return match.group(0) if match else value
+
+
 def get_xml_text(parent, tag):
     """
     Safely get text from XML tag.
@@ -65,12 +102,16 @@ def get_xml_text(parent, tag):
     return ""
 
 
-def get_first_available_value(parent, tags):
+def get_xml_text_from_possible_tags(parent, tags):
     for tag in tags:
         value = get_xml_text(parent, tag)
         if value:
             return value
     return ""
+
+
+def get_first_available_value(parent, tags):
+    return get_xml_text_from_possible_tags(parent, tags)
 
 
 def get_address(ledger):
@@ -94,13 +135,59 @@ def get_gstin(ledger):
     possible_tags = [
         "PARTYGSTIN",
         "GSTIN",
-        "GSTREGISTRATIONNUMBER"
+        "GSTREGISTRATIONNUMBER",
+        "LEDGERGSTIN",
+        "LEDGSTIN",
+        "VATIN",
+        "GSTINUIN",
+        "GSTINORUNIQUEID",
     ]
 
-    for tag in possible_tags:
-        value = get_xml_text(ledger, tag)
+    value = get_xml_text_from_possible_tags(ledger, possible_tags)
+    if value:
+        return normalize_gstin(value)
+
+    nested_tag_groups = [
+        [
+            "GSTREGDETAILS.LIST/GSTIN",
+            "GSTREGDETAILS.LIST/GSTINUIN",
+            "GSTREGDETAILS.LIST/GSTINORUNIQUEID",
+            "GSTDETAILS.LIST/GSTIN",
+            "GSTDETAILS.LIST/GSTINUIN",
+            "LEDGSTREGDETAILS.LIST/GSTIN",
+            "LEDGSTREGDETAILS.LIST/GSTINUIN",
+            "LEDGERGSTREGDETAILS.LIST/GSTIN",
+            "LEDGERGSTREGDETAILS.LIST/GSTINUIN",
+        ],
+        [
+            "GSTREGDETAILS/GSTIN",
+            "GSTREGDETAILS/GSTINUIN",
+            "GSTDETAILS/GSTIN",
+            "GSTDETAILS/GSTINUIN",
+        ],
+    ]
+
+    for tag_group in nested_tag_groups:
+        value = get_xml_text_from_possible_tags(ledger, tag_group)
         if value:
-            return value
+            return normalize_gstin(value)
+
+    for element in ledger.iter():
+        tag_name = str(element.tag or "").upper()
+        text_value = clean_text(element.text)
+        if not text_value:
+            continue
+        if (
+            "GSTIN" in tag_name
+            or "GSTREGISTRATIONNUMBER" in tag_name
+            or "PARTYGSTIN" in tag_name
+            or "GSTINUIN" in tag_name
+        ):
+            normalized = normalize_gstin(text_value)
+            if normalized:
+                return normalized
+        if GSTIN_PATTERN.search(text_value):
+            return normalize_gstin(text_value)
 
     return ""
 
@@ -115,12 +202,7 @@ def get_pan(ledger):
         "PANNUMBER"
     ]
 
-    for tag in possible_tags:
-        value = get_xml_text(ledger, tag)
-        if value:
-            return value
-
-    return ""
+    return get_xml_text_from_possible_tags(ledger, possible_tags)
 
 
 def get_contact_number(ledger):
@@ -131,12 +213,7 @@ def get_contact_number(ledger):
         "LEDGERPHONE"
     ]
 
-    for tag in possible_tags:
-        value = get_xml_text(ledger, tag)
-        if value:
-            return value
-
-    return ""
+    return get_xml_text_from_possible_tags(ledger, possible_tags)
 
 
 def get_email(ledger):
@@ -146,12 +223,7 @@ def get_email(ledger):
         "LEDGEREMAIL"
     ]
 
-    for tag in possible_tags:
-        value = get_xml_text(ledger, tag)
-        if value:
-            return value
-
-    return ""
+    return get_xml_text_from_possible_tags(ledger, possible_tags)
 
 
 # =====================================================
@@ -179,6 +251,7 @@ def build_tally_ledger_xml():
                 <TDLMESSAGE>
                     <COLLECTION NAME="Ledger Collection" ISMODIFY="No">
                         <TYPE>Ledger</TYPE>
+                        <CHILDOF>{target_group}</CHILDOF>
                         <FETCH>
                             NAME,
                             PARENT,
@@ -189,6 +262,15 @@ def build_tally_ledger_xml():
                             PARTYGSTIN,
                             GSTIN,
                             GSTREGISTRATIONNUMBER,
+                            LEDGERGSTIN,
+                            LEDGSTIN,
+                            VATIN,
+                            GSTINUIN,
+                            GSTINORUNIQUEID,
+                            GSTREGDETAILS,
+                            GSTDETAILS,
+                            LEDGSTREGDETAILS,
+                            LEDGERGSTREGDETAILS,
                             INCOMETAXNUMBER,
                             LEDGERMOBILE,
                             MOBILENO,
@@ -205,11 +287,12 @@ def build_tally_ledger_xml():
         </DESC>
     </BODY>
 </ENVELOPE>
-"""
+""".format(target_group=TARGET_LEDGER_GROUP)
 
 
 def fetch_ledgers_from_tally():
     xml_request = build_tally_ledger_xml()
+    LOGGER.info("Connecting to Tally at %s", TALLY_URL)
 
     try:
         response = requests.post(
@@ -233,6 +316,7 @@ def fetch_ledgers_from_tally():
     except Exception as e:
         raise Exception(f"Error while connecting to Tally: {e}")
 
+    LOGGER.info("Received response from Tally with status %s", response.status_code)
     return response.text
 
 
@@ -242,12 +326,16 @@ def fetch_ledgers_from_tally():
 
 def parse_ledgers(xml_text):
     records = []
+    gst_found = 0
+    gst_missing = 0
+    skipped_non_target_group = 0
 
     # Save raw response for checking
     with open("tally_raw_response.xml", "w", encoding="utf-8", errors="ignore") as f:
         f.write(xml_text)
 
-    print("Cleaning invalid XML characters...")
+    LOGGER.info("Saved raw Tally XML to tally_raw_response.xml")
+    LOGGER.info("Cleaning invalid XML characters")
 
     # IMPORTANT: clean before parsing
     xml_text = remove_invalid_xml_chars(xml_text)
@@ -255,6 +343,7 @@ def parse_ledgers(xml_text):
     # Save cleaned response for checking
     with open("tally_clean_response.xml", "w", encoding="utf-8", errors="ignore") as f:
         f.write(xml_text)
+    LOGGER.info("Saved cleaned Tally XML to tally_clean_response.xml")
 
     try:
         root = ET.fromstring(xml_text)
@@ -266,6 +355,7 @@ def parse_ledgers(xml_text):
         )
 
     ledgers = root.findall(".//LEDGER")
+    LOGGER.info("Found %s ledger nodes in Tally XML", len(ledgers))
 
     for ledger in ledgers:
         company_name = clean_text(ledger.attrib.get("NAME", ""))
@@ -277,19 +367,20 @@ def parse_ledgers(xml_text):
             continue
 
         parent = get_xml_text(ledger, "PARENT")
+        if normalize_name_key(parent) != normalize_name_key(TARGET_LEDGER_GROUP):
+            skipped_non_target_group += 1
+            continue
 
         address = get_address(ledger)
         state = get_xml_text(ledger, "STATENAME")
         pin_code = get_xml_text(ledger, "PINCODE")
 
-        gst_no = get_first_available_value(
-            ledger,
-            [
-                "PARTYGSTIN",
-                "GSTIN",
-                "GSTREGISTRATIONNUMBER"
-            ]
-        )
+        gst_no = get_gstin(ledger)
+        if gst_no:
+            gst_found += 1
+        else:
+            gst_missing += 1
+            LOGGER.warning("GST missing in Tally for company: %s", company_name)
 
         pan_no = get_first_available_value(
             ledger,
@@ -340,6 +431,14 @@ def parse_ledgers(xml_text):
 
         records.append(record)
 
+    LOGGER.info(
+        "Prepared %s records from %s | GST found: %s | GST missing: %s | Skipped other groups: %s",
+        len(records),
+        TARGET_LEDGER_GROUP,
+        gst_found,
+        gst_missing,
+        skipped_non_target_group
+    )
     return records
 
 # =====================================================
@@ -347,27 +446,128 @@ def parse_ledgers(xml_text):
 # =====================================================
 
 def send_to_web_app(records):
-    payload = {
-        "action": "syncCompanies",
-        "onlyBlankUpdates": True,
-        "records": records
+    session = requests.Session()
+    batch_results = []
+    aggregated = {
+        "success": True,
+        "message": "Company sync completed",
+        "result": {
+            "totalRecordsReceived": 0,
+            "checked": 0,
+            "matched": 0,
+            "notFound": 0,
+            "cellsUpdated": 0,
+            "cellsSame": 0,
+            "cellsSkippedBlank": 0,
+            "batchesProcessed": 0
+        }
     }
 
-    response = requests.post(
-        WEB_APP_URL,
-        data=json.dumps(payload),
-        headers={"Content-Type": "application/json"},
-        timeout=180
-    )
+    if not records:
+        return aggregated
 
-    try:
-        return response.json()
-    except Exception:
-        return {
-            "success": False,
-            "statusCode": response.status_code,
-            "responseText": response.text
+    for batch_number, start in enumerate(range(0, len(records), WEB_APP_BATCH_SIZE), start=1):
+        batch_records = records[start:start + WEB_APP_BATCH_SIZE]
+        payload = {
+            "action": "syncCompanies",
+            "onlyBlankUpdates": True,
+            "records": batch_records
         }
+
+        LOGGER.info(
+            "Sending batch %s with %s records to Apps Script Web App",
+            batch_number,
+            len(batch_records)
+        )
+
+        result = post_batch_to_web_app(session, payload, batch_number)
+        batch_results.append(result)
+
+        if not result.get("success"):
+            aggregated["success"] = False
+            aggregated["message"] = f"Batch {batch_number} failed"
+            aggregated["batchResults"] = batch_results
+            return aggregated
+
+        merge_batch_result(aggregated["result"], result.get("result") or {})
+        aggregated["result"]["batchesProcessed"] = batch_number
+
+    aggregated["batchResults"] = batch_results
+    return aggregated
+
+
+def post_batch_to_web_app(session, payload, batch_number):
+    last_error = None
+
+    for attempt in range(1, WEB_APP_MAX_RETRIES + 1):
+        try:
+            response = session.post(
+                WEB_APP_URL,
+                data=json.dumps(payload),
+                headers={"Content-Type": "application/json"},
+                timeout=(WEB_APP_CONNECT_TIMEOUT, WEB_APP_READ_TIMEOUT)
+            )
+
+            response.raise_for_status()
+
+            result = response.json()
+            LOGGER.info(
+                "Apps Script response received successfully for batch %s on attempt %s",
+                batch_number,
+                attempt
+            )
+            return result
+
+        except requests.exceptions.ReadTimeout as err:
+            last_error = err
+            LOGGER.warning(
+                "Apps Script read timeout for batch %s on attempt %s/%s",
+                batch_number,
+                attempt,
+                WEB_APP_MAX_RETRIES
+            )
+        except requests.exceptions.RequestException as err:
+            last_error = err
+            LOGGER.warning(
+                "Apps Script request failed for batch %s on attempt %s/%s: %s",
+                batch_number,
+                attempt,
+                WEB_APP_MAX_RETRIES,
+                err
+            )
+        except ValueError as err:
+            LOGGER.exception(
+                "Failed to parse Apps Script JSON response for batch %s",
+                batch_number
+            )
+            return {
+                "success": False,
+                "message": f"Invalid JSON response for batch {batch_number}: {err}"
+            }
+
+        if attempt < WEB_APP_MAX_RETRIES:
+            wait_seconds = attempt * 2
+            LOGGER.info("Retrying batch %s after %s seconds", batch_number, wait_seconds)
+            time.sleep(wait_seconds)
+
+    LOGGER.exception("Apps Script sync failed for batch %s", batch_number, exc_info=last_error)
+    return {
+        "success": False,
+        "message": f"Apps Script sync failed for batch {batch_number}: {last_error}"
+    }
+
+
+def merge_batch_result(total, batch):
+    for key in [
+        "totalRecordsReceived",
+        "checked",
+        "matched",
+        "notFound",
+        "cellsUpdated",
+        "cellsSame",
+        "cellsSkippedBlank"
+    ]:
+        total[key] = total.get(key, 0) + int(batch.get(key, 0))
 
 
 # =====================================================
@@ -375,24 +575,24 @@ def send_to_web_app(records):
 # =====================================================
 
 def main():
-    print("Connecting to Tally on port 9000...")
+    configure_logging()
+    LOGGER.info("Starting Tally company sync")
 
     xml_text = fetch_ledgers_from_tally()
 
-    print("Tally data fetched successfully.")
+    LOGGER.info("Tally data fetched successfully")
 
     records = parse_ledgers(xml_text)
 
-    print(f"Total ledgers fetched from Tally: {len(records)}")
+    LOGGER.info("Total ledgers parsed from Tally: %s", len(records))
 
     if not records:
-        print("No ledger data found from Tally.")
+        LOGGER.warning("No ledger data found from Tally")
         return
-
-    print("Sending data to Apps Script Web App...")
 
     result = send_to_web_app(records)
 
+    LOGGER.info("Sync completed")
     print("\n===== SYNC RESULT =====")
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
