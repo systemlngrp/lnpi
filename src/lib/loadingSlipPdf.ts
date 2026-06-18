@@ -92,8 +92,11 @@ export async function downloadLoadingSlipPdf({
 
     if (companyLines) {
       doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Address:", 14, currentY);
+      doc.setFont("helvetica", "normal");
       const wrapped = doc.splitTextToSize(companyLines, 180);
-      doc.text(wrapped, 14, currentY);
+      doc.text(wrapped, 30, currentY);
       currentY += wrapped.length * 5;
     }
 

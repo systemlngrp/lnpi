@@ -24,6 +24,12 @@ import { formatDate } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
 
+function getSlipNoSortValue(slipNo: string) {
+  const value = String(slipNo || "").trim();
+  const match = value.match(/(\d+)(?!.*\d)/);
+  return match ? Number(match[1]) : 0;
+}
+
 export function LoadingMaster() {
   const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [trucks] = useData<Truck>("trucks", []);
@@ -122,7 +128,18 @@ export function LoadingMaster() {
       const matchesItem = itemFilter === "All" || slip.itemNames.includes(itemFilter);
       
       return matchesSearch && matchesCompany && matchesErp && matchesItem;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }).sort((a, b) => {
+      const slipNoDiff = getSlipNoSortValue(b.slipNo) - getSlipNoSortValue(a.slipNo);
+      if (slipNoDiff !== 0) return slipNoDiff;
+
+      const textDiff = String(b.slipNo || "").localeCompare(String(a.slipNo || ""), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+      if (textDiff !== 0) return textDiff;
+
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
   }, [loadingSlips, plans, orders, npdItems, companies, searchTerm, companyFilter, erpFilter, itemFilter]);
 
   const handleDownloadPdf = async (slip: LoadingSlip) => {

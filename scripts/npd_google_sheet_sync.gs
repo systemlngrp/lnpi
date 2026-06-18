@@ -16,10 +16,6 @@ function performFullSync_(config, skipAlreadySynced) {
 
   const headers = values[0].map((header) => String(header || '').trim());
   const hostingerSyncIndex = headers.indexOf(config.hostingerSyncHeader);
-  const npdUpdateTimestampIndex = config.npdUpdateTimestampHeader
-    ? headers.indexOf(config.npdUpdateTimestampHeader)
-    : -1;
-  const fullSyncTimestamp = formatDate_(new Date());
 
   if (hostingerSyncIndex === -1) {
     throw new Error(`Column "${config.hostingerSyncHeader}" not found in sheet.`);
@@ -45,10 +41,6 @@ function performFullSync_(config, skipAlreadySynced) {
     headers.forEach((header, index) => {
       mapped[header] = row[index] ?? '';
     });
-
-    if (npdUpdateTimestampIndex !== -1) {
-      mapped[config.npdUpdateTimestampHeader] = fullSyncTimestamp;
-    }
 
     const rowKey = String(
       mapped[idHeader] || mapped['Id'] || mapped['Company'] || mapped['Company Name'] || mapped['name'] || ''
@@ -88,10 +80,6 @@ function processBatchSync_(config, spreadsheet, sheet, allRowsToSync, allRowIndi
   const batchSize = 100;
   let totalProcessed = 0;
   let lastResult = null;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
-  const npdUpdateTimestampIndex = config.npdUpdateTimestampHeader
-    ? headers.indexOf(config.npdUpdateTimestampHeader)
-    : -1;
 
   for (let i = 0; i < allRowsToSync.length; i += batchSize) {
     const rowsToSync = allRowsToSync.slice(i, i + batchSize);
@@ -126,9 +114,6 @@ function processBatchSync_(config, spreadsheet, sheet, allRowsToSync, allRowIndi
     rowIndicesToUpdate.forEach((rowIndex) => {
       try {
         sheet.getRange(rowIndex, hostingerSyncIndex + 1).setValue(syncTimestamp);
-        if (npdUpdateTimestampIndex !== -1) {
-          sheet.getRange(rowIndex, npdUpdateTimestampIndex + 1).setValue(syncTimestamp);
-        }
       } catch (err) {
         Logger.log('Failed to update timestamp for row %s: %s', rowIndex, err);
       }
@@ -287,15 +272,6 @@ function buildRowPayload_(sheet, rowIndex, config, skipIfSynced) {
     if (!normalizedHeader) return;
     payload[normalizedHeader] = dataRow[index] ?? '';
   });
-
-  if (config.npdUpdateTimestampHeader) {
-    const timestamp = formatDate_(new Date());
-    const timestampIndex = headerRow.indexOf(config.npdUpdateTimestampHeader);
-    payload[config.npdUpdateTimestampHeader] = timestamp;
-    if (timestampIndex !== -1) {
-      sheet.getRange(rowIndex, timestampIndex + 1).setValue(timestamp);
-    }
-  }
 
   if (skipIfSynced) {
     const hostingerSyncValue = String(payload[config.hostingerSyncHeader] || '').trim();

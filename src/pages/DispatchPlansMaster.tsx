@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 
 import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
-import { DispatchPlan, Truck, Order, Company, OrderSchedule } from "../types";
+import { DispatchPlan, Truck, Order, Company, OrderSchedule, LoadingSlip } from "../types";
 import { formatDate } from "../lib/serial";
-import { Trash2 } from "lucide-react";
+import { Pencil, Save, Trash2, X } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 export function DispatchPlansMaster() {
@@ -26,8 +26,16 @@ export function DispatchPlansMaster() {
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{ date: string; truckId: string; plannedQty: string }>({
+    date: "",
+    truckId: "",
+    plannedQty: "",
+  });
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -37,6 +45,96 @@ export function DispatchPlansMaster() {
     }
     setPlans(plans.filter(p => p.id !== id));
     setDeletingId(null);
+  };
+
+  const loadingSlipPlanIds = useMemo(() => {
+    const ids = new Set<string>();
+    loadingSlips.forEach((slip) => {
+      if (slip.status === "Cancelled") return;
+      slip.lines.forEach((line) => {
+        const planId = String(line.dispatchPlanId || "").trim();
+        if (planId) ids.add(planId);
+      });
+    });
+    return ids;
+  }, [loadingSlips]);
+
+  const openEditModal = (plan: DispatchPlan) => {
+    setEditingPlanId(plan.id);
+    setEditForm({
+      date: String(plan.date || "").slice(0, 10),
+      truckId: String(plan.truckId || ""),
+      plannedQty: String(Number(plan.plannedQty || 0)),
+    });
+  };
+
+  const closeEditModal = () => {
+    if (isSaving) return;
+    setEditingPlanId(null);
+    setEditForm({ date: "", truckId: "", plannedQty: "" });
+  };
+
+  const editingPlan = editingPlanId ? plans.find((plan) => plan.id === editingPlanId) || null : null;
+  const editingSchedule = editingPlan ? schedules.find((schedule) => schedule.id === editingPlan.scheduleId) || null : null;
+  const editingLoaded = Number(editingPlan?.loadedQty || 0);
+  const editingCancelled = Number(editingPlan?.canceledQty || 0);
+  const otherEffectivePlanned = editingPlan
+    ? plans
+        .filter((plan) => plan.scheduleId === editingPlan.scheduleId && plan.id !== editingPlan.id)
+        .reduce((sum, plan) => sum + Math.max(0, Number(plan.plannedQty || 0) - Number(plan.canceledQty || 0)), 0)
+    : 0;
+  const maxEditablePlannedQty = editingSchedule
+    ? Math.max(
+        editingLoaded + editingCancelled,
+        Number(editingSchedule.qty || 0) - Number(editingSchedule.canceledQty || 0) - otherEffectivePlanned
+      )
+    : Infinity;
+
+  const handleSaveEdit = async () => {
+    if (!editingPlan) return;
+    if (loadingSlipPlanIds.has(editingPlan.id)) {
+      alert("Dispatch plan cannot be edited after loading slip creation.");
+      closeEditModal();
+      return;
+    }
+
+    const plannedQty = Number(editForm.plannedQty || 0);
+    if (!editForm.date) {
+      alert("Please enter plan date.");
+      return;
+    }
+    if (!Number.isFinite(plannedQty) || plannedQty <= 0) {
+      alert("Planned qty must be greater than 0.");
+      return;
+    }
+    if (plannedQty < editingLoaded + editingCancelled) {
+      alert("Planned qty cannot be less than loaded qty plus cancelled qty.");
+      return;
+    }
+    if (Number.isFinite(maxEditablePlannedQty) && plannedQty > maxEditablePlannedQty) {
+      alert(`Planned qty cannot exceed ${maxEditablePlannedQty.toLocaleString()}.`);
+      return;
+    }
+
+    const nextPlan: DispatchPlan = {
+      ...editingPlan,
+      date: editForm.date,
+      truckId: editForm.truckId,
+      plannedQty,
+      updatedBy: window.localStorage.getItem("userName") || editingPlan.updatedBy || "Admin",
+      updateTimestamp: new Date().toISOString(),
+    };
+
+    try {
+      setIsSaving(true);
+      await setPlans((prev) => prev.map((plan) => (plan.id === nextPlan.id ? nextPlan : plan)));
+      closeEditModal();
+    } catch (error) {
+      console.error("Failed to update dispatch plan:", error);
+      alert("Failed to update dispatch plan.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -70,11 +168,12 @@ export function DispatchPlansMaster() {
                   <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">No dispatch plans found.</td>
                 </tr>
               ) : (
-                plans.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((p) => {
+                [...plans].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((p) => {
                   const order = orders.find(o => o.id === p.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = npdItems.find(i => i.id === order?.itemId);
                   const pending = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
+                  const hasLoadingSlip = loadingSlipPlanIds.has(p.id);
 
                   return (
                     <tr key={p.id} className="hover:bg-slate-50 divide-x divide-black">
@@ -106,6 +205,15 @@ export function DispatchPlansMaster() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(p)}
+                          disabled={hasLoadingSlip}
+                          title={hasLoadingSlip ? "Loading slip already created. Editing is locked." : "Edit dispatch plan"}
+                          className={`mr-2 p-1 transition ${hasLoadingSlip ? "text-slate-300 cursor-not-allowed" : "text-indigo-600 hover:text-indigo-900"}`}
+                        >
+                          <Pencil size={16} />
+                        </button>
                         <button 
                           onClick={() => handleDelete(p.id)} 
                           className={`${deletingId === p.id ? "text-amber-600 animate-pulse scale-110" : "text-red-600"} hover:text-red-900 transition-all p-1`}
@@ -121,6 +229,87 @@ export function DispatchPlansMaster() {
           </table>
         </div>
       </div>
+
+      {editingPlan ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeEditModal}>
+          <div className="w-full max-w-2xl rounded-xl border-2 border-black bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b-2 border-black px-5 py-4">
+              <div>
+                <h3 className="text-lg font-black uppercase tracking-tight text-black">Edit Dispatch Plan</h3>
+                <div className="text-xs font-semibold text-slate-500">{editingPlan.planNo || "-"}</div>
+              </div>
+              <button type="button" onClick={closeEditModal} className="text-slate-500 hover:text-black transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid gap-4 p-5 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase text-black">Plan Date</label>
+                <input
+                  type="date"
+                  value={editForm.date}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, date: e.target.value }))}
+                  className="w-full rounded border border-black px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase text-black">Truck</label>
+                <select
+                  value={editForm.truckId}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, truckId: e.target.value }))}
+                  className="w-full rounded border border-black px-3 py-2 text-sm"
+                >
+                  <option value="">Select truck</option>
+                  {trucks.map((truck) => (
+                    <option key={truck.id} value={truck.id}>
+                      {truck.truckNo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase text-black">Planned Qty</label>
+                <input
+                  type="number"
+                  min={editingLoaded + editingCancelled}
+                  step="0.01"
+                  value={editForm.plannedQty}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, plannedQty: e.target.value }))}
+                  className="w-full rounded border border-black px-3 py-2 text-sm"
+                />
+                <div className="mt-1 text-[11px] text-slate-500">
+                  Max allowed: {Number.isFinite(maxEditablePlannedQty) ? maxEditablePlannedQty.toLocaleString() : "-"}
+                </div>
+              </div>
+              <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <div><span className="font-bold text-black">Loaded:</span> {editingLoaded.toLocaleString()}</div>
+                <div><span className="font-bold text-black">Cancelled:</span> {editingCancelled.toLocaleString()}</div>
+                <div><span className="font-bold text-black">Schedule Qty:</span> {Number(editingSchedule?.qty || 0).toLocaleString()}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeEditModal}
+                className="rounded border border-black px-4 py-2 text-sm font-bold text-black"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 rounded bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+              >
+                <Save size={16} />
+                {isSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
