@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
