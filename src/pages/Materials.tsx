@@ -293,35 +293,52 @@ export function Materials() {
   }, [colorFilter, gsmFilter, materials, searchTerm, sizeFilter, sortDirection, sortKey, typeFilter]);
 
   const metrics = useMemo(() => {
-    let openingTotal = 0;
-    let receiptTotal = 0;
-    let issueTotal = 0;
-    let returnTotal = 0;
-    let closingTotal = 0;
+    let openingQtyTotal = 0;
+    let openingValueTotal = 0;
+    let receiptQtyTotal = 0;
+    let receiptValueTotal = 0;
+    let issueQtyTotal = 0;
+    let issueValueTotal = 0;
+    let returnQtyTotal = 0;
+    let closingQtyTotal = 0;
+    let closingValueTotal = 0;
 
     filteredMaterials.forEach((material) => {
       const movement = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
-      const opening = Number(material.openingQty || 0);
-      const receipts = Number(movement.receipts || 0);
-      const issues = Number(movement.issues || 0);
-      const returns = Number(movement.returns || 0);
-      const closing = opening + receipts + returns - issues;
+      const openingQty = Number(material.openingQty || 0);
+      const openingRate = Number(material.openingRate || 0);
+      const openingValue = Number(material.openingValue ?? (openingQty * openingRate) || 0);
+      const receiptQty = Number(movement.receipts || 0);
+      const issueQty = Number(movement.issues || 0);
+      const returnQty = Number(movement.returns || 0);
+      const closingQty = openingQty + receiptQty + returnQty - issueQty;
+      const receiptValue = receiptQty * openingRate;
+      const issueValue = issueQty * openingRate;
+      const closingValue = closingQty * openingRate;
 
-      openingTotal += opening;
-      receiptTotal += receipts;
-      issueTotal += issues;
-      returnTotal += returns;
-      closingTotal += closing;
+      openingQtyTotal += openingQty;
+      openingValueTotal += openingValue;
+      receiptQtyTotal += receiptQty;
+      receiptValueTotal += receiptValue;
+      issueQtyTotal += issueQty;
+      issueValueTotal += issueValue;
+      returnQtyTotal += returnQty;
+      closingQtyTotal += closingQty;
+      closingValueTotal += closingValue;
     });
 
     return {
       total: filteredMaterials.length,
       active: filteredMaterials.filter((material) => material.active !== "No").length,
-      openingTotal,
-      receiptTotal,
-      issueTotal,
-      returnTotal,
-      closingTotal,
+      openingQtyTotal,
+      openingValueTotal,
+      receiptQtyTotal,
+      receiptValueTotal,
+      issueQtyTotal,
+      issueValueTotal,
+      returnQtyTotal,
+      closingQtyTotal,
+      closingValueTotal,
     };
   }, [filteredMaterials, movementSummaryMap]);
 
@@ -1209,24 +1226,24 @@ export function Materials() {
             {/* Colorful Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
               <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
-                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Opening Value</div>
-                <div className="text-3xl font-black">{metrics.openingTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                <div className="text-[10px] font-bold mt-1 opacity-90">{metrics.total} filtered materials</div>
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Opening</div>
+                <div className="text-3xl font-black">{metrics.openingQtyTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-xs font-bold mt-1 opacity-95">Value {metrics.openingValueTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               </div>
               <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
-                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Receipts Value</div>
-                <div className="text-3xl font-black">{metrics.receiptTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                <div className="text-[10px] font-bold mt-1 opacity-90">Inward quantity across filtered rows</div>
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Receipts</div>
+                <div className="text-3xl font-black">{metrics.receiptQtyTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-xs font-bold mt-1 opacity-95">Value {metrics.receiptValueTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               </div>
               <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
-                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Issue Value</div>
-                <div className="text-3xl font-black">{metrics.issueTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                <div className="text-[10px] font-bold mt-1 opacity-90">Outward quantity across filtered rows</div>
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Issues</div>
+                <div className="text-3xl font-black">{metrics.issueQtyTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-xs font-bold mt-1 opacity-95">Value {metrics.issueValueTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               </div>
               <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
-                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Closing Value</div>
-                <div className="text-3xl font-black">{metrics.closingTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                <div className="text-[10px] font-bold mt-1 opacity-90">Includes returns {metrics.returnTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Closing</div>
+                <div className="text-3xl font-black">{metrics.closingQtyTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-xs font-bold mt-1 opacity-95">Value {metrics.closingValueTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               </div>
             </div>
 
