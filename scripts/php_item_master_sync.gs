@@ -3,7 +3,7 @@ const PHP_ITEM_MASTER_SYNC_CONFIG = {
   secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
   tabName: 'PHP ITEM MASTER',
   spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
-  idHeader: 'Item Id',
+  idHeader: 'php_id',
   hostingerSyncHeader: 'Hostinger Sync',
   flushDelayMs: 15000,
   pendingRowsPropertyKey: 'PHP_ITEM_MASTER_PENDING_ROWS',

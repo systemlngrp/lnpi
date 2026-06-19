@@ -223,6 +223,9 @@ const PHP_ITEM_MASTER_HEADER_MAP = {
   "Weight Per Pc/ Set (req)": "weightPerPcReq",
   "Calculated Weight Per PC/Set(req)": "calculatedWeightPerPcReq",
   "Item Id": "itemId",
+  "php_id": "phpId",
+  "PHP ID": "phpId",
+  "php id": "phpId",
   "CATEGORY": "category",
   "Holes Oreintation (L )": "holesOrientationL",
   "Holes Oreintation (W)": "holesOrientationW",
@@ -288,6 +291,9 @@ const PLATE_ITEM_MASTER_HEADER_MAP = {
   "Weight Per Pc/ Set (req)": "weightPerPcReq",
   "Calculated Weight Per PC/Set(req)": "calculatedWeightPerPcReq",
   "Item Id": "itemId",
+  "plateid": "plateId",
+  "Plate ID": "plateId",
+  "plate id": "plateId",
   "CATEGORY": "category",
   "No. of Ups for RAPC": "noOfUpsForRapc",
   "RAPC": "rapc",
@@ -628,7 +634,7 @@ app.post("/api/npd-sync", async (req, res) => {
   const rawRowsPayload = req.body?.rows;
   const syncTimestamp = stringOrEmpty(req.body?.syncTimestamp || (/* @__PURE__ */ new Date()).toISOString());
   const syncModeRaw = stringOrEmpty(req.body?.syncMode || "batch").toLowerCase();
-  const syncMode = syncModeRaw === "full" ? "full" : "batch";
+  const syncMode = syncModeRaw === "full" || syncModeRaw === "full_batch_chunk" ? "full" : "batch";
   const spreadsheetName = stringOrEmpty(req.body?.spreadsheetName);
   const spreadsheetId = stringOrEmpty(req.body?.spreadsheetId);
   if (!tabName) {
@@ -644,22 +650,24 @@ app.post("/api/npd-sync", async (req, res) => {
     },
     "PHP ITEM MASTER": {
       table: "php_item_master",
-      idColumn: "itemId",
+      idColumn: "phpId",
       headerMap: PHP_ITEM_MASTER_HEADER_MAP,
       requiredHeaders: PHP_ITEM_MASTER_REQUIRED_HEADERS,
       mapFn: (row) => {
         const mapped = mapSheetRowByHeaderMap_(row, PHP_ITEM_MASTER_HEADER_MAP);
+        mapped.phpId = stringOrEmpty(mapped.phpId || mapped.itemId);
         mapped.itemId = stringOrEmpty(mapped.itemId);
         return mapped;
       }
     },
     "PLATE ITEM MASTER": {
       table: "plate_item_master",
-      idColumn: "itemId",
+      idColumn: "plateId",
       headerMap: PLATE_ITEM_MASTER_HEADER_MAP,
       requiredHeaders: PLATE_ITEM_MASTER_REQUIRED_HEADERS,
       mapFn: (row) => {
         const mapped = mapSheetRowByHeaderMap_(row, PLATE_ITEM_MASTER_HEADER_MAP);
+        mapped.plateId = stringOrEmpty(mapped.plateId || mapped.itemId);
         mapped.itemId = stringOrEmpty(mapped.itemId);
         return mapped;
       }
@@ -756,6 +764,7 @@ app.post("/api/npd-sync", async (req, res) => {
   const duplicateIds = [...duplicateCounter.entries()].filter(([, count]) => count > 1).map(([id]) => id);
   const validRows = [...dedupedById.values()];
   const incomingIds = validRows.map((entry) => entry.mapped[config.idColumn]);
+  const processedIds = incomingIds.map((value) => stringOrEmpty(value)).filter((value) => value !== "");
   if (syncMode === "full" && duplicateIds.length > 0) {
     console.error(`${NPD_SYNC_LOG_PREFIX} Duplicate IDs in full sync`, duplicateIds);
     return res.status(400).json({
@@ -843,6 +852,7 @@ app.post("/api/npd-sync", async (req, res) => {
       syncTimestamp,
       totalRowsReceived: rowsPayload.length,
       processedRows: validRows.length,
+      processedIds,
       inserted,
       updated,
       removed,
@@ -5090,3 +5100,4 @@ async function startServer() {
   });
 }
 startServer();
+

@@ -3,7 +3,7 @@ const PLATE_ITEM_MASTER_SYNC_CONFIG = {
   secret: 'REPLACE_WITH_NPD_SYNC_SECRET',
   tabName: 'PLATE ITEM MASTER',
   spreadsheetId: SpreadsheetApp.getActiveSpreadsheet().getId(),
-  idHeader: 'Item Id',
+  idHeader: 'plateid',
   hostingerSyncHeader: 'Hostinger Sync',
   flushDelayMs: 15000,
   pendingRowsPropertyKey: 'PLATE_ITEM_MASTER_PENDING_ROWS',
