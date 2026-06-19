@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { TableControls } from "../components/TableControls";
@@ -9,6 +9,8 @@ import { OrderSchedule, Order, Company, Item, DispatchPlan, LoadingSlip, Product
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { ArrowUpDown, Save } from "lucide-react";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 type SortKey = "scheduledDate" | "orderNo" | "companyName" | "itemName" | "pendingQty";
 
@@ -16,15 +18,6 @@ export function PendingDispatchPlanning() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
 
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
@@ -179,12 +172,28 @@ export function PendingDispatchPlanning() {
   }, [basePendingSchedules, orders, companies]);
 
   const filteredSchedules = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
     const rows = !selectedCompanyId ? basePendingSchedules : basePendingSchedules.filter(s => {
       const order = orders.find(o => o.id === s.orderId);
       return order?.companyId === selectedCompanyId;
     });
 
-    return [...rows].sort((a, b) => {
+    return [...rows]
+      .filter((schedule) => {
+        if (!normalizedSearch) return true;
+        const order = orders.find((o) => o.id === schedule.orderId);
+        const company = companies.find((c) => c.id === order?.companyId);
+        const item = resolveOrderItem(order);
+        const haystack = [
+          formatDate(schedule.scheduledDate),
+          order?.orderNo,
+          company?.name,
+          item?.name,
+          String(schedule.qty || ""),
+        ].join(" ").toLowerCase();
+        return haystack.includes(normalizedSearch);
+      })
+      .sort((a, b) => {
       const orderA = orders.find(o => o.id === a.orderId);
       const orderB = orders.find(o => o.id === b.orderId);
       const companyA = companies.find(c => c.id === orderA?.companyId)?.name || "";
@@ -217,7 +226,16 @@ export function PendingDispatchPlanning() {
 
       return sortDirection === "asc" ? compare : -compare;
     });
-  }, [basePendingSchedules, selectedCompanyId, orders, companies, npdItems, sortDirection, sortKey, getEffectivePlannedForSchedule]);
+  }, [basePendingSchedules, selectedCompanyId, orders, companies, searchTerm, sortDirection, sortKey, getEffectivePlannedForSchedule, resolveOrderItem]);
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedSchedules,
+  } = useClientPagination(filteredSchedules, 25);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -583,7 +601,7 @@ export function PendingDispatchPlanning() {
                     type="checkbox" 
                     className="w-4 h-4 rounded border-black text-indigo-600 focus:ring-indigo-600"
                     onChange={handleSelectAll}
-                    checked={filteredSchedules.length > 0 && selectedIds.size === filteredSchedules.length}
+                    checked={paginatedSchedules.length > 0 && paginatedSchedules.every((schedule) => selectedIds.has(schedule.id))}
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Scheduled Date", "scheduledDate")}</th>
@@ -600,7 +618,7 @@ export function PendingDispatchPlanning() {
                   <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No pending dispatch plans found.</td>
                 </tr>
               ) : (
-                filteredSchedules.map((s) => {
+                paginatedSchedules.map((s) => {
                   const order = orders.find(o => o.id === s.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = resolveOrderItem(order);
@@ -668,6 +686,14 @@ export function PendingDispatchPlanning() {
           </table>
         </div>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }

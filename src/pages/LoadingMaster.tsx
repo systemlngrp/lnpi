@@ -24,6 +24,8 @@ import { formatDate } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 function getSlipNoSortValue(slipNo: string) {
   const value = String(slipNo || "").trim();
@@ -143,6 +145,15 @@ export function LoadingMaster() {
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
   }, [loadingSlips, plans, orders, npdItems, companies, searchTerm, companyFilter, erpFilter, itemFilter]);
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedSlips,
+  } = useClientPagination(processedSlips, 25);
 
   const handleDownloadPdf = async (slip: LoadingSlip) => {
     setIsDownloading(slip.id);
@@ -462,11 +473,11 @@ export function LoadingMaster() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-black">
-            {processedSlips.length === 0 ? (
+            {paginatedSlips.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
               </tr>
-            ) : processedSlips.map((slip) => (
+) : paginatedSlips.map((slip) => (
               <tr key={slip.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
@@ -554,7 +565,7 @@ export function LoadingMaster() {
                 </td>
               </tr>
             ))}
-            {processedSlips.map((slip) => {
+            {paginatedSlips.map((slip) => {
               const isExpanded = expandedSlipIds.has(slip.id);
               if (!isExpanded) return null;
               const draft = draftBySlipId[slip.id] || slip;
@@ -708,6 +719,14 @@ export function LoadingMaster() {
           </tbody>
         </table>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }

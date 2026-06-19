@@ -22,6 +22,8 @@ import {
   Truck as TruckIcon,
 } from "lucide-react";
 import { formatDate } from "../lib/serial";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 type InvoiceDetailRow = {
   id: string;
@@ -200,6 +202,15 @@ export function InvoicesMaster() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [invoices, companies, searchTerm, lineItems, npdItems, slips, trucks, dispatchPlans, orders]);
 
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedInvoices,
+  } = useClientPagination(processedInvoices, 25);
+
   const invoiceDetails = useMemo(() => {
     if (!selectedInvoice) return [];
     return buildInvoiceDetails(selectedInvoice);
@@ -243,14 +254,14 @@ export function InvoicesMaster() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-black">
-            {processedInvoices.length === 0 ? (
+            {paginatedInvoices.length === 0 ? (
               <tr>
                 <td colSpan={13} className="px-6 py-12 text-center text-slate-500 italic">
                   No invoices found.
                 </td>
               </tr>
             ) : (
-              processedInvoices.map((invoice) => (
+              paginatedInvoices.map((invoice) => (
                 <React.Fragment key={invoice.id}>
                   <tr className="hover:bg-slate-50 transition-colors divide-x divide-black">
                     <td className="px-4 py-4 text-center">
@@ -372,6 +383,14 @@ export function InvoicesMaster() {
           </tbody>
         </table>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

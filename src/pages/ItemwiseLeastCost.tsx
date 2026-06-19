@@ -5,6 +5,8 @@ import { Production, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Search } from "lucide-react";
 import { formatDate } from "../lib/serial";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 interface LeastCostRecord {
   date: string;
@@ -85,6 +87,15 @@ export function ItemwiseLeastCost() {
     );
   }, [leastCostData, searchTerm]);
 
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedData,
+  } = useClientPagination(filteredData, 25);
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -146,7 +157,7 @@ export function ItemwiseLeastCost() {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((row, idx) => (
+                paginatedData.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors divide-x divide-black text-[11px] whitespace-nowrap">
                     <td className="px-3 py-2 text-black">{formatDate(row.date)}</td>
                     <td className="px-3 py-2 font-bold text-black">{row.jobCardNo}</td>
@@ -182,6 +193,14 @@ export function ItemwiseLeastCost() {
           </table>
         </div>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }

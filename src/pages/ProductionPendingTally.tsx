@@ -12,6 +12,8 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { CheckCircle, Search } from "lucide-react";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 import { cn } from "../lib/utils";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 import { isProductionReadyForTally } from "../lib/productionStageFilters";
@@ -61,12 +63,23 @@ export function ProductionPendingTally() {
     }, 500);
   };
 
-  const pendingList = productions.filter(p => 
-    isProductionReadyForTally(p, getProductionActualPaperUsed(p, usageMap)) && (
-      p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (npdItems.find(i => i.id === p.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+  const pendingList = productions
+    .filter(p => 
+      isProductionReadyForTally(p, getProductionActualPaperUsed(p, usageMap)) && (
+        p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (npdItems.find(i => i.id === p.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+      )
     )
-  );
+    .sort((a, b) => new Date(b.updateTimestamp).getTime() - new Date(a.updateTimestamp).getTime());
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedPendingList,
+  } = useClientPagination(pendingList, 25);
 
   return (
     <div className="space-y-6">
@@ -90,7 +103,7 @@ export function ProductionPendingTally() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4 p-2">
-            {pendingList.sort((a, b) => new Date(b.updateTimestamp).getTime() - new Date(a.updateTimestamp).getTime()).map((p) => (
+            {paginatedPendingList.map((p) => (
                 <div key={p.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
                     <div className="flex justify-between items-center">
                         <div className="font-bold text-sm">Job: {p.transactionNo}</div>
@@ -125,14 +138,12 @@ export function ProductionPendingTally() {
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
-            {pendingList.length === 0 ? (
+            {paginatedPendingList.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
               </tr>
             ) : (
-              pendingList
-                .sort((a, b) => new Date(b.updateTimestamp).getTime() - new Date(a.updateTimestamp).getTime())
-                .map((p) => (
+              paginatedPendingList.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50 divide-x divide-black">
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{p.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
@@ -160,6 +171,14 @@ export function ProductionPendingTally() {
           </tbody>
         </table>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
 import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
@@ -7,19 +7,12 @@ import { formatDate } from "../lib/serial";
 import { Pencil, Save, Trash2, X } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 export function DispatchPlansMaster() {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
 
   const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [trucks] = useData<Truck>("trucks", []);
@@ -139,6 +132,41 @@ export function DispatchPlansMaster() {
     }
   };
 
+  const filteredPlans = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return [...plans]
+      .filter((plan) => {
+        if (!normalizedSearch) return true;
+        const order = orders.find((o) => o.id === plan.orderId);
+        const company = companies.find((c) => c.id === order?.companyId);
+        const item = resolveOrderItem(order);
+        const pending = Number(plan.plannedQty || 0) - Number(plan.loadedQty || 0) - Number(plan.canceledQty || 0);
+        const haystack = [
+          plan.planNo,
+          formatDate(plan.date),
+          company?.name,
+          order?.orderNo,
+          item?.name,
+          String(plan.plannedQty || ""),
+          String(plan.loadedQty || ""),
+          String(plan.canceledQty || ""),
+          String(pending),
+          plan.status,
+        ].join(" ").toLowerCase();
+        return haystack.includes(normalizedSearch);
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [plans, searchTerm, orders, companies, resolveOrderItem]);
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedPlans,
+  } = useClientPagination(filteredPlans, 25);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -165,12 +193,12 @@ export function DispatchPlansMaster() {
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
-              {plans.length === 0 ? (
+              {paginatedPlans.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">No dispatch plans found.</td>
                 </tr>
               ) : (
-                [...plans].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((p) => {
+                paginatedPlans.map((p) => {
                   const order = orders.find(o => o.id === p.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = resolveOrderItem(order);
@@ -231,6 +259,14 @@ export function DispatchPlansMaster() {
           </table>
         </div>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {editingPlan ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeEditModal}>

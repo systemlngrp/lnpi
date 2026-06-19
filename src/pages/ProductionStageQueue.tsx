@@ -20,6 +20,8 @@ import {
 } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
 import { normalizeMachineName } from "../lib/productionMachineNames";
@@ -231,6 +233,15 @@ export function ProductionStageQueue({
     usageMap,
   ]);
 
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedRows,
+  } = useClientPagination(rows, 25);
+
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (column !== sortKey) return <ArrowUpDown size={12} className="opacity-60" />;
     return sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />;
@@ -384,7 +395,7 @@ export function ProductionStageQueue({
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
-              {rows.length === 0 ? (
+              {paginatedRows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={
@@ -400,7 +411,7 @@ export function ProductionStageQueue({
                   </td>
                 </tr>
               ) : (
-                rows.map(({ production, order, item, company, actualPaperUsed, prereqQty, requiredMachines }) => (
+                paginatedRows.map(({ production, order, item, company, actualPaperUsed, prereqQty, requiredMachines }) => (
                   <tr key={production.id} className="hover:bg-slate-50 divide-x divide-black">
                     <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{production.transactionNo}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(production.date)}</td>
@@ -526,6 +537,14 @@ export function ProductionStageQueue({
           </table>
         </div>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }
