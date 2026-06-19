@@ -20,6 +20,7 @@ import {
   X,
   FileText,
   Truck as TruckIcon,
+  Pencil,
 } from "lucide-react";
 import { formatDate } from "../lib/serial";
 import { ClientPagination } from "../components/ClientPagination";
@@ -161,6 +162,10 @@ export function InvoicesMaster() {
   const openGatePass = (invoiceId: string) => {
     const existingGatePass = gatePasses.find((gatePass) => gatePass.invoiceId === invoiceId);
     navigate(existingGatePass ? `/gate-pass/form?id=${existingGatePass.id}` : `/gate-pass/form?invoiceId=${invoiceId}`);
+  };
+
+  const openInvoiceEditor = (invoiceId: string) => {
+    navigate(`/billing/pending?editInvoiceId=${encodeURIComponent(invoiceId)}`);
   };
 
   const processedInvoices = useMemo(() => {
@@ -315,6 +320,15 @@ export function InvoicesMaster() {
                         >
                           <FileText size={18} />
                         </button>
+                        {!invoice.tallyTimestamp && (
+                          <button
+                            onClick={() => openInvoiceEditor(invoice.id)}
+                            className="p-1.5 text-amber-700 hover:bg-amber-50 rounded"
+                            title="Edit Pending Invoice"
+                          >
+                            <Pencil size={18} />
+                          </button>
+                        )}
                         <button
                           onClick={() => openGatePass(invoice.id)}
                           className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"
@@ -461,14 +475,26 @@ export function InvoicesMaster() {
               )}
 
               <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => openGatePass(selectedInvoice.id)}
-                  className="inline-flex items-center gap-2 rounded border-2 border-black px-4 py-2 text-xs font-black uppercase hover:bg-slate-50"
-                >
-                  <TruckIcon size={16} />
-                  {gatePasses.some((gatePass) => gatePass.invoiceId === selectedInvoice.id) ? "Open Gate Pass" : "Create Gate Pass"}
-                </button>
+                <div className="flex gap-3">
+                  {!selectedInvoice.tallyTimestamp && (
+                    <button
+                      type="button"
+                      onClick={() => openInvoiceEditor(selectedInvoice.id)}
+                      className="inline-flex items-center gap-2 rounded border-2 border-amber-700 px-4 py-2 text-xs font-black uppercase text-amber-800 hover:bg-amber-50"
+                    >
+                      <Pencil size={16} />
+                      Edit Invoice
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openGatePass(selectedInvoice.id)}
+                    className="inline-flex items-center gap-2 rounded border-2 border-black px-4 py-2 text-xs font-black uppercase hover:bg-slate-50"
+                  >
+                    <TruckIcon size={16} />
+                    {gatePasses.some((gatePass) => gatePass.invoiceId === selectedInvoice.id) ? "Open Gate Pass" : "Create Gate Pass"}
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto border border-black">

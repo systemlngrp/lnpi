@@ -20,13 +20,16 @@ import {
   ChevronDown,
   FileText,
   CheckCircle,
-  Hash
+  Hash,
+  Pencil
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
+import { useNavigate } from "react-router-dom";
 
 export function BillingPendingTally() {
+  const navigate = useNavigate();
   const [invoices, setInvoices, isLoading] = useData<Invoice>("invoices", []);
   const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [companies] = useData<Company>("companies", []);
@@ -154,6 +157,10 @@ export function BillingPendingTally() {
     }
   };
 
+  const handleEditInvoice = (id: string) => {
+    navigate(`/billing/pending?editInvoiceId=${encodeURIComponent(id)}`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center border-b border-black pb-4">
@@ -229,13 +236,23 @@ export function BillingPendingTally() {
                       ₹{inv.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <button 
-                        disabled={!!processingId}
-                        onClick={() => handleMarkPosted(inv.id)}
-                        className="bg-emerald-600 text-white px-4 py-1.5 rounded text-xs font-black uppercase hover:bg-emerald-700 flex items-center gap-2 mx-auto disabled:opacity-50"
-                      >
-                        {processingId === inv.id ? <Spinner size={12} /> : <><CheckCircle size={14} /> Mark Posted</>}
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditInvoice(inv.id)}
+                          className="bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-black uppercase hover:bg-amber-700 flex items-center gap-2"
+                        >
+                          <Pencil size={14} />
+                          Edit
+                        </button>
+                        <button 
+                          disabled={!!processingId}
+                          onClick={() => handleMarkPosted(inv.id)}
+                          className="bg-emerald-600 text-white px-4 py-1.5 rounded text-xs font-black uppercase hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {processingId === inv.id ? <Spinner size={12} /> : <><CheckCircle size={14} /> Mark Posted</>}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   {expandedRows.has(inv.id) && (

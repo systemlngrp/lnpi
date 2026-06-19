@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { 
   LoadingSlip, 
   Company, 
@@ -56,15 +57,17 @@ interface InvoiceItemRow {
 }
 
 export function PendingInvoicing() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loadingSlips, , , loadingSlipApi] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
   const { resolveOrderItem } = useOrderItemCatalog();
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
-  const [, , , invoiceApi] = useData<Invoice>("invoices", []);
+  const [invoices, , , invoiceApi] = useData<Invoice>("invoices", []);
   const [invoiceLineItems, , , invoiceLineItemApi] = useData<InvoiceLineItem>("invoice_line_items", []);
-  const [, , , gatePassApi] = useData<GatePass>("gate_passes", []);
+  const [gatePasses, , , gatePassApi] = useData<GatePass>("gate_passes", []);
   const [trucks] = useData<Truck>("trucks", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -84,6 +87,7 @@ export function PendingInvoicing() {
   const [destination, setDestination] = useState("");
   const [transporter, setTransporter] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const editInvoiceId = String(searchParams.get("editInvoiceId") || "").trim();
 
   useAutoRefreshPause(
     Boolean(billingMode) ||
@@ -137,6 +141,94 @@ export function PendingInvoicing() {
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setExpandedCompanies(next);
+  };
+
+  const buildInvoiceRowsFromSlips = (selected: any[]) => {
+    const itemMap = new Map<string, InvoiceItemRow>();
+    const itemOrderQtyMap = new Map<string, Map<string, number>>();
+
+    selected.forEach((slip) => {
+      slip.lines.forEach((line: any) => {
+        const plan = plans.find((p) => p.id === line.dispatchPlanId);
+        const order = orders.find((o) => o.id === plan?.orderId);
+        const item = resolveOrderItem(order);
+        if (!order || !item) return;
+
+        const qty = Number(line.loadedQty || 0);
+        const gstRate = item.gstRate ?? 18;
+        const existing = itemMap.get(item.id);
+
+        if (existing) {
+          existing.totalQty += qty;
+          existing.sources.push({ loadingSlipId: slip.id, qty });
+        } else {
+          itemMap.set(item.id, {
+            id: crypto.randomUUID(),
+            itemId: item.id,
+            gstRate,
+            totalQty: qty,
+            sources: [{ loadingSlipId: slip.id, qty }],
+            allocations: [],
+          });
+        }
+
+        const byOrder = itemOrderQtyMap.get(item.id) || new Map<string, number>();
+        byOrder.set(order.id, (byOrder.get(order.id) || 0) + qty);
+        itemOrderQtyMap.set(item.id, byOrder);
+      });
+    });
+
+    itemMap.forEach((row, itemId) => {
+      const byOrder = itemOrderQtyMap.get(itemId) || new Map<string, number>();
+      const allocations: InvoiceAllocationRow[] = Array.from(byOrder.entries()).map(([orderId, qty]) => ({
+        id: crypto.randomUUID(),
+        orderId,
+        qty,
+      }));
+      row.allocations = allocations.length ? allocations : [{ id: crypto.randomUUID(), orderId: "", qty: row.totalQty }];
+    });
+
+    return Array.from(itemMap.values());
+  };
+
+  const applySavedInvoiceAllocations = (rows: InvoiceItemRow[], invoiceId: string) => {
+    const lineItemsForInvoice = invoiceLineItems.filter((line) => line.invoiceId === invoiceId);
+    if (lineItemsForInvoice.length === 0) return rows;
+
+    return rows.map((row) => {
+      const matchingLines = lineItemsForInvoice.filter((line) => String(line.itemId || "").trim() === row.itemId);
+      if (matchingLines.length === 0) return row;
+
+      const allocationsByOrder = new Map<string, number>();
+      let gstRate = row.gstRate;
+
+      matchingLines.forEach((line) => {
+        const slip = loadingSlips.find((entry) => entry.id === line.loadingSlipId);
+        const slipLine = slip?.lines?.find((entry: any) => {
+          const plan = plans.find((p) => p.id === entry.dispatchPlanId);
+          const order = orders.find((o) => o.id === plan?.orderId);
+          return String(order?.itemId || "").trim() === row.itemId;
+        });
+        const plan = slipLine ? plans.find((p) => p.id === slipLine.dispatchPlanId) : undefined;
+        const orderId = String(plan?.orderId || "").trim();
+        if (orderId) {
+          allocationsByOrder.set(orderId, (allocationsByOrder.get(orderId) || 0) + Number(line.qty || 0));
+        }
+        gstRate = Number(line.gstRate ?? gstRate ?? 0);
+      });
+
+      const allocations = Array.from(allocationsByOrder.entries()).map(([orderId, qty]) => ({
+        id: crypto.randomUUID(),
+        orderId,
+        qty,
+      }));
+
+      return {
+        ...row,
+        gstRate,
+        allocations: allocations.length ? allocations : row.allocations,
+      };
+    });
   };
 
   const groupedData = useMemo(() => {
@@ -234,53 +326,7 @@ export function PendingInvoicing() {
     setOtherCharges("");
     setDestination("");
     setTransporter("");
-    
-    const itemMap = new Map<string, InvoiceItemRow>();
-    const itemOrderQtyMap = new Map<string, Map<string, number>>(); // itemId -> orderId -> qty
-
-    selected.forEach((slip) => {
-      slip.lines.forEach((line: any) => {
-        const plan = plans.find((p) => p.id === line.dispatchPlanId);
-        const order = orders.find((o) => o.id === plan?.orderId);
-        const item = resolveOrderItem(order);
-        if (!order || !item) return;
-
-        const qty = Number(line.loadedQty || 0);
-        const gstRate = item.gstRate ?? 18;
-
-        const existing = itemMap.get(item.id);
-        if (existing) {
-          existing.totalQty += qty;
-          existing.sources.push({ loadingSlipId: slip.id, qty });
-        } else {
-          itemMap.set(item.id, {
-            id: crypto.randomUUID(),
-            itemId: item.id,
-            gstRate,
-            totalQty: qty,
-            sources: [{ loadingSlipId: slip.id, qty }],
-            allocations: [],
-          });
-        }
-
-        const byOrder = itemOrderQtyMap.get(item.id) || new Map<string, number>();
-        byOrder.set(order.id, (byOrder.get(order.id) || 0) + qty);
-        itemOrderQtyMap.set(item.id, byOrder);
-      });
-    });
-
-    // Seed allocations from slips' original orders
-    itemMap.forEach((row, itemId) => {
-      const byOrder = itemOrderQtyMap.get(itemId) || new Map<string, number>();
-      const allocations: InvoiceAllocationRow[] = Array.from(byOrder.entries()).map(([orderId, qty]) => ({
-        id: crypto.randomUUID(),
-        orderId,
-        qty,
-      }));
-      row.allocations = allocations.length ? allocations : [{ id: crypto.randomUUID(), orderId: "", qty: row.totalQty }];
-    });
-
-    setInvoiceRows(Array.from(itemMap.values()));
+    setInvoiceRows(buildInvoiceRowsFromSlips(selected));
 
     const company = companies.find(c => c.id === billingMode);
     setGstSupplyType((company?.gstSupplyType as any) || "INTRA_STATE");
@@ -291,6 +337,10 @@ export function PendingInvoicing() {
     setDestination("");
     setTransporter("");
     setOtherCharges("");
+    if (editInvoiceId) {
+      setSearchParams({});
+      navigate("/billing/master");
+    }
   };
 
   const handleAddRow = () => {
@@ -405,6 +455,49 @@ export function PendingInvoicing() {
     });
   }, [invoiceModal, trucks]);
 
+  useEffect(() => {
+    if (!editInvoiceId || invoiceModal !== null) return;
+
+    const invoice = invoices.find((entry) => entry.id === editInvoiceId);
+    if (!invoice) return;
+    if (invoice.tallyTimestamp) {
+      alert("This invoice is already posted to Tally and can no longer be edited.");
+      setSearchParams({});
+      navigate("/billing/master");
+      return;
+    }
+
+    const selected = loadingSlips.filter((slip) => slip.invoiceId === editInvoiceId && slip.status !== "Cancelled");
+    if (selected.length === 0) {
+      alert("No active loading slips were found for this invoice.");
+      setSearchParams({});
+      navigate("/billing/master");
+      return;
+    }
+
+    setBillingMode(invoice.companyId);
+    setSelectedSlips(new Set(selected.map((slip) => slip.id)));
+    setInvoiceModal({ companyId: invoice.companyId, slips: selected });
+    setOtherCharges(Number(invoice.otherCharges || 0));
+    setDestination(invoice.destination || "");
+    setTransporter(invoice.transporter || "");
+    setGstSupplyType((companies.find((row) => row.id === invoice.companyId)?.gstSupplyType as any) || "INTRA_STATE");
+
+    const seededRows = buildInvoiceRowsFromSlips(selected);
+    setInvoiceRows(applySavedInvoiceAllocations(seededRows, editInvoiceId));
+  }, [
+    editInvoiceId,
+    invoiceModal,
+    invoices,
+    loadingSlips,
+    invoiceLineItems,
+    plans,
+    orders,
+    companies,
+    navigate,
+    setSearchParams,
+  ]);
+
   const handleSubmitInvoice = async () => {
     if (!invoiceModal || isSubmitting) return;
     const company = companies.find(c => c.id === invoiceModal.companyId);
@@ -472,11 +565,12 @@ export function PendingInvoicing() {
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      const invoiceId = crypto.randomUUID();
+      const existingInvoice = editInvoiceId ? invoices.find((invoice) => invoice.id === editInvoiceId) : undefined;
+      const invoiceId = existingInvoice?.id || crypto.randomUUID();
       const newInvoice: Invoice = {
         id: invoiceId,
-        invoiceNo: "",
-        date: new Date().toISOString().slice(0, 10),
+        invoiceNo: existingInvoice?.invoiceNo || "",
+        date: existingInvoice?.date || new Date().toISOString().slice(0, 10),
         companyId: company.id,
         destination: destination.trim() || undefined,
         transporter: shouldShowTransporter ? (transporter.trim() || undefined) : undefined,
@@ -488,6 +582,12 @@ export function PendingInvoicing() {
         totalAfterGst: calculations.totalAfterGst,
         otherCharges: calculations.otherCharges,
         roundOff: calculations.roundOff,
+        tallyTimestamp: existingInvoice?.tallyTimestamp,
+        tallyBy: existingInvoice?.tallyBy,
+        tallyInvNo: existingInvoice?.tallyInvNo,
+        tallyInvDate: existingInvoice?.tallyInvDate,
+        tallyInvId: existingInvoice?.tallyInvId,
+        tallySyncRemark: existingInvoice?.tallySyncRemark,
         updatedBy: "System User",
         updateTimestamp: timestamp
       };
@@ -559,6 +659,8 @@ export function PendingInvoicing() {
       let gatePassCreated = false;
       const slipIdsUpdated = new Set<string>();
       let initialGatePass: GatePass | null = null;
+      const existingGatePass = gatePasses.find((gatePass) => gatePass.invoiceId === invoiceId) || null;
+      const existingLineItems = invoiceLineItems.filter((line) => line.invoiceId === invoiceId);
 
       try {
         await postEntity("invoices", newInvoice);
@@ -566,6 +668,10 @@ export function PendingInvoicing() {
 
         const persistedInvoice =
           (await fetchEntities<Invoice>("invoices")).find((invoice) => invoice.id === invoiceId) || newInvoice;
+
+        for (const existingLineItem of existingLineItems) {
+          await deleteEntity("invoice_line_items", existingLineItem.id);
+        }
 
         for (const lineItem of lineItems) {
           await postEntity("invoice_line_items", lineItem);
@@ -580,6 +686,8 @@ export function PendingInvoicing() {
         initialGatePass = buildGatePassFromInvoice({
           company,
           date: persistedInvoice.date,
+          existingId: existingGatePass?.id,
+          gatePassNo: existingGatePass?.gatePassNo,
           invoice: persistedInvoice,
           lineItems,
           npdItems,
@@ -635,10 +743,10 @@ export function PendingInvoicing() {
       closeInvoiceModal();
       setBillingMode(null);
       setSelectedSlips(new Set());
-      alert("Invoice and Gate Pass generated successfully! Showing Pending Tally Posting...");
+      alert(existingInvoice ? "Invoice updated successfully." : "Invoice and Gate Pass generated successfully! Showing Pending Tally Posting...");
     } catch (err) {
       console.error("Failed to generate invoice:", err);
-      alert(`Failed to generate invoice and gate pass: ${(err as Error).message}`);
+      alert(`Failed to save invoice and gate pass: ${(err as Error).message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -752,7 +860,7 @@ export function PendingInvoicing() {
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b-2 border-black">
               <div className="flex items-center gap-3">
                 <Receipt size={20} />
-                <h3 className="font-bold uppercase tracking-tight">Invoice Form - {companies.find(c => c.id === invoiceModal.companyId)?.name}</h3>
+                <h3 className="font-bold uppercase tracking-tight">{editInvoiceId ? "Edit Invoice" : "Invoice Form"} - {companies.find(c => c.id === invoiceModal.companyId)?.name}</h3>
               </div>
               <button onClick={closeInvoiceModal} className="hover:text-slate-300 transition">
                 <X size={24} />

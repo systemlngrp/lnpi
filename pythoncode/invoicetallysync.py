@@ -1,6 +1,8 @@
 import os
 import re
 import sys
+import json
+from functools import cmp_to_key
 import mysql.connector
 import requests
 from datetime import datetime, date
@@ -111,6 +113,23 @@ def normalize_uom(value):
         return ""
 
     return TALLY_UOM_ALIASES.get(normalized.upper(), normalized)
+
+
+def join_unique_values(values):
+    unique_values = []
+    seen = set()
+
+    for value in values or []:
+        normalized = str(value or "").strip()
+        if not normalized:
+            continue
+        key = normalized.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_values.append(normalized)
+
+    return ", ".join(unique_values)
 
 
 def sanitize_tally_xml(xml_text):
@@ -461,6 +480,87 @@ def ensure_invoice_sync_columns(conn):
         cursor.close()
 
 
+def parse_invoice_no_parts(invoice_no):
+    raw = str(invoice_no or "").strip()
+    if not raw:
+        return None
+
+    parts = [part.strip() for part in raw.split("/")]
+    if len(parts) < 3:
+        return None
+
+    prefix = "/".join(parts[:-2]).strip()
+    fy_label = parts[-2]
+    suffix = parts[-1]
+    fy_match = re.fullmatch(r"(\d{2,4})-(\d{2,4})", fy_label)
+    if not fy_match:
+        return None
+
+    start_year_text = fy_match.group(1)
+    start_year = int(start_year_text)
+    if len(start_year_text) == 2:
+        start_year += 2000
+
+    if not suffix.isdigit():
+        return None
+
+    return {
+        "prefix": prefix,
+        "fy_label": fy_label,
+        "fy_start_year": start_year,
+        "suffix_number": int(suffix),
+    }
+
+
+def compare_pending_invoice_rows(left_row, right_row):
+    left_invoice_no = str(left_row.get("invoiceNo") or "").strip()
+    right_invoice_no = str(right_row.get("invoiceNo") or "").strip()
+    left_parts = parse_invoice_no_parts(left_invoice_no)
+    right_parts = parse_invoice_no_parts(right_invoice_no)
+
+    if left_parts and right_parts:
+        left_key = (
+            left_parts["fy_start_year"],
+            left_parts["suffix_number"],
+            left_invoice_no,
+            str(left_row.get("date") or ""),
+            str(left_row.get("id") or ""),
+        )
+        right_key = (
+            right_parts["fy_start_year"],
+            right_parts["suffix_number"],
+            right_invoice_no,
+            str(right_row.get("date") or ""),
+            str(right_row.get("id") or ""),
+        )
+        if left_key < right_key:
+            return -1
+        if left_key > right_key:
+            return 1
+        return 0
+
+    if left_parts and not right_parts:
+        return -1
+    if right_parts and not left_parts:
+        return 1
+
+    left_fallback = (
+        str(left_row.get("date") or ""),
+        left_invoice_no,
+        str(left_row.get("id") or ""),
+    )
+    right_fallback = (
+        str(right_row.get("date") or ""),
+        right_invoice_no,
+        str(right_row.get("id") or ""),
+    )
+    if left_fallback < right_fallback:
+        return -1
+    if left_fallback > right_fallback:
+        return 1
+    return 0
+
+
 def get_pending_invoice_rows(conn):
     sql = """
         SELECT *
@@ -473,7 +573,7 @@ def get_pending_invoice_rows(conn):
     cursor.execute(sql)
     rows = cursor.fetchall()
     cursor.close()
-    return rows
+    return sorted(rows, key=cmp_to_key(compare_pending_invoice_rows))
 
 
 def tally_request(xml_data):
@@ -658,6 +758,8 @@ def get_invoice_dispatch_details(conn, invoice_id, item_lines):
 
     slip_nos = []
     truck_nos = []
+    order_nos = []
+    dispatch_plan_ids = []
     cursor = get_db_cursor(conn, dictionary=True)
 
     try:
@@ -665,7 +767,7 @@ def get_invoice_dispatch_details(conn, invoice_id, item_lines):
             placeholders = ", ".join(["%s"] * len(loading_slip_ids))
             cursor.execute(
                 f"""
-                SELECT ls.id, ls.slipNo, tr.truckNo
+                SELECT ls.id, ls.slipNo, ls.lines, tr.truckNo
                 FROM loading_slips ls
                 LEFT JOIN trucks tr ON tr.id = ls.truckId
                 WHERE ls.id IN ({placeholders})
@@ -675,10 +777,20 @@ def get_invoice_dispatch_details(conn, invoice_id, item_lines):
             for row in cursor.fetchall():
                 slip_no = str(row.get("slipNo") or "").strip()
                 truck_no = str(row.get("truckNo") or "").strip()
+                raw_lines = row.get("lines")
                 if slip_no and slip_no not in slip_nos:
                     slip_nos.append(slip_no)
                 if truck_no and truck_no not in truck_nos:
                     truck_nos.append(truck_no)
+                if raw_lines:
+                    try:
+                        slip_lines = raw_lines if isinstance(raw_lines, list) else json.loads(raw_lines)
+                    except Exception:
+                        slip_lines = []
+                    for slip_line in slip_lines or []:
+                        dispatch_plan_id = str((slip_line or {}).get("dispatchPlanId") or "").strip()
+                        if dispatch_plan_id and dispatch_plan_id not in dispatch_plan_ids:
+                            dispatch_plan_ids.append(dispatch_plan_id)
 
         if not truck_nos:
             cursor.execute(
@@ -693,12 +805,31 @@ def get_invoice_dispatch_details(conn, invoice_id, item_lines):
                 truck_no = str(row.get("truckNo") or "").strip()
                 if truck_no and truck_no not in truck_nos:
                     truck_nos.append(truck_no)
+
+        if dispatch_plan_ids:
+            placeholders = ", ".join(["%s"] * len(dispatch_plan_ids))
+            cursor.execute(
+                f"""
+                SELECT DISTINCT o.orderNo
+                FROM dispatch_plans dp
+                INNER JOIN orders_schedule os ON os.id = dp.scheduleId
+                INNER JOIN orders o ON o.id = os.orderId
+                WHERE dp.id IN ({placeholders})
+                ORDER BY o.orderNo
+                """,
+                tuple(dispatch_plan_ids),
+            )
+            for row in cursor.fetchall():
+                order_no = str(row.get("orderNo") or "").strip()
+                if order_no and order_no not in order_nos:
+                    order_nos.append(order_no)
     finally:
         cursor.close()
 
     return {
         "loadingSlipNos": slip_nos,
         "truckNos": truck_nos,
+        "orderNos": order_nos,
     }
 
 
@@ -806,10 +937,18 @@ def derive_tax_rates(invoice_row, item_lines):
     }
 
 
-def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledger_name, narration_text=""):
+def create_sales_voucher_xml(
+    invoice_row,
+    customer_name,
+    item_lines,
+    sales_ledger_name,
+    narration_text="",
+    dispatch_details=None,
+):
     invoice_date = format_tally_date(invoice_row.get("date"))
     invoice_no = str(invoice_row.get("invoiceNo") or "").strip()
     customer_name = customer_name or "Unknown Customer"
+    dispatch_details = dispatch_details or {}
 
     cgst = round(to_float(invoice_row.get("cgst")), 2)
     sgst = round(to_float(invoice_row.get("sgst")), 2)
@@ -903,7 +1042,7 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledge
         """
 
     if round_off != 0:
-        round_off_amount = f"{round_off:.2f}" if round_off > 0 else f"-{abs(round_off):.2f}"
+        round_off_amount = f"{abs(round_off):.2f}"
         deemed_positive = "No" if round_off > 0 else "Yes"
         ledger_entries_xml += f"""
                         <LEDGERENTRIES.LIST>
@@ -912,6 +1051,12 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledge
                             <AMOUNT>{round_off_amount}</AMOUNT>
                         </LEDGERENTRIES.LIST>
         """
+
+    dispatch_doc_no = join_unique_values(dispatch_details.get("loadingSlipNos"))
+    vehicle_no = join_unique_values(dispatch_details.get("truckNos"))
+    order_nos = join_unique_values(dispatch_details.get("orderNos"))
+    destination = str(invoice_row.get("destination") or dispatch_details.get("destination") or "").strip()
+    dispatch_through = "By Road"
 
     return f"""
 <ENVELOPE>
@@ -936,6 +1081,11 @@ def create_sales_voucher_xml(invoice_row, customer_name, item_lines, sales_ledge
                         <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
                         <ISINVOICE>Yes</ISINVOICE>
                         <NARRATION>{esc(narration_text)}</NARRATION>
+                        <BASICSHIPDOCUMENTNO>{esc(dispatch_doc_no)}</BASICSHIPDOCUMENTNO>
+                        <BASICDISPATCHTHROUGH>{esc(dispatch_through)}</BASICDISPATCHTHROUGH>
+                        <BASICFINALDESTINATION>{esc(destination)}</BASICFINALDESTINATION>
+                        <BASICVEHICLENO>{esc(vehicle_no)}</BASICVEHICLENO>
+                        <BASICORDERREF>{esc(order_nos)}</BASICORDERREF>
                         {inventory_xml}
                         {ledger_entries_xml}
                     </VOUCHER>
@@ -1190,6 +1340,7 @@ def sync_invoices_to_tally():
                     item_lines,
                     sales_ledger_name,
                     narration_text,
+                    dispatch_details,
                 )
 
                 if DEBUG_TALLY_XML:
