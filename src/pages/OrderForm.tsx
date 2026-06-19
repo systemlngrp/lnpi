@@ -651,9 +651,25 @@ export function OrderForm() {
             </label>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Item Source</label>
-              <div className="w-full">
-                <Select value={itemSource} onChange={handleItemSourceChange} options={itemSourceOptions} />
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Item Source</label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {itemSourceOptions.map((option) => {
+                  const checked = itemSource === option.value;
+                  return (
+                    <label
+                      key={option.value}
+                      className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition ${checked ? "border-indigo-600 bg-indigo-50 text-indigo-900" : "border-slate-300 bg-white text-slate-700 hover:border-indigo-300"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => handleItemSourceChange(option.value)}
+                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm font-semibold">{option.label}</span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
