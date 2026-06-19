@@ -3,6 +3,11 @@ export type SheetMasterColumn = {
   label: string;
 };
 
+export type SheetMasterFilter = {
+  key: string;
+  label: string;
+};
+
 export const PHP_ITEM_MASTER_COLUMNS: SheetMasterColumn[] = [
   { key: "timestamp", label: "Timestamp" },
   { key: "npdId", label: "NPD_ID" },

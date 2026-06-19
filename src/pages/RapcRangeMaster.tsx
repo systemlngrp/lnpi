@@ -4,6 +4,8 @@ import { useData } from "../hooks/useData";
 import { RapcRange } from "../types";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 import { buildSeedRapcRanges } from "../lib/rapcRanges";
 
 export function RapcRangeMaster() {
@@ -84,6 +86,15 @@ export function RapcRangeMaster() {
       return matchesSearch && matchesFrom && matchesTo;
     });
   }, [ranges, searchTerm, filterFrom, filterTo]);
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedRanges,
+  } = useClientPagination(filteredRanges, 25);
 
   return (
     <div className="space-y-6">
@@ -201,14 +212,14 @@ export function RapcRangeMaster() {
                     </div>
                   </td>
                 </tr>
-              ) : filteredRanges.length === 0 ? (
+              ) : paginatedRanges.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="border border-black px-6 py-8 text-center text-black font-medium">
                     No RAPC ranges found.
                   </td>
                 </tr>
               ) : (
-                filteredRanges.map((row) => (
+                paginatedRanges.map((row) => (
                   <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{row.from}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.to}</td>
@@ -242,6 +253,14 @@ export function RapcRangeMaster() {
           </table>
         </div>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }
