@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { 
   Invoice, 
   InvoiceLineItem,
@@ -30,6 +31,7 @@ export function BillingPendingTally() {
   const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [slips] = useData<LoadingSlip>("loading_slips", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
@@ -63,7 +65,7 @@ export function BillingPendingTally() {
       slip.lines.forEach((slipLine: any, index: number) => {
         const plan = dispatchPlans.find((dp) => dp.id === slipLine.dispatchPlanId);
         const order = orders.find((o) => o.id === plan?.orderId);
-        const item = npdItems.find((i) => i.id === order?.itemId);
+        const item = resolveOrderItem(order);
         const qty = Number(slipLine.loadedQty || 0);
         const rate = Number(order?.rate || 0);
 

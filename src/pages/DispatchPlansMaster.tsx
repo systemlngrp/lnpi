@@ -6,6 +6,7 @@ import { DispatchPlan, Truck, Order, Company, OrderSchedule, LoadingSlip } from 
 import { formatDate } from "../lib/serial";
 import { Pencil, Save, Trash2, X } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 
 export function DispatchPlansMaster() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,6 +26,7 @@ export function DispatchPlansMaster() {
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
 
@@ -171,7 +173,7 @@ export function DispatchPlansMaster() {
                 [...plans].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((p) => {
                   const order = orders.find(o => o.id === p.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = npdItems.find(i => i.id === order?.itemId);
+                  const item = resolveOrderItem(order);
                   const pending = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
                   const hasLoadingSlip = loadingSlipPlanIds.has(p.id);
 

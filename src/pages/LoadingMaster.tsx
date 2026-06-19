@@ -22,6 +22,7 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
 
 function getSlipNoSortValue(slipNo: string) {
@@ -36,6 +37,7 @@ export function LoadingMaster() {
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [companies] = useData<Company>("companies", []);
   const [invoices, setInvoices] = useData<Invoice>("invoices", []);
   const [invoiceLineItems, setInvoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
@@ -84,7 +86,7 @@ export function LoadingMaster() {
       slip.lines.forEach(line => {
         const plan = plans.find(p => p.id === line.dispatchPlanId);
         const order = orders.find(o => o.id === plan?.orderId);
-        const item = npdItems.find(i => i.id === order?.itemId);
+        const item = resolveOrderItem(order);
         if (item?.name) names.add(item.name);
       });
     });
@@ -103,7 +105,7 @@ export function LoadingMaster() {
       slip.lines.forEach(line => {
         const plan = plans.find(p => p.id === line.dispatchPlanId);
         const order = orders.find(o => o.id === plan?.orderId);
-        const item = npdItems.find(i => i.id === order?.itemId);
+        const item = resolveOrderItem(order);
         const company = companies.find(c => c.id === order?.companyId);
         
         if (item?.name) uniqueItemNames.add(item.name);
@@ -167,7 +169,7 @@ export function LoadingMaster() {
     slip.lines.map((line) => {
       const plan = plans.find((p) => p.id === line.dispatchPlanId);
       const order = orders.find((o) => o.id === plan?.orderId);
-      const item = npdItems.find((i) => i.id === order?.itemId);
+      const item = resolveOrderItem(order);
       const company = companies.find((c) => c.id === order?.companyId);
       const plannedQty = Number(plan?.plannedQty || 0);
       const cancelledQty = Number(plan?.canceledQty || 0);

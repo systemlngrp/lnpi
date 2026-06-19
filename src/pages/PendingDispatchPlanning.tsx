@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { OrderSchedule, Order, Company, Item, DispatchPlan, LoadingSlip, Production } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
@@ -29,6 +30,7 @@ export function PendingDispatchPlanning() {
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [productions] = useData<Production>("productions", []);
@@ -187,8 +189,8 @@ export function PendingDispatchPlanning() {
       const orderB = orders.find(o => o.id === b.orderId);
       const companyA = companies.find(c => c.id === orderA?.companyId)?.name || "";
       const companyB = companies.find(c => c.id === orderB?.companyId)?.name || "";
-      const itemA = npdItems.find(i => i.id === orderA?.itemId)?.name || "";
-      const itemB = npdItems.find(i => i.id === orderB?.itemId)?.name || "";
+      const itemA = resolveOrderItem(orderA)?.name || "";
+      const itemB = resolveOrderItem(orderB)?.name || "";
       const plannedA = getEffectivePlannedForSchedule(a.id);
       const plannedB = getEffectivePlannedForSchedule(b.id);
       const pendingA = Math.max(0, Number(a.qty || 0) - plannedA);
@@ -601,7 +603,7 @@ export function PendingDispatchPlanning() {
                 filteredSchedules.map((s) => {
                   const order = orders.find(o => o.id === s.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = npdItems.find(i => i.id === order?.itemId);
+                  const item = resolveOrderItem(order);
                   
                   const schedDate = new Date(s.scheduledDate);
                   const isOverdue = schedDate < today;

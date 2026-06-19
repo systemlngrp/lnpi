@@ -7,7 +7,7 @@ import { useData } from "../hooks/useData";
 import { Order } from "../types";
 import { formatDate } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
-import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { ChevronUp, ChevronDown, CheckCircle, XCircle, Edit } from "lucide-react";
 
 export function OrdersPendingPH() {
@@ -28,7 +28,7 @@ export function OrdersPendingPH() {
   const [orders, setOrders] = useData<Order>("orders", []);
   const [companies] = useData("companies", []);
   const [users] = useData<User>("users", []);
-  const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const navigate = useNavigate();
 
   const userMap = useMemo(() => {
@@ -188,8 +188,8 @@ export function OrdersPendingPH() {
                 <td className="px-4 py-2 border border-black">{o.orderNo}</td>
                 <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
                 <td className="px-4 py-2 border border-black">{(companies as any[]).find((c:any)=>c.id===o.companyId)?.name}</td>
-                <td className="px-4 py-2 border border-black">{npdItems.find((item) => item.id === o.itemId)?.name}</td>
-                <td className="px-4 py-2 border border-black">{npdItems.find((item) => item.id === o.itemId)?.erp || "-"}</td>
+                <td className="px-4 py-2 border border-black">{resolveOrderItem(o)?.name || "-"}</td>
+                <td className="px-4 py-2 border border-black">{resolveOrderItem(o)?.erp || "-"}</td>
                 <td className="px-4 py-2 border border-black whitespace-nowrap">{getOrderByLabel(o.orderBy) || '-'}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">

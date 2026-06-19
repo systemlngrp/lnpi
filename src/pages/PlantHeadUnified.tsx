@@ -8,6 +8,7 @@ import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, Truck, XCircle, ClipboardList, Package } from "lucide-react";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 type Tab = "all" | "material-in" | "orders" | "consumption";
@@ -30,6 +31,7 @@ export function PlantHeadUnified() {
   const [orders, setOrders] = useData<Order>("orders", []);
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
   const [materials] = useData<Material>("materials", []);
+  const { resolveOrderItem } = useOrderItemCatalog();
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
@@ -377,7 +379,7 @@ export function PlantHeadUnified() {
                     <div className="font-bold text-sm">{o.orderNo}</div>
                   </div>
                   <div className="text-sm font-bold">{companies.find((c) => c.id === o.companyId)?.name || o.companyId}</div>
-                  <div className="text-xs text-slate-600">{npdItems.find((it) => it.id === o.itemId)?.name || "Unknown"} [{o.qty}]</div>
+                  <div className="text-xs text-slate-600">{resolveOrderItem(o)?.name || "Unknown"} [{o.qty}]</div>
                   <div className="flex gap-2 justify-end">
                     <ApproveButton confirming={confirmId === o.id} submitting={submittingId === o.id} onClick={() => handleApproveOrder(o.id)} />
                     <button onClick={() => handleCancelOrder(o.id)} disabled={submittingId === o.id} className="bg-red-50 text-red-800 border border-red-800 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest">
@@ -430,7 +432,7 @@ export function PlantHeadUnified() {
                       <td className="px-4 py-2 text-sm font-medium">{o.orderNo}</td>
                       <td className="px-4 py-2 text-sm">{formatDate(o.orderDate)}</td>
                       <td className="px-4 py-2 text-sm">{companies.find((c) => c.id === o.companyId)?.name || o.companyId}</td>
-                      <td className="px-4 py-2 text-sm">{npdItems.find((it) => it.id === o.itemId)?.name || "Unknown"}</td>
+                      <td className="px-4 py-2 text-sm">{resolveOrderItem(o)?.name || "Unknown"}</td>
                       <td className="px-4 py-2 text-sm text-right font-bold">{o.qty}</td>
                       <td className="px-4 py-2 text-right">
                         <div className="flex gap-2 justify-end">

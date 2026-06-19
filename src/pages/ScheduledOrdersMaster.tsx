@@ -7,11 +7,10 @@ import {
   DispatchPlan, 
   LoadingSlip, 
   Company,
-  Item
 } from "../types";
 import { formatDate } from "../lib/serial";
 import { Search, Calendar, Building2, Package, X, Filter } from "lucide-react";
-import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 
@@ -19,7 +18,7 @@ export function ScheduledOrdersMaster() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
-  const npdItems = useNpdItems();
+  const { resolveOrderItem, itemsBySource } = useOrderItemCatalog();
   const [productions] = useData<Production>("productions", []);
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -35,7 +34,7 @@ export function ScheduledOrdersMaster() {
     return schedules.map(s => {
       const order = orders.find(o => o.id === s.orderId);
       const company = companies.find(c => c.id === order?.companyId);
-      const item = npdItems.find(i => i.id === order?.itemId);
+      const item = resolveOrderItem(order);
 
       // 1. Produced (from productions table linked to this schedule)
       const produced = productions
@@ -94,7 +93,7 @@ export function ScheduledOrdersMaster() {
       if (dateCompare !== 0) return dateCompare;
       return a.orderNo.localeCompare(b.orderNo, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [schedules, orders, companies, npdItems, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
+  }, [schedules, orders, companies, resolveOrderItem, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
   const {
     page,
     setPage,
@@ -162,8 +161,8 @@ export function ScheduledOrdersMaster() {
             className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none appearance-none bg-white"
           >
             <option value="">All Items</option>
-            {npdItems.map(i => (
-              <option key={i.id} value={i.id}>{i.name}</option>
+            {Object.values(itemsBySource).flat().map((item) => (
+              <option key={`${item.source}::${item.id}`} value={item.id}>{item.name}</option>
             ))}
           </select>
         </div>

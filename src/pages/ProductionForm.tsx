@@ -21,6 +21,7 @@ import { generateTransactionNo, formatDate } from "../lib/serial";
 import { CircleHelp } from "lucide-react";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { fetchNpdItems } from "../lib/npdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 
 const REEL_FORMULA_MODE = {
   breadthHeightBased: "breadth-height-based",
@@ -183,6 +184,7 @@ export function ProductionForm() {
   const [sampleRequests, setSampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [settings] = useData<Setting>("settings", []);
   const [npdItems, setNpdItems] = useState<Item[]>([]);
+  const { resolveOrderItem } = useOrderItemCatalog();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const urlScheduleId = searchParams.get("scheduleId") || searchParams.get("scheduledId") || "";
@@ -640,7 +642,7 @@ export function ProductionForm() {
 
   const scheduleOptions = pendingSchedules.map((schedule) => {
     const order = orders.find((row) => row.id === schedule.orderId);
-    const item = npdItems.find((row) => row.id === String(order?.itemId || "").trim());
+    const item = resolveOrderItem(order);
     const company = companies.find((row) => row.id === order?.companyId);
     const pending = getPendingProductionQty(schedule);
 

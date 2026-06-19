@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { 
   LoadingSlip, 
   Company, 
@@ -58,6 +59,7 @@ export function PendingInvoicing() {
   const [loadingSlips, , , loadingSlipApi] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const [, , , invoiceApi] = useData<Invoice>("invoices", []);
@@ -160,7 +162,7 @@ export function PendingInvoicing() {
       const slipItems = s.lines.map(l => {
         const lp = plans.find(p => p.id === l.dispatchPlanId);
         const lo = orders.find(o => o.id === lp?.orderId);
-        return npdItems.find(i => i.id === lo?.itemId)?.name || "Unknown";
+        return resolveOrderItem(lo)?.name || "Unknown";
       });
 
       companyMap.get(company.id)!.slips.push({
@@ -236,7 +238,7 @@ export function PendingInvoicing() {
       slip.lines.forEach((line: any) => {
         const plan = plans.find((p) => p.id === line.dispatchPlanId);
         const order = orders.find((o) => o.id === plan?.orderId);
-        const item = npdItems.find((i) => i.id === order?.itemId);
+        const item = resolveOrderItem(order);
         if (!order || !item) return;
 
         const qty = Number(line.loadedQty || 0);

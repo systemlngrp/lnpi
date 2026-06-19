@@ -1,14 +1,15 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
-import { useNpdItems } from "../hooks/useNpdItems";
-import { Company, Item, Order, OrderSchedule } from "../types";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { Company, Order, OrderSchedule } from "../types";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/serial";
+import { normalizeOrderItemSource } from "../lib/orderItems";
 
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
@@ -46,7 +47,7 @@ export function PendingProduction() {
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
-  const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [companies] = useData<Company>("companies", []);
 
   const [cancelValues, setCancelValues] = useState<Record<string, string>>({});
@@ -73,7 +74,7 @@ export function PendingProduction() {
         })
         .map((schedule) => {
           const order = orders.find((row) => row.id === schedule.orderId);
-          const item = npdItems.find((row) => row.id === order?.itemId);
+          const item = resolveOrderItem(order);
           const company = companies.find((row) => row.id === order?.companyId);
           return { schedule, order, item, company, pendingQty: getPendingProductionQty(schedule) };
         })
@@ -82,7 +83,7 @@ export function PendingProduction() {
           const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
           return timeB - timeA;
         }),
-    [companies, cutoffDate, npdItems, orders, schedules]
+    [companies, cutoffDate, orders, resolveOrderItem, schedules]
   );
   const {
     page,
@@ -127,8 +128,9 @@ export function PendingProduction() {
     const pendingQty = getPendingProductionQty(schedule);
     if (pendingQty <= 0) return;
     const order = orders.find((row) => row.id === schedule.orderId);
-    const item = npdItems.find((row) => row.id === String(order?.itemId || "").trim());
-    const boxType = String((item as any)?.boxType || "").trim();
+    const item = resolveOrderItem(order);
+    const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
+    const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
     if (!boxType) return;
 
     if (makeConfirmId !== schedule.id) {
@@ -175,7 +177,8 @@ export function PendingProduction() {
               </tr>
             ) : (
               paginatedRows.map(({ schedule, order, item, company, pendingQty }) => {
-                const boxType = String((item as any)?.boxType || "").trim();
+                const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
+    const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
                 const hasBoxType = Boolean(boxType);
                 return (
                 <tr key={schedule.id} className="hover:bg-slate-50">
@@ -215,7 +218,7 @@ export function PendingProduction() {
                         className={`px-3 py-1 rounded font-bold disabled:opacity-50 ${
                           makeConfirmId === schedule.id ? "bg-amber-500 text-black" : "bg-yellow-400 text-black"
                         }`}
-                        title={hasBoxType ? "Plan job" : "Box Type is missing in NPD. Planning is disabled."}
+                        title={canPlanFgJob ? (hasBoxType ? "Plan job" : "Box Type is missing in NPD. Planning is disabled.") : "Only FG orders can create production jobs."}
                       >
                         {makeConfirmId === schedule.id ? "Confirm?" : "Plan Job"}
                       </button>

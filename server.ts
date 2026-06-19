@@ -1538,6 +1538,13 @@ function resolveLinkedNpdId(value: any) {
   return "";
 }
 
+function normalizeOrderItemSourceValue(value: any) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "PHP") return "PHP";
+  if (normalized === "PLATE") return "PLATE";
+  return "FG";
+}
+
 function normalizeMaterialLineNpdLink(line: any) {
   const resolvedId = resolveLinkedNpdId(line);
   return {
@@ -1548,7 +1555,21 @@ function normalizeMaterialLineNpdLink(line: any) {
 }
 
 function normalizeNpdLinkedPayload(tableName: string, data: any) {
-  if (NPD_LINKED_TABLES.has(tableName)) {
+  if (tableName === "orders") {
+    const itemSource = normalizeOrderItemSourceValue(data?.itemSource);
+    data.itemSource = itemSource;
+
+    if (itemSource === "FG") {
+      const resolvedId = resolveLinkedNpdId(data);
+      if (resolvedId) {
+        data.npdId = resolvedId;
+        data.itemId = resolvedId;
+      }
+    } else {
+      delete data.npdId;
+      data.itemId = stringOrEmpty(data?.itemId);
+    }
+  } else if (NPD_LINKED_TABLES.has(tableName)) {
     const resolvedId = resolveLinkedNpdId(data);
     if (resolvedId) {
       data.npdId = resolvedId;
@@ -1639,7 +1660,16 @@ function normalizeFetchedRow(tableName: string, row: any) {
     newRow.lines = newRow.lines.map((line: any) => normalizeMaterialLineNpdLink(line));
   }
 
-  if (NPD_LINKED_TABLES.has(tableName)) {
+  if (tableName === "orders") {
+    newRow.itemSource = normalizeOrderItemSourceValue(newRow.itemSource);
+    if (newRow.itemSource === "FG") {
+      const resolvedId = resolveLinkedNpdId(newRow);
+      if (resolvedId) {
+        newRow.npdId = resolvedId;
+        newRow.itemId = resolvedId;
+      }
+    }
+  } else if (NPD_LINKED_TABLES.has(tableName)) {
     const resolvedId = resolveLinkedNpdId(newRow);
     if (resolvedId) {
       newRow.npdId = resolvedId;
@@ -2893,6 +2923,7 @@ async function initDb(retries = 5) {
           \`poNumber\` VARCHAR(100),
           \`erpCode\` VARCHAR(100),
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`itemSource\` VARCHAR(20) NOT NULL DEFAULT 'FG',
           \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2),
@@ -3950,6 +3981,7 @@ async function initDb(retries = 5) {
         { table: "orders", column: "orderDate", type: "VARCHAR(50) NOT NULL" },
         { table: "orders", column: "companyId", type: "VARCHAR(36) NOT NULL" },
         { table: "orders", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "orders", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "orders", column: "npdId", type: "VARCHAR(36)" },
         { table: "orders", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "orders", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
@@ -4382,6 +4414,10 @@ const createHandlers = (tableName: string) => {
         }
 
         if (tableName === "orders") {
+          data.itemSource = normalizeOrderItemSourceValue(data.itemSource);
+          if (data.itemSource !== "FG") {
+            delete data.npdId;
+          }
           const rateNumber = Number(data.rate);
           if (!Number.isFinite(rateNumber) || rateNumber <= 0) {
             return res.status(400).json({ error: "Rate must be greater than 0." });
@@ -4551,7 +4587,8 @@ const createHandlers = (tableName: string) => {
             const currentStatus = String(data.status || "Pending PH").trim();
             const alreadyApproved = hasWorkflowValue(data.approvedTimestamp) || hasWorkflowValue(data.approvedEmail);
             if (!alreadyApproved && (currentStatus === "Pending PH" || !currentStatus)) {
-              const itemId = resolveLinkedNpdId(data);
+              const itemSource = normalizeOrderItemSourceValue(data.itemSource);
+              const itemId = itemSource === "FG" ? resolveLinkedNpdId(data) : "";
               const punchDate = String(data.orderDate || "").trim() || new Date().toISOString().slice(0, 10);
 
               if (itemId && Number.isFinite(orderRate) && punchDate) {
@@ -4855,7 +4892,8 @@ const createHandlers = (tableName: string) => {
         if (tableName === "orders") {
           const approvalStatuses = new Set(["Pending Scheduling", "Scheduled"]);
           const now = new Date().toISOString();
-          const itemId = resolveLinkedNpdId(data);
+          const itemSource = normalizeOrderItemSourceValue(data.itemSource);
+          const itemId = itemSource === "FG" ? resolveLinkedNpdId(data) : String(data.itemId || "").trim();
           const rateNumber = Number(data.rate);
           const updatedBy = String(data.approvedEmail || data.updatedBy || "System").trim() || "System";
 
@@ -4894,13 +4932,25 @@ const createHandlers = (tableName: string) => {
             await conn.query(query, values);
 
             if (shouldUpdateItemRate) {
-              await conn.query(
-                "UPDATE `npd` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
-                [rateNumber, updatedBy, now, itemId]
-              );
+              if (itemSource === "PHP") {
+                await conn.query(
+                  "UPDATE `php_item_master` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                  [rateNumber, updatedBy, now, itemId]
+                );
+              } else if (itemSource === "PLATE") {
+                await conn.query(
+                  "UPDATE `plate_item_master` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                  [rateNumber, updatedBy, now, itemId]
+                );
+              } else {
+                await conn.query(
+                  "UPDATE `npd` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                  [rateNumber, updatedBy, now, itemId]
+                );
+              }
             }
 
-            if (itemId && Number.isFinite(rateNumber) && rateNumber > 0) {
+            if (itemSource === "FG" && itemId && Number.isFinite(rateNumber) && rateNumber > 0) {
               await conn.query(
                 "UPDATE `npd` SET `orderRate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
                 [rateNumber, updatedBy, now, itemId]

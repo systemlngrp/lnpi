@@ -7,6 +7,7 @@ import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
 import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
@@ -45,6 +46,7 @@ export function UpcomingScheduledOrders() {
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [companies] = useData<Company>("companies", []);
 
   const [cancelValues, setCancelValues] = useState<Record<string, string>>({});
@@ -71,7 +73,7 @@ export function UpcomingScheduledOrders() {
         })
         .map((schedule) => {
           const order = orders.find((row) => row.id === schedule.orderId);
-          const item = npdItems.find((row) => row.id === order?.itemId);
+          const item = resolveOrderItem(order);
           const company = companies.find((row) => row.id === order?.companyId);
           return { schedule, order, item, company, pendingQty: getPendingProductionQty(schedule) };
         })

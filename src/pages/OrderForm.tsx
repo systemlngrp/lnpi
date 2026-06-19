@@ -1,46 +1,52 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2, Upload, Download } from "lucide-react";
-import { Order, Company, Item } from "../types";
+import { Order, Company, OrderItemSource } from "../types";
 import { Spinner } from "../components/Spinner";
-
-import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/utils";
 import { Select } from "../components/Select";
 import { useLocation, useNavigate } from "react-router-dom";
 import { User } from "../types";
 import { getFinancialYear } from "../lib/serial";
 import * as XLSX from "xlsx";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import {
+  getOrderItemDisplayName,
+  getOrderItemSourceLabel,
+  normalizeOrderItemSource,
+  normalizeOrderRecord,
+  OrderCatalogItem,
+} from "../lib/orderItems";
 
 export function OrderForm() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // Simple DOM-based table row filter bound to the search input
   useEffect(() => {
     const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
+    const rows = document.querySelectorAll("table tbody tr");
     rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
+      const txt = (row.textContent || "").toLowerCase();
+      (row as HTMLElement).style.display = q && !txt.includes(q) ? "none" : "";
     });
   }, [searchTerm]);
 
   const navigate = useNavigate();
-  const [orders, setOrders, isLoading] = useData<Order>("orders", []);
+  const [orders, setOrders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [users] = useData<User>("users", []);
-  const [allItems, setAllItems] = useState<Item[]>([]);
+  const { itemsBySource, fgItems, resolveOrderItem } = useOrderItemCatalog();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isFormOpen, setIsFormOpen] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [orderDate, setOrderDate] = useState<string>(new Date().toISOString().slice(0,10));
+  const [orderDate, setOrderDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [isUniversal, setIsUniversal] = useState(false);
   const [companyId, setCompanyId] = useState("");
-  const [poType, setPoType] = useState<"Verbal"|"Ref No.">("Verbal");
+  const [poType, setPoType] = useState<"Verbal" | "Ref No.">("Verbal");
   const [poNumber, setPoNumber] = useState("");
+  const [itemSource, setItemSource] = useState<OrderItemSource>("FG");
   const [itemId, setItemId] = useState("");
   const [erpCode, setErpCode] = useState<string>("");
   const [qty, setQty] = useState<string>("");
@@ -52,6 +58,10 @@ export function OrderForm() {
   })();
   const [orderBy, setOrderBy] = useState("");
   const [remarks, setRemarks] = useState("");
+  const location = useLocation();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const currentSourceItems = itemsBySource[itemSource] || [];
 
   const getNextVerbalPoNumber = (effectiveOrderDate: string, ignoreOrderId?: string | null) => {
     const fy = getFinancialYear(effectiveOrderDate);
@@ -118,68 +128,46 @@ export function OrderForm() {
     { value: "Ref No.", label: "Ref No." },
   ];
 
+  const itemSourceOptions = (["FG", "PHP", "PLATE"] as OrderItemSource[]).map((source) => ({
+    value: source,
+    label: getOrderItemSourceLabel(source),
+  }));
+
   const companyOptions = companies
     .slice()
-    .sort((a,b) => (a.name||"").localeCompare(b.name||""))
-    .map(c => ({ value: c.id, label: c.name }));
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+    .map((company) => ({ value: company.id, label: company.name }));
 
   const normalizeCompanyName = (value: string | null | undefined) =>
     String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
-  const getItemCustomerName = (item: Item | undefined) =>
-    normalizeCompanyName((item as any)?.customerName || item?.customer || "");
-  const getItemDisplayName = (item: Item | undefined) =>
-    String(item?.name || (item as any)?.itemName || item?.erp || "").trim();
   const normalizeText = (value: string | null | undefined) =>
     String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 
-  const resolveItemCompanyId = (item: Item | undefined) => {
+  const resolveItemCompanyId = (item: OrderCatalogItem | undefined) => {
     if (!item) return "";
-    const customerName = getItemCustomerName(item);
-    if (!customerName) return "";
-    return companies.find((company) => normalizeCompanyName(company.name) === customerName)?.id || "";
+    const companyName = normalizeCompanyName(item.companyName);
+    if (!companyName) return "";
+    return companies.find((company) => normalizeCompanyName(company.name) === companyName)?.id || "";
   };
-
-  const fetchAllOrderItems = useCallback(async () => {
-    const token = window.localStorage.getItem("authToken") || "";
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const pageSize = 10000;
-
-    try {
-      const response = await fetch(`/api/npd?page=1&pageSize=${pageSize}&status=all`, { headers });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to fetch full item list");
-      }
-
-      const result = await response.json();
-      const rows = Array.isArray(result?.rows) ? result.rows : [];
-      const normalizedRows = rows.map((row) => ({
-        ...row,
-        name: String(row?.name || row?.itemName || row?.erp || "").trim(),
-      }));
-      setAllItems(normalizedRows);
-    } catch (error) {
-      console.error("Failed to fetch full NPD item list for orders:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAllOrderItems();
-  }, [fetchAllOrderItems]);
 
   const itemOptions = useMemo(() => {
     const selectedCompanyName = normalizeCompanyName(companies.find((company) => company.id === companyId)?.name);
-    return allItems
-      .filter((item) => isUniversal || !companyId || getItemCustomerName(item) === selectedCompanyName)
+    return currentSourceItems
+      .filter((item) => {
+        if (isUniversal || !companyId) return true;
+        const itemCompanyName = normalizeCompanyName(item.companyName);
+        if (!itemCompanyName) return true;
+        return itemCompanyName === selectedCompanyName;
+      })
       .slice()
-      .sort((a,b) => getItemDisplayName(a).localeCompare(getItemDisplayName(b)))
-      .map(i => ({ value: i.id, label: getItemDisplayName(i) }));
-  }, [allItems, companyId, companies, isUniversal]);
+      .sort((a, b) => getOrderItemDisplayName(a).localeCompare(getOrderItemDisplayName(b)))
+      .map((item) => ({ value: item.id, label: getOrderItemDisplayName(item) }));
+  }, [companyId, companies, currentSourceItems, isUniversal]);
 
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const location = useLocation();
-
-  const userOptions = users.slice().sort((a,b)=> (a.name||"").localeCompare(b.name||"")).map(u=>({ value: u.id, label: u.name }));
+  const userOptions = users
+    .slice()
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+    .map((user) => ({ value: user.id, label: user.name }));
 
   const downloadTemplate = () => {
     const templateData = [
@@ -188,11 +176,11 @@ export function OrderForm() {
         "PO Type": "Verbal",
         "PO Number": "",
         "Item Name": "Example Item",
-        "Qty": 100,
-        "Rate": 12.5,
+        Qty: 100,
+        Rate: 12.5,
         "Order By": "Admin",
-        "Remarks": "Urgent order",
-      }
+        Remarks: "Urgent order",
+      },
     ];
 
     const ws = XLSX.utils.json_to_sheet(templateData);
@@ -221,9 +209,11 @@ export function OrderForm() {
 
         setIsSubmitting(true);
 
-        const itemMap = new Map<string, Item>();
-        allItems.forEach((item) => {
-          const keys = [item.name, (item as any)?.itemName, item.erp?.toString?.()]
+        const bulkSource: OrderItemSource = "FG";
+        const bulkItems = fgItems;
+        const itemMap = new Map<string, OrderCatalogItem>();
+        bulkItems.forEach((item) => {
+          const keys = [item.name, item.erp]
             .map((value) => normalizeText(value))
             .filter(Boolean);
           keys.forEach((key) => {
@@ -298,9 +288,6 @@ export function OrderForm() {
           }
 
           const companyId = resolveItemCompanyId(matchedItem);
-          if (matchedItem && !companyId) {
-            rowIssues.push(`Company not resolved for item: ${itemNameValue}`);
-          }
 
           if (!qtyValue) {
             rowIssues.push("Qty is required");
@@ -346,8 +333,10 @@ export function OrderForm() {
             orderDate: orderDateValue,
             companyId,
             poNumber: poType === "Ref No." ? poNumberValue : resolvedPoNumber,
-            erpCode: matchedItem?.erp?.toString() || "",
+            erpCode: matchedItem?.erp || "",
             itemId: matchedItem?.id || "",
+            itemSource: bulkSource,
+            npdId: matchedItem?.source === "FG" ? matchedItem.id : undefined,
             qty: /^[0-9]+$/.test(qtyValue) ? parseInt(qtyValue, 10) : 0,
             rate: Number.isFinite(rateNumber) ? rateNumber : 0,
             orderAmount: /^[0-9]+$/.test(qtyValue) && Number.isFinite(rateNumber) ? parseInt(qtyValue, 10) * rateNumber : 0,
@@ -405,33 +394,40 @@ export function OrderForm() {
       setTimeout(() => setDeletingId(null), 3000);
       return;
     }
-    setOrders(orders.filter(o => o.id !== id));
+    setOrders(orders.filter((order) => order.id !== id));
     setDeletingId(null);
   };
 
-  const handleEdit = (o: Order) => {
+  const loadOrderIntoForm = (order: Order) => {
+    const normalizedOrder = normalizeOrderRecord(order);
     setIsUniversal(false);
-    setEditingId(o.id);
-    setOrderDate(o.orderDate || "");
-    setCompanyId(o.companyId);
-    setPoType(o.poType || "Verbal");
-    setPoNumber(o.poNumber || "");
-    setItemId(o.itemId);
-    setErpCode((o.erpCode || "").toString());
-    setQty(o.qty?.toString() || "");
-    setRate(o.rate?.toString() || "");
-    setOrderBy(o.orderBy || "");
-    setRemarks(o.remarks || "");
+    setEditingId(order.id);
+    setOrderDate(order.orderDate || "");
+    setCompanyId(order.companyId || "");
+    setPoType(order.poType || "Verbal");
+    setPoNumber(order.poNumber || "");
+    setItemSource(normalizedOrder.itemSource);
+    setItemId(order.itemId || "");
+    setErpCode((order.erpCode || "").toString());
+    setQty(order.qty?.toString() || "");
+    setRate(order.rate?.toString() || "");
+    setOrderBy(order.orderBy || "");
+    setRemarks(order.remarks || "");
     setIsFormOpen(true);
+  };
+
+  const handleEdit = (order: Order) => {
+    loadOrderIntoForm(order);
   };
 
   const resetForm = () => {
     setIsUniversal(false);
     setEditingId(null);
-    setOrderDate(new Date().toISOString().slice(0,10));
+    setOrderDate(new Date().toISOString().slice(0, 10));
     setCompanyId("");
     setPoType("Verbal");
     setPoNumber("");
+    setItemSource("FG");
     setItemId("");
     setErpCode("");
     setQty("");
@@ -442,14 +438,14 @@ export function OrderForm() {
 
   useEffect(() => {
     if (poType === "Verbal") {
-      const editingOrder = editingId ? orders.find((o) => o.id === editingId) : null;
+      const editingOrder = editingId ? orders.find((order) => order.id === editingId) : null;
       if (editingOrder?.poType === "Verbal" && editingOrder.poNumber) {
         setPoNumber(editingOrder.poNumber);
       } else {
         setPoNumber(getNextVerbalPoNumber(orderDate, editingId));
       }
     } else if (editingId) {
-      const editingOrder = orders.find((o) => o.id === editingId);
+      const editingOrder = orders.find((order) => order.id === editingId);
       setPoNumber(editingOrder?.poType === "Ref No." ? editingOrder.poNumber || "" : "");
     } else {
       setPoNumber("");
@@ -477,27 +473,29 @@ export function OrderForm() {
 
     setIsSubmitting(true);
     setTimeout(() => {
-      const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as any;
+      const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as const;
       const payload: Order = {
         id: editingId || crypto.randomUUID(),
-        ...(editingId ? { orderNo: orders.find(o=>o.id===editingId)?.orderNo } : {}),
+        ...(editingId ? { orderNo: orders.find((order) => order.id === editingId)?.orderNo } : {}),
         orderDate,
         companyId,
         poNumber: poType === "Verbal" ? getNextVerbalPoNumber(orderDate, editingId) : poNumber,
         erpCode,
         itemId,
-        qty: parseInt(qty,10),
+        itemSource,
+        npdId: itemSource === "FG" ? itemId : undefined,
+        qty: parseInt(qty, 10),
         rate: rateNumber,
         orderAmount,
         orderBy,
         poType,
         remarks,
-        status: editingId ? orders.find(o=>o.id===editingId)?.status || 'Pending PH' : 'Pending PH',
-        ...audit
+        status: editingId ? orders.find((order) => order.id === editingId)?.status || "Pending PH" : "Pending PH",
+        ...audit,
       };
 
       if (editingId) {
-        setOrders(orders.map(o => o.id === editingId ? { ...o, ...payload } : o));
+        setOrders(orders.map((order) => (order.id === editingId ? { ...order, ...payload } : order)));
       } else {
         setOrders([...orders, payload]);
       }
@@ -509,7 +507,6 @@ export function OrderForm() {
     }, 500);
   };
 
-  // Auto-fill ERP when item selected
   const handleItemChange = (id: string) => {
     if (id === itemId) return;
     if (!id) {
@@ -519,16 +516,24 @@ export function OrderForm() {
       return;
     }
     setItemId(id);
-    const it = allItems.find(i => i.id === id);
-    const linkedCompanyId = resolveItemCompanyId(it);
+    const item = currentSourceItems.find((entry) => entry.id === id);
+    const linkedCompanyId = resolveItemCompanyId(item);
     if (!isUniversal && !companyId && linkedCompanyId) {
       setCompanyId(linkedCompanyId);
     }
-    if (it && typeof it.erp !== 'undefined') setErpCode((it.erp || "").toString());
-    else setErpCode("");
-    if (it && typeof it.rate !== "undefined" && it.rate !== null) {
-      setRate(String(it.rate));
+    setErpCode(item?.erp || "");
+    if (typeof item?.rate !== "undefined") {
+      setRate(String(item.rate ?? ""));
     }
+  };
+
+  const handleItemSourceChange = (value: string) => {
+    const nextSource = normalizeOrderItemSource(value);
+    if (nextSource === itemSource) return;
+    setItemSource(nextSource);
+    setItemId("");
+    setErpCode("");
+    setRate("");
   };
 
   const handleCompanyChange = (id: string) => {
@@ -541,11 +546,10 @@ export function OrderForm() {
       }
       return;
     }
-    if (isUniversal) return;
-    if (!itemId) return;
-    const selectedItem = allItems.find((item) => item.id === itemId);
+    if (isUniversal || !itemId) return;
+    const selectedItem = currentSourceItems.find((item) => item.id === itemId);
     const resolvedCompanyId = resolveItemCompanyId(selectedItem);
-    if (resolvedCompanyId !== id) {
+    if (resolvedCompanyId && resolvedCompanyId !== id) {
       setItemId("");
       setErpCode("");
       setRate("");
@@ -554,38 +558,21 @@ export function OrderForm() {
 
   useEffect(() => {
     if (isUniversal || !companyId || !itemId) return;
-    const selectedItem = allItems.find((item) => item.id === itemId);
+    const selectedItem = currentSourceItems.find((item) => item.id === itemId);
     const resolvedCompanyId = resolveItemCompanyId(selectedItem);
     if (resolvedCompanyId && resolvedCompanyId !== companyId) {
       setItemId("");
       setErpCode("");
       setRate("");
     }
-  }, [allItems, companyId, isUniversal, itemId]);
+  }, [companyId, currentSourceItems, isUniversal, itemId]);
 
-  // Auto-open edit when ?edit=<id> in URL (used by Plant Head edit link)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const editId = params.get("edit");
-    if (editId) {
-      const o = orders.find(x => x.id === editId);
-      if (o) {
-        // populate form
-        setIsFormOpen(true);
-        setIsUniversal(false);
-        setEditingId(o.id);
-        setOrderDate(o.orderDate || "");
-        setCompanyId(o.companyId);
-        setPoType(o.poType || "Verbal");
-        setPoNumber(o.poNumber || "");
-        setItemId(o.itemId);
-        setErpCode((o.erpCode || "").toString());
-        setQty(o.qty?.toString() || "");
-        setRate(o.rate?.toString() || "");
-        setOrderBy(o.orderBy || "");
-        setRemarks(o.remarks || "");
-      }
-    }
+    if (!editId) return;
+    const order = orders.find((entry) => entry.id === editId);
+    if (order) loadOrderIntoForm(order);
   }, [location.search, orders]);
 
   return (
@@ -626,7 +613,7 @@ export function OrderForm() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Order Date</label>
-              <input type="date" value={orderDate} onChange={(e)=>setOrderDate(e.target.value)} className="w-full border border-slate-300 rounded-md p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} className="w-full border border-slate-300 rounded-md p-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
 
             <div>
@@ -644,13 +631,13 @@ export function OrderForm() {
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">PO Type</label>
               <div className="w-full">
-                <Select value={poType} onChange={(v:any)=>setPoType(v)} options={poOptions} />
+                <Select value={poType} onChange={(value: any) => setPoType(value)} options={poOptions} />
               </div>
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">PO Number</label>
-              <input value={poNumber} onChange={(e)=>setPoNumber(e.target.value)} className={`w-full border rounded-md p-3 ${poType === 'Verbal' ? 'bg-slate-100 border-slate-200 text-slate-600' : 'border-slate-300 text-slate-900'}`} disabled={poType === 'Verbal'} />
+              <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} className={`w-full border rounded-md p-3 ${poType === "Verbal" ? "bg-slate-100 border-slate-200 text-slate-600" : "border-slate-300 text-slate-900"}`} disabled={poType === "Verbal"} />
             </div>
 
             <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -664,6 +651,13 @@ export function OrderForm() {
             </label>
 
             <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Item Source</label>
+              <div className="w-full">
+                <Select value={itemSource} onChange={handleItemSourceChange} options={itemSourceOptions} />
+              </div>
+            </div>
+
+            <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Item</label>
               <div className="w-full">
                 <Select value={itemId} onChange={handleItemChange} options={itemOptions} placeholder="Select Item..." />
@@ -672,12 +666,12 @@ export function OrderForm() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">ERP Code</label>
-              <input value={erpCode} onChange={(e)=>setErpCode(e.target.value)} className="w-full border border-slate-300 rounded-md p-3 bg-slate-50 text-slate-700" readOnly />
+              <input value={erpCode} onChange={(e) => setErpCode(e.target.value)} className="w-full border border-slate-300 rounded-md p-3 bg-slate-50 text-slate-700" readOnly />
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Qty</label>
-              <input value={qty} onChange={(e)=>setQty(e.target.value.replace(/[^0-9]/g,''))} className="w-full border border-slate-300 rounded-md p-3" />
+              <input value={qty} onChange={(e) => setQty(e.target.value.replace(/[^0-9]/g, ""))} className="w-full border border-slate-300 rounded-md p-3" />
             </div>
 
             <div>
@@ -712,13 +706,13 @@ export function OrderForm() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Remarks</label>
-              <input value={remarks} onChange={(e)=>setRemarks(e.target.value)} className="w-full border border-slate-300 rounded-md p-3" />
+              <input value={remarks} onChange={(e) => setRemarks(e.target.value)} className="w-full border border-slate-300 rounded-md p-3" />
             </div>
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded-md font-semibold shadow">{isSubmitting ? <Spinner /> : 'Submit'}</button>
-            <button type="button" onClick={()=>{ setIsFormOpen(false); resetForm(); navigate("/orders/master"); }} className="bg-white text-black border border-slate-300 px-6 py-2 rounded-md font-semibold">Cancel</button>
+            <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded-md font-semibold shadow">{isSubmitting ? <Spinner /> : "Submit"}</button>
+            <button type="button" onClick={() => { setIsFormOpen(false); resetForm(); navigate("/orders/master"); }} className="bg-white text-black border border-slate-300 px-6 py-2 rounded-md font-semibold">Cancel</button>
           </div>
         </form>
       )}
@@ -740,23 +734,26 @@ export function OrderForm() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-black">
-            {orders.map(o => (
-              <tr key={o.id} className="divide-x divide-black hover:bg-slate-50">
-                <td className="px-4 py-2 border border-black">{o.orderNo}</td>
-                <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
-                <td className="px-4 py-2 border border-black">{companies.find(c => c.id === o.companyId)?.name}</td>
-                <td className="px-4 py-2 border border-black">{o.poNumber}</td>
-                <td className="px-4 py-2 border border-black">{o.erpCode}</td>
-                <td className="px-4 py-2 border border-black">{getItemDisplayName(allItems.find(i => i.id === o.itemId))}</td>
-                <td className="px-4 py-2 text-right border border-black">{o.qty}</td>
-                <td className="px-4 py-2 text-right border border-black">{o.rate}</td>
-                <td className="px-4 py-2 text-right border border-black">{users.find(u => u.id === o.orderBy)?.name}</td>
-                <td className="px-4 py-2 text-right border border-black">
-                  <button title="Edit" aria-label="Edit" onClick={() => handleEdit(o)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={16} /></button>
-                  <button title={deletingId === o.id ? 'Confirm cancel' : 'Cancel'} aria-label={deletingId === o.id ? 'Confirm cancel' : 'Cancel'} onClick={() => handleDelete(o.id)} className={`${deletingId === o.id ? 'text-amber-600 animate-pulse' : 'text-red-600'} hover:text-red-900`}><Trash2 size={16} /></button>
-                </td>
-              </tr>
-            ))}
+            {orders.map((order) => {
+              const resolvedItem = resolveOrderItem(order);
+              return (
+                <tr key={order.id} className="divide-x divide-black hover:bg-slate-50">
+                  <td className="px-4 py-2 border border-black">{order.orderNo}</td>
+                  <td className="px-4 py-2 border border-black">{formatDate(order.orderDate)}</td>
+                  <td className="px-4 py-2 border border-black">{companies.find((company) => company.id === order.companyId)?.name}</td>
+                  <td className="px-4 py-2 border border-black">{order.poNumber}</td>
+                  <td className="px-4 py-2 border border-black">{resolvedItem?.erp || order.erpCode}</td>
+                  <td className="px-4 py-2 border border-black">{getOrderItemDisplayName(resolvedItem)}</td>
+                  <td className="px-4 py-2 text-right border border-black">{order.qty}</td>
+                  <td className="px-4 py-2 text-right border border-black">{order.rate}</td>
+                  <td className="px-4 py-2 text-right border border-black">{users.find((user) => user.id === order.orderBy)?.name}</td>
+                  <td className="px-4 py-2 text-right border border-black">
+                    <button title="Edit" aria-label="Edit" onClick={() => handleEdit(order)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={16} /></button>
+                    <button title={deletingId === order.id ? "Confirm cancel" : "Cancel"} aria-label={deletingId === order.id ? "Confirm cancel" : "Cancel"} onClick={() => handleDelete(order.id)} className={`${deletingId === order.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900`}><Trash2 size={16} /></button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>}

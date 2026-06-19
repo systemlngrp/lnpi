@@ -27,6 +27,7 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 
 interface PendingPlan extends DispatchPlan {
   companyName: string;
@@ -72,6 +73,7 @@ export function PendingLoading() {
   const [plans, updatePlans, plansLoading] = useData<DispatchPlan>("dispatch_plans", []);
   const [trucks] = useData<Truck>("trucks", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [productions] = useData<Production>("productions", []);
@@ -122,7 +124,7 @@ export function PendingLoading() {
       if (pending <= 0) return false;
 
       const order = orders.find((row) => row.id === plan.orderId);
-      const item = npdItems.find((row) => row.id === order?.itemId);
+      const item = resolveOrderItem(order);
       const company = companies.find((row) => row.id === order?.companyId);
 
       const searchBlob = `${item?.name || ""} ${company?.name || ""} ${order?.orderNo || ""}`.toLowerCase();
@@ -133,7 +135,7 @@ export function PendingLoading() {
 
     filtered.forEach((plan) => {
       const order = orders.find((row) => row.id === plan.orderId);
-      const item = npdItems.find((row) => row.id === order?.itemId);
+      const item = resolveOrderItem(order);
       const company = companies.find((row) => row.id === order?.companyId);
       if (!item || !company) return;
 

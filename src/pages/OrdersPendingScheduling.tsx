@@ -6,7 +6,7 @@ import { Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
-import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 
 export function OrdersPendingScheduling() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,7 +25,7 @@ export function OrdersPendingScheduling() {
   const [orders, setOrders] = useData<Order>("orders", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [companies] = useData("companies", []);
-  const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
 
   const rowsFor = (orderId: string) => schedules.filter(s => s.orderId === orderId);
 
@@ -42,7 +42,7 @@ export function OrdersPendingScheduling() {
   
   const pending = useMemo(() => {
     return orders
-      .filter(o => o.status === "Pending Scheduling" && o.status !== "Cancelled" && (o.qty || 0) > totalScheduled(o.id))
+      .filter(o => o.status === "Pending Scheduling" && (o.qty || 0) > totalScheduled(o.id))
       .sort((a, b) => {
         const aNo = a.orderNo || "";
         const bNo = b.orderNo || "";
@@ -232,11 +232,11 @@ export function OrdersPendingScheduling() {
                     <td className="px-3 py-2 border border-black">{idx + 1}</td>
                     <td className="px-3 py-2 border border-black">{o.orderNo}</td>
                     <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
-                    <td className="px-3 py-2 border border-black">{npdItems.find(i => i.id === o.itemId)?.name}</td>
+                    <td className="px-3 py-2 border border-black">{resolveOrderItem(o)?.name || "-"}</td>
                     <td className="px-3 py-2 border border-black">{formatQty(o.qty)}</td>
                     <td className="px-3 py-2 border border-black">{formatQty(sched)}</td>
                     <td className="px-3 py-2 border border-black font-bold text-indigo-700">{formatQty(pendingSched)}</td>
-                    <td className="px-3 py-2 border border-black">{npdItems.find(i => i.id === o.itemId)?.uom}</td>
+                    <td className="px-3 py-2 border border-black">{resolveOrderItem(o)?.uom || "-"}</td>
                     <td className="px-3 py-2 border border-black"><button onClick={() => { setModalOrderId(o.id); setModalOpen(true); }} className="bg-indigo-600 text-white px-3 py-1 rounded">Schedule</button></td>
                   </tr>
                 );
@@ -255,7 +255,7 @@ export function OrdersPendingScheduling() {
                 </div>
               </div>
 
-              <div className="text-sm mb-3"><strong>Company:</strong> {(companies as any[]).find(c=>c.id===orders.find(o=>o.id===modalOrderId)?.companyId)?.name} • <strong>Item:</strong> {npdItems.find(i => i.id === orders.find(o => o.id === modalOrderId)?.itemId)?.name}</div>
+              <div className="text-sm mb-3"><strong>Company:</strong> {(companies as any[]).find(c=>c.id===orders.find(o=>o.id===modalOrderId)?.companyId)?.name} • <strong>Item:</strong> {resolveOrderItem(orders.find(o => o.id === modalOrderId))?.name || "-"}</div>
 
               <div className="grid grid-cols-3 gap-4 mb-3">
                 <div className="bg-slate-50 p-2 border border-black rounded">

@@ -425,6 +425,7 @@ export interface Company {
 }
 
 export type POType = "Verbal" | "Ref No.";
+export type OrderItemSource = "FG" | "PHP" | "PLATE";
 
 export interface Order {
   id: string;
@@ -434,6 +435,7 @@ export interface Order {
   poNumber?: string;
   erpCode?: string | number;
   itemId: string;
+  itemSource?: OrderItemSource;
   npdId?: string;
   qty: number;
   rate?: number;

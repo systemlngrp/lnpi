@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { normalizeOrderItemSource } from "../lib/orderItems";
 import { Company, Order, OrderSchedule } from "../types";
 import { formatDate } from "../lib/serial";
 
@@ -17,6 +18,7 @@ export function PendingNpd() {
       .map((schedule) => {
         const order = orders.find((row) => row.id === schedule.orderId);
         if (!order || order.status === "Cancelled") return null;
+        if (normalizeOrderItemSource(order.itemSource) !== "FG") return null;
         const item = npdItems.find((row) => row.id === String(order.itemId || "").trim());
         const company = companies.find((row) => row.id === order.companyId);
         const boxType = String((item as any)?.boxType || "").trim();

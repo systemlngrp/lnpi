@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { LoadingSlip, DispatchPlan, Order, Company, Item, Truck } from "../types";
 import { Search, BookOpen, Calendar, MapPin, Package, User } from "lucide-react";
 import { formatDate } from "../lib/serial";
@@ -12,6 +13,7 @@ export function DeliveryBook() {
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
   const [trucks] = useData<Truck>("trucks", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -29,7 +31,7 @@ export function DeliveryBook() {
       const itemsList = Array.from(new Set(slip.lines.map(line => {
         const p = dispatchPlans.find(pl => pl.id === line.dispatchPlanId);
         const o = orders.find(ord => ord.id === p?.orderId);
-        return npdItems.find(i => i.id === o?.itemId)?.name || "Unknown";
+        return resolveOrderItem(o)?.name || "Unknown";
       })));
 
       return {

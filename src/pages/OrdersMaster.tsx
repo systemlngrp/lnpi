@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowDown, ArrowUp, Plus, Search, Calendar } from "lucide-react";
 import Select from "react-select";
 import { useData } from "../hooks/useData";
-import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/utils";
@@ -53,7 +53,7 @@ export function OrdersMaster() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const npdItems = useNpdItems();
+  const { resolveOrderItem } = useOrderItemCatalog();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
@@ -77,8 +77,8 @@ export function OrdersMaster() {
     [companies, suppliers]
   );
   const itemMap = useMemo(
-    () => new Map(npdItems.map((item) => [item.id, item.name || ""])),
-    [npdItems]
+    () => new Map(orders.map((order) => [order.id, resolveOrderItem(order)?.name || ""])),
+    [orders, resolveOrderItem]
   );
   const userMap = useMemo(
     () => new Map(users.map((user) => [user.id, user.name || ""])),
@@ -131,7 +131,7 @@ export function OrdersMaster() {
       return {
         order,
         companyName: companyMap.get(order.companyId) || "",
-        itemName: itemMap.get(order.itemId) || "",
+        itemName: itemMap.get(order.id) || "",
         orderByName: userMap.get(order.orderBy || "") || "",
         canceledQty,
         invoicedQty,
