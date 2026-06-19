@@ -420,8 +420,11 @@ function getSyncIdCandidates_(config) {
   if (primary === 'Item Id') {
     candidates.push('Item ID', 'ItemID', 'ItemId');
   }
+  if (primary === 'phpid') {
+    candidates.push('php id', 'PHP ID', 'phpId', 'PHPID', 'php_id');
+  }
   if (primary === 'php_id') {
-    candidates.push('php id', 'PHP ID', 'phpId', 'PHPID');
+    candidates.push('phpid', 'php id', 'PHP ID', 'phpId', 'PHPID');
   }
   if (primary === 'plateid') {
     candidates.push('plate id', 'Plate ID', 'plateId', 'PLATEID');

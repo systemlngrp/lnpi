@@ -250,6 +250,8 @@ const PHP_ITEM_MASTER_HEADER_MAP = {
   "Weight Per Pc/ Set (req)": "weightPerPcReq",
   "Calculated Weight Per PC/Set(req)": "calculatedWeightPerPcReq",
   "Item Id": "itemId",
+  "phpid": "phpId",
+  "PHPID": "phpId",
   "php_id": "phpId",
   "PHP ID": "phpId",
   "php id": "phpId",
@@ -285,7 +287,7 @@ const PHP_ITEM_MASTER_HEADER_MAP = {
   "Hostinger Sync": "hostingerSync",
 } as const;
 
-const PHP_ITEM_MASTER_REQUIRED_HEADERS = ["php_id"] as const;
+const PHP_ITEM_MASTER_REQUIRED_HEADERS = ["phpid"] as const;
 
 const PLATE_ITEM_MASTER_HEADER_MAP = {
   "Timestamp": "timestamp",

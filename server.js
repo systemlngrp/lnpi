@@ -223,6 +223,8 @@ const PHP_ITEM_MASTER_HEADER_MAP = {
   "Weight Per Pc/ Set (req)": "weightPerPcReq",
   "Calculated Weight Per PC/Set(req)": "calculatedWeightPerPcReq",
   "Item Id": "itemId",
+  "phpid": "phpId",
+  "PHPID": "phpId",
   "php_id": "phpId",
   "PHP ID": "phpId",
   "php id": "phpId",
