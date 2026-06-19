@@ -456,7 +456,9 @@ export function PendingInvoicing() {
   }, [invoiceModal, trucks]);
 
   useEffect(() => {
-    if (!editInvoiceId || invoiceModal !== null) return;
+    if (!editInvoiceId) return;
+    if (invoiceModal !== null && invoiceRows.length > 0) return;
+    if (plans.length === 0 || orders.length === 0) return;
 
     const invoice = invoices.find((entry) => entry.id === editInvoiceId);
     if (!invoice) return;
@@ -484,10 +486,12 @@ export function PendingInvoicing() {
     setGstSupplyType((companies.find((row) => row.id === invoice.companyId)?.gstSupplyType as any) || "INTRA_STATE");
 
     const seededRows = buildInvoiceRowsFromSlips(selected);
+    if (seededRows.length === 0) return;
     setInvoiceRows(applySavedInvoiceAllocations(seededRows, editInvoiceId));
   }, [
     editInvoiceId,
     invoiceModal,
+    invoiceRows.length,
     invoices,
     loadingSlips,
     invoiceLineItems,
