@@ -640,25 +640,24 @@ export function OrderForm() {
               <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} className={`w-full border rounded-md p-3 ${poType === "Verbal" ? "bg-slate-100 border-slate-200 text-slate-600" : "border-slate-300 text-slate-900"}`} disabled={poType === "Verbal"} />
             </div>
 
-            <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <input
-                type="checkbox"
-                checked={isUniversal}
-                onChange={(e) => setIsUniversal(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              Show All Items
-            </label>
-
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Item Source</label>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={isUniversal}
+                    onChange={(e) => setIsUniversal(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Show All Items
+                </label>
                 {itemSourceOptions.map((option) => {
                   const checked = itemSource === option.value;
                   return (
                     <label
                       key={option.value}
-                      className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition ${checked ? "border-indigo-600 bg-indigo-50 text-indigo-900" : "border-slate-300 bg-white text-slate-700 hover:border-indigo-300"}`}
+                      className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition ${checked ? "border-indigo-600 bg-indigo-50 text-indigo-900" : "border-slate-300 bg-white text-slate-700 hover:border-indigo-300"}`}
                     >
                       <input
                         type="checkbox"
@@ -666,7 +665,7 @@ export function OrderForm() {
                         onChange={() => handleItemSourceChange(option.value)}
                         className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                       />
-                      <span className="text-sm font-semibold">{option.label}</span>
+                      <span>{option.label}</span>
                     </label>
                   );
                 })}
