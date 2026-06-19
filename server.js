@@ -1640,6 +1640,25 @@ async function ensureCompaniesSchemaColumns(db, database) {
     await ensureColumnExists(db, database, "companies", column, type);
   }
 }
+async function ensureGatePassNullableColumns(db, database) {
+  const nullableColumns = [
+    { column: "invoiceId", type: "VARCHAR(36) NULL" },
+    { column: "invoiceNo", type: "VARCHAR(100) NULL" },
+    { column: "companyId", type: "VARCHAR(36) NULL" },
+    { column: "companyName", type: "VARCHAR(255) NULL" }
+  ];
+  for (const { column, type } of nullableColumns) {
+    const [rows] = await db.query(
+      "SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+      [database, "gate_passes", column]
+    );
+    const metadata = rows[0];
+    if (!metadata) continue;
+    if (String(metadata.IS_NULLABLE || "").toUpperCase() === "YES") continue;
+    console.log(`[DB] Relaxing gate_passes.${column} to nullable for returnable gate pass compatibility...`);
+    await db.query(`ALTER TABLE \`gate_passes\` MODIFY COLUMN \`${column}\` ${type}`);
+  }
+}
 async function getExistingColumnNames(db, database, table) {
   const [rows] = await db.query(
     "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?",
@@ -3776,6 +3795,11 @@ async function initDb(retries = 5) {
         console.warn("[DB] Could not normalize legacy users columns:", err.message);
       }
       try {
+        await ensureGatePassNullableColumns(db, database);
+      } catch (err) {
+        console.warn("[DB] Could not normalize gate_passes nullable invoice fields:", err.message);
+      }
+      try {
         const [oldLeastSheetWeight] = await db.query(
           "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
           [database, "productions", "leastSheetWeight"]
@@ -5181,3 +5205,4 @@ async function startServer() {
   });
 }
 startServer();
+
