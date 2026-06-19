@@ -1320,10 +1320,14 @@ export function Materials() {
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">BF</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Color</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Opening</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Opening Value</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Receipts</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Receipt Value</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Issues</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Issue Value</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Returns</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Balance</th>
+                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Closing Value</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Unit</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Tally Sync</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Tally ID</th>
@@ -1333,14 +1337,20 @@ export function Materials() {
                 <tbody className="divide-y divide-black">
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={18} className="px-6 py-10 text-center text-slate-500 font-medium italic">
+                      <td colSpan={22} className="px-6 py-10 text-center text-slate-500 font-medium italic">
                         No materials matching your search criteria.
                       </td>
                     </tr>
                   ) : (
                     paginatedMaterials.map((material, index) => {
                       const mvt = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
-                      const balance = Number(material.openingQty || 0) + mvt.receipts + mvt.returns - mvt.issues;
+                      const openingQty = Number(material.openingQty || 0);
+                      const openingRate = Number(material.openingRate || 0);
+                      const openingValue = Number(material.openingValue ?? (openingQty * openingRate) || 0);
+                      const balance = openingQty + mvt.receipts + mvt.returns - mvt.issues;
+                      const receiptValue = mvt.receipts * openingRate;
+                      const issueValue = mvt.issues * openingRate;
+                      const closingValue = balance * openingRate;
                       return (
                         <tr key={material.id} className={`hover:bg-indigo-50/30 transition-colors divide-x divide-black ${material.active === "No" ? "opacity-50 grayscale" : ""}`}>
                           <td className="px-4 py-3 text-center">
@@ -1362,11 +1372,17 @@ export function Materials() {
                           <td className="px-4 py-3 text-black text-xs">{material.bf ?? "-"}</td>
                           <td className="px-4 py-3 text-black text-xs font-bold">{material.type === "Reel" ? material.color || "-" : "-"}</td>
                           <td className="px-4 py-3 text-black text-xs font-medium bg-slate-50">{material.openingQty?.toLocaleString() ?? "0"}</td>
+                          <td className="px-4 py-3 text-indigo-700 text-xs font-bold bg-indigo-50/30">{openingValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/30">{mvt.receipts.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/20">{receiptValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/30">{mvt.issues.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/20">{issueValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="px-4 py-3 text-indigo-700 text-xs font-bold bg-indigo-50/30">{mvt.returns.toLocaleString()}</td>
-                          <td className={`px-4 py-3 text-xs font-black border-r-2 border-black ${balance < 0 ? "text-red-600 bg-red-50" : "text-slate-900 bg-amber-50/50"}`}>
+                          <td className={`px-4 py-3 text-xs font-black ${balance < 0 ? "text-red-600 bg-red-50" : "text-slate-900 bg-amber-50/50"}`}>
                             {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className={`px-4 py-3 text-xs font-black border-r-2 border-black ${closingValue < 0 ? "text-red-600 bg-red-50" : "text-violet-700 bg-violet-50/30"}`}>
+                            {closingValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-black text-[10px] font-black uppercase">{material.uom || ""}</td>
                           <td className="px-4 py-3 text-black text-[10px] font-bold">
