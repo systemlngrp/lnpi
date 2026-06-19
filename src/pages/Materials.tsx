@@ -293,19 +293,35 @@ export function Materials() {
   }, [colorFilter, gsmFilter, materials, searchTerm, sizeFilter, sortDirection, sortKey, typeFilter]);
 
   const metrics = useMemo(() => {
-    let totalReelWeight = 0;
-    let totalOtherStock = 0;
-    filteredMaterials.forEach(m => {
-      const mvt = movementSummaryMap.get(m.id) || { receipts: 0, issues: 0, returns: 0 };
-      const balance = Number(m.openingQty || 0) + mvt.receipts + mvt.returns - mvt.issues;
-      if (m.type === "Reel") totalReelWeight += balance;
-      else totalOtherStock += balance;
+    let openingTotal = 0;
+    let receiptTotal = 0;
+    let issueTotal = 0;
+    let returnTotal = 0;
+    let closingTotal = 0;
+
+    filteredMaterials.forEach((material) => {
+      const movement = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
+      const opening = Number(material.openingQty || 0);
+      const receipts = Number(movement.receipts || 0);
+      const issues = Number(movement.issues || 0);
+      const returns = Number(movement.returns || 0);
+      const closing = opening + receipts + returns - issues;
+
+      openingTotal += opening;
+      receiptTotal += receipts;
+      issueTotal += issues;
+      returnTotal += returns;
+      closingTotal += closing;
     });
+
     return {
       total: filteredMaterials.length,
-      active: filteredMaterials.filter(m => m.active !== "No").length,
-      reelWeight: totalReelWeight,
-      otherStock: totalOtherStock,
+      active: filteredMaterials.filter((material) => material.active !== "No").length,
+      openingTotal,
+      receiptTotal,
+      issueTotal,
+      returnTotal,
+      closingTotal,
     };
   }, [filteredMaterials, movementSummaryMap]);
 
@@ -1193,24 +1209,24 @@ export function Materials() {
             {/* Colorful Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
               <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
-                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Total Materials</div>
-                <div className="text-3xl font-black">{metrics.total}</div>
-                <div className="text-[10px] font-bold mt-1 opacity-90">{metrics.active} Active Items</div>
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Opening Value</div>
+                <div className="text-3xl font-black">{metrics.openingTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-[10px] font-bold mt-1 opacity-90">{metrics.total} filtered materials</div>
               </div>
               <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
-                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Reel Stock</div>
-                <div className="text-3xl font-black">{metrics.reelWeight.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm">KG</span></div>
-                <div className="text-[10px] font-bold mt-1 opacity-90">Net Weight in Godown</div>
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Receipts Value</div>
+                <div className="text-3xl font-black">{metrics.receiptTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-[10px] font-bold mt-1 opacity-90">Inward quantity across filtered rows</div>
               </div>
               <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
-                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Other Stock</div>
-                <div className="text-3xl font-black">{metrics.otherStock.toLocaleString()}</div>
-                <div className="text-[10px] font-bold mt-1 opacity-90">Consumables & Spares</div>
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Issue Value</div>
+                <div className="text-3xl font-black">{metrics.issueTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-[10px] font-bold mt-1 opacity-90">Outward quantity across filtered rows</div>
               </div>
               <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
-                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Filtered Items</div>
-                <div className="text-3xl font-black">{filteredMaterials.length}</div>
-                <div className="text-[10px] font-bold mt-1 opacity-90">Based on active filters</div>
+                <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Closing Value</div>
+                <div className="text-3xl font-black">{metrics.closingTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div className="text-[10px] font-bold mt-1 opacity-90">Includes returns {metrics.returnTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               </div>
             </div>
 
