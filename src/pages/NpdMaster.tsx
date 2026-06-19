@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
@@ -8,10 +8,13 @@ type NpdRecord = {
   [key: string]: string | number | boolean | null | undefined;
 };
 
+type NpdStatusFilter = "active" | "removed" | "all";
+
 const NPD_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "boxType", label: "BOX TYPE" },
   { key: "customerName", label: "Customer Name" },
   { key: "itemName", label: "Item Name" },
+  { key: "syncStatus", label: "Status" },
   { key: "opening", label: "Opening" },
   { key: "receipt", label: "Receipt" },
   { key: "production", label: "Production" },
@@ -162,6 +165,7 @@ export function NpdMaster() {
   const [total, setTotal] = useState(0);
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<NpdStatusFilter>("all");
   const [pageSize, setPageSize] = useState(100);
 
   useEffect(() => {
@@ -184,6 +188,7 @@ export function NpdMaster() {
           pageSize: String(pageSize),
         });
         if (searchTerm) params.set("search", searchTerm);
+        params.set("status", statusFilter);
 
         const response = await fetch(`/api/npd?${params.toString()}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -209,7 +214,7 @@ export function NpdMaster() {
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize, searchTerm]);
+  }, [page, pageSize, searchTerm, statusFilter]);
 
   useAutoRefreshEffect(() => {
     setLoading(true);
@@ -219,6 +224,7 @@ export function NpdMaster() {
       pageSize: String(pageSize),
     });
     if (searchTerm) params.set("search", searchTerm);
+    params.set("status", statusFilter);
 
     void fetch(`/api/npd?${params.toString()}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -239,6 +245,11 @@ export function NpdMaster() {
       });
   });
 
+  const statusOptions: Array<{ value: NpdStatusFilter; label: string }> = [
+    { value: "all", label: "All" },
+    { value: "active", label: "Active" },
+    { value: "removed", label: "Removed" },
+  ];
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const pageLabel = useMemo(() => {
     if (total === 0) return "0 records";
@@ -271,6 +282,24 @@ export function NpdMaster() {
             <span>{loading ? "Loading NPD items..." : pageLabel}</span>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs font-black uppercase">
+              Status
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setPage(1);
+                  setStatusFilter(e.target.value as NpdStatusFilter);
+                }}
+                disabled={loading}
+                className="rounded border border-black bg-white px-2 py-1 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex items-center gap-2 text-xs font-black uppercase">
               Rows
               <select
@@ -379,7 +408,9 @@ export function NpdMaster() {
                               "-"
                             )
                           ) : (
-                            formatCellValue(rawValue)
+                            column.key === "syncStatus"
+                              ? formatCellValue(rawValue || "active")
+                              : formatCellValue(rawValue)
                           )}
                         </td>
                       );
@@ -394,3 +425,4 @@ export function NpdMaster() {
     </div>
   );
 }
+

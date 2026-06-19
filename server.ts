@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -1725,14 +1725,20 @@ async function fetchLegacyItems(db: mysql.Pool) {
 
 async function fetchActiveNpdItems(
   db: mysql.Pool,
-  options?: { search?: string; limit?: number; offset?: number; includeTotal?: boolean }
+  options?: { search?: string; limit?: number; offset?: number; includeTotal?: boolean; status?: "active" | "removed" | "all" }
 ) {
   const [npdColumnsRows] = await db.query("SHOW COLUMNS FROM `npd`");
   const npdColumns = new Set((npdColumnsRows as any[]).map((row) => String(row.Field || "").trim()));
   const openingExpr = npdColumns.has("opening") ? "COALESCE(n.opening, 0)" : "0";
-  const syncStatusFilter = npdColumns.has("syncStatus")
-    ? "COALESCE(NULLIF(TRIM(n.syncStatus), ''), 'active') <> 'removed'"
-    : "1 = 1";
+  const requestedStatus = String(options?.status || "active").trim().toLowerCase();
+  const syncStatusExpr = "COALESCE(NULLIF(TRIM(n.syncStatus), ''), 'active')";
+  const syncStatusFilter = !npdColumns.has("syncStatus")
+    ? "1 = 1"
+    : requestedStatus === "removed"
+      ? `${syncStatusExpr} = 'removed'`
+      : requestedStatus === "all"
+        ? "1 = 1"
+        : `${syncStatusExpr} <> 'removed'`;
   const search = String(options?.search || "").trim();
   const limit = Number.isFinite(options?.limit) ? Math.max(1, Number(options?.limit)) : undefined;
   const offset = Number.isFinite(options?.offset) ? Math.max(0, Number(options?.offset)) : 0;
@@ -4307,8 +4313,11 @@ const createHandlers = (tableName: string) => {
           const page = Math.max(1, Number(req.query.page || 1));
           const pageSize = Math.min(10000, Math.max(25, Number(req.query.pageSize || 10000)));
           const search = String(req.query.search || "").trim();
+          const statusParam = String(req.query.status || "active").trim().toLowerCase();
+          const status = statusParam === "removed" || statusParam === "all" ? statusParam : "active";
           const result = await fetchActiveNpdItems(db, {
             search,
+            status,
             limit: pageSize,
             offset: (page - 1) * pageSize,
             includeTotal: true,
@@ -4320,6 +4329,7 @@ const createHandlers = (tableName: string) => {
             page,
             pageSize,
             search,
+            status,
           });
         } else if (tableName === "production_processing") {
           [rows] = await db.query(`
@@ -5756,4 +5766,5 @@ async function startServer() {
 }
 
 startServer();
+
 
