@@ -22,7 +22,11 @@ export function PendingReturnableItems() {
           return state === "Open" || state === "Partially Returned";
         })
         .filter((gatePass) => {
-          const haystack = [gatePass.gatePassNo, getGatePassPrimaryPartyName(gatePass), gatePass.truckNo]
+          const itemNames = (gatePass.lines || [])
+            .map((line) => line.itemDescription || line.itemName)
+            .filter(Boolean)
+            .join(" ");
+          const haystack = [gatePass.gatePassNo, getGatePassPrimaryPartyName(gatePass), gatePass.truckNo, itemNames]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
@@ -33,6 +37,16 @@ export function PendingReturnableItems() {
   );
 
   const selectedGatePass = pendingGatePasses.find((gatePass) => gatePass.id === selectedGatePassId) || null;
+  const getGatePassItemNames = (gatePass: GatePass) => {
+    const labels = Array.from(
+      new Set(
+        (gatePass.lines || [])
+          .map((line) => String(line.itemDescription || line.itemName || "").trim())
+          .filter(Boolean)
+      )
+    );
+    return labels.length ? labels.join(", ") : "-";
+  };
   const selectedLines = selectedGatePass ? getGatePassLinesWithReturns(selectedGatePass, materialIn) : [];
 
   const handleClearOff = async (gatePass: GatePass) => {
@@ -62,14 +76,14 @@ export function PendingReturnableItems() {
       </div>
 
       <div className="rounded border border-black bg-white p-4 shadow-sm">
-        <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search gate pass no, recipient, truck..." className="w-full max-w-xl rounded border border-black px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black" />
+        <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search gate pass no, recipient, item name, truck..." className="w-full max-w-xl rounded border border-black px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black" />
       </div>
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
           <thead className="bg-slate-100">
             <tr className="divide-x divide-black">
-              {["Gate Pass No", "Date", "Recipient", "Truck", "Total Qty", "Pending Qty", "Derived State", "Actions"].map((heading) => (
+              {["Gate Pass No", "Date", "Recipient", "Item Name", "Truck", "Total Qty", "Pending Qty", "Derived State", "Actions"].map((heading) => (
                 <th key={heading} className="border-b border-black px-4 py-3 text-left text-xs font-black uppercase text-black">{heading}</th>
               ))}
             </tr>
@@ -77,7 +91,7 @@ export function PendingReturnableItems() {
           <tbody className="divide-y divide-black bg-white">
             {pendingGatePasses.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">No pending returnable items found.</td>
+                <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">No pending returnable items found.</td>
               </tr>
             ) : (
               pendingGatePasses.map((gatePass) => (
@@ -85,6 +99,7 @@ export function PendingReturnableItems() {
                   <td className="px-4 py-3 text-sm font-bold text-black">{gatePass.gatePassNo}</td>
                   <td className="px-4 py-3 text-sm text-black">{formatDate(gatePass.date)}</td>
                   <td className="px-4 py-3 text-sm text-black">{getGatePassPrimaryPartyName(gatePass)}</td>
+                  <td className="px-4 py-3 text-sm text-black max-w-[320px]">{getGatePassItemNames(gatePass)}</td>
                   <td className="px-4 py-3 text-sm text-black">{gatePass.truckNo || "-"}</td>
                   <td className="px-4 py-3 text-right text-sm text-black">{Number(gatePass.totalQty || 0).toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-amber-700">{getPendingQtyForGatePass(gatePass, materialIn).toLocaleString()}</td>
@@ -151,3 +166,5 @@ export function PendingReturnableItems() {
     </div>
   );
 }
+
+
