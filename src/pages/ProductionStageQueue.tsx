@@ -120,7 +120,7 @@ export function ProductionStageQueue({
       .map((production) => {
         const schedule = schedules.find((row) => row.id === production.scheduleId);
         const order = orders.find((row) => row.id === schedule?.orderId);
-        const item = npdItems.find((row) => row.id === production.itemId);
+        const item = npdItems.find((row) => String(row.id) === String(production.itemId || order?.itemId || "").trim());
         const company = companies.find((row) => row.id === order?.companyId);
         const prereqQty = prereqMachine
           ? processing

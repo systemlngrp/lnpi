@@ -259,7 +259,7 @@ const PHP_ITEM_MASTER_HEADER_MAP = {
   "Calculted B GSM": "calculatedBGsm",
   "Hostinger Sync": "hostingerSync"
 };
-const PHP_ITEM_MASTER_REQUIRED_HEADERS = ["Item Id"];
+const PHP_ITEM_MASTER_REQUIRED_HEADERS = ["phpid"];
 const PLATE_ITEM_MASTER_HEADER_MAP = {
   "Timestamp": "timestamp",
   "NPD_ID": "npdId",
@@ -318,7 +318,7 @@ const PLATE_ITEM_MASTER_HEADER_MAP = {
   "Total Weight (Grams)": "totalWeightGrams",
   "Hostinger Sync": "hostingerSync"
 };
-const PLATE_ITEM_MASTER_REQUIRED_HEADERS = ["Item Id"];
+const PLATE_ITEM_MASTER_REQUIRED_HEADERS = ["plateid"];
 const NPD_SYNC_NUMERIC_KEYS = /* @__PURE__ */ new Set([
   "erp",
   "rate",
@@ -1495,7 +1495,9 @@ async function fetchActiveNpdItems(db, options) {
   const [npdColumnsRows] = await db.query("SHOW COLUMNS FROM `npd`");
   const npdColumns = new Set(npdColumnsRows.map((row) => String(row.Field || "").trim()));
   const openingExpr = npdColumns.has("opening") ? "COALESCE(n.opening, 0)" : "0";
-  const syncStatusFilter = npdColumns.has("syncStatus") ? "COALESCE(NULLIF(TRIM(n.syncStatus), ''), 'active') <> 'removed'" : "1 = 1";
+  const requestedStatus = String(options?.status || "active").trim().toLowerCase();
+  const syncStatusExpr = "COALESCE(NULLIF(TRIM(n.syncStatus), ''), 'active')";
+  const syncStatusFilter = !npdColumns.has("syncStatus") ? "1 = 1" : requestedStatus === "removed" ? `${syncStatusExpr} = 'removed'` : requestedStatus === "all" ? "1 = 1" : `${syncStatusExpr} <> 'removed'`;
   const search = String(options?.search || "").trim();
   const limit = Number.isFinite(options?.limit) ? Math.max(1, Number(options?.limit)) : void 0;
   const offset = Number.isFinite(options?.offset) ? Math.max(0, Number(options?.offset)) : 0;
@@ -3872,8 +3874,11 @@ const createHandlers = (tableName) => {
           const page = Math.max(1, Number(req.query.page || 1));
           const pageSize = Math.min(1e4, Math.max(25, Number(req.query.pageSize || 1e4)));
           const search = String(req.query.search || "").trim();
+          const statusParam = String(req.query.status || "active").trim().toLowerCase();
+          const status = statusParam === "removed" || statusParam === "all" ? statusParam : "active";
           const result = await fetchActiveNpdItems(db, {
             search,
+            status,
             limit: pageSize,
             offset: (page - 1) * pageSize,
             includeTotal: true
@@ -3884,7 +3889,8 @@ const createHandlers = (tableName) => {
             total: result.total,
             page,
             pageSize,
-            search
+            search,
+            status
           });
         } else if (tableName === "production_processing") {
           [rows] = await db.query(`
@@ -5102,4 +5108,3 @@ async function startServer() {
   });
 }
 startServer();
-

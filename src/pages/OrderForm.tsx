@@ -145,7 +145,7 @@ export function OrderForm() {
     const pageSize = 10000;
 
     try {
-      const response = await fetch(`/api/npd?page=1&pageSize=${pageSize}`, { headers });
+      const response = await fetch(`/api/npd?page=1&pageSize=${pageSize}&status=all`, { headers });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to fetch full item list");

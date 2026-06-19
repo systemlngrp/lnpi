@@ -35,7 +35,7 @@ export function ConsumptionForm() {
       return timeB - timeA;
     })
     .map((production) => {
-      const item = npdItems.find((row) => row.id === production.itemId);
+      const item = npdItems.find((row) => String(row.id) === String(production.itemId || "").trim());
       const displayedJobNo = String(production.jobCardNo || production.transactionNo || "");
       return {
         value: production.id,
