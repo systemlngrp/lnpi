@@ -26,7 +26,7 @@ function syncNpdSheetToHostinger() {
 }
 
 function forceFullNpdSync() {
-  return performFullSync_(NPD_SYNC_CONFIG, false);
+  return performFullSync_(NPD_SYNC_CONFIG, true);
 }
 
 function syncNpdRatesFromHostinger() {

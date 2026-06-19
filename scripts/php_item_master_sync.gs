@@ -16,7 +16,7 @@ function syncPhpItemMasterSheetToHostinger() {
 }
 
 function forceFullPhpItemMasterSync() {
-  return performFullSync_(PHP_ITEM_MASTER_SYNC_CONFIG, false);
+  return performFullSync_(PHP_ITEM_MASTER_SYNC_CONFIG, true);
 }
 
 function flushQueuedPhpItemMasterSync() {

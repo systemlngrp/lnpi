@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
@@ -14,16 +14,6 @@ export function OrdersPendingPH() {
   const [searchTerm, setSearchTerm] = useState('');
   const [orderByFilter, setOrderByFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
 
   const [orders, setOrders] = useData<Order>("orders", []);
   const [companies] = useData("companies", []);
@@ -64,30 +54,53 @@ export function OrdersPendingPH() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [pending, users, userMap]);
 
-  const filtered = useMemo(() => {
-    return pending
-      .filter(o => {
-        if (orderByFilter && String(o.orderBy || "") !== orderByFilter) return false;
-        return true;
-      })
-      .sort((a, b) => {
-        const aNo = a.orderNo || "";
-        const bNo = b.orderNo || "";
-        const cmp = aNo.localeCompare(bNo, undefined, { numeric: true, sensitivity: "base" });
-        return sortOrder === "asc" ? cmp : -cmp;
-      });
-  }, [pending, orderByFilter, sortOrder]);
-
-  const presentOrderByValues = Array.from(new Set(pending.map(o => String(o.orderBy || "").trim()).filter(Boolean)));
-  const unmappedOrderBys = presentOrderByValues.filter(v => !resolveOrderByUser(v));
-  const params = new URLSearchParams(window.location.search);
-  const showDebug = params.get("debug") === "1";
-
   const getOrderByLabel = (raw: string) => {
     const u = resolveOrderByUser(String(raw || ""));
     if (u) return u.name || "";
     return String(raw || "").trim();
   };
+
+  const filtered = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return pending
+      .map((order) => {
+        const item = resolveOrderItem(order);
+        const companyName = (companies as any[]).find((c: any) => c.id === order.companyId)?.name || "";
+        return {
+          order,
+          item,
+          companyName,
+          orderByLabel: getOrderByLabel(order.orderBy),
+        };
+      })
+      .filter(({ order, item, companyName, orderByLabel }) => {
+        if (orderByFilter && String(order.orderBy || "") !== orderByFilter) return false;
+        if (!normalizedSearch) return true;
+        const haystack = [
+          order.orderNo,
+          formatDate(order.orderDate),
+          companyName,
+          item?.name,
+          item?.erp,
+          orderByLabel,
+          String(order.qty || ""),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedSearch);
+      })
+      .sort((a, b) => {
+        const aNo = a.order.orderNo || "";
+        const bNo = b.order.orderNo || "";
+        const cmp = aNo.localeCompare(bNo, undefined, { numeric: true, sensitivity: "base" });
+        return sortOrder === "asc" ? cmp : -cmp;
+      });
+  }, [companies, orderByFilter, pending, resolveOrderItem, searchTerm, sortOrder]);
+
+  const presentOrderByValues = Array.from(new Set(pending.map(o => String(o.orderBy || "").trim()).filter(Boolean)));
+  const unmappedOrderBys = presentOrderByValues.filter(v => !resolveOrderByUser(v));
+  const params = new URLSearchParams(window.location.search);
+  const showDebug = params.get("debug") === "1";
 
   const toggleSort = () => {
     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -183,14 +196,14 @@ export function OrdersPendingPH() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(o => (
+            {filtered.map(({ order: o, item, companyName, orderByLabel }) => (
               <tr key={o.id} className="hover:bg-slate-50">
                 <td className="px-4 py-2 border border-black">{o.orderNo}</td>
                 <td className="px-4 py-2 border border-black">{formatDate(o.orderDate)}</td>
-                <td className="px-4 py-2 border border-black">{(companies as any[]).find((c:any)=>c.id===o.companyId)?.name}</td>
-                <td className="px-4 py-2 border border-black">{resolveOrderItem(o)?.name || "-"}</td>
-                <td className="px-4 py-2 border border-black">{resolveOrderItem(o)?.erp || "-"}</td>
-                <td className="px-4 py-2 border border-black whitespace-nowrap">{getOrderByLabel(o.orderBy) || '-'}</td>
+                <td className="px-4 py-2 border border-black">{companyName || "-"}</td>
+                <td className="px-4 py-2 border border-black">{item?.name || "-"}</td>
+                <td className="px-4 py-2 border border-black">{item?.erp || "-"}</td>
+                <td className="px-4 py-2 border border-black whitespace-nowrap">{orderByLabel || '-'}</td>
                 <td className="px-4 py-2 border border-black">{o.qty}</td>
                 <td className="px-4 py-2 border border-black">
                   <div className="flex items-center gap-2">

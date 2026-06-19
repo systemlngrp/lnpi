@@ -16,7 +16,7 @@ function syncPlateItemMasterSheetToHostinger() {
 }
 
 function forceFullPlateItemMasterSync() {
-  return performFullSync_(PLATE_ITEM_MASTER_SYNC_CONFIG, false);
+  return performFullSync_(PLATE_ITEM_MASTER_SYNC_CONFIG, true);
 }
 
 function flushQueuedPlateItemMasterSync() {

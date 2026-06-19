@@ -16,7 +16,7 @@ function syncCompaniesSheetToHostinger() {
 }
 
 function forceFullCompanySync() {
-  return performFullSync_(COMPANY_SYNC_CONFIG, false);
+  return performFullSync_(COMPANY_SYNC_CONFIG, true);
 }
 
 function flushQueuedCompanySync() {

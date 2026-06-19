@@ -9,8 +9,32 @@ import {
   OrderCatalogItem,
 } from "../lib/orderItems";
 
+const getLookupKeys = (source: OrderItemSource, row: any) => {
+  const normalizedSource = normalizeOrderItemSource(source);
+  const keys = [
+    row?.id,
+    row?.itemId,
+    row?.npdId,
+    row?.phpId,
+    row?.plateId,
+    row?.raw?.id,
+    row?.raw?.itemId,
+    row?.raw?.npdId,
+    row?.raw?.phpId,
+    row?.raw?.plateId,
+  ];
+
+  return [...new Set(keys.map((value) => String(value || "").trim()).filter(Boolean))].map((value) =>
+    getOrderItemCompositeKey(normalizedSource, value)
+  );
+};
+
 export function useOrderItemCatalog() {
-  const [fgRows] = useData<any>("npd", []);
+  const [fgRows] = useData<any>("npd", [], {
+    endpointOverride: "/api/npd?page=1&pageSize=10000&status=all",
+    storageKey: "npd_order_catalog",
+    syncEventKey: "sync-data-npd",
+  });
   const [phpRows] = useData<any>("php_item_master", []);
   const [plateRows] = useData<any>("plate_item_master", []);
 
@@ -27,7 +51,11 @@ export function useOrderItemCatalog() {
     const map = new Map<string, OrderCatalogItem>();
     (Object.keys(itemsBySource) as OrderItemSource[]).forEach((source) => {
       itemsBySource[source].forEach((item) => {
-        map.set(getOrderItemCompositeKey(source, item.id), item);
+        getLookupKeys(source, item).forEach((key) => {
+          if (!map.has(key)) {
+            map.set(key, item);
+          }
+        });
       });
     });
     return map;
@@ -35,13 +63,25 @@ export function useOrderItemCatalog() {
 
   const findItem = (source: OrderItemSource | undefined, itemId: string | undefined) => {
     const normalizedSource = normalizeOrderItemSource(source);
-    return itemMap.get(getOrderItemCompositeKey(normalizedSource, String(itemId || "").trim()));
+    const normalizedItemId = String(itemId || "").trim();
+    if (!normalizedItemId) return undefined;
+    return itemMap.get(getOrderItemCompositeKey(normalizedSource, normalizedItemId));
   };
 
   const resolveOrderItem = (order?: Partial<Order> | null) => {
     if (!order) return undefined;
     const normalizedOrder = normalizeOrderRecord(order);
-    return findItem(normalizedOrder.itemSource, normalizedOrder.itemId);
+    const lookupCandidates = [
+      normalizedOrder.itemId,
+      normalizedOrder.itemSource === "FG" ? normalizedOrder.npdId : "",
+    ];
+
+    for (const candidate of lookupCandidates) {
+      const match = findItem(normalizedOrder.itemSource, String(candidate || ""));
+      if (match) return match;
+    }
+
+    return undefined;
   };
 
   return {

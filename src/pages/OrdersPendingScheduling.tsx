@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Order, OrderSchedule } from "../types";
-import { Select } from "../components/Select";
 import { Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 
@@ -11,16 +10,6 @@ import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 export function OrdersPendingScheduling() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
 
   const [orders, setOrders] = useData<Order>("orders", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -41,15 +30,39 @@ export function OrdersPendingScheduling() {
   const today = new Date().toISOString().slice(0, 10);
   
   const pending = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
     return orders
-      .filter(o => o.status === "Pending Scheduling" && (o.qty || 0) > totalScheduled(o.id))
+      .filter((order) => order.status === "Pending Scheduling" && (order.qty || 0) > totalScheduled(order.id))
+      .map((order) => {
+        const item = resolveOrderItem(order);
+        const companyName = (companies as any[]).find((company) => company.id === order.companyId)?.name || "";
+        const scheduledQty = totalScheduled(order.id);
+        const pendingQty = Number(order.qty || 0) - scheduledQty;
+        return { order, item, companyName, scheduledQty, pendingQty };
+      })
+      .filter(({ order, item, companyName, pendingQty, scheduledQty }) => {
+        if (!normalizedSearch) return true;
+        const haystack = [
+          order.orderNo,
+          companyName,
+          item?.name,
+          item?.erp,
+          item?.uom,
+          String(order.qty || ""),
+          String(scheduledQty),
+          String(pendingQty),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedSearch);
+      })
       .sort((a, b) => {
-        const aNo = a.orderNo || "";
-        const bNo = b.orderNo || "";
+        const aNo = a.order.orderNo || "";
+        const bNo = b.order.orderNo || "";
         const cmp = aNo.localeCompare(bNo, undefined, { numeric: true, sensitivity: "base" });
         return sortOrder === "asc" ? cmp : -cmp;
       });
-  }, [orders, schedules, sortOrder]);
+  }, [companies, orders, resolveOrderItem, schedules, searchTerm, sortOrder]);
 
   const toggleSort = () => {
     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -224,19 +237,17 @@ export function OrdersPendingScheduling() {
               </tr>
             </thead>
             <tbody>
-              {pending.map((o, idx) => {
-                const sched = totalScheduled(o.id);
-                const pendingSched = Number(o.qty || 0) - sched;
+              {pending.map(({ order: o, item, companyName, scheduledQty: sched, pendingQty: pendingSched }, idx) => {
                 return (
                   <tr key={o.id} className="hover:bg-slate-50">
                     <td className="px-3 py-2 border border-black">{idx + 1}</td>
                     <td className="px-3 py-2 border border-black">{o.orderNo}</td>
-                    <td className="px-3 py-2 border border-black">{(companies as any[]).find(c=>c.id===o.companyId)?.name}</td>
-                    <td className="px-3 py-2 border border-black">{resolveOrderItem(o)?.name || "-"}</td>
+                    <td className="px-3 py-2 border border-black">{companyName || "-"}</td>
+                    <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
                     <td className="px-3 py-2 border border-black">{formatQty(o.qty)}</td>
                     <td className="px-3 py-2 border border-black">{formatQty(sched)}</td>
                     <td className="px-3 py-2 border border-black font-bold text-indigo-700">{formatQty(pendingSched)}</td>
-                    <td className="px-3 py-2 border border-black">{resolveOrderItem(o)?.uom || "-"}</td>
+                    <td className="px-3 py-2 border border-black">{item?.uom || "-"}</td>
                     <td className="px-3 py-2 border border-black"><button onClick={() => { setModalOrderId(o.id); setModalOpen(true); }} className="bg-indigo-600 text-white px-3 py-1 rounded">Schedule</button></td>
                   </tr>
                 );

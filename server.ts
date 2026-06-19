@@ -732,12 +732,14 @@ app.post("/api/npd-sync", async (req, res) => {
       headerMap: NPD_SYNC_HEADER_MAP,
       requiredHeaders: NPD_SYNC_REQUIRED_HEADERS,
       mapFn: mapSheetRowToNpdRow,
+      skipIfHostingerSynced: true,
     },
     "PHP ITEM MASTER": {
       table: "php_item_master",
       idColumn: "phpId",
       headerMap: PHP_ITEM_MASTER_HEADER_MAP,
       requiredHeaders: PHP_ITEM_MASTER_REQUIRED_HEADERS,
+      skipIfHostingerSynced: true,
       mapFn: (row: Record<string, any>) => {
         const mapped = mapSheetRowByHeaderMap_(row, PHP_ITEM_MASTER_HEADER_MAP as Record<string, string>);
         mapped.phpId = stringOrEmpty(mapped.phpId || mapped.itemId);
@@ -750,6 +752,7 @@ app.post("/api/npd-sync", async (req, res) => {
       idColumn: "plateId",
       headerMap: PLATE_ITEM_MASTER_HEADER_MAP,
       requiredHeaders: PLATE_ITEM_MASTER_REQUIRED_HEADERS,
+      skipIfHostingerSynced: true,
       mapFn: (row: Record<string, any>) => {
         const mapped = mapSheetRowByHeaderMap_(row, PLATE_ITEM_MASTER_HEADER_MAP as Record<string, string>);
         mapped.plateId = stringOrEmpty(mapped.plateId || mapped.itemId);
@@ -762,6 +765,7 @@ app.post("/api/npd-sync", async (req, res) => {
       idColumn: "id",
       headerMap: COMPANY_SYNC_HEADER_MAP,
       requiredHeaders: COMPANY_SYNC_REQUIRED_HEADERS,
+      skipIfHostingerSynced: true,
       mapFn: (row: Record<string, any>) => {
         const mapped: Record<string, any> = {};
         
@@ -850,7 +854,11 @@ app.post("/api/npd-sync", async (req, res) => {
     };
   });
 
-  const invalidRows = normalizedRows
+  const eligibleRows = config.skipIfHostingerSynced
+    ? normalizedRows.filter((entry) => stringOrEmpty(entry.mapped.hostingerSync) === "")
+    : normalizedRows;
+
+  const invalidRows = eligibleRows
     .filter((entry) => !entry.mapped[config.idColumn])
     .map((entry) => ({
       rowNumber: entry.rowNumber,
@@ -860,7 +868,7 @@ app.post("/api/npd-sync", async (req, res) => {
 
   const duplicateCounter = new Map<string, number>();
   const dedupedById = new Map<string, (typeof normalizedRows)[number]>();
-  normalizedRows.forEach((entry) => {
+  eligibleRows.forEach((entry) => {
     const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
     if (!syncId) return;
     duplicateCounter.set(syncId, (duplicateCounter.get(syncId) || 0) + 1);

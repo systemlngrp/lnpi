@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
@@ -34,16 +34,6 @@ function parseLocalYmd(dateStr?: string) {
 export function PendingProduction() {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
-
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
@@ -63,28 +53,46 @@ export function PendingProduction() {
     return cutoff;
   }, []);
 
-  const pendingRows = useMemo(
-    () =>
-      schedules
-        .filter((schedule) => {
-          if (getPendingProductionQty(schedule) <= 0) return false;
-          const scheduledDate = parseLocalYmd(schedule.scheduledDate);
-          if (!scheduledDate) return false;
-          return scheduledDate.getTime() <= cutoffDate.getTime();
-        })
-        .map((schedule) => {
-          const order = orders.find((row) => row.id === schedule.orderId);
-          const item = resolveOrderItem(order);
-          const company = companies.find((row) => row.id === order?.companyId);
-          return { schedule, order, item, company, pendingQty: getPendingProductionQty(schedule) };
-        })
-        .sort((a, b) => {
-          const timeA = new Date(a.schedule.updateTimestamp || a.schedule.scheduledDate || 0).getTime();
-          const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
-          return timeB - timeA;
-        }),
-    [companies, cutoffDate, orders, resolveOrderItem, schedules]
-  );
+  const pendingRows = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return schedules
+      .filter((schedule) => {
+        if (getPendingProductionQty(schedule) <= 0) return false;
+        const scheduledDate = parseLocalYmd(schedule.scheduledDate);
+        if (!scheduledDate) return false;
+        return scheduledDate.getTime() <= cutoffDate.getTime();
+      })
+      .map((schedule) => {
+        const order = orders.find((row) => row.id === schedule.orderId);
+        const item = resolveOrderItem(order);
+        const company = companies.find((row) => row.id === order?.companyId);
+        return { schedule, order, item, company, pendingQty: getPendingProductionQty(schedule) };
+      })
+      .filter(({ schedule, order, item, company, pendingQty }) => {
+        if (!normalizedSearch) return true;
+        const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
+        const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
+        const haystack = [
+          order?.orderNo,
+          formatDate(schedule.scheduledDate),
+          company?.name,
+          item?.name,
+          boxType,
+          String(schedule.qty || 0),
+          String(schedule.producedQty || 0),
+          String(schedule.canceledQty || 0),
+          String(pendingQty),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedSearch);
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.schedule.updateTimestamp || a.schedule.scheduledDate || 0).getTime();
+        const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
+        return timeB - timeA;
+      });
+  }, [companies, cutoffDate, orders, resolveOrderItem, schedules, searchTerm]);
   const {
     page,
     setPage,

@@ -239,6 +239,16 @@ function processBatchSync_(config, spreadsheet, sheet, allRowsToSync, allRowIndi
   };
 }
 
+function shouldSkipSyncedRows_(config) {
+  if (!config) return false;
+  return [
+    typeof NPD_SYNC_CONFIG !== 'undefined' ? NPD_SYNC_CONFIG.tabName : '',
+    typeof COMPANY_SYNC_CONFIG !== 'undefined' ? COMPANY_SYNC_CONFIG.tabName : '',
+    typeof PHP_ITEM_MASTER_SYNC_CONFIG !== 'undefined' ? PHP_ITEM_MASTER_SYNC_CONFIG.tabName : '',
+    typeof PLATE_ITEM_MASTER_SYNC_CONFIG !== 'undefined' ? PLATE_ITEM_MASTER_SYNC_CONFIG.tabName : '',
+  ].includes(config.tabName);
+}
+
 function onNpdSheetEdit(e) {
   if (!e || !e.range) {
     return;
@@ -248,7 +258,7 @@ function onNpdSheetEdit(e) {
   const sheetName = sheet.getName();
   const config = getAllSheetSyncConfigs_().find((entry) => entry.tabName === sheetName);
   if (config) {
-    handleSheetEdit_(e, config, false);
+    handleSheetEdit_(e, config, shouldSkipSyncedRows_(config));
   }
 }
 
