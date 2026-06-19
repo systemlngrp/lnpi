@@ -24,7 +24,7 @@ function createBlankLine(): GatePassLine {
     itemName: "",
     itemDescription: "",
     qty: 0,
-    uom: "",
+    uom: "PCS",
     rate: 0,
     amount: 0,
     loadingSlipIds: [],
@@ -72,7 +72,18 @@ export function GatePassForm() {
       setRemarks(editingGatePass.remarks || "");
       setRecipientId(editingGatePass.recipientId || "");
       setSentByUserId(editingGatePass.sentByUserId || "");
-      setReturnableLines(editingGatePass.lines?.length ? editingGatePass.lines.map((line) => ({ ...line })) : [createBlankLine()]);
+      setReturnableLines(
+        editingGatePass.lines?.length
+          ? editingGatePass.lines.map((line) => ({
+              ...line,
+              uom: String(line.uom || "PCS").trim() || "PCS",
+              rate: 0,
+              amount: 0,
+              loadingSlipIds: [],
+              loadingSlipNos: [],
+            }))
+          : [createBlankLine()]
+      );
       return;
     }
 
@@ -191,10 +202,19 @@ export function GatePassForm() {
     const normalizedLines = returnableLines
       .map((line) => {
         const qty = Number(line.qty || 0);
-        const rate = Number(line.rate || 0);
-        const amount = Number(line.amount || qty * rate);
         const itemDescription = String(line.itemDescription || line.itemName || "").trim();
-        return { ...line, itemName: itemDescription, itemDescription, qty, rate, amount };
+        const uom = String(line.uom || "PCS").trim() || "PCS";
+        return {
+          ...line,
+          itemName: itemDescription,
+          itemDescription,
+          qty,
+          uom,
+          rate: 0,
+          amount: 0,
+          loadingSlipIds: [],
+          loadingSlipNos: [],
+        };
       })
       .filter((line) => line.itemDescription && Number(line.qty || 0) > 0);
 
@@ -205,6 +225,10 @@ export function GatePassForm() {
       gatePassNo: editingGatePass?.gatePassNo || "",
       date,
       gatePassType: "Returnable",
+      invoiceId: undefined,
+      invoiceNo: undefined,
+      companyId: undefined,
+      companyName: undefined,
       recipientId,
       recipientName: recipientSupplier?.name || recipientCompany?.name || "",
       recipientType: recipientSupplier ? "Supplier" : "Customer",
@@ -219,7 +243,7 @@ export function GatePassForm() {
       clearedOffAt: editingGatePass?.clearedOffAt,
       clearedOffBy: editingGatePass?.clearedOffBy,
       totalQty: normalizedLines.reduce((sum, line) => sum + Number(line.qty || 0), 0),
-      totalAmount: normalizedLines.reduce((sum, line) => sum + Number(line.amount || 0), 0),
+      totalAmount: 0,
       lines: normalizedLines,
       updatedBy: "System User",
       updateTimestamp: new Date().toISOString(),
@@ -259,7 +283,7 @@ export function GatePassForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <div className={`grid gap-6 ${isReturnable ? "" : "lg:grid-cols-[1.4fr_1fr]"}`}>
           <div className="space-y-6 rounded border border-black bg-white p-6 shadow-sm">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Gate Pass Type" required>
@@ -320,12 +344,12 @@ export function GatePassForm() {
                 </div>
                 <div className="space-y-3">
                   {returnableLines.map((line) => (
-                    <div key={line.id} className="grid gap-3 rounded border border-slate-200 p-3 md:grid-cols-[2fr_100px_120px_120px_120px_48px]">
+                    <div key={line.id} className="grid gap-3 rounded border border-slate-200 p-3 md:grid-cols-[minmax(0,2fr)_100px_120px_48px]">
                       <input value={line.itemDescription || ""} onChange={(e) => updateReturnableLine(line.id, { itemDescription: e.target.value, itemName: e.target.value })} placeholder="Item description" className="rounded border border-black px-3 py-2 text-sm" />
                       <input type="number" min="0" step="0.01" value={line.qty || ""} onChange={(e) => updateReturnableLine(line.id, { qty: Number(e.target.value || 0) })} placeholder="Qty" className="rounded border border-black px-3 py-2 text-sm" />
-                      <Select value={line.uom || ""} onChange={(value) => updateReturnableLine(line.id, { uom: value })} options={unitOptions} placeholder="UOM" />
-                      <input type="number" min="0" step="0.01" value={line.rate || ""} onChange={(e) => updateReturnableLine(line.id, { rate: Number(e.target.value || 0) })} placeholder="Rate" className="rounded border border-black px-3 py-2 text-sm" />
-                      <input type="number" min="0" step="0.01" value={line.amount || ""} onChange={(e) => updateReturnableLine(line.id, { amount: Number(e.target.value || 0) })} placeholder="Amount" className="rounded border border-black px-3 py-2 text-sm" />
+                      <div className="w-[120px]">
+                        <Select value={line.uom || "PCS"} onChange={(value) => updateReturnableLine(line.id, { uom: value || "PCS" })} options={unitOptions} placeholder="UOM" />
+                      </div>
                       <button type="button" onClick={() => removeReturnableLine(line.id)} className="rounded border border-red-300 text-red-700 hover:bg-red-50">
                         <Trash2 size={16} className="mx-auto" />
                       </button>
@@ -351,32 +375,34 @@ export function GatePassForm() {
             )}
           </div>
 
-          <div className="space-y-4 rounded border border-black bg-white p-6 shadow-sm">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Preview</h3>
-            {isReturnable ? (
-              <div className="space-y-3 text-sm">
-                <SummaryRow label="Recipient" value={recipientOptions.find((row) => row.value === recipientId)?.label || "-"} />
-                <SummaryRow label="Sent By" value={userOptions.find((row) => row.value === sentByUserId)?.label || "-"} />
-                <SummaryRow label="Total Qty" value={returnableLines.reduce((sum, line) => sum + Number(line.qty || 0), 0).toLocaleString()} />
-                <SummaryRow label="Total Amount" value={returnableLines.reduce((sum, line) => sum + Number(line.amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
-              </div>
-            ) : previewGatePass ? (
-              <div className="space-y-3 text-sm">
-                <SummaryRow label="Tally Invoice No" value={selectedInvoice?.tallyInvNo || "Tally Invoice Pending"} />
-                <SummaryRow label="Company" value={previewGatePass.companyName || "-"} />
-                <SummaryRow label="Truck" value={previewGatePass.truckNo || "-"} />
-                <SummaryRow label="Total Qty" value={previewGatePass.totalQty.toLocaleString()} />
-                <SummaryRow label="Total Invoice Amount" value={previewGatePass.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
-              </div>
-            ) : (
-              <div className="text-sm text-slate-500">Select invoice and loading slips to preview.</div>
-            )}
+          {!isReturnable ? (
+            <div className="space-y-4 rounded border border-black bg-white p-6 shadow-sm">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Preview</h3>
+              {previewGatePass ? (
+                <div className="space-y-3 text-sm">
+                  <SummaryRow label="Tally Invoice No" value={selectedInvoice?.tallyInvNo || "Tally Invoice Pending"} />
+                  <SummaryRow label="Company" value={previewGatePass.companyName || "-"} />
+                  <SummaryRow label="Truck" value={previewGatePass.truckNo || "-"} />
+                  <SummaryRow label="Total Qty" value={previewGatePass.totalQty.toLocaleString()} />
+                  <SummaryRow label="Total Invoice Amount" value={previewGatePass.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500">Select invoice and loading slips to preview.</div>
+              )}
 
-            <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center gap-2 rounded bg-indigo-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-800 disabled:opacity-50">
-              {isSubmitting ? <Spinner size={18} className="text-white" /> : <Save size={16} />}
-              {editingGatePass ? "Update Gate Pass" : "Save Gate Pass"}
-            </button>
-          </div>
+              <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center gap-2 rounded bg-indigo-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-800 disabled:opacity-50">
+                {isSubmitting ? <Spinner size={18} className="text-white" /> : <Save size={16} />}
+                {editingGatePass ? "Update Gate Pass" : "Save Gate Pass"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 rounded bg-indigo-700 px-6 py-3 text-sm font-bold text-white transition hover:bg-indigo-800 disabled:opacity-50">
+                {isSubmitting ? <Spinner size={18} className="text-white" /> : <Save size={16} />}
+                {editingGatePass ? "Update Gate Pass" : "Save Gate Pass"}
+              </button>
+            </div>
+          )}
         </div>
       </form>
     </div>

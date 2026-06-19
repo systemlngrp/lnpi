@@ -22,6 +22,8 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 type Mode = "pending-approval" | "approved" | "rejected" | "all";
 
@@ -81,6 +83,15 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       })
       .sort((a, b) => new Date(b.updateTimestamp || b.timestamp || 0).getTime() - new Date(a.updateTimestamp || a.timestamp || 0).getTime());
   }, [purchaseOrders, mode, supplierMap, searchTerm]);
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedOrders,
+  } = useClientPagination(filteredOrders, 25);
 
   const handleToggleRow = (id: string) => {
     const next = new Set(expandedRows);
@@ -326,14 +337,14 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-black">
-            {filteredOrders.length === 0 ? (
+            {paginatedOrders.length === 0 ? (
               <tr>
                 <td colSpan={mode === "rejected" ? 8 : 7} className="px-4 py-12 text-center text-slate-500 italic">
                   No purchase orders found.
                 </td>
               </tr>
             ) : (
-              filteredOrders.map((order) => {
+              paginatedOrders.map((order) => {
                 const isExpanded = expandedRows.has(order.id);
                 const lines = orderLines.filter((l) => l.purchaseOrderId === order.id);
                 const indent = indents.find((i) => i.id === order.indentId);
@@ -504,6 +515,14 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           </tbody>
         </table>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       <div className="flex justify-end">
         <button

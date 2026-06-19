@@ -648,13 +648,15 @@ app.post("/api/npd-sync", async (req, res) => {
       idColumn: "npdId",
       headerMap: NPD_SYNC_HEADER_MAP,
       requiredHeaders: NPD_SYNC_REQUIRED_HEADERS,
-      mapFn: mapSheetRowToNpdRow
+      mapFn: mapSheetRowToNpdRow,
+      skipIfHostingerSynced: true
     },
     "PHP ITEM MASTER": {
       table: "php_item_master",
       idColumn: "phpId",
       headerMap: PHP_ITEM_MASTER_HEADER_MAP,
       requiredHeaders: PHP_ITEM_MASTER_REQUIRED_HEADERS,
+      skipIfHostingerSynced: true,
       mapFn: (row) => {
         const mapped = mapSheetRowByHeaderMap_(row, PHP_ITEM_MASTER_HEADER_MAP);
         mapped.phpId = stringOrEmpty(mapped.phpId || mapped.itemId);
@@ -667,6 +669,7 @@ app.post("/api/npd-sync", async (req, res) => {
       idColumn: "plateId",
       headerMap: PLATE_ITEM_MASTER_HEADER_MAP,
       requiredHeaders: PLATE_ITEM_MASTER_REQUIRED_HEADERS,
+      skipIfHostingerSynced: true,
       mapFn: (row) => {
         const mapped = mapSheetRowByHeaderMap_(row, PLATE_ITEM_MASTER_HEADER_MAP);
         mapped.plateId = stringOrEmpty(mapped.plateId || mapped.itemId);
@@ -679,6 +682,7 @@ app.post("/api/npd-sync", async (req, res) => {
       idColumn: "id",
       headerMap: COMPANY_SYNC_HEADER_MAP,
       requiredHeaders: COMPANY_SYNC_REQUIRED_HEADERS,
+      skipIfHostingerSynced: true,
       mapFn: (row) => {
         const mapped = {};
         Object.entries(COMPANY_SYNC_HEADER_MAP).forEach(([header, key]) => {
@@ -750,14 +754,15 @@ app.post("/api/npd-sync", async (req, res) => {
       mapped
     };
   });
-  const invalidRows = normalizedRows.filter((entry) => !entry.mapped[config.idColumn]).map((entry) => ({
+  const eligibleRows = config.skipIfHostingerSynced ? normalizedRows.filter((entry) => stringOrEmpty(entry.mapped.hostingerSync) === "") : normalizedRows;
+  const invalidRows = eligibleRows.filter((entry) => !entry.mapped[config.idColumn]).map((entry) => ({
     rowNumber: entry.rowNumber,
     reason: `Missing ${config.idColumn}`,
     itemName: stringOrEmpty(entry.source?.["Item Name"] || entry.source?.["Company Name"] || entry.source?.["Name"])
   }));
   const duplicateCounter = /* @__PURE__ */ new Map();
   const dedupedById = /* @__PURE__ */ new Map();
-  normalizedRows.forEach((entry) => {
+  eligibleRows.forEach((entry) => {
     const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
     if (!syncId) return;
     duplicateCounter.set(syncId, (duplicateCounter.get(syncId) || 0) + 1);
@@ -1325,6 +1330,12 @@ function resolveLinkedNpdId(value) {
   if (itemId) return itemId;
   return "";
 }
+function normalizeOrderItemSourceValue(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "PHP") return "PHP";
+  if (normalized === "PLATE") return "PLATE";
+  return "FG";
+}
 function normalizeMaterialLineNpdLink(line) {
   const resolvedId = resolveLinkedNpdId(line);
   return {
@@ -1334,7 +1345,20 @@ function normalizeMaterialLineNpdLink(line) {
   };
 }
 function normalizeNpdLinkedPayload(tableName, data) {
-  if (NPD_LINKED_TABLES.has(tableName)) {
+  if (tableName === "orders") {
+    const itemSource = normalizeOrderItemSourceValue(data?.itemSource);
+    data.itemSource = itemSource;
+    if (itemSource === "FG") {
+      const resolvedId = resolveLinkedNpdId(data);
+      if (resolvedId) {
+        data.npdId = resolvedId;
+        data.itemId = resolvedId;
+      }
+    } else {
+      delete data.npdId;
+      data.itemId = stringOrEmpty(data?.itemId);
+    }
+  } else if (NPD_LINKED_TABLES.has(tableName)) {
     const resolvedId = resolveLinkedNpdId(data);
     if (resolvedId) {
       data.npdId = resolvedId;
@@ -1414,7 +1438,16 @@ function normalizeFetchedRow(tableName, row) {
   if (tableName === "material_in" && Array.isArray(newRow.lines)) {
     newRow.lines = newRow.lines.map((line) => normalizeMaterialLineNpdLink(line));
   }
-  if (NPD_LINKED_TABLES.has(tableName)) {
+  if (tableName === "orders") {
+    newRow.itemSource = normalizeOrderItemSourceValue(newRow.itemSource);
+    if (newRow.itemSource === "FG") {
+      const resolvedId = resolveLinkedNpdId(newRow);
+      if (resolvedId) {
+        newRow.npdId = resolvedId;
+        newRow.itemId = resolvedId;
+      }
+    }
+  } else if (NPD_LINKED_TABLES.has(tableName)) {
     const resolvedId = resolveLinkedNpdId(newRow);
     if (resolvedId) {
       newRow.npdId = resolvedId;
@@ -2514,6 +2547,7 @@ async function initDb(retries = 5) {
           \`poNumber\` VARCHAR(100),
           \`erpCode\` VARCHAR(100),
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`itemSource\` VARCHAR(20) NOT NULL DEFAULT 'FG',
           \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2),
@@ -3538,6 +3572,7 @@ async function initDb(retries = 5) {
         { table: "orders", column: "orderDate", type: "VARCHAR(50) NOT NULL" },
         { table: "orders", column: "companyId", type: "VARCHAR(36) NOT NULL" },
         { table: "orders", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "orders", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "orders", column: "npdId", type: "VARCHAR(36)" },
         { table: "orders", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "orders", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
@@ -3934,6 +3969,10 @@ const createHandlers = (tableName) => {
           delete data.balance;
         }
         if (tableName === "orders") {
+          data.itemSource = normalizeOrderItemSourceValue(data.itemSource);
+          if (data.itemSource !== "FG") {
+            delete data.npdId;
+          }
           const rateNumber = Number(data.rate);
           if (!Number.isFinite(rateNumber) || rateNumber <= 0) {
             return res.status(400).json({ error: "Rate must be greater than 0." });
@@ -4075,7 +4114,8 @@ const createHandlers = (tableName) => {
             const currentStatus = String(data.status || "Pending PH").trim();
             const alreadyApproved = hasWorkflowValue(data.approvedTimestamp) || hasWorkflowValue(data.approvedEmail);
             if (!alreadyApproved && (currentStatus === "Pending PH" || !currentStatus)) {
-              const itemId = resolveLinkedNpdId(data);
+              const itemSource = normalizeOrderItemSourceValue(data.itemSource);
+              const itemId = itemSource === "FG" ? resolveLinkedNpdId(data) : "";
               const punchDate = String(data.orderDate || "").trim() || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
               if (itemId && Number.isFinite(orderRate) && punchDate) {
                 const [billingRows] = await db.query(
@@ -4322,7 +4362,27 @@ const createHandlers = (tableName) => {
               console.warn(`[DB] Could not ensure gate_passes.${gatePassColumn.column}:`, error.message);
             }
           }
-          const invoiceId = String(data.invoiceId || "").trim();
+          const gatePassType = String(data.gatePassType || "Non-Returnable").trim() || "Non-Returnable";
+          data.gatePassType = gatePassType;
+          if (gatePassType === "Returnable") {
+            data.invoiceId = null;
+            data.invoiceNo = null;
+            data.companyId = null;
+            data.companyName = null;
+            data.loadingSlipIds = [];
+            data.loadingSlipNos = [];
+            data.totalAmount = 0;
+            if (Array.isArray(data.lines)) {
+              data.lines = data.lines.map((line) => ({
+                ...line,
+                rate: 0,
+                amount: 0,
+                loadingSlipIds: [],
+                loadingSlipNos: []
+              }));
+            }
+          }
+          const invoiceId = gatePassType === "Non-Returnable" ? String(data.invoiceId || "").trim() : "";
           if (invoiceId) {
             const currentId = String(data.id || "").trim();
             const [existingRows] = await db.query(
@@ -4348,7 +4408,8 @@ const createHandlers = (tableName) => {
         if (tableName === "orders") {
           const approvalStatuses = /* @__PURE__ */ new Set(["Pending Scheduling", "Scheduled"]);
           const now = (/* @__PURE__ */ new Date()).toISOString();
-          const itemId = resolveLinkedNpdId(data);
+          const itemSource = normalizeOrderItemSourceValue(data.itemSource);
+          const itemId = itemSource === "FG" ? resolveLinkedNpdId(data) : String(data.itemId || "").trim();
           const rateNumber = Number(data.rate);
           const updatedBy = String(data.approvedEmail || data.updatedBy || "System").trim() || "System";
           const conn = await db.getConnection();
@@ -4372,12 +4433,24 @@ const createHandlers = (tableName) => {
             console.log(`[DB] Upserting to ${tableName}`, { id: data.id });
             await conn.query(query, values);
             if (shouldUpdateItemRate) {
-              await conn.query(
-                "UPDATE `npd` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
-                [rateNumber, updatedBy, now, itemId]
-              );
+              if (itemSource === "PHP") {
+                await conn.query(
+                  "UPDATE `php_item_master` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                  [rateNumber, updatedBy, now, itemId]
+                );
+              } else if (itemSource === "PLATE") {
+                await conn.query(
+                  "UPDATE `plate_item_master` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                  [rateNumber, updatedBy, now, itemId]
+                );
+              } else {
+                await conn.query(
+                  "UPDATE `npd` SET `rate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+                  [rateNumber, updatedBy, now, itemId]
+                );
+              }
             }
-            if (itemId && Number.isFinite(rateNumber) && rateNumber > 0) {
+            if (itemSource === "FG" && itemId && Number.isFinite(rateNumber) && rateNumber > 0) {
               await conn.query(
                 "UPDATE `npd` SET `orderRate` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
                 [rateNumber, updatedBy, now, itemId]

@@ -5,6 +5,8 @@ import autoTable from "jspdf-autotable";
 import { CheckCircle, Eye, FileText, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
@@ -73,6 +75,27 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
         }),
     [indents, mode, searchTerm, indentLines, materials]
   );
+
+  const displayRows = useMemo(
+    () =>
+      mode === "Pending"
+        ? visibleIndents.flatMap((indent) =>
+            indentLines
+              .filter((line) => line.indentId === indent.id)
+              .map((line) => ({ indent, line }))
+          )
+        : visibleIndents.map((indent) => ({ indent, line: null as IndentLine | null })),
+    [indentLines, mode, visibleIndents]
+  );
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedDisplayRows,
+  } = useClientPagination(displayRows, 25);
 
   const handleExportPdf = () => {
     const doc = new jsPDF("l", "mm", "a4");
@@ -334,7 +357,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
             </tr>
           </thead>
           <tbody>
-            {visibleIndents.length === 0 ? (
+            {paginatedDisplayRows.length === 0 ? (
               <tr>
                 <td
                   colSpan={mode === "Pending" ? 10 : mode === "Rejected" ? 8 : 7}
@@ -344,14 +367,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                 </td>
               </tr>
             ) : (
-              (mode === "Pending"
-                ? visibleIndents.flatMap((indent) =>
-                    indentLines
-                      .filter((line) => line.indentId === indent.id)
-                      .map((line) => ({ indent, line }))
-                  )
-                : visibleIndents.map((indent) => ({ indent, line: null as IndentLine | null }))
-              ).map(({ indent, line }) => {
+              paginatedDisplayRows.map(({ indent, line }) => {
                 const lineRows = indentLines.filter((row) => row.indentId === indent.id);
                 const material = line ? materials.find((row) => row.id === line.materialId) : null;
 
@@ -451,6 +467,14 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
           </tbody>
         </table>
       </div>
+
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {(mode === "Pending" || mode === "Approved" || mode === "Completed") ? (
         <div className="flex justify-end">

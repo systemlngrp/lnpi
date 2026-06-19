@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -4869,7 +4869,29 @@ const createHandlers = (tableName: string) => {
             }
           }
 
-          const invoiceId = String(data.invoiceId || "").trim();
+          const gatePassType = String(data.gatePassType || "Non-Returnable").trim() || "Non-Returnable";
+          data.gatePassType = gatePassType;
+
+          if (gatePassType === "Returnable") {
+            data.invoiceId = null;
+            data.invoiceNo = null;
+            data.companyId = null;
+            data.companyName = null;
+            data.loadingSlipIds = [];
+            data.loadingSlipNos = [];
+            data.totalAmount = 0;
+            if (Array.isArray(data.lines)) {
+              data.lines = data.lines.map((line: any) => ({
+                ...line,
+                rate: 0,
+                amount: 0,
+                loadingSlipIds: [],
+                loadingSlipNos: [],
+              }));
+            }
+          }
+
+          const invoiceId = gatePassType === "Non-Returnable" ? String(data.invoiceId || "").trim() : "";
           if (invoiceId) {
             const currentId = String(data.id || "").trim();
             const [existingRows] = await db.query(
@@ -5824,5 +5846,6 @@ async function startServer() {
 }
 
 startServer();
+
 
 

@@ -5,6 +5,8 @@ import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { ExcelExport } from "../components/ExcelExport";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 import type { Supplier } from "../types";
 import { useAutoRefreshEffect, useAutoRefreshPause } from "../hooks/useAutoRefresh";
 
@@ -88,6 +90,26 @@ export function PurchaseOrderPendingIndentLines() {
       );
     });
   }, [rows, searchTerm]);
+
+  const sortedFilteredRows = useMemo(() =>
+    filteredRows
+      .slice()
+      .sort((a, b) => {
+        const ad = new Date(a.targetDeliveryDate || a.requisitionDate || 0).getTime();
+        const bd = new Date(b.targetDeliveryDate || b.requisitionDate || 0).getTime();
+        return ad - bd;
+      }),
+    [filteredRows]
+  );
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems: paginatedRows,
+  } = useClientPagination(sortedFilteredRows, 25);
 
   const filteredRowIds = useMemo(() => new Set(filteredRows.map((r) => r.indentLineId)), [filteredRows]);
   const allVisibleSelected = useMemo(() => {
@@ -296,21 +318,14 @@ export function PurchaseOrderPendingIndentLines() {
             </tr>
           </thead>
           <tbody>
-            {filteredRows.length === 0 ? (
+            {paginatedRows.length === 0 ? (
               <tr>
                 <td colSpan={18} className="border border-black px-6 py-10 text-center text-sm text-slate-600">
                   No pending indent lines found.
                 </td>
               </tr>
             ) : (
-              filteredRows
-                .slice()
-                .sort((a, b) => {
-                  const ad = new Date(a.targetDeliveryDate || a.requisitionDate || 0).getTime();
-                  const bd = new Date(b.targetDeliveryDate || b.requisitionDate || 0).getTime();
-                  return ad - bd;
-                })
-                .map((row) => (
+              paginatedRows.map((row) => (
                   <tr key={row.indentLineId} className="hover:bg-slate-50">
                     <td className="border border-black px-3 py-3 text-center">
                       <input
@@ -403,6 +418,13 @@ export function PurchaseOrderPendingIndentLines() {
           </tbody>
         </table>
       </div>
+      <ClientPagination
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
     </div>
   );
