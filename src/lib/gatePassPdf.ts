@@ -9,10 +9,14 @@ export async function downloadGatePassPdf({
   gatePass,
   setting,
   invoiceDisplayNo,
+  destination,
+  transporter,
 }: {
   gatePass: GatePass;
   setting?: Setting | null;
   invoiceDisplayNo?: string;
+  destination?: string;
+  transporter?: string;
 }) {
   const doc = new jsPDF("p", "mm", "a4");
   let currentY = (await renderOrganizationHeader(doc, setting)).currentY;
@@ -31,6 +35,7 @@ export async function downloadGatePassPdf({
     [isReturnable ? "Recipient" : "Invoice No", resolvedInvoiceNo],
     [isReturnable ? "Sent By" : "Company", isReturnable ? gatePass.sentByUserName || "-" : getGatePassPrimaryPartyName(gatePass)],
     ["Truck", gatePass.truckNo || "-"],
+    ["Destination", isReturnable ? "-" : destination || "-"],
     ["Total Qty", Number(gatePass.totalQty || 0).toLocaleString()],
     [
       "Total Invoice Amount",
@@ -39,6 +44,7 @@ export async function downloadGatePassPdf({
         maximumFractionDigits: 2,
       }),
     ],
+    ["Transporter", isReturnable ? "-" : transporter || "-"],
   ];
 
   autoTable(doc, {
@@ -47,7 +53,8 @@ export async function downloadGatePassPdf({
       [details[0][0], details[0][1], details[1][0], details[1][1]],
       [details[2][0], details[2][1], details[3][0], details[3][1]],
       [details[4][0], details[4][1], details[5][0], details[5][1]],
-      ["", "", details[6][0], details[6][1]],
+      [details[8][0], details[8][1], details[6][0], details[6][1]],
+      ["", "", details[7][0], details[7][1]],
     ],
     theme: "plain",
     styles: {

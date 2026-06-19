@@ -81,6 +81,8 @@ export function PendingInvoicing() {
   const [invoiceRows, setInvoiceRows] = useState<InvoiceItemRow[]>([]);
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
   const [otherCharges, setOtherCharges] = useState<number | "">("");
+  const [destination, setDestination] = useState("");
+  const [transporter, setTransporter] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useAutoRefreshPause(
@@ -230,6 +232,8 @@ export function PendingInvoicing() {
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
     setOtherCharges("");
+    setDestination("");
+    setTransporter("");
     
     const itemMap = new Map<string, InvoiceItemRow>();
     const itemOrderQtyMap = new Map<string, Map<string, number>>(); // itemId -> orderId -> qty
@@ -280,6 +284,13 @@ export function PendingInvoicing() {
 
     const company = companies.find(c => c.id === billingMode);
     setGstSupplyType((company?.gstSupplyType as any) || "INTRA_STATE");
+  };
+
+  const closeInvoiceModal = () => {
+    setInvoiceModal(null);
+    setDestination("");
+    setTransporter("");
+    setOtherCharges("");
   };
 
   const handleAddRow = () => {
@@ -386,10 +397,22 @@ export function PendingInvoicing() {
     };
   }, [invoiceRows, gstSupplyType, orders, otherCharges]);
 
+  const shouldShowTransporter = useMemo(() => {
+    if (!invoiceModal) return false;
+    return invoiceModal.slips.some((slip) => {
+      const truckNo = trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "";
+      return truckNo.trim().toLowerCase() === "other";
+    });
+  }, [invoiceModal, trucks]);
+
   const handleSubmitInvoice = async () => {
     if (!invoiceModal || isSubmitting) return;
     const company = companies.find(c => c.id === invoiceModal.companyId);
     if (!company) return;
+    if (shouldShowTransporter && !transporter.trim()) {
+      alert("Please enter Transporter when Truck No is Other.");
+      return;
+    }
 
     const loadedByItemId = new Map<string, number>();
     const totalLoaded = invoiceModal.slips.reduce((sum, s) => 
@@ -455,6 +478,8 @@ export function PendingInvoicing() {
         invoiceNo: "",
         date: new Date().toISOString().slice(0, 10),
         companyId: company.id,
+        destination: destination.trim() || undefined,
+        transporter: shouldShowTransporter ? (transporter.trim() || undefined) : undefined,
         gstRate: 0,
         totalBeforeGst: calculations.totalBeforeGst,
         cgst: calculations.cgst,
@@ -607,7 +632,7 @@ export function PendingInvoicing() {
         gatePassApi.refresh(),
       ]);
 
-      setInvoiceModal(null);
+      closeInvoiceModal();
       setBillingMode(null);
       setSelectedSlips(new Set());
       alert("Invoice and Gate Pass generated successfully! Showing Pending Tally Posting...");
@@ -729,12 +754,39 @@ export function PendingInvoicing() {
                 <Receipt size={20} />
                 <h3 className="font-bold uppercase tracking-tight">Invoice Form - {companies.find(c => c.id === invoiceModal.companyId)?.name}</h3>
               </div>
-              <button onClick={() => setInvoiceModal(null)} className="hover:text-slate-300 transition">
+              <button onClick={closeInvoiceModal} className="hover:text-slate-300 transition">
                 <X size={24} />
               </button>
             </div>
             
             <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Destination</label>
+                  <input
+                    type="text"
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
+                    placeholder="Enter destination"
+                    className="w-full rounded border-2 border-black px-3 py-2 text-sm font-medium"
+                  />
+                </div>
+                {shouldShowTransporter ? (
+                  <div>
+                    <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">
+                      Transporter <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={transporter}
+                      onChange={(e) => setTransporter(e.target.value)}
+                      placeholder="Enter transporter"
+                      className="w-full rounded border-2 border-black px-3 py-2 text-sm font-medium"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
               <div className="overflow-x-auto border border-black">
                 <table className="min-w-full divide-y divide-black border-collapse">
                   <thead className="bg-slate-100">
@@ -924,8 +976,13 @@ export function PendingInvoicing() {
                 </table>
               </div>
               
-              <div className="text-[11px] font-bold text-slate-600">
-                Use <span className="font-black text-black">Add Order</span> on an item to split quantities across orders.
+              <div className="space-y-1 text-[11px] font-bold text-slate-600">
+                <div>
+                  Use <span className="font-black text-black">Add Order</span> on an item to split quantities across orders.
+                </div>
+                {shouldShowTransporter ? (
+                  <div className="text-amber-700">Transporter is required because Truck No is Other on the selected loading slip.</div>
+                ) : null}
               </div>
 
               <div className="flex justify-between items-center bg-slate-50 p-4 border-t-2 border-black -mx-6 -mb-6 sticky bottom-0">
@@ -936,7 +993,7 @@ export function PendingInvoicing() {
                 </div>
                 <div className="flex gap-3">
                     <button 
-                    onClick={() => setInvoiceModal(null)}
+                    onClick={closeInvoiceModal}
                     className="px-8 py-3 border-2 border-black font-black uppercase text-xs tracking-widest hover:bg-white transition"
                     >
                     Cancel

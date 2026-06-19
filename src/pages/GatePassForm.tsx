@@ -383,6 +383,8 @@ export function GatePassForm() {
                   <SummaryRow label="Tally Invoice No" value={selectedInvoice?.tallyInvNo || "Tally Invoice Pending"} />
                   <SummaryRow label="Company" value={previewGatePass.companyName || "-"} />
                   <SummaryRow label="Truck" value={previewGatePass.truckNo || "-"} />
+                  <SummaryRow label="Destination" value={selectedInvoice?.destination || "-"} />
+                  <SummaryRow label="Transporter" value={selectedInvoice?.transporter || "-"} />
                   <SummaryRow label="Total Qty" value={previewGatePass.totalQty.toLocaleString()} />
                   <SummaryRow label="Total Invoice Amount" value={previewGatePass.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
                 </div>

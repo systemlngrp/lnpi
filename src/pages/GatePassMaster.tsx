@@ -21,6 +21,9 @@ export function GatePassMaster() {
   const getLinkedInvoice = (gatePass: GatePass) =>
     gatePass.invoiceId ? invoices.find((invoice) => invoice.id === gatePass.invoiceId) || null : null;
 
+  const getLinkedInvoiceDestination = (gatePass: GatePass) => getLinkedInvoice(gatePass)?.destination || "-";
+  const getLinkedInvoiceTransporter = (gatePass: GatePass) => getLinkedInvoice(gatePass)?.transporter || "-";
+
   const getGatePassInvoiceDisplayNo = (gatePass: GatePass) => {
     if (isReturnableGatePass(gatePass)) return getGatePassPrimaryPartyName(gatePass);
     return getLinkedInvoice(gatePass)?.tallyInvNo || "Tally Invoice Pending";
@@ -66,6 +69,8 @@ export function GatePassMaster() {
         gatePass,
         setting: settings[0],
         invoiceDisplayNo: isReturnableGatePass(gatePass) ? undefined : getLinkedInvoice(gatePass)?.tallyInvNo || "-",
+        destination: isReturnableGatePass(gatePass) ? undefined : getLinkedInvoice(gatePass)?.destination,
+        transporter: isReturnableGatePass(gatePass) ? undefined : getLinkedInvoice(gatePass)?.transporter,
       });
     } catch (error) {
       console.error("Failed to generate Gate Pass PDF:", error);
@@ -159,10 +164,12 @@ export function GatePassMaster() {
               </div>
 
               {!isReturnableGatePass(selectedGatePass) && (
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-5">
                   <InfoCard label="Tally Invoice No" value={getLinkedInvoice(selectedGatePass)?.tallyInvNo || "Tally Invoice Pending"} />
                   <InfoCard label="Tally Invoice Date" value={getLinkedInvoice(selectedGatePass)?.tallyInvDate ? formatDate(getLinkedInvoice(selectedGatePass)?.tallyInvDate || "") : "-"} />
                   <InfoCard label="Tally Status" value={getLinkedInvoice(selectedGatePass)?.tallySyncRemark || "Pending Tally Sync"} />
+                  <InfoCard label="Destination" value={getLinkedInvoiceDestination(selectedGatePass)} />
+                  <InfoCard label="Transporter" value={getLinkedInvoiceTransporter(selectedGatePass)} />
                 </div>
               )}
 

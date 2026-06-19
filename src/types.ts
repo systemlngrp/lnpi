@@ -716,6 +716,8 @@ export interface Invoice {
   invoiceNo: string;
   date: string;
   companyId: string;
+  destination?: string;
+  transporter?: string;
   gstRate: number;
   totalBeforeGst: number;
   cgst: number;
