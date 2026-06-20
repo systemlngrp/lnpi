@@ -232,6 +232,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-blue-800",
     items: [
       { name: "PHP Dispatch Form", href: "/dispatch/php/form", icon: ClipboardList },
+      { name: "PHP Dispatch Plan Master", href: "/dispatch/php/master", icon: Database },
     ],
   },
   {
@@ -239,6 +240,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-cyan-800",
     items: [
       { name: "Plate Dispatch Form", href: "/dispatch/plate/form", icon: ClipboardList },
+      { name: "Plate Dispatch Plan Master", href: "/dispatch/plate/master", icon: Database },
     ],
   },
   {
@@ -254,6 +256,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-indigo-700",
     items: [
       { name: "PHP Loading Slip Form", href: "/loading/php/form", icon: Truck },
+      { name: "PHP Loading Slip Master", href: "/loading/php/master", icon: FileText },
     ],
   },
   {
@@ -261,6 +264,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-violet-700",
     items: [
       { name: "Plate Loading Slip Form", href: "/loading/plate/form", icon: Truck },
+      { name: "Plate Loading Slip Master", href: "/loading/plate/master", icon: FileText },
     ],
   },
   {
