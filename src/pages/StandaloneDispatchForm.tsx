@@ -16,6 +16,8 @@ type DispatchableProduction = {
   itemName: string;
   companyName: string;
   alreadyPlanned: number;
+  alreadyLoaded: number;
+  alreadyCanceled: number;
   remaining: number;
 };
 
@@ -51,13 +53,18 @@ export function StandaloneDispatchForm({ source }: StandaloneDispatchFormProps) 
         const item = items.find((entry) => entry.id === String(production.itemId || "").trim());
         const availableBase =
           Number(production.prodFromFFG || 0) > 0 ? Number(production.prodFromFFG || 0) : Number(production.qty || 0);
+        const productionPlans = dispatchPlans.filter((plan) => String(plan.productionId || "").trim() === production.id);
         const alreadyPlanned = Number(effectivePlannedByProductionId.get(production.id) || 0);
+        const alreadyLoaded = productionPlans.reduce((sum, plan) => sum + Number(plan.loadedQty || 0), 0);
+        const alreadyCanceled = productionPlans.reduce((sum, plan) => sum + Number(plan.canceledQty || 0), 0);
         const remaining = Math.max(0, availableBase - alreadyPlanned);
         return {
           production,
           itemName: item?.name || String(production.itemId || ""),
           companyName: production.companyName || item?.companyName || "-",
           alreadyPlanned,
+          alreadyLoaded,
+          alreadyCanceled,
           remaining,
         };
       })
@@ -184,6 +191,8 @@ export function StandaloneDispatchForm({ source }: StandaloneDispatchFormProps) 
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Company</th>
               <th className="px-3 py-2 text-right text-xs font-black uppercase">Produced</th>
               <th className="px-3 py-2 text-right text-xs font-black uppercase">Planned</th>
+              <th className="px-3 py-2 text-right text-xs font-black uppercase">Loaded</th>
+              <th className="px-3 py-2 text-right text-xs font-black uppercase">Canceled</th>
               <th className="px-3 py-2 text-right text-xs font-black uppercase">Remaining</th>
               <th className="px-3 py-2 text-right text-xs font-black uppercase">Plan Qty</th>
             </tr>
@@ -191,7 +200,7 @@ export function StandaloneDispatchForm({ source }: StandaloneDispatchFormProps) 
           <tbody>
             {paginatedItems.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-8 text-center text-black font-medium">No dispatchable productions found.</td>
+                <td colSpan={11} className="px-6 py-8 text-center text-black font-medium">No dispatchable productions found.</td>
               </tr>
             ) : (
               paginatedItems.map((row) => (
@@ -209,6 +218,8 @@ export function StandaloneDispatchForm({ source }: StandaloneDispatchFormProps) 
                   <td className="px-3 py-2 text-sm">{row.companyName}</td>
                   <td className="px-3 py-2 text-sm text-right">{Number(row.production.qty || 0).toLocaleString()}</td>
                   <td className="px-3 py-2 text-sm text-right">{row.alreadyPlanned.toLocaleString()}</td>
+                  <td className="px-3 py-2 text-sm text-right">{row.alreadyLoaded.toLocaleString()}</td>
+                  <td className="px-3 py-2 text-sm text-right">{row.alreadyCanceled.toLocaleString()}</td>
                   <td className="px-3 py-2 text-sm text-right font-bold">{row.remaining.toLocaleString()}</td>
                   <td className="px-3 py-2 text-sm text-right">
                     <input
