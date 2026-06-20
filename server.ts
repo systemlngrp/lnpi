@@ -717,9 +717,16 @@ app.post("/api/npd-sync", async (req, res) => {
   const rawRowsPayload = req.body?.rows;
   const syncTimestamp = stringOrEmpty(req.body?.syncTimestamp || new Date().toISOString());
   const syncModeRaw = stringOrEmpty(req.body?.syncMode || "batch").toLowerCase();
-  const syncMode = syncModeRaw === "full" || syncModeRaw === "full_batch_chunk" ? "full" : "batch";
+  const syncMode = syncModeRaw === "full_finalize"
+    ? "full_finalize"
+    : syncModeRaw === "full_batch_chunk"
+      ? "full_batch_chunk"
+      : syncModeRaw === "full"
+        ? "full"
+        : "batch";
   const spreadsheetName = stringOrEmpty(req.body?.spreadsheetName);
   const spreadsheetId = stringOrEmpty(req.body?.spreadsheetId);
+  const finalizeProcessedIds = normalizeSyncIdList(req.body?.processedIds);
 
   if (!tabName) {
     return res.status(400).json({ error: "tabName is required." });
@@ -802,10 +809,14 @@ app.post("/api/npd-sync", async (req, res) => {
     return res.status(400).json({ error: `Only tab(s) ${Object.keys(tabConfigs).filter(Boolean).join(", ")} are allowed.` });
   }
 
-  if (!Array.isArray(rawRowsPayload)) {
+  if (syncMode !== "full_finalize" && !Array.isArray(rawRowsPayload)) {
     return res.status(400).json({ error: "rows must be an array." });
   }
-  const rowsPayload = rawRowsPayload as any[];
+  const rowsPayload = Array.isArray(rawRowsPayload) ? (rawRowsPayload as any[]) : [];
+
+  if (syncMode === "full_finalize" && finalizeProcessedIds.length === 0) {
+    return res.status(400).json({ error: "processedIds is required for full_finalize." });
+  }
 
   console.log(
     `${NPD_SYNC_LOG_PREFIX} Request received`,
@@ -820,7 +831,7 @@ app.post("/api/npd-sync", async (req, res) => {
   );
 
   let missingRequiredHeaders: string[] = [];
-  if (tabName === "Companies") {
+  if (syncMode !== "full_finalize" && tabName === "Companies") {
     const hasIdHeader = rowsPayload.some((row) =>
       Object.prototype.hasOwnProperty.call(row || {}, "Id") ||
       Object.prototype.hasOwnProperty.call(row || {}, "id") ||
@@ -836,7 +847,7 @@ app.post("/api/npd-sync", async (req, res) => {
     if (!hasCompanyHeader) {
       missingRequiredHeaders.push("Company or Company Name");
     }
-  } else {
+  } else if (syncMode !== "full_finalize") {
     missingRequiredHeaders = config.requiredHeaders.filter((header) =>
       rowsPayload.length > 0 && !rowsPayload.some((row) => Object.prototype.hasOwnProperty.call(row || {}, header))
     );
@@ -870,19 +881,23 @@ app.post("/api/npd-sync", async (req, res) => {
   const dedupedById = new Map<string, (typeof normalizedRows)[number]>();
   eligibleRows.forEach((entry) => {
     const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
-    if (!syncId) return;
-    duplicateCounter.set(syncId, (duplicateCounter.get(syncId) || 0) + 1);
-    dedupedById.set(syncId, entry);
+    const businessKey = resolveSheetSyncBusinessKey_(config, entry.mapped);
+    const dedupeKey = businessKey || syncId;
+    if (!dedupeKey) return;
+    duplicateCounter.set(dedupeKey, (duplicateCounter.get(dedupeKey) || 0) + 1);
+    dedupedById.set(dedupeKey, entry);
   });
   const duplicateIds = [...duplicateCounter.entries()]
     .filter(([, count]) => count > 1)
-    .map(([id]) => id);
+    .map(([id]) => id.startsWith("erp:") ? id.slice(4) : id);
 
   const validRows = [...dedupedById.values()];
-  const incomingIds = validRows.map((entry) => entry.mapped[config.idColumn]);
-  const processedIds = incomingIds.map((value) => stringOrEmpty(value)).filter((value) => value !== "");
+  const incomingIds = syncMode === "full_finalize"
+    ? finalizeProcessedIds
+    : normalizeSyncIdList(validRows.map((entry) => entry.mapped[config.idColumn]));
+  const processedIds = incomingIds;
 
-  if (syncMode === "full" && duplicateIds.length > 0) {
+  if ((syncMode === "full" || syncMode === "full_batch_chunk") && duplicateIds.length > 0) {
     console.error(`${NPD_SYNC_LOG_PREFIX} Duplicate IDs in full sync`, duplicateIds);
     return res.status(400).json({
       error: `Duplicate ${config.idColumn} values found in sync payload.`,
@@ -902,52 +917,76 @@ app.post("/api/npd-sync", async (req, res) => {
     await conn.beginTransaction();
 
     const [existingRows] = await conn.query(
-      `SELECT id, \`${config.idColumn}\` as syncId FROM \`${config.table}\` WHERE \`${config.idColumn}\` IS NOT NULL AND TRIM(\`${config.idColumn}\`) <> ''`
+      config.table === "npd"
+        ? `SELECT id, \`${config.idColumn}\` as syncId, \`erp\` as erp FROM \`${config.table}\``
+        : `SELECT id, \`${config.idColumn}\` as syncId FROM \`${config.table}\` WHERE \`${config.idColumn}\` IS NOT NULL AND TRIM(\`${config.idColumn}\`) <> ''`
     );
     const existingBySyncId = new Map<string, any>();
+    const existingByBusinessKey = new Map<string, any>();
     (existingRows as any[]).forEach((row) => {
       const syncId = stringOrEmpty(row.syncId);
       if (syncId) existingBySyncId.set(syncId, row);
+      if (config.table === "npd") {
+        const erp = stringOrEmpty((row as any).erp);
+        if (erp) existingByBusinessKey.set(`erp:${erp}`, row);
+      }
     });
 
     let inserted = 0;
     let updated = 0;
 
-    for (const entry of validRows) {
-      const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
-      const existing = existingBySyncId.get(syncId);
-      const payload: Record<string, any> = {
-        id: stringOrEmpty(existing?.id) || (config.idColumn === 'id' ? syncId : null) || crypto.randomUUID(),
-        ...entry.mapped,
-        syncSource: "google_sheets",
-        syncStatus: "active",
-        updatedBy: "Google Sheets Sync",
-        updateTimestamp: syncTimestamp,
-      };
+    if (syncMode !== "full_finalize") {
+      for (const entry of validRows) {
+        const syncId = stringOrEmpty(entry.mapped[config.idColumn]);
+        const businessKey = resolveSheetSyncBusinessKey_(config, entry.mapped);
+        const existing = existingBySyncId.get(syncId) || (businessKey ? existingByBusinessKey.get(businessKey) : null);
+        const payload: Record<string, any> = {
+          id: stringOrEmpty(existing?.id) || (config.idColumn === 'id' ? syncId : null) || crypto.randomUUID(),
+          ...entry.mapped,
+          syncSource: "google_sheets",
+          syncStatus: "active",
+          updatedBy: "Google Sheets Sync",
+          updateTimestamp: syncTimestamp,
+        };
 
-      const columns = Object.keys(payload);
-      const values = columns.map((column) => payload[column]);
-      const insertColumns = columns.map((column) => `\`${column}\``).join(", ");
-      const insertPlaceholders = columns.map(() => "?").join(", ");
-      const updateColumns = columns
-        .filter((column) => column !== "id")
-        .map((column) => `\`${column}\` = VALUES(\`${column}\`)`)
-        .join(", ");
+        const columns = Object.keys(payload);
+        const values = columns.map((column) => payload[column]);
+        const insertColumns = columns.map((column) => `\`${column}\``).join(", ");
+        const insertPlaceholders = columns.map(() => "?").join(", ");
+        const updateColumns = columns
+          .filter((column) => column !== "id")
+          .map((column) => `\`${column}\` = VALUES(\`${column}\`)`)
+          .join(", ");
 
-      await conn.query(
-        `INSERT INTO \`${config.table}\` (${insertColumns})
-         VALUES (${insertPlaceholders})
-         ON DUPLICATE KEY UPDATE ${updateColumns}`,
-        values
-      );
+        await conn.query(
+          `INSERT INTO \`${config.table}\` (${insertColumns})
+           VALUES (${insertPlaceholders})
+           ON DUPLICATE KEY UPDATE ${updateColumns}`,
+          values
+        );
 
-      if (existing) updated++;
-      else inserted++;
+        existingBySyncId.set(syncId, { id: payload.id, syncId });
+        if (businessKey) {
+          existingByBusinessKey.set(businessKey, { id: payload.id, syncId });
+        }
+
+        if (existing) updated++;
+        else inserted++;
+      }
     }
 
     let removed = 0;
-    if (syncMode === "full") {
+    if (syncMode === "full" || syncMode === "full_finalize") {
       if (incomingIds.length > 0) {
+        await conn.query(
+          `UPDATE \`${config.table}\`
+           SET \`syncStatus\` = 'active',
+               \`updatedBy\` = 'Google Sheets Sync',
+               \`updateTimestamp\` = ?
+           WHERE \`syncSource\` = 'google_sheets'
+             AND \`${config.idColumn}\` IN (${incomingIds.map(() => "?").join(", ")})`,
+          [syncTimestamp, ...incomingIds]
+        );
         const [result] = await conn.query(
           `UPDATE \`${config.table}\`
            SET \`syncStatus\` = 'removed',
@@ -1536,6 +1575,22 @@ function mapSheetRowToNpdRow(row: Record<string, any>) {
   const mapped = mapSheetRowByHeaderMap_(row, NPD_SYNC_HEADER_MAP as Record<string, string>, NPD_SYNC_NUMERIC_KEYS);
   mapped.npdId = stringOrEmpty(mapped.npdId);
   return mapped;
+}
+
+function resolveSheetSyncBusinessKey_(config: any, mappedRow: Record<string, any>) {
+  if (!config || !mappedRow) return "";
+
+  if (config.table === "npd") {
+    const erp = stringOrEmpty(mappedRow.erp);
+    if (erp) return `erp:${erp}`;
+  }
+
+  return stringOrEmpty(mappedRow[config.idColumn]);
+}
+
+function normalizeSyncIdList(values: any) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.map((value) => stringOrEmpty(value)).filter((value) => value !== ""))];
 }
 
 function resolveLinkedNpdId(value: any) {
@@ -4567,6 +4622,22 @@ const createHandlers = (tableName: string) => {
           }
 
           return res.json(normalizeFetchedRow("users", userRecord));
+        }
+
+        if (tableName === "npd") {
+          const normalizedErp = stringOrEmpty(data.erp);
+          if (normalizedErp) {
+            data.erp = normalizedErp;
+            const currentId = String(data.id || "").trim();
+            const [existingNpdRows] = await db.query(
+              "SELECT id FROM `npd` WHERE COALESCE(NULLIF(TRIM(`erp`), ''), '') = ? AND id <> ? LIMIT 1",
+              [normalizedErp, currentId]
+            );
+            const existingNpd = (existingNpdRows as any[])[0];
+            if (existingNpd?.id) {
+              data.id = String(existingNpd.id);
+            }
+          }
         }
 
         if (tableName === "production_processing") {

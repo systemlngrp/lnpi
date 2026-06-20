@@ -143,6 +143,11 @@ function processBatchSync_(config, spreadsheet, sheet, allRowsToSync, allRowIndi
   const batchSize = 100;
   let totalProcessed = 0;
   let lastResult = null;
+  const processedIds = [...new Set(
+    allRowsToSync
+      .map((row) => getSyncIdValue_(row, config))
+      .filter((value) => value !== '')
+  )];
 
   for (let i = 0; i < allRowsToSync.length; i += batchSize) {
     const rowsToSync = allRowsToSync.slice(i, i + batchSize);
@@ -232,8 +237,51 @@ function processBatchSync_(config, spreadsheet, sheet, allRowsToSync, allRowIndi
     }
   }
 
+  const finalizeTimestamp = formatDate_(new Date());
+  const finalizeResponse = UrlFetchApp.fetch(config.apiUrl, {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    headers: {
+      'x-npd-sync-secret': config.secret,
+    },
+    payload: JSON.stringify({
+      spreadsheetId: config.spreadsheetId,
+      spreadsheetName: spreadsheet.getName(),
+      tabName: sheet.getName(),
+      syncMode: 'full_finalize',
+      syncTimestamp: finalizeTimestamp,
+      processedIds: processedIds,
+    }),
+  });
+
+  const finalizeText = finalizeResponse.getContentText();
+  const finalizeCode = finalizeResponse.getResponseCode();
+  if (finalizeCode >= 400) {
+    logItemMasterSync_(config, 'HTTP error during full-sync finalize', {
+      responseCode: finalizeCode,
+      responseText: finalizeText,
+      processedIds: processedIds,
+      apiUrl: config.apiUrl,
+    });
+    throw new Error(`Full sync finalize failed for ${config.tabName}: ${finalizeText}`);
+  }
+
+  const parsedFinalizeResponse = parseSyncResponse_(finalizeText, config.tabName);
+  logItemMasterSync_(config, 'Received full-sync finalize response', {
+    responseCode: finalizeCode,
+    responseText: finalizeText,
+    processedRows: parsedFinalizeResponse.processedRows,
+    processedIds: parsedFinalizeResponse.processedIds,
+    inserted: parsedFinalizeResponse.inserted,
+    updated: parsedFinalizeResponse.updated,
+    removed: parsedFinalizeResponse.removed,
+    invalidRows: parsedFinalizeResponse.invalidRows,
+    duplicateIds: parsedFinalizeResponse.duplicateIds,
+  });
+
   return {
-    ...lastResult,
+    ...parsedFinalizeResponse,
     totalProcessed: totalProcessed,
     message: `Successfully synced ${totalProcessed} rows to ${config.tabName}.`
   };
@@ -509,6 +557,11 @@ function parseSyncResponse_(responseText, tabName) {
 }
 
 function resolveSyncRowKey_(row, config, idHeader) {
+  if (config && typeof NPD_SYNC_CONFIG !== 'undefined' && config.tabName === NPD_SYNC_CONFIG.tabName) {
+    const erpKey = String(row['ERP'] || '').trim();
+    if (erpKey) return `ERP:${erpKey}`;
+  }
+
   const strictId = getSyncIdValue_(row, config);
   if (strictId) return strictId;
 
