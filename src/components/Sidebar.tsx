@@ -228,11 +228,39 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
+    section: "PHP Dispatch",
+    color: "bg-blue-800",
+    items: [
+      { name: "PHP Dispatch Form", href: "/dispatch/php/form", icon: ClipboardList },
+    ],
+  },
+  {
+    section: "Plate Dispatch",
+    color: "bg-cyan-800",
+    items: [
+      { name: "Plate Dispatch Form", href: "/dispatch/plate/form", icon: ClipboardList },
+    ],
+  },
+  {
     section: "Loading",
     color: "bg-indigo-600",
     items: [
       { name: "Pending Loading", href: "/loading/pending", icon: Truck, countKey: "/loading/pending" },
       { name: "Loading Master", href: "/loading/master", icon: FileText },
+    ],
+  },
+  {
+    section: "PHP Loading",
+    color: "bg-indigo-700",
+    items: [
+      { name: "PHP Loading Slip Form", href: "/loading/php/form", icon: Truck },
+    ],
+  },
+  {
+    section: "Plate Loading",
+    color: "bg-violet-700",
+    items: [
+      { name: "Plate Loading Slip Form", href: "/loading/plate/form", icon: Truck },
     ],
   },
   {

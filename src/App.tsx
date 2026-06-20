@@ -84,6 +84,10 @@ import { PendingDispatchPlanning } from "./pages/PendingDispatchPlanning";
 import { DispatchPlansMaster } from "./pages/DispatchPlansMaster";
 import { PendingLoading } from "./pages/PendingLoading";
 import { LoadingMaster } from "./pages/LoadingMaster";
+import { PhpDispatchForm } from "./pages/PhpDispatchForm";
+import { PlateDispatchForm } from "./pages/PlateDispatchForm";
+import { PhpLoadingForm } from "./pages/PhpLoadingForm";
+import { PlateLoadingForm } from "./pages/PlateLoadingForm";
 import { PendingInvoicing } from "./pages/PendingInvoicing";
 import { BillingPendingTally } from "./pages/BillingPendingTally";
 import { InvoicesMaster } from "./pages/InvoicesMaster";
@@ -241,10 +245,14 @@ export default function App() {
           {/* Dispatch */}
           <Route path="dispatch/pending-planning" element={<PendingDispatchPlanning />} />
           <Route path="dispatch/master" element={<DispatchPlansMaster />} />
+          <Route path="dispatch/php/form" element={<PhpDispatchForm />} />
+          <Route path="dispatch/plate/form" element={<PlateDispatchForm />} />
 
           {/* Loading */}
           <Route path="loading/pending" element={<PendingLoading />} />
           <Route path="loading/master" element={<LoadingMaster />} />
+          <Route path="loading/php/form" element={<PhpLoadingForm />} />
+          <Route path="loading/plate/form" element={<PlateLoadingForm />} />
 
           {/* Billing */}
           <Route path="billing/pending" element={<PendingInvoicing />} />
