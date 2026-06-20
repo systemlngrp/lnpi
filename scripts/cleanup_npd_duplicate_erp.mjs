@@ -158,7 +158,7 @@ async function main() {
       }
     }
 
-    const [materialInRows] = await conn.query("SELECT id, lines FROM material_in");
+    const [materialInRows] = await conn.query("SELECT `id`, `lines` FROM `material_in`");
     let materialInUpdated = 0;
     for (const row of materialInRows || []) {
       const rawLines = typeof row.lines === "string" ? JSON.parse(row.lines) : row.lines;
@@ -176,7 +176,7 @@ async function main() {
         };
       });
       if (!changed) continue;
-      await conn.query("UPDATE material_in SET lines = ? WHERE id = ?", [JSON.stringify(nextLines), s(row.id)]);
+      await conn.query("UPDATE `material_in` SET `lines` = ? WHERE `id` = ?", [JSON.stringify(nextLines), s(row.id)]);
       materialInUpdated += 1;
     }
 
