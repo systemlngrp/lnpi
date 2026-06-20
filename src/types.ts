@@ -527,6 +527,7 @@ export interface Production {
   scheduleId?: string;
   itemId: string;
   itemSource?: OrderItemSource;
+  parentProductionId?: string;
   npdId?: string;
   qty: number;
   uom: string;

@@ -22,6 +22,7 @@ import { CircleHelp } from "lucide-react";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { fetchNpdItems } from "../lib/npdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import type { OrderCatalogItem } from "../lib/orderItems";
 
 const REEL_FORMULA_MODE = {
   breadthHeightBased: "breadth-height-based",
@@ -79,6 +80,85 @@ function round2(value: number) {
 
 function roundUpWhole(value: number) {
   return Math.ceil(value);
+}
+function normalizeErpCode(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function toOptionalNumber(value: unknown) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
+}
+
+function toOptionalString(value: unknown) {
+  const stringValue = String(value || "").trim();
+  return stringValue || undefined;
+}
+
+function findItemByErp(items: OrderCatalogItem[], erpCode: string) {
+  const normalizedErp = normalizeErpCode(erpCode);
+  if (!normalizedErp) return undefined;
+
+  return items.find((item) => {
+    const raw = item.raw || {};
+    return [item.erp, raw.erpItemCode, raw.masterItemNameErpCode].some(
+      (value) => normalizeErpCode(value) === normalizedErp
+    );
+  });
+}
+
+function getSetsPerBox(item?: OrderCatalogItem) {
+  const raw = item?.raw || {};
+  return toOptionalNumber(raw.numberOfSetsPerBox);
+}
+
+function buildLinkedProduction({
+  sourceItem,
+  itemSource,
+  transactionNo,
+  date,
+  qty,
+  remarks,
+  timestamp,
+  parentProductionId,
+}: {
+  sourceItem: OrderCatalogItem;
+  itemSource: "PHP" | "PLATE";
+  transactionNo: string;
+  date: string;
+  qty: number;
+  remarks: string;
+  timestamp: string;
+  parentProductionId: string;
+}): Production {
+  const raw = sourceItem.raw || {};
+
+  return {
+    id: crypto.randomUUID(),
+    transactionNo,
+    date,
+    itemId: sourceItem.id,
+    itemSource,
+    parentProductionId,
+    qty,
+    uom: sourceItem.uom || toOptionalString(raw.uom) || "",
+    remarks,
+    status: "Pending Consumption",
+    updatedBy: "System User",
+    updateTimestamp: timestamp,
+    rate: sourceItem.rate ?? toOptionalNumber(raw.rate),
+    companyName: sourceItem.companyName || toOptionalString(raw.company) || toOptionalString(raw.customerName),
+    erpCode: sourceItem.erp || toOptionalString(raw.erpItemCode) || toOptionalString(raw.masterItemNameErpCode),
+    noOfParts: toOptionalNumber(raw.noOfParts) || toOptionalNumber(raw.numberOfSetsPerBox),
+    ups: toOptionalNumber(raw.ups) || toOptionalNumber(raw.noOfUpsForRapc) || toOptionalNumber(raw.noOfUpsForCutting),
+    length: toOptionalNumber(raw.length),
+    breadth: toOptionalNumber(raw.breadth),
+    height: toOptionalNumber(raw.height),
+    ply: toOptionalNumber(raw.ply) || toOptionalNumber(raw.noOfPly),
+    flute: toOptionalString(raw.flute) || toOptionalString(raw.fluteType),
+    gsm: toOptionalNumber(raw.gsm) || toOptionalNumber(raw.boardGsmReq) || toOptionalNumber(raw.calculatedBGsm),
+    plateWeight: toOptionalNumber(raw.plateWeight) || toOptionalNumber(raw.weightPerPcReq) || toOptionalNumber(raw.totalWeightGrams),
+  };
 }
 
 function getPendingProductionQty(schedule: OrderSchedule) {
@@ -184,7 +264,7 @@ export function ProductionForm() {
   const [sampleRequests, setSampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [settings] = useData<Setting>("settings", []);
   const [npdItems, setNpdItems] = useState<Item[]>([]);
-  const { resolveOrderItem } = useOrderItemCatalog();
+  const { resolveOrderItem, itemsBySource } = useOrderItemCatalog();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const urlScheduleId = searchParams.get("scheduleId") || searchParams.get("scheduledId") || "";
@@ -196,6 +276,7 @@ export function ProductionForm() {
   }, []);
 
   const [formData, setFormData] = useState(() => createInitialFormData(todayStr));
+  const [linkedJobNotice, setLinkedJobNotice] = useState("");
 
   useEffect(() => {
     fetchNpdItems()
@@ -221,7 +302,7 @@ export function ProductionForm() {
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
     productions.forEach((production) => {
-      if (production.status === "Cancelled" || production.cancelTimestamp) return;
+      if ((production.itemSource || "FG") !== "FG" || production.status === "Cancelled" || production.cancelTimestamp) return;
 
       const erp = String(production.erpCode || "").trim();
       const gsm = Number(production.gsm || 0);
@@ -252,7 +333,7 @@ export function ProductionForm() {
   const latestRelevantProduction = useMemo(
     () =>
       [...productions]
-        .filter((production) => production.status !== "Cancelled" && !production.cancelTimestamp)
+        .filter((production) => (production.itemSource || "FG") === "FG" && production.status !== "Cancelled" && !production.cancelTimestamp)
         .sort((a, b) => {
           const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
           const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
@@ -324,6 +405,27 @@ export function ProductionForm() {
   );
 
   const currentQty = Number(formData.qty || 0);
+  const linkedProductionPreview = useMemo(() => {
+    const phpItem = findItemByErp(itemsBySource.PHP || [], selectedErp);
+    const plateItem = findItemByErp(itemsBySource.PLATE || [], selectedErp);
+    const phpSetsPerBox = getSetsPerBox(phpItem);
+    const plateSetsPerBox = getSetsPerBox(plateItem);
+    const mainQty = Number(formData.qty || 0);
+
+    return {
+      phpItem,
+      plateItem,
+      phpSetsPerBox,
+      plateSetsPerBox,
+      mainQty,
+      phpQty: phpItem && phpSetsPerBox && mainQty > 0 ? round2(mainQty * phpSetsPerBox) : 0,
+      plateQty: plateItem && plateSetsPerBox && mainQty > 0 ? round2(mainQty * plateSetsPerBox) : 0,
+      canCreatePhp: Boolean(phpItem && phpSetsPerBox),
+      canCreatePlate: Boolean(plateItem && plateSetsPerBox),
+      phpStatus: !phpItem ? "Not found in PHP Master" : !phpSetsPerBox ? "Sets/Pcs missing in PHP Master" : "Ready",
+      plateStatus: !plateItem ? "Not found in Plate Master" : !plateSetsPerBox ? "Sets/Pcs missing in Plate Master" : "Ready",
+    };
+  }, [formData.qty, itemsBySource.PHP, itemsBySource.PLATE, selectedErp]);
   const currentGsm = Number(formData.gsm || 0);
   const leastGsm = Number(formData.leastGsm || 0);
   const deviationLimit = isSameAsLastItem ? Number((lastPlanQty * (deviationAllowed / 100)).toFixed(2)) : 0;
@@ -666,6 +768,9 @@ export function ProductionForm() {
       const nextPendingQty = pendingQty - qty;
       const txnNo = generateTransactionNo("PR", productions, formData.date);
 
+      const linkedCreatedLabels: string[] = [];
+      const linkedSkippedReasons: string[] = [];
+
       await setProductions((prev) => {
         const newEntry: Production = {
           id: crypto.randomUUID(),
@@ -673,6 +778,7 @@ export function ProductionForm() {
           date: formData.date,
           scheduleId: selectedSchedule.id,
           itemId: selectedItem.id,
+          itemSource: "FG",
           npdId: selectedItem.id,
           qty,
           uom: selectedItem.uom || "",
@@ -684,8 +790,54 @@ export function ProductionForm() {
             Object.entries(formData).filter(([key]) => !["date", "qty", "remarks"].includes(key))
           ),
         } as Production;
-        return [newEntry, ...prev];
+
+        const linkedEntries: Production[] = [];
+        if (linkedProductionPreview.canCreatePhp && linkedProductionPreview.phpItem) {
+          const phpTxnNo = generateTransactionNo("PR", [newEntry, ...prev], formData.date);
+          linkedEntries.push(
+            buildLinkedProduction({
+              sourceItem: linkedProductionPreview.phpItem,
+              itemSource: "PHP",
+              transactionNo: phpTxnNo,
+              date: formData.date,
+              qty: linkedProductionPreview.phpQty,
+              remarks: formData.remarks,
+              timestamp,
+              parentProductionId: newEntry.id,
+            })
+          );
+          linkedCreatedLabels.push(`PHP ${linkedProductionPreview.phpQty}`);
+        } else {
+          linkedSkippedReasons.push(linkedProductionPreview.phpStatus);
+        }
+
+        if (linkedProductionPreview.canCreatePlate && linkedProductionPreview.plateItem) {
+          const plateTxnNo = generateTransactionNo("PR", [...linkedEntries, newEntry, ...prev], formData.date);
+          linkedEntries.push(
+            buildLinkedProduction({
+              sourceItem: linkedProductionPreview.plateItem,
+              itemSource: "PLATE",
+              transactionNo: plateTxnNo,
+              date: formData.date,
+              qty: linkedProductionPreview.plateQty,
+              remarks: formData.remarks,
+              timestamp,
+              parentProductionId: newEntry.id,
+            })
+          );
+          linkedCreatedLabels.push(`Plate ${linkedProductionPreview.plateQty}`);
+        } else {
+          linkedSkippedReasons.push(linkedProductionPreview.plateStatus);
+        }
+
+        return [newEntry, ...linkedEntries, ...prev];
       });
+
+      setLinkedJobNotice(
+        linkedCreatedLabels.length > 0
+          ? `Main job saved. Auto-created linked jobs: ${linkedCreatedLabels.join(", ")}.${linkedSkippedReasons.length ? ` Skipped: ${linkedSkippedReasons.join(", ")}.` : ""}`
+          : `Main job saved. PHP/Plate linked jobs not created: ${linkedSkippedReasons.join(", ") || "master data not complete"}.`
+      );
 
       if (isSampleItem && matchedSampleRequest?.id) {
         await setSampleRequests((prev) =>
@@ -774,6 +926,34 @@ export function ProductionForm() {
             </div>
           )}
 
+
+          {selectedSchedule && selectedOrder && (
+            <div className="bg-white border border-black rounded p-4 shadow-sm">
+              <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                <h3 className="text-sm font-black uppercase tracking-wide text-black">PHP / Plate Linked Job Preview</h3>
+                <span className="text-xs font-bold uppercase text-slate-600">ERP: {selectedErp || "-"}</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+                <InfoTile label="PHP Item" value={linkedProductionPreview.phpItem?.name || "Not found in PHP Master"} />
+                <InfoTile label="Plate Item" value={linkedProductionPreview.plateItem?.name || "Not found in Plate Master"} />
+                <InfoTile label="Sets/Pcs Per Box" value={`${linkedProductionPreview.phpSetsPerBox || "Missing"} / ${linkedProductionPreview.plateSetsPerBox || "Missing"}`} />
+                <InfoTile label="Main Planned Qty" value={linkedProductionPreview.mainQty || 0} />
+                <InfoTile label="PHP Planned Qty" value={linkedProductionPreview.phpQty || "Not planned"} />
+                <InfoTile label="Plate Planned Qty" value={linkedProductionPreview.plateQty || "Not planned"} />
+              </div>
+              {(linkedProductionPreview.phpStatus !== "Ready" || linkedProductionPreview.plateStatus !== "Ready") ? (
+                <div className="mt-3 rounded border border-amber-600 bg-amber-50 px-3 py-2 text-xs font-bold uppercase text-amber-900">
+                  PHP: {linkedProductionPreview.phpStatus}. Plate: {linkedProductionPreview.plateStatus}. Linked jobs are created only when that master item and Sets/Pcs value are available.
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {linkedJobNotice ? (
+            <div className="rounded border border-black bg-blue-50 px-4 py-3 text-sm font-bold text-black">
+              {linkedJobNotice}
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {showField("Production Date") && <div className="flex flex-col space-y-1">
               <LabelWithHelp
@@ -1064,6 +1244,7 @@ export function ProductionForm() {
               </tr>
             ) : (
               productions
+                .filter((production) => (production.itemSource || "FG") === "FG")
                 .sort((a, b) => {
                   const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
                   const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
