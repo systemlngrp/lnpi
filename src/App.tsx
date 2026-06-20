@@ -50,9 +50,13 @@ import { MrrApprovals } from "./pages/MrrApprovals";
 import { MaterialInMaster } from "./pages/MaterialInMaster";
 import { MaterialInItemMaster } from "./pages/MaterialInItemMaster";
 import { ProductionForm } from "./pages/ProductionForm";
+import { PhpProductionForm } from "./pages/PhpProductionForm";
+import { PlateProductionForm } from "./pages/PlateProductionForm";
 import { PendingProduction } from "./pages/PendingProduction";
 import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
+import { PhpProductionMaster } from "./pages/PhpProductionMaster";
+import { PlateProductionMaster } from "./pages/PlateProductionMaster";
 import { ProductionPendingConsumption, ProductionPendingFFG } from "./pages/ProductionStageQueue";
 import { ProductionPlan } from "./pages/ProductionPlan";
 import { PendingNpd } from "./pages/PendingNpd";
@@ -208,6 +212,8 @@ export default function App() {
           
           {/* Production */}
           <Route path="production/form" element={<ProductionForm />} />
+          <Route path="production/php/form" element={<PhpProductionForm />} />
+          <Route path="production/plate/form" element={<PlateProductionForm />} />
           <Route path="production/pending" element={<PendingProduction />} />
           <Route path="production/pending-npd" element={<PendingNpd />} />
           <Route path="production/upcoming" element={<UpcomingScheduledOrders />} />
@@ -217,6 +223,8 @@ export default function App() {
           <Route path="production/pending-job-closure" element={<PendingJobClosure />} />
           <Route path="production/pending-machine-processing" element={<MachinePendingProcessing />} />
           <Route path="production/master" element={<ProductionMaster />} />
+          <Route path="production/php/master" element={<PhpProductionMaster />} />
+          <Route path="production/plate/master" element={<PlateProductionMaster />} />
           <Route path="production/plan" element={<ProductionPlan />} />
           <Route path="operations-dashboard" element={<OperationDashboard />} />
           <Route path="production-processing/form" element={<ProductionProcessingForm />} />

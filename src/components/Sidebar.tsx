@@ -173,6 +173,10 @@ export const NAVIGATION: NavGroup[] = [
     section: "Production",
     color: "bg-emerald-700",
     items: [
+      { name: "PHP Production Form", href: "/production/php/form", icon: ClipboardList },
+      { name: "PHP Production Master", href: "/production/php/master", icon: Database },
+      { name: "Plate Production Form", href: "/production/plate/form", icon: ClipboardList },
+      { name: "Plate Production Master", href: "/production/plate/master", icon: Database },
       { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
       { name: "Pending NPD", href: "/production/pending-npd", icon: Activity, countKey: "/production/pending-npd" },
       { name: "Upcoming Scheduled Orders", href: "/production/upcoming", icon: Activity, countKey: "/orders/upcoming" },
