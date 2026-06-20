@@ -526,6 +526,7 @@ export interface Production {
   date: string;
   scheduleId?: string;
   itemId: string;
+  itemSource?: OrderItemSource;
   npdId?: string;
   qty: number;
   uom: string;
