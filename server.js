@@ -1127,11 +1127,11 @@ async function getDeleteBlockers(db, tableName, id) {
   }
   return blockers;
 }
-async function ensureIndex(db, database, table, column, indexName) {
+async function ensureIndex(db, database2, table, column, indexName) {
   try {
     const [rows] = await db.query(
       "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?",
-      [database, table, indexName]
+      [database2, table, indexName]
     );
     if (rows.length > 0) return;
     await db.query(`CREATE INDEX \`${indexName}\` ON \`${table}\` (\`${column}\`)`);
@@ -1140,14 +1140,14 @@ async function ensureIndex(db, database, table, column, indexName) {
     console.warn(`[DB] Could not ensure index ${indexName} on ${table}(${column}):`, err.message);
   }
 }
-async function ensureForeignKey(db, database, def) {
+async function ensureForeignKey(db, database2, def) {
   try {
     const [rows] = await db.query(
       "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND CONSTRAINT_NAME = ?",
-      [database, def.table, def.constraintName]
+      [database2, def.table, def.constraintName]
     );
     if (rows.length > 0) return;
-    await ensureIndex(db, database, def.table, def.column, def.indexName);
+    await ensureIndex(db, database2, def.table, def.column, def.indexName);
     await db.query(
       `ALTER TABLE \`${def.table}\` ADD CONSTRAINT \`${def.constraintName}\` FOREIGN KEY (\`${def.column}\`) REFERENCES \`${def.refTable}\` (\`${def.refColumn}\`) ON DELETE RESTRICT ON UPDATE CASCADE`
     );
@@ -1156,7 +1156,7 @@ async function ensureForeignKey(db, database, def) {
     console.warn(`[DB] Could not ensure foreign key ${def.constraintName}:`, err.message);
   }
 }
-async function ensureBestEffortForeignKeys(db, database) {
+async function ensureBestEffortForeignKeys(db, database2) {
   const defs = [
     {
       table: "indent_lines",
@@ -1288,7 +1288,7 @@ async function ensureBestEffortForeignKeys(db, database) {
     }
   ];
   for (const def of defs) {
-    await ensureForeignKey(db, database, def);
+    await ensureForeignKey(db, database2, def);
   }
 }
 function hasWorkflowValue(value) {
@@ -1666,20 +1666,20 @@ function normalizeItemLookupId(value) {
 function normalizeComparableName(value) {
   return stringOrEmpty(value).replace(/\s+/g, " ").toLowerCase();
 }
-async function ensureColumnExists(db, database, table, column, type) {
+async function ensureColumnExists(db, database2, table, column, type) {
   const [rows] = await db.query(
     "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
-    [database, table, column]
+    [database2, table, column]
   );
   if (rows.length > 0) return;
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
 }
-async function ensureCompaniesSchemaColumns(db, database) {
+async function ensureCompaniesSchemaColumns(db, database2) {
   for (const { column, type } of COMPANY_SCHEMA_COLUMNS) {
-    await ensureColumnExists(db, database, "companies", column, type);
+    await ensureColumnExists(db, database2, "companies", column, type);
   }
 }
-async function ensureGatePassNullableColumns(db, database) {
+async function ensureGatePassNullableColumns(db, database2) {
   const nullableColumns = [
     { column: "invoiceId", type: "VARCHAR(36) NULL" },
     { column: "invoiceNo", type: "VARCHAR(100) NULL" },
@@ -1689,7 +1689,7 @@ async function ensureGatePassNullableColumns(db, database) {
   for (const { column, type } of nullableColumns) {
     const [rows] = await db.query(
       "SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
-      [database, "gate_passes", column]
+      [database2, "gate_passes", column]
     );
     const metadata = rows[0];
     if (!metadata) continue;
@@ -1698,15 +1698,15 @@ async function ensureGatePassNullableColumns(db, database) {
     await db.query(`ALTER TABLE \`gate_passes\` MODIFY COLUMN \`${column}\` ${type}`);
   }
 }
-async function getExistingColumnNames(db, database, table) {
+async function getExistingColumnNames(db, database2, table) {
   const [rows] = await db.query(
     "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?",
-    [database, table]
+    [database2, table]
   );
   return new Set(rows.map((row) => String(row.COLUMN_NAME || "")));
 }
-async function ensureUsersCanonicalData(db, database) {
-  const columns = await getExistingColumnNames(db, database, "users");
+async function ensureUsersCanonicalData(db, database2) {
+  const columns = await getExistingColumnNames(db, database2, "users");
   if (columns.has("userId")) {
     const userIdSources = ["userid", "user_id"].filter((column) => columns.has(column));
     if (userIdSources.length > 0) {
@@ -1740,14 +1740,14 @@ async function ensureUsersCanonicalData(db, database) {
     );
   }
 }
-async function ensureNpdSchemaColumns(db, database) {
+async function ensureNpdSchemaColumns(db, database2) {
   for (const { column, type } of NPD_SCHEMA_COLUMNS) {
-    await ensureColumnExists(db, database, "npd", column, type);
+    await ensureColumnExists(db, database2, "npd", column, type);
   }
 }
-async function ensureSheetMasterSchemaColumns(db, database, table, schemaColumns) {
+async function ensureSheetMasterSchemaColumns(db, database2, table, schemaColumns) {
   for (const { column, type } of schemaColumns) {
-    await ensureColumnExists(db, database, table, column, type);
+    await ensureColumnExists(db, database2, table, column, type);
   }
 }
 async function buildItemToNpdIdMap(db) {
@@ -1761,8 +1761,8 @@ async function buildItemToNpdIdMap(db) {
   });
   return mapping;
 }
-async function migrateLinkedTableToNpd(db, database, table, itemToNpdId) {
-  await ensureColumnExists(db, database, table, "npdId", "VARCHAR(36) NULL");
+async function migrateLinkedTableToNpd(db, database2, table, itemToNpdId) {
+  await ensureColumnExists(db, database2, table, "npdId", "VARCHAR(36) NULL");
   const [rows] = await db.query(`SELECT id, itemId, npdId FROM \`${table}\``);
   let migrated = 0;
   let unmatched = 0;
@@ -1814,14 +1814,14 @@ async function migrateMaterialInLinesToNpd(db, itemToNpdId) {
   }
   console.log(`[DB] material_in: migrated ${migrated} JSON item links to NPD, unmatched ${unmatched}`);
 }
-async function migrateItemMasterLinksToNpd(db, database) {
+async function migrateItemMasterLinksToNpd(db, database2) {
   const itemToNpdId = await buildItemToNpdIdMap(db);
   if (itemToNpdId.size === 0) {
     console.warn("[DB] No Item-to-NPD mappings were discovered. Skipping NPD link migration.");
     return;
   }
   for (const table of ["orders", "productions", "invoice_line_items", "sample_requests", "consumptions"]) {
-    await migrateLinkedTableToNpd(db, database, table, itemToNpdId);
+    await migrateLinkedTableToNpd(db, database2, table, itemToNpdId);
   }
   await migrateMaterialInLinesToNpd(db, itemToNpdId);
 }
@@ -1956,23 +1956,23 @@ async function getPool() {
   const host = clean(process.env.DB_HOST);
   const user = clean(process.env.DB_USER);
   const password = clean(process.env.DB_PASSWORD);
-  const database = clean(process.env.DB_NAME);
+  const database2 = clean(process.env.DB_NAME);
   const port = parseInt(clean(process.env.DB_PORT) || "3306");
-  if (!host || !user || !database) {
+  if (!host || !user || !database2) {
     const missing = [];
     if (!host) missing.push("DB_HOST");
     if (!user) missing.push("DB_USER");
-    if (!database) missing.push("DB_NAME");
+    if (!database2) missing.push("DB_NAME");
     console.warn(`[DB] Initialization skipped. Missing env vars: ${missing.join(", ")}`);
     console.warn("[DB] Please set these in Settings -> Secrets.");
     return null;
   }
-  console.log(`[DB] Attempting connection to ${host}:${port} (DB: ${database}, User: ${user})`);
+  console.log(`[DB] Attempting connection to ${host}:${port} (DB: ${database2}, User: ${user})`);
   const config = {
     host,
     user,
     password,
-    database,
+    database: database2,
     port,
     waitForConnections: true,
     connectionLimit: 10,
@@ -2232,8 +2232,8 @@ async function initDb(retries = 5) {
   for (let i = 0; i < retries; i++) {
     const db = await getPool();
     const clean = (val) => val?.trim().replace(/^["']|["']$/g, "");
-    const database = clean(process.env.DB_NAME);
-    if (!db || !database) {
+    const database2 = clean(process.env.DB_NAME);
+    if (!db || !database2) {
       if (i === retries - 1) console.warn("[DB] Skipping tables initialization (no credentials or database name)");
       return;
     }
@@ -2404,7 +2404,7 @@ async function initDb(retries = 5) {
       try {
         const [columns] = await db.query(
           "SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'purchase_orders' AND COLUMN_NAME = 'indentId'",
-          [database]
+          [database2]
         );
         if (columns.length > 0 && columns[0].IS_NULLABLE === "NO") {
           console.log("[DB] Making purchase_orders.indentId nullable...");
@@ -2670,7 +2670,7 @@ async function initDb(retries = 5) {
       try {
         const [columns] = await db.query(
           "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'companies'",
-          [database]
+          [database2]
         );
         const existingColumns = columns.map((c) => c.COLUMN_NAME);
         if (!existingColumns.includes("gstType")) {
@@ -3274,7 +3274,7 @@ async function initDb(retries = 5) {
       try {
         const [columns] = await db.query(
           "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'npd'",
-          [database]
+          [database2]
         );
         const existingColumns = columns.map((c) => c.COLUMN_NAME);
         if (!existingColumns.includes("uom")) {
@@ -3314,9 +3314,9 @@ async function initDb(retries = 5) {
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
-      await ensureNpdSchemaColumns(db, database);
-      await ensureSheetMasterSchemaColumns(db, database, "php_item_master", PHP_ITEM_MASTER_SCHEMA_COLUMNS);
-      await ensureSheetMasterSchemaColumns(db, database, "plate_item_master", PLATE_ITEM_MASTER_SCHEMA_COLUMNS);
+      await ensureNpdSchemaColumns(db, database2);
+      await ensureSheetMasterSchemaColumns(db, database2, "php_item_master", PHP_ITEM_MASTER_SCHEMA_COLUMNS);
+      await ensureSheetMasterSchemaColumns(db, database2, "plate_item_master", PLATE_ITEM_MASTER_SCHEMA_COLUMNS);
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`settings\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
@@ -3745,6 +3745,7 @@ async function initDb(retries = 5) {
         { table: "orders_schedule", column: "canceledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "productions", column: "scheduleId", type: "VARCHAR(36)" },
         { table: "productions", column: "parentProductionId", type: "VARCHAR(36)" },
+        { table: "productions", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "productions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "productions", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "consumptions", column: "phTimestamp", type: "VARCHAR(255)" },
@@ -3954,7 +3955,7 @@ async function initDb(retries = 5) {
         try {
           const [columns] = await db.query(
             "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
-            [database, m.table, m.column]
+            [database2, m.table, m.column]
           );
           if (columns.length === 0) {
             console.log(`[DB] Adding missing column ${m.column} to table ${m.table}...`);
@@ -3978,23 +3979,23 @@ async function initDb(retries = 5) {
         console.warn("[DB] Could not backfill orders.orderAmount:", err.message);
       }
       try {
-        await ensureUsersCanonicalData(db, database);
+        await ensureUsersCanonicalData(db, database2);
       } catch (err) {
         console.warn("[DB] Could not normalize legacy users columns:", err.message);
       }
       try {
-        await ensureGatePassNullableColumns(db, database);
+        await ensureGatePassNullableColumns(db, database2);
       } catch (err) {
         console.warn("[DB] Could not normalize gate_passes nullable invoice fields:", err.message);
       }
       try {
         const [oldLeastSheetWeight] = await db.query(
           "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
-          [database, "productions", "leastSheetWeight"]
+          [database2, "productions", "leastSheetWeight"]
         );
         const [newLeastGsm] = await db.query(
           "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
-          [database, "productions", "leastGsm"]
+          [database2, "productions", "leastGsm"]
         );
         if (oldLeastSheetWeight.length > 0 && newLeastGsm.length === 0) {
           console.log("[DB] Renaming productions.leastSheetWeight to leastGsm...");
@@ -4011,7 +4012,7 @@ async function initDb(retries = 5) {
         try {
           const [columns] = await db.query(
             "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?",
-            [database, m.table, m.column]
+            [database2, m.table, m.column]
           );
           if (columns.length > 0) {
             console.log(`[DB] Dropping deprecated column ${m.column} from table ${m.table}...`);
@@ -4033,12 +4034,12 @@ async function initDb(retries = 5) {
         console.warn("[DB] Could not drop legacy foreign key:", err.message);
       }
       try {
-        await ensureNpdSchemaColumns(db, database);
+        await ensureNpdSchemaColumns(db, database2);
       } catch (err) {
         console.warn("[DB] Could not ensure npd schema columns:", err.message);
       }
       try {
-        await ensureCompaniesSchemaColumns(db, database);
+        await ensureCompaniesSchemaColumns(db, database2);
       } catch (err) {
         console.warn("[DB] Could not ensure companies schema columns:", err.message);
       }
@@ -4048,12 +4049,12 @@ async function initDb(retries = 5) {
         console.warn("[DB] Could not seed official India states:", err.message);
       }
       try {
-        await ensureBestEffortForeignKeys(db, database);
+        await ensureBestEffortForeignKeys(db, database2);
       } catch (err) {
         console.warn("[DB] Could not ensure foreign keys:", err.message);
       }
       try {
-        await migrateItemMasterLinksToNpd(db, database);
+        await migrateItemMasterLinksToNpd(db, database2);
       } catch (err) {
         console.warn("[DB] Could not migrate Item Master links to NPD:", err.message);
       }
@@ -4623,6 +4624,9 @@ const createHandlers = (tableName) => {
               });
             }
           }
+        }
+        if (tableName === "productions") {
+          await ensureColumnExists(db, database, "productions", "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
         }
         const keys = Object.keys(data);
         const values = Object.values(data).map(

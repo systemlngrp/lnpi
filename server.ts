@@ -4180,6 +4180,7 @@ async function initDb(retries = 5) {
         { table: "orders_schedule", column: "canceledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "productions", column: "scheduleId", type: "VARCHAR(36)" },
         { table: "productions", column: "parentProductionId", type: "VARCHAR(36)" },
+        { table: "productions", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "productions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "productions", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "consumptions", column: "phTimestamp", type: "VARCHAR(255)" },
@@ -5154,6 +5155,10 @@ const createHandlers = (tableName: string) => {
           }
         }
         
+        if (tableName === "productions") {
+          await ensureColumnExists(db, database, "productions", "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
+        }
+
         const keys = Object.keys(data);
         // Stringify any objects or arrays for MySQL JSON columns
         const values = Object.values(data).map(v => 
