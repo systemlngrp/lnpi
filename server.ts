@@ -5156,7 +5156,8 @@ const createHandlers = (tableName: string) => {
         }
         
         if (tableName === "productions") {
-          await ensureColumnExists(db, database, "productions", "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
+          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+          await ensureColumnExists(db, schemaName, "productions", "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
         }
 
         const keys = Object.keys(data);
