@@ -167,9 +167,9 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
 
     let fgCreationMessage = "";
     if (String(methodology || "").trim().toUpperCase() === "CORRUGATION") {
-      const fgItem = findFgItemByErp(itemsBySource.FG || [], selectedJob.masterErp);
+      const fgItem = findFgItemByErp(itemsBySource.FG || [], selectedJob.erpCode);
       if (!fgItem) {
-        fgCreationMessage = ` FG production skipped: main FG item not found for ERP ${String(selectedJob.masterErp || "-")}.`;
+        fgCreationMessage = ` FG production skipped: FG item not found for item ERP ${String(selectedJob.erpCode || "-")}.`;
       } else {
         const fgTxnNo = generateTransactionNo(getProductionJobPrefix("FG"), productions, scheduleDate);
         const fgRaw = fgItem.raw || {};
@@ -191,7 +191,7 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
           jobCardNo: selectedJob.transactionNo,
           companyName: selectedJob.companyName || fgItem.companyName || undefined,
           masterErp: selectedJob.masterErp,
-          erpCode: String(fgItem.erp || fgRaw.erpItemCode || selectedJob.masterErp || "") || undefined,
+          erpCode: String(fgItem.erp || fgRaw.erpItemCode || selectedJob.erpCode || "") || undefined,
           rate: Number.isFinite(Number(selectedJob.rate)) ? Number(selectedJob.rate) : fgItem.rate,
           noOfParts: Number.isFinite(Number(selectedJob.noOfParts)) ? Number(selectedJob.noOfParts) : undefined,
           ups: Number.isFinite(Number(selectedJob.ups)) ? Number(selectedJob.ups) : undefined,
