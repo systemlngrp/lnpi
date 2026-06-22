@@ -3271,6 +3271,84 @@ async function initDb(retries = 5) {
       `);
 
       await db.query(`
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS `php_job_master` (
+          `id` VARCHAR(36) PRIMARY KEY,
+          `transactionNo` VARCHAR(100) NOT NULL,
+          `date` VARCHAR(50) NOT NULL,
+          `parentProductionId` VARCHAR(36),
+          `scheduleId` VARCHAR(36),
+          `itemId` VARCHAR(255) NOT NULL,
+          `npdId` VARCHAR(255),
+          `erpCode` VARCHAR(255),
+          `companyName` VARCHAR(255),
+          `jobCardNo` VARCHAR(255),
+          `qty` DECIMAL(15,2) NOT NULL,
+          `uom` VARCHAR(50) NOT NULL,
+          `remarks` TEXT,
+          `status` VARCHAR(50) NOT NULL DEFAULT 'Pending Consumption',
+          `noOfParts` DECIMAL(15,2),
+          `ups` DECIMAL(15,2),
+          `length` DECIMAL(15,2),
+          `breadth` DECIMAL(15,2),
+          `height` DECIMAL(15,2),
+          `ply` DECIMAL(15,2),
+          `flute` VARCHAR(255),
+          `gsm` DECIMAL(15,2),
+          `plateWeight` DECIMAL(15,5),
+          `rate` DECIMAL(15,2),
+          `phTimestamp` VARCHAR(255),
+          `phEmailId` VARCHAR(255),
+          `tallyTimestamp` VARCHAR(255),
+          `closeBy` VARCHAR(255),
+          `closeDate` VARCHAR(50),
+          `cancelTimestamp` VARCHAR(255),
+          `cancelEmailId` VARCHAR(255),
+          `cancelRemarks` TEXT,
+          `updatedBy` VARCHAR(255),
+          `updateTimestamp` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS `plate_job_master` (
+          `id` VARCHAR(36) PRIMARY KEY,
+          `transactionNo` VARCHAR(100) NOT NULL,
+          `date` VARCHAR(50) NOT NULL,
+          `parentProductionId` VARCHAR(36),
+          `scheduleId` VARCHAR(36),
+          `itemId` VARCHAR(255) NOT NULL,
+          `npdId` VARCHAR(255),
+          `erpCode` VARCHAR(255),
+          `companyName` VARCHAR(255),
+          `jobCardNo` VARCHAR(255),
+          `qty` DECIMAL(15,2) NOT NULL,
+          `uom` VARCHAR(50) NOT NULL,
+          `remarks` TEXT,
+          `status` VARCHAR(50) NOT NULL DEFAULT 'Pending Consumption',
+          `noOfParts` DECIMAL(15,2),
+          `ups` DECIMAL(15,2),
+          `length` DECIMAL(15,2),
+          `breadth` DECIMAL(15,2),
+          `height` DECIMAL(15,2),
+          `ply` DECIMAL(15,2),
+          `flute` VARCHAR(255),
+          `gsm` DECIMAL(15,2),
+          `plateWeight` DECIMAL(15,5),
+          `rate` DECIMAL(15,2),
+          `phTimestamp` VARCHAR(255),
+          `phEmailId` VARCHAR(255),
+          `tallyTimestamp` VARCHAR(255),
+          `closeBy` VARCHAR(255),
+          `closeDate` VARCHAR(50),
+          `cancelTimestamp` VARCHAR(255),
+          `cancelEmailId` VARCHAR(255),
+          `cancelRemarks` TEXT,
+          `updatedBy` VARCHAR(255),
+          `updateTimestamp` VARCHAR(255)
+        )
+      `);
+
         CREATE TABLE IF NOT EXISTS \`production_processing\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`productionId\` VARCHAR(36) NOT NULL,
@@ -5138,7 +5216,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "settings"];
 
 app.get("/api/legacy-items", async (req, res) => {
   try {
