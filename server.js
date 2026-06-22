@@ -2784,6 +2784,8 @@ async function initDb(retries = 5) {
           \`transactionNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`scheduleId\` VARCHAR(36),
+          \`parentProductionId\` VARCHAR(36),
+          \`itemSource\` VARCHAR(20) NOT NULL DEFAULT 'FG',
           \`itemId\` VARCHAR(36) NOT NULL,
           \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15, 2) NOT NULL,
@@ -2854,86 +2856,135 @@ async function initDb(retries = 5) {
 	        )
       `);
       await db.query(`
-        CREATE TABLE IF NOT EXISTS \`production_processing\` (
-          \`id\` VARCHAR(36) PRIMARY KEY,
-          \`productionId\` VARCHAR(36) NOT NULL,
-          \`jobNo\` VARCHAR(100),
-          \`machineId\` VARCHAR(36) NOT NULL,
-          \`machineName\` VARCHAR(255),
-          \`shift\` VARCHAR(10) DEFAULT 'Day',
-          \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
-          \`operatorId\` VARCHAR(36) NOT NULL,
-          \`operatorName\` VARCHAR(255),
-          \`date\` VARCHAR(50) NOT NULL,
-          \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
-        )
-      `);
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS \`consumptions\` (
+        CREATE TABLE IF NOT EXISTS \`php_job_master\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
-          \`itemId\` VARCHAR(36) NOT NULL,
-          \`npdId\` VARCHAR(36),
-          \`qty\` DECIMAL(15, 2) NOT NULL,
+          \`parentProductionId\` VARCHAR(36),
+          \`scheduleId\` VARCHAR(36),
+          \`itemId\` VARCHAR(255) NOT NULL,
+          \`npdId\` VARCHAR(255),
+          \`erpCode\` VARCHAR(255),
+          \`companyName\` VARCHAR(255),
+          \`jobCardNo\` VARCHAR(255),
+          \`qty\` DECIMAL(15,2) NOT NULL,
           \`uom\` VARCHAR(50) NOT NULL,
           \`remarks\` TEXT,
-          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending PH',
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending Consumption',
+          \`noOfParts\` DECIMAL(15,2),
+          \`ups\` DECIMAL(15,2),
+          \`length\` DECIMAL(15,2),
+          \`breadth\` DECIMAL(15,2),
+          \`height\` DECIMAL(15,2),
+          \`ply\` DECIMAL(15,2),
+          \`flute\` VARCHAR(255),
+          \`gsm\` DECIMAL(15,2),
+          \`plateWeight\` DECIMAL(15,5),
+          \`rate\` DECIMAL(15,2),
           \`phTimestamp\` VARCHAR(255),
           \`phEmailId\` VARCHAR(255),
           \`tallyTimestamp\` VARCHAR(255),
-          \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255),
-          \`productionId\` VARCHAR(36),
-          \`jobCardNo\` VARCHAR(255)
-        )
-      `);
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS \`sample_requests\` (
-          \`id\` VARCHAR(36) PRIMARY KEY,
-          \`timestamp\` VARCHAR(255) NOT NULL,
-          \`date\` VARCHAR(50) NOT NULL,
-          \`itemId\` VARCHAR(36) NOT NULL,
-          \`npdId\` VARCHAR(36),
-          \`itemName\` VARCHAR(255) NOT NULL,
-          \`erp\` VARCHAR(100),
-          \`plannedQuantity\` DECIMAL(15,2) NOT NULL,
-          \`jobCardNo\` VARCHAR(255),
+          \`closeBy\` VARCHAR(255),
+          \`closeDate\` VARCHAR(50),
           \`cancelTimestamp\` VARCHAR(255),
-          \`cancelBy\` VARCHAR(255),
+          \`cancelEmailId\` VARCHAR(255),
+          \`cancelRemarks\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
       await db.query(`
-        CREATE TABLE IF NOT EXISTS \`trucks\` (
+        CREATE TABLE IF NOT EXISTS \`plate_job_master\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
-          \`truckNo\` VARCHAR(50) NOT NULL,
-          \`driverName\` VARCHAR(255),
-          \`mobileNo\` VARCHAR(20),
+          \`transactionNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`parentProductionId\` VARCHAR(36),
+          \`scheduleId\` VARCHAR(36),
+          \`itemId\` VARCHAR(255) NOT NULL,
+          \`npdId\` VARCHAR(255),
+          \`erpCode\` VARCHAR(255),
+          \`companyName\` VARCHAR(255),
+          \`jobCardNo\` VARCHAR(255),
+          \`qty\` DECIMAL(15,2) NOT NULL,
+          \`uom\` VARCHAR(50) NOT NULL,
+          \`remarks\` TEXT,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending Consumption',
+          \`noOfParts\` DECIMAL(15,2),
+          \`ups\` DECIMAL(15,2),
+          \`length\` DECIMAL(15,2),
+          \`breadth\` DECIMAL(15,2),
+          \`height\` DECIMAL(15,2),
+          \`ply\` DECIMAL(15,2),
+          \`flute\` VARCHAR(255),
+          \`gsm\` DECIMAL(15,2),
+          \`plateWeight\` DECIMAL(15,5),
+          \`rate\` DECIMAL(15,2),
+          \`phTimestamp\` VARCHAR(255),
+          \`phEmailId\` VARCHAR(255),
+          \`tallyTimestamp\` VARCHAR(255),
+          \`closeBy\` VARCHAR(255),
+          \`closeDate\` VARCHAR(50),
+          \`cancelTimestamp\` VARCHAR(255),
+          \`cancelEmailId\` VARCHAR(255),
+          \`cancelRemarks\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
       await db.query(`
-        CREATE TABLE IF NOT EXISTS \`dispatch_plans\` (
+        CREATE TABLE IF NOT EXISTS \`php_dispatch_plans\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
-          \`scheduleId\` VARCHAR(36) NOT NULL,
-          \`orderId\` VARCHAR(36) NOT NULL,
+          \`scheduleId\` VARCHAR(36),
+          \`orderId\` VARCHAR(36),
+          \`productionId\` VARCHAR(36),
           \`truckId\` VARCHAR(36) NOT NULL,
           \`plannedQty\` DECIMAL(15,2) NOT NULL,
+          \`loadedQty\` DECIMAL(15,2) DEFAULT 0,
+          \`canceledQty\` DECIMAL(15,2) DEFAULT 0,
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Planned',
           \`date\` VARCHAR(50) NOT NULL,
-          \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255),
           \`planNo\` VARCHAR(100),
-          \`loadedQty\` DECIMAL(15,2) DEFAULT 0,
-          \`canceledQty\` DECIMAL(15,2) DEFAULT 0
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
         )
       `);
       await db.query(`
-        CREATE TABLE IF NOT EXISTS \`loading_slips\` (
+        CREATE TABLE IF NOT EXISTS \`plate_dispatch_plans\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`scheduleId\` VARCHAR(36),
+          \`orderId\` VARCHAR(36),
+          \`productionId\` VARCHAR(36),
+          \`truckId\` VARCHAR(36) NOT NULL,
+          \`plannedQty\` DECIMAL(15,2) NOT NULL,
+          \`loadedQty\` DECIMAL(15,2) DEFAULT 0,
+          \`canceledQty\` DECIMAL(15,2) DEFAULT 0,
+          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Planned',
+          \`date\` VARCHAR(50) NOT NULL,
+          \`planNo\` VARCHAR(100),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`php_loading_slips\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`slipNo\` VARCHAR(100) NOT NULL,
+          \`date\` VARCHAR(50) NOT NULL,
+          \`truckId\` VARCHAR(36),
+          \`lines\` JSON NOT NULL,
+          \`packingDetails\` JSON,
+          \`extraItemsQty\` DECIMAL(15,2),
+          \`invoiceId\` VARCHAR(36),
+          \`status\` VARCHAR(20) DEFAULT 'Active',
+          \`cancelReason\` TEXT,
+          \`cancelledAt\` VARCHAR(255),
+          \`cancelledBy\` VARCHAR(255),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`plate_loading_slips\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`slipNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
@@ -3647,6 +3698,7 @@ async function initDb(retries = 5) {
         { table: "orders_schedule", column: "producedQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "orders_schedule", column: "canceledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "productions", column: "scheduleId", type: "VARCHAR(36)" },
+        { table: "productions", column: "parentProductionId", type: "VARCHAR(36)" },
         { table: "productions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "productions", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "consumptions", column: "phTimestamp", type: "VARCHAR(255)" },
@@ -3662,6 +3714,7 @@ async function initDb(retries = 5) {
         { table: "trucks", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "dispatch_plans", column: "scheduleId", type: "VARCHAR(36) NOT NULL" },
         { table: "dispatch_plans", column: "orderId", type: "VARCHAR(36) NOT NULL" },
+        { table: "dispatch_plans", column: "productionId", type: "VARCHAR(36)" },
         { table: "dispatch_plans", column: "truckId", type: "VARCHAR(36) NOT NULL" },
         { table: "dispatch_plans", column: "plannedQty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "dispatch_plans", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Planned'" },
@@ -4279,7 +4332,7 @@ const createHandlers = (tableName) => {
             console.warn("[DB] Could not auto-generate indentNo:", err.message);
           }
         }
-        if (tableName === "loading_slips") {
+        if (["loading_slips", "php_loading_slips", "plate_loading_slips"].includes(tableName)) {
           try {
             if (!data.slipNo) {
               const dateStr = data.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -4578,7 +4631,7 @@ const createHandlers = (tableName) => {
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_dispatch_plans", "plate_dispatch_plans", "php_loading_slips", "plate_loading_slips", "settings"];
 app.get("/api/legacy-items", async (req, res) => {
   try {
     const user = await getRequestUser(req);

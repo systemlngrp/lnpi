@@ -307,7 +307,7 @@ export function Materials() {
       const movement = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
       const openingQty = Number(material.openingQty || 0);
       const openingRate = Number(material.openingRate || 0);
-      const openingValue = Number(material.openingValue ?? (openingQty * openingRate ?? 0));
+      const openingValue = Number(material.openingValue ?? (openingQty * openingRate));
       const receiptQty = Number(movement.receipts || 0);
       const issueQty = Number(movement.issues || 0);
       const returnQty = Number(movement.returns || 0);
@@ -1363,7 +1363,7 @@ export function Materials() {
                       const mvt = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
                       const openingQty = Number(material.openingQty || 0);
                       const openingRate = Number(material.openingRate || 0);
-                      const openingValue = Number(material.openingValue ?? (openingQty * openingRate ?? 0));
+                      const openingValue = Number(material.openingValue ?? (openingQty * openingRate));
                       const balance = openingQty + mvt.receipts + mvt.returns - mvt.issues;
                       const receiptValue = mvt.receipts * openingRate;
                       const issueValue = mvt.issues * openingRate;
