@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
+import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
@@ -11,9 +11,9 @@ import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { getProductionDisplayStatus } from "../lib/productionStageFilters";
-import { fetchNpdItems } from "../lib/npdItems";
 import { cn } from "../lib/utils";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 
 export function ProductionMaster() {
   const navigate = useNavigate();
@@ -25,16 +25,7 @@ export function ProductionMaster() {
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const [npdItems, setNpdItems] = useState<Item[]>([]);
-
-  useEffect(() => {
-    fetchNpdItems()
-      .then(setNpdItems)
-      .catch((error) => {
-        console.error("Failed to fetch NPD items for Production Master:", error);
-        setNpdItems([]);
-      });
-  }, []);
+  const { findItem } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [closingId, setClosingId] = useState<string | null>(null);
@@ -42,6 +33,22 @@ export function ProductionMaster() {
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [cancelSubmittingId, setCancelSubmittingId] = useState<string | null>(null);
+
+  const resolveProductionItem = (production?: Production | null) => {
+    if (!production) return undefined;
+    return findItem(production.itemSource || "FG", String(production.itemId || ""));
+  };
+
+  const getItemValue = (item: any, ...keys: string[]) => {
+    const raw = item?.raw || item || {};
+    for (const key of keys) {
+      const direct = item?.[key];
+      if (!(direct === null || direct === undefined || String(direct).trim() === "")) return direct;
+      const nested = raw?.[key];
+      if (!(nested === null || nested === undefined || String(nested).trim() === "")) return nested;
+    }
+    return undefined;
+  };
 
   const ffgSummaries = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
@@ -120,8 +127,8 @@ export function ProductionMaster() {
     const result = new Map<string, { canClose: boolean; reasons: string[] }>();
 
     productions.forEach((production) => {
-      const item = npdItems.find((i) => i.id === String(production.itemId || "").trim());
-      const boxType = (item as any)?.boxType;
+      const item = resolveProductionItem(production);
+      const boxType = getItemValue(item, "boxType");
       const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, boxType).map((m) =>
         normalizeMachineName(m)
       );
@@ -327,7 +334,7 @@ export function ProductionMaster() {
 
   const filteredList = productions
     .filter(p => {
-      const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
+      const item = resolveProductionItem(p);
       const schedule = schedules.find(s => s.id === p.scheduleId);
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
@@ -367,7 +374,7 @@ export function ProductionMaster() {
   const cancelTarget = cancelModalJobId ? productions.find((p) => p.id === cancelModalJobId) : null;
   const cancelTargetSchedule = cancelTarget?.scheduleId ? schedules.find((schedule) => schedule.id === cancelTarget.scheduleId) : null;
   const cancelTargetOrder = cancelTargetSchedule ? orders.find((order) => order.id === cancelTargetSchedule.orderId) : null;
-  const cancelTargetItem = cancelTarget ? npdItems.find((item) => item.id === String(cancelTarget.itemId || "").trim()) : null;
+  const cancelTargetItem = cancelTarget ? resolveProductionItem(cancelTarget) || null : null;
 
   return (
     <div className="space-y-6">
@@ -404,12 +411,12 @@ export function ProductionMaster() {
                 const schedule = schedules.find(s => s.id === p.scheduleId);
                 const order = orders.find(o => o.id === schedule?.orderId);
                 const company = companies.find(c => c.id === order?.companyId);
-                const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
+                const item = resolveProductionItem(p);
                 const erp = String(p.erpCode || "").trim();
                 const leastGsm = erpLeastGsmMap.get(erp);
                 const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                 const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-                const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
+                const mandatory = getMandatoryStatus(p.id, getItemValue(item, "boxType"));
                 const displayStatus = getProductionDisplayStatus(p);
                 
                 return (
@@ -432,10 +439,10 @@ export function ProductionMaster() {
                       )}
                       <div className="text-sm font-bold">{item?.name || "Unknown"}</div>
                       <div className="text-[10px] text-slate-600 uppercase font-black">
-                        Type: {(item as any)?.boxType || "-"} | Print: {p.printingColor || "-"}
+                        Type: {getItemValue(item, "boxType") || "-"} | Print: {p.printingColor || "-"}
                       </div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">
-                        OD: {item?.lOd || "-"}×{item?.wOd || "-"}×{item?.hOd || "-"}
+                        OD: {getItemValue(item, "lOd") || "-"}×{getItemValue(item, "wOd") || "-"}×{getItemValue(item, "hOd") || "-"}
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <div className="flex flex-col">
@@ -586,8 +593,8 @@ export function ProductionMaster() {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
-                  const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
+                  const item = resolveProductionItem(p);
+                  const mandatory = getMandatoryStatus(p.id, getItemValue(item, "boxType"));
                   const erp = String(p.erpCode || "").trim();
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
@@ -613,11 +620,11 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.erpCode || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || p.companyName || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{item?.name || "Unknown"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.isSample ? "Yes" : "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.boxType || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{getItemValue(item, "isSample") ? "Yes" : "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{getItemValue(item, "boxType") || "-"}</td>
                       <td className="px-4 py-4 text-[11px] text-black border border-black whitespace-nowrap">
                         {mandatory.required.length === 0 ? (
                           "-"
@@ -633,7 +640,7 @@ export function ProductionMaster() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
-                      <td className="px-4 py-4 text-center text-xs font-medium text-black border border-black whitespace-nowrap">{p.ups || (item as any)?.ups || "-"}</td>
+                      <td className="px-4 py-4 text-center text-xs font-medium text-black border border-black whitespace-nowrap">{p.ups || getItemValue(item, "ups") || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-amber-700 border border-black whitespace-nowrap bg-amber-50/40">
                         {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}
                       </td>
@@ -663,9 +670,9 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.length || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.breadth || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.height || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.lOd || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.wOd || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.hOd || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "lOd") || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "wOd") || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "hOd") || "-"}</td>
 
                       <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{p.ply || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.flute || "-"}</td>
