@@ -186,15 +186,24 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "PHP Production",
+    section: "PHP / Plate Process",
     color: "bg-emerald-800",
+    items: [
+      { name: "Scheduling", href: "/production/php-plate/scheduling", icon: ClipboardList },
+      { name: "Sequencing", href: "/production/php-plate/pending-sequencing", icon: Activity },
+      { name: "Production", href: "/production/php-plate/pending-production", icon: Hammer },
+    ],
+  },
+  {
+    section: "PHP Master",
+    color: "bg-emerald-900",
     items: [
       { name: "PHP Production Master", href: "/production/php/master", icon: Database },
     ],
   },
   {
-    section: "Plate Production",
-    color: "bg-green-800",
+    section: "Plate Master",
+    color: "bg-green-900",
     items: [
       { name: "Plate Production Master", href: "/production/plate/master", icon: Database },
     ],

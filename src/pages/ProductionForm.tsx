@@ -475,6 +475,13 @@ export function ProductionForm() {
     const phpSetsPerBox = getSetsPerBox(phpItem);
     const plateSetsPerBox = getSetsPerBox(plateItem);
     const mainQty = Number(formData.qty || 0);
+    const mainJobNo = generateTransactionNo("PR", allJobRows, formData.date || todayStr);
+    const phpJobNo = phpItem && phpSetsPerBox && mainQty > 0
+      ? generateTransactionNo("PR", [{ id: "preview-fg", transactionNo: mainJobNo, date: formData.date || todayStr } as Production, ...allJobRows], formData.date || todayStr)
+      : "-";
+    const plateJobNo = plateItem && plateSetsPerBox && mainQty > 0
+      ? generateTransactionNo("PR", [{ id: "preview-php", transactionNo: String(phpJobNo), date: formData.date || todayStr } as Production, { id: "preview-fg", transactionNo: mainJobNo, date: formData.date || todayStr } as Production, ...allJobRows], formData.date || todayStr)
+      : "-";
 
     return {
       phpItem,
@@ -482,6 +489,9 @@ export function ProductionForm() {
       phpSetsPerBox,
       plateSetsPerBox,
       mainQty,
+      mainJobNo,
+      phpJobNo,
+      plateJobNo,
       phpQty: phpItem && phpSetsPerBox && mainQty > 0 ? round2(mainQty * phpSetsPerBox) : 0,
       plateQty: plateItem && plateSetsPerBox && mainQty > 0 ? round2(mainQty * plateSetsPerBox) : 0,
       canCreatePhp: Boolean(phpItem && phpSetsPerBox),
@@ -489,7 +499,7 @@ export function ProductionForm() {
       phpStatus: !phpItem ? "Not found in PHP Master" : !phpSetsPerBox ? "Sets/Pcs missing in PHP Master" : "Ready",
       plateStatus: !plateItem ? "Not found in Plate Master" : !plateSetsPerBox ? "Sets/Pcs missing in Plate Master" : "Ready",
     };
-  }, [formData.qty, itemsBySource.PHP, itemsBySource.PLATE, selectedErp]);
+  }, [allJobRows, formData.date, formData.qty, itemsBySource.PHP, itemsBySource.PLATE, selectedErp, todayStr]);
   const currentGsm = Number(formData.gsm || 0);
   const leastGsm = Number(formData.leastGsm || 0);
   const deviationLimit = isSameAsLastItem ? Number((lastPlanQty * (deviationAllowed / 100)).toFixed(2)) : 0;
@@ -1303,7 +1313,9 @@ export function ProductionForm() {
                 <h3 className="text-sm font-black uppercase tracking-wide text-black">PHP / Plate Linked Job Preview</h3>
                 <span className="text-xs font-bold uppercase text-slate-600">ERP: {selectedErp || "-"}</span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-8 gap-4">
+                <InfoTile label="PHP Job No" value={linkedProductionPreview.phpJobNo} />
+                <InfoTile label="Plate Job No" value={linkedProductionPreview.plateJobNo} />
                 <InfoTile label="PHP Item" value={linkedProductionPreview.phpItem?.name || "Not found in PHP Master"} />
                 <InfoTile label="Plate Item" value={linkedProductionPreview.plateItem?.name || "Not found in Plate Master"} />
                 <InfoTile label="Sets/Pcs Per Box" value={`${linkedProductionPreview.phpSetsPerBox || "Missing"} / ${linkedProductionPreview.plateSetsPerBox || "Missing"}`} />

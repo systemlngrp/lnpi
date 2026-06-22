@@ -550,6 +550,7 @@ export interface Production {
   jobType?: string;
   sequence?: string | number;
   jobCompletionTimeOutput?: string | number;
+  productionOutputQty?: number;
   noOfHolesInPhp?: number;
   fluteType?: string;
   ups?: number;

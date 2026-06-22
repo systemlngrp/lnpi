@@ -54,7 +54,16 @@ import { PendingProduction } from "./pages/PendingProduction";
 import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
 import { PhpProductionMaster } from "./pages/PhpProductionMaster";
+import { PhpProductionScheduling } from "./pages/PhpProductionScheduling";
+import { PhpProductionSequencing } from "./pages/PhpProductionSequencing";
+import { PhpProductionExecution } from "./pages/PhpProductionExecution";
+import { PhpPlateProductionScheduling } from "./pages/PhpPlateProductionScheduling";
+import { PhpPlateProductionSequencing } from "./pages/PhpPlateProductionSequencing";
+import { PhpPlateProductionExecution } from "./pages/PhpPlateProductionExecution";
 import { PlateProductionMaster } from "./pages/PlateProductionMaster";
+import { PlateProductionScheduling } from "./pages/PlateProductionScheduling";
+import { PlateProductionSequencing } from "./pages/PlateProductionSequencing";
+import { PlateProductionExecution } from "./pages/PlateProductionExecution";
 import { ProductionPendingConsumption, ProductionPendingFFG } from "./pages/ProductionStageQueue";
 import { ProductionPlan } from "./pages/ProductionPlan";
 import { PendingNpd } from "./pages/PendingNpd";
@@ -228,7 +237,16 @@ export default function App() {
           <Route path="production/pending-machine-processing" element={<MachinePendingProcessing />} />
           <Route path="production/master" element={<ProductionMaster />} />
           <Route path="production/php/master" element={<PhpProductionMaster />} />
+          <Route path="production/php/scheduling" element={<PhpProductionScheduling />} />
+          <Route path="production/php/pending-sequencing" element={<PhpProductionSequencing />} />
+          <Route path="production/php/pending-production" element={<PhpProductionExecution />} />
+          <Route path="production/php-plate/scheduling" element={<PhpPlateProductionScheduling />} />
+          <Route path="production/php-plate/pending-sequencing" element={<PhpPlateProductionSequencing />} />
+          <Route path="production/php-plate/pending-production" element={<PhpPlateProductionExecution />} />
           <Route path="production/plate/master" element={<PlateProductionMaster />} />
+          <Route path="production/plate/scheduling" element={<PlateProductionScheduling />} />
+          <Route path="production/plate/pending-sequencing" element={<PlateProductionSequencing />} />
+          <Route path="production/plate/pending-production" element={<PlateProductionExecution />} />
           <Route path="production/plan" element={<ProductionPlan />} />
           <Route path="operations-dashboard" element={<OperationDashboard />} />
           <Route path="production-processing/form" element={<ProductionProcessingForm />} />

@@ -126,7 +126,8 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Methodology</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Job Type</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Sequence</th>
-              <th className="px-3 py-2 text-left text-xs font-black uppercase">Job Completion Time Output</th>
+              <th className="px-3 py-2 text-left text-xs font-black uppercase">Job Completion Time</th>
+              <th className="px-3 py-2 text-right text-xs font-black uppercase">Output</th>
               <th className="px-3 py-2 text-right text-xs font-black uppercase">Qty</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">UOM</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Status</th>
@@ -137,7 +138,7 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
           <tbody>
             {paginatedItems.length === 0 ? (
               <tr>
-                <td colSpan={36} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                <td colSpan={37} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
               </tr>
             ) : (
               paginatedItems.map((row) => {
@@ -175,6 +176,7 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
                     <td className="px-3 py-2 text-sm">{formatCell(row.jobType)}</td>
                     <td className="px-3 py-2 text-sm">{formatCell(row.sequence)}</td>
                     <td className="px-3 py-2 text-sm">{formatCell(row.jobCompletionTimeOutput)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{formatNumber(row.productionOutputQty)}</td>
                     <td className="px-3 py-2 text-sm text-right">{formatNumber(row.qty)}</td>
                     <td className="px-3 py-2 text-sm">{formatCell(row.uom || item?.uom)}</td>
                     <td className="px-3 py-2 text-sm">{formatCell(row.status)}</td>
