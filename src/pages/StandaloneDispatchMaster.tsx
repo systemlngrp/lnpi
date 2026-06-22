@@ -7,14 +7,19 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
 
+const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_job_master" : "plate_job_master";
+const getDispatchEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_dispatch_plans" : "plate_dispatch_plans";
+
 type StandaloneDispatchMasterProps = {
   source: Extract<OrderItemSource, "PHP" | "PLATE">;
 };
 
 export function StandaloneDispatchMaster({ source }: StandaloneDispatchMasterProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
-  const [productions] = useData<Production>("productions", []);
+  const [plans, setPlans] = useData<DispatchPlan>(getDispatchEntityName(source), []);
+  const [productions] = useData<Production>(getJobMasterEntityName(source), []);
   const [trucks] = useData<Truck>("trucks", []);
   const [companies] = useData<Company>("companies", []);
   const { itemsBySource } = useOrderItemCatalog();
@@ -30,7 +35,7 @@ export function StandaloneDispatchMaster({ source }: StandaloneDispatchMasterPro
     return plans
       .filter((plan) => {
         const production = productionMap.get(String(plan.productionId || "").trim());
-        return production && (production.itemSource || "FG") === source;
+        return Boolean(production);
       })
       .map((plan) => {
         const production = productionMap.get(String(plan.productionId || "").trim())!;

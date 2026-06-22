@@ -936,27 +936,6 @@ export function ProductionForm() {
           )}
 
 
-          {selectedSchedule && selectedOrder && (
-            <div className="bg-white border border-black rounded p-4 shadow-sm">
-              <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                <h3 className="text-sm font-black uppercase tracking-wide text-black">PHP / Plate Linked Job Preview</h3>
-                <span className="text-xs font-bold uppercase text-slate-600">ERP: {selectedErp || "-"}</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
-                <InfoTile label="PHP Item" value={linkedProductionPreview.phpItem?.name || "Not found in PHP Master"} />
-                <InfoTile label="Plate Item" value={linkedProductionPreview.plateItem?.name || "Not found in Plate Master"} />
-                <InfoTile label="Sets/Pcs Per Box" value={`${linkedProductionPreview.phpSetsPerBox || "Missing"} / ${linkedProductionPreview.plateSetsPerBox || "Missing"}`} />
-                <InfoTile label="Main Planned Qty" value={linkedProductionPreview.mainQty || 0} />
-                <InfoTile label="PHP Planned Qty" value={linkedProductionPreview.phpQty || "Not planned"} />
-                <InfoTile label="Plate Planned Qty" value={linkedProductionPreview.plateQty || "Not planned"} />
-              </div>
-              {(linkedProductionPreview.phpStatus !== "Ready" || linkedProductionPreview.plateStatus !== "Ready") ? (
-                <div className="mt-3 rounded border border-amber-600 bg-amber-50 px-3 py-2 text-xs font-bold uppercase text-amber-900">
-                  PHP: {linkedProductionPreview.phpStatus}. Plate: {linkedProductionPreview.plateStatus}. Linked jobs are created only when that master item and Sets/Pcs value are available.
-                </div>
-              ) : null}
-            </div>
-          )}
 
           {linkedJobNotice ? (
             <div className="rounded border border-black bg-blue-50 px-4 py-3 text-sm font-bold text-black">
@@ -1213,6 +1192,27 @@ export function ProductionForm() {
             </div>
           </div>
 
+          {selectedSchedule && selectedOrder && (
+            <div className="bg-white border border-black rounded p-4 shadow-sm">
+              <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                <h3 className="text-sm font-black uppercase tracking-wide text-black">PHP / Plate Linked Job Preview</h3>
+                <span className="text-xs font-bold uppercase text-slate-600">ERP: {selectedErp || "-"}</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+                <InfoTile label="PHP Item" value={linkedProductionPreview.phpItem?.name || "Not found in PHP Master"} />
+                <InfoTile label="Plate Item" value={linkedProductionPreview.plateItem?.name || "Not found in Plate Master"} />
+                <InfoTile label="Sets/Pcs Per Box" value={`${linkedProductionPreview.phpSetsPerBox || "Missing"} / ${linkedProductionPreview.plateSetsPerBox || "Missing"}`} />
+                <InfoTile label="Main Planned Qty" value={linkedProductionPreview.mainQty || 0} />
+                <InfoTile label="PHP Planned Qty" value={linkedProductionPreview.phpQty || "Not planned"} />
+                <InfoTile label="Plate Planned Qty" value={linkedProductionPreview.plateQty || "Not planned"} />
+              </div>
+              {(linkedProductionPreview.phpStatus !== "Ready" || linkedProductionPreview.plateStatus !== "Ready") ? (
+                <div className="mt-3 rounded border border-amber-600 bg-amber-50 px-3 py-2 text-xs font-bold uppercase text-amber-900">
+                  PHP: {linkedProductionPreview.phpStatus}. Plate: {linkedProductionPreview.plateStatus}. Linked jobs are created only when that master item and Sets/Pcs value are available.
+                </div>
+              ) : null}
+            </div>
+          )}
           <div className="pt-2">
             <button
               type="submit"
@@ -1287,6 +1287,27 @@ export function ProductionForm() {
         </div>
       )}
 
+          {selectedSchedule && selectedOrder && (
+            <div className="bg-white border border-black rounded p-4 shadow-sm">
+              <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                <h3 className="text-sm font-black uppercase tracking-wide text-black">PHP / Plate Linked Job Preview</h3>
+                <span className="text-xs font-bold uppercase text-slate-600">ERP: {selectedErp || "-"}</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+                <InfoTile label="PHP Item" value={linkedProductionPreview.phpItem?.name || "Not found in PHP Master"} />
+                <InfoTile label="Plate Item" value={linkedProductionPreview.plateItem?.name || "Not found in Plate Master"} />
+                <InfoTile label="Sets/Pcs Per Box" value={`${linkedProductionPreview.phpSetsPerBox || "Missing"} / ${linkedProductionPreview.plateSetsPerBox || "Missing"}`} />
+                <InfoTile label="Main Planned Qty" value={linkedProductionPreview.mainQty || 0} />
+                <InfoTile label="PHP Planned Qty" value={linkedProductionPreview.phpQty || "Not planned"} />
+                <InfoTile label="Plate Planned Qty" value={linkedProductionPreview.plateQty || "Not planned"} />
+              </div>
+              {(linkedProductionPreview.phpStatus !== "Ready" || linkedProductionPreview.plateStatus !== "Ready") ? (
+                <div className="mt-3 rounded border border-amber-600 bg-amber-50 px-3 py-2 text-xs font-bold uppercase text-amber-900">
+                  PHP: {linkedProductionPreview.phpStatus}. Plate: {linkedProductionPreview.plateStatus}. Linked jobs are created only when that master item and Sets/Pcs value are available.
+                </div>
+              ) : null}
+            </div>
+          )}
       <div className="pt-2">
         <button
           type="button"

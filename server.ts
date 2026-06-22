@@ -3451,6 +3451,80 @@ async function initDb(retries = 5) {
         )
       `);
 
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS `php_dispatch_plans` (
+          `id` VARCHAR(36) PRIMARY KEY,
+          `scheduleId` VARCHAR(36),
+          `orderId` VARCHAR(36),
+          `productionId` VARCHAR(36),
+          `truckId` VARCHAR(36) NOT NULL,
+          `plannedQty` DECIMAL(15,2) NOT NULL,
+          `loadedQty` DECIMAL(15,2) DEFAULT 0,
+          `canceledQty` DECIMAL(15,2) DEFAULT 0,
+          `status` VARCHAR(50) NOT NULL DEFAULT 'Planned',
+          `date` VARCHAR(50) NOT NULL,
+          `planNo` VARCHAR(100),
+          `updatedBy` VARCHAR(255),
+          `updateTimestamp` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS `plate_dispatch_plans` (
+          `id` VARCHAR(36) PRIMARY KEY,
+          `scheduleId` VARCHAR(36),
+          `orderId` VARCHAR(36),
+          `productionId` VARCHAR(36),
+          `truckId` VARCHAR(36) NOT NULL,
+          `plannedQty` DECIMAL(15,2) NOT NULL,
+          `loadedQty` DECIMAL(15,2) DEFAULT 0,
+          `canceledQty` DECIMAL(15,2) DEFAULT 0,
+          `status` VARCHAR(50) NOT NULL DEFAULT 'Planned',
+          `date` VARCHAR(50) NOT NULL,
+          `planNo` VARCHAR(100),
+          `updatedBy` VARCHAR(255),
+          `updateTimestamp` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS `php_loading_slips` (
+          `id` VARCHAR(36) PRIMARY KEY,
+          `slipNo` VARCHAR(100) NOT NULL,
+          `date` VARCHAR(50) NOT NULL,
+          `truckId` VARCHAR(36),
+          `lines` JSON NOT NULL,
+          `packingDetails` JSON,
+          `extraItemsQty` DECIMAL(15,2),
+          `invoiceId` VARCHAR(36),
+          `status` VARCHAR(20) DEFAULT 'Active',
+          `cancelReason` TEXT,
+          `cancelledAt` VARCHAR(255),
+          `cancelledBy` VARCHAR(255),
+          `updatedBy` VARCHAR(255),
+          `updateTimestamp` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS `plate_loading_slips` (
+          `id` VARCHAR(36) PRIMARY KEY,
+          `slipNo` VARCHAR(100) NOT NULL,
+          `date` VARCHAR(50) NOT NULL,
+          `truckId` VARCHAR(36),
+          `lines` JSON NOT NULL,
+          `packingDetails` JSON,
+          `extraItemsQty` DECIMAL(15,2),
+          `invoiceId` VARCHAR(36),
+          `status` VARCHAR(20) DEFAULT 'Active',
+          `cancelReason` TEXT,
+          `cancelledAt` VARCHAR(255),
+          `cancelledBy` VARCHAR(255),
+          `updatedBy` VARCHAR(255),
+          `updateTimestamp` VARCHAR(255)
+        )
+      `);
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`invoices\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
@@ -4873,8 +4947,8 @@ const createHandlers = (tableName: string) => {
           }
         }
 
-        // Auto-generate slipNo for loading_slips when not provided
-        if (tableName === 'loading_slips') {
+        // Auto-generate slipNo for loading tables when not provided
+        if (['loading_slips', 'php_loading_slips', 'plate_loading_slips'].includes(tableName)) {
           try {
             if (!data.slipNo) {
               const dateStr = data.date || new Date().toISOString().slice(0,10);
@@ -5216,7 +5290,7 @@ const createHandlers = (tableName: string) => {
 };
 
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_dispatch_plans", "plate_dispatch_plans", "php_loading_slips", "plate_loading_slips", "settings"];
 
 app.get("/api/legacy-items", async (req, res) => {
   try {
@@ -6031,4 +6105,3 @@ async function startServer() {
 }
 
 startServer();
-

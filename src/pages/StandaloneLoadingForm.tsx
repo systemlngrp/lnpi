@@ -7,6 +7,13 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
 
+const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_job_master" : "plate_job_master";
+const getDispatchEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_dispatch_plans" : "plate_dispatch_plans";
+const getLoadingEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_loading_slips" : "plate_loading_slips";
+
 type StandaloneLoadingFormProps = {
   source: Extract<OrderItemSource, "PHP" | "PLATE">;
 };
@@ -20,9 +27,9 @@ type PendingStandalonePlan = {
 };
 
 export function StandaloneLoadingForm({ source }: StandaloneLoadingFormProps) {
-  const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
-  const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const [productions] = useData<Production>("productions", []);
+  const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>(getDispatchEntityName(source), []);
+  const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>(getLoadingEntityName(source), []);
+  const [productions] = useData<Production>(getJobMasterEntityName(source), []);
   const [trucks] = useData<Truck>("trucks", []);
   const { itemsBySource } = useOrderItemCatalog();
   const items = itemsBySource[source] || [];
@@ -40,7 +47,6 @@ export function StandaloneLoadingForm({ source }: StandaloneLoadingFormProps) {
       .map((plan) => {
         const production = productionMap.get(String(plan.productionId || "").trim());
         if (!production) return null;
-        if ((production.itemSource || "FG") !== source) return null;
         const pendingQty = Math.max(0, Number(plan.plannedQty || 0) - Number(plan.loadedQty || 0) - Number(plan.canceledQty || 0));
         if (pendingQty <= 0) return null;
         const item = items.find((entry) => entry.id === String(production.itemId || "").trim());

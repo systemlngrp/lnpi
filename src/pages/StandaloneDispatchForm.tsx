@@ -7,6 +7,11 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
 
+const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_job_master" : "plate_job_master";
+const getDispatchEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_dispatch_plans" : "plate_dispatch_plans";
+
 type StandaloneDispatchFormProps = {
   source: Extract<OrderItemSource, "PHP" | "PLATE">;
 };
@@ -22,8 +27,8 @@ type DispatchableProduction = {
 };
 
 export function StandaloneDispatchForm({ source }: StandaloneDispatchFormProps) {
-  const [productions] = useData<Production>("productions", []);
-  const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [productions] = useData<Production>(getJobMasterEntityName(source), []);
+  const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>(getDispatchEntityName(source), []);
   const { itemsBySource } = useOrderItemCatalog();
   const items = itemsBySource[source] || [];
 
@@ -47,7 +52,6 @@ export function StandaloneDispatchForm({ source }: StandaloneDispatchFormProps) 
   const rows = useMemo<DispatchableProduction[]>(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return productions
-      .filter((production) => (production.itemSource || "FG") === source)
       .filter((production) => production.status !== "Cancelled" && !production.cancelTimestamp)
       .map((production) => {
         const item = items.find((entry) => entry.id === String(production.itemId || "").trim());

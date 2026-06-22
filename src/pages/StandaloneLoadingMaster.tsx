@@ -7,15 +7,22 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
 
+const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_job_master" : "plate_job_master";
+const getDispatchEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_dispatch_plans" : "plate_dispatch_plans";
+const getLoadingEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_loading_slips" : "plate_loading_slips";
+
 type StandaloneLoadingMasterProps = {
   source: Extract<OrderItemSource, "PHP" | "PLATE">;
 };
 
 export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
-  const [productions] = useData<Production>("productions", []);
+  const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>(getLoadingEntityName(source), []);
+  const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>(getDispatchEntityName(source), []);
+  const [productions] = useData<Production>(getJobMasterEntityName(source), []);
   const [trucks] = useData<Truck>("trucks", []);
   const { itemsBySource } = useOrderItemCatalog();
   const items = itemsBySource[source] || [];
@@ -30,7 +37,7 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
         const relevantLines = slip.lines.filter((line) => {
           const plan = planMap.get(String(line.dispatchPlanId || "").trim());
           const production = plan ? productionMap.get(String(plan.productionId || "").trim()) : null;
-          return production && (production.itemSource || "FG") === source;
+          return Boolean(production);
         });
         if (relevantLines.length === 0) return null;
 
