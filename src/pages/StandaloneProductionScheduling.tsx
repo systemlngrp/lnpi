@@ -5,6 +5,7 @@ import { TableControls } from "../components/TableControls";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
+import { generateTransactionNo, getProductionJobPrefix } from "../lib/serial";
 import { OrderItemSource, Production } from "../types";
 import { Select } from "../components/Select";
 
@@ -44,7 +45,22 @@ function formatNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed.toLocaleString() : "-";
 }
 
+function normalizeErpCode(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function findFgItemByErp(items: any[], erpCode: unknown) {
+  const normalizedErp = normalizeErpCode(erpCode);
+  if (!normalizedErp) return undefined;
+
+  return items.find((item) => {
+    const raw = item?.raw || {};
+    return [item?.erp, raw.erpItemCode, raw.masterItemNameErpCode].some((value) => normalizeErpCode(value) === normalizedErp);
+  });
+}
+
 export function StandaloneProductionScheduling({ source }: StandaloneProductionSchedulingProps) {
+  const [productions, setProductions] = useData<Production>("productions", []);
   const [phpJobs, setPhpJobs] = useData<Production>(getJobMasterEntityName("PHP"), []);
   const [plateJobs, setPlateJobs] = useData<Production>(getJobMasterEntityName("PLATE"), []);
   const { itemsBySource } = useOrderItemCatalog();
@@ -121,7 +137,7 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
       return;
     }
 
-    const nextPlannedQty = Number(plannedQty || selectedJob.qty || 0);
+    const nextPlannedQty = Number(plannedQty);
     if (!Number.isFinite(nextPlannedQty) || nextPlannedQty <= 0) {
       window.alert("Planned Qty must be greater than zero.");
       return;
@@ -149,7 +165,52 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
       await setPlateJobs(updateJobs);
     }
 
-    window.alert("Job schedule saved successfully.");
+    let fgCreationMessage = "";
+    if (String(methodology || "").trim().toUpperCase() === "CORRUGATION") {
+      const fgItem = findFgItemByErp(itemsBySource.FG || [], selectedJob.masterErp);
+      if (!fgItem) {
+        fgCreationMessage = ` FG production skipped: main FG item not found for ERP ${String(selectedJob.masterErp || "-")}.`;
+      } else {
+        const fgTxnNo = generateTransactionNo(getProductionJobPrefix("FG"), productions, scheduleDate);
+        const fgRaw = fgItem.raw || {};
+        const fgEntry: Production = {
+          id: crypto.randomUUID(),
+          transactionNo: fgTxnNo,
+          date: scheduleDate,
+          itemId: fgItem.id,
+          itemSource: "FG",
+          npdId: fgItem.id,
+          parentProductionId: selectedJob.id,
+          qty: nextPlannedQty,
+          plannedQty: nextPlannedQty,
+          uom: fgItem.uom || String(fgRaw.uom || ""),
+          remarks: String(selectedJob.remarks || ""),
+          status: "Pending Consumption",
+          updatedBy: "System User",
+          updateTimestamp: timestamp,
+          jobCardNo: selectedJob.transactionNo,
+          companyName: selectedJob.companyName || fgItem.companyName || undefined,
+          masterErp: selectedJob.masterErp,
+          erpCode: String(fgItem.erp || fgRaw.erpItemCode || selectedJob.masterErp || "") || undefined,
+          rate: Number.isFinite(Number(selectedJob.rate)) ? Number(selectedJob.rate) : fgItem.rate,
+          noOfParts: Number.isFinite(Number(selectedJob.noOfParts)) ? Number(selectedJob.noOfParts) : undefined,
+          ups: Number.isFinite(Number(selectedJob.ups)) ? Number(selectedJob.ups) : undefined,
+          length: Number.isFinite(Number(selectedJob.length)) ? Number(selectedJob.length) : undefined,
+          breadth: Number.isFinite(Number(selectedJob.breadth)) ? Number(selectedJob.breadth) : undefined,
+          height: Number.isFinite(Number(selectedJob.height)) ? Number(selectedJob.height) : undefined,
+          ply: Number.isFinite(Number(selectedJob.ply)) ? Number(selectedJob.ply) : undefined,
+          flute: String(selectedJob.flute || "") || undefined,
+          fluteType: String(selectedJob.fluteType || selectedJob.flute || "") || undefined,
+          gsm: Number.isFinite(Number(selectedJob.gsm)) ? Number(selectedJob.gsm) : undefined,
+          printingColor: String(selectedJob.printingColor || "") || undefined,
+          plateWeight: Number.isFinite(Number(selectedJob.plateWeight)) ? Number(selectedJob.plateWeight) : undefined,
+        };
+        await setProductions((prev) => [fgEntry, ...prev]);
+        fgCreationMessage = ` FG production job ${fgTxnNo} created.`;
+      }
+    }
+
+    window.alert(`Job schedule saved successfully.${fgCreationMessage}`);
     resetScheduler();
   };
 
