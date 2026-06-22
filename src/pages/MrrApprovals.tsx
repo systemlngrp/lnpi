@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier } from "../types";
+import { Company, Material, MaterialIn, Item, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Download } from "lucide-react";
@@ -18,12 +18,21 @@ export function MrrApprovals() {
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
   
   const [activeStage, setActiveStage] = useState<Stage>("Pending PH");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
+
+  const getSupplierName = (id: string) => {
+    const supplier = suppliers.find(s => s.id === id);
+    if (supplier) return supplier.name;
+    const company = companies.find(c => c.id === id);
+    if (company) return company.name;
+    return id;
+  };
 
   const stages: { label: string; value: Stage }[] = [
     { label: "Plant Head", value: "Pending PH" },
@@ -43,12 +52,12 @@ export function MrrApprovals() {
     return materialIn
       .filter(m => m.status === activeStage)
       .filter(m => {
-        const supplierName = suppliers.find(s => s.id === m.supplierId)?.name || "";
+        const supplierName = getSupplierName(m.supplierId);
         const searchStr = `${m.transactionNo} ${m.gateEntryNo || ""} ${supplierName} ${m.invoiceNo}`.toLowerCase();
         return searchStr.includes(searchTerm.toLowerCase());
       })
       .sort((a, b) => new Date(b.updateTimestamp || b.timestamp).getTime() - new Date(a.updateTimestamp || a.timestamp).getTime());
-  }, [materialIn, activeStage, searchTerm, suppliers]);
+  }, [materialIn, activeStage, searchTerm, suppliers, companies]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -149,7 +158,7 @@ export function MrrApprovals() {
 
   const downloadPdf = (mrr: MaterialIn) => {
     const doc = new jsPDF();
-    const supplier = suppliers.find(s => s.id === mrr.supplierId);
+    const supplierName = getSupplierName(mrr.supplierId);
     
     doc.setFontSize(18);
     doc.text("MATERIAL RECEIPT", 105, 15, { align: "center" });
@@ -157,7 +166,7 @@ export function MrrApprovals() {
     doc.setFontSize(10);
     doc.text(`MRR No: ${mrr.transactionNo}`, 14, 25);
     doc.text(`Date: ${formatDate(mrr.date)}`, 14, 30);
-    doc.text(`Supplier: ${supplier?.name || "N/A"}`, 14, 35);
+    doc.text(`Supplier/Customer: ${supplierName || "N/A"}`, 14, 35);
     doc.text(`Invoice No: ${mrr.invoiceNo}`, 14, 40);
     
     const tableData = mrr.lines.map((l, i) => [
@@ -174,13 +183,11 @@ export function MrrApprovals() {
       head: [["S.No", "Item Description", "Qty", "UOM", "Rate", "Amount"]],
       body: tableData,
       theme: "grid",
-      headStyles: { fillStyle: "black", textColor: "white" }
+      headStyles: { fillColor: [0, 0, 0], textColor: "white" }
     });
 
     doc.save(`MRR_${mrr.transactionNo}.pdf`);
   };
-
-  const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
 
   const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
     const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
@@ -277,7 +284,7 @@ export function MrrApprovals() {
                     
                     const mrrWeight = linesToDisplay.reduce((s, l) => s + (l.actualQty || l.qty || 0), 0);
                     const invWeight = linesToDisplay.reduce((s, l) => s + (l.invoiceQty || 0), 0);
-                    const firstLine = linesToDisplay[0] || {};
+                    const firstLine: Partial<MaterialIn["lines"][0]> = linesToDisplay[0] || {};
                     const basicValue = linesToDisplay.reduce((s, l) => s + (l.actualValue || l.value || 0), 0);
 
                     return (

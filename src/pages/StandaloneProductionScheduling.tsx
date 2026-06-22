@@ -26,9 +26,6 @@ const SHIFT_OPTIONS = [
 const METHODOLOGY_OPTIONS = [
   { value: "CORRUGATION", label: "CORRUGATION" },
   { value: "SCRAP", label: "SCRAP" },
-  { value: "PRINTING", label: "PRINTING" },
-  { value: "PUNCHING", label: "PUNCHING" },
-  { value: "OTHER", label: "OTHER" },
 ];
 
 const SOURCE_OPTIONS = [
@@ -74,6 +71,7 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
     return jobs
       .filter((job) => job.status !== "Cancelled")
       .filter((job) => activeSourceFilter === "ALL" || job.jobSource === activeSourceFilter)
+      .filter((job) => !String(job.scheduledDate || "").trim() || !String(job.shift || "").trim() || !String(job.methodology || "").trim() || !(Number(job.plannedQty || 0) > 0))
       .filter((job) => {
         const item = (itemsBySource[job.jobSource] || []).find((entry) => entry.id === String(job.itemId || "").trim());
         if (!query) return true;
