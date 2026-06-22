@@ -468,6 +468,7 @@ export function ProductionForm() {
   );
 
   const currentQty = Number(formData.qty || 0);
+  const allJobRows = useMemo(() => [...productions, ...phpJobMaster, ...plateJobMaster], [productions, phpJobMaster, plateJobMaster]);
   const linkedProductionPreview = useMemo(() => {
     const phpItem = findItemByErp(itemsBySource.PHP || [], selectedErp);
     const plateItem = findItemByErp(itemsBySource.PLATE || [], selectedErp);

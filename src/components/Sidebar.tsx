@@ -189,7 +189,6 @@ export const NAVIGATION: NavGroup[] = [
     section: "PHP Production",
     color: "bg-emerald-800",
     items: [
-      { name: "PHP Production Form", href: "/production/php/form", icon: ClipboardList },
       { name: "PHP Production Master", href: "/production/php/master", icon: Database },
     ],
   },
@@ -197,7 +196,6 @@ export const NAVIGATION: NavGroup[] = [
     section: "Plate Production",
     color: "bg-green-800",
     items: [
-      { name: "Plate Production Form", href: "/production/plate/form", icon: ClipboardList },
       { name: "Plate Production Master", href: "/production/plate/master", icon: Database },
     ],
   },
