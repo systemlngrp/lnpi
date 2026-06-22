@@ -17,7 +17,7 @@ import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
-import { generateTransactionNo, formatDate } from "../lib/serial";
+import { generateTransactionNo, formatDate, getProductionJobPrefix } from "../lib/serial";
 import { CircleHelp } from "lucide-react";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { fetchNpdItems } from "../lib/npdItems";
@@ -140,6 +140,7 @@ function buildLinkedProduction({
   remarks,
   timestamp,
   parentProductionId,
+  parentJobNo,
   scheduleId,
   scheduledDate,
   planningId,
@@ -154,6 +155,7 @@ function buildLinkedProduction({
   remarks: string;
   timestamp: string;
   parentProductionId: string;
+  parentJobNo?: string;
   scheduleId?: string;
   scheduledDate?: string;
   planningId?: string;
@@ -189,6 +191,7 @@ function buildLinkedProduction({
     updatedBy: "System User",
     updateTimestamp: timestamp,
     companyName: sourceItem.companyName || firstOptionalString(raw.company, raw.customerName, defaults?.companyName),
+    jobCardNo: firstOptionalString(parentJobNo, raw.jobCardNo, defaults?.jobCardNo),
     masterErp: masterErpValue,
     erpCode,
     shift: firstOptionalString(defaults?.shift),
@@ -475,12 +478,12 @@ export function ProductionForm() {
     const phpSetsPerBox = getSetsPerBox(phpItem);
     const plateSetsPerBox = getSetsPerBox(plateItem);
     const mainQty = Number(formData.qty || 0);
-    const mainJobNo = generateTransactionNo("PR", allJobRows, formData.date || todayStr);
+    const mainJobNo = generateTransactionNo(getProductionJobPrefix("FG"), allJobRows, formData.date || todayStr);
     const phpJobNo = phpItem && phpSetsPerBox && mainQty > 0
-      ? generateTransactionNo("PR", [{ id: "preview-fg", transactionNo: mainJobNo, date: formData.date || todayStr } as Production, ...allJobRows], formData.date || todayStr)
+      ? generateTransactionNo(getProductionJobPrefix("PHP"), [{ id: "preview-fg", transactionNo: mainJobNo, date: formData.date || todayStr } as Production, ...allJobRows], formData.date || todayStr)
       : "-";
     const plateJobNo = plateItem && plateSetsPerBox && mainQty > 0
-      ? generateTransactionNo("PR", [{ id: "preview-php", transactionNo: String(phpJobNo), date: formData.date || todayStr } as Production, { id: "preview-fg", transactionNo: mainJobNo, date: formData.date || todayStr } as Production, ...allJobRows], formData.date || todayStr)
+      ? generateTransactionNo(getProductionJobPrefix("PLATE"), [{ id: "preview-php", transactionNo: String(phpJobNo), date: formData.date || todayStr } as Production, { id: "preview-fg", transactionNo: mainJobNo, date: formData.date || todayStr } as Production, ...allJobRows], formData.date || todayStr)
       : "-";
 
     return {
@@ -840,7 +843,7 @@ export function ProductionForm() {
     try {
       const timestamp = new Date().toISOString();
       const nextPendingQty = pendingQty - qty;
-      const txnNo = generateTransactionNo("PR", allJobRows, formData.date);
+      const txnNo = generateTransactionNo(getProductionJobPrefix("FG"), allJobRows, formData.date);
 
       const linkedCreatedLabels: string[] = [];
       const linkedSkippedReasons: string[] = [];
@@ -866,7 +869,7 @@ export function ProductionForm() {
       const linkedPhpEntries: Production[] = [];
       const linkedPlateEntries: Production[] = [];
       if (linkedProductionPreview.canCreatePhp && linkedProductionPreview.phpItem) {
-        const phpTxnNo = generateTransactionNo("PR", [newEntry, ...allJobRows], formData.date);
+        const phpTxnNo = generateTransactionNo(getProductionJobPrefix("PHP"), [newEntry, ...allJobRows], formData.date);
         linkedPhpEntries.push(
           buildLinkedProduction({
             sourceItem: linkedProductionPreview.phpItem,
@@ -877,6 +880,7 @@ export function ProductionForm() {
             remarks: formData.remarks,
             timestamp,
             parentProductionId: newEntry.id,
+            parentJobNo: newEntry.transactionNo,
             scheduleId: selectedSchedule.id,
             scheduledDate: selectedSchedule.scheduledDate,
             planningId: selectedSchedule.id,
@@ -908,7 +912,7 @@ export function ProductionForm() {
       }
 
       if (linkedProductionPreview.canCreatePlate && linkedProductionPreview.plateItem) {
-        const plateTxnNo = generateTransactionNo("PR", [...linkedPhpEntries, newEntry, ...allJobRows], formData.date);
+        const plateTxnNo = generateTransactionNo(getProductionJobPrefix("PLATE"), [...linkedPhpEntries, newEntry, ...allJobRows], formData.date);
         linkedPlateEntries.push(
           buildLinkedProduction({
             sourceItem: linkedProductionPreview.plateItem,
@@ -919,6 +923,7 @@ export function ProductionForm() {
             remarks: formData.remarks,
             timestamp,
             parentProductionId: newEntry.id,
+            parentJobNo: newEntry.transactionNo,
             scheduleId: selectedSchedule.id,
             scheduledDate: selectedSchedule.scheduledDate,
             planningId: selectedSchedule.id,

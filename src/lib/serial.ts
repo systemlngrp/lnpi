@@ -12,6 +12,12 @@ export function getFinancialYear(dateStr?: string) {
   }
 }
 
+export function getProductionJobPrefix(source?: "FG" | "PHP" | "PLATE") {
+  if (source === "PHP") return "PHP";
+  if (source === "PLATE") return "PLATE";
+  return "PR";
+}
+
 export function generateTransactionNo(prefix: string, existingRecords: any[], dateStr: string = new Date().toISOString()) {
   const currentFy = getFinancialYear(dateStr);
   let maxNum = 0;

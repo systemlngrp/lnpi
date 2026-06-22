@@ -3,7 +3,7 @@ import { useData } from "../hooks/useData";
 import { Company, OrderItemSource, Production, Setting } from "../types";
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
-import { generateTransactionNo } from "../lib/serial";
+import { generateTransactionNo, getProductionJobPrefix } from "../lib/serial";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemDisplayName, getOrderItemSourceLabel } from "../lib/orderItems";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
@@ -147,7 +147,7 @@ export function StandaloneProductionForm({ source }: StandaloneProductionFormPro
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      const txnNo = generateTransactionNo("PR", allJobRows, formData.date);
+      const txnNo = generateTransactionNo(getProductionJobPrefix(source), allJobRows, formData.date);
       const newEntry: Production = {
         id: crypto.randomUUID(),
         transactionNo: txnNo,
