@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Company, Material, MaterialIn, Item, Supplier } from "../types";
+import { Company, Material, MaterialIn, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Download } from "lucide-react";
@@ -211,13 +211,16 @@ export function MrrApprovals() {
   };
 
   const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
+    if (line.serviceName?.trim()) return line.serviceName;
+
     const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
     if (isFgType) {
       const item = npdItems.find(i => i.id === line.itemId);
-      return item ? item.name : line.itemId;
+      return item ? item.name : (line.itemName?.trim() || line.itemId);
     }
+
     const material = materials.find(m => m.id === line.itemId);
-    if (!material) return line.itemId;
+    if (!material) return line.itemName?.trim() || line.itemId;
     const specs = [];
     if (material.size) specs.push(`Size: ${material.size} CM`);
     if (material.gsm) specs.push(`GSM: ${material.gsm}`);
