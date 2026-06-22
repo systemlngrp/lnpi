@@ -178,7 +178,7 @@ export function ProductionMaster() {
     });
 
     return result;
-  }, [productions, npdItems, processing, mandatoryMachinesByType]);
+  }, [productions, processing, mandatoryMachinesByType]);
 
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
