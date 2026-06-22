@@ -210,23 +210,31 @@ export function MrrApprovals() {
     doc.save(`MRR_${mrr.transactionNo}.pdf`);
   };
 
-  const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
-    if (line.serviceName?.trim()) return line.serviceName;
-
-    const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
-    if (isFgType) {
-      const item = npdItems.find(i => i.id === line.itemId);
-      return item ? item.name : (line.itemName?.trim() || line.itemId);
-    }
-
-    const material = materials.find(m => m.id === line.itemId);
-    if (!material) return line.itemName?.trim() || line.itemId;
+  const getMaterialSpecs = (material: Material) => {
     const specs = [];
     if (material.size) specs.push(`Size: ${material.size} CM`);
     if (material.gsm) specs.push(`GSM: ${material.gsm}`);
     if (material.bf) specs.push(`BF: ${material.bf}`);
     const specStr = specs.join(" X ");
     return specStr ? `${material.name} - ${specStr}` : material.name;
+  };
+
+  const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
+    if (line.serviceName?.trim()) return line.serviceName;
+
+    const npdItem = npdItems.find(i => i.id === line.itemId);
+    const material = materials.find(m => m.id === line.itemId);
+    const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
+
+    if (isFgType) {
+      if (npdItem) return npdItem.name;
+      if (material) return getMaterialSpecs(material);
+      return line.itemName?.trim() || line.itemId;
+    }
+
+    if (material) return getMaterialSpecs(material);
+    if (npdItem) return npdItem.name;
+    return line.itemName?.trim() || line.itemId;
   };
 
   return (

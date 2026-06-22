@@ -432,6 +432,7 @@ export function MaterialInForm() {
     const newLine = applySupplyTypeTaxRates({
       id: crypto.randomUUID(),
       itemId: currentItemId,
+      itemName: material.name,
       qty,
       uom: mrrType === "Reel" ? "KG" : material.uom || "",
       poId: selectedPo?.id,
