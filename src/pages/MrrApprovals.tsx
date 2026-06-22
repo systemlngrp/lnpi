@@ -299,7 +299,7 @@ export function MrrApprovals() {
                         </td>
                         <td className="px-4 py-4">{m.gateEntryNo || "-"}</td>
                         <td className="px-4 py-4">{m.transactionNo}</td>
-                        <td className="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{getSupplierName(m.supplierId)}</td>
+                        <td className="px-4 py-4 w-[170px] max-w-[170px] whitespace-normal break-words leading-snug">{getSupplierName(m.supplierId)}</td>
                         <td className="px-4 py-4 leading-relaxed">
                           {linesToDisplay.map((l, i) => (
                             <div key={i} className="mb-2 last:mb-0 border-b border-black/5 pb-1 last:border-0">
