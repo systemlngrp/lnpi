@@ -7,12 +7,15 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
 
+const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_job_master" : "plate_job_master";
+
 type StandaloneProductionMasterProps = {
   source: Extract<OrderItemSource, "PHP" | "PLATE">;
 };
 
 export function StandaloneProductionMaster({ source }: StandaloneProductionMasterProps) {
-  const [productions, setProductions] = useData<Production>("productions", []);
+  const [productions, setProductions] = useData<Production>(getJobMasterEntityName(source), []);
   const { itemsBySource } = useOrderItemCatalog();
   const items = itemsBySource[source] || [];
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,7 +23,6 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
   const filteredList = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return productions
-      .filter((production) => (production.itemSource || "FG") === source)
       .filter((production) => {
         if (!normalizedSearch) return true;
         const item = items.find((entry) => entry.id === String(production.itemId || "").trim());

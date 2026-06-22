@@ -8,6 +8,9 @@ import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemDisplayName, getOrderItemSourceLabel } from "../lib/orderItems";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 
+const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
+  source === "PHP" ? "php_job_master" : "plate_job_master";
+
 type StandaloneProductionFormProps = {
   source: Extract<OrderItemSource, "PHP" | "PLATE">;
 };
@@ -49,7 +52,10 @@ function ReadOnlyField({ label, value }: { label: string; value: string | number
 
 export function StandaloneProductionForm({ source }: StandaloneProductionFormProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [productions, setProductions] = useData<Production>("productions", []);
+  const [fgProductions] = useData<Production>("productions", []);
+  const [phpJobMaster] = useData<Production>(getJobMasterEntityName("PHP"), []);
+  const [plateJobMaster] = useData<Production>(getJobMasterEntityName("PLATE"), []);
+  const [productions, setProductions] = useData<Production>(getJobMasterEntityName(source), []);
   const [companies] = useData<Company>("companies", []);
   const [settings] = useData<Setting>("settings", []);
   const { itemsBySource } = useOrderItemCatalog();
@@ -61,6 +67,10 @@ export function StandaloneProductionForm({ source }: StandaloneProductionFormPro
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
   const [formData, setFormData] = useState(() => createInitialFormData(todayStr));
+  const allJobRows = useMemo(
+    () => [...fgProductions, ...phpJobMaster, ...plateJobMaster],
+    [fgProductions, phpJobMaster, plateJobMaster]
+  );
 
   useEffect(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -137,7 +147,7 @@ export function StandaloneProductionForm({ source }: StandaloneProductionFormPro
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      const txnNo = generateTransactionNo("PR", productions, formData.date);
+      const txnNo = generateTransactionNo("PR", allJobRows, formData.date);
       const newEntry: Production = {
         id: crypto.randomUUID(),
         transactionNo: txnNo,

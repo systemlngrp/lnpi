@@ -24,6 +24,9 @@ import { fetchNpdItems } from "../lib/npdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import type { OrderCatalogItem } from "../lib/orderItems";
 
+const getJobMasterEntityName = (source: "PHP" | "PLATE") =>
+  source === "PHP" ? "php_job_master" : "plate_job_master";
+
 const REEL_FORMULA_MODE = {
   breadthHeightBased: "breadth-height-based",
   typeBased: "type-based",
@@ -256,6 +259,8 @@ export function ProductionForm() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [productions, setProductions] = useData<Production>("productions", []);
+  const [phpJobMaster, setPhpJobMaster] = useData<Production>(getJobMasterEntityName("PHP"), []);
+  const [plateJobMaster, setPlateJobMaster] = useData<Production>(getJobMasterEntityName("PLATE"), []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -766,72 +771,76 @@ export function ProductionForm() {
     try {
       const timestamp = new Date().toISOString();
       const nextPendingQty = pendingQty - qty;
-      const txnNo = generateTransactionNo("PR", productions, formData.date);
+      const txnNo = generateTransactionNo("PR", allJobRows, formData.date);
 
       const linkedCreatedLabels: string[] = [];
       const linkedSkippedReasons: string[] = [];
+      const newEntry: Production = {
+        id: crypto.randomUUID(),
+        transactionNo: txnNo,
+        date: formData.date,
+        scheduleId: selectedSchedule.id,
+        itemId: selectedItem.id,
+        itemSource: "FG",
+        npdId: selectedItem.id,
+        qty,
+        uom: selectedItem.uom || "",
+        remarks: formData.remarks,
+        status: "Pending Consumption",
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+        ...Object.fromEntries(
+          Object.entries(formData).filter(([key]) => !["date", "qty", "remarks"].includes(key))
+        ),
+      } as Production;
 
-      await setProductions((prev) => {
-        const newEntry: Production = {
-          id: crypto.randomUUID(),
-          transactionNo: txnNo,
-          date: formData.date,
-          scheduleId: selectedSchedule.id,
-          itemId: selectedItem.id,
-          itemSource: "FG",
-          npdId: selectedItem.id,
-          qty,
-          uom: selectedItem.uom || "",
-          remarks: formData.remarks,
-          status: "Pending Consumption",
-          updatedBy: "System User",
-          updateTimestamp: timestamp,
-          ...Object.fromEntries(
-            Object.entries(formData).filter(([key]) => !["date", "qty", "remarks"].includes(key))
-          ),
-        } as Production;
+      const linkedPhpEntries: Production[] = [];
+      const linkedPlateEntries: Production[] = [];
+      if (linkedProductionPreview.canCreatePhp && linkedProductionPreview.phpItem) {
+        const phpTxnNo = generateTransactionNo("PR", [newEntry, ...allJobRows], formData.date);
+        linkedPhpEntries.push(
+          buildLinkedProduction({
+            sourceItem: linkedProductionPreview.phpItem,
+            itemSource: "PHP",
+            transactionNo: phpTxnNo,
+            date: formData.date,
+            qty: linkedProductionPreview.phpQty,
+            remarks: formData.remarks,
+            timestamp,
+            parentProductionId: newEntry.id,
+          })
+        );
+        linkedCreatedLabels.push(`PHP ${linkedProductionPreview.phpQty}`);
+      } else {
+        linkedSkippedReasons.push(linkedProductionPreview.phpStatus);
+      }
 
-        const linkedEntries: Production[] = [];
-        if (linkedProductionPreview.canCreatePhp && linkedProductionPreview.phpItem) {
-          const phpTxnNo = generateTransactionNo("PR", [newEntry, ...prev], formData.date);
-          linkedEntries.push(
-            buildLinkedProduction({
-              sourceItem: linkedProductionPreview.phpItem,
-              itemSource: "PHP",
-              transactionNo: phpTxnNo,
-              date: formData.date,
-              qty: linkedProductionPreview.phpQty,
-              remarks: formData.remarks,
-              timestamp,
-              parentProductionId: newEntry.id,
-            })
-          );
-          linkedCreatedLabels.push(`PHP ${linkedProductionPreview.phpQty}`);
-        } else {
-          linkedSkippedReasons.push(linkedProductionPreview.phpStatus);
-        }
+      if (linkedProductionPreview.canCreatePlate && linkedProductionPreview.plateItem) {
+        const plateTxnNo = generateTransactionNo("PR", [...linkedPhpEntries, newEntry, ...allJobRows], formData.date);
+        linkedPlateEntries.push(
+          buildLinkedProduction({
+            sourceItem: linkedProductionPreview.plateItem,
+            itemSource: "PLATE",
+            transactionNo: plateTxnNo,
+            date: formData.date,
+            qty: linkedProductionPreview.plateQty,
+            remarks: formData.remarks,
+            timestamp,
+            parentProductionId: newEntry.id,
+          })
+        );
+        linkedCreatedLabels.push(`Plate ${linkedProductionPreview.plateQty}`);
+      } else {
+        linkedSkippedReasons.push(linkedProductionPreview.plateStatus);
+      }
 
-        if (linkedProductionPreview.canCreatePlate && linkedProductionPreview.plateItem) {
-          const plateTxnNo = generateTransactionNo("PR", [...linkedEntries, newEntry, ...prev], formData.date);
-          linkedEntries.push(
-            buildLinkedProduction({
-              sourceItem: linkedProductionPreview.plateItem,
-              itemSource: "PLATE",
-              transactionNo: plateTxnNo,
-              date: formData.date,
-              qty: linkedProductionPreview.plateQty,
-              remarks: formData.remarks,
-              timestamp,
-              parentProductionId: newEntry.id,
-            })
-          );
-          linkedCreatedLabels.push(`Plate ${linkedProductionPreview.plateQty}`);
-        } else {
-          linkedSkippedReasons.push(linkedProductionPreview.plateStatus);
-        }
-
-        return [newEntry, ...linkedEntries, ...prev];
-      });
+      await setProductions((prev) => [newEntry, ...prev]);
+      if (linkedPhpEntries.length > 0) {
+        await setPhpJobMaster((prev) => [...linkedPhpEntries, ...prev]);
+      }
+      if (linkedPlateEntries.length > 0) {
+        await setPlateJobMaster((prev) => [...linkedPlateEntries, ...prev]);
+      }
 
       setLinkedJobNotice(
         linkedCreatedLabels.length > 0

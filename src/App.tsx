@@ -50,8 +50,6 @@ import { MrrApprovals } from "./pages/MrrApprovals";
 import { MaterialInMaster } from "./pages/MaterialInMaster";
 import { MaterialInItemMaster } from "./pages/MaterialInItemMaster";
 import { ProductionForm } from "./pages/ProductionForm";
-import { PhpProductionForm } from "./pages/PhpProductionForm";
-import { PlateProductionForm } from "./pages/PlateProductionForm";
 import { PendingProduction } from "./pages/PendingProduction";
 import { ProductionPendingTally } from "./pages/ProductionPendingTally";
 import { ProductionMaster } from "./pages/ProductionMaster";
@@ -220,8 +218,6 @@ export default function App() {
           
           {/* Production */}
           <Route path="production/form" element={<ProductionForm />} />
-          <Route path="production/php/form" element={<PhpProductionForm />} />
-          <Route path="production/plate/form" element={<PlateProductionForm />} />
           <Route path="production/pending" element={<PendingProduction />} />
           <Route path="production/pending-npd" element={<PendingNpd />} />
           <Route path="production/upcoming" element={<UpcomingScheduledOrders />} />
