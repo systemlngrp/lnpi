@@ -45,6 +45,32 @@ function formatNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed.toLocaleString() : "-";
 }
 
+function toOptionalNumber(value: unknown) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && String(value ?? "").trim() !== "" ? numberValue : undefined;
+}
+
+function toOptionalString(value: unknown) {
+  const stringValue = String(value || "").trim();
+  return stringValue || undefined;
+}
+
+function firstOptionalNumber(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = toOptionalNumber(value);
+    if (normalized !== undefined) return normalized;
+  }
+  return undefined;
+}
+
+function firstOptionalString(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = toOptionalString(value);
+    if (normalized !== undefined) return normalized;
+  }
+  return undefined;
+}
+
 function normalizeErpCode(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
@@ -182,6 +208,7 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
           npdId: fgItem.id,
           parentProductionId: selectedJob.id,
           qty: nextPlannedQty,
+          requiredQty: nextPlannedQty,
           plannedQty: nextPlannedQty,
           uom: fgItem.uom || String(fgRaw.uom || ""),
           remarks: String(selectedJob.remarks || ""),
@@ -189,21 +216,29 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
           updatedBy: "System User",
           updateTimestamp: timestamp,
           jobCardNo: selectedJob.transactionNo,
-          companyName: selectedJob.companyName || fgItem.companyName || undefined,
-          masterErp: selectedJob.masterErp,
-          erpCode: String(fgItem.erp || fgRaw.erpItemCode || selectedJob.erpCode || "") || undefined,
-          rate: Number.isFinite(Number(selectedJob.rate)) ? Number(selectedJob.rate) : fgItem.rate,
-          noOfParts: Number.isFinite(Number(selectedJob.noOfParts)) ? Number(selectedJob.noOfParts) : undefined,
-          ups: Number.isFinite(Number(selectedJob.ups)) ? Number(selectedJob.ups) : undefined,
-          length: Number.isFinite(Number(selectedJob.length)) ? Number(selectedJob.length) : undefined,
-          breadth: Number.isFinite(Number(selectedJob.breadth)) ? Number(selectedJob.breadth) : undefined,
-          height: Number.isFinite(Number(selectedJob.height)) ? Number(selectedJob.height) : undefined,
-          ply: Number.isFinite(Number(selectedJob.ply)) ? Number(selectedJob.ply) : undefined,
-          flute: String(selectedJob.flute || "") || undefined,
-          fluteType: String(selectedJob.fluteType || selectedJob.flute || "") || undefined,
-          gsm: Number.isFinite(Number(selectedJob.gsm)) ? Number(selectedJob.gsm) : undefined,
-          printingColor: String(selectedJob.printingColor || "") || undefined,
-          plateWeight: Number.isFinite(Number(selectedJob.plateWeight)) ? Number(selectedJob.plateWeight) : undefined,
+          companyName: firstOptionalString(selectedJob.companyName, fgItem.companyName, fgRaw.companyName, fgRaw.customerName),
+          category: firstOptionalString(selectedJob.category, fgRaw.category),
+          masterErp: firstOptionalString(selectedJob.masterErp, fgRaw.masterItemNameErpCode),
+          erpCode: firstOptionalString(selectedJob.erpCode, fgItem.erp, fgRaw.erpItemCode),
+          rate: firstOptionalNumber(selectedJob.rate, fgItem.rate, fgRaw.rate),
+          jobType: firstOptionalString(fgRaw.boxType, fgRaw.jobType, selectedJob.jobType),
+          noOfParts: firstOptionalNumber(selectedJob.noOfParts, fgRaw.noOfParts, fgRaw.part),
+          ups: firstOptionalNumber(selectedJob.ups, fgRaw.ups, fgRaw.noOfUpsForRapc, fgRaw.noOfUpsForCutting),
+          length: firstOptionalNumber(selectedJob.length, fgRaw.length),
+          breadth: firstOptionalNumber(selectedJob.breadth, fgRaw.breadth),
+          height: firstOptionalNumber(selectedJob.height, fgRaw.height),
+          ply: firstOptionalNumber(selectedJob.ply, fgRaw.ply, fgRaw.noOfPly),
+          flute: firstOptionalString(selectedJob.flute, fgRaw.flute, fgRaw.fluteType),
+          fluteType: firstOptionalString(selectedJob.fluteType, selectedJob.flute, fgRaw.fluteType, fgRaw.flute),
+          l1: firstOptionalNumber(selectedJob.l1, fgRaw.l1),
+          f1: firstOptionalNumber(selectedJob.f1, fgRaw.f1),
+          l2: firstOptionalNumber(selectedJob.l2, fgRaw.l2),
+          f2: firstOptionalNumber(selectedJob.f2, fgRaw.f2),
+          l3: firstOptionalNumber(selectedJob.l3, fgRaw.l3),
+          gsm: firstOptionalNumber(selectedJob.gsm, fgRaw.gsm, fgRaw.boardGsmReq, fgRaw.calculatedBGsm),
+          boardGsmReq: firstOptionalNumber(selectedJob.boardGsmReq, fgRaw.boardGsmReq, fgRaw.calculatedBGsm, fgRaw.gsm),
+          printingColor: firstOptionalString(selectedJob.printingColor, fgRaw.printingColor, fgRaw.printingColour1),
+          plateWeight: firstOptionalNumber(selectedJob.plateWeight, fgRaw.plateWeight, fgRaw.totalWeightGrams),
         };
         await setProductions((prev) => [fgEntry, ...prev]);
         fgCreationMessage = ` FG production job ${fgTxnNo} created.`;
