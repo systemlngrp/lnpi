@@ -2862,6 +2862,7 @@ async function initDb(retries = 5) {
           \`date\` VARCHAR(50) NOT NULL,
           \`parentProductionId\` VARCHAR(36),
           \`scheduleId\` VARCHAR(36),
+          \`itemSource\` VARCHAR(20) NOT NULL DEFAULT 'FG',
           \`itemId\` VARCHAR(255) NOT NULL,
           \`npdId\` VARCHAR(255),
           \`masterErp\` VARCHAR(255),
@@ -2923,6 +2924,7 @@ async function initDb(retries = 5) {
           \`date\` VARCHAR(50) NOT NULL,
           \`parentProductionId\` VARCHAR(36),
           \`scheduleId\` VARCHAR(36),
+          \`itemSource\` VARCHAR(20) NOT NULL DEFAULT 'FG',
           \`itemId\` VARCHAR(255) NOT NULL,
           \`npdId\` VARCHAR(255),
           \`masterErp\` VARCHAR(255),
@@ -3759,6 +3761,7 @@ async function initDb(retries = 5) {
         { table: "trucks", column: "mobileNo", type: "VARCHAR(20)" },
         { table: "trucks", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "trucks", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "php_job_master", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "php_job_master", column: "masterErp", type: "VARCHAR(255)" },
         { table: "php_job_master", column: "shift", type: "VARCHAR(50)" },
         { table: "php_job_master", column: "category", type: "VARCHAR(255)" },
@@ -3782,6 +3785,7 @@ async function initDb(retries = 5) {
         { table: "php_job_master", column: "brustingStrengthReq", type: "DECIMAL(15,2)" },
         { table: "php_job_master", column: "printingColor", type: "VARCHAR(255)" },
         { table: "php_job_master", column: "weightPerPcSetReq", type: "DECIMAL(15,5)" },
+        { table: "plate_job_master", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "plate_job_master", column: "masterErp", type: "VARCHAR(255)" },
         { table: "plate_job_master", column: "shift", type: "VARCHAR(50)" },
         { table: "plate_job_master", column: "category", type: "VARCHAR(255)" },
@@ -4625,9 +4629,9 @@ const createHandlers = (tableName) => {
             }
           }
         }
-        if (tableName === "productions") {
+        if (["productions", "php_job_master", "plate_job_master"].includes(tableName)) {
           const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
-          await ensureColumnExists(db, schemaName, "productions", "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
+          await ensureColumnExists(db, schemaName, tableName, "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
         }
         const keys = Object.keys(data);
         const values = Object.values(data).map(
