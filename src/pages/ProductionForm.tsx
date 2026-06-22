@@ -98,6 +98,22 @@ function toOptionalString(value: unknown) {
   return stringValue || undefined;
 }
 
+function firstOptionalNumber(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = toOptionalNumber(value);
+    if (normalized !== undefined) return normalized;
+  }
+  return undefined;
+}
+
+function firstOptionalString(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = toOptionalString(value);
+    if (normalized !== undefined) return normalized;
+  }
+  return undefined;
+}
+
 function findItemByErp(items: OrderCatalogItem[], erpCode: string) {
   const normalizedErp = normalizeErpCode(erpCode);
   if (!normalizedErp) return undefined;
@@ -124,6 +140,11 @@ function buildLinkedProduction({
   remarks,
   timestamp,
   parentProductionId,
+  scheduleId,
+  scheduledDate,
+  planningId,
+  masterErp,
+  defaults,
 }: {
   sourceItem: OrderCatalogItem;
   itemSource: "PHP" | "PLATE";
@@ -133,34 +154,71 @@ function buildLinkedProduction({
   remarks: string;
   timestamp: string;
   parentProductionId: string;
+  scheduleId?: string;
+  scheduledDate?: string;
+  planningId?: string;
+  masterErp?: string;
+  defaults?: Partial<Production>;
 }): Production {
   const raw = sourceItem.raw || {};
+  const setsPerBox = firstOptionalNumber(raw.numberOfSetsPerBox, defaults?.setsPerBox);
+  const erpCode = firstOptionalString(raw.erpItemCode, sourceItem.erp, defaults?.erpCode);
+  const masterErpValue = firstOptionalString(raw.masterItemNameErpCode, masterErp, defaults?.masterErp);
+  const printingColor = firstOptionalString(
+    defaults?.printingColor,
+    joinPrintingColors(raw.printingColour1, raw.printingColour2),
+    joinPrintingColors(raw.color1, raw.color2)
+  );
 
   return {
     id: crypto.randomUUID(),
     transactionNo,
     date,
+    scheduleId,
+    planningId: planningId || scheduleId,
+    scheduledDate,
     itemId: sourceItem.id,
     itemSource,
     parentProductionId,
     qty,
+    requiredQty: qty,
+    plannedQty: qty,
     uom: sourceItem.uom || toOptionalString(raw.uom) || "",
     remarks,
     status: "Pending Consumption",
     updatedBy: "System User",
     updateTimestamp: timestamp,
-    rate: sourceItem.rate ?? toOptionalNumber(raw.rate),
-    companyName: sourceItem.companyName || toOptionalString(raw.company) || toOptionalString(raw.customerName),
-    erpCode: sourceItem.erp || toOptionalString(raw.erpItemCode) || toOptionalString(raw.masterItemNameErpCode),
-    noOfParts: toOptionalNumber(raw.noOfParts) || toOptionalNumber(raw.numberOfSetsPerBox),
-    ups: toOptionalNumber(raw.ups) || toOptionalNumber(raw.noOfUpsForRapc) || toOptionalNumber(raw.noOfUpsForCutting),
-    length: toOptionalNumber(raw.length),
-    breadth: toOptionalNumber(raw.breadth),
-    height: toOptionalNumber(raw.height),
-    ply: toOptionalNumber(raw.ply) || toOptionalNumber(raw.noOfPly),
-    flute: toOptionalString(raw.flute) || toOptionalString(raw.fluteType),
-    gsm: toOptionalNumber(raw.gsm) || toOptionalNumber(raw.boardGsmReq) || toOptionalNumber(raw.calculatedBGsm),
-    plateWeight: toOptionalNumber(raw.plateWeight) || toOptionalNumber(raw.weightPerPcReq) || toOptionalNumber(raw.totalWeightGrams),
+    companyName: sourceItem.companyName || firstOptionalString(raw.company, raw.customerName, defaults?.companyName),
+    masterErp: masterErpValue,
+    erpCode,
+    shift: firstOptionalString(defaults?.shift),
+    category: firstOptionalString(raw.category, defaults?.category),
+    setsPerBox,
+    rate: firstOptionalNumber(raw.rate, sourceItem.rate, defaults?.rate),
+    jobType: firstOptionalString(raw.jobType, raw.boxType, sourceItem.boxType, itemSource),
+    methodology: firstOptionalString(raw.methodology, defaults?.methodology),
+    sequence: firstOptionalString(raw.sequence, defaults?.sequence),
+    jobCompletionTimeOutput: firstOptionalString(raw.jobCompletionTimeOutput, raw.output, defaults?.jobCompletionTimeOutput),
+    noOfParts: firstOptionalNumber(raw.noOfParts, raw.numberOfSetsPerBox, defaults?.noOfParts),
+    ups: firstOptionalNumber(raw.ups, raw.noOfUpsForRapc, raw.noOfUpsForCutting, defaults?.ups),
+    length: firstOptionalNumber(raw.length, defaults?.length),
+    breadth: firstOptionalNumber(raw.breadth, defaults?.breadth),
+    height: firstOptionalNumber(raw.height, defaults?.height),
+    ply: firstOptionalNumber(raw.ply, raw.noOfPly, defaults?.ply),
+    noOfHolesInPhp: firstOptionalNumber(raw.numberOfHolesInPhp, defaults?.noOfHolesInPhp),
+    flute: firstOptionalString(raw.flute, raw.fluteType, defaults?.flute),
+    fluteType: firstOptionalString(raw.fluteType, raw.flute, defaults?.fluteType, defaults?.flute),
+    l1: firstOptionalNumber(raw.l1, defaults?.l1),
+    f1: firstOptionalNumber(raw.f1, defaults?.f1),
+    l2: firstOptionalNumber(raw.l2, defaults?.l2),
+    f2: firstOptionalNumber(raw.f2, defaults?.f2),
+    l3: firstOptionalNumber(raw.l3, defaults?.l3),
+    gsm: firstOptionalNumber(raw.gsm, raw.boardGsmReq, raw.calculatedBGsm, defaults?.gsm),
+    boardGsmReq: firstOptionalNumber(raw.boardGsmReq, raw.calculatedBGsm, defaults?.boardGsmReq, defaults?.gsm),
+    brustingStrengthReq: firstOptionalNumber(raw.brustingStrengthReq, defaults?.brustingStrengthReq),
+    printingColor,
+    weightPerPcSetReq: firstOptionalNumber(raw.weightPerPcReq, raw.calculatedWeightPerPcReq, raw.totalWeightGrams, defaults?.weightPerPcSetReq),
+    plateWeight: firstOptionalNumber(raw.plateWeight, raw.weightPerPcReq, raw.totalWeightGrams, defaults?.plateWeight),
   };
 }
 
@@ -808,6 +866,29 @@ export function ProductionForm() {
             remarks: formData.remarks,
             timestamp,
             parentProductionId: newEntry.id,
+            scheduleId: selectedSchedule.id,
+            scheduledDate: selectedSchedule.scheduledDate,
+            planningId: selectedSchedule.id,
+            masterErp: selectedErp,
+            defaults: {
+              shift: "",
+              category: (selectedItem as any)?.category,
+              companyName: selectedCompany?.name || "",
+              masterErp: selectedErp,
+              l1: formData.l1 === "" ? undefined : Number(formData.l1),
+              f1: formData.f1 === "" ? undefined : Number(formData.f1),
+              l2: formData.l2 === "" ? undefined : Number(formData.l2),
+              f2: formData.f2 === "" ? undefined : Number(formData.f2),
+              l3: formData.l3 === "" ? undefined : Number(formData.l3),
+              length: formData.length === "" ? undefined : Number(formData.length),
+              breadth: formData.breadth === "" ? undefined : Number(formData.breadth),
+              height: formData.height === "" ? undefined : Number(formData.height),
+              ply: formData.ply === "" ? undefined : Number(formData.ply),
+              flute: String(formData.flute || ""),
+              gsm: formData.gsm === "" ? undefined : Number(formData.gsm),
+              boardGsmReq: formData.gsm === "" ? undefined : Number(formData.gsm),
+              printingColor: String(formData.printingColor || ""),
+            },
           })
         );
         linkedCreatedLabels.push(`PHP ${linkedProductionPreview.phpQty}`);
@@ -827,6 +908,29 @@ export function ProductionForm() {
             remarks: formData.remarks,
             timestamp,
             parentProductionId: newEntry.id,
+            scheduleId: selectedSchedule.id,
+            scheduledDate: selectedSchedule.scheduledDate,
+            planningId: selectedSchedule.id,
+            masterErp: selectedErp,
+            defaults: {
+              shift: "",
+              category: (selectedItem as any)?.category,
+              companyName: selectedCompany?.name || "",
+              masterErp: selectedErp,
+              l1: formData.l1 === "" ? undefined : Number(formData.l1),
+              f1: formData.f1 === "" ? undefined : Number(formData.f1),
+              l2: formData.l2 === "" ? undefined : Number(formData.l2),
+              f2: formData.f2 === "" ? undefined : Number(formData.f2),
+              l3: formData.l3 === "" ? undefined : Number(formData.l3),
+              length: formData.length === "" ? undefined : Number(formData.length),
+              breadth: formData.breadth === "" ? undefined : Number(formData.breadth),
+              height: formData.height === "" ? undefined : Number(formData.height),
+              ply: formData.ply === "" ? undefined : Number(formData.ply),
+              flute: String(formData.flute || ""),
+              gsm: formData.gsm === "" ? undefined : Number(formData.gsm),
+              boardGsmReq: formData.gsm === "" ? undefined : Number(formData.gsm),
+              printingColor: String(formData.printingColor || ""),
+            },
           })
         );
         linkedCreatedLabels.push(`Plate ${linkedProductionPreview.plateQty}`);

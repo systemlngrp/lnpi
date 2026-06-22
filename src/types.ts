@@ -536,8 +536,22 @@ export interface Production {
   
   // New production fields
   jobCardNo?: string | number;
+  shift?: string;
+  category?: string;
+  masterErp?: string | number;
   erpCode?: string | number;
+  setsPerBox?: number;
   noOfParts?: number;
+  requiredQty?: number;
+  planningId?: string;
+  scheduledDate?: string;
+  plannedQty?: number;
+  methodology?: string;
+  jobType?: string;
+  sequence?: string | number;
+  jobCompletionTimeOutput?: string | number;
+  noOfHolesInPhp?: number;
+  fluteType?: string;
   ups?: number;
   length?: number;
   breadth?: number;
@@ -557,9 +571,12 @@ export interface Production {
   f2?: number;
   l3?: number;
   gsm?: number;
+  boardGsmReq?: number;
+  brustingStrengthReq?: number;
   color1?: string;
   color2?: string;
   printingColor?: string;
+  weightPerPcSetReq?: number;
   paperRequiredNos?: number;
   topPaperWeightKg?: number;
   linerWeightKg?: number;
