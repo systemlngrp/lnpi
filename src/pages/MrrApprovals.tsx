@@ -53,7 +53,7 @@ export function MrrApprovals() {
       .filter(m => m.status === activeStage)
       .filter(m => {
         const supplierName = getSupplierName(m.supplierId);
-        const searchStr = `${m.transactionNo} ${m.gateEntryNo || ""} ${supplierName} ${m.invoiceNo}`.toLowerCase();
+        const searchStr = `${m.transactionNo} ${m.gateEntryNo || ""} ${supplierName} ${m.invoiceNo} ${m.mrrType || ""}`.toLowerCase();
         return searchStr.includes(searchTerm.toLowerCase());
       })
       .sort((a, b) => new Date(b.updateTimestamp || b.timestamp).getTime() - new Date(a.updateTimestamp || a.timestamp).getTime());
@@ -261,6 +261,7 @@ export function MrrApprovals() {
                   <th className="px-4 py-3 text-left">GE No</th>
                   <th className="px-4 py-3 text-left">MRR No</th>
                   <th className="px-4 py-3 text-left">Supplier/Customer</th>
+                  <th className="px-4 py-3 text-left">MRR Type</th>
                   <th className="px-4 py-3 text-left min-w-[300px]">Items</th>
                   <th className="px-4 py-3 text-right">MRR Qty</th>
                   <th className="px-4 py-3 text-right">Inv Qty</th>
@@ -274,7 +275,7 @@ export function MrrApprovals() {
               <tbody className="divide-y divide-black bg-white">
                 {filteredList.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
+                    <td colSpan={13} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
                       No records found in this stage
                     </td>
                   </tr>
@@ -300,6 +301,7 @@ export function MrrApprovals() {
                         <td className="px-4 py-4">{m.gateEntryNo || "-"}</td>
                         <td className="px-4 py-4">{m.transactionNo}</td>
                         <td className="px-4 py-4 w-[170px] max-w-[170px] whitespace-normal break-words leading-snug">{getSupplierName(m.supplierId)}</td>
+                        <td className="px-4 py-4 whitespace-nowrap font-bold">{m.mrrType || "-"}</td>
                         <td className="px-4 py-4 leading-relaxed">
                           {linesToDisplay.map((l, i) => (
                             <div key={i} className="mb-2 last:mb-0 border-b border-black/5 pb-1 last:border-0">

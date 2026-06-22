@@ -21,6 +21,9 @@ import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
 import { getAvailableReelPackingSlips, getNonReelAvailableQty } from "../lib/materialMovement";
 import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
+import { useNpdItems } from "../hooks/useNpdItems";
+
+type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean };
 
 function normalizeDate(value?: string | null) {
   return String(value || "").slice(0, 10);
@@ -56,6 +59,7 @@ export function MaterialIssueForm() {
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
+  const npdItems = useNpdItems();
 
   const requestedDate = normalizeDate(searchParams.get("date"));
   const lockDate = searchParams.get("lockDate") === "1";
@@ -102,9 +106,35 @@ export function MaterialIssueForm() {
     [productions]
   );
 
+  const issueMaterials = useMemo<IssueMaterialOption[]>(() => {
+    const existingMaterialIds = new Set(materials.map((material) => String(material.id)));
+    const fgItems = new Map<string, IssueMaterialOption>();
+
+    materialIn.forEach((receipt) => {
+      if (receipt.mrrType !== "FG Purchase" && receipt.mrrType !== "Rejection In") return;
+      (receipt.lines || []).forEach((line) => {
+        const itemId = String(line.itemId || line.npdId || "").trim();
+        if (!itemId || existingMaterialIds.has(itemId) || fgItems.has(itemId)) return;
+        const item = npdItems.find((entry) => entry.id === itemId);
+        if (!item) return;
+
+        fgItems.set(itemId, {
+          id: item.id,
+          type: "Other",
+          erpCode: item.erp,
+          name: item.name,
+          uom: line.uom || item.uom || "PCS",
+          active: "Yes",
+          isFgPurchaseItem: true,
+        });
+      });
+    });
+
+    return [...materials, ...Array.from(fgItems.values())];
+  }, [materialIn, materials, npdItems]);
   const materialOptions = useMemo(
     () =>
-      materials
+      issueMaterials
         .filter((material) => material.active !== "No")
         .filter((material) => (isWithoutJobIssue(issueType) ? material.type !== "Reel" : true))
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -112,7 +142,7 @@ export function MaterialIssueForm() {
           value: material.id,
           label: `${material.name}${material.erpCode ? ` (${material.erpCode})` : ""}`,
         })),
-    [issueType, materials]
+    [issueMaterials, issueType]
   );
 
   const issueTypeOptions = [
@@ -122,7 +152,7 @@ export function MaterialIssueForm() {
 
   const selectedProduction = productions.find((production) => production.id === productionId);
 
-  const getMaterial = (materialId: string) => materials.find((material) => material.id === materialId);
+  const getMaterial = (materialId: string) => issueMaterials.find((material) => material.id === materialId);
 
   const handleAddLine = () => {
     if (!currentMaterialId) return;
@@ -261,7 +291,6 @@ export function MaterialIssueForm() {
 
         if (line.isReel) {
           const reelIds = selectedReels[line.id] || [];
-          getLineAvailableReels(line.materialId)
           getAvailableReelPackingSlips(line.materialId, packingSlips, materialIssueReelLines, materialReturnReelLines)
             .filter((slip) => reelIds.includes(slip.id))
             .forEach((slip) => {
