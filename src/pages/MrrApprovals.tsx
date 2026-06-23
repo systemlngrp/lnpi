@@ -347,7 +347,7 @@ export function MrrApprovals() {
                         <td className="px-4 py-4 leading-relaxed">
                           {linesToDisplay.map((l, i) => (
                             <div key={i} className="mb-2 last:mb-0 border-b border-black/5 pb-1 last:border-0">
-                              <div className="font-bold lowercase first-letter:uppercase">{getItemSpecs(l, m.mrrType)}</div>
+                              <div className="font-bold">{getItemSpecs(l, m.mrrType)}</div>
                             </div>
                           ))}
                         </td>
