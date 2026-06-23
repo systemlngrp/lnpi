@@ -1,9 +1,10 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, Loader2, Trash2 } from "lucide-react";
 import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import { Company, GateEntry, GateEntryPhoto, GatePass, Supplier } from "../types";
+import { getPendingQtyForGatePass, isReturnableGatePass } from "../lib/gatePassState";
 
 const PHOTO_SLOTS = 8;
 
@@ -34,6 +35,7 @@ export function GateEntryForm() {
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
   const [gatePasses] = useData<GatePass>("gate_passes", []);
+  const [materialIn] = useData("material-in", []);
 
   const sourceGatePass = gatePasses.find((gatePass) => gatePass.id === sourceGatePassId) || null;
 
@@ -46,16 +48,38 @@ export function GateEntryForm() {
   const [photoSlots, setPhotoSlots] = useState<PhotoSlot[]>(createInitialSlots);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const eligibleReturnableRecipientIds = useMemo(() => {
+    return new Set(
+      gatePasses
+        .filter((gatePass) => isReturnableGatePass(gatePass))
+        .filter((gatePass) => !gatePass.clearOffReason || !gatePass.clearedOffAt)
+        .filter((gatePass) => getPendingQtyForGatePass(gatePass, materialIn) > 0)
+        .map((gatePass) => String(gatePass.recipientId || "").trim())
+        .filter(Boolean)
+    );
+  }, [gatePasses, materialIn]);
+
   const supplierOptions = useMemo(() => {
     const combined = [
       ...suppliers.filter((s) => s.active !== "No").map((s) => ({ value: s.id, label: s.name })),
       ...companies.map((c) => ({ value: c.id, label: c.name })),
     ];
-    return combined.sort((a, b) => a.label.localeCompare(b.label));
-  }, [suppliers, companies]);
+    const filtered =
+      purpose === "Returnable Receipt"
+        ? combined.filter((option) => eligibleReturnableRecipientIds.has(option.value))
+        : combined;
+    return filtered.sort((a, b) => a.label.localeCompare(b.label));
+  }, [suppliers, companies, purpose, eligibleReturnableRecipientIds]);
 
   const hasUploadingPhoto = photoSlots.some((slot) => slot.uploading);
   const purposeLocked = Boolean(sourceGatePassId);
+
+  useEffect(() => {
+    if (purpose !== "Returnable Receipt") return;
+    if (!supplierId) return;
+    if (eligibleReturnableRecipientIds.has(supplierId)) return;
+    setSupplierId(sourceGatePass?.recipientId || "");
+  }, [purpose, supplierId, eligibleReturnableRecipientIds, sourceGatePass?.recipientId]);
 
   const resetForm = () => {
     setDate(toInputDate());
@@ -195,7 +219,17 @@ export function GateEntryForm() {
             </Field>
 
             <Field label="Supplier / Customer Name" required>
-              <Select value={supplierId} onChange={setSupplierId} options={supplierOptions} placeholder="Search or Select Supplier / Customer..." required />
+              <Select
+                value={supplierId}
+                onChange={setSupplierId}
+                options={supplierOptions}
+                placeholder={
+                  purpose === "Returnable Receipt"
+                    ? "Select party with pending returnable gate pass..."
+                    : "Search or Select Supplier / Customer..."
+                }
+                required
+              />
             </Field>
 
             <Field label="Invoice No" required>
@@ -282,3 +316,5 @@ function Field({
     </div>
   );
 }
+
+
