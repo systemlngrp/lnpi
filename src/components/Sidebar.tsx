@@ -189,6 +189,8 @@ export const NAVIGATION: NavGroup[] = [
     section: "PHP / Plate Process",
     color: "bg-emerald-800",
     items: [
+      { name: "Pending PHP Planning", href: "/production/php/pending-planning", icon: ClipboardList },
+      { name: "Pending Plate Planning", href: "/production/plate/pending-planning", icon: ClipboardList },
       { name: "Scheduling", href: "/production/php-plate/scheduling", icon: ClipboardList },
       { name: "Sequencing", href: "/production/php-plate/pending-sequencing", icon: Activity },
       { name: "Production", href: "/production/php-plate/pending-production", icon: Hammer },

@@ -88,6 +88,7 @@ import { OrdersMaster } from "./pages/OrdersMaster";
 import { ScheduledOrdersMaster } from "./pages/ScheduledOrdersMaster";
 import { UpcomingScheduledOrders } from "./pages/UpcomingScheduledOrders";
 import { PendingDispatchPlanning } from "./pages/PendingDispatchPlanning";
+import { PendingPhpPlanning, PendingPlatePlanning } from "./pages/PendingLinkedProductionPlanning";
 import { DispatchPlansMaster } from "./pages/DispatchPlansMaster";
 import { PendingLoading } from "./pages/PendingLoading";
 import { LoadingMaster } from "./pages/LoadingMaster";
@@ -237,6 +238,7 @@ export default function App() {
           <Route path="production/pending-machine-processing" element={<MachinePendingProcessing />} />
           <Route path="production/master" element={<ProductionMaster />} />
           <Route path="production/php/master" element={<PhpProductionMaster />} />
+          <Route path="production/php/pending-planning" element={<PendingPhpPlanning />} />
           <Route path="production/php/scheduling" element={<PhpProductionScheduling />} />
           <Route path="production/php/pending-sequencing" element={<PhpProductionSequencing />} />
           <Route path="production/php/pending-production" element={<PhpProductionExecution />} />
@@ -244,6 +246,7 @@ export default function App() {
           <Route path="production/php-plate/pending-sequencing" element={<PhpPlateProductionSequencing />} />
           <Route path="production/php-plate/pending-production" element={<PhpPlateProductionExecution />} />
           <Route path="production/plate/master" element={<PlateProductionMaster />} />
+          <Route path="production/plate/pending-planning" element={<PendingPlatePlanning />} />
           <Route path="production/plate/scheduling" element={<PlateProductionScheduling />} />
           <Route path="production/plate/pending-sequencing" element={<PlateProductionSequencing />} />
           <Route path="production/plate/pending-production" element={<PlateProductionExecution />} />

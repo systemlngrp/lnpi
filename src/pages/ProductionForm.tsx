@@ -22,7 +22,6 @@ import { CircleHelp } from "lucide-react";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { fetchNpdItems } from "../lib/npdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
-import type { OrderCatalogItem } from "../lib/orderItems";
 
 const getJobMasterEntityName = (source: "PHP" | "PLATE") =>
   source === "PHP" ? "php_job_master" : "plate_job_master";
@@ -84,142 +83,6 @@ function round2(value: number) {
 function roundUpWhole(value: number) {
   return Math.ceil(value);
 }
-function normalizeErpCode(value: unknown) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function toOptionalNumber(value: unknown) {
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
-}
-
-function toOptionalString(value: unknown) {
-  const stringValue = String(value || "").trim();
-  return stringValue || undefined;
-}
-
-function firstOptionalNumber(...values: unknown[]) {
-  for (const value of values) {
-    const normalized = toOptionalNumber(value);
-    if (normalized !== undefined) return normalized;
-  }
-  return undefined;
-}
-
-function firstOptionalString(...values: unknown[]) {
-  for (const value of values) {
-    const normalized = toOptionalString(value);
-    if (normalized !== undefined) return normalized;
-  }
-  return undefined;
-}
-
-function findItemByErp(items: OrderCatalogItem[], erpCode: string) {
-  const normalizedErp = normalizeErpCode(erpCode);
-  if (!normalizedErp) return undefined;
-
-  return items.find((item) => {
-    const raw = item.raw || {};
-    return [item.erp, raw.erpItemCode, raw.masterItemNameErpCode].some(
-      (value) => normalizeErpCode(value) === normalizedErp
-    );
-  });
-}
-
-function getSetsPerBox(item?: OrderCatalogItem) {
-  const raw = item?.raw || {};
-  return toOptionalNumber(raw.numberOfSetsPerBox);
-}
-
-function buildLinkedProduction({
-  sourceItem,
-  itemSource,
-  transactionNo,
-  date,
-  qty,
-  remarks,
-  timestamp,
-  parentProductionId,
-  parentJobNo,
-  scheduleId,
-  scheduledDate,
-  planningId,
-  defaults,
-}: {
-  sourceItem: OrderCatalogItem;
-  itemSource: "PHP" | "PLATE";
-  transactionNo: string;
-  date: string;
-  qty: number;
-  remarks: string;
-  timestamp: string;
-  parentProductionId: string;
-  parentJobNo?: string;
-  scheduleId?: string;
-  scheduledDate?: string;
-  planningId?: string;
-  defaults?: Partial<Production>;
-}): Production {
-  const raw = sourceItem.raw || {};
-  const setsPerBox = firstOptionalNumber(raw.numberOfSetsPerBox, defaults?.setsPerBox);
-  const erpCode = firstOptionalString(raw.erpItemCode, sourceItem.erp, defaults?.erpCode);
-  const printingColor = firstOptionalString(
-    defaults?.printingColor,
-    joinPrintingColors(raw.printingColour1, raw.printingColour2),
-    joinPrintingColors(raw.color1, raw.color2)
-  );
-
-  return {
-    id: crypto.randomUUID(),
-    transactionNo,
-    date,
-    scheduleId,
-    planningId: planningId || scheduleId,
-    scheduledDate,
-    itemId: sourceItem.id,
-    itemSource,
-    parentProductionId,
-    qty,
-    requiredQty: qty,
-    plannedQty: qty,
-    uom: sourceItem.uom || toOptionalString(raw.uom) || "",
-    remarks,
-    status: "Pending Consumption",
-    updatedBy: "System User",
-    updateTimestamp: timestamp,
-    companyName: sourceItem.companyName || firstOptionalString(raw.company, raw.customerName, defaults?.companyName),
-    jobCardNo: firstOptionalString(parentJobNo, raw.jobCardNo, defaults?.jobCardNo),
-    erpCode,
-    shift: firstOptionalString(defaults?.shift),
-    setsPerBox,
-    rate: firstOptionalNumber(raw.rate, sourceItem.rate, defaults?.rate),
-    jobType: firstOptionalString(raw.jobType, raw.boxType, sourceItem.boxType, itemSource),
-    methodology: firstOptionalString(raw.methodology, defaults?.methodology),
-    sequence: firstOptionalString(raw.sequence, defaults?.sequence),
-    jobCompletionTimeOutput: firstOptionalString(raw.jobCompletionTimeOutput, raw.output, defaults?.jobCompletionTimeOutput),
-    noOfParts: firstOptionalNumber(raw.noOfParts, raw.numberOfSetsPerBox, defaults?.noOfParts),
-    ups: firstOptionalNumber(raw.ups, raw.noOfUpsForRapc, raw.noOfUpsForCutting, defaults?.ups),
-    length: firstOptionalNumber(raw.length, defaults?.length),
-    breadth: firstOptionalNumber(raw.breadth, defaults?.breadth),
-    height: firstOptionalNumber(raw.height, defaults?.height),
-    ply: firstOptionalNumber(raw.ply, raw.noOfPly, defaults?.ply),
-    noOfHolesInPhp: firstOptionalNumber(raw.numberOfHolesInPhp, defaults?.noOfHolesInPhp),
-    flute: firstOptionalString(raw.flute, raw.fluteType, defaults?.flute),
-    fluteType: firstOptionalString(raw.fluteType, raw.flute, defaults?.fluteType, defaults?.flute),
-    l1: firstOptionalNumber(raw.l1, defaults?.l1),
-    f1: firstOptionalNumber(raw.f1, defaults?.f1),
-    l2: firstOptionalNumber(raw.l2, defaults?.l2),
-    f2: firstOptionalNumber(raw.f2, defaults?.f2),
-    l3: firstOptionalNumber(raw.l3, defaults?.l3),
-    gsm: firstOptionalNumber(raw.gsm, raw.boardGsmReq, raw.calculatedBGsm, defaults?.gsm),
-    boardGsmReq: firstOptionalNumber(raw.boardGsmReq, raw.calculatedBGsm, defaults?.boardGsmReq, defaults?.gsm),
-    brustingStrengthReq: firstOptionalNumber(raw.brustingStrengthReq, defaults?.brustingStrengthReq),
-    printingColor,
-    weightPerPcSetReq: firstOptionalNumber(raw.weightPerPcReq, raw.calculatedWeightPerPcReq, raw.totalWeightGrams, defaults?.weightPerPcSetReq),
-    plateWeight: firstOptionalNumber(raw.plateWeight, raw.weightPerPcReq, raw.totalWeightGrams, defaults?.plateWeight),
-  };
-}
-
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
     Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
@@ -315,8 +178,8 @@ export function ProductionForm() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [productions, setProductions] = useData<Production>("productions", []);
-  const [phpJobMaster, setPhpJobMaster] = useData<Production>(getJobMasterEntityName("PHP"), []);
-  const [plateJobMaster, setPlateJobMaster] = useData<Production>(getJobMasterEntityName("PLATE"), []);
+  const [phpJobMaster] = useData<Production>(getJobMasterEntityName("PHP"), []);
+  const [plateJobMaster] = useData<Production>(getJobMasterEntityName("PLATE"), []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -325,7 +188,7 @@ export function ProductionForm() {
   const [sampleRequests, setSampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [settings] = useData<Setting>("settings", []);
   const [npdItems, setNpdItems] = useState<Item[]>([]);
-  const { resolveOrderItem, itemsBySource } = useOrderItemCatalog();
+  const { resolveOrderItem } = useOrderItemCatalog();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const urlScheduleId = searchParams.get("scheduleId") || searchParams.get("scheduledId") || "";
@@ -337,7 +200,6 @@ export function ProductionForm() {
   }, []);
 
   const [formData, setFormData] = useState(() => createInitialFormData(todayStr));
-  const [linkedJobNotice, setLinkedJobNotice] = useState("");
 
   useEffect(() => {
     fetchNpdItems()
@@ -467,37 +329,6 @@ export function ProductionForm() {
 
   const currentQty = Number(formData.qty || 0);
   const allJobRows = useMemo(() => [...productions, ...phpJobMaster, ...plateJobMaster], [productions, phpJobMaster, plateJobMaster]);
-  const linkedProductionPreview = useMemo(() => {
-    const phpItem = findItemByErp(itemsBySource.PHP || [], selectedErp);
-    const plateItem = findItemByErp(itemsBySource.PLATE || [], selectedErp);
-    const phpSetsPerBox = getSetsPerBox(phpItem);
-    const plateSetsPerBox = getSetsPerBox(plateItem);
-    const mainQty = Number(formData.qty || 0);
-    const mainJobNo = generateTransactionNo(getProductionJobPrefix("FG"), allJobRows, formData.date || todayStr);
-    const phpJobNo = phpItem && phpSetsPerBox && mainQty > 0
-      ? generateTransactionNo(getProductionJobPrefix("PHP"), [{ id: "preview-fg", transactionNo: mainJobNo, date: formData.date || todayStr } as Production, ...allJobRows], formData.date || todayStr)
-      : "-";
-    const plateJobNo = plateItem && plateSetsPerBox && mainQty > 0
-      ? generateTransactionNo(getProductionJobPrefix("PLATE"), [{ id: "preview-php", transactionNo: String(phpJobNo), date: formData.date || todayStr } as Production, { id: "preview-fg", transactionNo: mainJobNo, date: formData.date || todayStr } as Production, ...allJobRows], formData.date || todayStr)
-      : "-";
-
-    return {
-      phpItem,
-      plateItem,
-      phpSetsPerBox,
-      plateSetsPerBox,
-      mainQty,
-      mainJobNo,
-      phpJobNo,
-      plateJobNo,
-      phpQty: phpItem && phpSetsPerBox && mainQty > 0 ? round2(mainQty * phpSetsPerBox) : 0,
-      plateQty: plateItem && plateSetsPerBox && mainQty > 0 ? round2(mainQty * plateSetsPerBox) : 0,
-      canCreatePhp: Boolean(phpItem && phpSetsPerBox),
-      canCreatePlate: Boolean(plateItem && plateSetsPerBox),
-      phpStatus: !phpItem ? "Not found in PHP Master" : !phpSetsPerBox ? "Sets/Pcs missing in PHP Master" : "Ready",
-      plateStatus: !plateItem ? "Not found in Plate Master" : !plateSetsPerBox ? "Sets/Pcs missing in Plate Master" : "Ready",
-    };
-  }, [allJobRows, formData.date, formData.qty, itemsBySource.PHP, itemsBySource.PLATE, selectedErp, todayStr]);
   const currentGsm = Number(formData.gsm || 0);
   const leastGsm = Number(formData.leastGsm || 0);
   const deviationLimit = isSameAsLastItem ? Number((lastPlanQty * (deviationAllowed / 100)).toFixed(2)) : 0;
@@ -840,8 +671,6 @@ export function ProductionForm() {
       const nextPendingQty = pendingQty - qty;
       const txnNo = generateTransactionNo(getProductionJobPrefix("FG"), allJobRows, formData.date);
 
-      const linkedCreatedLabels: string[] = [];
-      const linkedSkippedReasons: string[] = [];
       const newEntry: Production = {
         id: crypto.randomUUID(),
         transactionNo: txnNo,
@@ -861,101 +690,7 @@ export function ProductionForm() {
         ),
       } as Production;
 
-      const linkedPhpEntries: Production[] = [];
-      const linkedPlateEntries: Production[] = [];
-      if (linkedProductionPreview.canCreatePhp && linkedProductionPreview.phpItem) {
-        const phpTxnNo = generateTransactionNo(getProductionJobPrefix("PHP"), [newEntry, ...allJobRows], formData.date);
-        linkedPhpEntries.push(
-          buildLinkedProduction({
-            sourceItem: linkedProductionPreview.phpItem,
-            itemSource: "PHP",
-            transactionNo: phpTxnNo,
-            date: formData.date,
-            qty: linkedProductionPreview.phpQty,
-            remarks: formData.remarks,
-            timestamp,
-            parentProductionId: newEntry.id,
-            parentJobNo: newEntry.transactionNo,
-            scheduleId: selectedSchedule.id,
-            scheduledDate: selectedSchedule.scheduledDate,
-            planningId: selectedSchedule.id,
-            defaults: {
-              shift: "",
-              companyName: selectedCompany?.name || "",
-              l1: formData.l1 === "" ? undefined : Number(formData.l1),
-              f1: formData.f1 === "" ? undefined : Number(formData.f1),
-              l2: formData.l2 === "" ? undefined : Number(formData.l2),
-              f2: formData.f2 === "" ? undefined : Number(formData.f2),
-              l3: formData.l3 === "" ? undefined : Number(formData.l3),
-              length: formData.length === "" ? undefined : Number(formData.length),
-              breadth: formData.breadth === "" ? undefined : Number(formData.breadth),
-              height: formData.height === "" ? undefined : Number(formData.height),
-              ply: formData.ply === "" ? undefined : Number(formData.ply),
-              flute: String(formData.flute || ""),
-              gsm: formData.gsm === "" ? undefined : Number(formData.gsm),
-              boardGsmReq: formData.gsm === "" ? undefined : Number(formData.gsm),
-              printingColor: String(formData.printingColor || ""),
-            },
-          })
-        );
-        linkedCreatedLabels.push(`PHP ${linkedProductionPreview.phpQty}`);
-      } else {
-        linkedSkippedReasons.push(linkedProductionPreview.phpStatus);
-      }
-
-      if (linkedProductionPreview.canCreatePlate && linkedProductionPreview.plateItem) {
-        const plateTxnNo = generateTransactionNo(getProductionJobPrefix("PLATE"), [...linkedPhpEntries, newEntry, ...allJobRows], formData.date);
-        linkedPlateEntries.push(
-          buildLinkedProduction({
-            sourceItem: linkedProductionPreview.plateItem,
-            itemSource: "PLATE",
-            transactionNo: plateTxnNo,
-            date: formData.date,
-            qty: linkedProductionPreview.plateQty,
-            remarks: formData.remarks,
-            timestamp,
-            parentProductionId: newEntry.id,
-            parentJobNo: newEntry.transactionNo,
-            scheduleId: selectedSchedule.id,
-            scheduledDate: selectedSchedule.scheduledDate,
-            planningId: selectedSchedule.id,
-            defaults: {
-              shift: "",
-              companyName: selectedCompany?.name || "",
-              l1: formData.l1 === "" ? undefined : Number(formData.l1),
-              f1: formData.f1 === "" ? undefined : Number(formData.f1),
-              l2: formData.l2 === "" ? undefined : Number(formData.l2),
-              f2: formData.f2 === "" ? undefined : Number(formData.f2),
-              l3: formData.l3 === "" ? undefined : Number(formData.l3),
-              length: formData.length === "" ? undefined : Number(formData.length),
-              breadth: formData.breadth === "" ? undefined : Number(formData.breadth),
-              height: formData.height === "" ? undefined : Number(formData.height),
-              ply: formData.ply === "" ? undefined : Number(formData.ply),
-              flute: String(formData.flute || ""),
-              gsm: formData.gsm === "" ? undefined : Number(formData.gsm),
-              boardGsmReq: formData.gsm === "" ? undefined : Number(formData.gsm),
-              printingColor: String(formData.printingColor || ""),
-            },
-          })
-        );
-        linkedCreatedLabels.push(`Plate ${linkedProductionPreview.plateQty}`);
-      } else {
-        linkedSkippedReasons.push(linkedProductionPreview.plateStatus);
-      }
-
       await setProductions((prev) => [newEntry, ...prev]);
-      if (linkedPhpEntries.length > 0) {
-        await setPhpJobMaster((prev) => [...linkedPhpEntries, ...prev]);
-      }
-      if (linkedPlateEntries.length > 0) {
-        await setPlateJobMaster((prev) => [...linkedPlateEntries, ...prev]);
-      }
-
-      setLinkedJobNotice(
-        linkedCreatedLabels.length > 0
-          ? `Main job saved. Auto-created linked jobs: ${linkedCreatedLabels.join(", ")}.${linkedSkippedReasons.length ? ` Skipped: ${linkedSkippedReasons.join(", ")}.` : ""}`
-          : `Main job saved. PHP/Plate linked jobs not created: ${linkedSkippedReasons.join(", ") || "master data not complete"}.`
-      );
 
       if (isSampleItem && matchedSampleRequest?.id) {
         await setSampleRequests((prev) =>
@@ -1043,14 +778,6 @@ export function ProductionForm() {
               <InfoTile label="Pending Qty" value={`${pendingQty} ${selectedItem?.uom || ""}`} />
             </div>
           )}
-
-
-
-          {linkedJobNotice ? (
-            <div className="rounded border border-black bg-blue-50 px-4 py-3 text-sm font-bold text-black">
-              {linkedJobNotice}
-            </div>
-          ) : null}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {showField("Production Date") && <div className="flex flex-col space-y-1">
               <LabelWithHelp
@@ -1300,30 +1027,6 @@ export function ProductionForm() {
               {showField("Company Name") ? <FormInput label="Company Name" value={formData.companyName} readOnly helpText="Auto-fetched from the selected order's company." /> : null}
             </div>
           </div>
-
-          {selectedSchedule && selectedOrder && (
-            <div className="bg-white border border-black rounded p-4 shadow-sm">
-              <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                <h3 className="text-sm font-black uppercase tracking-wide text-black">PHP / Plate Linked Job Preview</h3>
-                <span className="text-xs font-bold uppercase text-slate-600">ERP: {selectedErp || "-"}</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-8 gap-4">
-                <InfoTile label="PHP Job No" value={linkedProductionPreview.phpJobNo} />
-                <InfoTile label="Plate Job No" value={linkedProductionPreview.plateJobNo} />
-                <InfoTile label="PHP Item" value={linkedProductionPreview.phpItem?.name || "Not found in PHP Master"} />
-                <InfoTile label="Plate Item" value={linkedProductionPreview.plateItem?.name || "Not found in Plate Master"} />
-                <InfoTile label="Sets/Pcs Per Box" value={`${linkedProductionPreview.phpSetsPerBox || "Missing"} / ${linkedProductionPreview.plateSetsPerBox || "Missing"}`} />
-                <InfoTile label="Main Planned Qty" value={linkedProductionPreview.mainQty || 0} />
-                <InfoTile label="PHP Planned Qty" value={linkedProductionPreview.phpQty || "Not planned"} />
-                <InfoTile label="Plate Planned Qty" value={linkedProductionPreview.plateQty || "Not planned"} />
-              </div>
-              {(linkedProductionPreview.phpStatus !== "Ready" || linkedProductionPreview.plateStatus !== "Ready") ? (
-                <div className="mt-3 rounded border border-amber-600 bg-amber-50 px-3 py-2 text-xs font-bold uppercase text-amber-900">
-                  PHP: {linkedProductionPreview.phpStatus}. Plate: {linkedProductionPreview.plateStatus}. Linked jobs are created only when that master item and Sets/Pcs value are available.
-                </div>
-              ) : null}
-            </div>
-          )}
           <div className="pt-2">
             <button
               type="submit"
