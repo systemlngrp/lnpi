@@ -219,7 +219,15 @@ export function MrrApprovals() {
   };
 
   const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
-    if (line.serviceName?.trim()) return line.serviceName;
+    const isServiceReturn = mrrType === "Service Return" || line.lineType === "Service";
+    if (isServiceReturn) {
+      const baseLabel = line.sourceGatePassItemDescription?.trim() || line.itemName?.trim() || line.itemId;
+      const serviceName = line.serviceName?.trim();
+      if (serviceName && serviceName.toLowerCase() !== baseLabel.trim().toLowerCase()) {
+        return `${baseLabel} (${serviceName})`;
+      }
+      return baseLabel;
+    }
 
     const npdItem = npdItems.find(i => i.id === line.itemId);
     const material = materials.find(m => m.id === line.itemId);
