@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Company, Material, MaterialIn, Supplier } from "../types";
+import { Company, Material, MaterialIn, Service, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Download } from "lucide-react";
@@ -19,6 +19,7 @@ export function MrrApprovals() {
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
+  const [services] = useData<Service>("services", []);
   
   const [activeStage, setActiveStage] = useState<Stage>("All MRR");
   const [searchTerm, setSearchTerm] = useState("");
@@ -222,9 +223,9 @@ export function MrrApprovals() {
     const isServiceReturn = mrrType === "Service Return" || line.lineType === "Service";
     if (isServiceReturn) {
       const baseLabel = line.sourceGatePassItemDescription?.trim() || line.itemName?.trim() || line.itemId;
-      const serviceName = line.serviceName?.trim();
-      if (serviceName) {
-        return `${baseLabel} (${serviceName})`;
+      const resolvedServiceName = services.find((service) => service.id === (line.serviceId || line.itemId))?.name?.trim() || line.serviceName?.trim();
+      if (resolvedServiceName) {
+        return `${baseLabel} (${resolvedServiceName})`;
       }
       return baseLabel;
     }
