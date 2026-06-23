@@ -426,7 +426,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   });
 
   const counts: Record<string, number> = {
-    "/material-receipt/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
+    "/material-receipt/approvals": materialIn.filter(m => ["Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
     "/material-receipt/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
     "/production/pending": (() => {
       const today = new Date();
@@ -673,3 +673,4 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     </div>
   );
 }
+

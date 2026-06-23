@@ -10,7 +10,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useNpdItems } from "../hooks/useNpdItems";
 
-type Stage = "All MRR" | "Pending MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally";
+type Stage = "All MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally";
 
 export function MrrApprovals() {
   const navigate = useNavigate();
@@ -36,14 +36,13 @@ export function MrrApprovals() {
 
   const stages: { label: string; value: Stage }[] = [
     { label: "All MRR", value: "All MRR" },
-    { label: "Pending MRR", value: "Pending MRR" },
     { label: "Plant Head", value: "Pending PH" },
     { label: "Accounts", value: "Pending Accounts" },
     { label: "MD Approval", value: "Pending MD" },
     { label: "Pending Tally", value: "Pending Tally" },
   ];
 
-  const approvalStatuses: Stage[] = ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"];
+  const approvalStatuses: Stage[] = ["Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"];
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -137,7 +136,7 @@ export function MrrApprovals() {
         patch.md_approval_remark = remark;
       }
     } else {
-      nextStatus = "Pending MRR";
+      nextStatus = "Pending PH";
       if (currentStage === "Pending PH") patch.plant_head_remark = `REJECTED: ${remark}`;
       if (currentStage === "Pending Accounts") patch.accounts_remark = `REJECTED: ${remark}`;
       if (currentStage === "Pending MD") patch.md_approval_remark = `REJECTED: ${remark}`;
@@ -443,5 +442,6 @@ export function MrrApprovals() {
     </div>
   );
 }
+
 
 

@@ -21,7 +21,7 @@ export function MaterialInMaster() {
   const setting = settings[0];
   void setting;
 
-  const statusOptions = ["All", "Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally", "Completed"];
+  const statusOptions = ["All", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally", "Completed"];
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -249,3 +249,4 @@ export function MaterialInMaster() {
     </div>
   );
 }
+

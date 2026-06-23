@@ -270,7 +270,7 @@ export function MaterialInItemMaster() {
         <tbody className="divide-y divide-black bg-white">
           {data.map((line: any) => {
             const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
-            const canEditInline = line.parentStatus === "Pending MRR" || line.parentStatus === "Pending PH";
+            const canEditInline = line.parentStatus === "Pending PH";
             const isEditing = editingLineId === line.id;
 
             return (
@@ -511,3 +511,4 @@ export function MaterialInItemMaster() {
     </div>
   );
 }
+

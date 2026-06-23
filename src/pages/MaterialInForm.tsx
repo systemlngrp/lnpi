@@ -122,8 +122,12 @@ export function MaterialInForm() {
 
   const isInterState = supplierGstSupplyType === "INTER_STATE";
 
+  const isReturnableReceiptFlow = Boolean(
+    (linkedGateEntry?.purpose === "Returnable Receipt" && linkedGateEntry?.sourceGatePassId) ||
+    editingEntry?.mrrType === "Service Return"
+  );
   const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
-  const isServiceReturn = mrrType === "Service Return";
+  const isServiceReturn = isReturnableReceiptFlow || mrrType === "Service Return";
 
   const materialOptions = useMemo(
     () => {
@@ -155,6 +159,11 @@ export function MaterialInForm() {
         .map((service) => ({ value: service.id, label: service.name })),
     [services]
   );
+
+  const activeItemOptions = isServiceReturn ? serviceOptions : materialOptions;
+  const activeItemLabel = isServiceReturn ? "Service" : isFgType ? "FG Item" : "Material";
+  const activeItemPlaceholder = isServiceReturn ? "Select Service..." : isFgType ? "Select Item..." : "Select Material...";
+  const activeItemSelectKey = isServiceReturn ? "service" : isFgType ? "fg" : mrrType === "Reel" ? "reel" : "material";
 
   const supplierOptions = useMemo(
     () => {
@@ -434,7 +443,7 @@ export function MaterialInForm() {
       itemId: currentItemId,
       itemName: material.name,
       qty,
-      uom: mrrType === "Reel" ? "KG" : material.uom || "",
+      uom: mrrType === "Reel" ? "KG" : ("uom" in material ? material.uom || "" : ""),
       poId: selectedPo?.id,
       poNo: selectedPo?.poNo,
       poLineId: selectedPoLine?.id,
@@ -946,7 +955,7 @@ export function MaterialInForm() {
           roundOff: submitSummary.roundOffValue,
           totalAmount: submitSummary.totalAmount,
           lines: submitSummary.lines,
-          status: editingEntry?.status || "Pending MRR",
+          status: editingEntry?.status || "Pending PH",
           updatedBy: "System User",
           updateTimestamp: timestamp,
           phTimestamp: editingEntry?.phTimestamp,
@@ -1195,9 +1204,9 @@ export function MaterialInForm() {
           <div className="flex flex-wrap gap-4 items-end mb-4 bg-slate-50 p-4 rounded border border-black">
             <div className="flex flex-col space-y-1 w-full md:w-80">
               <label className="text-sm font-bold text-black">
-                {isServiceReturn ? "Service" : isFgType ? "FG Item" : "Material"} <span className="text-red-600">*</span>
+                {activeItemLabel} <span className="text-red-600">*</span>
               </label>
-              <Select options={isServiceReturn ? serviceOptions : materialOptions} value={currentItemId} onChange={setCurrentItemId} placeholder={isServiceReturn ? "Select Service..." : isFgType ? "Select Item..." : "Select Material..."} />
+              <Select key={activeItemSelectKey} options={activeItemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder={activeItemPlaceholder} />
             </div>
             {isServiceReturn ? (
               <div className="flex flex-col space-y-1 w-full md:w-80">
@@ -1539,3 +1548,6 @@ export function MaterialInForm() {
     </div>
   );
 }
+
+
+
