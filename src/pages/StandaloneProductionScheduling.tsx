@@ -203,7 +203,6 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
           updateTimestamp: timestamp,
           jobCardNo: selectedJob.transactionNo,
           companyName: firstOptionalString(selectedJob.companyName, sourceItem.companyName, sourceRaw.companyName, sourceRaw.customerName),
-          category: firstOptionalString(selectedJob.category, sourceRaw.category),
           masterErp: firstOptionalString(selectedJob.masterErp, sourceRaw.masterItemNameErpCode),
           erpCode: firstOptionalString(selectedJob.erpCode, sourceItem.erp, sourceRaw.erpItemCode),
           rate: firstOptionalNumber(selectedJob.rate, sourceItem.rate, sourceRaw.rate),

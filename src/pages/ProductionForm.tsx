@@ -195,7 +195,6 @@ function buildLinkedProduction({
     masterErp: masterErpValue,
     erpCode,
     shift: firstOptionalString(defaults?.shift),
-    category: firstOptionalString(raw.category, defaults?.category),
     setsPerBox,
     rate: firstOptionalNumber(raw.rate, sourceItem.rate, defaults?.rate),
     jobType: firstOptionalString(raw.jobType, raw.boxType, sourceItem.boxType, itemSource),
@@ -887,7 +886,6 @@ export function ProductionForm() {
             masterErp: selectedErp,
             defaults: {
               shift: "",
-              category: (selectedItem as any)?.category,
               companyName: selectedCompany?.name || "",
               masterErp: selectedErp,
               l1: formData.l1 === "" ? undefined : Number(formData.l1),
@@ -930,7 +928,6 @@ export function ProductionForm() {
             masterErp: selectedErp,
             defaults: {
               shift: "",
-              category: (selectedItem as any)?.category,
               companyName: selectedCompany?.name || "",
               masterErp: selectedErp,
               l1: formData.l1 === "" ? undefined : Number(formData.l1),
