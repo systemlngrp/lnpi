@@ -135,7 +135,7 @@ export function StandaloneProductionSequencing({ source }: Props) {
         </table>
       </div>
       {selectedJob ? (
-        <div className="bg-white border border-black rounded shadow-sm p-4 max-w-md">
+        <div className="bg-white border border-black rounded shadow-sm p-4 max-w-md mx-auto w-full">
           <h3 className="text-sm font-black uppercase tracking-wide text-black mb-4">Sequence</h3>
           <div className="text-xs font-black uppercase text-slate-500">Source</div>
           <div className="mt-1 mb-4 rounded border border-black bg-slate-100 px-3 py-2 text-sm font-bold text-black">{selectedJob.jobSource}</div>
