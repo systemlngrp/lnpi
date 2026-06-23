@@ -135,17 +135,19 @@ export function StandaloneProductionSequencing({ source }: Props) {
         </table>
       </div>
       {selectedJob ? (
-        <div className="bg-white border border-black rounded shadow-sm p-4 max-w-md mx-auto w-full">
-          <h3 className="text-sm font-black uppercase tracking-wide text-black mb-4">Sequence</h3>
-          <div className="text-xs font-black uppercase text-slate-500">Source</div>
-          <div className="mt-1 mb-4 rounded border border-black bg-slate-100 px-3 py-2 text-sm font-bold text-black">{selectedJob.jobSource}</div>
-          <div className="text-xs font-black uppercase text-slate-500">Job No</div>
-          <div className="mt-1 mb-4 rounded border border-black bg-slate-100 px-3 py-2 text-sm font-bold text-black">{selectedJob.transactionNo}</div>
-          <div className="text-xs font-black uppercase text-slate-500">Sequence</div>
-          <input type="number" min={0} step="1" value={sequence} onChange={(e) => setSequence(e.target.value)} className="mt-1 w-full border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
-          <div className="mt-4 flex gap-3">
-            <button type="button" onClick={() => void saveSequence()} className="rounded border border-black bg-emerald-600 px-4 py-2 text-sm font-bold uppercase text-white hover:bg-emerald-700">Save</button>
-            <button type="button" onClick={() => { setSelectedJobKey(""); setSequence(""); }} className="rounded border border-black bg-white px-4 py-2 text-sm font-bold uppercase text-black hover:bg-slate-50">Cancel</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { setSelectedJobKey(""); setSequence(""); }}>
+          <div className="bg-white border border-black rounded shadow-sm p-4 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-black uppercase tracking-wide text-black mb-4">Sequence</h3>
+            <div className="text-xs font-black uppercase text-slate-500">Source</div>
+            <div className="mt-1 mb-4 rounded border border-black bg-slate-100 px-3 py-2 text-sm font-bold text-black">{selectedJob.jobSource}</div>
+            <div className="text-xs font-black uppercase text-slate-500">Job No</div>
+            <div className="mt-1 mb-4 rounded border border-black bg-slate-100 px-3 py-2 text-sm font-bold text-black">{selectedJob.transactionNo}</div>
+            <div className="text-xs font-black uppercase text-slate-500">Sequence</div>
+            <input type="number" min={0} step="1" value={sequence} onChange={(e) => setSequence(e.target.value)} className="mt-1 w-full border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
+            <div className="mt-4 flex gap-3">
+              <button type="button" onClick={() => void saveSequence()} className="rounded border border-black bg-emerald-600 px-4 py-2 text-sm font-bold uppercase text-white hover:bg-emerald-700">Save</button>
+              <button type="button" onClick={() => { setSelectedJobKey(""); setSequence(""); }} className="rounded border border-black bg-white px-4 py-2 text-sm font-bold uppercase text-black hover:bg-slate-50">Cancel</button>
+            </div>
           </div>
         </div>
       ) : null}
