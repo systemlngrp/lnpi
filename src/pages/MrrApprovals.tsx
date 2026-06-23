@@ -223,7 +223,7 @@ export function MrrApprovals() {
     if (isServiceReturn) {
       const baseLabel = line.sourceGatePassItemDescription?.trim() || line.itemName?.trim() || line.itemId;
       const serviceName = line.serviceName?.trim();
-      if (serviceName && serviceName.toLowerCase() !== baseLabel.trim().toLowerCase()) {
+      if (serviceName) {
         return `${baseLabel} (${serviceName})`;
       }
       return baseLabel;
