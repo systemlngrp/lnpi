@@ -6,6 +6,7 @@ import { Select } from "../components/Select";
 import { generateTransactionNo, getProductionJobPrefix } from "../lib/serial";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemDisplayName, getOrderItemSourceLabel } from "../lib/orderItems";
+import { getProductionMatchingFields } from "../lib/productionMatching";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 
 const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
@@ -174,7 +175,11 @@ export function StandaloneProductionForm({ source }: StandaloneProductionFormPro
         gsm: formData.gsm === "" ? undefined : Number(formData.gsm),
         plateWeight: formData.plateWeight === "" ? undefined : Number(formData.plateWeight),
       };
-      await setProductions((prev) => [newEntry, ...prev]);
+      const normalizedEntry: Production = {
+        ...newEntry,
+        ...getProductionMatchingFields(newEntry, selectedItem),
+      };
+      await setProductions((prev) => [normalizedEntry, ...prev]);
       setSelectedItemId("");
       setFormData(createInitialFormData(todayStr));
     } finally {

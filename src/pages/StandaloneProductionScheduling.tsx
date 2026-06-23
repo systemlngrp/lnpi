@@ -6,6 +6,7 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
 import { generateTransactionNo, getProductionJobPrefix } from "../lib/serial";
+import { getProductionMatchingFields } from "../lib/productionMatching";
 import { OrderItemSource, Production } from "../types";
 import { Select } from "../components/Select";
 
@@ -200,7 +201,11 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
           companyName: firstOptionalString(selectedJob.companyName, sourceItem.companyName, sourceRaw.companyName, sourceRaw.customerName),
           erpCode: firstOptionalString(selectedJob.erpCode, sourceItem.erp, sourceRaw.erpItemCode),
         };
-        await setProductions((prev) => [fgEntry, ...prev]);
+        const normalizedEntry: Production = {
+          ...fgEntry,
+          ...getProductionMatchingFields(fgEntry, sourceItem),
+        };
+        await setProductions((prev) => [normalizedEntry, ...prev]);
         fgCreationMessage = ` Production job ${fgTxnNo} created from ${selectedJob.jobSource} item master.`;
       }
     }

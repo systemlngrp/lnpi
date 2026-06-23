@@ -6,6 +6,7 @@ import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useData } from "../hooks/useData";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { getProductionMatchingFields } from "../lib/productionMatching";
 import { generateTransactionNo, getProductionJobPrefix, formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import type { Company, Order, OrderItemSource, OrderSchedule, Production } from "../types";
@@ -126,7 +127,7 @@ function buildPlannedProduction({
   );
   const masterErp = firstOptionalString(order?.erpCode, raw.masterItemNameErpCode);
 
-  return {
+  const production: Production = {
     id: crypto.randomUUID(),
     transactionNo,
     date: schedule.scheduledDate,
@@ -172,6 +173,11 @@ function buildPlannedProduction({
     printingColor,
     weightPerPcSetReq: firstOptionalNumber(raw.weightPerPcReq, raw.calculatedWeightPerPcReq, raw.totalWeightGrams),
     plateWeight: firstOptionalNumber(raw.plateWeight, raw.weightPerPcReq, raw.totalWeightGrams),
+  };
+
+  return {
+    ...production,
+    ...getProductionMatchingFields(production, sourceItem),
   };
 }
 

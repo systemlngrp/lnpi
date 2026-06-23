@@ -22,6 +22,7 @@ import { CircleHelp } from "lucide-react";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { fetchNpdItems } from "../lib/npdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { getProductionMatchingFields } from "../lib/productionMatching";
 
 const getJobMasterEntityName = (source: "PHP" | "PLATE") =>
   source === "PHP" ? "php_job_master" : "plate_job_master";
@@ -690,7 +691,12 @@ export function ProductionForm() {
         ),
       } as Production;
 
-      await setProductions((prev) => [newEntry, ...prev]);
+      const normalizedEntry: Production = {
+        ...newEntry,
+        ...getProductionMatchingFields(newEntry, selectedItem),
+      };
+
+      await setProductions((prev) => [normalizedEntry, ...prev]);
 
       if (isSampleItem && matchedSampleRequest?.id) {
         await setSampleRequests((prev) =>

@@ -1,5 +1,4 @@
 import type { Production } from "../types";
-import type { OrderCatalogItem } from "./orderItems";
 
 function hasValue(value: unknown) {
   return !(value === null || value === undefined || (typeof value === "string" && value.trim() === ""));
@@ -40,9 +39,17 @@ function joinPrintingColors(...values: unknown[]) {
     .join(" / ") || undefined;
 }
 
+type MatchingProductionItem = {
+  raw?: any;
+  erp?: string | number;
+  companyName?: string;
+  rate?: number;
+  boxType?: string;
+};
+
 export function getProductionMatchingFields(
   production: Partial<Production>,
-  item?: Partial<OrderCatalogItem> | null
+  item?: MatchingProductionItem | null
 ): Partial<Production> {
   const raw = item?.raw || {};
 
