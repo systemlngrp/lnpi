@@ -473,7 +473,6 @@ export function MaterialInForm() {
     }, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
 
     setLines((prev) => [...prev, newLine]);
-    }
 
     if (mrrType === "Reel") {
       setPackingSlipDrafts((prev) => ({ ...prev, [newLine.id]: [] }));
