@@ -381,6 +381,15 @@ export function MaterialInForm() {
   const handleAddLine = () => {
     if (!currentItemId) return;
 
+    if (mrrType === "Others") {
+      for (const line of linesForSubmit) {
+        if (!String(line.poLineId || "").trim() || !String(line.poNo || "").trim()) {
+          alert("Our PO No. is mandatory for every Others line.");
+          return;
+        }
+      }
+    }
+
     if (isServiceReturn) {
       const service = services.find((entry) => entry.id === currentItemId);
       const sourceLine = pendingGatePassLines.find((line) => line.id === currentSourceGatePassLineId);
@@ -423,6 +432,10 @@ export function MaterialInForm() {
         ? Number(currentInvoiceRate)
         : Number(selectedPoLine?.rate || 0);
 
+    if (mrrType === "Others" && !currentPoLineId) {
+      alert("Our PO No. is mandatory before adding an Others line.");
+      return;
+    }
     if (mrrType === "Others" && (!resolvedInvoiceRate || resolvedInvoiceRate <= 0)) return;
     
     const material = getMaterial(currentItemId);
@@ -460,6 +473,8 @@ export function MaterialInForm() {
     }, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
 
     setLines((prev) => [...prev, newLine]);
+    }
+
     if (mrrType === "Reel") {
       setPackingSlipDrafts((prev) => ({ ...prev, [newLine.id]: [] }));
     }
@@ -568,8 +583,11 @@ export function MaterialInForm() {
         throw new Error(`Row ${index + 2}: Invoice Rate must be a valid number.`);
       }
 
-      const resolvedPo = ourPoSearch ? getResolvedPoForMaterial(material.id, ourPoSearch) : null;
-      if (ourPoSearch && !resolvedPo) {
+      if (!ourPoSearch) {
+        throw new Error(`Row ${index + 2}: Our PO No. is mandatory for ${material.name}.`);
+      }
+      const resolvedPo = getResolvedPoForMaterial(material.id, ourPoSearch);
+      if (!resolvedPo) {
         throw new Error(`Row ${index + 2}: Our PO No. not matched for ${material.name}.`);
       }
 
@@ -914,6 +932,10 @@ export function MaterialInForm() {
           alert("Each packing slip row must have weight in KG.");
           return;
         }
+        if (slips.some((slip) => !String(slip.ourPoId || "").trim() || !String(slip.ourPoNo || "").trim())) {
+          alert("Our PO No. is mandatory for every reel row.");
+          return;
+        }
       }
     }
 
@@ -1250,7 +1272,7 @@ export function MaterialInForm() {
             ) : null}
             {!isFgType && mrrType === "Others" ? (
               <div className="flex flex-col space-y-1 w-full md:w-80">
-                <label className="text-sm font-bold text-black">Our PO No.</label>
+                <label className="text-sm font-bold text-black">Our PO No. <span className="text-red-600">*</span></label>
                 <Select
                   options={currentItemId ? getApprovedPoOptionsForMaterial(currentItemId) : []}
                   value={currentPoLineId}
@@ -1548,6 +1570,9 @@ export function MaterialInForm() {
     </div>
   );
 }
+
+
+
 
 
 
