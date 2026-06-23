@@ -87,6 +87,7 @@ export function MaterialInForm() {
   const [currentPoLineId, setCurrentPoLineId] = useState("");
   const [packingSlipDrafts, setPackingSlipDrafts] = useState<Record<string, PackingSlipDraft[]>>({});
   const reelBulkInputRef = useRef<HTMLInputElement>(null);
+  const hasAutoFilledServiceReturnRef = useRef(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -197,6 +198,10 @@ export function MaterialInForm() {
   }, [editingEntry, linkedGateEntry]);
 
   useEffect(() => {
+    hasAutoFilledServiceReturnRef.current = false;
+  }, [gateEntryId, editId]);
+
+  useEffect(() => {
     if (!editingEntry) return;
 
     setDate(editingEntry.date || new Date().toISOString().split("T")[0]);
@@ -241,6 +246,61 @@ export function MaterialInForm() {
     if (!linkedSourceGatePass) return [];
     return getGatePassLinesWithReturns(linkedSourceGatePass, materialIn, editingEntry?.id).filter((line) => Number(line.pendingQty || 0) > 0);
   }, [editingEntry?.id, linkedSourceGatePass, materialIn]);
+
+  useEffect(() => {
+    if (!isServiceReturn) return;
+    const sourceLine = pendingGatePassLines.find((line) => line.id === currentSourceGatePassLineId);
+    if (!sourceLine) return;
+
+    const matchedService = services.find((service) => service.id === sourceLine.itemId)
+      || services.find((service) => service.name.trim().toLowerCase() === String(sourceLine.itemName || "").trim().toLowerCase());
+
+    setCurrentItemId(matchedService?.id || sourceLine.itemId || "");
+    setCurrentQty(Number(sourceLine.pendingQty || 0));
+    setCurrentInvoiceRate(Number(sourceLine.rate || 0));
+  }, [currentSourceGatePassLineId, isServiceReturn, pendingGatePassLines, services]);
+
+  useEffect(() => {
+    if (editingEntry) return;
+    if (hasAutoFilledServiceReturnRef.current) return;
+    if (!linkedGateEntry || linkedGateEntry.purpose !== "Returnable Receipt" || !linkedGateEntry.sourceGatePassId) return;
+    if (!pendingGatePassLines.length) return;
+
+    const autoLines = pendingGatePassLines.map((sourceLine) => {
+      const matchedService = services.find((service) => service.id === sourceLine.itemId)
+        || services.find((service) => service.name.trim().toLowerCase() === String(sourceLine.itemName || "").trim().toLowerCase());
+      const qty = Number(sourceLine.pendingQty || 0);
+      const invoiceRate = Number(sourceLine.rate || 0);
+
+      return applySupplyTypeTaxRates({
+        id: crypto.randomUUID(),
+        itemId: matchedService?.id || sourceLine.itemId || sourceLine.id,
+        itemName: matchedService?.name || sourceLine.itemName,
+        lineType: "Service",
+        serviceId: matchedService?.id || sourceLine.itemId || sourceLine.id,
+        serviceName: matchedService?.name || sourceLine.itemName,
+        sourceGatePassId: linkedSourceGatePass?.id,
+        sourceGatePassNo: linkedSourceGatePass?.gatePassNo,
+        sourceGatePassLineId: sourceLine.id,
+        sourceGatePassItemDescription: sourceLine.itemDescription || sourceLine.itemName,
+        qty,
+        uom: sourceLine.uom || "",
+        invoiceQty: qty,
+        invoiceRate,
+        actualQty: qty,
+        rate: invoiceRate,
+        value: qty * invoiceRate,
+        gstRate: 0,
+        cgstRate: 0,
+        sgstRate: 0,
+        igstRate: 0,
+      }, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
+    });
+
+    setLines(autoLines);
+    resetLineDrafts();
+    hasAutoFilledServiceReturnRef.current = true;
+  }, [editingEntry, isInterState, linkedGateEntry, linkedSourceGatePass, pendingGatePassLines, services]);
 
   const getMaterial = (materialId: string) => {
     if (isServiceReturn) return services.find((service) => service.id === materialId);
