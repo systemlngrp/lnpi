@@ -256,7 +256,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
           matchStatus,
         };
       })
-      .filter((row) => row.fgPendingQty > 0 && (row.selectable || !row.linkedItem || !row.setsPerBox));
+      .filter((row) => row.fgPendingQty > 0 && row.selectable && Boolean(row.linkedItem) && Boolean(row.setsPerBox) && row.remainingQty > 0);
   }, [companies, orders, plannedQtyByScheduleId, resolveOrderItem, schedules, source, sourceItems]);
 
   const availableCompanies = useMemo(() => {
