@@ -68,6 +68,39 @@ export function useOrderItemCatalog() {
     return itemMap.get(getOrderItemCompositeKey(normalizedSource, normalizedItemId));
   };
 
+  const findItemAcrossSources = (
+    itemId: string | undefined,
+    preferredSource?: OrderItemSource,
+    erpCode?: string | number
+  ) => {
+    const normalizedItemId = String(itemId || "").trim();
+    const normalizedErp = String(erpCode || "").trim().toLowerCase();
+    const orderedSources = [preferredSource, "FG", "PHP", "PLATE"]
+      .map((source) => normalizeOrderItemSource(source))
+      .filter((source, index, arr) => arr.indexOf(source) === index) as OrderItemSource[];
+
+    if (normalizedItemId) {
+      for (const source of orderedSources) {
+        const match = findItem(source, normalizedItemId);
+        if (match) return match;
+      }
+    }
+
+    if (normalizedErp) {
+      for (const source of orderedSources) {
+        const match = (itemsBySource[source] || []).find((item) => {
+          const raw = item.raw || {};
+          return [item.erp, raw.erpItemCode, raw.masterItemNameErpCode]
+            .map((value) => String(value || "").trim().toLowerCase())
+            .filter(Boolean)
+            .includes(normalizedErp);
+        });
+        if (match) return match;
+      }
+    }
+
+    return undefined;
+  };
   const resolveOrderItem = (order?: Partial<Order> | null) => {
     if (!order) return undefined;
     const normalizedOrder = normalizeOrderRecord(order);
@@ -91,6 +124,7 @@ export function useOrderItemCatalog() {
     itemsBySource,
     itemMap,
     findItem,
+    findItemAcrossSources,
     resolveOrderItem,
   };
 }

@@ -25,7 +25,7 @@ export function ProductionMaster() {
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const { findItem } = useOrderItemCatalog();
+  const { findItemAcrossSources } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [closingId, setClosingId] = useState<string | null>(null);
@@ -36,7 +36,11 @@ export function ProductionMaster() {
 
   const resolveProductionItem = (production?: Production | null) => {
     if (!production) return undefined;
-    return findItem(production.itemSource || "FG", String(production.itemId || ""));
+    return findItemAcrossSources(
+      String(production.itemId || ""),
+      production.itemSource,
+      production.erpCode
+    );
   };
 
   const getItemValue = (item: any, ...keys: string[]) => {
