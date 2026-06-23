@@ -6,6 +6,7 @@ import { TableControls } from "../components/TableControls";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
+import { resolvePhpPlateFgLink } from "../lib/phpPlateFgLink";
 
 const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
   source === "PHP" ? "php_job_master" : "plate_job_master";
@@ -24,8 +25,20 @@ function formatNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed.toLocaleString() : "-";
 }
 
+function formatFgNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toLocaleString() : "0";
+}
+
+function getFgCellClasses(isBlocked: boolean, requiresFgGate: boolean) {
+  if (requiresFgGate && isBlocked) return "bg-red-100 text-red-700 font-bold";
+  if (requiresFgGate) return "bg-emerald-50 text-emerald-700 font-bold";
+  return "bg-slate-50 text-black font-semibold";
+}
+
 export function StandaloneProductionMaster({ source }: StandaloneProductionMasterProps) {
   const [productions, setProductions] = useData<Production>(getJobMasterEntityName(source), []);
+  const [fgProductions] = useData<Production>("productions", []);
   const { itemsBySource } = useOrderItemCatalog();
   const items = itemsBySource[source] || [];
   const [searchTerm, setSearchTerm] = useState("");
@@ -93,7 +106,7 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
       </div>
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
       <div className="bg-white border border-black rounded shadow-sm overflow-auto">
-        <table className="min-w-[3200px] w-full divide-y divide-black border-collapse">
+        <table className="min-w-[3320px] w-full divide-y divide-black border-collapse">
           <thead className="bg-slate-100">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Job No</th>
@@ -124,6 +137,7 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Scheduled Date</th>
               <th className="px-3 py-2 text-right text-xs font-black uppercase">Planned Qnt</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Methodology</th>
+              <th className="px-3 py-2 text-right text-xs font-black uppercase">FG Value</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Job Type</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Sequence</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Job Completion Time</th>
@@ -138,11 +152,12 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
           <tbody>
             {paginatedItems.length === 0 ? (
               <tr>
-                <td colSpan={37} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
+                <td colSpan={38} className="px-6 py-8 text-center text-black font-medium">No productions found.</td>
               </tr>
             ) : (
               paginatedItems.map((row) => {
                 const item = items.find((entry) => entry.id === String(row.itemId || "").trim());
+                const fgState = resolvePhpPlateFgLink(row, fgProductions, source);
                 return (
                   <tr key={row.id} className="border-t border-black">
                     <td className="px-3 py-2 text-sm font-semibold">{formatCell(row.transactionNo)}</td>
@@ -173,6 +188,7 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
                     <td className="px-3 py-2 text-sm">{formatCell(row.scheduledDate)}</td>
                     <td className="px-3 py-2 text-sm text-right">{formatNumber(row.plannedQty || row.qty)}</td>
                     <td className="px-3 py-2 text-sm">{formatCell(row.methodology)}</td>
+                    <td className={`px-3 py-2 text-sm text-right ${getFgCellClasses(fgState.isBlocked, fgState.requiresFgGate)}`}>{formatFgNumber(fgState.fgValue)}</td>
                     <td className="px-3 py-2 text-sm">{formatCell(row.jobType)}</td>
                     <td className="px-3 py-2 text-sm">{formatCell(row.sequence)}</td>
                     <td className="px-3 py-2 text-sm">{formatCell(row.jobCompletionTimeOutput)}</td>

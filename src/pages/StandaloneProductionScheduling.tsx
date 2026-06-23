@@ -200,6 +200,8 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
           updateTimestamp: timestamp,
           companyName: firstOptionalString(selectedJob.companyName, sourceItem.companyName, sourceRaw.companyName, sourceRaw.customerName),
           erpCode: firstOptionalString(selectedJob.erpCode, sourceItem.erp, sourceRaw.erpItemCode),
+          phpScheduledJobId: selectedJob.jobSource === "PHP" ? selectedJob.id : undefined,
+          plateScheduledJobId: selectedJob.jobSource === "PLATE" ? selectedJob.id : undefined,
         };
         const normalizedEntry: Production = {
           ...fgEntry,

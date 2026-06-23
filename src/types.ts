@@ -593,6 +593,8 @@ export interface Production {
   avgWeight?: number;
   prodFromSheetPlant?: number;
   prodFromFFG?: number;
+  phpScheduledJobId?: string;
+  plateScheduledJobId?: string;
   wastage?: number;
   productionInMeter?: number;
   plannedProductionInMeter?: number;
