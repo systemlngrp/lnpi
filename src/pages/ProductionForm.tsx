@@ -144,7 +144,6 @@ function buildLinkedProduction({
   scheduleId,
   scheduledDate,
   planningId,
-  masterErp,
   defaults,
 }: {
   sourceItem: OrderCatalogItem;
@@ -159,13 +158,11 @@ function buildLinkedProduction({
   scheduleId?: string;
   scheduledDate?: string;
   planningId?: string;
-  masterErp?: string;
   defaults?: Partial<Production>;
 }): Production {
   const raw = sourceItem.raw || {};
   const setsPerBox = firstOptionalNumber(raw.numberOfSetsPerBox, defaults?.setsPerBox);
   const erpCode = firstOptionalString(raw.erpItemCode, sourceItem.erp, defaults?.erpCode);
-  const masterErpValue = firstOptionalString(raw.masterItemNameErpCode, masterErp, defaults?.masterErp);
   const printingColor = firstOptionalString(
     defaults?.printingColor,
     joinPrintingColors(raw.printingColour1, raw.printingColour2),
@@ -192,7 +189,6 @@ function buildLinkedProduction({
     updateTimestamp: timestamp,
     companyName: sourceItem.companyName || firstOptionalString(raw.company, raw.customerName, defaults?.companyName),
     jobCardNo: firstOptionalString(parentJobNo, raw.jobCardNo, defaults?.jobCardNo),
-    masterErp: masterErpValue,
     erpCode,
     shift: firstOptionalString(defaults?.shift),
     setsPerBox,
@@ -883,11 +879,9 @@ export function ProductionForm() {
             scheduleId: selectedSchedule.id,
             scheduledDate: selectedSchedule.scheduledDate,
             planningId: selectedSchedule.id,
-            masterErp: selectedErp,
             defaults: {
               shift: "",
               companyName: selectedCompany?.name || "",
-              masterErp: selectedErp,
               l1: formData.l1 === "" ? undefined : Number(formData.l1),
               f1: formData.f1 === "" ? undefined : Number(formData.f1),
               l2: formData.l2 === "" ? undefined : Number(formData.l2),
@@ -925,11 +919,9 @@ export function ProductionForm() {
             scheduleId: selectedSchedule.id,
             scheduledDate: selectedSchedule.scheduledDate,
             planningId: selectedSchedule.id,
-            masterErp: selectedErp,
             defaults: {
               shift: "",
               companyName: selectedCompany?.name || "",
-              masterErp: selectedErp,
               l1: formData.l1 === "" ? undefined : Number(formData.l1),
               f1: formData.f1 === "" ? undefined : Number(formData.f1),
               l2: formData.l2 === "" ? undefined : Number(formData.l2),
