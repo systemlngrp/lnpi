@@ -1,4 +1,4 @@
-import type { GatePass, GatePassLine, MaterialIn, MaterialLine } from "../types";
+import type { GateEntry, GatePass, GatePassLine, MaterialIn, MaterialLine } from "../types";
 
 export type DerivedGatePassState = "Open" | "Partially Returned" | "Closed" | "Cleared Off";
 
@@ -68,6 +68,16 @@ export function getPendingQtyForGatePass(gatePass: GatePass, materialIn: Materia
   return round2(getGatePassLinesWithReturns(gatePass, materialIn).reduce((sum, line) => sum + Number(line.pendingQty || 0), 0));
 }
 
+export function hasSavedReturnableReceiptGateEntry(gatePass: GatePass, gateEntries: GateEntry[]) {
+  const gatePassId = String(gatePass.id || "").trim();
+  if (!gatePassId) return false;
+
+  return gateEntries.some((entry) => {
+    const purpose = String(entry.purpose || "").trim();
+    const sourceGatePassId = String(entry.sourceGatePassId || "").trim();
+    return purpose === "Returnable Receipt" && sourceGatePassId === gatePassId;
+  });
+}
 export function getGatePassPrimaryPartyName(gatePass: GatePass) {
   return gatePass.companyName || gatePass.recipientName || "-";
 }
@@ -75,3 +85,4 @@ export function getGatePassPrimaryPartyName(gatePass: GatePass) {
 export function getGatePassLineLabel(line: GatePassLine | MaterialLine) {
   return line.itemDescription || line.itemName || line.sourceGatePassItemDescription || "Unknown";
 }
+

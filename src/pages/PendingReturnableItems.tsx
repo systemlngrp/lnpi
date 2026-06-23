@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { Eye, FilePlus2, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
-import { deriveGatePassState, getGatePassLinesWithReturns, getGatePassPrimaryPartyName, getPendingQtyForGatePass, isReturnableGatePass } from "../lib/gatePassState";
-import { GatePass, MaterialIn } from "../types";
+import { deriveGatePassState, getGatePassLinesWithReturns, getGatePassPrimaryPartyName, getPendingQtyForGatePass, hasSavedReturnableReceiptGateEntry, isReturnableGatePass } from "../lib/gatePassState";
+import { GateEntry, GatePass, MaterialIn } from "../types";
 import { formatDate } from "../lib/serial";
 
 export function PendingReturnableItems() {
   const navigate = useNavigate();
   const [gatePasses, setGatePasses] = useData<GatePass>("gate_passes", []);
+  const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGatePassId, setSelectedGatePassId] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export function PendingReturnableItems() {
     () =>
       gatePasses
         .filter((gatePass) => isReturnableGatePass(gatePass))
+        .filter((gatePass) => !hasSavedReturnableReceiptGateEntry(gatePass, gateEntries))
         .filter((gatePass) => {
           const state = deriveGatePassState(gatePass, materialIn);
           return state === "Open" || state === "Partially Returned";
@@ -33,7 +35,7 @@ export function PendingReturnableItems() {
           return haystack.includes(searchTerm.toLowerCase());
         })
         .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime()),
-    [gatePasses, materialIn, searchTerm]
+    [gateEntries, gatePasses, materialIn, searchTerm]
   );
 
   const selectedGatePass = pendingGatePasses.find((gatePass) => gatePass.id === selectedGatePassId) || null;
@@ -166,5 +168,7 @@ export function PendingReturnableItems() {
     </div>
   );
 }
+
+
 
 

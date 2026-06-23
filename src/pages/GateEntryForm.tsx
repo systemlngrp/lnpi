@@ -4,7 +4,7 @@ import { Camera, Loader2, Trash2 } from "lucide-react";
 import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import { Company, GateEntry, GateEntryPhoto, GatePass, Supplier } from "../types";
-import { getPendingQtyForGatePass, isReturnableGatePass } from "../lib/gatePassState";
+import { getPendingQtyForGatePass, hasSavedReturnableReceiptGateEntry, isReturnableGatePass } from "../lib/gatePassState";
 
 const PHOTO_SLOTS = 8;
 
@@ -54,10 +54,11 @@ export function GateEntryForm() {
         .filter((gatePass) => isReturnableGatePass(gatePass))
         .filter((gatePass) => !gatePass.clearOffReason || !gatePass.clearedOffAt)
         .filter((gatePass) => getPendingQtyForGatePass(gatePass, materialIn) > 0)
+        .filter((gatePass) => !hasSavedReturnableReceiptGateEntry(gatePass, gateEntries))
         .map((gatePass) => String(gatePass.recipientId || "").trim())
         .filter(Boolean)
     );
-  }, [gatePasses, materialIn]);
+  }, [gateEntries, gatePasses, materialIn]);
 
   const supplierOptions = useMemo(() => {
     const combined = [
@@ -316,5 +317,6 @@ function Field({
     </div>
   );
 }
+
 
 
