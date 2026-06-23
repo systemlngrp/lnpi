@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
+import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, Machine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
@@ -8,12 +8,13 @@ import { ClipboardList, CheckCircle, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
-import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
+import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { getProductionDisplayStatus } from "../lib/productionStageFilters";
 import { cn } from "../lib/utils";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { getProductionEffectiveType, getRequiredMachinesForProduction } from "../lib/productionType";
 import { getProductionMatchingFields, hasProductionMatchingFieldChanges } from "../lib/productionMatching";
 
 export function ProductionMaster() {
@@ -26,6 +27,7 @@ export function ProductionMaster() {
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [machines] = useData<Machine>("machines", []);
   const { findItemAcrossSources } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -152,8 +154,8 @@ export function ProductionMaster() {
 
     productions.forEach((production) => {
       const item = resolveProductionItem(production);
-      const boxType = getItemValue(item, "boxType");
-      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, boxType).map((m) =>
+      const effectiveType = getProductionEffectiveType(production, item);
+      const requiredMachines = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines).map((m) =>
         normalizeMachineName(m)
       );
 
@@ -163,7 +165,7 @@ export function ProductionMaster() {
       const reasons: string[] = [];
 
       if (requiredMachines.length === 0) {
-        reasons.push(`No required process steps configured for Type: ${String(boxType || "-")}`);
+        reasons.push(`No required process steps configured for Type: ${String(effectiveType || "-")}`);
       }
 
       const isEntryComplete = (entry: ProductionProcessing) => {
@@ -202,7 +204,7 @@ export function ProductionMaster() {
     });
 
     return result;
-  }, [productions, processing, mandatoryMachinesByType]);
+  }, [productions, processing, mandatoryMachinesByType, machines]);
 
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -386,11 +388,11 @@ export function ProductionMaster() {
     return `${machines} (${totalQty})`;
   };
 
-  const getMandatoryStatus = (productionId: string, boxType?: string) => {
-    const required = getRequiredMachinesForType(mandatoryMachinesByType, boxType);
+  const getMandatoryStatus = (production: Production, item?: any) => {
+    const required = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines);
     if (required.length === 0) return { required, done: 0, missing: [] as string[] };
 
-    const doneSet = processingMachinesMap.get(productionId) || new Set<string>();
+    const doneSet = processingMachinesMap.get(production.id) || new Set<string>();
     const missing = required.filter((name) => !doneSet.has(normalizeMachineName(name)));
     return { required, done: required.length - missing.length, missing };
   };
@@ -442,7 +444,7 @@ export function ProductionMaster() {
                 const leastGsm = erpLeastGsmMap.get(erp);
                 const isHighGsm = displayRow.gsm && leastGsm && Number(displayRow.gsm) > Number(leastGsm);
                 const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-                const mandatory = getMandatoryStatus(p.id, getItemValue(item, "boxType"));
+                const mandatory = getMandatoryStatus(p, item);
                 const displayStatus = getProductionDisplayStatus(p);
                 
                 return (
@@ -465,7 +467,7 @@ export function ProductionMaster() {
                       )}
                       <div className="text-sm font-bold">{item?.name || "Unknown"}</div>
                       <div className="text-[10px] text-slate-600 uppercase font-black">
-                        Type: {getItemValue(item, "boxType") || "-"} | Print: {displayRow.printingColor || "-"}
+                        Type: {getProductionEffectiveType(p, item) || "-"} | Print: {displayRow.printingColor || "-"}
                       </div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">
                         OD: {getItemValue(item, "lOd") || "-"}×{getItemValue(item, "wOd") || "-"}×{getItemValue(item, "hOd") || "-"}
@@ -622,7 +624,7 @@ export function ProductionMaster() {
                   const item = resolveProductionItem(p);
                   const normalizedFields = getProductionMatchingFields(p, item);
                   const displayRow = { ...p, ...normalizedFields };
-                  const mandatory = getMandatoryStatus(p.id, getItemValue(item, "boxType"));
+                  const mandatory = getMandatoryStatus(p, item);
                   const erp = String(displayRow.erpCode || "").trim();
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = displayRow.gsm && leastGsm && Number(displayRow.gsm) > Number(leastGsm);
@@ -652,7 +654,7 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{item?.name || "Unknown"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{getItemValue(item, "isSample") ? "Yes" : "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{getItemValue(item, "boxType") || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{getProductionEffectiveType(p, item) || "-"}</td>
                       <td className="px-4 py-4 text-[11px] text-black border border-black whitespace-nowrap">
                         {mandatory.required.length === 0 ? (
                           "-"

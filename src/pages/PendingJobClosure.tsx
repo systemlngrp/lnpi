@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, MaterialIssue } from "../types";
+import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, MaterialIssue, Machine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
@@ -8,11 +8,12 @@ import { ClipboardList, CheckCircle, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
-import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
+import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { getProductionDisplayStatus } from "../lib/productionStageFilters";
-import { fetchNpdItems } from "../lib/npdItems";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { getProductionEffectiveType, getRequiredMachinesForProduction } from "../lib/productionType";
 
 export function PendingJobClosure() {
   const navigate = useNavigate();
@@ -25,16 +26,8 @@ export function PendingJobClosure() {
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
-  const [npdItems, setNpdItems] = useState<Item[]>([]);
-
-  useEffect(() => {
-    fetchNpdItems()
-      .then(setNpdItems)
-      .catch((error) => {
-        console.error("Failed to fetch NPD items for Pending Job Closure:", error);
-        setNpdItems([]);
-      });
-  }, []);
+  const [machines] = useData<Machine>("machines", []);
+  const { findItemAcrossSources } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [closingId, setClosingId] = useState<string | null>(null);
@@ -44,6 +37,15 @@ export function PendingJobClosure() {
   const [cancelSubmittingId, setCancelSubmittingId] = useState<string | null>(null);
   const [editingProductionDateId, setEditingProductionDateId] = useState<string | null>(null);
   const [productionDateDraft, setProductionDateDraft] = useState("");
+
+  const resolveProductionItem = (production?: Production | null) => {
+    if (!production) return undefined;
+    return findItemAcrossSources(
+      String(production.itemId || ""),
+      production.itemSource,
+      production.erpCode
+    );
+  };
 
   const updateCloseMeta = async (id: string, patch: Partial<Pick<Production, "closeBy" | "closeDate">>) => {
     const resolvedPatch = { ...patch };
@@ -150,9 +152,9 @@ export function PendingJobClosure() {
     const result = new Map<string, { canClose: boolean; reasons: string[] }>();
 
     productions.forEach((production) => {
-      const item = npdItems.find((i) => i.id === String(production.itemId || "").trim());
-      const boxType = (item as any)?.boxType;
-      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, boxType).map((m) =>
+      const item = resolveProductionItem(production);
+      const effectiveType = getProductionEffectiveType(production, item);
+      const requiredMachines = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines).map((m) =>
         normalizeMachineName(m)
       );
 
@@ -162,7 +164,7 @@ export function PendingJobClosure() {
       const reasons: string[] = [];
 
       if (requiredMachines.length === 0) {
-        reasons.push(`No required process steps configured for Type: ${String(boxType || "-")}`);
+        reasons.push(`No required process steps configured for Type: ${String(effectiveType || "-")}`);
       }
 
       const isEntryComplete = (entry: ProductionProcessing) => {
@@ -201,7 +203,7 @@ export function PendingJobClosure() {
     });
 
     return result;
-  }, [productions, npdItems, processing, mandatoryMachinesByType]);
+  }, [productions, processing, mandatoryMachinesByType, machines, findItemAcrossSources]);
 
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -362,7 +364,7 @@ export function PendingJobClosure() {
       const isNotCancelled = p.status !== "Cancelled";
       if (!isNotClosed || !isNotCancelled) return false;
 
-      const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
+      const item = resolveProductionItem(p);
       const schedule = schedules.find(s => s.id === p.scheduleId);
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
@@ -383,11 +385,11 @@ export function PendingJobClosure() {
     paginatedItems: paginatedList,
   } = useClientPagination(filteredList, 25);
 
-  const getMandatoryStatus = (productionId: string, boxType?: string) => {
-    const required = getRequiredMachinesForType(mandatoryMachinesByType, boxType);
+  const getMandatoryStatus = (production: Production, item?: any) => {
+    const required = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines);
     if (required.length === 0) return { required, done: 0, missing: [] as string[] };
 
-    const doneSet = processingMachinesMap.get(productionId) || new Set<string>();
+    const doneSet = processingMachinesMap.get(production.id) || new Set<string>();
     const missing = required.filter((name) => !doneSet.has(normalizeMachineName(name)));
     return { required, done: required.length - missing.length, missing };
   };
@@ -395,7 +397,7 @@ export function PendingJobClosure() {
   const cancelTarget = cancelModalJobId ? productions.find((p) => p.id === cancelModalJobId) : null;
   const cancelTargetSchedule = cancelTarget?.scheduleId ? schedules.find((schedule) => schedule.id === cancelTarget.scheduleId) : null;
   const cancelTargetOrder = cancelTargetSchedule ? orders.find((order) => order.id === cancelTargetSchedule.orderId) : null;
-  const cancelTargetItem = cancelTarget ? npdItems.find((item) => item.id === String(cancelTarget.itemId || "").trim()) : null;
+  const cancelTargetItem = cancelTarget ? resolveProductionItem(cancelTarget) : null;
 
   return (
     <div className="space-y-6">
@@ -416,12 +418,12 @@ export function PendingJobClosure() {
                 const schedule = schedules.find(s => s.id === p.scheduleId);
                 const order = orders.find(o => o.id === schedule?.orderId);
                 const company = companies.find(c => c.id === order?.companyId);
-                const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
+                const item = resolveProductionItem(p);
                 const erp = String(p.erpCode || "").trim();
                 const leastGsm = erpLeastGsmMap.get(erp);
                 const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                 const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-                const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
+                const mandatory = getMandatoryStatus(p, item);
                 
                 return (
                   <div key={p.id} className={`${isHighGsm ? "bg-amber-50" : "bg-white"} border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative`}>
@@ -438,10 +440,10 @@ export function PendingJobClosure() {
                       )}
                       <div className="text-sm font-bold">{item?.name || "Unknown"}</div>
                       <div className="text-[10px] text-slate-600 uppercase font-black">
-                        Type: {(item as any)?.boxType || "-"} | Print: {p.printingColor || "-"}
+                        Type: {getProductionEffectiveType(p, item) || "-"} | Print: {p.printingColor || "-"}
                       </div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">
-                        OD: {item?.lOd || "-"}×{item?.wOd || "-"}×{item?.hOd || "-"}
+                        OD: {(item as any)?.lOd || item?.raw?.lOd || "-"}{" x "}{(item as any)?.wOd || item?.raw?.wOd || "-"}{" x "}{(item as any)?.hOd || item?.raw?.hOd || "-"}
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <div className="flex flex-col">
@@ -616,8 +618,8 @@ export function PendingJobClosure() {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
-                  const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
+                  const item = resolveProductionItem(p);
+                  const mandatory = getMandatoryStatus(p, item);
                   const erp = String(p.erpCode || "").trim();
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
@@ -633,7 +635,7 @@ export function PendingJobClosure() {
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{item?.name || "Unknown"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.isSample ? "Yes" : "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.boxType || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{getProductionEffectiveType(p, item) || "-"}</td>
                       <td className="px-4 py-4 text-[11px] text-black border border-black whitespace-nowrap">
                         {mandatory.required.length === 0 ? (
                           "-"
@@ -665,9 +667,9 @@ export function PendingJobClosure() {
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.length || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.breadth || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.height || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.lOd || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.wOd || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.hOd || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{(item as any)?.lOd || item?.raw?.lOd || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{(item as any)?.wOd || item?.raw?.wOd || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{(item as any)?.hOd || item?.raw?.hOd || "-"}</td>
 
                       <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{p.ply || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.flute || "-"}</td>
@@ -697,7 +699,7 @@ export function PendingJobClosure() {
                       </td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).reelAsPerCalc || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).reelActualWithTrimming || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).cuttingWithTrimming || item?.cuttingSize || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).cuttingWithTrimming || (item as any)?.cuttingSize || item?.raw?.cuttingSize || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.plannedProductionInMeter ?? "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.sheetWeight || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.fluteBatches || "-"}</td>
