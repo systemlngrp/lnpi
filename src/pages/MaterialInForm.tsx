@@ -247,15 +247,26 @@ export function MaterialInForm() {
     return getGatePassLinesWithReturns(linkedSourceGatePass, materialIn, editingEntry?.id).filter((line) => Number(line.pendingQty || 0) > 0);
   }, [editingEntry?.id, linkedSourceGatePass, materialIn]);
 
+  const resolveServiceForGatePassLine = (sourceLine?: { itemId?: string; itemName?: string; itemDescription?: string }) => {
+    if (!sourceLine) return undefined;
+
+    const normalizedCandidates = [sourceLine.itemName, sourceLine.itemDescription]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+
+    return services.find((service) => service.id === sourceLine.itemId)
+      || services.find((service) => normalizedCandidates.includes(service.name.trim().toLowerCase()))
+      || services.find((service) => normalizedCandidates.some((candidate) => service.name.trim().toLowerCase().includes(candidate) || candidate.includes(service.name.trim().toLowerCase())));
+  };
+
   useEffect(() => {
     if (!isServiceReturn) return;
     const sourceLine = pendingGatePassLines.find((line) => line.id === currentSourceGatePassLineId);
     if (!sourceLine) return;
 
-    const matchedService = services.find((service) => service.id === sourceLine.itemId)
-      || services.find((service) => service.name.trim().toLowerCase() === String(sourceLine.itemName || "").trim().toLowerCase());
+    const matchedService = resolveServiceForGatePassLine(sourceLine);
 
-    setCurrentItemId(matchedService?.id || sourceLine.itemId || "");
+    setCurrentItemId(matchedService?.id || "");
     setCurrentQty(Number(sourceLine.pendingQty || 0));
     setCurrentInvoiceRate(Number(sourceLine.rate || 0));
   }, [currentSourceGatePassLineId, isServiceReturn, pendingGatePassLines, services]);
@@ -267,18 +278,17 @@ export function MaterialInForm() {
     if (!pendingGatePassLines.length) return;
 
     const autoLines = pendingGatePassLines.map((sourceLine) => {
-      const matchedService = services.find((service) => service.id === sourceLine.itemId)
-        || services.find((service) => service.name.trim().toLowerCase() === String(sourceLine.itemName || "").trim().toLowerCase());
+      const matchedService = resolveServiceForGatePassLine(sourceLine);
       const qty = Number(sourceLine.pendingQty || 0);
       const invoiceRate = Number(sourceLine.rate || 0);
 
       return applySupplyTypeTaxRates({
         id: crypto.randomUUID(),
         itemId: matchedService?.id || sourceLine.itemId || sourceLine.id,
-        itemName: matchedService?.name || sourceLine.itemName,
+        itemName: matchedService?.name || sourceLine.itemName || sourceLine.itemDescription,
         lineType: "Service",
         serviceId: matchedService?.id || sourceLine.itemId || sourceLine.id,
-        serviceName: matchedService?.name || sourceLine.itemName,
+        serviceName: matchedService?.name || sourceLine.itemName || sourceLine.itemDescription,
         sourceGatePassId: linkedSourceGatePass?.id,
         sourceGatePassNo: linkedSourceGatePass?.gatePassNo,
         sourceGatePassLineId: sourceLine.id,
@@ -297,8 +307,15 @@ export function MaterialInForm() {
       }, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
     });
 
+    const firstSourceLine = pendingGatePassLines[0];
+    const firstMatchedService = resolveServiceForGatePassLine(firstSourceLine);
+
     setLines(autoLines);
     resetLineDrafts();
+    setCurrentSourceGatePassLineId(firstSourceLine?.id || "");
+    setCurrentItemId(firstMatchedService?.id || "");
+    setCurrentQty(Number(firstSourceLine?.pendingQty || 0));
+    setCurrentInvoiceRate(Number(firstSourceLine?.rate || 0));
     hasAutoFilledServiceReturnRef.current = true;
   }, [editingEntry, isInterState, linkedGateEntry, linkedSourceGatePass, pendingGatePassLines, services]);
 
