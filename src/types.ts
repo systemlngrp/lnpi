@@ -500,7 +500,7 @@ export interface MaterialIn {
   mdEmailId?: string;
   md_approval_remark?: string;
   tallyTimestamp?: string;
-  status: "Pending MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally" | "Completed";
+  status: "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally" | "Completed";
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -863,3 +863,4 @@ export interface OperationDashboardSummary {
   comparisonLabel: string;
   groups: OperationDashboardMetricGroup[];
 }
+

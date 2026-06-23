@@ -2215,7 +2215,7 @@ function normalizeWorkflowStatus(tableName: string, row: any) {
   const normalized = { ...row };
   const currentStatus = typeof normalized.status === "string" ? normalized.status.trim() : normalized.status;
 
-  if (currentStatus && tableName !== "productions") {
+  if (currentStatus && tableName !== "productions" && tableName !== "material_in") {
     normalized.status = currentStatus;
     return normalized;
   }
@@ -6111,3 +6111,4 @@ async function startServer() {
 }
 
 startServer();
+
