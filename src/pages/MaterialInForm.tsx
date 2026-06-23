@@ -568,9 +568,16 @@ export function MaterialInForm() {
           patch.invoiceRate !== undefined
             ? Number(patch.invoiceRate || 0)
             : (line.invoiceRate ? Number(line.invoiceRate) : 0) || Number(poLine?.rate || 0);
+        const selectedService = isServiceReturn && patch.itemId
+          ? services.find((entry) => entry.id === String(patch.itemId))
+          : undefined;
         const nextLine = recalculateMaterialLine({
           ...line,
           ...patch,
+          itemId: selectedService?.id || patch.itemId || line.itemId,
+          itemName: selectedService?.name || patch.itemName || line.itemName,
+          serviceId: selectedService?.id || patch.serviceId || line.serviceId,
+          serviceName: selectedService?.name || patch.serviceName || line.serviceName,
           poLineId,
           poId: po?.id,
           poNo: po?.poNo,
@@ -1399,7 +1406,16 @@ export function MaterialInForm() {
                       const materialName = (line.itemName || getMaterial(line.itemId)?.name || "Unknown");
                       return (
                         <tr key={line.id} className="divide-x divide-black">
-                          <td className="px-4 py-3 text-sm text-black border border-black">{materialName}</td>
+                          <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
+                            {isServiceReturn ? (
+                              <Select
+                                options={serviceOptions}
+                                value={line.serviceId || line.itemId || ""}
+                                onChange={(value) => updateLine(line.id, { itemId: value, serviceId: value })}
+                                placeholder="Select Service..."
+                              />
+                            ) : materialName}
+                          </td>
                           {isServiceReturn ? <td className="px-4 py-3 text-sm text-black border border-black">{line.sourceGatePassItemDescription || "-"}</td> : null}
                           {!isFgType && mrrType === "Others" ? (
                             <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
