@@ -15,8 +15,8 @@ const LIGHT: [number, number, number] = [245, 245, 245];
 const DARK: [number, number, number] = [20, 20, 20];
 const TABLE_MARGIN_X = PAGE_X + 1;
 const META_FONT = 9;
-const TABLE_FONT = 9;
-const TITLE_FONT = 9;
+const TABLE_FONT = 12;
+const TITLE_FONT = 12;
 
 function resolveFgItem(order?: Partial<Order> | null, npdItems?: Item[]) {
   if (!order || !npdItems) return undefined;
@@ -139,10 +139,10 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
     safeBody,
     {
       0: { halign: "center", cellWidth: 20, fontStyle: "bold" },
-      1: { halign: "right", cellWidth: 38, fontStyle: "bold" },
-      2: { halign: "right", cellWidth: 36, fontStyle: "bold" },
+      1: { halign: "center", cellWidth: 38, fontStyle: "bold" },
+      2: { halign: "center", cellWidth: 36, fontStyle: "bold" },
       3: { halign: "center", cellWidth: 28 },
-      4: { halign: "right", cellWidth: 40, fontStyle: "bold" },
+      4: { halign: "center", cellWidth: 40, fontStyle: "bold" },
     }
   ));
   const finalY = (doc as any).lastAutoTable.finalY;
@@ -154,10 +154,10 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
     [["Totals", totalBundles ? totalBundles.toLocaleString() : "", "", "", totalQty ? totalQty.toLocaleString() : ""]],
     {
       0: { fontStyle: "bold", cellWidth: 20 },
-      1: { halign: "right", cellWidth: 38, fontStyle: "bold" },
+      1: { halign: "center", cellWidth: 38, fontStyle: "bold" },
       2: { cellWidth: 36 },
       3: { cellWidth: 28 },
-      4: { halign: "right", cellWidth: 40, fontStyle: "bold" },
+      4: { halign: "center", cellWidth: 40, fontStyle: "bold" },
     }
   ));
   return (doc as any).lastAutoTable.finalY + 3;
