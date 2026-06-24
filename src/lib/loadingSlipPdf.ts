@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable, { type UserOptions } from "jspdf-autotable";
 import { formatDate } from "./serial";
-import type { Company, DispatchPlan, Item, LoadingSlip, LoadingSlipAllocation, Order, Setting, Truck } from "../types";
+import type { Company, DispatchPlan, Item, LinkedLoadingDetail, LoadingSlip, LoadingSlipAllocation, Order, Setting, Truck } from "../types";
 import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
 const FRAME_X = 22;
@@ -204,6 +204,57 @@ function renderLinkedDetailSection(doc: jsPDF, startY: number, title: string, ro
   return (doc as any).lastAutoTable.finalY + 3;
 }
 
+function renderPackingSection(
+  doc: jsPDF,
+  startY: number,
+  title: string,
+  packingDetails?: LoadingSlip["packingDetails"],
+  extraItemsQty?: number
+) {
+  const sectionY = drawSectionHeader(doc, title, startY);
+  const packingRows: Array<Array<string | number>> = Array.isArray(packingDetails) && packingDetails.length > 0
+    ? packingDetails.map((detail, index) => [
+        index + 1,
+        Number(detail.bundles || 0).toLocaleString(),
+        Number(detail.packSize || 0).toLocaleString(),
+        Number(detail.quantity || 0).toLocaleString(),
+      ])
+    : [["-", "-", "-", "-"]];
+
+  if (extraItemsQty) {
+    packingRows.push(["", "Extra Items (Loose)", "", Number(extraItemsQty || 0).toLocaleString()]);
+  }
+
+  autoTable(
+    doc,
+    buildTableOptions(
+      sectionY,
+      [["SL", "Bundles", "Pack Size", "Quantity"]],
+      packingRows,
+      {
+        0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
+        1: { halign: "right", cellWidth: 46 },
+        2: { halign: "right", cellWidth: 46 },
+        3: { halign: "right", cellWidth: 43, fontStyle: "bold" },
+      }
+    )
+  );
+
+  return (doc as any).lastAutoTable.finalY + 3;
+}
+
+function getLinkedPackingRows(details?: LinkedLoadingDetail[]) {
+  if (!Array.isArray(details) || details.length === 0) return undefined;
+  const rows = details.flatMap((detail) => Array.isArray(detail.packingDetails) ? detail.packingDetails : []);
+  return rows.length > 0 ? rows : undefined;
+}
+
+function getLinkedExtraQty(details?: LinkedLoadingDetail[]) {
+  if (!Array.isArray(details) || details.length === 0) return undefined;
+  const total = details.reduce((sum, detail) => sum + Number(detail.extraItemsQty || 0), 0);
+  return total > 0 ? total : undefined;
+}
+
 export async function downloadLoadingSlipPdf({
   slip,
   setting,
@@ -289,36 +340,10 @@ export async function downloadLoadingSlipPdf({
 
   currentY = (doc as any).lastAutoTable.finalY + 4;
   currentY = renderLinkedDetailSection(doc, currentY, "PHP DETAILS", slip.phpDetails);
+  currentY = renderPackingSection(doc, currentY, "PHP PACKING DETAILS", getLinkedPackingRows(slip.phpDetails), getLinkedExtraQty(slip.phpDetails));
   currentY = renderLinkedDetailSection(doc, currentY, "PLATE DETAILS", slip.plateDetails);
-
-  currentY = drawSectionHeader(doc, "PACKING DETAILS", currentY);
-  const packingRows: Array<Array<string | number>> = Array.isArray(slip.packingDetails) && slip.packingDetails.length > 0
-    ? slip.packingDetails.map((detail, index) => [
-        index + 1,
-        Number(detail.bundles || 0).toLocaleString(),
-        Number(detail.packSize || 0).toLocaleString(),
-        Number(detail.quantity || 0).toLocaleString(),
-      ])
-    : [["-", "-", "-", "-"]];
-  if (slip.extraItemsQty) {
-    packingRows.push(["", "Extra Items (Loose)", "", Number(slip.extraItemsQty || 0).toLocaleString()]);
-  }
-
-  autoTable(
-    doc,
-    buildTableOptions(
-      currentY,
-      [["SL", "Bundles", "Pack Size", "Quantity"]],
-      packingRows,
-      {
-        0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
-        1: { halign: "right", cellWidth: 46 },
-        2: { halign: "right", cellWidth: 46 },
-        3: { halign: "right", cellWidth: 43, fontStyle: "bold" },
-      }
-    )
-  );
-  currentY = (doc as any).lastAutoTable.finalY + 4;
+  currentY = renderPackingSection(doc, currentY, "PLATE PACKING DETAILS", getLinkedPackingRows(slip.plateDetails), getLinkedExtraQty(slip.plateDetails));
+  currentY = renderPackingSection(doc, currentY, "FG PACKING DETAILS", slip.packingDetails, slip.extraItemsQty) + 1;
 
   const footerY = Math.min(currentY + 3, FRAME_Y + FRAME_HEIGHT - 20);
   doc.setFont("helvetica", "italic");
