@@ -4639,7 +4639,6 @@ const createHandlers = (tableName: string) => {
             SELECT
               ili.*,
               COALESCE(
-                NULLIF(TRIM(ili.itemName), ''),
                 NULLIF(TRIM(i.name), ''),
                 NULLIF(TRIM(n.itemName), ''),
                 NULLIF(TRIM(n.name), ''),
