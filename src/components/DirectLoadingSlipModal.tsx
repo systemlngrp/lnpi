@@ -59,6 +59,14 @@ export function DirectLoadingSlipModal({
   const [draft, setDraft] = useState<Draft>(makeDraft());
   const [isSaving, setIsSaving] = useState(false);
   const company = useMemo(() => companies.find((row) => row.id === draft.companyId), [companies, draft.companyId]);
+  const filteredItems = useMemo(() => {
+    const companyName = String(company?.name || "").trim().toLowerCase();
+    if (!companyName) return [];
+    return allItems.filter((row) => {
+      const itemCompany = String(row.companyName || "").trim().toLowerCase();
+      return !itemCompany || itemCompany === companyName;
+    });
+  }, [allItems, company]);
   const item = useMemo(() => allItems.find((row) => row.id === draft.itemId), [allItems, draft.itemId]);
 
   const normalizedPacking = useMemo(
@@ -192,7 +200,7 @@ export function DirectLoadingSlipModal({
                       "Company",
                       <select
                         value={draft.companyId}
-                        onChange={(e) => setDraft((prev) => ({ ...prev, companyId: e.target.value }))}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, companyId: e.target.value, itemId: "" }))}
                         className="w-full rounded border border-black px-3 py-2 text-sm"
                       >
                         <option value="">Select Company</option>
@@ -214,9 +222,10 @@ export function DirectLoadingSlipModal({
                         value={draft.itemId}
                         onChange={(e) => setDraft((prev) => ({ ...prev, itemId: e.target.value }))}
                         className="w-full rounded border border-black px-3 py-2 text-sm"
+                        disabled={!company}
                       >
-                        <option value="">Select Item</option>
-                        {allItems.map((row) => (
+                        <option value="">{company ? "Select Item" : "Select Company First"}</option>
+                        {filteredItems.map((row) => (
                           <option key={`${row.source}-${row.id}`} value={row.id}>
                             [{row.source}] {row.name}
                             {row.erp ? ` | ERP ${row.erp}` : ""}

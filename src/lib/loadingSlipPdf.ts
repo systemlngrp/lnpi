@@ -14,7 +14,7 @@ const BLACK: [number, number, number] = [0, 0, 0];
 const LIGHT: [number, number, number] = [245, 245, 245];
 const DARK: [number, number, number] = [20, 20, 20];
 const TABLE_MARGIN_X = PAGE_X + 1;
-const META_FONT = 9;
+const META_FONT = 12;
 const TABLE_FONT = 12;
 const TITLE_FONT = 12;
 const CONTENT_W = PAGE_W - ((TABLE_MARGIN_X - PAGE_X) * 2);
@@ -108,7 +108,7 @@ function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: s
   drawCellText(doc, "Date", leftX, startY + 6.8, labelW, "left");
   drawCellText(doc, meta.date, x1, startY + 6.8, leftValueW, "left");
   drawCellText(doc, "Customer", x2, startY + 6.8, rightLabelW, "left");
-  drawCellText(doc, meta.company, x3, startY + 6.8, rightValueW, "right");
+  drawCellText(doc, meta.company, x3, startY + 6.8, rightValueW, "left");
 
   drawCellText(doc, "ERP Code", leftX, y1 + 6.8, labelW, "left");
   drawCellText(doc, meta.erpCode, x1, y1 + 6.8, leftValueW, "left");
@@ -289,10 +289,6 @@ export async function downloadLoadingSlipPdf({
   const totalPhpPlate = phpPacking.reduce((sum, row) => sum + Number(row.quantity || 0), 0) + platePacking.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
   currentY = drawTotalPhpPlate(doc, currentY, totalPhpPlate);
 
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(4.5);
-  doc.setTextColor(...DARK);
-  doc.text("System generated loading slip", PAGE_X + PAGE_W / 2, Math.min(currentY + 2, PAGE_Y + PAGE_H - 24), { align: "center" });
   drawSignatures(doc);
 
   const safeSlipNo = String(slip.slipNo || "LoadingSlip").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
