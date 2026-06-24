@@ -1,8 +1,8 @@
 import jsPDF from "jspdf";
 import autoTable, { type UserOptions } from "jspdf-autotable";
 import { formatDate } from "./serial";
-import type { Company, DispatchPlan, Item, LinkedLoadingDetail, LoadingSlip, Order, PackingDetail, Setting, Truck } from "../types";
-import { resolveLoadingSlipLineContext, summarizeLoadingSlip } from "./loadingSlipContext";
+import type { Company, DispatchPlan, Item, LoadingSlip, Order, PackingDetail, Setting, Truck } from "../types";
+import { summarizeLoadingSlip } from "./loadingSlipContext";
 import { normalizeOrderCatalogItem } from "./orderItems";
 import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
@@ -13,6 +13,10 @@ const PAGE_H = 279;
 const BLACK: [number, number, number] = [0, 0, 0];
 const LIGHT: [number, number, number] = [245, 245, 245];
 const DARK: [number, number, number] = [20, 20, 20];
+const TABLE_MARGIN_X = PAGE_X + 1;
+const META_FONT = 9;
+const TABLE_FONT = 9;
+const TITLE_FONT = 9;
 
 function resolveFgItem(order?: Partial<Order> | null, npdItems?: Item[]) {
   if (!order || !npdItems) return undefined;
@@ -22,16 +26,16 @@ function resolveFgItem(order?: Partial<Order> | null, npdItems?: Item[]) {
 function tableOptions(startY: number, head: UserOptions["head"], body: UserOptions["body"], columnStyles?: UserOptions["columnStyles"]): UserOptions {
   return {
     startY,
-    margin: { left: PAGE_X + 4, right: PAGE_X + 4 },
+    margin: { left: TABLE_MARGIN_X, right: TABLE_MARGIN_X },
     head,
     body,
     theme: "grid",
     styles: {
       font: "helvetica",
-      fontSize: 5.2,
+      fontSize: TABLE_FONT,
       textColor: 0,
       halign: "center",
-      cellPadding: { top: 1, right: 1, bottom: 1, left: 1 },
+      cellPadding: { top: 1.2, right: 1.2, bottom: 1.2, left: 1.2 },
       lineColor: BLACK,
       lineWidth: 0.2,
       overflow: "linebreak",
@@ -55,51 +59,63 @@ function tableOptions(startY: number, head: UserOptions["head"], body: UserOptio
   };
 }
 
+function drawCellText(doc: jsPDF, text: string, x: number, y: number, width: number, align: "left" | "right" | "center") {
+  const safeText = String(text || "-");
+  const lines = doc.splitTextToSize(safeText, Math.max(4, width - 3));
+  const tx = align === "left" ? x + 1.2 : align === "right" ? x + width - 1.2 : x + width / 2;
+  doc.text(lines, tx, y, { align });
+}
+
 function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: string; truckNo: string; erpCode: string; company: string; itemName: string }) {
-  const leftX = PAGE_X + 4;
-  const totalW = PAGE_W - 8;
+  const leftX = TABLE_MARGIN_X;
+  const totalW = PAGE_W - ((TABLE_MARGIN_X - PAGE_X) * 2);
   const halfW = totalW / 2;
-  const labelW = 18;
-  const rowH = 8;
+  const labelW = halfW * 0.35;
+  const valueW = halfW * 0.65;
+  const rowH = 9;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.text(`SL No: ${meta.slipNo || "-"}`, PAGE_X + PAGE_W - 6, startY - 1, { align: "right" });
+  doc.setFontSize(META_FONT);
+  doc.text(`SL No: ${meta.slipNo || "-"}`, PAGE_X + PAGE_W - 1, startY - 1.5, { align: "right" });
 
-  const rows: Array<[string, string, string, string]> = [
-    ["Date", meta.date, "Truck No", meta.truckNo],
-    ["ERP Code", meta.erpCode, "Company", meta.company],
-    ["Item Name", meta.itemName, "", ""],
+  const rows = [
+    { leftLabel: "Date", leftValue: meta.date, rightLabel: "Truck No", rightValue: meta.truckNo },
+    { leftLabel: "ERP Code", leftValue: meta.erpCode, rightLabel: "Customer", rightValue: meta.company },
   ];
 
   rows.forEach((row, idx) => {
     const y = startY + idx * rowH;
-    const rightValueW = halfW - labelW;
+    const rightX = leftX + halfW;
+
     doc.rect(leftX, y, labelW, rowH);
-    doc.rect(leftX + labelW, y, rightValueW, rowH);
-    doc.rect(leftX + halfW, y, labelW, rowH);
-    doc.rect(leftX + halfW + labelW, y, rightValueW, rowH);
+    doc.rect(leftX + labelW, y, valueW, rowH);
+    doc.rect(rightX, y, labelW, rowH);
+    doc.rect(rightX + labelW, y, valueW, rowH);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(5.6);
-    doc.text(row[0], leftX + labelW / 2, y + 4.8, { align: "center" });
-    if (row[2]) doc.text(row[2], leftX + halfW + labelW / 2, y + 4.8, { align: "center" });
-
-    doc.setFont("helvetica", "bold");
-    const leftValueLines = doc.splitTextToSize(String(row[1] || "-"), rightValueW - 2);
-    const rightValueLines = doc.splitTextToSize(String(row[3] || "-"), rightValueW - 2);
-    doc.text(leftValueLines, leftX + labelW + rightValueW / 2, y + 4.2, { align: "center" });
-    if (row[2]) doc.text(rightValueLines, leftX + halfW + labelW + rightValueW / 2, y + 4.2, { align: "center" });
+    doc.setFontSize(META_FONT);
+    drawCellText(doc, row.leftLabel, leftX, y + 5.7, labelW, "left");
+    drawCellText(doc, row.leftValue, leftX + labelW, y + 5.7, valueW, "left");
+    drawCellText(doc, row.rightLabel, rightX, y + 5.7, labelW, "left");
+    drawCellText(doc, row.rightValue, rightX + labelW, y + 5.7, valueW, "right");
   });
 
-  return startY + rows.length * rowH + 4;
+  const itemY = startY + rows.length * rowH;
+  doc.rect(leftX, itemY, labelW, rowH);
+  doc.rect(leftX + labelW, itemY, totalW - labelW, rowH);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(META_FONT);
+  drawCellText(doc, "Item Name", leftX, itemY + 5.7, labelW, "left");
+  drawCellText(doc, meta.itemName, leftX + labelW, itemY + 5.7, totalW - labelW, "right");
+
+  return itemY + rowH + 3;
 }
 
 function drawSectionTitle(doc: jsPDF, title: string, startY: number) {
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(TITLE_FONT);
   doc.text(title, PAGE_X + PAGE_W / 2, startY, { align: "center" });
-  return startY + 2;
+  return startY + 1.5;
 }
 
 function toPackingRows(details?: PackingDetail[]) {
@@ -144,7 +160,7 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
       4: { halign: "right", cellWidth: 40, fontStyle: "bold" },
     }
   ));
-  return (doc as any).lastAutoTable.finalY + 5;
+  return (doc as any).lastAutoTable.finalY + 3;
 }
 
 function drawTotalPhpPlate(doc: jsPDF, startY: number, totalQty: number) {
@@ -157,7 +173,7 @@ function drawTotalPhpPlate(doc: jsPDF, startY: number, totalQty: number) {
       1: { halign: "center", cellWidth: 30, fontStyle: "bold" },
     }
   ));
-  return (doc as any).lastAutoTable.finalY + 8;
+  return (doc as any).lastAutoTable.finalY + 6;
 }
 
 function drawSignatures(doc: jsPDF) {
@@ -198,9 +214,7 @@ export async function downloadLoadingSlipPdf({
   let currentY = (await renderOrganizationHeader(doc, setting, {
     startY: PAGE_Y + 3,
     drawDivider: false,
-    titleFontSize: 11,
-    subtitleFontSize: 6,
-  })).currentY;
+  } as any)).currentY;
 
   const resolveOrderItem = (order?: Partial<Order> | null) => resolveFgItem(order, npdItems);
   const summary = summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem: (order) => resolveOrderItem(order) as any });
@@ -211,7 +225,7 @@ export async function downloadLoadingSlipPdf({
   const truckNo = String(trucks.find((row) => row.id === slip.truckId)?.truckNo || "-").trim() || "-";
   const totalQty = slip.lines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0);
 
-  currentY = drawTopMeta(doc, currentY + 3, {
+  currentY = drawTopMeta(doc, currentY + 2, {
     slipNo: String(slip.slipNo || "-"),
     date: formatDate(slip.date),
     truckNo,
