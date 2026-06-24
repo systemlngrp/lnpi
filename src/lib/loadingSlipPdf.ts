@@ -163,9 +163,26 @@ function buildTableOptions(startY: number, head: UserOptions["head"], body: User
   };
 }
 
+function drawSignatureRow(doc: jsPDF) {
+  const baseY = FRAME_Y + FRAME_HEIGHT - 16;
+  const segments = [
+    { label: "Security", center: CONTENT_X + 18 },
+    { label: "Dispatch Executive", center: FRAME_X + FRAME_WIDTH / 2 },
+    { label: "Driver", center: CONTENT_X + CONTENT_WIDTH - 18 },
+  ];
+
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.setLineWidth(0.25);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(4.8);
+  segments.forEach((segment) => {
+    doc.line(segment.center - 21, baseY, segment.center + 21, baseY);
+    doc.text(segment.label, segment.center, baseY + 4.5, { align: "center" });
+  });
+}
+
 function renderLinkedDetailSection(doc: jsPDF, startY: number, title: string, rows: LoadingSlip["phpDetails"]) {
   const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-  if (safeRows.length === 0) return startY;
 
   const sectionY = drawSectionHeader(doc, title, startY);
   autoTable(
@@ -173,7 +190,9 @@ function renderLinkedDetailSection(doc: jsPDF, startY: number, title: string, ro
     buildTableOptions(
       sectionY,
       [["SL", "Item Name", "Required Qty"]],
-      safeRows.map((row, index) => [index + 1, row?.itemName || "-", Number(row?.requiredQty || 0).toLocaleString()]),
+      safeRows.length > 0
+        ? safeRows.map((row, index) => [index + 1, row?.itemName || "-", Number(row?.requiredQty || 0).toLocaleString()])
+        : [["-", "-", "-"]],
       {
         0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
         1: { cellWidth: 117 },
@@ -272,40 +291,42 @@ export async function downloadLoadingSlipPdf({
   currentY = renderLinkedDetailSection(doc, currentY, "PHP DETAILS", slip.phpDetails);
   currentY = renderLinkedDetailSection(doc, currentY, "PLATE DETAILS", slip.plateDetails);
 
-  if (Array.isArray(slip.packingDetails) && slip.packingDetails.length > 0) {
-    currentY = drawSectionHeader(doc, "PACKING DETAILS", currentY);
-    const packingRows: Array<Array<string | number>> = slip.packingDetails.map((detail, index) => [
-      index + 1,
-      Number(detail.bundles || 0).toLocaleString(),
-      Number(detail.packSize || 0).toLocaleString(),
-      Number(detail.quantity || 0).toLocaleString(),
-    ]);
-    if (slip.extraItemsQty) {
-      packingRows.push(["", "Extra Items (Loose)", "", Number(slip.extraItemsQty || 0).toLocaleString()]);
-    }
-
-    autoTable(
-      doc,
-      buildTableOptions(
-        currentY,
-        [["SL", "Bundles", "Pack Size", "Quantity"]],
-        packingRows,
-        {
-          0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
-          1: { halign: "right", cellWidth: 46 },
-          2: { halign: "right", cellWidth: 46 },
-          3: { halign: "right", cellWidth: 43, fontStyle: "bold" },
-        }
-      )
-    );
-    currentY = (doc as any).lastAutoTable.finalY + 4;
+  currentY = drawSectionHeader(doc, "PACKING DETAILS", currentY);
+  const packingRows: Array<Array<string | number>> = Array.isArray(slip.packingDetails) && slip.packingDetails.length > 0
+    ? slip.packingDetails.map((detail, index) => [
+        index + 1,
+        Number(detail.bundles || 0).toLocaleString(),
+        Number(detail.packSize || 0).toLocaleString(),
+        Number(detail.quantity || 0).toLocaleString(),
+      ])
+    : [["-", "-", "-", "-"]];
+  if (slip.extraItemsQty) {
+    packingRows.push(["", "Extra Items (Loose)", "", Number(slip.extraItemsQty || 0).toLocaleString()]);
   }
 
+  autoTable(
+    doc,
+    buildTableOptions(
+      currentY,
+      [["SL", "Bundles", "Pack Size", "Quantity"]],
+      packingRows,
+      {
+        0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
+        1: { halign: "right", cellWidth: 46 },
+        2: { halign: "right", cellWidth: 46 },
+        3: { halign: "right", cellWidth: 43, fontStyle: "bold" },
+      }
+    )
+  );
+  currentY = (doc as any).lastAutoTable.finalY + 4;
+
+  const footerY = Math.min(currentY + 3, FRAME_Y + FRAME_HEIGHT - 20);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(4.8);
   doc.setTextColor(...SUBTLE_TEXT);
-  doc.text("System generated loading slip", FRAME_X + FRAME_WIDTH / 2, Math.min(currentY + 3, FRAME_Y + FRAME_HEIGHT - 4), { align: "center" });
+  doc.text("System generated loading slip", FRAME_X + FRAME_WIDTH / 2, footerY, { align: "center" });
   doc.setTextColor(0, 0, 0);
+  drawSignatureRow(doc);
 
   const safeSlipNo = String(slip.slipNo || "LoadingSlip").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
   doc.save(`LoadingSlip_${safeSlipNo}_${String(slip.date || "").slice(0, 10)}.pdf`);
