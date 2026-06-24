@@ -69,46 +69,47 @@ function drawCellText(doc: jsPDF, text: string, x: number, y: number, width: num
 function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: string; truckNo: string; erpCode: string; company: string; itemName: string }) {
   const leftX = TABLE_MARGIN_X;
   const totalW = PAGE_W - ((TABLE_MARGIN_X - PAGE_X) * 2);
-  const halfW = totalW / 2;
-  const labelW = halfW * 0.35;
-  const valueW = halfW * 0.65;
-  const rowH = 9;
+  const labelW = 22;
+  const leftValueW = 44;
+  const rightLabelW = 28;
+  const rightValueW = totalW - labelW - leftValueW - rightLabelW;
+  const rowH = 11;
+  const x1 = leftX + labelW;
+  const x2 = x1 + leftValueW;
+  const x3 = x2 + rightLabelW;
+  const y1 = startY + rowH;
+  const y2 = startY + rowH * 2;
+  const totalH = rowH * 3;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(META_FONT);
   doc.text(`SL No: ${meta.slipNo || "-"}`, PAGE_X + PAGE_W - 1, startY - 1.5, { align: "right" });
 
-  const rows = [
-    { leftLabel: "Date", leftValue: meta.date, rightLabel: "Truck No", rightValue: meta.truckNo },
-    { leftLabel: "ERP Code", leftValue: meta.erpCode, rightLabel: "Customer", rightValue: meta.company },
-  ];
+  doc.setLineWidth(0.22);
+  doc.roundedRect(leftX, startY, totalW, totalH, 4, 4);
+  doc.line(x1, startY, x1, startY + totalH);
+  doc.line(x2, startY, x2, startY + totalH);
+  doc.line(x3, startY, x3, startY + totalH);
+  doc.line(leftX, y1, leftX + totalW, y1);
+  doc.line(leftX, y2, leftX + totalW, y2);
 
-  rows.forEach((row, idx) => {
-    const y = startY + idx * rowH;
-    const rightX = leftX + halfW;
-
-    doc.rect(leftX, y, labelW, rowH);
-    doc.rect(leftX + labelW, y, valueW, rowH);
-    doc.rect(rightX, y, labelW, rowH);
-    doc.rect(rightX + labelW, y, valueW, rowH);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(META_FONT);
-    drawCellText(doc, row.leftLabel, leftX, y + 5.7, labelW, "left");
-    drawCellText(doc, row.leftValue, leftX + labelW, y + 5.7, valueW, "left");
-    drawCellText(doc, row.rightLabel, rightX, y + 5.7, labelW, "left");
-    drawCellText(doc, row.rightValue, rightX + labelW, y + 5.7, valueW, "right");
-  });
-
-  const itemY = startY + rows.length * rowH;
-  doc.rect(leftX, itemY, labelW, rowH);
-  doc.rect(leftX + labelW, itemY, totalW - labelW, rowH);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(META_FONT);
-  drawCellText(doc, "Item Name", leftX, itemY + 5.7, labelW, "left");
-  drawCellText(doc, meta.itemName, leftX + labelW, itemY + 5.7, totalW - labelW, "right");
 
-  return itemY + rowH + 3;
+  drawCellText(doc, "Date", leftX, startY + 6.8, labelW, "left");
+  drawCellText(doc, meta.date, x1, startY + 6.8, leftValueW, "left");
+  drawCellText(doc, "Customer", x2, startY + 6.8, rightLabelW, "left");
+  drawCellText(doc, meta.company, x3, startY + 6.8, rightValueW, "right");
+
+  drawCellText(doc, "ERP Code", leftX, y1 + 6.8, labelW, "left");
+  drawCellText(doc, meta.erpCode, x1, y1 + 6.8, leftValueW, "left");
+  drawCellText(doc, "Item Name", x2, y1 + 6.8, rightLabelW, "left");
+  drawCellText(doc, meta.itemName, x3, y1 + 6.8, rightValueW, "right");
+
+  drawCellText(doc, "Truck No", leftX, y2 + 6.8, labelW, "left");
+  drawCellText(doc, meta.truckNo, x1, y2 + 6.8, leftValueW, "left");
+
+  return startY + totalH + 3;
 }
 
 function drawSectionTitle(doc: jsPDF, title: string, startY: number) {
