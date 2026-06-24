@@ -25,6 +25,7 @@ const PACKING_COL_WIDTHS = {
   extra: 41,
   total: 41,
 };
+const BOX_TOP_GAP = 4;
 
 function resolveFgItem(order?: Partial<Order> | null, npdItems?: Item[]) {
   if (!order || !npdItems) return undefined;
@@ -127,6 +128,12 @@ function drawSectionTitle(doc: jsPDF, title: string, startY: number) {
   return startY + 0.8;
 }
 
+function drawCenteredText(doc: jsPDF, text: string, x: number, y: number, width: number) {
+  const safeText = String(text || "").trim();
+  const lines = doc.splitTextToSize(safeText || " ", Math.max(4, width - 2));
+  doc.text(lines, x + width / 2, y, { align: "center" });
+}
+
 function toPackingRows(details?: PackingDetail[]) {
   return (Array.isArray(details) ? details : []).map((row, index) => [
     index + 1,
@@ -139,37 +146,65 @@ function toPackingRows(details?: PackingDetail[]) {
 
 function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, rows: PackingDetail[] | undefined, requiredQty?: number) {
   const sectionTitle = requiredQty != null ? `${title} (Required Qty = ${Number(requiredQty || 0).toLocaleString()})` : title;
-  const titleY = drawSectionTitle(doc, sectionTitle, startY);
+  const titleY = drawSectionTitle(doc, sectionTitle, startY + BOX_TOP_GAP);
   const body = toPackingRows(rows);
   const safeBody = body.length > 0 ? body : [["", "", "", "", ""]];
-  autoTable(doc, tableOptions(
-    titleY,
-    [["Line No", "Total Bundles", "Pack Size", "Extra", "Total"]],
-    safeBody,
-    {
-      0: { halign: "center", cellWidth: PACKING_COL_WIDTHS.lineNo, fontStyle: "bold" },
-      1: { halign: "center", cellWidth: PACKING_COL_WIDTHS.bundles, fontStyle: "bold" },
-      2: { halign: "center", cellWidth: PACKING_COL_WIDTHS.packSize, fontStyle: "bold" },
-      3: { halign: "center", cellWidth: PACKING_COL_WIDTHS.extra },
-      4: { halign: "center", cellWidth: PACKING_COL_WIDTHS.total, fontStyle: "bold" },
-    }
-  ));
-  const finalY = (doc as any).lastAutoTable.finalY;
   const totalBundles = (rows || []).reduce((sum, row) => sum + Number(row.bundles || 0), 0);
   const totalQty = (rows || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-  autoTable(doc, tableOptions(
-    finalY,
-    [],
-    [["Totals", totalBundles ? totalBundles.toLocaleString() : "", "", "", totalQty ? totalQty.toLocaleString() : ""]],
-    {
-      0: { halign: "center", fontStyle: "bold", cellWidth: PACKING_COL_WIDTHS.lineNo },
-      1: { halign: "center", cellWidth: PACKING_COL_WIDTHS.bundles, fontStyle: "bold" },
-      2: { halign: "center", cellWidth: PACKING_COL_WIDTHS.packSize },
-      3: { halign: "center", cellWidth: PACKING_COL_WIDTHS.extra },
-      4: { halign: "center", cellWidth: PACKING_COL_WIDTHS.total, fontStyle: "bold" },
-    }
-  ));
-  return (doc as any).lastAutoTable.finalY + 2;
+  const header = ["Line No", "Total Bundles", "Pack Size", "Extra", "Total"];
+  const columns = [
+    PACKING_COL_WIDTHS.lineNo,
+    PACKING_COL_WIDTHS.bundles,
+    PACKING_COL_WIDTHS.packSize,
+    PACKING_COL_WIDTHS.extra,
+    PACKING_COL_WIDTHS.total,
+  ];
+  const leftX = TABLE_MARGIN_X;
+  const topY = titleY + 1;
+  const rowH = 10;
+  const totalW = columns.reduce((sum, width) => sum + width, 0);
+  const totalRows = 1 + safeBody.length + 1;
+  const totalH = rowH * totalRows;
+
+  doc.setLineWidth(0.22);
+  doc.roundedRect(leftX, topY, totalW, totalH, 4, 4);
+
+  let runningX = leftX;
+  columns.slice(0, -1).forEach((width) => {
+    runningX += width;
+    doc.line(runningX, topY, runningX, topY + totalH);
+  });
+
+  for (let index = 1; index < totalRows; index += 1) {
+    const y = topY + rowH * index;
+    doc.line(leftX, y, leftX + totalW, y);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(TABLE_FONT);
+
+  let cellX = leftX;
+  header.forEach((label, index) => {
+    drawCenteredText(doc, label, cellX, topY + 6.5, columns[index]);
+    cellX += columns[index];
+  });
+
+  safeBody.forEach((row, rowIndex) => {
+    let rowX = leftX;
+    row.forEach((value, cellIndex) => {
+      drawCenteredText(doc, String(value || ""), rowX, topY + rowH * (rowIndex + 1) + 6.5, columns[cellIndex]);
+      rowX += columns[cellIndex];
+    });
+  });
+
+  const totalsRow = ["Totals", totalBundles ? totalBundles.toLocaleString() : "", "", "", totalQty ? totalQty.toLocaleString() : ""];
+  let totalX = leftX;
+  totalsRow.forEach((value, cellIndex) => {
+    drawCenteredText(doc, value, totalX, topY + rowH * (safeBody.length + 1) + 6.5, columns[cellIndex]);
+    totalX += columns[cellIndex];
+  });
+
+  return topY + totalH + 2;
 }
 
 function drawTotalPhpPlate(doc: jsPDF, startY: number, totalQty: number) {
