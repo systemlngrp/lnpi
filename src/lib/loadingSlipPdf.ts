@@ -17,6 +17,14 @@ const TABLE_MARGIN_X = PAGE_X + 1;
 const META_FONT = 9;
 const TABLE_FONT = 12;
 const TITLE_FONT = 12;
+const CONTENT_W = PAGE_W - ((TABLE_MARGIN_X - PAGE_X) * 2);
+const PACKING_COL_WIDTHS = {
+  lineNo: 20,
+  bundles: 41,
+  packSize: 41,
+  extra: 41,
+  total: 41,
+};
 
 function resolveFgItem(order?: Partial<Order> | null, npdItems?: Item[]) {
   if (!order || !npdItems) return undefined;
@@ -68,7 +76,7 @@ function drawCellText(doc: jsPDF, text: string, x: number, y: number, width: num
 
 function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: string; truckNo: string; erpCode: string; company: string; itemName: string }) {
   const leftX = TABLE_MARGIN_X;
-  const totalW = PAGE_W - ((TABLE_MARGIN_X - PAGE_X) * 2);
+  const totalW = CONTENT_W;
   const labelW = 22;
   const leftValueW = 44;
   const rightLabelW = 28;
@@ -116,7 +124,7 @@ function drawSectionTitle(doc: jsPDF, title: string, startY: number) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(TITLE_FONT);
   doc.text(title, PAGE_X + PAGE_W / 2, startY, { align: "center" });
-  return startY + 1.5;
+  return startY + 0.8;
 }
 
 function toPackingRows(details?: PackingDetail[]) {
@@ -139,11 +147,11 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
     [["Line No", "Total Bundles", "Pack Size", "Extra", "Total"]],
     safeBody,
     {
-      0: { halign: "center", cellWidth: 20, fontStyle: "bold" },
-      1: { halign: "center", cellWidth: 38, fontStyle: "bold" },
-      2: { halign: "center", cellWidth: 36, fontStyle: "bold" },
-      3: { halign: "center", cellWidth: 28 },
-      4: { halign: "center", cellWidth: 40, fontStyle: "bold" },
+      0: { halign: "center", cellWidth: PACKING_COL_WIDTHS.lineNo, fontStyle: "bold" },
+      1: { halign: "center", cellWidth: PACKING_COL_WIDTHS.bundles, fontStyle: "bold" },
+      2: { halign: "center", cellWidth: PACKING_COL_WIDTHS.packSize, fontStyle: "bold" },
+      3: { halign: "center", cellWidth: PACKING_COL_WIDTHS.extra },
+      4: { halign: "center", cellWidth: PACKING_COL_WIDTHS.total, fontStyle: "bold" },
     }
   ));
   const finalY = (doc as any).lastAutoTable.finalY;
@@ -154,14 +162,14 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
     [],
     [["Totals", totalBundles ? totalBundles.toLocaleString() : "", "", "", totalQty ? totalQty.toLocaleString() : ""]],
     {
-      0: { fontStyle: "bold", cellWidth: 20 },
-      1: { halign: "center", cellWidth: 38, fontStyle: "bold" },
-      2: { cellWidth: 36 },
-      3: { cellWidth: 28 },
-      4: { halign: "center", cellWidth: 40, fontStyle: "bold" },
+      0: { halign: "center", fontStyle: "bold", cellWidth: PACKING_COL_WIDTHS.lineNo },
+      1: { halign: "center", cellWidth: PACKING_COL_WIDTHS.bundles, fontStyle: "bold" },
+      2: { halign: "center", cellWidth: PACKING_COL_WIDTHS.packSize },
+      3: { halign: "center", cellWidth: PACKING_COL_WIDTHS.extra },
+      4: { halign: "center", cellWidth: PACKING_COL_WIDTHS.total, fontStyle: "bold" },
     }
   ));
-  return (doc as any).lastAutoTable.finalY + 3;
+  return (doc as any).lastAutoTable.finalY + 2;
 }
 
 function drawTotalPhpPlate(doc: jsPDF, startY: number, totalQty: number) {
@@ -170,11 +178,11 @@ function drawTotalPhpPlate(doc: jsPDF, startY: number, totalQty: number) {
     [],
     [["Total of PHP and Plate", Number(totalQty || 0).toLocaleString()]],
     {
-      0: { fontStyle: "bold", cellWidth: 140 },
-      1: { halign: "center", cellWidth: 30, fontStyle: "bold" },
+      0: { halign: "center", fontStyle: "bold", cellWidth: PACKING_COL_WIDTHS.lineNo + PACKING_COL_WIDTHS.bundles + PACKING_COL_WIDTHS.packSize + PACKING_COL_WIDTHS.extra },
+      1: { halign: "center", cellWidth: PACKING_COL_WIDTHS.total, fontStyle: "bold" },
     }
   ));
-  return (doc as any).lastAutoTable.finalY + 6;
+  return (doc as any).lastAutoTable.finalY + 5;
 }
 
 function drawSignatures(doc: jsPDF) {
