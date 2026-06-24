@@ -110,9 +110,9 @@ function drawSectionTitle(doc: jsPDF, title: string, startY: number) {
 function toPackingRows(details?: PackingDetail[]) {
   return (Array.isArray(details) ? details : []).map((row, index) => [
     index + 1,
-    Number(row.extra || 0) ? Number(row.extra || 0).toLocaleString() : "",
     Number(row.bundles || 0).toLocaleString(),
     Number(row.packSize || 0).toLocaleString(),
+    Number(row.extra || 0) ? Number(row.extra || 0).toLocaleString() : "",
     Number(row.quantity || 0).toLocaleString(),
   ]);
 }
@@ -124,13 +124,13 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
   const safeBody = body.length > 0 ? body : [["", "", "", "", ""]];
   autoTable(doc, tableOptions(
     titleY,
-    [["Line No", "Extra", "Total (Bundles)", "Pack Size", "All Total"]],
+    [["Line No", "Total Bundles", "Pack Size", "Extra", "Total"]],
     safeBody,
     {
       0: { halign: "center", cellWidth: 20, fontStyle: "bold" },
-      1: { halign: "center", cellWidth: 28 },
-      2: { halign: "right", cellWidth: 38, fontStyle: "bold" },
-      3: { halign: "right", cellWidth: 36, fontStyle: "bold" },
+      1: { halign: "right", cellWidth: 38, fontStyle: "bold" },
+      2: { halign: "right", cellWidth: 36, fontStyle: "bold" },
+      3: { halign: "center", cellWidth: 28 },
       4: { halign: "right", cellWidth: 40, fontStyle: "bold" },
     }
   ));
@@ -140,12 +140,12 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
   autoTable(doc, tableOptions(
     finalY,
     [],
-    [["Totals", "", totalBundles ? totalBundles.toLocaleString() : "", "", totalQty ? totalQty.toLocaleString() : ""]],
+    [["Totals", totalBundles ? totalBundles.toLocaleString() : "", "", "", totalQty ? totalQty.toLocaleString() : ""]],
     {
       0: { fontStyle: "bold", cellWidth: 20 },
-      1: { cellWidth: 28 },
-      2: { halign: "right", cellWidth: 38, fontStyle: "bold" },
-      3: { cellWidth: 36 },
+      1: { halign: "right", cellWidth: 38, fontStyle: "bold" },
+      2: { cellWidth: 36 },
+      3: { cellWidth: 28 },
       4: { halign: "right", cellWidth: 40, fontStyle: "bold" },
     }
   ));
