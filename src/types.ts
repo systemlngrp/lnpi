@@ -425,7 +425,7 @@ export interface Company {
 }
 
 export type POType = "Verbal" | "Ref No.";
-export type OrderItemSource = "FG" | "PHP" | "PLATE";
+export type OrderItemSource = "FG" | "PHP" | "PLATE" | "MATERIAL";
 
 export interface Order {
   id: string;
@@ -896,4 +896,3 @@ export interface OperationDashboardSummary {
   comparisonLabel: string;
   groups: OperationDashboardMetricGroup[];
 }
-

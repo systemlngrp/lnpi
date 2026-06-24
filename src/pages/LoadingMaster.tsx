@@ -43,7 +43,7 @@ export function LoadingMaster() {
   const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem, itemsBySource, fgItems } = useOrderItemCatalog();
+  const { resolveOrderItem, itemsBySource, allItems } = useOrderItemCatalog();
   const [companies] = useData<Company>("companies", []);
   const [invoices, setInvoices] = useData<Invoice>("invoices", []);
   const [invoiceLineItems, setInvoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
@@ -470,7 +470,7 @@ export function LoadingMaster() {
           </div>
           <button type="button" onClick={() => setIsDirectModalOpen(true)} className="inline-flex items-center justify-center gap-2 rounded border border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-slate-800">
             <Plus size={16} />
-            Create Direct Loading Slip
+            Direct Loading Slip
           </button>
         </div>
       </div>
@@ -811,7 +811,7 @@ export function LoadingMaster() {
         open={isDirectModalOpen}
         companies={companies}
         trucks={trucks}
-        fgItems={fgItems}
+        allItems={allItems}
         plans={plans}
         orders={orders}
         phpItems={itemsBySource.PHP || []}

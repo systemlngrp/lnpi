@@ -17,12 +17,14 @@ export function normalizeOrderItemSource(value: unknown): OrderItemSource {
   const normalized = String(value || "").trim().toUpperCase();
   if (normalized === "PHP") return "PHP";
   if (normalized === "PLATE") return "PLATE";
+  if (normalized === "MATERIAL") return "MATERIAL";
   return "FG";
 }
 
 export function getOrderItemSourceLabel(source: OrderItemSource) {
   if (source === "PHP") return "PHP ITEM";
   if (source === "PLATE") return "PLATE ITEM";
+  if (source === "MATERIAL") return "MATERIAL";
   return "FG ITEM";
 }
 
@@ -45,6 +47,7 @@ export function normalizeOrderCatalogItem(row: any, source: OrderItemSource): Or
     row?.id ||
       row?.npdId ||
       row?.itemId ||
+      row?.materialId ||
       row?.erpItemCode ||
       row?.masterItemNameErpCode ||
       ""
@@ -58,11 +61,13 @@ export function normalizeOrderCatalogItem(row: any, source: OrderItemSource): Or
       row?.masterItemNameErpCode ||
       row?.erpItemCode ||
       row?.erp ||
+      row?.erpCode ||
       ""
   ).trim();
 
   const erp = String(
     row?.erp ??
+      row?.erpCode ??
       row?.erpItemCode ??
       row?.masterItemNameErpCode ??
       ""

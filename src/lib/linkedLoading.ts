@@ -3,6 +3,13 @@ import type { OrderCatalogItem } from "./orderItems";
 
 type LinkedSource = Extract<OrderItemSource, "PHP" | "PLATE">;
 
+function normalizeSource(value: unknown): OrderItemSource {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "PHP") return "PHP";
+  if (normalized === "PLATE") return "PLATE";
+  if (normalized === "MATERIAL") return "MATERIAL";
+  return "FG";
+}
 
 function normalizeErpCode(value: unknown) {
   return String(value || "").trim().toLowerCase();
@@ -68,6 +75,9 @@ export function buildLinkedLoadingDetailsFromSlip({
     const plan = plans.find((row) => row.id === line.dispatchPlanId);
     const order = orders.find((row) => row.id === plan?.orderId);
     const fgItem = resolveOrderItem(order || (line.itemId ? ({ itemId: line.itemId, itemSource: line.itemSource || "FG" } as Partial<Order>) : null));
+    const lineSource = normalizeSource(line.itemSource || order?.itemSource || fgItem?.source || "FG");
+    if (lineSource !== "FG") return;
+
     const scheduleErp = String(line.erpCode || order?.erpCode || fgItem?.erp || "").trim();
     const linkedItem = findLinkedItemByErp(sourceItems, scheduleErp);
     const setsPerBox = getLinkedSetsPerBox(linkedItem);
@@ -100,4 +110,3 @@ export function buildLinkedLoadingDetailsFromSlip({
 
   return Array.from(detailsByItemId.values());
 }
-

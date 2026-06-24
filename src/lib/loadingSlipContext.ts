@@ -29,6 +29,7 @@ function normalizeSource(value: unknown): OrderItemSource {
   const normalized = normalizeString(value).toUpperCase();
   if (normalized === "PHP") return "PHP";
   if (normalized === "PLATE") return "PLATE";
+  if (normalized === "MATERIAL") return "MATERIAL";
   return "FG";
 }
 
