@@ -59,6 +59,12 @@ interface JobOption {
   ffg: number;
 }
 
+type LinkedSide = Extract<OrderItemSource, "PHP" | "PLATE">;
+
+function createEmptyPackingRows(): PackingDetail[] {
+  return [{ bundles: 0, packSize: 0, quantity: 0 }];
+}
+
 function getLoadingSlipJobAllocations(line: LoadingSlipLine): Array<{ jobId: string; jobNo: string; qty: number }> {
   if (Array.isArray(line.allocations) && line.allocations.length > 0) {
     return line.allocations
@@ -97,8 +103,16 @@ export function PendingLoading() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [modalTruckId, setModalTruckId] = useState<string>("");
-  const [packingDetails, setPackingDetails] = useState<PackingDetail[]>([{ bundles: 0, packSize: 0, quantity: 0 }]);
+  const [packingDetails, setPackingDetails] = useState<PackingDetail[]>(createEmptyPackingRows());
   const [extraItemsQty, setExtraItemsQty] = useState<number | "">("");
+  const [linkedPackingDetails, setLinkedPackingDetails] = useState<Record<LinkedSide, PackingDetail[]>>({
+    PHP: createEmptyPackingRows(),
+    PLATE: createEmptyPackingRows(),
+  });
+  const [linkedExtraItemsQty, setLinkedExtraItemsQty] = useState<Record<LinkedSide, number | "">>({
+    PHP: "",
+    PLATE: "",
+  });
 
   const productionMap = useMemo(() => new Map(productions.map((production) => [production.id, production])), [productions]);
 
@@ -278,8 +292,10 @@ export function PendingLoading() {
       [modalKey]: Object.fromEntries(eligibleJobs.map((j) => [j.jobId, ""])),
     });
     setModalTruckId("");
-    setPackingDetails([{ bundles: 0, packSize: 0, quantity: 0 }]);
+    setPackingDetails(createEmptyPackingRows());
     setExtraItemsQty("");
+    setLinkedPackingDetails({ PHP: createEmptyPackingRows(), PLATE: createEmptyPackingRows() });
+    setLinkedExtraItemsQty({ PHP: "", PLATE: "" });
   };
 
   const handleCloseLoad = () => {
@@ -288,29 +304,41 @@ export function PendingLoading() {
     setJobSplitQtys({});
     setOpeningStockQtys({});
     setModalTruckId("");
-    setPackingDetails([{ bundles: 0, packSize: 0, quantity: 0 }]);
+    setPackingDetails(createEmptyPackingRows());
     setExtraItemsQty("");
+    setLinkedPackingDetails({ PHP: createEmptyPackingRows(), PLATE: createEmptyPackingRows() });
+    setLinkedExtraItemsQty({ PHP: "", PLATE: "" });
   };
 
-  const getPreviewLinkedDetails = (source: Extract<OrderItemSource, "PHP" | "PLATE">, loadedQty: number): LinkedLoadingDetail[] => {
+  const getPreviewLinkedDetails = (source: LinkedSide, loadedQty: number): LinkedLoadingDetail[] => {
     if (!loadingModal || !(loadedQty > 0)) return [];
     const firstPlan = loadingModal.plans[0];
     const order = orders.find((row) => row.id === firstPlan?.orderId);
     const fgItem = resolveOrderItem(order);
     const sourceItems = itemsBySource[source] || [];
-    const linkedItem = findLinkedItemByErp(sourceItems, order?.erpCode || fgItem?.erp);
+    const itemErp = String(order?.erpCode || fgItem?.erp || "").trim();
+    const linkedItem = findLinkedItemByErp(sourceItems, itemErp);
     const setsPerBox = getLinkedSetsPerBox(linkedItem);
     if (!linkedItem || !setsPerBox) return [];
     const raw = linkedItem.raw || {};
+    const sidePackingDetails = linkedPackingDetails[source]
+      .filter((row) => Number(row.bundles || 0) > 0 && Number(row.packSize || 0) > 0)
+      .map((row) => ({
+        bundles: Number(row.bundles || 0),
+        packSize: Number(row.packSize || 0),
+        quantity: Number(row.quantity || 0),
+      }));
     return [{
       source,
       itemId: linkedItem.id,
       itemName: linkedItem.name,
       companyName: linkedItem.companyName,
-      erpCode: String(raw.erpItemCode || linkedItem.erp || "").trim() || undefined,
+      erpCode: itemErp || undefined,
       masterErp: String(raw.masterItemNameErpCode || "").trim() || undefined,
       setsPerBox,
       requiredQty: parseFloat((loadedQty * setsPerBox).toFixed(2)),
+      packingDetails: sidePackingDetails.length > 0 ? sidePackingDetails : undefined,
+      extraItemsQty: Number(linkedExtraItemsQty[source] || 0) || undefined,
     }];
   };
 
@@ -330,6 +358,40 @@ export function PendingLoading() {
     row.quantity = row.bundles * row.packSize;
     next[index] = row;
     setPackingDetails(next);
+  };
+
+  const getLinkedPackingTotal = (source: LinkedSide) =>
+    linkedPackingDetails[source].reduce((sum, row) => sum + Number(row.quantity || 0), 0) + Number(linkedExtraItemsQty[source] || 0);
+
+  const handleAddLinkedPackingRow = (source: LinkedSide) => {
+    setLinkedPackingDetails((prev) => ({
+      ...prev,
+      [source]: [...prev[source], { bundles: 0, packSize: 0, quantity: 0 }],
+    }));
+  };
+
+  const handleRemoveLinkedPackingRow = (source: LinkedSide, index: number) => {
+    setLinkedPackingDetails((prev) => {
+      const nextRows = [...prev[source]];
+      nextRows.splice(index, 1);
+      return {
+        ...prev,
+        [source]: nextRows.length > 0 ? nextRows : createEmptyPackingRows(),
+      };
+    });
+  };
+
+  const handleUpdateLinkedPackingRow = (source: LinkedSide, index: number, field: keyof PackingDetail, value: number) => {
+    setLinkedPackingDetails((prev) => {
+      const nextRows = [...prev[source]];
+      const row = { ...nextRows[index], [field]: value };
+      row.quantity = row.bundles * row.packSize;
+      nextRows[index] = row;
+      return {
+        ...prev,
+        [source]: nextRows,
+      };
+    });
   };
 
   const handleSubmitLoading = async () => {
@@ -425,7 +487,11 @@ export function PendingLoading() {
         orders,
         resolveOrderItem,
         sourceItems: itemsBySource.PHP || [],
-      });
+      }).map((detail) => ({
+        ...detail,
+        packingDetails: linkedPackingDetails.PHP.filter((row) => Number(row.bundles || 0) > 0 && Number(row.packSize || 0) > 0),
+        extraItemsQty: Number(linkedExtraItemsQty.PHP || 0) || undefined,
+      }));
       const plateDetails = buildLinkedLoadingDetailsFromSlip({
         slip: baseSlip,
         source: "PLATE",
@@ -433,7 +499,11 @@ export function PendingLoading() {
         orders,
         resolveOrderItem,
         sourceItems: itemsBySource.PLATE || [],
-      });
+      }).map((detail) => ({
+        ...detail,
+        packingDetails: linkedPackingDetails.PLATE.filter((row) => Number(row.bundles || 0) > 0 && Number(row.packSize || 0) > 0),
+        extraItemsQty: Number(linkedExtraItemsQty.PLATE || 0) || undefined,
+      }));
       const newSlip: LoadingSlip = {
         ...baseSlip,
         phpDetails,
@@ -808,35 +878,121 @@ export function PendingLoading() {
 
                       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                         {[
-                          { title: "PHP Details", rows: phpDetailsPreview, emptyLabel: "No matched PHP item" },
-                          { title: "Plate Details", rows: plateDetailsPreview, emptyLabel: "No matched Plate item" },
+                          { source: "PHP" as const, title: "PHP Details", rows: phpDetailsPreview, emptyLabel: "No matched PHP item" },
+                          { source: "PLATE" as const, title: "Plate Details", rows: plateDetailsPreview, emptyLabel: "No matched Plate item" },
                         ].map((section) => (
-                          <div key={section.title} className="border-2 border-black rounded overflow-hidden">
+                          <div key={section.title} className="border-2 border-black rounded overflow-hidden bg-white">
                             <div className="bg-slate-900 px-4 py-3 text-sm font-black uppercase tracking-wider text-white">{section.title}</div>
                             <table className="min-w-full divide-y divide-black border-collapse">
                               <thead className="bg-slate-100">
                                 <tr className="divide-x divide-black">
                                   <th className="px-4 py-2 text-left text-[10px] font-black uppercase">SL</th>
+                                  <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Item ERP</th>
+                                  <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Master ERP</th>
                                   <th className="px-4 py-2 text-left text-[10px] font-black uppercase">{section.title === "PHP Details" ? "PHP Item Name" : "Plate Item Name"}</th>
+                                  <th className="px-4 py-2 text-right text-[10px] font-black uppercase">Sets/Box</th>
                                   <th className="px-4 py-2 text-right text-[10px] font-black uppercase">Required Qty</th>
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-black">
                                 {section.rows.length === 0 ? (
                                   <tr>
-                                    <td colSpan={3} className="px-4 py-5 text-center text-xs font-semibold text-slate-500">{section.emptyLabel}</td>
+                                    <td colSpan={6} className="px-4 py-5 text-center text-xs font-semibold text-slate-500">{section.emptyLabel}</td>
                                   </tr>
                                 ) : (
                                   section.rows.map((detail, index) => (
                                     <tr key={`${section.title}-${detail.itemId}`} className="divide-x divide-black">
                                       <td className="px-4 py-2 text-xs font-black">{index + 1}</td>
+                                      <td className="px-4 py-2 text-xs font-semibold text-slate-700">{detail.erpCode || "-"}</td>
+                                      <td className="px-4 py-2 text-xs font-semibold text-slate-700">{detail.masterErp || "-"}</td>
                                       <td className="px-4 py-2 text-xs font-semibold text-black">{detail.itemName}</td>
+                                      <td className="px-4 py-2 text-right text-xs font-black text-slate-700">{detail.setsPerBox.toLocaleString()}</td>
                                       <td className="px-4 py-2 text-right text-xs font-black text-indigo-700">{detail.requiredQty.toLocaleString()}</td>
                                     </tr>
                                   ))
                                 )}
                               </tbody>
                             </table>
+
+                            {section.rows.length > 0 ? (
+                              <div className="border-t-2 border-black">
+                                <div className="flex items-center justify-between px-4 py-3 bg-indigo-50/60 border-b border-black">
+                                  <div className="text-xs font-black uppercase tracking-wider text-black">{section.source} Packing Details</div>
+                                  <div className="text-[11px] font-bold text-slate-500">
+                                    Total: <span className="text-sm font-black text-emerald-700">{getLinkedPackingTotal(section.source).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                                <table className="min-w-full divide-y divide-black border-collapse">
+                                  <thead className="bg-slate-100">
+                                    <tr className="divide-x divide-black">
+                                      <th className="px-4 py-2 text-left text-[10px] font-black uppercase">No. of Bundles</th>
+                                      <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Pack Size</th>
+                                      <th className="px-4 py-2 text-right text-[10px] font-black uppercase">Quantity</th>
+                                      <th className="px-4 py-2 text-center text-[10px] font-black uppercase w-16">Action</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-black">
+                                    {linkedPackingDetails[section.source].map((detail, idx) => (
+                                      <tr key={`${section.source}-${idx}`} className="divide-x divide-black">
+                                        <td className="px-4 py-2">
+                                          <input
+                                            type="number"
+                                            value={detail.bundles || ""}
+                                            onChange={(e) => handleUpdateLinkedPackingRow(section.source, idx, "bundles", parseFloat(e.target.value) || 0)}
+                                            className="w-full rounded border-2 border-yellow-400 bg-yellow-100 px-2 py-1 text-xs font-bold text-black focus:border-black focus:outline-none"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-2">
+                                          <input
+                                            type="number"
+                                            value={detail.packSize || ""}
+                                            onChange={(e) => handleUpdateLinkedPackingRow(section.source, idx, "packSize", parseFloat(e.target.value) || 0)}
+                                            className="w-full rounded border-2 border-yellow-400 bg-yellow-100 px-2 py-1 text-xs font-bold text-black focus:border-black focus:outline-none"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-2 text-right text-xs font-black bg-slate-50">
+                                          {detail.quantity.toLocaleString()}
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                          <button
+                                            onClick={() => handleRemoveLinkedPackingRow(section.source, idx)}
+                                            disabled={linkedPackingDetails[section.source].length <= 1}
+                                            className="text-rose-600 hover:text-rose-800 disabled:opacity-30"
+                                          >
+                                            <Trash2 size={16} />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    <tr className="bg-emerald-50/30 border-t-2 border-black">
+                                      <td colSpan={2} className="px-4 py-3 text-xs font-black uppercase text-emerald-800 italic">Extra ({section.source})</td>
+                                      <td className="px-4 py-2">
+                                        <input
+                                          type="number"
+                                          value={linkedExtraItemsQty[section.source] ?? ""}
+                                          onChange={(e) =>
+                                            setLinkedExtraItemsQty((prev) => ({
+                                              ...prev,
+                                              [section.source]: e.target.value === "" ? "" : parseFloat(e.target.value),
+                                            }))
+                                          }
+                                          className="w-full rounded border-2 border-yellow-500 bg-yellow-100 px-2 py-1.5 text-right font-black text-xs text-black focus:ring-0"
+                                          placeholder={`Enter ${section.source} Extra Qty`}
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2 text-center">
+                                        <button
+                                          onClick={() => handleAddLinkedPackingRow(section.source)}
+                                          className="bg-black text-white p-1.5 rounded-full hover:bg-slate-800 transition shadow-[2px_2px_0px_0px_rgba(79,70,229,1)] active:shadow-none"
+                                        >
+                                          <Plus size={16} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>

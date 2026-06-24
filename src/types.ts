@@ -719,6 +719,8 @@ export interface LinkedLoadingDetail {
   masterErp?: string;
   setsPerBox: number;
   requiredQty: number;
+  packingDetails?: PackingDetail[];
+  extraItemsQty?: number;
 }
 
 export interface LoadingSlip {

@@ -1,18 +1,8 @@
-import { LoadingSlip, Order, OrderItemSource } from "../types";
+import { LinkedLoadingDetail, LoadingSlip, Order, OrderItemSource, PackingDetail } from "../types";
 import type { OrderCatalogItem } from "./orderItems";
 
 type LinkedSource = Extract<OrderItemSource, "PHP" | "PLATE">;
 
-export type LinkedLoadingDetail = {
-  source: LinkedSource;
-  itemId: string;
-  itemName: string;
-  companyName?: string;
-  erpCode?: string;
-  masterErp?: string;
-  setsPerBox: number;
-  requiredQty: number;
-};
 
 function normalizeErpCode(value: unknown) {
   return String(value || "").trim().toLowerCase();
@@ -25,6 +15,16 @@ function toPositiveNumber(value: unknown) {
 
 function round2(value: number) {
   return parseFloat(value.toFixed(2));
+}
+
+function clonePackingDetails(rows?: PackingDetail[]) {
+  return Array.isArray(rows)
+    ? rows.map((row) => ({
+        bundles: Number(row.bundles || 0),
+        packSize: Number(row.packSize || 0),
+        quantity: Number(row.quantity || 0),
+      }))
+    : undefined;
 }
 
 export function findLinkedItemByErp(items: OrderCatalogItem[], erpCode: unknown) {
@@ -50,6 +50,7 @@ export function buildLinkedLoadingDetailsFromSlip({
   orders,
   resolveOrderItem,
   sourceItems,
+  existingDetails,
 }: {
   slip: LoadingSlip;
   source: LinkedSource;
@@ -57,8 +58,10 @@ export function buildLinkedLoadingDetailsFromSlip({
   orders: Order[];
   resolveOrderItem: (order?: Partial<Order> | null) => OrderCatalogItem | undefined;
   sourceItems: OrderCatalogItem[];
+  existingDetails?: LinkedLoadingDetail[];
 }) {
   const detailsByItemId = new Map<string, LinkedLoadingDetail>();
+  const existingDetailsByItemId = new Map((existingDetails || []).map((detail) => [detail.itemId, detail]));
 
   slip.lines.forEach((line) => {
     const plan = plans.find((row) => row.id === line.dispatchPlanId);
@@ -79,15 +82,18 @@ export function buildLinkedLoadingDetailsFromSlip({
       return;
     }
 
+    const existingDetail = existingDetailsByItemId.get(linkedItem.id);
     detailsByItemId.set(linkedItem.id, {
       source,
       itemId: linkedItem.id,
       itemName: linkedItem.name,
       companyName: linkedItem.companyName,
-      erpCode: String(raw.erpItemCode || linkedItem.erp || "").trim() || undefined,
+      erpCode: scheduleErp || String(raw.erpItemCode || linkedItem.erp || "").trim() || undefined,
       masterErp: String(raw.masterItemNameErpCode || "").trim() || undefined,
       setsPerBox,
       requiredQty,
+      packingDetails: clonePackingDetails(existingDetail?.packingDetails),
+      extraItemsQty: existingDetail?.extraItemsQty,
     });
   });
 

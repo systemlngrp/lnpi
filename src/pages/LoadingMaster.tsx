@@ -289,6 +289,7 @@ export function LoadingMaster() {
       orders,
       resolveOrderItem,
       sourceItems: itemsBySource.PHP || [],
+      existingDetails: draft.phpDetails,
     });
     const plateDetails = buildLinkedLoadingDetailsFromSlip({
       slip: draft,
@@ -297,6 +298,7 @@ export function LoadingMaster() {
       orders,
       resolveOrderItem,
       sourceItems: itemsBySource.PLATE || [],
+      existingDetails: draft.plateDetails,
     });
     const syncedDraft: LoadingSlip = {
       ...draft,
