@@ -1,20 +1,21 @@
 import jsPDF from "jspdf";
 import autoTable, { type UserOptions } from "jspdf-autotable";
 import { formatDate } from "./serial";
-import type { Company, DispatchPlan, Item, LinkedLoadingDetail, LoadingSlip, LoadingSlipAllocation, Order, Setting, Truck } from "../types";
+import type { Company, DispatchPlan, Item, LinkedLoadingDetail, LoadingSlip, LoadingSlipAllocation, Setting, Truck } from "../types";
 import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
-const FRAME_X = 22;
-const FRAME_Y = 14;
-const FRAME_WIDTH = 166;
-const FRAME_HEIGHT = 196;
-const CONTENT_X = FRAME_X + 4;
-const CONTENT_Y = FRAME_Y + 4;
-const CONTENT_WIDTH = FRAME_WIDTH - 8;
-const BRAND_COLOR: [number, number, number] = [23, 40, 75];
-const LIGHT_HEADER: [number, number, number] = [236, 241, 248];
-const BORDER_COLOR: [number, number, number] = [15, 23, 42];
-const SUBTLE_TEXT: [number, number, number] = [71, 85, 105];
+const FRAME_X = 18;
+const FRAME_Y = 12;
+const FRAME_WIDTH = 174;
+const FRAME_HEIGHT = 206;
+const CONTENT_X = FRAME_X + 3;
+const CONTENT_Y = FRAME_Y + 3;
+const CONTENT_WIDTH = FRAME_WIDTH - 6;
+const BLACK: [number, number, number] = [0, 0, 0];
+const DARK_GRAY: [number, number, number] = [40, 40, 40];
+const MID_GRAY: [number, number, number] = [120, 120, 120];
+const LIGHT_GRAY: [number, number, number] = [240, 240, 240];
+const VERY_LIGHT_GRAY: [number, number, number] = [248, 248, 248];
 
 function formatAllocations(allocations?: LoadingSlip["lines"][number]["allocations"], jobNos?: LoadingSlip["lines"][number]["jobNos"]) {
   if (Array.isArray(allocations) && allocations.length > 0) {
@@ -40,37 +41,50 @@ function getTruckDisplay(trucks: Truck[], truckId: string) {
 }
 
 function drawOuterFrame(doc: jsPDF) {
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.setLineWidth(0.35);
+  doc.setDrawColor(...BLACK);
+  doc.setLineWidth(0.3);
   doc.rect(FRAME_X, FRAME_Y, FRAME_WIDTH, FRAME_HEIGHT);
 }
 
+function drawWatermark(doc: jsPDF, text: string) {
+  const safeText = String(text || "LOADING SLIP").trim();
+  if (!safeText) return;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(30);
+  doc.setTextColor(245, 245, 245);
+  doc.text(safeText, FRAME_X + FRAME_WIDTH / 2, FRAME_Y + FRAME_HEIGHT / 2, {
+    align: "center",
+    angle: 0,
+  });
+  doc.setTextColor(0, 0, 0);
+}
+
 function drawTitleBand(doc: jsPDF, startY: number) {
-  doc.setFillColor(...BRAND_COLOR);
-  doc.roundedRect(CONTENT_X, startY, CONTENT_WIDTH, 8, 1, 1, "F");
+  doc.setFillColor(...BLACK);
+  doc.roundedRect(CONTENT_X, startY, CONTENT_WIDTH, 7, 0.8, 0.8, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
-  doc.text("LOADING SLIP", FRAME_X + FRAME_WIDTH / 2, startY + 5.4, { align: "center" });
+  doc.setFontSize(9.6);
+  doc.text("LOADING SLIP", FRAME_X + FRAME_WIDTH / 2, startY + 4.7, { align: "center" });
   doc.setTextColor(0, 0, 0);
-  return startY + 10;
+  return startY + 8.8;
 }
 
 function drawSectionHeader(doc: jsPDF, title: string, startY: number) {
-  doc.setFillColor(...LIGHT_HEADER);
-  doc.rect(CONTENT_X, startY, CONTENT_WIDTH, 5.5, "F");
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.rect(CONTENT_X, startY, CONTENT_WIDTH, 5.5);
+  doc.setFillColor(...LIGHT_GRAY);
+  doc.setDrawColor(...BLACK);
+  doc.setLineWidth(0.2);
+  doc.rect(CONTENT_X, startY, CONTENT_WIDTH, 5, "FD");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.text(title, CONTENT_X + 2, startY + 3.8);
-  return startY + 6.2;
+  doc.setFontSize(6.9);
+  doc.text(title, CONTENT_X + 1.8, startY + 3.35);
+  return startY + 5.8;
 }
 
 function drawInfoGrid(doc: jsPDF, startY: number, details: Array<[string, string]>) {
-  const rowHeight = 4.8;
+  const rowHeight = 4.5;
   const halfWidth = CONTENT_WIDTH / 2;
-  const labelWidth = 18;
+  const labelWidth = 16;
 
   details.forEach(([label, value], index) => {
     const left = index % 2 === 0;
@@ -78,22 +92,22 @@ function drawInfoGrid(doc: jsPDF, startY: number, details: Array<[string, string
     const x = left ? CONTENT_X : CONTENT_X + halfWidth;
     const y = startY + row * rowHeight;
 
-    doc.setFillColor(248, 250, 252);
+    doc.setFillColor(...VERY_LIGHT_GRAY);
     doc.rect(x, y, labelWidth, rowHeight, "F");
-    doc.setDrawColor(...BORDER_COLOR);
+    doc.setDrawColor(...BLACK);
     doc.rect(x, y, labelWidth, rowHeight);
     doc.rect(x + labelWidth, y, halfWidth - labelWidth, rowHeight);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.1);
-    doc.text(label, x + 1.4, y + 3.2);
+    doc.setFontSize(5.5);
+    doc.text(label, x + 1, y + 3);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.1);
-    doc.text(String(value || "-"), x + labelWidth + 1.4, y + 3.2);
+    doc.setFontSize(5.5);
+    doc.text(String(value || "-"), x + labelWidth + 1, y + 3);
   });
 
-  return startY + Math.ceil(details.length / 2) * rowHeight + 2;
+  return startY + Math.ceil(details.length / 2) * rowHeight + 1.8;
 }
 
 function drawCompanyBlock(doc: jsPDF, company: Company, startY: number) {
@@ -103,28 +117,23 @@ function drawCompanyBlock(doc: jsPDF, company: Company, startY: number) {
   const addressText = addressParts.join(", ");
   const gstText = String(company.gstNo || "").trim();
 
-  const addressLines = addressText ? doc.splitTextToSize(addressText, CONTENT_WIDTH - 24) : [];
-  const gstLines = gstText ? doc.splitTextToSize(gstText, CONTENT_WIDTH - 24) : [];
-  const boxHeight = Math.max(12, 5 + addressLines.length * 3.4 + (gstLines.length ? gstLines.length * 3.4 + 2 : 0));
+  const addressLines = addressText ? doc.splitTextToSize(addressText, CONTENT_WIDTH - 22) : [];
+  const gstLines = gstText ? doc.splitTextToSize(gstText, CONTENT_WIDTH - 22) : [];
+  const boxHeight = Math.max(10.5, 4.2 + addressLines.length * 3 + (gstLines.length ? gstLines.length * 3 + 1.2 : 0));
 
-  doc.setDrawColor(...BORDER_COLOR);
+  doc.setDrawColor(...BLACK);
   doc.rect(CONTENT_X, startY, CONTENT_WIDTH, boxHeight);
-
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.2);
-  doc.text("Consignee", CONTENT_X + 1.5, startY + 4);
-  doc.text("GST No.", CONTENT_X + 1.5, startY + boxHeight / 2 + 1.2);
+  doc.setFontSize(5.5);
+  doc.text("Consignee", CONTENT_X + 1, startY + 3.2);
+  doc.text("GST No.", CONTENT_X + 1, startY + boxHeight / 2 + 0.9);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.9);
-  if (addressLines.length > 0) {
-    doc.text(addressLines, CONTENT_X + 18, startY + 4);
-  }
-  if (gstLines.length > 0) {
-    doc.text(gstLines, CONTENT_X + 18, startY + boxHeight / 2 + 1.2);
-  }
+  doc.setFontSize(5.3);
+  if (addressLines.length > 0) doc.text(addressLines, CONTENT_X + 16, startY + 3.2);
+  if (gstLines.length > 0) doc.text(gstLines, CONTENT_X + 16, startY + boxHeight / 2 + 0.9);
 
-  return startY + boxHeight + 3;
+  return startY + boxHeight + 2.2;
 }
 
 function buildTableOptions(startY: number, head: UserOptions["head"], body: UserOptions["body"], columnStyles?: UserOptions["columnStyles"]): UserOptions {
@@ -136,55 +145,55 @@ function buildTableOptions(startY: number, head: UserOptions["head"], body: User
     theme: "grid",
     styles: {
       font: "helvetica",
-      fontSize: 5.6,
+      fontSize: 5.2,
       textColor: 0,
-      cellPadding: { top: 1.2, right: 1.2, bottom: 1.2, left: 1.2 },
-      lineColor: BORDER_COLOR,
-      lineWidth: 0.18,
+      cellPadding: { top: 1.1, right: 1.1, bottom: 1.1, left: 1.1 },
+      lineColor: BLACK,
+      lineWidth: 0.16,
       overflow: "linebreak",
       valign: "middle",
     },
     headStyles: {
-      fillColor: BRAND_COLOR,
+      fillColor: DARK_GRAY,
       textColor: 255,
       fontStyle: "bold",
       halign: "center",
-      lineColor: BORDER_COLOR,
-      lineWidth: 0.2,
-    },
-    bodyStyles: {
-      lineColor: BORDER_COLOR,
+      lineColor: BLACK,
       lineWidth: 0.18,
     },
+    bodyStyles: {
+      lineColor: BLACK,
+      lineWidth: 0.16,
+    },
     alternateRowStyles: { fillColor: [255, 255, 255] },
-    tableLineColor: BORDER_COLOR,
-    tableLineWidth: 0.2,
+    tableLineColor: BLACK,
+    tableLineWidth: 0.18,
     columnStyles,
   };
 }
 
 function drawSignatureRow(doc: jsPDF) {
-  const baseY = FRAME_Y + FRAME_HEIGHT - 16;
+  const baseY = FRAME_Y + FRAME_HEIGHT - 14;
   const segments = [
-    { label: "Security", center: CONTENT_X + 18 },
+    { label: "Security", center: CONTENT_X + 19 },
     { label: "Dispatch Executive", center: FRAME_X + FRAME_WIDTH / 2 },
-    { label: "Driver", center: CONTENT_X + CONTENT_WIDTH - 18 },
+    { label: "Driver", center: CONTENT_X + CONTENT_WIDTH - 19 },
   ];
 
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.setLineWidth(0.25);
+  doc.setDrawColor(...BLACK);
+  doc.setLineWidth(0.22);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(4.8);
+  doc.setFontSize(4.7);
   segments.forEach((segment) => {
-    doc.line(segment.center - 21, baseY, segment.center + 21, baseY);
-    doc.text(segment.label, segment.center, baseY + 4.5, { align: "center" });
+    doc.line(segment.center - 18, baseY, segment.center + 18, baseY);
+    doc.text(segment.label, segment.center, baseY + 4, { align: "center" });
   });
 }
 
 function renderLinkedDetailSection(doc: jsPDF, startY: number, title: string, rows: LoadingSlip["phpDetails"]) {
   const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-
   const sectionY = drawSectionHeader(doc, title, startY);
+
   autoTable(
     doc,
     buildTableOptions(
@@ -195,13 +204,13 @@ function renderLinkedDetailSection(doc: jsPDF, startY: number, title: string, ro
         : [["-", "-", "-"]],
       {
         0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
-        1: { cellWidth: 117 },
+        1: { cellWidth: 120 },
         2: { halign: "right", cellWidth: 28, fontStyle: "bold" },
       }
     )
   );
 
-  return (doc as any).lastAutoTable.finalY + 3;
+  return (doc as any).lastAutoTable.finalY + 2.4;
 }
 
 function renderPackingSection(
@@ -233,19 +242,19 @@ function renderPackingSection(
       packingRows,
       {
         0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
-        1: { halign: "right", cellWidth: 46 },
-        2: { halign: "right", cellWidth: 46 },
-        3: { halign: "right", cellWidth: 43, fontStyle: "bold" },
+        1: { halign: "right", cellWidth: 49 },
+        2: { halign: "right", cellWidth: 49 },
+        3: { halign: "right", cellWidth: 49, fontStyle: "bold" },
       }
     )
   );
 
-  return (doc as any).lastAutoTable.finalY + 3;
+  return (doc as any).lastAutoTable.finalY + 2.4;
 }
 
 function getLinkedPackingRows(details?: LinkedLoadingDetail[]) {
   if (!Array.isArray(details) || details.length === 0) return undefined;
-  const rows = details.flatMap((detail) => Array.isArray(detail.packingDetails) ? detail.packingDetails : []);
+  const rows = details.flatMap((detail) => (Array.isArray(detail.packingDetails) ? detail.packingDetails : []));
   return rows.length > 0 ? rows : undefined;
 }
 
@@ -268,12 +277,13 @@ export async function downloadLoadingSlipPdf({
   setting?: Setting | null;
   trucks: Truck[];
   plans: DispatchPlan[];
-  orders: Order[];
+  orders: any[];
   npdItems: Item[];
   companies: Company[];
 }) {
   const doc = new jsPDF("p", "mm", "a4");
   drawOuterFrame(doc);
+  drawWatermark(doc, String(setting?.organizationName || "LAXMI NARAYAN"));
 
   let currentY = (await renderOrganizationHeader(doc, setting, {
     startY: CONTENT_Y,
@@ -331,24 +341,24 @@ export async function downloadLoadingSlipPdf({
       fgRows,
       {
         0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
-        1: { cellWidth: 72 },
-        2: { cellWidth: 52, textColor: SUBTLE_TEXT },
-        3: { halign: "right", cellWidth: 21, fontStyle: "bold" },
+        1: { cellWidth: 78 },
+        2: { cellWidth: 47, textColor: MID_GRAY },
+        3: { halign: "right", cellWidth: 27, fontStyle: "bold" },
       }
     )
   );
 
-  currentY = (doc as any).lastAutoTable.finalY + 4;
+  currentY = (doc as any).lastAutoTable.finalY + 3;
+  currentY = renderPackingSection(doc, currentY, "FG PACKING DETAILS", slip.packingDetails, slip.extraItemsQty);
   currentY = renderLinkedDetailSection(doc, currentY, "PHP DETAILS", slip.phpDetails);
   currentY = renderPackingSection(doc, currentY, "PHP PACKING DETAILS", getLinkedPackingRows(slip.phpDetails), getLinkedExtraQty(slip.phpDetails));
   currentY = renderLinkedDetailSection(doc, currentY, "PLATE DETAILS", slip.plateDetails);
   currentY = renderPackingSection(doc, currentY, "PLATE PACKING DETAILS", getLinkedPackingRows(slip.plateDetails), getLinkedExtraQty(slip.plateDetails));
-  currentY = renderPackingSection(doc, currentY, "FG PACKING DETAILS", slip.packingDetails, slip.extraItemsQty) + 1;
 
-  const footerY = Math.min(currentY + 3, FRAME_Y + FRAME_HEIGHT - 20);
+  const footerY = Math.min(currentY + 2, FRAME_Y + FRAME_HEIGHT - 18);
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(4.8);
-  doc.setTextColor(...SUBTLE_TEXT);
+  doc.setFontSize(4.6);
+  doc.setTextColor(...MID_GRAY);
   doc.text("System generated loading slip", FRAME_X + FRAME_WIDTH / 2, footerY, { align: "center" });
   doc.setTextColor(0, 0, 0);
   drawSignatureRow(doc);
