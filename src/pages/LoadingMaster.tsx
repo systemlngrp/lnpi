@@ -754,6 +754,25 @@ export function LoadingMaster() {
                           </tbody>
                         </table>
                       </div>
+
+                      {slip.status !== "Cancelled" && isEditing ? (
+                        <div className="flex justify-end gap-3 border-t border-black bg-slate-50 px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => cancelEdit(slip.id)}
+                            className="px-3 py-1.5 text-xs font-bold border border-black rounded bg-white hover:bg-slate-100"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void saveEdit(slip.id)}
+                            className="px-3 py-1.5 text-xs font-bold border border-black rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </td>
                 </tr>

@@ -20,6 +20,7 @@ function round2(value: number) {
 function clonePackingDetails(rows?: PackingDetail[]) {
   return Array.isArray(rows)
     ? rows.map((row) => ({
+        extra: Number(row.extra || 0),
         bundles: Number(row.bundles || 0),
         packSize: Number(row.packSize || 0),
         quantity: Number(row.quantity || 0),
