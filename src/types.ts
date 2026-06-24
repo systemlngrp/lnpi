@@ -667,6 +667,7 @@ export interface DispatchPlan {
   planNo?: string;
   scheduleId: string;
   orderId: string;
+  productionId?: string;
   truckId: string;
   plannedQty: number;
   loadedQty?: number;
@@ -682,6 +683,12 @@ export interface LoadingSlipLine {
   loadedQty: number;
   jobNos?: Array<string | number>;
   allocations?: LoadingSlipAllocation[];
+  itemId?: string;
+  itemName?: string;
+  companyName?: string;
+  erpCode?: string;
+  masterErp?: string;
+  itemSource?: OrderItemSource;
 }
 
 export type LoadingSlipAllocation =
@@ -703,12 +710,26 @@ export interface PackingDetail {
   quantity: number;
 }
 
+export interface LinkedLoadingDetail {
+  source: Extract<OrderItemSource, "PHP" | "PLATE">;
+  itemId: string;
+  itemName: string;
+  companyName?: string;
+  erpCode?: string;
+  masterErp?: string;
+  setsPerBox: number;
+  requiredQty: number;
+}
+
 export interface LoadingSlip {
   id: string;
   slipNo: string;
   date: string;
   truckId: string;
   lines: LoadingSlipLine[];
+  fgLoadingId?: string;
+  phpDetails?: LinkedLoadingDetail[];
+  plateDetails?: LinkedLoadingDetail[];
   status?: "Active" | "Cancelled";
   cancelReason?: string;
   cancelledAt?: string;

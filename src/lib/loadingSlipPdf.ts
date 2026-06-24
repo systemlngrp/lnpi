@@ -22,6 +22,30 @@ function formatAllocations(allocations?: LoadingSlip["lines"][number]["allocatio
   return "-";
 }
 
+function renderLinkedDetailSection(doc: jsPDF, startY: number, title: string, rows: LoadingSlip["phpDetails"]) {
+  const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (safeRows.length === 0) return startY;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(title, 14, startY);
+
+  autoTable(doc, {
+    startY: startY + 4,
+    head: [["SL", "Item Name", "Required Qty"]],
+    body: safeRows.map((row, index) => [index + 1, row?.itemName || "-", Number(row?.requiredQty || 0).toLocaleString()]),
+    theme: "grid",
+    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: 0 },
+    headStyles: { fillColor: [51, 65, 85], textColor: 255, fontStyle: "bold" },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 12 },
+      2: { halign: "right", cellWidth: 32, fontStyle: "bold" },
+    },
+  });
+
+  return (doc as any).lastAutoTable.finalY + 8;
+}
+
 export async function downloadLoadingSlipPdf({
   slip,
   setting,
@@ -137,6 +161,9 @@ export async function downloadLoadingSlipPdf({
   });
 
   currentY = (doc as any).lastAutoTable.finalY + 10;
+
+  currentY = renderLinkedDetailSection(doc, currentY, "PHP DETAILS", slip.phpDetails);
+  currentY = renderLinkedDetailSection(doc, currentY, "PLATE DETAILS", slip.plateDetails);
 
   if (Array.isArray(slip.packingDetails) && slip.packingDetails.length > 0) {
     doc.setFont("helvetica", "bold");

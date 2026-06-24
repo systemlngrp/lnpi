@@ -5,12 +5,12 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useData } from "../hooks/useData";
 import type { SheetMasterColumn, SheetMasterFilter } from "../lib/sheetMasterConfigs";
 
-type SheetMasterRow = {
+export type SheetMasterRow = {
   id: string;
   [key: string]: string | number | boolean | null | undefined;
 };
 
-function formatCellValue(value: SheetMasterRow[string]) {
+export function formatCellValue(value: SheetMasterRow[string]) {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
@@ -22,14 +22,17 @@ export function SheetMasterPage({
   columns,
   searchPlaceholder,
   filters = [],
+  rowsOverride,
 }: {
   title: string;
   entity: string;
   columns: SheetMasterColumn[];
   searchPlaceholder: string;
   filters?: SheetMasterFilter[];
+  rowsOverride?: SheetMasterRow[];
 }) {
   const [rows] = useData<SheetMasterRow>(entity, []);
+  const effectiveRows = rowsOverride || rows;
   const [searchTerm, setSearchTerm] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
 
@@ -38,17 +41,17 @@ export function SheetMasterPage({
       ...filter,
       options: Array.from(
         new Set(
-          rows
+          effectiveRows
             .map((row) => String(row[filter.key] ?? "").trim())
             .filter(Boolean)
         )
       ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true })),
     }));
-  }, [filters, rows]);
+  }, [effectiveRows, filters]);
 
   const filteredRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    return rows.filter((row) => {
+    return effectiveRows.filter((row) => {
       const matchesSearch = !query || columns.some((column) => String(row[column.key] ?? "").toLowerCase().includes(query));
       if (!matchesSearch) return false;
       return filters.every((filter) => {
@@ -57,7 +60,7 @@ export function SheetMasterPage({
         return String(row[filter.key] ?? "").trim() === selectedValue;
       });
     });
-  }, [columns, filterValues, filters, rows, searchTerm]);
+  }, [columns, effectiveRows, filterValues, filters, searchTerm]);
 
   const {
     page,

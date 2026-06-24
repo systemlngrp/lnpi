@@ -420,6 +420,7 @@ const NPD_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
   })),
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+  { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" },
 ];
 
 const PHP_ITEM_MASTER_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
@@ -429,6 +430,7 @@ const PHP_ITEM_MASTER_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = 
   })),
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+  { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" },
 ];
 
 const PLATE_ITEM_MASTER_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
@@ -438,6 +440,7 @@ const PLATE_ITEM_MASTER_SCHEMA_COLUMNS: Array<{ column: string; type: string }> 
   })),
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+  { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" },
 ];
 
 const COMPANY_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
@@ -1702,8 +1705,9 @@ function normalizeNpdRowForItemConsumers(row: any) {
 function normalizeFetchedRow(tableName: string, row: any) {
   const newRow = normalizeWorkflowStatus(tableName, row);
 
+  const jsonColumns = new Set(["lines", "packingDetails", "phpDetails", "plateDetails"]);
   Object.keys(newRow).forEach((key) => {
-    if (key === "lines" && typeof newRow[key] === "string") {
+    if (jsonColumns.has(key) && typeof newRow[key] === "string") {
       try {
         newRow[key] = JSON.parse(newRow[key]);
       } catch (e) {
@@ -3442,6 +3446,7 @@ async function initDb(retries = 5) {
           \`slipNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36),
+          \`fgLoadingId\` VARCHAR(36),
           \`lines\` JSON NOT NULL,
           \`packingDetails\` JSON,
           \`extraItemsQty\` DECIMAL(15,2),
@@ -3461,6 +3466,7 @@ async function initDb(retries = 5) {
           \`slipNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36),
+          \`fgLoadingId\` VARCHAR(36),
           \`lines\` JSON NOT NULL,
           \`packingDetails\` JSON,
           \`extraItemsQty\` DECIMAL(15,2),
@@ -4272,6 +4278,8 @@ async function initDb(retries = 5) {
         { table: "loading_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "loading_slips", column: "invoiceId", type: "VARCHAR(36)" },
         { table: "loading_slips", column: "packingDetails", type: "JSON" },
+        { table: "loading_slips", column: "phpDetails", type: "JSON" },
+        { table: "loading_slips", column: "plateDetails", type: "JSON" },
         { table: "loading_slips", column: "extraItemsQty", type: "DECIMAL(15,2)" },
         { table: "invoices", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
         { table: "invoices", column: "date", type: "VARCHAR(50) NOT NULL" },
@@ -5054,7 +5062,7 @@ const createHandlers = (tableName: string) => {
           transactionNo: data.transactionNo || data.transaction_no 
         });
 
-        if (tableName === "loading_slips") {
+        if (["loading_slips", "php_loading_slips", "plate_loading_slips"].includes(tableName)) {
           const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
           const loadingSlipColumns = [
             { column: "dispatchPlanId", type: "VARCHAR(36)" },
@@ -5064,10 +5072,19 @@ const createHandlers = (tableName: string) => {
             { column: "companyName", type: "VARCHAR(255)" },
             { column: "truckId", type: "VARCHAR(36)" },
             { column: "truckNo", type: "VARCHAR(255)" },
+            { column: "fgLoadingId", type: "VARCHAR(36)" },
             { column: "invoiceId", type: "VARCHAR(36)" },
             { column: "invoiceNo", type: "VARCHAR(100)" },
             { column: "items", type: "LONGTEXT" },
             { column: "lines", type: "LONGTEXT" },
+            { column: "packingDetails", type: "LONGTEXT" },
+            { column: "phpDetails", type: "LONGTEXT" },
+            { column: "plateDetails", type: "LONGTEXT" },
+            { column: "extraItemsQty", type: "DECIMAL(15,2) DEFAULT 0" },
+            { column: "status", type: "VARCHAR(20) DEFAULT 'Active'" },
+            { column: "cancelReason", type: "TEXT" },
+            { column: "cancelledAt", type: "VARCHAR(255)" },
+            { column: "cancelledBy", type: "VARCHAR(255)" },
             { column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
             { column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
             { column: "remarks", type: "TEXT" },
@@ -5077,10 +5094,10 @@ const createHandlers = (tableName: string) => {
 
           for (const loadingSlipColumn of loadingSlipColumns) {
             try {
-              await ensureColumnExists(db, schemaName, "loading_slips", loadingSlipColumn.column, loadingSlipColumn.type);
+              await ensureColumnExists(db, schemaName, tableName, loadingSlipColumn.column, loadingSlipColumn.type);
             } catch (error) {
               console.warn(
-                `[DB] Could not ensure loading_slips.${loadingSlipColumn.column}:`,
+                `[DB] Could not ensure ${tableName}.${loadingSlipColumn.column}:`,
                 (error as Error).message
               );
             }

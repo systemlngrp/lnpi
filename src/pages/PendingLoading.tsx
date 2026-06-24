@@ -11,6 +11,8 @@ import {
   LoadingSlipLine,
   Production,
   PackingDetail,
+  LinkedLoadingDetail,
+  OrderItemSource,
 } from "../types";
 import {
   Truck as TruckIcon,
@@ -28,6 +30,8 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { buildLinkedLoadingDetailsFromSlip, findLinkedItemByErp, getLinkedSetsPerBox } from "../lib/linkedLoading";
+import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
 
 interface PendingPlan extends DispatchPlan {
   companyName: string;
@@ -73,11 +77,13 @@ export function PendingLoading() {
   const [plans, updatePlans, plansLoading] = useData<DispatchPlan>("dispatch_plans", []);
   const [trucks] = useData<Truck>("trucks", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem } = useOrderItemCatalog();
+  const { resolveOrderItem, itemsBySource } = useOrderItemCatalog();
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [productions] = useData<Production>("productions", []);
   const [loadingSlips, updateLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [, updatePhpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
+  const [, updatePlateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -211,7 +217,7 @@ export function PendingLoading() {
     const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
     const byJobId = jobSplitQtys[modalKey] || {};
     const openingStockQty = getPlanOpeningStockQty(modalKey);
-    const jobAllocatedTotal = Object.values(byJobId).reduce((sum, qty) => sum + Number(qty || 0), 0);
+    const jobAllocatedTotal = Object.values(byJobId).reduce<number>((sum, qty) => sum + Number(qty || 0), 0);
     const allocatedTotal = jobAllocatedTotal + openingStockQty;
     const errors: string[] = [];
 
@@ -284,6 +290,28 @@ export function PendingLoading() {
     setModalTruckId("");
     setPackingDetails([{ bundles: 0, packSize: 0, quantity: 0 }]);
     setExtraItemsQty("");
+  };
+
+  const getPreviewLinkedDetails = (source: Extract<OrderItemSource, "PHP" | "PLATE">, loadedQty: number): LinkedLoadingDetail[] => {
+    if (!loadingModal || !(loadedQty > 0)) return [];
+    const firstPlan = loadingModal.plans[0];
+    const order = orders.find((row) => row.id === firstPlan?.orderId);
+    const fgItem = resolveOrderItem(order);
+    const sourceItems = itemsBySource[source] || [];
+    const linkedItem = findLinkedItemByErp(sourceItems, order?.erpCode || fgItem?.erp);
+    const setsPerBox = getLinkedSetsPerBox(linkedItem);
+    if (!linkedItem || !setsPerBox) return [];
+    const raw = linkedItem.raw || {};
+    return [{
+      source,
+      itemId: linkedItem.id,
+      itemName: linkedItem.name,
+      companyName: linkedItem.companyName,
+      erpCode: String(raw.erpItemCode || linkedItem.erp || "").trim() || undefined,
+      masterErp: String(raw.masterItemNameErpCode || "").trim() || undefined,
+      setsPerBox,
+      requiredQty: parseFloat((loadedQty * setsPerBox).toFixed(2)),
+    }];
   };
 
   const handleAddPackingRow = () => {
@@ -381,7 +409,7 @@ export function PendingLoading() {
 
     setIsSubmitting(true);
     try {
-      const newSlip: LoadingSlip = {
+      const baseSlip: LoadingSlip = {
         id: crypto.randomUUID(),
         slipNo: "",
         date: new Date().toISOString().slice(0, 10),
@@ -390,8 +418,31 @@ export function PendingLoading() {
         packingDetails: packingDetails.filter(d => d.bundles > 0 && d.packSize > 0),
         extraItemsQty: Number(extraItemsQty || 0) || undefined,
       };
+      const phpDetails = buildLinkedLoadingDetailsFromSlip({
+        slip: baseSlip,
+        source: "PHP",
+        plans,
+        orders,
+        resolveOrderItem,
+        sourceItems: itemsBySource.PHP || [],
+      });
+      const plateDetails = buildLinkedLoadingDetailsFromSlip({
+        slip: baseSlip,
+        source: "PLATE",
+        plans,
+        orders,
+        resolveOrderItem,
+        sourceItems: itemsBySource.PLATE || [],
+      });
+      const newSlip: LoadingSlip = {
+        ...baseSlip,
+        phpDetails,
+        plateDetails,
+      };
 
       await updateLoadingSlips((prev) => [...prev, newSlip]);
+      await updatePhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: phpDetails }));
+      await updatePlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: plateDetails }));
 
       await updatePlans((prev) =>
         prev.map((plan) => {
@@ -630,6 +681,8 @@ export function PendingLoading() {
                   const totalPending = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
                   const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
                   const validation = getModalValidation(loadingModal);
+                  const phpDetailsPreview = getPreviewLinkedDetails("PHP", rowLoadedQty);
+                  const plateDetailsPreview = getPreviewLinkedDetails("PLATE", rowLoadedQty);
 
                   const jobs = productions
                     .filter((p) => 
@@ -751,6 +804,41 @@ export function PendingLoading() {
                             </tfoot>
                           </table>
                         </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        {[
+                          { title: "PHP Details", rows: phpDetailsPreview, emptyLabel: "No matched PHP item" },
+                          { title: "Plate Details", rows: plateDetailsPreview, emptyLabel: "No matched Plate item" },
+                        ].map((section) => (
+                          <div key={section.title} className="border-2 border-black rounded overflow-hidden">
+                            <div className="bg-slate-900 px-4 py-3 text-sm font-black uppercase tracking-wider text-white">{section.title}</div>
+                            <table className="min-w-full divide-y divide-black border-collapse">
+                              <thead className="bg-slate-100">
+                                <tr className="divide-x divide-black">
+                                  <th className="px-4 py-2 text-left text-[10px] font-black uppercase">SL</th>
+                                  <th className="px-4 py-2 text-left text-[10px] font-black uppercase">{section.title === "PHP Details" ? "PHP Item Name" : "Plate Item Name"}</th>
+                                  <th className="px-4 py-2 text-right text-[10px] font-black uppercase">Required Qty</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-black">
+                                {section.rows.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={3} className="px-4 py-5 text-center text-xs font-semibold text-slate-500">{section.emptyLabel}</td>
+                                  </tr>
+                                ) : (
+                                  section.rows.map((detail, index) => (
+                                    <tr key={`${section.title}-${detail.itemId}`} className="divide-x divide-black">
+                                      <td className="px-4 py-2 text-xs font-black">{index + 1}</td>
+                                      <td className="px-4 py-2 text-xs font-semibold text-black">{detail.itemName}</td>
+                                      <td className="px-4 py-2 text-right text-xs font-black text-indigo-700">{detail.requiredQty.toLocaleString()}</td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))}
                       </div>
 
                       <div className="space-y-4">

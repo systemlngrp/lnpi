@@ -23,6 +23,8 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { buildLinkedLoadingDetailsFromSlip } from "../lib/linkedLoading";
+import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
 import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
@@ -36,13 +38,15 @@ function getSlipNoSortValue(slipNo: string) {
 export function LoadingMaster() {
   const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [trucks] = useData<Truck>("trucks", []);
-  const [plans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem } = useOrderItemCatalog();
+  const { resolveOrderItem, itemsBySource } = useOrderItemCatalog();
   const [companies] = useData<Company>("companies", []);
   const [invoices, setInvoices] = useData<Invoice>("invoices", []);
   const [invoiceLineItems, setInvoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [, setPhpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
+  const [, setPlateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -278,6 +282,27 @@ export function LoadingMaster() {
     const originalByPlan = new Map(original.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
     const draftByPlan = new Map(draft.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
     const allPlanIds = new Set<string>([...originalByPlan.keys(), ...draftByPlan.keys()]);
+    const phpDetails = buildLinkedLoadingDetailsFromSlip({
+      slip: draft,
+      source: "PHP",
+      plans,
+      orders,
+      resolveOrderItem,
+      sourceItems: itemsBySource.PHP || [],
+    });
+    const plateDetails = buildLinkedLoadingDetailsFromSlip({
+      slip: draft,
+      source: "PLATE",
+      plans,
+      orders,
+      resolveOrderItem,
+      sourceItems: itemsBySource.PLATE || [],
+    });
+    const syncedDraft: LoadingSlip = {
+      ...draft,
+      phpDetails,
+      plateDetails,
+    };
 
     await setPlans((prev) =>
       prev.map((plan) => {
@@ -290,9 +315,11 @@ export function LoadingMaster() {
 
     await setLoadingSlips((prev) =>
       prev.map((s) =>
-        s.id === slipId ? { ...draft, updatedBy: "System User", updateTimestamp: now } : s
+        s.id === slipId ? { ...syncedDraft, updatedBy: "System User", updateTimestamp: now } : s
       )
     );
+    await setPhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: syncedDraft, details: phpDetails }));
+    await setPlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: syncedDraft, details: plateDetails }));
 
     if (original.invoiceId) {
       const invoiceId = original.invoiceId;
@@ -398,7 +425,21 @@ export function LoadingMaster() {
     await setLoadingSlips((prev) =>
       prev.map((row) =>
         row.id === slip.id
-          ? { ...row, status: "Cancelled", cancelReason: reason, cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
+          ? { ...row, status: "Cancelled" as const, cancelReason: reason, cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
+          : row
+      )
+    );
+    await setPhpLoadingSlips((prev) =>
+      prev.map((row) =>
+        String(row.fgLoadingId || "").trim() === slip.id
+          ? { ...row, status: "Cancelled" as const, cancelReason: reason || "Cancelled from parent FG loading slip", cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
+          : row
+      )
+    );
+    await setPlateLoadingSlips((prev) =>
+      prev.map((row) =>
+        String(row.fgLoadingId || "").trim() === slip.id
+          ? { ...row, status: "Cancelled" as const, cancelReason: reason || "Cancelled from parent FG loading slip", cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
           : row
       )
     );
