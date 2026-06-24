@@ -1635,6 +1635,18 @@ function normalizeNpdLinkedPayload(tableName: string, data: any) {
       delete data.npdId;
       data.itemId = stringOrEmpty(data?.itemId);
     }
+  } else if (tableName === "invoice_line_items") {
+    data.itemSource = normalizeOrderItemSourceValue(data.itemSource);
+    if (data.itemSource === "FG") {
+      const resolvedId = resolveLinkedNpdId(data);
+      if (resolvedId) {
+        data.npdId = resolvedId;
+        data.itemId = resolvedId;
+      }
+    } else {
+      delete data.npdId;
+      data.itemId = stringOrEmpty(data?.itemId);
+    }
   } else if (NPD_LINKED_TABLES.has(tableName)) {
     const resolvedId = resolveLinkedNpdId(data);
     if (resolvedId) {
@@ -1728,6 +1740,15 @@ function normalizeFetchedRow(tableName: string, row: any) {
   }
 
   if (tableName === "orders") {
+    newRow.itemSource = normalizeOrderItemSourceValue(newRow.itemSource);
+    if (newRow.itemSource === "FG") {
+      const resolvedId = resolveLinkedNpdId(newRow);
+      if (resolvedId) {
+        newRow.npdId = resolvedId;
+        newRow.itemId = resolvedId;
+      }
+    }
+  } else if (tableName === "invoice_line_items") {
     newRow.itemSource = normalizeOrderItemSourceValue(newRow.itemSource);
     if (newRow.itemSource === "FG") {
       const resolvedId = resolveLinkedNpdId(newRow);
@@ -3544,6 +3565,7 @@ await db.query(`
           \`invoiceId\` VARCHAR(36) NOT NULL,
           \`loadingSlipId\` VARCHAR(36) NOT NULL,
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`itemSource\` VARCHAR(20) NOT NULL DEFAULT 'FG',
           \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2) NOT NULL,
@@ -4377,6 +4399,7 @@ await db.query(`
         { table: "invoice_line_items", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
         { table: "invoice_line_items", column: "loadingSlipId", type: "VARCHAR(36) NOT NULL" },
         { table: "invoice_line_items", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "invoice_line_items", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "invoice_line_items", column: "npdId", type: "VARCHAR(36)" },
         { table: "invoice_line_items", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoice_line_items", column: "rate", type: "DECIMAL(15,2) NOT NULL" },

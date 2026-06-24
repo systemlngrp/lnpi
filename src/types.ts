@@ -704,7 +704,7 @@ export type LoadingSlipAllocation =
     }
   | {
       sourceType: "opening_stock";
-      sourceRef: "FG Stock";
+      sourceRef: "FG Stock" | "PHP Stock" | "PLATE Stock" | "MATERIAL Stock";
       qty: number;
     };
 
@@ -794,6 +794,7 @@ export interface InvoiceLineItem {
   invoiceId: string;
   loadingSlipId: string;
   itemId: string;
+  itemSource?: OrderItemSource;
   npdId?: string;
   qty: number;
   rate: number;

@@ -387,7 +387,8 @@ const NPD_SCHEMA_COLUMNS = [
     type: "LONGTEXT"
   })),
   { column: "syncSource", type: "VARCHAR(50) NULL" },
-  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" }
+  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+  { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" }
 ];
 const PHP_ITEM_MASTER_SCHEMA_COLUMNS = [
   ...[...new Set(Object.values(PHP_ITEM_MASTER_HEADER_MAP))].map((column) => ({
@@ -395,7 +396,8 @@ const PHP_ITEM_MASTER_SCHEMA_COLUMNS = [
     type: "LONGTEXT"
   })),
   { column: "syncSource", type: "VARCHAR(50) NULL" },
-  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" }
+  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+  { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" }
 ];
 const PLATE_ITEM_MASTER_SCHEMA_COLUMNS = [
   ...[...new Set(Object.values(PLATE_ITEM_MASTER_HEADER_MAP))].map((column) => ({
@@ -403,7 +405,8 @@ const PLATE_ITEM_MASTER_SCHEMA_COLUMNS = [
     type: "LONGTEXT"
   })),
   { column: "syncSource", type: "VARCHAR(50) NULL" },
-  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" }
+  { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
+  { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" }
 ];
 const COMPANY_SCHEMA_COLUMNS = [
   { column: "pin", type: "VARCHAR(50)" },
@@ -1397,6 +1400,18 @@ function normalizeNpdLinkedPayload(tableName, data) {
       delete data.npdId;
       data.itemId = stringOrEmpty(data?.itemId);
     }
+  } else if (tableName === "invoice_line_items") {
+    data.itemSource = normalizeOrderItemSourceValue(data.itemSource);
+    if (data.itemSource === "FG") {
+      const resolvedId = resolveLinkedNpdId(data);
+      if (resolvedId) {
+        data.npdId = resolvedId;
+        data.itemId = resolvedId;
+      }
+    } else {
+      delete data.npdId;
+      data.itemId = stringOrEmpty(data?.itemId);
+    }
   } else if (NPD_LINKED_TABLES.has(tableName)) {
     const resolvedId = resolveLinkedNpdId(data);
     if (resolvedId) {
@@ -1459,8 +1474,9 @@ function normalizeNpdRowForItemConsumers(row) {
 }
 function normalizeFetchedRow(tableName, row) {
   const newRow = normalizeWorkflowStatus(tableName, row);
+  const jsonColumns = /* @__PURE__ */ new Set(["lines", "packingDetails", "phpDetails", "plateDetails"]);
   Object.keys(newRow).forEach((key) => {
-    if (key === "lines" && typeof newRow[key] === "string") {
+    if (jsonColumns.has(key) && typeof newRow[key] === "string") {
       try {
         newRow[key] = JSON.parse(newRow[key]);
       } catch (e) {
@@ -1478,6 +1494,15 @@ function normalizeFetchedRow(tableName, row) {
     newRow.lines = newRow.lines.map((line) => normalizeMaterialLineNpdLink(line));
   }
   if (tableName === "orders") {
+    newRow.itemSource = normalizeOrderItemSourceValue(newRow.itemSource);
+    if (newRow.itemSource === "FG") {
+      const resolvedId = resolveLinkedNpdId(newRow);
+      if (resolvedId) {
+        newRow.npdId = resolvedId;
+        newRow.itemId = resolvedId;
+      }
+    }
+  } else if (tableName === "invoice_line_items") {
     newRow.itemSource = normalizeOrderItemSourceValue(newRow.itemSource);
     if (newRow.itemSource === "FG") {
       const resolvedId = resolveLinkedNpdId(newRow);
@@ -2791,9 +2816,20 @@ async function initDb(retries = 5) {
           \`qty\` DECIMAL(15, 2) NOT NULL,
           \`requiredQty\` DECIMAL(15,2),
           \`plannedQty\` DECIMAL(15,2),
+          \`masterErp\` VARCHAR(255),
           \`uom\` VARCHAR(50) NOT NULL,
           \`remarks\` TEXT,
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending PH',
+          \`shift\` VARCHAR(50),
+          \`category\` VARCHAR(255),
+          \`setsPerBox\` DECIMAL(15,2),
+          \`planningId\` VARCHAR(255),
+          \`scheduledDate\` VARCHAR(50),
+          \`methodology\` TEXT,
+          \`jobType\` VARCHAR(255),
+          \`sequence\` VARCHAR(100),
+          \`jobCompletionTimeOutput\` VARCHAR(255),
+          \`productionOutputQty\` DECIMAL(15,2),
           \`noOfParts\` INT,
           \`ups\` INT,
           \`length\` DECIMAL(15,2),
@@ -2804,8 +2840,10 @@ async function initDb(retries = 5) {
           \`reelActualWithTrimming\` DECIMAL(15,2),
           \`cuttingWithTrimming\` DECIMAL(15,2),
           \`ply\` INT,
+          \`noOfHolesInPhp\` DECIMAL(15,2),
           \`idToOd\` VARCHAR(255),
           \`flute\` VARCHAR(255),
+          \`fluteType\` VARCHAR(255),
           \`takeUpFactor\` DECIMAL(15,5),
           \`top\` DECIMAL(15,2),
           \`l1\` DECIMAL(15,2),
@@ -2814,9 +2852,12 @@ async function initDb(retries = 5) {
           \`f2\` DECIMAL(15,2),
           \`l3\` DECIMAL(15,2),
           \`gsm\` DECIMAL(15,2),
+          \`boardGsmReq\` DECIMAL(15,2),
+          \`brustingStrengthReq\` DECIMAL(15,2),
           \`color1\` VARCHAR(255),
           \`color2\` VARCHAR(255),
           \`printingColor\` VARCHAR(255),
+          \`weightPerPcSetReq\` DECIMAL(15,5),
           \`paperRequiredNos\` DECIMAL(15,2),
           \`topPaperWeightKg\` DECIMAL(15,5),
           \`linerWeightKg\` DECIMAL(15,5),
@@ -2833,6 +2874,8 @@ async function initDb(retries = 5) {
           \`avgWeight\` DECIMAL(15,5),
           \`prodFromSheetPlant\` DECIMAL(15,2),
           \`prodFromFFG\` DECIMAL(15,2),
+          \`phpScheduledJobId\` VARCHAR(36),
+          \`plateScheduledJobId\` VARCHAR(36),
           \`wastage\` DECIMAL(15,2),
           \`productionInMeter\` DECIMAL(15,2),
           \`plannedProductionInMeter\` DECIMAL(15,2),
@@ -2984,45 +3027,12 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
-        CREATE TABLE IF NOT EXISTS \`php_dispatch_plans\` (
-          \`id\` VARCHAR(36) PRIMARY KEY,
-          \`scheduleId\` VARCHAR(36),
-          \`orderId\` VARCHAR(36),
-          \`productionId\` VARCHAR(36),
-          \`truckId\` VARCHAR(36) NOT NULL,
-          \`plannedQty\` DECIMAL(15,2) NOT NULL,
-          \`loadedQty\` DECIMAL(15,2) DEFAULT 0,
-          \`canceledQty\` DECIMAL(15,2) DEFAULT 0,
-          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Planned',
-          \`date\` VARCHAR(50) NOT NULL,
-          \`planNo\` VARCHAR(100),
-          \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
-        )
-      `);
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS \`plate_dispatch_plans\` (
-          \`id\` VARCHAR(36) PRIMARY KEY,
-          \`scheduleId\` VARCHAR(36),
-          \`orderId\` VARCHAR(36),
-          \`productionId\` VARCHAR(36),
-          \`truckId\` VARCHAR(36) NOT NULL,
-          \`plannedQty\` DECIMAL(15,2) NOT NULL,
-          \`loadedQty\` DECIMAL(15,2) DEFAULT 0,
-          \`canceledQty\` DECIMAL(15,2) DEFAULT 0,
-          \`status\` VARCHAR(50) NOT NULL DEFAULT 'Planned',
-          \`date\` VARCHAR(50) NOT NULL,
-          \`planNo\` VARCHAR(100),
-          \`updatedBy\` VARCHAR(255),
-          \`updateTimestamp\` VARCHAR(255)
-        )
-      `);
-      await db.query(`
         CREATE TABLE IF NOT EXISTS \`php_loading_slips\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`slipNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36),
+          \`fgLoadingId\` VARCHAR(36),
           \`lines\` JSON NOT NULL,
           \`packingDetails\` JSON,
           \`extraItemsQty\` DECIMAL(15,2),
@@ -3041,6 +3051,7 @@ async function initDb(retries = 5) {
           \`slipNo\` VARCHAR(100) NOT NULL,
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36),
+          \`fgLoadingId\` VARCHAR(36),
           \`lines\` JSON NOT NULL,
           \`packingDetails\` JSON,
           \`extraItemsQty\` DECIMAL(15,2),
@@ -3134,6 +3145,7 @@ async function initDb(retries = 5) {
           \`invoiceId\` VARCHAR(36) NOT NULL,
           \`loadingSlipId\` VARCHAR(36) NOT NULL,
           \`itemId\` VARCHAR(36) NOT NULL,
+          \`itemSource\` VARCHAR(20) NOT NULL DEFAULT 'FG',
           \`npdId\` VARCHAR(36),
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2) NOT NULL,
@@ -3754,6 +3766,75 @@ async function initDb(retries = 5) {
         { table: "productions", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "productions", column: "requiredQty", type: "DECIMAL(15,2)" },
         { table: "productions", column: "plannedQty", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "masterErp", type: "VARCHAR(255)" },
+        { table: "productions", column: "shift", type: "VARCHAR(50)" },
+        { table: "productions", column: "category", type: "VARCHAR(255)" },
+        { table: "productions", column: "setsPerBox", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "planningId", type: "VARCHAR(255)" },
+        { table: "productions", column: "scheduledDate", type: "VARCHAR(50)" },
+        { table: "productions", column: "methodology", type: "TEXT" },
+        { table: "productions", column: "jobType", type: "VARCHAR(255)" },
+        { table: "productions", column: "sequence", type: "VARCHAR(100)" },
+        { table: "productions", column: "jobCompletionTimeOutput", type: "VARCHAR(255)" },
+        { table: "productions", column: "productionOutputQty", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "noOfParts", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "ups", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "length", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "breadth", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "height", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "reelAsPerCalc", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "noOfUpsInCuttingForPlates", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "reelActualWithTrimming", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "cuttingWithTrimming", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "ply", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "noOfHolesInPhp", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "idToOd", type: "VARCHAR(255)" },
+        { table: "productions", column: "flute", type: "VARCHAR(255)" },
+        { table: "productions", column: "fluteType", type: "VARCHAR(255)" },
+        { table: "productions", column: "takeUpFactor", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "top", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "l1", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "f1", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "l2", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "f2", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "l3", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "gsm", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "boardGsmReq", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "brustingStrengthReq", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "color1", type: "VARCHAR(255)" },
+        { table: "productions", column: "color2", type: "VARCHAR(255)" },
+        { table: "productions", column: "printingColor", type: "VARCHAR(255)" },
+        { table: "productions", column: "weightPerPcSetReq", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "paperRequiredNos", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "topPaperWeightKg", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "linerWeightKg", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "totalJobWeight", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "sheetWeight", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "plateWeight", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "gsmLeastCost", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "totalPaperWeight", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "rate", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "totalWeightOfSet", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "realizationPerKg", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "companyName", type: "VARCHAR(255)" },
+        { table: "productions", column: "actualPaperUsed", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "avgWeight", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "prodFromSheetPlant", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "prodFromFFG", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "phpScheduledJobId", type: "VARCHAR(36)" },
+        { table: "productions", column: "plateScheduledJobId", type: "VARCHAR(36)" },
+        { table: "productions", column: "wastage", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "productionInMeter", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "plannedProductionInMeter", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "leastGsm", type: "DECIMAL(15,5)" },
+        { table: "productions", column: "fluteBatches", type: "TEXT" },
+        { table: "productions", column: "erpCodeReel", type: "VARCHAR(255)" },
+        { table: "productions", column: "lineRequiredNos", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "jobCardNo", type: "VARCHAR(255)" },
+        { table: "productions", column: "erpCode", type: "VARCHAR(255)" },
+        { table: "productions", column: "year", type: "INT" },
+        { table: "productions", column: "month", type: "VARCHAR(50)" },
+        { table: "productions", column: "idToOd17", type: "DECIMAL(15,2)" },
         { table: "productions", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "productions", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "consumptions", column: "phTimestamp", type: "VARCHAR(255)" },
@@ -3837,6 +3918,8 @@ async function initDb(retries = 5) {
         { table: "loading_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "loading_slips", column: "invoiceId", type: "VARCHAR(36)" },
         { table: "loading_slips", column: "packingDetails", type: "JSON" },
+        { table: "loading_slips", column: "phpDetails", type: "JSON" },
+        { table: "loading_slips", column: "plateDetails", type: "JSON" },
         { table: "loading_slips", column: "extraItemsQty", type: "DECIMAL(15,2)" },
         { table: "invoices", column: "invoiceNo", type: "VARCHAR(100) NOT NULL" },
         { table: "invoices", column: "date", type: "VARCHAR(50) NOT NULL" },
@@ -3884,6 +3967,7 @@ async function initDb(retries = 5) {
         { table: "invoice_line_items", column: "invoiceId", type: "VARCHAR(36) NOT NULL" },
         { table: "invoice_line_items", column: "loadingSlipId", type: "VARCHAR(36) NOT NULL" },
         { table: "invoice_line_items", column: "itemId", type: "VARCHAR(36) NOT NULL" },
+        { table: "invoice_line_items", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
         { table: "invoice_line_items", column: "npdId", type: "VARCHAR(36)" },
         { table: "invoice_line_items", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "invoice_line_items", column: "rate", type: "DECIMAL(15,2) NOT NULL" },
@@ -4118,7 +4202,6 @@ const createHandlers = (tableName) => {
             SELECT
               ili.*,
               COALESCE(
-                NULLIF(TRIM(ili.itemName), ''),
                 NULLIF(TRIM(i.name), ''),
                 NULLIF(TRIM(n.itemName), ''),
                 NULLIF(TRIM(n.name), ''),
@@ -4531,7 +4614,7 @@ const createHandlers = (tableName) => {
           status: data.status,
           transactionNo: data.transactionNo || data.transaction_no
         });
-        if (tableName === "loading_slips") {
+        if (["loading_slips", "php_loading_slips", "plate_loading_slips"].includes(tableName)) {
           const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
           const loadingSlipColumns = [
             { column: "dispatchPlanId", type: "VARCHAR(36)" },
@@ -4539,12 +4622,22 @@ const createHandlers = (tableName) => {
             { column: "date", type: "VARCHAR(50)" },
             { column: "companyId", type: "VARCHAR(36)" },
             { column: "companyName", type: "VARCHAR(255)" },
+            { column: "loadingSource", type: "VARCHAR(30) DEFAULT 'DISPATCH_PLAN'" },
             { column: "truckId", type: "VARCHAR(36)" },
             { column: "truckNo", type: "VARCHAR(255)" },
+            { column: "fgLoadingId", type: "VARCHAR(36)" },
             { column: "invoiceId", type: "VARCHAR(36)" },
             { column: "invoiceNo", type: "VARCHAR(100)" },
             { column: "items", type: "LONGTEXT" },
             { column: "lines", type: "LONGTEXT" },
+            { column: "packingDetails", type: "LONGTEXT" },
+            { column: "phpDetails", type: "LONGTEXT" },
+            { column: "plateDetails", type: "LONGTEXT" },
+            { column: "extraItemsQty", type: "DECIMAL(15,2) DEFAULT 0" },
+            { column: "status", type: "VARCHAR(20) DEFAULT 'Active'" },
+            { column: "cancelReason", type: "TEXT" },
+            { column: "cancelledAt", type: "VARCHAR(255)" },
+            { column: "cancelledBy", type: "VARCHAR(255)" },
             { column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
             { column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
             { column: "remarks", type: "TEXT" },
@@ -4553,10 +4646,10 @@ const createHandlers = (tableName) => {
           ];
           for (const loadingSlipColumn of loadingSlipColumns) {
             try {
-              await ensureColumnExists(db, schemaName, "loading_slips", loadingSlipColumn.column, loadingSlipColumn.type);
+              await ensureColumnExists(db, schemaName, tableName, loadingSlipColumn.column, loadingSlipColumn.type);
             } catch (error) {
               console.warn(
-                `[DB] Could not ensure loading_slips.${loadingSlipColumn.column}:`,
+                `[DB] Could not ensure ${tableName}.${loadingSlipColumn.column}:`,
                 error.message
               );
             }
@@ -4740,7 +4833,7 @@ const createHandlers = (tableName) => {
     }
   };
 };
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_dispatch_plans", "plate_dispatch_plans", "php_loading_slips", "plate_loading_slips", "settings"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings"];
 app.get("/api/legacy-items", async (req, res) => {
   try {
     const user = await getRequestUser(req);

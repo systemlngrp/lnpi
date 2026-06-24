@@ -181,7 +181,11 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
     let fgCreationMessage = "";
     if (String(methodology || "").trim().toUpperCase() === "CORRUGATION") {
       const sourceItem = selectedItem;
-      if (!sourceItem) {
+      const linkField = selectedJob.jobSource === "PHP" ? "phpScheduledJobId" : "plateScheduledJobId";
+      const existingLinkedProduction = productions.find((production) => String((production as any)[linkField] || "").trim() === selectedJob.id);
+      if (existingLinkedProduction) {
+        fgCreationMessage = ` Linked production job ${existingLinkedProduction.transactionNo} already exists.`;
+      } else if (!sourceItem) {
         fgCreationMessage = ` Production job skipped: ${selectedJob.jobSource} item not found in item master.`;
       } else {
         const sourceRaw = sourceItem.raw || {};
@@ -191,6 +195,7 @@ export function StandaloneProductionScheduling({ source }: StandaloneProductionS
           transactionNo: fgTxnNo,
           date: scheduleDate,
           itemId: sourceItem.id,
+          itemSource: "FG",
           qty: nextPlannedQty,
           plannedQty: nextPlannedQty,
           uom: sourceItem.uom || String(sourceRaw.uom || ""),

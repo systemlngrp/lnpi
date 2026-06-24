@@ -58,6 +58,8 @@ export function PendingProduction() {
     return schedules
       .filter((schedule) => {
         if (getPendingProductionQty(schedule) <= 0) return false;
+        const order = orders.find((row) => row.id === schedule.orderId);
+        if (normalizeOrderItemSource(order?.itemSource) !== "FG") return false;
         const scheduledDate = parseLocalYmd(schedule.scheduledDate);
         if (!scheduledDate) return false;
         return scheduledDate.getTime() <= cutoffDate.getTime();

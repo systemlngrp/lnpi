@@ -1,4 +1,4 @@
-import { LoadingSlip, Production } from "../types";
+import { LoadingSlip, OrderItemSource, Production } from "../types";
 
 type MasterRow = {
   id: string;
@@ -20,21 +20,23 @@ function rowKeys(row: MasterRow) {
   return [...new Set([row.id, row.itemId].map((value) => normalize(value)).filter(Boolean))];
 }
 
-function slipLineMatchesRow(line: LoadingSlip["lines"][number], row: MasterRow) {
+function slipLineMatchesRow(line: LoadingSlip["lines"][number], row: MasterRow, source: Extract<OrderItemSource, "PHP" | "PLATE">) {
   const keys = rowKeys(row);
-  return keys.includes(normalize(line.itemId));
+  const lineSource = String(line.itemSource || source).trim().toUpperCase();
+  return lineSource === source && keys.includes(normalize(line.itemId));
 }
 
-function jobMatchesRow(job: Production, row: MasterRow) {
+function jobMatchesRow(job: Production, row: MasterRow, source: Extract<OrderItemSource, "PHP" | "PLATE">) {
   const keys = rowKeys(row);
-  return keys.includes(normalize(job.itemId));
+  const jobSource = String(job.itemSource || source).trim().toUpperCase();
+  return jobSource === source && keys.includes(normalize(job.itemId));
 }
 
-export function buildPhpPlateInventoryRows(masterRows: MasterRow[], jobs: Production[], loadingSlips: LoadingSlip[]) {
+export function buildPhpPlateInventoryRows(masterRows: MasterRow[], jobs: Production[], loadingSlips: LoadingSlip[], source: Extract<OrderItemSource, "PHP" | "PLATE">) {
   return masterRows.map((row) => {
     const output = jobs.reduce((sum, job) => {
       if (job.status === "Cancelled" || job.cancelTimestamp) return sum;
-      if (!jobMatchesRow(job, row)) return sum;
+      if (!jobMatchesRow(job, row, source)) return sum;
       return sum + toNumber(job.productionOutputQty);
     }, 0);
 
@@ -43,7 +45,7 @@ export function buildPhpPlateInventoryRows(masterRows: MasterRow[], jobs: Produc
       return (
         sum +
         slip.lines.reduce((lineSum, line) => {
-          if (!slipLineMatchesRow(line, row)) return lineSum;
+          if (!slipLineMatchesRow(line, row, source)) return lineSum;
           return lineSum + toNumber(line.loadedQty);
         }, 0)
       );

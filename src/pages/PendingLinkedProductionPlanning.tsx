@@ -25,6 +25,7 @@ type PlanningRow = {
   company?: Company;
   fgItem?: OrderCatalogItem;
   linkedItem?: OrderCatalogItem;
+  isDirectSourceOrder: boolean;
   fgPendingQty: number;
   setsPerBox?: number;
   requiredQty: number;
@@ -227,19 +228,26 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
         const fgItem = resolveOrderItem(order);
         const company = companies.find((row) => row.id === order?.companyId);
         const fgPendingQty = getPendingFgQty(schedule);
+        const isDirectSourceOrder = order?.itemSource === source;
         const scheduleErp = String(order?.erpCode || fgItem?.erp || "").trim();
-        const linkedItem = findItemByErp(sourceItems, scheduleErp);
+        const linkedItem = isDirectSourceOrder
+          ? sourceItems.find((item) => item.id === String(order?.itemId || "").trim())
+          : findItemByErp(sourceItems, scheduleErp);
         const setsPerBox = getSetsPerBox(linkedItem);
-        const requiredQty = linkedItem && setsPerBox ? round2(fgPendingQty * setsPerBox) : 0;
+        const requiredQty = isDirectSourceOrder
+          ? fgPendingQty
+          : linkedItem && setsPerBox
+            ? round2(fgPendingQty * setsPerBox)
+            : 0;
         const alreadyPlannedQty = Number(plannedQtyByScheduleId.get(schedule.id) || 0);
         const remainingQty = Math.max(0, round2(requiredQty - alreadyPlannedQty));
 
         let matchStatus = "Ready";
         let selectable = true;
         if (!linkedItem) {
-          matchStatus = `No ${source} master match for ERP`;
+          matchStatus = isDirectSourceOrder ? `No ${source} item found for direct order` : `No ${source} master match for ERP`;
           selectable = false;
-        } else if (!setsPerBox) {
+        } else if (!isDirectSourceOrder && !setsPerBox) {
           matchStatus = "Sets/Pcs per box missing";
           selectable = false;
         } else if (remainingQty <= 0) {
@@ -253,6 +261,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
           company,
           fgItem,
           linkedItem,
+          isDirectSourceOrder,
           fgPendingQty,
           setsPerBox,
           requiredQty,
@@ -262,7 +271,10 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
           matchStatus,
         };
       })
-      .filter((row) => row.fgPendingQty > 0 && row.selectable && Boolean(row.linkedItem) && Boolean(row.setsPerBox) && row.remainingQty > 0);
+      .filter((row) => {
+        if (row.fgPendingQty <= 0 || !row.selectable || !row.linkedItem || row.remainingQty <= 0) return false;
+        return row.isDirectSourceOrder || Boolean(row.setsPerBox);
+      });
   }, [companies, orders, plannedQtyByScheduleId, resolveOrderItem, schedules, source, sourceItems]);
 
   const availableCompanies = useMemo(() => {
@@ -441,8 +453,8 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
 
   const title = source === "PHP" ? "Pending PHP Planning" : "Pending Plate Planning";
   const description = source === "PHP"
-    ? "Create PHP jobs from scheduled FG orders using ERP matching and Sets/Pcs per box."
-    : "Create Plate jobs from scheduled FG orders using ERP matching and Sets/Pcs per box.";
+    ? "Create PHP jobs from direct PHP orders or scheduled FG orders using ERP matching and Sets/Pcs per box."
+    : "Create Plate jobs from direct Plate orders or scheduled FG orders using ERP matching and Sets/Pcs per box.";
 
   return (
     <div className="space-y-6">
@@ -561,11 +573,11 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
                       <td className="px-4 py-4 text-xs font-bold border border-black whitespace-nowrap">{formatDate(row.schedule.scheduledDate)}</td>
                       <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">{row.order?.orderNo || "-"}</td>
                       <td className="px-4 py-4 text-xs border border-black">{row.company?.name || "-"}</td>
-                      <td className="px-4 py-4 text-xs border border-black">{row.fgItem?.name || "-"}</td>
+                      <td className="px-4 py-4 text-xs border border-black">{row.isDirectSourceOrder ? "Direct Order" : row.fgItem?.name || "-"}</td>
                       <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">{String(row.order?.erpCode || row.fgItem?.erp || "-")}</td>
                       <td className="px-4 py-4 text-xs border border-black">{row.linkedItem?.name || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">{row.fgPendingQty.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs border border-black whitespace-nowrap">{row.setsPerBox?.toLocaleString() || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs border border-black whitespace-nowrap">{row.isDirectSourceOrder ? "Direct" : row.setsPerBox?.toLocaleString() || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs border border-black whitespace-nowrap">{row.requiredQty.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs border border-black whitespace-nowrap">{row.alreadyPlannedQty.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap">{row.remainingQty.toLocaleString()}</td>

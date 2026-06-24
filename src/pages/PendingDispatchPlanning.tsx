@@ -8,6 +8,7 @@ import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { OrderSchedule, Order, Company, Item, DispatchPlan, LoadingSlip, Production } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
+import { normalizeOrderItemSource } from "../lib/orderItems";
 import { ArrowUpDown, Save } from "lucide-react";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
@@ -310,10 +311,12 @@ export function PendingDispatchPlanning() {
   const plannedNowByItemId = useMemo(() => {
     const map = new Map<string, number>();
     selectedIds.forEach((scheduleId) => {
+      const schedule = schedules.find((row) => row.id === scheduleId);
+      const order = orders.find((row) => row.id === schedule?.orderId);
+      if (normalizeOrderItemSource(order?.itemSource) !== "FG") return;
       const itemId = itemIdByScheduleId.get(scheduleId) || "";
       if (!itemId) return;
 
-      const schedule = schedules.find((row) => row.id === scheduleId);
       const effectivePlanned = getEffectivePlannedForSchedule(scheduleId);
       const schedulePendingQty = schedule ? Math.max(0, Number(schedule.qty || 0) - effectivePlanned) : 0;
 
@@ -321,7 +324,7 @@ export function PendingDispatchPlanning() {
       map.set(itemId, (map.get(itemId) || 0) + Number(plannedQty || 0));
     });
     return map;
-  }, [itemIdByScheduleId, rowPlannedQty, schedules, selectedIds, getEffectivePlannedForSchedule]);
+  }, [itemIdByScheduleId, orders, rowPlannedQty, schedules, selectedIds, getEffectivePlannedForSchedule]);
 
   const calculationRows = useMemo(() => {
     const itemIds = Array.from(plannedNowByItemId.keys());
@@ -425,7 +428,7 @@ export function PendingDispatchPlanning() {
           scheduleId: id,
           orderId: schedule.orderId,
           truckId: "",
-          plannedQty: rowPlannedQty[id] !== undefined ? rowPlannedQty[id] : Math.max(0, balance),
+          plannedQty: Number(rowPlannedQty[id] !== undefined ? rowPlannedQty[id] : Math.max(0, balance)),
           status: "Planned",
           date: timestamp,
           updateTimestamp: timestamp,
