@@ -1,147 +1,28 @@
 import jsPDF from "jspdf";
 import autoTable, { type UserOptions } from "jspdf-autotable";
 import { formatDate } from "./serial";
-import type { Company, DispatchPlan, Item, LinkedLoadingDetail, LoadingSlip, LoadingSlipAllocation, Order, Setting, Truck } from "../types";
+import type { Company, DispatchPlan, Item, LinkedLoadingDetail, LoadingSlip, Order, PackingDetail, Setting, Truck } from "../types";
 import { resolveLoadingSlipLineContext, summarizeLoadingSlip } from "./loadingSlipContext";
 import { normalizeOrderCatalogItem } from "./orderItems";
 import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
-const FRAME_X = 18;
-const FRAME_Y = 12;
-const FRAME_WIDTH = 174;
-const FRAME_HEIGHT = 206;
-const CONTENT_X = FRAME_X + 3;
-const CONTENT_Y = FRAME_Y + 3;
-const CONTENT_WIDTH = FRAME_WIDTH - 6;
+const PAGE_X = 12;
+const PAGE_Y = 8;
+const PAGE_W = 186;
+const PAGE_H = 279;
 const BLACK: [number, number, number] = [0, 0, 0];
-const DARK_GRAY: [number, number, number] = [40, 40, 40];
-const MID_GRAY: [number, number, number] = [120, 120, 120];
-const LIGHT_GRAY: [number, number, number] = [240, 240, 240];
-const VERY_LIGHT_GRAY: [number, number, number] = [248, 248, 248];
+const LIGHT: [number, number, number] = [245, 245, 245];
+const DARK: [number, number, number] = [20, 20, 20];
 
-function formatAllocations(allocations?: LoadingSlip["lines"][number]["allocations"], jobNos?: LoadingSlip["lines"][number]["jobNos"]) {
-  if (Array.isArray(allocations) && allocations.length > 0) {
-    return allocations
-      .map((allocation: LoadingSlipAllocation) =>
-        allocation.sourceType === "job"
-          ? `${allocation.jobNo} (${Number(allocation.qty || 0).toLocaleString()})`
-          : `${allocation.sourceRef} (${Number(allocation.qty || 0).toLocaleString()})`
-      )
-      .join(", ");
-  }
-
-  if (Array.isArray(jobNos) && jobNos.length > 0) {
-    return jobNos.map((jobNo) => String(jobNo)).join(", ");
-  }
-
-  return "-";
+function resolveFgItem(order?: Partial<Order> | null, npdItems?: Item[]) {
+  if (!order || !npdItems) return undefined;
+  return npdItems.map((row) => normalizeOrderCatalogItem(row, "FG")).find((row) => row && row.id === String(order.itemId || "").trim()) || undefined;
 }
 
-function getTruckDisplay(trucks: Truck[], truckId: string) {
-  const truck = trucks.find((row) => row.id === truckId);
-  return String(truck?.truckNo || "-").trim() || "-";
-}
-
-function drawOuterFrame(doc: jsPDF) {
-  doc.setDrawColor(...BLACK);
-  doc.setLineWidth(0.3);
-  doc.rect(FRAME_X, FRAME_Y, FRAME_WIDTH, FRAME_HEIGHT);
-}
-
-function drawWatermark(doc: jsPDF, text: string) {
-  const safeText = String(text || "LOADING SLIP").trim();
-  if (!safeText) return;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(30);
-  doc.setTextColor(245, 245, 245);
-  doc.text(safeText, FRAME_X + FRAME_WIDTH / 2, FRAME_Y + FRAME_HEIGHT / 2, {
-    align: "center",
-    angle: 0,
-  });
-  doc.setTextColor(0, 0, 0);
-}
-
-function drawTitleBand(doc: jsPDF, startY: number) {
-  doc.setFillColor(...BLACK);
-  doc.roundedRect(CONTENT_X, startY, CONTENT_WIDTH, 7, 0.8, 0.8, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.6);
-  doc.text("LOADING SLIP", FRAME_X + FRAME_WIDTH / 2, startY + 4.7, { align: "center" });
-  doc.setTextColor(0, 0, 0);
-  return startY + 8.8;
-}
-
-function drawSectionHeader(doc: jsPDF, title: string, startY: number) {
-  doc.setFillColor(...LIGHT_GRAY);
-  doc.setDrawColor(...BLACK);
-  doc.setLineWidth(0.2);
-  doc.rect(CONTENT_X, startY, CONTENT_WIDTH, 5, "FD");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.9);
-  doc.text(title, CONTENT_X + 1.8, startY + 3.35);
-  return startY + 5.8;
-}
-
-function drawInfoGrid(doc: jsPDF, startY: number, details: Array<[string, string]>) {
-  const rowHeight = 4.5;
-  const halfWidth = CONTENT_WIDTH / 2;
-  const labelWidth = 16;
-
-  details.forEach(([label, value], index) => {
-    const left = index % 2 === 0;
-    const row = Math.floor(index / 2);
-    const x = left ? CONTENT_X : CONTENT_X + halfWidth;
-    const y = startY + row * rowHeight;
-
-    doc.setFillColor(...VERY_LIGHT_GRAY);
-    doc.rect(x, y, labelWidth, rowHeight, "F");
-    doc.setDrawColor(...BLACK);
-    doc.rect(x, y, labelWidth, rowHeight);
-    doc.rect(x + labelWidth, y, halfWidth - labelWidth, rowHeight);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(5.5);
-    doc.text(label, x + 1, y + 3);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.5);
-    doc.text(String(value || "-"), x + labelWidth + 1, y + 3);
-  });
-
-  return startY + Math.ceil(details.length / 2) * rowHeight + 1.8;
-}
-
-function drawCompanyBlock(doc: jsPDF, company: Company, startY: number) {
-  const addressParts = [company.address, company.district, company.state]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-  const addressText = addressParts.join(", ");
-  const gstText = String(company.gstNo || "").trim();
-
-  const addressLines = addressText ? doc.splitTextToSize(addressText, CONTENT_WIDTH - 22) : [];
-  const gstLines = gstText ? doc.splitTextToSize(gstText, CONTENT_WIDTH - 22) : [];
-  const boxHeight = Math.max(10.5, 4.2 + addressLines.length * 3 + (gstLines.length ? gstLines.length * 3 + 1.2 : 0));
-
-  doc.setDrawColor(...BLACK);
-  doc.rect(CONTENT_X, startY, CONTENT_WIDTH, boxHeight);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.5);
-  doc.text("Consignee", CONTENT_X + 1, startY + 3.2);
-  doc.text("GST No.", CONTENT_X + 1, startY + boxHeight / 2 + 0.9);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.3);
-  if (addressLines.length > 0) doc.text(addressLines, CONTENT_X + 16, startY + 3.2);
-  if (gstLines.length > 0) doc.text(gstLines, CONTENT_X + 16, startY + boxHeight / 2 + 0.9);
-
-  return startY + boxHeight + 2.2;
-}
-
-function buildTableOptions(startY: number, head: UserOptions["head"], body: UserOptions["body"], columnStyles?: UserOptions["columnStyles"]): UserOptions {
+function tableOptions(startY: number, head: UserOptions["head"], body: UserOptions["body"], columnStyles?: UserOptions["columnStyles"]): UserOptions {
   return {
     startY,
-    margin: { left: CONTENT_X, right: CONTENT_X },
+    margin: { left: PAGE_X + 4, right: PAGE_X + 4 },
     head,
     body,
     theme: "grid",
@@ -149,121 +30,155 @@ function buildTableOptions(startY: number, head: UserOptions["head"], body: User
       font: "helvetica",
       fontSize: 5.2,
       textColor: 0,
-      cellPadding: { top: 1.1, right: 1.1, bottom: 1.1, left: 1.1 },
+      cellPadding: { top: 1, right: 1, bottom: 1, left: 1 },
       lineColor: BLACK,
-      lineWidth: 0.16,
+      lineWidth: 0.2,
       overflow: "linebreak",
       valign: "middle",
     },
     headStyles: {
-      fillColor: DARK_GRAY,
-      textColor: 255,
+      fillColor: LIGHT,
+      textColor: 0,
       fontStyle: "bold",
       halign: "center",
       lineColor: BLACK,
-      lineWidth: 0.18,
+      lineWidth: 0.22,
     },
     bodyStyles: {
       lineColor: BLACK,
-      lineWidth: 0.16,
+      lineWidth: 0.2,
     },
-    alternateRowStyles: { fillColor: [255, 255, 255] },
     tableLineColor: BLACK,
-    tableLineWidth: 0.18,
+    tableLineWidth: 0.22,
     columnStyles,
   };
 }
 
-function drawSignatureRow(doc: jsPDF) {
-  const baseY = FRAME_Y + FRAME_HEIGHT - 14;
-  const segments = [
-    { label: "Security", center: CONTENT_X + 19 },
-    { label: "Dispatch Executive", center: FRAME_X + FRAME_WIDTH / 2 },
-    { label: "Driver", center: CONTENT_X + CONTENT_WIDTH - 19 },
+function drawPageBorder(doc: jsPDF) {
+  doc.setDrawColor(...BLACK);
+  doc.setLineWidth(0.25);
+  doc.rect(PAGE_X, PAGE_Y, PAGE_W, PAGE_H);
+}
+
+function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: string; truckNo: string; erpCode: string; company: string; itemName: string }) {
+  const leftX = PAGE_X + 4;
+  const totalW = PAGE_W - 8;
+  const halfW = totalW / 2;
+  const labelW = 18;
+  const rowH = 8;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.text(`SL No: ${meta.slipNo || "-"}`, PAGE_X + PAGE_W - 6, startY - 1, { align: "right" });
+
+  const rows: Array<[string, string, string, string]> = [
+    ["Date", meta.date, "Truck No", meta.truckNo],
+    ["ERP Code", meta.erpCode, "Company", meta.company],
+    ["Item Name", meta.itemName, "", ""],
   ];
 
-  doc.setDrawColor(...BLACK);
+  rows.forEach((row, idx) => {
+    const y = startY + idx * rowH;
+    const rightValueW = halfW - labelW;
+    doc.rect(leftX, y, labelW, rowH);
+    doc.rect(leftX + labelW, y, rightValueW, rowH);
+    doc.rect(leftX + halfW, y, labelW, rowH);
+    doc.rect(leftX + halfW + labelW, y, rightValueW, rowH);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.6);
+    doc.text(row[0], leftX + 1, y + 4.8);
+    doc.text(row[2], leftX + halfW + 1, y + 4.8);
+
+    doc.setFont("helvetica", "bold");
+    const leftValueLines = doc.splitTextToSize(String(row[1] || "-"), rightValueW - 2);
+    const rightValueLines = doc.splitTextToSize(String(row[3] || "-"), rightValueW - 2);
+    doc.text(leftValueLines, leftX + labelW + 1, y + 4.2);
+    if (row[2]) doc.text(rightValueLines, leftX + halfW + labelW + 1, y + 4.2);
+  });
+
+  return startY + rows.length * rowH + 4;
+}
+
+function drawSectionTitle(doc: jsPDF, title: string, startY: number) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.text(title, PAGE_X + PAGE_W / 2, startY, { align: "center" });
+  return startY + 2;
+}
+
+function toPackingRows(details?: PackingDetail[]) {
+  return (Array.isArray(details) ? details : []).map((row, index) => [
+    index + 1,
+    Number(row.extra || 0) ? Number(row.extra || 0).toLocaleString() : "",
+    Number(row.bundles || 0).toLocaleString(),
+    Number(row.packSize || 0).toLocaleString(),
+    Number(row.quantity || 0).toLocaleString(),
+  ]);
+}
+
+function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, rows: PackingDetail[] | undefined, requiredQty?: number) {
+  const sectionTitle = requiredQty != null ? `${title} (Required Qty = ${Number(requiredQty || 0).toLocaleString()})` : title;
+  const titleY = drawSectionTitle(doc, sectionTitle, startY);
+  const body = toPackingRows(rows);
+  const safeBody = body.length > 0 ? body : [["", "", "", "", ""]];
+  autoTable(doc, tableOptions(
+    titleY,
+    [["Line No", "Extra", "Total (Bundles)", "Pack Size", "All Total"]],
+    safeBody,
+    {
+      0: { halign: "center", cellWidth: 20, fontStyle: "bold" },
+      1: { halign: "center", cellWidth: 28 },
+      2: { halign: "right", cellWidth: 38, fontStyle: "bold" },
+      3: { halign: "right", cellWidth: 36, fontStyle: "bold" },
+      4: { halign: "right", cellWidth: 40, fontStyle: "bold" },
+    }
+  ));
+  const finalY = (doc as any).lastAutoTable.finalY;
+  const totalBundles = (rows || []).reduce((sum, row) => sum + Number(row.bundles || 0), 0);
+  const totalQty = (rows || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  autoTable(doc, tableOptions(
+    finalY,
+    [],
+    [["Totals", "", totalBundles ? totalBundles.toLocaleString() : "", "", totalQty ? totalQty.toLocaleString() : ""]],
+    {
+      0: { fontStyle: "bold", cellWidth: 20 },
+      1: { cellWidth: 28 },
+      2: { halign: "right", cellWidth: 38, fontStyle: "bold" },
+      3: { cellWidth: 36 },
+      4: { halign: "right", cellWidth: 40, fontStyle: "bold" },
+    }
+  ));
+  return (doc as any).lastAutoTable.finalY + 5;
+}
+
+function drawTotalPhpPlate(doc: jsPDF, startY: number, totalQty: number) {
+  autoTable(doc, tableOptions(
+    startY,
+    [],
+    [["Total of PHP and Plate", Number(totalQty || 0).toLocaleString()]],
+    {
+      0: { fontStyle: "bold", cellWidth: 140 },
+      1: { halign: "center", cellWidth: 30, fontStyle: "bold" },
+    }
+  ));
+  return (doc as any).lastAutoTable.finalY + 8;
+}
+
+function drawSignatures(doc: jsPDF) {
+  const y = PAGE_Y + PAGE_H - 18;
+  const points = [
+    { x: PAGE_X + 22, label: "Security" },
+    { x: PAGE_X + PAGE_W / 2, label: "Dispatch Executive" },
+    { x: PAGE_X + PAGE_W - 22, label: "Driver" },
+  ];
   doc.setLineWidth(0.22);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(4.7);
-  segments.forEach((segment) => {
-    doc.line(segment.center - 18, baseY, segment.center + 18, baseY);
-    doc.text(segment.label, segment.center, baseY + 4, { align: "center" });
+  doc.setFontSize(5.2);
+  points.forEach((point) => {
+    doc.line(point.x - 18, y, point.x + 18, y);
+    doc.text(point.label, point.x, y + 4, { align: "center" });
   });
-}
-
-function renderLinkedDetailSection(doc: jsPDF, startY: number, title: string, rows: LoadingSlip["phpDetails"]) {
-  const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-  const sectionY = drawSectionHeader(doc, title, startY);
-
-  autoTable(
-    doc,
-    buildTableOptions(
-      sectionY,
-      [["SL", "Item Name", "Required Qty"]],
-      safeRows.length > 0
-        ? safeRows.map((row, index) => [index + 1, row?.itemName || "-", Number(row?.requiredQty || 0).toLocaleString()])
-        : [["-", "-", "-"]],
-      {
-        0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
-        1: { cellWidth: 120 },
-        2: { halign: "right", cellWidth: 28, fontStyle: "bold" },
-      }
-    )
-  );
-
-  return (doc as any).lastAutoTable.finalY + 2.4;
-}
-
-function renderPackingSection(
-  doc: jsPDF,
-  startY: number,
-  title: string,
-  packingDetails?: LoadingSlip["packingDetails"],
-  extraItemsQty?: number
-) {
-  const sectionY = drawSectionHeader(doc, title, startY);
-  const packingRows: Array<Array<string | number>> = Array.isArray(packingDetails) && packingDetails.length > 0
-    ? packingDetails.map((detail, index) => [
-        index + 1,
-        Number(detail.bundles || 0).toLocaleString(),
-        Number(detail.packSize || 0).toLocaleString(),
-        Number(detail.quantity || 0).toLocaleString(),
-      ])
-    : [["-", "-", "-", "-"]];
-
-  if (extraItemsQty) {
-    packingRows.push(["", "Extra Items (Loose)", "", Number(extraItemsQty || 0).toLocaleString()]);
-  }
-
-  autoTable(
-    doc,
-    buildTableOptions(
-      sectionY,
-      [["SL", "Bundles", "Pack Size", "Quantity"]],
-      packingRows,
-      {
-        0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
-        1: { halign: "right", cellWidth: 49 },
-        2: { halign: "right", cellWidth: 49 },
-        3: { halign: "right", cellWidth: 49, fontStyle: "bold" },
-      }
-    )
-  );
-
-  return (doc as any).lastAutoTable.finalY + 2.4;
-}
-
-function getLinkedPackingRows(details?: LinkedLoadingDetail[]) {
-  if (!Array.isArray(details) || details.length === 0) return undefined;
-  const rows = details.flatMap((detail) => (Array.isArray(detail.packingDetails) ? detail.packingDetails : []));
-  return rows.length > 0 ? rows : undefined;
-}
-
-function getLinkedExtraQty(details?: LinkedLoadingDetail[]) {
-  if (!Array.isArray(details) || details.length === 0) return undefined;
-  const total = details.reduce((sum, detail) => sum + Number(detail.extraItemsQty || 0), 0);
-  return total > 0 ? total : undefined;
 }
 
 export async function downloadLoadingSlipPdf({
@@ -284,82 +199,49 @@ export async function downloadLoadingSlipPdf({
   companies: Company[];
 }) {
   const doc = new jsPDF("p", "mm", "a4");
-  drawOuterFrame(doc);
-  drawWatermark(doc, String(setting?.organizationName || "LAXMI NARAYAN"));
+  drawPageBorder(doc);
 
   let currentY = (await renderOrganizationHeader(doc, setting, {
-    startY: CONTENT_Y,
+    startY: PAGE_Y + 3,
     drawDivider: false,
+    titleFontSize: 11,
+    subtitleFontSize: 6,
   })).currentY;
 
-  currentY = drawTitleBand(doc, currentY);
-
-  const resolveOrderItem = (order?: Partial<Order> | null) => {
-    if (!order) return undefined;
-    return npdItems.map((row) => normalizeOrderCatalogItem(row, "FG")).find((row) => row && row.id === String(order.itemId || "").trim()) || undefined;
-  };
+  const resolveOrderItem = (order?: Partial<Order> | null) => resolveFgItem(order, npdItems);
   const summary = summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem: (order) => resolveOrderItem(order) as any });
-  const uniqueCompanies = Array.from(new Set(summary.lineContexts.map((ctx) => ctx.companyId).filter(Boolean)))
-    .map((id) => companies.find((company) => company.id === id))
-    .filter(Boolean) as Company[];
-
-  const companyDisplay = uniqueCompanies.length === 1 ? uniqueCompanies[0].name : summary.companyNames.length === 1 ? summary.companyNames[0] : uniqueCompanies.length > 1 ? "Multiple" : String(slip.companyName || "-");
+  const firstContext = summary.lineContexts[0];
+  const companyName = summary.companyNames[0] || firstContext?.companyName || slip.companyName || "-";
+  const erpCode = summary.erpCodes[0] || firstContext?.erpCode || "-";
+  const itemName = summary.itemNames[0] || firstContext?.itemName || slip.lines[0]?.itemName || "-";
+  const truckNo = String(trucks.find((row) => row.id === slip.truckId)?.truckNo || "-").trim() || "-";
   const totalQty = slip.lines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0);
-  const truckDisplay = getTruckDisplay(trucks, slip.truckId);
 
-  currentY = drawInfoGrid(doc, currentY, [
-    ["Slip No", slip.slipNo || "-"],
-    ["Date", formatDate(slip.date)],
-    ["Company", companyDisplay],
-    ["Truck No", truckDisplay],
-    ["Total Qty", totalQty.toLocaleString()],
-    ["Status", slip.status || "Active"],
-  ]);
-
-  if (uniqueCompanies.length === 1) {
-    currentY = drawCompanyBlock(doc, uniqueCompanies[0], currentY);
-  }
-
-  currentY = drawSectionHeader(doc, "FG DETAILS", currentY);
-  const fgRows = slip.lines.map((line, index) => {
-    const context = resolveLoadingSlipLineContext({ slip, line, plans, orders, companies, resolveOrderItem: (order) => resolveOrderItem(order) as any });
-    return [
-      index + 1,
-      context.itemName || line.itemName || "Unknown Item",
-      context.isDirect ? "Direct Loading" : formatAllocations(line.allocations, line.jobNos),
-      Number(line.loadedQty || 0).toLocaleString(),
-    ];
+  currentY = drawTopMeta(doc, currentY + 3, {
+    slipNo: String(slip.slipNo || "-"),
+    date: formatDate(slip.date),
+    truckNo,
+    erpCode,
+    company: companyName,
+    itemName,
   });
 
-  autoTable(
-    doc,
-    buildTableOptions(
-      currentY,
-      [["SL", "Item Name", "Allocation / Source", "Loaded Qty"]],
-      fgRows,
-      {
-        0: { halign: "center", cellWidth: 10, fontStyle: "bold" },
-        1: { cellWidth: 78 },
-        2: { cellWidth: 47, textColor: MID_GRAY },
-        3: { halign: "right", cellWidth: 27, fontStyle: "bold" },
-      }
-    )
-  );
+  currentY = renderSamplePackingTable(doc, currentY, "Box Loading Details", slip.packingDetails, totalQty);
 
-  currentY = (doc as any).lastAutoTable.finalY + 3;
-  currentY = renderPackingSection(doc, currentY, "FG PACKING DETAILS", slip.packingDetails, slip.extraItemsQty);
-  currentY = renderLinkedDetailSection(doc, currentY, "PHP DETAILS", slip.phpDetails);
-  currentY = renderPackingSection(doc, currentY, "PHP PACKING DETAILS", getLinkedPackingRows(slip.phpDetails), getLinkedExtraQty(slip.phpDetails));
-  currentY = renderLinkedDetailSection(doc, currentY, "PLATE DETAILS", slip.plateDetails);
-  currentY = renderPackingSection(doc, currentY, "PLATE PACKING DETAILS", getLinkedPackingRows(slip.plateDetails), getLinkedExtraQty(slip.plateDetails));
+  const phpPacking = slip.phpDetails?.flatMap((detail) => detail.packingDetails || []) || [];
+  currentY = renderSamplePackingTable(doc, currentY, "PHP Loading Details", phpPacking, undefined);
 
-  const footerY = Math.min(currentY + 2, FRAME_Y + FRAME_HEIGHT - 18);
+  const platePacking = slip.plateDetails?.flatMap((detail) => detail.packingDetails || []) || [];
+  currentY = renderSamplePackingTable(doc, currentY, "Plate Loading Details", platePacking, undefined);
+
+  const totalPhpPlate = phpPacking.reduce((sum, row) => sum + Number(row.quantity || 0), 0) + platePacking.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  currentY = drawTotalPhpPlate(doc, currentY, totalPhpPlate);
+
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(4.6);
-  doc.setTextColor(...MID_GRAY);
-  doc.text("System generated loading slip", FRAME_X + FRAME_WIDTH / 2, footerY, { align: "center" });
-  doc.setTextColor(0, 0, 0);
-  drawSignatureRow(doc);
+  doc.setFontSize(4.5);
+  doc.setTextColor(...DARK);
+  doc.text("System generated loading slip", PAGE_X + PAGE_W / 2, Math.min(currentY + 2, PAGE_Y + PAGE_H - 24), { align: "center" });
+  drawSignatures(doc);
 
   const safeSlipNo = String(slip.slipNo || "LoadingSlip").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
   doc.save(`LoadingSlip_${safeSlipNo}_${String(slip.date || "").slice(0, 10)}.pdf`);
