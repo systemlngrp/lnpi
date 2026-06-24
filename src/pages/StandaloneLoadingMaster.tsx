@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { DispatchPlan, LoadingSlip, OrderItemSource, Production, Truck } from "../types";
+import { LoadingSlip, OrderItemSource, Production, Truck } from "../types";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
@@ -9,8 +9,6 @@ import { getOrderItemSourceLabel } from "../lib/orderItems";
 
 const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
   source === "PHP" ? "php_job_master" : "plate_job_master";
-const getDispatchEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
-  source === "PHP" ? "php_dispatch_plans" : "plate_dispatch_plans";
 const getLoadingEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE">) =>
   source === "PHP" ? "php_loading_slips" : "plate_loading_slips";
 
@@ -20,15 +18,13 @@ type StandaloneLoadingMasterProps = {
 
 export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>(getLoadingEntityName(source), []);
-  const [dispatchPlans, setDispatchPlans] = useData<DispatchPlan>(getDispatchEntityName(source), []);
+  const [loadingSlips] = useData<LoadingSlip>(getLoadingEntityName(source), []);
   const [productions] = useData<Production>(getJobMasterEntityName(source), []);
   const [trucks] = useData<Truck>("trucks", []);
   const [fgLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const { itemsBySource } = useOrderItemCatalog();
   const items = itemsBySource[source] || [];
 
-  const planMap = useMemo(() => new Map(dispatchPlans.map((plan) => [plan.id, plan])), [dispatchPlans]);
   const productionMap = useMemo(() => new Map(productions.map((production) => [production.id, production])), [productions]);
   const fgSlipMap = useMemo(() => new Map(fgLoadingSlips.map((slip) => [slip.id, slip])), [fgLoadingSlips]);
 
@@ -36,29 +32,29 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return loadingSlips
       .map((slip) => {
-        const isFgLinked = Boolean(String(slip.fgLoadingId || "").trim());
-        const relevantLines = isFgLinked
-          ? slip.lines.filter((line) => Number(line.loadedQty || 0) > 0)
-          : slip.lines.filter((line) => {
-              const plan = planMap.get(String(line.dispatchPlanId || "").trim());
-              const production = plan ? productionMap.get(String(plan.productionId || "").trim()) : null;
-              return Boolean(production);
-            });
+        const relevantLines = slip.lines.filter((line) => Number(line.loadedQty || 0) > 0);
         if (relevantLines.length === 0) return null;
 
         const firstLine = relevantLines[0];
-        const firstPlan = planMap.get(String(firstLine.dispatchPlanId || "").trim());
-        const firstProduction = firstPlan ? productionMap.get(String(firstPlan.productionId || "").trim()) : null;
-        const item = firstProduction
-          ? items.find((entry) => entry.id === String(firstProduction.itemId || "").trim())
-          : null;
+        const firstAllocation = Array.isArray(firstLine.allocations)
+          ? firstLine.allocations.find((allocation) => allocation.sourceType === "job")
+          : undefined;
+        const firstProduction = firstAllocation?.sourceType === "job"
+          ? productionMap.get(String(firstAllocation.jobId || "").trim())
+          : undefined;
+        const item = firstLine.itemId
+          ? items.find((entry) => entry.id === String(firstLine.itemId || "").trim())
+          : firstProduction
+            ? items.find((entry) => entry.id === String(firstProduction.itemId || "").trim())
+            : undefined;
         const fgSlip = fgSlipMap.get(String(slip.fgLoadingId || "").trim());
+        const isFgLinked = Boolean(String(slip.fgLoadingId || "").trim());
 
         return {
           slip,
           itemName: firstLine.itemName || item?.name || String(firstProduction?.itemId || "-"),
           companyName: firstLine.companyName || firstProduction?.companyName || item?.companyName || "-",
-          jobNo: firstProduction?.transactionNo || "-",
+          jobNo: firstAllocation?.sourceType === "job" ? firstAllocation.jobNo || firstProduction?.transactionNo || "-" : "-",
           fgSlipNo: fgSlip?.slipNo || "-",
           truckNo: trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "-",
           totalQty: relevantLines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0),
@@ -77,55 +73,9 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
           sensitivity: "base",
         })
       );
-  }, [fgSlipMap, items, loadingSlips, planMap, productionMap, searchTerm, trucks]);
+  }, [fgSlipMap, items, loadingSlips, productionMap, searchTerm, trucks]);
 
   const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems } = useClientPagination(processedSlips, 25);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  const cancelSlip = async (slipId: string) => {
-    const slip = loadingSlips.find((row) => row.id === slipId);
-    if (!slip || slip.status === "Cancelled" || slip.fgLoadingId) return;
-
-    if (deletingId !== slipId) {
-      setDeletingId(slipId);
-      setTimeout(() => setDeletingId(null), 3000);
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const byPlan = new Map(slip.lines.map((line) => [line.dispatchPlanId, Number(line.loadedQty || 0)]));
-
-    await setDispatchPlans((prev) =>
-      prev.map((plan) => {
-        if (!byPlan.has(plan.id)) return plan;
-        return {
-          ...plan,
-          loadedQty: Math.max(0, Number(plan.loadedQty || 0) - Number(byPlan.get(plan.id) || 0)),
-          updateTimestamp: now,
-          updatedBy: "System User",
-        };
-      })
-    );
-
-    await setLoadingSlips((prev) =>
-      prev.map((row) =>
-        row.id === slipId
-          ? {
-              ...row,
-              status: "Cancelled",
-              cancelledAt: now,
-              cancelledBy: "System User",
-              cancelReason: "Cancelled from standalone master",
-              updateTimestamp: now,
-              updatedBy: "System User",
-            }
-          : row
-      )
-    );
-
-    setDeletingId(null);
-  };
-
   const sourceLabel = getOrderItemSourceLabel(source);
 
   return (
@@ -149,7 +99,7 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Truck</th>
               <th className="px-3 py-2 text-right text-xs font-black uppercase">Qty</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Status</th>
-              <th className="px-3 py-2 text-center text-xs font-black uppercase">Action</th>
+              <th className="px-3 py-2 text-center text-xs font-black uppercase">Source</th>
             </tr>
           </thead>
           <tbody>
@@ -173,14 +123,7 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
                     {row.isFgLinked ? (
                       <span className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[10px] font-bold uppercase text-indigo-700">Linked</span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => void cancelSlip(row.slip.id)}
-                        disabled={row.slip.status === "Cancelled"}
-                        className="rounded border border-black px-2 py-1 font-bold uppercase disabled:opacity-50"
-                      >
-                        {deletingId === row.slip.id ? "Confirm" : "Cancel"}
-                      </button>
+                      <span className="rounded border border-slate-300 bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-700">Historical</span>
                     )}
                   </td>
                 </tr>

@@ -92,12 +92,6 @@ import { PendingPhpPlanning, PendingPlatePlanning } from "./pages/PendingLinkedP
 import { DispatchPlansMaster } from "./pages/DispatchPlansMaster";
 import { PendingLoading } from "./pages/PendingLoading";
 import { LoadingMaster } from "./pages/LoadingMaster";
-import { PhpDispatchForm } from "./pages/PhpDispatchForm";
-import { PlateDispatchForm } from "./pages/PlateDispatchForm";
-import { PhpDispatchMaster } from "./pages/PhpDispatchMaster";
-import { PlateDispatchMaster } from "./pages/PlateDispatchMaster";
-import { PhpLoadingForm } from "./pages/PhpLoadingForm";
-import { PlateLoadingForm } from "./pages/PlateLoadingForm";
 import { PhpLoadingMaster } from "./pages/PhpLoadingMaster";
 import { PlateLoadingMaster } from "./pages/PlateLoadingMaster";
 import { PendingInvoicing } from "./pages/PendingInvoicing";
@@ -266,17 +260,11 @@ export default function App() {
           {/* Dispatch */}
           <Route path="dispatch/pending-planning" element={<PendingDispatchPlanning />} />
           <Route path="dispatch/master" element={<DispatchPlansMaster />} />
-          <Route path="dispatch/php/form" element={<PhpDispatchForm />} />
-          <Route path="dispatch/php/master" element={<PhpDispatchMaster />} />
-          <Route path="dispatch/plate/form" element={<PlateDispatchForm />} />
-          <Route path="dispatch/plate/master" element={<PlateDispatchMaster />} />
 
           {/* Loading */}
           <Route path="loading/pending" element={<PendingLoading />} />
           <Route path="loading/master" element={<LoadingMaster />} />
-          <Route path="loading/php/form" element={<PhpLoadingForm />} />
           <Route path="loading/php/master" element={<PhpLoadingMaster />} />
-          <Route path="loading/plate/form" element={<PlateLoadingForm />} />
           <Route path="loading/plate/master" element={<PlateLoadingMaster />} />
 
           {/* Billing */}
