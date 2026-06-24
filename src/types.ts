@@ -683,12 +683,16 @@ export interface LoadingSlipLine {
   loadedQty: number;
   jobNos?: Array<string | number>;
   allocations?: LoadingSlipAllocation[];
+  companyId?: string;
   itemId?: string;
   itemName?: string;
   companyName?: string;
   erpCode?: string;
   masterErp?: string;
   itemSource?: OrderItemSource;
+  rate?: number;
+  gstRate?: number;
+  uom?: string;
 }
 
 export type LoadingSlipAllocation =
@@ -705,6 +709,7 @@ export type LoadingSlipAllocation =
     };
 
 export interface PackingDetail {
+  extra?: number;
   bundles: number;
   packSize: number;
   quantity: number;
@@ -729,6 +734,9 @@ export interface LoadingSlip {
   date: string;
   truckId: string;
   lines: LoadingSlipLine[];
+  loadingSource?: "DISPATCH_PLAN" | "DIRECT";
+  companyId?: string;
+  companyName?: string;
   fgLoadingId?: string;
   phpDetails?: LinkedLoadingDetail[];
   plateDetails?: LinkedLoadingDetail[];

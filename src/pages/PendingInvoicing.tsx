@@ -47,11 +47,15 @@ interface InvoiceAllocationRow {
   qty: number;
 }
 
+const DIRECT_ALLOCATION_ID = "__DIRECT__";
+
 interface InvoiceItemRow {
   id: string;
   itemId: string;
+  itemName: string;
   gstRate: number;
-  totalQty: number; // total qty from selected loading slips for this item
+  defaultRate: number;
+  totalQty: number;
   sources: Array<{ loadingSlipId: string; qty: number }>;
   allocations: InvoiceAllocationRow[];
 }
@@ -151,30 +155,37 @@ export function PendingInvoicing() {
       slip.lines.forEach((line: any) => {
         const plan = plans.find((p) => p.id === line.dispatchPlanId);
         const order = orders.find((o) => o.id === plan?.orderId);
-        const item = resolveOrderItem(order);
-        if (!order || !item) return;
+        const item = resolveOrderItem(order) || (line.itemId ? resolveOrderItem({ itemId: line.itemId, itemSource: line.itemSource || "FG" } as any) : undefined);
+        const itemId = String(order?.itemId || line.itemId || item?.id || "").trim();
+        if (!itemId) return;
 
         const qty = Number(line.loadedQty || 0);
-        const gstRate = item.gstRate ?? 18;
-        const existing = itemMap.get(item.id);
+        const gstRate = Number(line.gstRate ?? item?.gstRate ?? 18);
+        const rate = Number(line.rate ?? item?.rate ?? order?.rate ?? 0);
+        const itemName = String(line.itemName || item?.name || "Item").trim() || "Item";
+        const existing = itemMap.get(itemId);
 
         if (existing) {
           existing.totalQty += qty;
           existing.sources.push({ loadingSlipId: slip.id, qty });
+          if (!existing.defaultRate && rate) existing.defaultRate = rate;
         } else {
-          itemMap.set(item.id, {
+          itemMap.set(itemId, {
             id: crypto.randomUUID(),
-            itemId: item.id,
+            itemId,
+            itemName,
             gstRate,
+            defaultRate: rate,
             totalQty: qty,
             sources: [{ loadingSlipId: slip.id, qty }],
             allocations: [],
           });
         }
 
-        const byOrder = itemOrderQtyMap.get(item.id) || new Map<string, number>();
-        byOrder.set(order.id, (byOrder.get(order.id) || 0) + qty);
-        itemOrderQtyMap.set(item.id, byOrder);
+        const byOrder = itemOrderQtyMap.get(itemId) || new Map<string, number>();
+        const allocationKey = order?.id ? order.id : DIRECT_ALLOCATION_ID;
+        byOrder.set(allocationKey, (byOrder.get(allocationKey) || 0) + qty);
+        itemOrderQtyMap.set(itemId, byOrder);
       });
     });
 
@@ -240,14 +251,16 @@ export function PendingInvoicing() {
       if (!firstLine) return;
       const plan = plans.find(p => p.id === firstLine.dispatchPlanId);
       const order = orders.find(o => o.id === plan?.orderId);
-      const company = companies.find(c => c.id === order?.companyId);
+      const company = companies.find(c => c.id === (order?.companyId || s.companyId || firstLine.companyId));
+      const companyName = company?.name || s.companyName || firstLine.companyName || "";
 
-      if (!company) return;
+      if (!company && !companyName) return;
 
-      if (!companyMap.has(company.id)) {
-        companyMap.set(company.id, {
-          companyId: company.id,
-          companyName: company.name,
+      const groupId = company?.id || s.companyId || `direct-${companyName}`;
+      if (!companyMap.has(groupId)) {
+        companyMap.set(groupId, {
+          companyId: groupId,
+          companyName: company?.name || companyName,
           slips: []
         });
       }
@@ -256,10 +269,10 @@ export function PendingInvoicing() {
       const slipItems = s.lines.map(l => {
         const lp = plans.find(p => p.id === l.dispatchPlanId);
         const lo = orders.find(o => o.id === lp?.orderId);
-        return resolveOrderItem(lo)?.name || "Unknown";
+        return resolveOrderItem(lo)?.name || l.itemName || "Unknown";
       });
 
-      companyMap.get(company.id)!.slips.push({
+      companyMap.get(groupId)!.slips.push({
         ...s,
         totalQty,
         items: Array.from(new Set(slipItems))
@@ -414,8 +427,8 @@ export function PendingInvoicing() {
     invoiceRows.forEach((itemRow) => {
       itemRow.allocations.forEach((alloc) => {
         const order = orders.find((o) => o.id === alloc.orderId);
-        if (!order) return;
-        const rate = Number(order.rate || 0);
+        const rate = alloc.orderId === DIRECT_ALLOCATION_ID ? Number(itemRow.defaultRate || 0) : Number(order?.rate || 0);
+        if (alloc.orderId !== DIRECT_ALLOCATION_ID && !order) return;
         const qty = Number(alloc.qty || 0);
         const amount = qty * rate;
         totalBeforeGst += amount;
@@ -517,7 +530,7 @@ export function PendingInvoicing() {
         const qty = Number(l.loadedQty || 0);
         const plan = plans.find(p => p.id === l.dispatchPlanId);
         const order = orders.find(o => o.id === plan?.orderId);
-        const itemId = String(order?.itemId || "").trim();
+        const itemId = String(order?.itemId || l.itemId || "").trim();
         if (itemId) loadedByItemId.set(itemId, (loadedByItemId.get(itemId) || 0) + qty);
         return lSum + qty;
       }, 0)
@@ -554,7 +567,7 @@ export function PendingInvoicing() {
     for (const itemRow of invoiceRows) {
       for (const alloc of itemRow.allocations) {
         const order = orders.find((o) => o.id === alloc.orderId);
-        if (!order) continue;
+        if (alloc.orderId === DIRECT_ALLOCATION_ID || !order) continue;
         const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
         const allowedMax = Number(order.qty || 0) * (1 + tolerancePercent / 100);
         const currentlyDispatched = totalDispatched + Number(alloc.qty || 0);
@@ -626,9 +639,11 @@ export function PendingInvoicing() {
         const pool = poolsByItemId.get(itemRow.itemId) || buildPool(itemRow.sources || []);
         for (const alloc of itemRow.allocations) {
           const order = orders.find((o) => o.id === alloc.orderId);
-          if (!order) continue;
-          if (order.itemId !== itemRow.itemId) continue;
-          const rate = Number(order.rate || 0);
+          if (alloc.orderId !== DIRECT_ALLOCATION_ID) {
+            if (!order) continue;
+            if (order.itemId !== itemRow.itemId) continue;
+          }
+          const rate = alloc.orderId === DIRECT_ALLOCATION_ID ? Number(itemRow.defaultRate || 0) : Number(order?.rate || 0);
           const parts = consumeFromPool(pool, Number(alloc.qty || 0));
           for (const part of parts) {
             const amount = part.qty * rate;
@@ -917,7 +932,7 @@ export function PendingInvoicing() {
                   </thead>
                   <tbody className="divide-y divide-black">
                     {invoiceRows.flatMap((itemRow) => {
-                      const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
+                      const itemName = itemRow.itemName || npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
                       const pendingOrdersForItem = orders.filter((o) => {
                         if (o.companyId !== invoiceModal.companyId) return false;
                         if (o.status === "Cancelled") return false;
@@ -975,10 +990,11 @@ export function PendingInvoicing() {
 
                       const childRows = itemRow.allocations.map((alloc) => {
                         const order = orders.find((o) => o.id === alloc.orderId);
+                        const isDirectAlloc = alloc.orderId === DIRECT_ALLOCATION_ID;
                         const dispatched = order ? (totalDispatchedByOrderId.get(order.id) || 0) : 0;
                         const orderQty = order ? Number(order.qty || 0) : 0;
                         const pending = order ? Math.max(0, orderQty - dispatched) : 0;
-                        const rate = order ? Number(order.rate || 0) : 0;
+                        const rate = isDirectAlloc ? Number(itemRow.defaultRate || 0) : order ? Number(order.rate || 0) : 0;
                         const amount = Number(alloc.qty || 0) * rate;
                         const otherAllocated = itemRow.allocations
                           .filter((a) => a.id !== alloc.id)
@@ -997,6 +1013,7 @@ export function PendingInvoicing() {
                                 className="w-full border-2 border-black rounded p-1 text-[11px] font-bold focus:ring-0"
                               >
                                 <option value="">-- Choose Order --</option>
+                                {alloc.orderId === DIRECT_ALLOCATION_ID ? <option value={DIRECT_ALLOCATION_ID}>Direct Loading</option> : null}
                                 {pendingOrdersForItem.map((o) => (
                                   <option key={o.id} value={o.id}>
                                     {o.orderNo} | {o.poNumber || "No PO"}
@@ -1004,10 +1021,10 @@ export function PendingInvoicing() {
                                 ))}
                               </select>
                             </td>
-                            <td className="px-2 py-2 text-right text-[11px] font-medium">{order ? orderQty.toLocaleString() : "-"}</td>
-                            <td className="px-2 py-2 text-right text-[11px] font-medium text-slate-500">{order ? dispatched.toLocaleString() : "-"}</td>
-                            <td className="px-2 py-2 text-right text-[11px] font-black text-indigo-700">{order ? pending.toLocaleString() : "-"}</td>
-                            <td className="px-2 py-2 text-right text-[11px] font-bold">{order ? rate : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-medium">{isDirectAlloc ? "-" : order ? orderQty.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-medium text-slate-500">{isDirectAlloc ? "-" : order ? dispatched.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-black text-indigo-700">{isDirectAlloc ? "Direct" : order ? pending.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-bold">{rate || "-"}</td>
                             <td className="px-2 py-2 text-right bg-indigo-50/30">
                               <input
                                 type="number"

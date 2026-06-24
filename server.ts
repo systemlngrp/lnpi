@@ -5120,6 +5120,7 @@ const createHandlers = (tableName: string) => {
             { column: "date", type: "VARCHAR(50)" },
             { column: "companyId", type: "VARCHAR(36)" },
             { column: "companyName", type: "VARCHAR(255)" },
+            { column: "loadingSource", type: "VARCHAR(30) DEFAULT 'DISPATCH_PLAN'" },
             { column: "truckId", type: "VARCHAR(36)" },
             { column: "truckNo", type: "VARCHAR(255)" },
             { column: "fgLoadingId", type: "VARCHAR(36)" },

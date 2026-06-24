@@ -100,7 +100,7 @@ export function InvoicesMaster() {
         return (slip.lines || []).map((slipLine: any, index: number) => {
           const plan = dispatchPlans.find((row) => row.id === slipLine.dispatchPlanId);
           const order = orders.find((row) => row.id === plan?.orderId);
-          let masterId = String(order?.itemId || "").trim();
+          let masterId = String(order?.itemId || slipLine.itemId || "").trim();
 
           const exactKey = `${slip.id}__${masterId}`;
           let storedLine = masterId ? storedLineQueues.get(exactKey)?.shift() : undefined;
@@ -118,8 +118,8 @@ export function InvoicesMaster() {
           return {
             id: storedLine?.id || `${slip.id}-${index}-${masterId || "line"}`,
             itemId: masterId,
-            itemName: item?.name || order?.poNumber || "Unknown",
-            erp: String(order?.erpCode || (item as any)?.erp || "").trim(),
+            itemName: item?.name || slipLine.itemName || order?.poNumber || "Unknown",
+            erp: String(order?.erpCode || slipLine.erpCode || (item as any)?.erp || "").trim(),
             slipNo: slip.slipNo || `Slip ${index + 1}`,
             truckNo: truck?.truckNo || "N/A",
             qty,

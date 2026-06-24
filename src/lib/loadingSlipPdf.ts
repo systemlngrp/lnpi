@@ -1,7 +1,9 @@
 import jsPDF from "jspdf";
 import autoTable, { type UserOptions } from "jspdf-autotable";
 import { formatDate } from "./serial";
-import type { Company, DispatchPlan, Item, LinkedLoadingDetail, LoadingSlip, LoadingSlipAllocation, Setting, Truck } from "../types";
+import type { Company, DispatchPlan, Item, LinkedLoadingDetail, LoadingSlip, LoadingSlipAllocation, Order, Setting, Truck } from "../types";
+import { resolveLoadingSlipLineContext, summarizeLoadingSlip } from "./loadingSlipContext";
+import { normalizeOrderCatalogItem } from "./orderItems";
 import { renderOrganizationHeader } from "./pdfOrganizationHeader";
 
 const FRAME_X = 18;
@@ -277,7 +279,7 @@ export async function downloadLoadingSlipPdf({
   setting?: Setting | null;
   trucks: Truck[];
   plans: DispatchPlan[];
-  orders: any[];
+  orders: Order[];
   npdItems: Item[];
   companies: Company[];
 }) {
@@ -292,18 +294,16 @@ export async function downloadLoadingSlipPdf({
 
   currentY = drawTitleBand(doc, currentY);
 
-  const companyIds = new Set<string>();
-  slip.lines.forEach((line) => {
-    const plan = plans.find((row) => row.id === line.dispatchPlanId);
-    const order = orders.find((row) => row.id === plan?.orderId);
-    if (order?.companyId) companyIds.add(order.companyId);
-  });
-
-  const uniqueCompanies = Array.from(companyIds)
+  const resolveOrderItem = (order?: Partial<Order> | null) => {
+    if (!order) return undefined;
+    return npdItems.map((row) => normalizeOrderCatalogItem(row, "FG")).find((row) => row && row.id === String(order.itemId || "").trim()) || undefined;
+  };
+  const summary = summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem: (order) => resolveOrderItem(order) as any });
+  const uniqueCompanies = Array.from(new Set(summary.lineContexts.map((ctx) => ctx.companyId).filter(Boolean)))
     .map((id) => companies.find((company) => company.id === id))
     .filter(Boolean) as Company[];
 
-  const companyDisplay = uniqueCompanies.length === 1 ? uniqueCompanies[0].name : uniqueCompanies.length > 1 ? "Multiple" : "-";
+  const companyDisplay = uniqueCompanies.length === 1 ? uniqueCompanies[0].name : summary.companyNames.length === 1 ? summary.companyNames[0] : uniqueCompanies.length > 1 ? "Multiple" : String(slip.companyName || "-");
   const totalQty = slip.lines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0);
   const truckDisplay = getTruckDisplay(trucks, slip.truckId);
 
@@ -322,13 +322,11 @@ export async function downloadLoadingSlipPdf({
 
   currentY = drawSectionHeader(doc, "FG DETAILS", currentY);
   const fgRows = slip.lines.map((line, index) => {
-    const plan = plans.find((row) => row.id === line.dispatchPlanId);
-    const order = orders.find((row) => row.id === plan?.orderId);
-    const item = npdItems.find((row) => row.id === order?.itemId);
+    const context = resolveLoadingSlipLineContext({ slip, line, plans, orders, companies, resolveOrderItem: (order) => resolveOrderItem(order) as any });
     return [
       index + 1,
-      item?.name || line.itemName || "Unknown Item",
-      formatAllocations(line.allocations, line.jobNos),
+      context.itemName || line.itemName || "Unknown Item",
+      context.isDirect ? "Direct Loading" : formatAllocations(line.allocations, line.jobNos),
       Number(line.loadedQty || 0).toLocaleString(),
     ];
   });

@@ -67,8 +67,8 @@ export function buildLinkedLoadingDetailsFromSlip({
   slip.lines.forEach((line) => {
     const plan = plans.find((row) => row.id === line.dispatchPlanId);
     const order = orders.find((row) => row.id === plan?.orderId);
-    const fgItem = resolveOrderItem(order);
-    const scheduleErp = String(order?.erpCode || fgItem?.erp || "").trim();
+    const fgItem = resolveOrderItem(order || (line.itemId ? ({ itemId: line.itemId, itemSource: line.itemSource || "FG" } as Partial<Order>) : null));
+    const scheduleErp = String(line.erpCode || order?.erpCode || fgItem?.erp || "").trim();
     const linkedItem = findLinkedItemByErp(sourceItems, scheduleErp);
     const setsPerBox = getLinkedSetsPerBox(linkedItem);
     if (!linkedItem || !setsPerBox) return;
@@ -88,7 +88,7 @@ export function buildLinkedLoadingDetailsFromSlip({
       source,
       itemId: linkedItem.id,
       itemName: linkedItem.name,
-      companyName: linkedItem.companyName,
+      companyName: String(line.companyName || linkedItem.companyName || "").trim() || undefined,
       erpCode: scheduleErp || String(raw.erpItemCode || linkedItem.erp || "").trim() || undefined,
       masterErp: String(raw.masterItemNameErpCode || "").trim() || undefined,
       setsPerBox,
