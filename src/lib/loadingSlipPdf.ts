@@ -30,6 +30,7 @@ function tableOptions(startY: number, head: UserOptions["head"], body: UserOptio
       font: "helvetica",
       fontSize: 5.2,
       textColor: 0,
+      halign: "center",
       cellPadding: { top: 1, right: 1, bottom: 1, left: 1 },
       lineColor: BLACK,
       lineWidth: 0.2,
@@ -52,12 +53,6 @@ function tableOptions(startY: number, head: UserOptions["head"], body: UserOptio
     tableLineWidth: 0.22,
     columnStyles,
   };
-}
-
-function drawPageBorder(doc: jsPDF) {
-  doc.setDrawColor(...BLACK);
-  doc.setLineWidth(0.25);
-  doc.rect(PAGE_X, PAGE_Y, PAGE_W, PAGE_H);
 }
 
 function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: string; truckNo: string; erpCode: string; company: string; itemName: string }) {
@@ -87,14 +82,14 @@ function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: s
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(5.6);
-    doc.text(row[0], leftX + 1, y + 4.8);
-    doc.text(row[2], leftX + halfW + 1, y + 4.8);
+    doc.text(row[0], leftX + labelW / 2, y + 4.8, { align: "center" });
+    if (row[2]) doc.text(row[2], leftX + halfW + labelW / 2, y + 4.8, { align: "center" });
 
     doc.setFont("helvetica", "bold");
     const leftValueLines = doc.splitTextToSize(String(row[1] || "-"), rightValueW - 2);
     const rightValueLines = doc.splitTextToSize(String(row[3] || "-"), rightValueW - 2);
-    doc.text(leftValueLines, leftX + labelW + 1, y + 4.2);
-    if (row[2]) doc.text(rightValueLines, leftX + halfW + labelW + 1, y + 4.2);
+    doc.text(leftValueLines, leftX + labelW + rightValueW / 2, y + 4.2, { align: "center" });
+    if (row[2]) doc.text(rightValueLines, leftX + halfW + labelW + rightValueW / 2, y + 4.2, { align: "center" });
   });
 
   return startY + rows.length * rowH + 4;
@@ -199,7 +194,6 @@ export async function downloadLoadingSlipPdf({
   companies: Company[];
 }) {
   const doc = new jsPDF("p", "mm", "a4");
-  drawPageBorder(doc);
 
   let currentY = (await renderOrganizationHeader(doc, setting, {
     startY: PAGE_Y + 3,
