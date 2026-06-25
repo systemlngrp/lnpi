@@ -48,7 +48,7 @@ export function ScheduledOrdersMaster() {
 
       const effectiveProducedForPlanning = productions
         .filter(p => p.scheduleId === s.id && p.status !== "Cancelled")
-        .reduce((sum, p) => sum + Math.min(Number(p.plannedQty ?? p.qty || 0), Number(p.prodFromFFG || 0)), 0);
+        .reduce((sum, p) => sum + Math.min(Number((p.plannedQty ?? p.qty) || 0), Number(p.prodFromFFG || 0)), 0);
 
       // 2. Loaded (from loading slips via dispatch plans)
       const schedulePlans = plans.filter(p => p.scheduleId === s.id);
