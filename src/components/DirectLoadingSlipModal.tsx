@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { Company, DispatchPlan, LoadingSlip, Order, PackingDetail, Truck } from "../types";
 import type { OrderCatalogItem } from "../lib/orderItems";
 import { buildLinkedLoadingDetailsFromSlip } from "../lib/linkedLoading";
+import { Select } from "./Select";
 import { X, Plus, Trash2 } from "lucide-react";
 
 type Props = {
@@ -28,6 +29,7 @@ type Draft = {
   itemId: string;
   truckId: string;
   loadedQty: number | "";
+  rate: number | "";
   packingDetails: PackingDetail[];
   extraItemsQty: number | "";
 };
@@ -39,6 +41,7 @@ const makeDraft = (): Draft => ({
   itemId: "",
   truckId: "",
   loadedQty: "",
+  rate: "",
   packingDetails: [makePacking()],
   extraItemsQty: "",
 });
@@ -59,14 +62,40 @@ export function DirectLoadingSlipModal({
   const [draft, setDraft] = useState<Draft>(makeDraft());
   const [isSaving, setIsSaving] = useState(false);
   const company = useMemo(() => companies.find((row) => row.id === draft.companyId), [companies, draft.companyId]);
+  const companyOptions = useMemo(
+    () =>
+      [...companies]
+        .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }))
+        .map((row) => ({
+          value: row.id,
+          label: row.name,
+          searchText: row.name,
+        })),
+    [companies]
+  );
   const filteredItems = useMemo(() => {
     const companyName = String(company?.name || "").trim().toLowerCase();
     if (!companyName) return [];
-    return allItems.filter((row) => {
-      const itemCompany = String(row.companyName || "").trim().toLowerCase();
-      return !itemCompany || itemCompany === companyName;
-    });
+    return allItems
+      .filter((row) => {
+        const itemCompany = String(row.companyName || "").trim().toLowerCase();
+        return !itemCompany || itemCompany === companyName;
+      })
+      .sort((left, right) => {
+        const nameDiff = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+        if (nameDiff !== 0) return nameDiff;
+        return String(left.erp || "").localeCompare(String(right.erp || ""), undefined, { sensitivity: "base", numeric: true });
+      });
   }, [allItems, company]);
+  const itemOptions = useMemo(
+    () =>
+      filteredItems.map((row) => ({
+        value: row.id,
+        label: `[${row.source}] ${row.name}${row.erp ? ` | ERP ${row.erp}` : ""}`,
+        searchText: `${row.name} ${row.erp} ${row.source} ${row.companyName}`,
+      })),
+    [filteredItems]
+  );
   const item = useMemo(() => allItems.find((row) => row.id === draft.itemId), [allItems, draft.itemId]);
 
   const normalizedPacking = useMemo(
@@ -101,7 +130,7 @@ export function DirectLoadingSlipModal({
           erpCode: item.erp,
           itemSource: item.source,
           loadedQty: Number(draft.loadedQty || 0),
-          rate: Number(item.rate || 0) || undefined,
+          rate: draft.rate === "" ? undefined : Number(draft.rate || 0),
           gstRate: Number(item.gstRate || 0) || undefined,
           uom: item.uom || undefined,
         },
@@ -198,18 +227,12 @@ export function DirectLoadingSlipModal({
                   <td className="w-1/2 p-3 align-top">
                     {field(
                       "Company",
-                      <select
+                      <Select
+                        options={companyOptions}
                         value={draft.companyId}
-                        onChange={(e) => setDraft((prev) => ({ ...prev, companyId: e.target.value, itemId: "" }))}
-                        className="w-full rounded border border-black px-3 py-2 text-sm"
-                      >
-                        <option value="">Select Company</option>
-                        {companies.map((row) => (
-                          <option key={row.id} value={row.id}>
-                            {row.name}
-                          </option>
-                        ))}
-                      </select>,
+                        onChange={(value) => setDraft((prev) => ({ ...prev, companyId: value, itemId: "", rate: "" }))}
+                        placeholder="Select Company"
+                      />,
                       true
                     )}
                   </td>
@@ -218,20 +241,20 @@ export function DirectLoadingSlipModal({
                   <td className="w-1/2 p-3 align-top">
                     {field(
                       "Item",
-                      <select
+                      <Select
+                        options={itemOptions}
                         value={draft.itemId}
-                        onChange={(e) => setDraft((prev) => ({ ...prev, itemId: e.target.value }))}
-                        className="w-full rounded border border-black px-3 py-2 text-sm"
+                        onChange={(value) => {
+                          const selectedItem = filteredItems.find((row) => row.id === value);
+                          setDraft((prev) => ({
+                            ...prev,
+                            itemId: value,
+                            rate: selectedItem?.rate ?? "",
+                          }));
+                        }}
+                        placeholder={company ? "Select Item" : "Select Company First"}
                         disabled={!company}
-                      >
-                        <option value="">{company ? "Select Item" : "Select Company First"}</option>
-                        {filteredItems.map((row) => (
-                          <option key={`${row.source}-${row.id}`} value={row.id}>
-                            [{row.source}] {row.name}
-                            {row.erp ? ` | ERP ${row.erp}` : ""}
-                          </option>
-                        ))}
-                      </select>,
+                      />,
                       true
                     )}
                   </td>
@@ -257,18 +280,34 @@ export function DirectLoadingSlipModal({
               </tbody>
             </table>
 
-            <div className="max-w-sm">
-              {field(
-                "Loaded Qty",
-                <input
-                  type="number"
-                  min={0}
-                  value={draft.loadedQty}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, loadedQty: e.target.value === "" ? "" : Number(e.target.value) }))}
-                  className="w-full rounded border border-black px-3 py-2 text-sm"
-                />,
-                true
-              )}
+            <div className="grid max-w-2xl grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                {field(
+                  "Loaded Qty",
+                  <input
+                    type="number"
+                    min={0}
+                    value={draft.loadedQty}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, loadedQty: e.target.value === "" ? "" : Number(e.target.value) }))}
+                    className="w-full rounded border border-black px-3 py-2 text-sm"
+                  />,
+                  true
+                )}
+              </div>
+              <div>
+                {field(
+                  "Rate",
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.00001"
+                    value={draft.rate}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, rate: e.target.value === "" ? "" : Number(e.target.value) }))}
+                    className="w-full rounded border border-black px-3 py-2 text-sm"
+                    placeholder="Enter Rate"
+                  />
+                )}
+              </div>
             </div>
           </div>
 

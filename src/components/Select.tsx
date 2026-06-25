@@ -32,7 +32,7 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
   };
 
   return (
-    <div className="grid w-full grid-cols-[minmax(0,1fr)_42px] items-start gap-2">
+    <div className={`grid w-full items-start gap-2 ${onAdd ? "grid-cols-[minmax(0,1fr)_42px]" : "grid-cols-1"}`}>
       <div className="min-w-0">
         <ReactSelect
           inputId={id}
