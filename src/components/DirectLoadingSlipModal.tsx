@@ -73,28 +73,23 @@ export function DirectLoadingSlipModal({
         })),
     [companies]
   );
-  const filteredItems = useMemo(() => {
-    const companyName = String(company?.name || "").trim().toLowerCase();
-    if (!companyName) return [];
-    return allItems
-      .filter((row) => {
-        const itemCompany = String(row.companyName || "").trim().toLowerCase();
-        return !itemCompany || itemCompany === companyName;
-      })
-      .sort((left, right) => {
+  const sortedItems = useMemo(
+    () =>
+      [...allItems].sort((left, right) => {
         const nameDiff = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
         if (nameDiff !== 0) return nameDiff;
         return String(left.erp || "").localeCompare(String(right.erp || ""), undefined, { sensitivity: "base", numeric: true });
-      });
-  }, [allItems, company]);
+      }),
+    [allItems]
+  );
   const itemOptions = useMemo(
     () =>
-      filteredItems.map((row) => ({
+      sortedItems.map((row) => ({
         value: row.id,
         label: `[${row.source}] ${row.name}${row.erp ? ` | ERP ${row.erp}` : ""}`,
         searchText: `${row.name} ${row.erp} ${row.source} ${row.companyName}`,
       })),
-    [filteredItems]
+    [sortedItems]
   );
   const item = useMemo(() => allItems.find((row) => row.id === draft.itemId), [allItems, draft.itemId]);
 
@@ -230,7 +225,7 @@ export function DirectLoadingSlipModal({
                       <Select
                         options={companyOptions}
                         value={draft.companyId}
-                        onChange={(value) => setDraft((prev) => ({ ...prev, companyId: value, itemId: "", rate: "" }))}
+                        onChange={(value) => setDraft((prev) => ({ ...prev, companyId: value }))}
                         placeholder="Select Company"
                       />,
                       true
@@ -245,15 +240,15 @@ export function DirectLoadingSlipModal({
                         options={itemOptions}
                         value={draft.itemId}
                         onChange={(value) => {
-                          const selectedItem = filteredItems.find((row) => row.id === value);
+                          const selectedItem = sortedItems.find((row) => row.id === value);
                           setDraft((prev) => ({
                             ...prev,
                             itemId: value,
                             rate: selectedItem?.rate ?? "",
                           }));
                         }}
-                        placeholder={company ? "Select Item" : "Select Company First"}
-                        disabled={!company}
+                        placeholder="Select Item"
+                        disabled={false}
                       />,
                       true
                     )}
