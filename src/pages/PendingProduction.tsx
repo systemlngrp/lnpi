@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
-import { Company, Order, OrderSchedule } from "../types";
+import { Company, Order, OrderSchedule, Production } from "../types";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
@@ -11,9 +11,9 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/serial";
 import { normalizeOrderItemSource } from "../lib/orderItems";
 
-function getPendingProductionQty(schedule: OrderSchedule) {
+function getPendingProductionQty(schedule: OrderSchedule, producedQty: number) {
   return Math.max(
-    Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
+    Number(schedule.qty || 0) - Number(producedQty || 0) - Number(schedule.canceledQty || 0),
     0
   );
 }
@@ -36,6 +36,7 @@ export function PendingProduction() {
 
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [productions] = useData<Production>("productions", []);
   const [orders] = useData<Order>("orders", []);
   const { resolveOrderItem } = useOrderItemCatalog();
   const [companies] = useData<Company>("companies", []);
@@ -53,11 +54,24 @@ export function PendingProduction() {
     return cutoff;
   }, []);
 
+  const producedQtyByScheduleId = useMemo(() => {
+    const map = new Map<string, number>();
+    productions
+      .filter((production) => production.status !== "Cancelled")
+      .forEach((production) => {
+        const scheduleId = String(production.scheduleId || "").trim();
+        if (!scheduleId) return;
+        map.set(scheduleId, (map.get(scheduleId) || 0) + Number(production.prodFromFFG || 0));
+      });
+    return map;
+  }, [productions]);
+
   const pendingRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return schedules
       .filter((schedule) => {
-        if (getPendingProductionQty(schedule) <= 0) return false;
+        const producedQty = Number(producedQtyByScheduleId.get(schedule.id) || 0);
+        if (getPendingProductionQty(schedule, producedQty) <= 0) return false;
         const order = orders.find((row) => row.id === schedule.orderId);
         if (normalizeOrderItemSource(order?.itemSource) !== "FG") return false;
         const scheduledDate = parseLocalYmd(schedule.scheduledDate);
@@ -68,9 +82,10 @@ export function PendingProduction() {
         const order = orders.find((row) => row.id === schedule.orderId);
         const item = resolveOrderItem(order);
         const company = companies.find((row) => row.id === order?.companyId);
-        return { schedule, order, item, company, pendingQty: getPendingProductionQty(schedule) };
+        const producedQty = Number(producedQtyByScheduleId.get(schedule.id) || 0);
+        return { schedule, order, item, company, producedQty, pendingQty: getPendingProductionQty(schedule, producedQty) };
       })
-      .filter(({ schedule, order, item, company, pendingQty }) => {
+      .filter(({ schedule, order, item, company, pendingQty, producedQty }) => {
         if (!normalizedSearch) return true;
         const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
         const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
@@ -81,7 +96,7 @@ export function PendingProduction() {
           item?.name,
           boxType,
           String(schedule.qty || 0),
-          String(schedule.producedQty || 0),
+          String(producedQty),
           String(schedule.canceledQty || 0),
           String(pendingQty),
         ]
@@ -94,7 +109,7 @@ export function PendingProduction() {
         const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
         return timeB - timeA;
       });
-  }, [companies, cutoffDate, orders, resolveOrderItem, schedules, searchTerm]);
+  }, [companies, cutoffDate, orders, producedQtyByScheduleId, resolveOrderItem, schedules, searchTerm]);
   const {
     page,
     setPage,
@@ -107,7 +122,8 @@ export function PendingProduction() {
   const handleCancelQty = async (schedule: OrderSchedule) => {
     const rawValue = cancelValues[schedule.id];
     const qtyToCancel = Number(rawValue || 0);
-    const pendingQty = getPendingProductionQty(schedule);
+    const producedQty = Number(producedQtyByScheduleId.get(schedule.id) || 0);
+    const pendingQty = getPendingProductionQty(schedule, producedQty);
 
     if (!qtyToCancel || qtyToCancel <= 0 || qtyToCancel > pendingQty) return;
 
@@ -135,7 +151,8 @@ export function PendingProduction() {
   };
 
   const handleMakeJob = async (schedule: OrderSchedule) => {
-    const pendingQty = getPendingProductionQty(schedule);
+    const producedQty = Number(producedQtyByScheduleId.get(schedule.id) || 0);
+    const pendingQty = getPendingProductionQty(schedule, producedQty);
     if (pendingQty <= 0) return;
     const order = orders.find((row) => row.id === schedule.orderId);
     const item = resolveOrderItem(order);
@@ -186,7 +203,7 @@ export function PendingProduction() {
                 </td>
               </tr>
             ) : (
-              paginatedRows.map(({ schedule, order, item, company, pendingQty }) => {
+              paginatedRows.map(({ schedule, order, item, company, pendingQty, producedQty }) => {
                 const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
     const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
                 const hasBoxType = Boolean(boxType);
@@ -198,7 +215,7 @@ export function PendingProduction() {
                   <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
                   <td className={`px-3 py-2 border border-black font-bold ${hasBoxType ? "text-black" : "bg-red-100 text-red-700"}`}>{boxType || "Missing"}</td>
                   <td className="px-3 py-2 border border-black">{schedule.qty || 0}</td>
-                  <td className="px-3 py-2 border border-black">{schedule.producedQty || 0}</td>
+                  <td className="px-3 py-2 border border-black">{producedQty}</td>
                   <td className="px-3 py-2 border border-black">{schedule.canceledQty || 0}</td>
                   <td className="px-3 py-2 border border-black font-bold">{pendingQty}</td>
                   <td className="px-3 py-2 border border-black">
