@@ -562,13 +562,13 @@ export function LoadingMaster() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   {formatDate(slip.date)}
                 </td>
-                <td className="px-6 py-4 text-sm text-black">
-                  <div className="max-w-[150px] truncate font-medium" title={slip.companyNames}>
+                <td className="px-6 py-4 text-sm text-black align-top">
+                  <div className="max-w-[240px] whitespace-normal break-words font-medium leading-5" title={slip.companyNames}>
                     {slip.companyNames || "-"}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-slate-600">
-                  <div className="max-w-[200px] truncate" title={slip.itemNames}>
+                <td className="px-6 py-4 text-sm text-slate-600 align-top">
+                  <div className="max-w-[280px] whitespace-normal break-words leading-5" title={slip.itemNames}>
                     {slip.itemNames || "-"}
                   </div>
                 </td>

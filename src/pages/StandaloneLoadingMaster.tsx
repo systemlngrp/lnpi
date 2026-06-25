@@ -114,8 +114,12 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
                   <td className="px-3 py-2 text-sm">{row.isFgLinked ? row.fgSlipNo : "-"}</td>
                   <td className="px-3 py-2 text-sm">{row.slip.date}</td>
                   <td className="px-3 py-2 text-sm">{row.jobNo}</td>
-                  <td className="px-3 py-2 text-sm">{row.itemName}</td>
-                  <td className="px-3 py-2 text-sm">{row.companyName}</td>
+                  <td className="px-3 py-2 text-sm align-top">
+                    <div className="max-w-[260px] whitespace-normal break-words leading-5">{row.itemName}</div>
+                  </td>
+                  <td className="px-3 py-2 text-sm align-top">
+                    <div className="max-w-[260px] whitespace-normal break-words leading-5">{row.companyName}</div>
+                  </td>
                   <td className="px-3 py-2 text-sm">{row.truckNo}</td>
                   <td className="px-3 py-2 text-sm text-right">{row.totalQty.toLocaleString()}</td>
                   <td className="px-3 py-2 text-sm">{row.slip.status || "Active"}</td>
