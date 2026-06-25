@@ -590,6 +590,8 @@ export interface Production {
   realizationPerKg?: number;
   companyName?: string;
   actualPaperUsed?: number;
+  paperNotRequired?: boolean;
+  paperNotRequiredReason?: string;
   avgWeight?: number;
   prodFromSheetPlant?: number;
   prodFromFFG?: number;

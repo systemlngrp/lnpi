@@ -16,6 +16,12 @@ export function hasWorkflowValue(value: unknown) {
   return Number.isFinite(asNumber) ? asNumber > 0 : true;
 }
 
+export function hasPaperNotRequiredBypass(
+  production: Pick<Production, "paperNotRequired" | "paperNotRequiredReason">
+) {
+  return Boolean(production.paperNotRequired) && String(production.paperNotRequiredReason || "").trim().length > 0;
+}
+
 export function buildProductionMaterialUsageMap(
   materialIssues: MaterialIssue[],
   materialIssueLines: MaterialIssueLine[],
@@ -95,11 +101,12 @@ export function syncProductionWorkflowFromUsage(
   }
 
   const normalizedUsage = Math.max(0, Number(actualPaperUsed || 0));
+  const bypassedPaperIssue = hasPaperNotRequiredBypass(production);
   let status: Production["status"] = "Pending Consumption";
 
-  if (normalizedUsage > 0 && hasWorkflowValue(production.prodFromFFG)) {
+  if ((normalizedUsage > 0 || bypassedPaperIssue) && hasWorkflowValue(production.prodFromFFG)) {
     status = "Pending Tally";
-  } else if (normalizedUsage > 0) {
+  } else if (normalizedUsage > 0 || bypassedPaperIssue) {
     status = "Pending FFG";
   }
 

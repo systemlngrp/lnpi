@@ -23,7 +23,7 @@ import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
-import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import { buildProductionMaterialUsageMap, getProductionActualPaperUsed, hasPaperNotRequiredBypass, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
@@ -32,6 +32,10 @@ type QueueMode = "consumption" | "ffg";
 
 type SortKey = "jobNo" | "date" | "orderNo" | "erpCode" | "company" | "item" | "qty" | "actualPaperUsed" | "prodFfg" | "status";
 type SortDir = "asc" | "desc";
+type PaperBypassDraft = {
+  checked: boolean;
+  reason: string;
+};
 
 const parseJobNo = (value: string) => {
   const raw = String(value || "").trim();
@@ -91,6 +95,9 @@ export function ProductionStageQueue({
   const [ffgValues, setFfgValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [paperBypassDrafts, setPaperBypassDrafts] = useState<Record<string, PaperBypassDraft>>({});
+  const [paperBypassErrors, setPaperBypassErrors] = useState<Record<string, string>>({});
+  const [paperBypassSavingId, setPaperBypassSavingId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("jobNo");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const usageMap = useMemo(
@@ -251,6 +258,74 @@ export function ProductionStageQueue({
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (column !== sortKey) return <ArrowUpDown size={12} className="opacity-60" />;
     return sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />;
+  };
+
+  const getPaperBypassDraft = (production: Production): PaperBypassDraft =>
+    paperBypassDrafts[production.id] ?? {
+      checked: hasPaperNotRequiredBypass(production),
+      reason: String(production.paperNotRequiredReason || ""),
+    };
+
+  const updatePaperBypassDraft = (production: Production, next: Partial<PaperBypassDraft>) => {
+    const current = getPaperBypassDraft(production);
+    const merged: PaperBypassDraft = {
+      checked: next.checked ?? current.checked,
+      reason: next.reason ?? current.reason,
+    };
+    setPaperBypassDrafts((prev) => ({ ...prev, [production.id]: merged }));
+    setPaperBypassErrors((prev) => {
+      if (!prev[production.id]) return prev;
+      const clone = { ...prev };
+      delete clone[production.id];
+      return clone;
+    });
+  };
+
+  const handleSavePaperBypass = async (production: Production, actualPaperUsed: number) => {
+    const draft = getPaperBypassDraft(production);
+    const normalizedReason = draft.checked ? draft.reason.trim() : "";
+
+    if (draft.checked && !normalizedReason) {
+      setPaperBypassErrors((prev) => ({ ...prev, [production.id]: "Reason is required." }));
+      return;
+    }
+
+    setPaperBypassSavingId(production.id);
+    try {
+      const timestamp = new Date().toISOString();
+      await setProductions((prev) =>
+        prev.map((entry) => {
+          if (entry.id !== production.id) return entry;
+          return syncProductionWorkflowFromUsage(
+            {
+              ...entry,
+              paperNotRequired: draft.checked && Boolean(normalizedReason),
+              paperNotRequiredReason: normalizedReason || undefined,
+            },
+            actualPaperUsed,
+            timestamp
+          );
+        })
+      );
+      setPaperBypassDrafts((prev) => ({
+        ...prev,
+        [production.id]: {
+          checked: draft.checked && Boolean(normalizedReason),
+          reason: normalizedReason,
+        },
+      }));
+      setPaperBypassErrors((prev) => {
+        if (!prev[production.id]) return prev;
+        const clone = { ...prev };
+        delete clone[production.id];
+        return clone;
+      });
+    } catch (error) {
+      console.error("Failed to save paper bypass:", error);
+      alert("Failed to save paper not required setting. Please try again.");
+    } finally {
+      setPaperBypassSavingId(null);
+    }
   };
 
   const handleSaveFfg = async (productionId: string) => {
@@ -424,7 +499,16 @@ export function ProductionStageQueue({
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{production.erpCode || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
-                    <td className="px-4 py-4 text-xs text-black border border-black">{item?.name || "Unknown"}</td>
+                    <td className="px-4 py-4 text-xs text-black border border-black">
+                      <div className="space-y-1">
+                        <div>{item?.name || "Unknown"}</div>
+                        {hasPaperNotRequiredBypass(production) ? (
+                          <div className="inline-flex items-center rounded border border-amber-700 bg-amber-50 px-2 py-0.5 text-[10px] font-black uppercase text-amber-800">
+                            Paper Not Required
+                          </div>
+                        ) : null}
+                      </div>
+                    </td>
                     {issuePrereqMachineName ? (
                       <td className="px-4 py-4 text-right text-xs font-black text-emerald-700 border border-black whitespace-nowrap">
                         {prereqQty > 0 ? prereqQty.toFixed(2) : "-"}
@@ -460,30 +544,82 @@ export function ProductionStageQueue({
                     ) : null}
                     {enableFfgEditing ? (
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            step="0.00001"
-                            min={0}
-                            value={ffgValues[production.id] || ""}
-                            onChange={(e) => setFfgValues((prev) => ({ ...prev, [production.id]: e.target.value }))}
-                            placeholder="Enter FG"
-                            className="w-28 border-2 border-black rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void handleSaveFfg(production.id)}
-                            disabled={savingId === production.id || !ffgValues[production.id] || Number(ffgValues[production.id]) <= 0}
-                            className="bg-emerald-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black disabled:opacity-50"
-                          >
-                            {savingId === production.id ? "Saving..." : "Save"}
-                          </button>
+                        <div className="flex flex-col gap-3 whitespace-normal">
+                          {hasPaperNotRequiredBypass(production) ? (
+                            <div className="rounded border border-amber-300 bg-amber-50 p-2">
+                              <label className="flex items-center gap-2 text-[11px] font-black uppercase text-amber-900">
+                                <input
+                                  type="checkbox"
+                                  checked={getPaperBypassDraft(production).checked}
+                                  onChange={(e) =>
+                                    updatePaperBypassDraft(production, {
+                                      checked: e.target.checked,
+                                      reason: e.target.checked ? getPaperBypassDraft(production).reason : "",
+                                    })
+                                  }
+                                  className="h-3.5 w-3.5 rounded border-slate-400 text-amber-700 focus:ring-amber-500"
+                                />
+                                Paper Not Required
+                              </label>
+                              {getPaperBypassDraft(production).checked ? (
+                                <div className="mt-2 flex flex-col gap-2">
+                                  <input
+                                    type="text"
+                                    value={getPaperBypassDraft(production).reason}
+                                    onChange={(e) => updatePaperBypassDraft(production, { reason: e.target.value })}
+                                    placeholder="Enter reason"
+                                    className="w-full rounded border border-amber-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                  />
+                                  {paperBypassErrors[production.id] ? (
+                                    <div className="text-[11px] font-semibold text-rose-700">{paperBypassErrors[production.id]}</div>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleSavePaperBypass(production, actualPaperUsed)}
+                                    disabled={paperBypassSavingId === production.id}
+                                    className="self-start rounded border border-black bg-amber-500 px-3 py-1 text-[11px] font-black uppercase text-black disabled:opacity-50"
+                                  >
+                                    {paperBypassSavingId === production.id ? "Saving..." : "Save Paper"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSavePaperBypass(production, actualPaperUsed)}
+                                  disabled={paperBypassSavingId === production.id}
+                                  className="mt-2 self-start rounded border border-black bg-white px-3 py-1 text-[11px] font-black uppercase text-black disabled:opacity-50"
+                                >
+                                  {paperBypassSavingId === production.id ? "Saving..." : "Clear Paper"}
+                                </button>
+                              )}
+                            </div>
+                          ) : null}
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              step="0.00001"
+                              min={0}
+                              value={ffgValues[production.id] || ""}
+                              onChange={(e) => setFfgValues((prev) => ({ ...prev, [production.id]: e.target.value }))}
+                              placeholder="Enter FG"
+                              className="w-28 border-2 border-black rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveFfg(production.id)}
+                              disabled={savingId === production.id || !ffgValues[production.id] || Number(ffgValues[production.id]) <= 0}
+                              className="bg-emerald-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black disabled:opacity-50"
+                            >
+                              {savingId === production.id ? "Saving..." : "Save"}
+                            </button>
+                          </div>
                         </div>
                       </td>
                     ) : null}
                     {enableIssueAction ? (
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
+                      <td className="px-4 py-4 text-xs text-black border border-black">
                         {(() => {
+                          const paperBypassDraft = getPaperBypassDraft(production);
                           const normalizedRequired = requiredMachines.map((m) => normalizeMachineName(m));
                           const requiresLiner = normalizedRequired.includes("Corrugation Liner");
                           const linerDone = processing.some(
@@ -494,44 +630,89 @@ export function ProductionStageQueue({
 
                           const prereqMissing = !!issuePrereqMachineName && !(prereqQty > 0);
 
+                          const bypassControls = (
+                            <>
+                              <label className="inline-flex items-center gap-2 text-[11px] font-black uppercase text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={paperBypassDraft.checked}
+                                  onChange={(e) =>
+                                    updatePaperBypassDraft(production, {
+                                      checked: e.target.checked,
+                                      reason: e.target.checked ? paperBypassDraft.reason : "",
+                                    })
+                                  }
+                                  className="h-3.5 w-3.5 rounded border-slate-400 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                Paper Not Required
+                              </label>
+                              {paperBypassDraft.checked ? (
+                                <>
+                                  <input
+                                    type="text"
+                                    value={paperBypassDraft.reason}
+                                    onChange={(e) => updatePaperBypassDraft(production, { reason: e.target.value })}
+                                    placeholder="Enter reason"
+                                    className="w-56 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                  />
+                                  {paperBypassErrors[production.id] ? (
+                                    <div className="text-[11px] font-semibold text-rose-700">{paperBypassErrors[production.id]}</div>
+                                  ) : null}
+                                </>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => void handleSavePaperBypass(production, actualPaperUsed)}
+                                disabled={paperBypassSavingId === production.id}
+                                className="self-start rounded border border-black bg-amber-400 px-3 py-1 text-[11px] font-black uppercase text-black disabled:opacity-50"
+                              >
+                                {paperBypassSavingId === production.id ? "Saving..." : paperBypassDraft.checked ? "Save Paper" : "Clear Paper"}
+                              </button>
+                            </>
+                          );
+
                           if (prereqMissing) {
                             return (
-                              <button
-                                type="button"
-                                disabled
-                                title={`${normalizeMachineName(issuePrereqMachineName || "Corrugation Liner")} entry pending`}
-                                className="bg-slate-200 text-slate-500 px-3 py-1 rounded font-bold text-[11px] uppercase border border-black cursor-not-allowed"
-                              >
-                                Issue Material
-                              </button>
-                            );
-                          }
-
-                          if (!requiresLiner || linerDone) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const date = String(production.date || "").slice(0, 10);
-                                  const params = new URLSearchParams({
-                                    productionId: production.id,
-                                    date,
-                                    lockDate: "1",
-                                    lockJob: "1",
-                                  });
-                                  navigate(`/material-movement/reel-issue-return?${params.toString()}`);
-                                }}
-                                className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
-                              >
-                                Issue Material
-                              </button>
+                              <div className="flex flex-col gap-2 whitespace-normal">
+                                <button
+                                  type="button"
+                                  disabled
+                                  title={`${normalizeMachineName(issuePrereqMachineName || "Corrugation Liner")} entry pending`}
+                                  className="bg-slate-200 text-slate-500 px-3 py-1 rounded font-bold text-[11px] uppercase border border-black cursor-not-allowed"
+                                >
+                                  Issue Material
+                                </button>
+                                {bypassControls}
+                              </div>
                             );
                           }
 
                           return (
-                            <span className="inline-flex items-center rounded border border-amber-700 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-800">
-                              Add Corrugation Liner entry
-                            </span>
+                            <div className="flex flex-col gap-2 whitespace-normal">
+                              {!requiresLiner || linerDone ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const date = String(production.date || "").slice(0, 10);
+                                    const params = new URLSearchParams({
+                                      productionId: production.id,
+                                      date,
+                                      lockDate: "1",
+                                      lockJob: "1",
+                                    });
+                                    navigate(`/material-movement/reel-issue-return?${params.toString()}`);
+                                  }}
+                                  className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
+                                >
+                                  Issue Material
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center rounded border border-amber-700 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-800">
+                                  Add Corrugation Liner entry
+                                </span>
+                              )}
+                              {bypassControls}
+                            </div>
                           );
                         })()}
                       </td>
