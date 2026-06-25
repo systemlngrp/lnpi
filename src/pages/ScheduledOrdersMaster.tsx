@@ -226,8 +226,8 @@ export function ScheduledOrdersMaster() {
                   <span className="block">Qty</span>
                 </th>
                 <th className="px-2 py-2 border border-black text-right bg-lime-50 text-lime-800 leading-tight">
-                  <span className="block">Produced</span>
-                  <span className="block">FG Qty</span>
+                  <span className="block">Production</span>
+                  <span className="block">FFG Qty</span>
                 </th>
                 <th className="px-2 py-2 border border-black text-right bg-cyan-50 text-cyan-800 leading-tight">
                   <span className="block">Pending</span>
