@@ -999,20 +999,6 @@ export function PendingInvoicing() {
                                 );
                               })()}
                               <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="text-[10px] font-black uppercase text-slate-500">GST</div>
-                                  <select
-                                    value={itemRow.gstRate}
-                                    onChange={(e) => updateItemGstRate(itemRow.id, Number(e.target.value))}
-                                    className="w-20 px-2 py-1 border-2 border-black rounded text-[11px] font-bold"
-                                  >
-                                    {[0, 5, 12, 18, 28].map((v) => (
-                                      <option key={v} value={v}>
-                                        {v}%
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
                                 <button
                                   type="button"
                                   onClick={() => addAllocationRow(itemRow.id)}
@@ -1073,7 +1059,19 @@ export function PendingInvoicing() {
                                 className="w-24 px-1 py-1 border-2 border-indigo-600 rounded text-right text-[11px] font-black focus:ring-0"
                               />
                             </td>
-                            <td className="px-2 py-2 text-right text-[11px]">{itemRow.gstRate}%</td>
+                            <td className="px-2 py-2 text-right text-[11px]">
+                              <select
+                                value={itemRow.gstRate}
+                                onChange={(e) => updateItemGstRate(itemRow.id, Number(e.target.value))}
+                                className="w-20 border border-black rounded px-2 py-1 text-right text-[11px] font-bold bg-white"
+                              >
+                                {[0, 5, 12, 18, 28].map((v) => (
+                                  <option key={v} value={v}>
+                                    {v}%
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
                             <td className="px-2 py-2 text-right text-[11px] font-black">{format2(amount)}</td>
                             <td className="px-2 py-2 text-center">
                               <button onClick={() => removeAllocationRow(itemRow.id, alloc.id)} className="text-rose-600 hover:text-rose-800">
