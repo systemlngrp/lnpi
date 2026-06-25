@@ -36,10 +36,13 @@ export function ScheduledOrdersMaster() {
       const company = companies.find(c => c.id === order?.companyId);
       const item = resolveOrderItem(order);
 
-      // 1. Produced (from productions table linked to this schedule)
-      const produced = productions
+      // 1. Planned Qty (from production jobs linked to this schedule)
+      const plannedQty = productions
         .filter(p => p.scheduleId === s.id && p.status !== "Cancelled")
-        .reduce((sum, p) => sum + (Number(p.qty) || 0), 0);
+        .reduce((sum, p) => sum + (Number(p.plannedQty ?? p.qty) || 0), 0);
+
+      // 2. Produced FG Qty (actual finished goods reported on the schedule)
+      const producedFgQty = Number(s.producedQty || 0);
 
       // 2. Loaded (from loading slips via dispatch plans)
       const schedulePlans = plans.filter(p => p.scheduleId === s.id);
@@ -70,8 +73,9 @@ export function ScheduledOrdersMaster() {
         itemId: item?.id || "",
         itemName: item?.name || "-",
         itemErp: item?.erp || "-",
-        produced,
-        pendingPlanning: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0) - produced, 0),
+        plannedQty,
+        producedFgQty,
+        pendingPlanning: Math.max((Number(s.qty) || 0) - plannedQty - producedFgQty - (Number(s.canceledQty) || 0), 0),
         loaded,
         invoiced,
         pendingInvoice: Math.max(loaded - invoiced, 0),
@@ -218,8 +222,12 @@ export function ScheduledOrdersMaster() {
                   <span className="block">Canceled</span>
                 </th>
                 <th className="px-2 py-2 border border-black text-right bg-emerald-50 leading-tight">
-                  <span className="block">Production</span>
                   <span className="block">Planned</span>
+                  <span className="block">Qty</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-right bg-lime-50 text-lime-800 leading-tight">
+                  <span className="block">Produced</span>
+                  <span className="block">FG Qty</span>
                 </th>
                 <th className="px-2 py-2 border border-black text-right bg-cyan-50 text-cyan-800 leading-tight">
                   <span className="block">Pending</span>
@@ -254,7 +262,8 @@ export function ScheduledOrdersMaster() {
                   <td className="px-3 py-2 border border-black">{s.itemErp}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium bg-indigo-50/30">{(Number(s.qty) || 0).toLocaleString()}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium text-red-600 bg-red-50/30">{(Number(s.canceledQty) || 0).toLocaleString()}</td>
-                  <td className="px-3 py-2 border border-black text-right font-medium text-emerald-700 bg-emerald-50/30">{s.produced.toLocaleString()}</td>
+                  <td className="px-3 py-2 border border-black text-right font-medium text-emerald-700 bg-emerald-50/30">{s.plannedQty.toLocaleString()}</td>
+                  <td className="px-3 py-2 border border-black text-right font-medium text-lime-700 bg-lime-50/30">{s.producedFgQty.toLocaleString()}</td>
                   <td className={`px-3 py-2 border border-black text-right font-medium ${s.pendingPlanning > 0 ? 'text-cyan-800 bg-cyan-50/40' : 'text-slate-400 bg-cyan-50/20'}`}>
                     {s.pendingPlanning.toLocaleString()}
                   </td>
@@ -270,7 +279,7 @@ export function ScheduledOrdersMaster() {
               ))}
               {detailedSchedules.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
+                  <td colSpan={15} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
                     No schedules found matching your criteria
                   </td>
                 </tr>
@@ -287,7 +296,10 @@ export function ScheduledOrdersMaster() {
                     {detailedSchedules.reduce((sum, s) => sum + (Number(s.canceledQty) || 0), 0).toLocaleString()}
                   </td>
                   <td className="px-3 py-2 text-right bg-emerald-50 text-emerald-700">
-                    {detailedSchedules.reduce((sum, s) => sum + s.produced, 0).toLocaleString()}
+                    {detailedSchedules.reduce((sum, s) => sum + s.plannedQty, 0).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-right bg-lime-50 text-lime-800">
+                    {detailedSchedules.reduce((sum, s) => sum + s.producedFgQty, 0).toLocaleString()}
                   </td>
                   <td className="px-3 py-2 text-right bg-cyan-50 text-cyan-800">
                     {detailedSchedules.reduce((sum, s) => sum + s.pendingPlanning, 0).toLocaleString()}
