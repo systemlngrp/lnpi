@@ -119,11 +119,16 @@ export interface MaterialLine {
   poNo?: string;
   poLineId?: string;
   poRate?: number;
+  invoiceCurrency?: InvoiceCurrency;
+  exchangeRate?: number;
   invoiceQty?: number;
   invoiceRate?: number;
+  invoiceRateUsd?: number;
   invoiceValue?: number;
+  invoiceValueUsd?: number;
   actualQty?: number;
   actualValue?: number;
+  actualValueUsd?: number;
   rate: number;
   value: number;
   gstRate?: number;
@@ -425,6 +430,7 @@ export interface Company {
 }
 
 export type POType = "Verbal" | "Ref No.";
+export type InvoiceCurrency = "INR" | "USD";
 export type OrderItemSource = "FG" | "PHP" | "PLATE" | "MATERIAL";
 
 export interface Order {
@@ -475,9 +481,13 @@ export interface MaterialIn {
   invoiceNo: string;
   invDate: string;
   supplierId: string;
+  invoiceCurrency?: InvoiceCurrency;
+  exchangeRate?: number;
   totalPoValue?: number;
   totalInvoiceValue?: number;
+  totalInvoiceValueUsd?: number;
   totalActualValue?: number;
+  totalActualValueUsd?: number;
   totalCgst?: number;
   totalSgst?: number;
   totalIgst?: number;

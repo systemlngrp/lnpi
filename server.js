@@ -415,6 +415,19 @@ const COMPANY_SCHEMA_COLUMNS = [
   { column: "gstType", type: "VARCHAR(100)" },
   { column: "panNo", type: "VARCHAR(100)" }
 ];
+const MATERIAL_IN_CURRENCY_SCHEMA_COLUMNS = [
+  { column: "invoiceCurrency", type: "VARCHAR(10) NULL" },
+  { column: "exchangeRate", type: "DECIMAL(15,4) NULL" },
+  { column: "totalInvoiceValueUsd", type: "DECIMAL(15,2) NULL" },
+  { column: "totalActualValueUsd", type: "DECIMAL(15,2) NULL" }
+];
+const MATERIAL_IN_LINE_CURRENCY_SCHEMA_COLUMNS = [
+  { column: "invoiceCurrency", type: "VARCHAR(10) NULL" },
+  { column: "exchangeRate", type: "DECIMAL(15,4) NULL" },
+  { column: "invoiceRateUsd", type: "DECIMAL(15,4) NULL" },
+  { column: "invoiceValueUsd", type: "DECIMAL(15,2) NULL" },
+  { column: "actualValueUsd", type: "DECIMAL(15,2) NULL" }
+];
 const AUDIT_COLUMN_DEFINITIONS = [
   { column: "updatedBy", type: "VARCHAR(255) NULL" },
   { column: "updateTimestamp", type: "VARCHAR(255) NULL" }
@@ -1707,6 +1720,14 @@ async function ensureColumnExists(db, database, table, column, type) {
 async function ensureCompaniesSchemaColumns(db, database) {
   for (const { column, type } of COMPANY_SCHEMA_COLUMNS) {
     await ensureColumnExists(db, database, "companies", column, type);
+  }
+}
+async function ensureMaterialInCurrencySchemaColumns(db, database) {
+  for (const { column, type } of MATERIAL_IN_CURRENCY_SCHEMA_COLUMNS) {
+    await ensureColumnExists(db, database, "material_in", column, type);
+  }
+  for (const { column, type } of MATERIAL_IN_LINE_CURRENCY_SCHEMA_COLUMNS) {
+    await ensureColumnExists(db, database, "material_in_lines", column, type);
   }
 }
 async function ensureAuditColumnsForAllTables(db, database) {
@@ -4168,6 +4189,7 @@ async function initDb(retries = 5) {
       }
       try {
         await ensureCompaniesSchemaColumns(db, database);
+        await ensureMaterialInCurrencySchemaColumns(db, database);
         await ensureAuditColumnsForAllTables(db, database);
       } catch (err) {
         console.warn("[DB] Could not ensure companies schema columns:", err.message);

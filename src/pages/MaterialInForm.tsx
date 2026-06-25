@@ -12,6 +12,7 @@ import {
   MaterialIn,
   MaterialInPackingSlip,
   MaterialLine,
+  InvoiceCurrency,
   PurchaseOrder,
   PurchaseOrderLine,
   Service,
@@ -22,7 +23,7 @@ import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import * as XLSX from "xlsx";
 import { useNpdItems } from "../hooks/useNpdItems";
-import { applySupplyTypeTaxRates, recalculateMaterialLine, summarizeMaterialInLines } from "../lib/materialInTaxes";
+import { applySupplyTypeTaxRates, normalizeInvoiceCurrency, recalculateMaterialLine, summarizeMaterialInLines } from "../lib/materialInTaxes";
 import { getGatePassLinesWithReturns } from "../lib/gatePassState";
 
 type PackingSlipDraft = {
@@ -52,6 +53,10 @@ function formatReelNo(value: number) {
   return String(value).padStart(5, "0");
 }
 
+function roundCurrencyValue(value: number) {
+  return Number(Number(value || 0).toFixed(4));
+}
+
 export function MaterialInForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -73,6 +78,8 @@ export function MaterialInForm() {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [invDate, setInvDate] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [invoiceCurrency, setInvoiceCurrency] = useState<InvoiceCurrency>("INR");
+  const [exchangeRate, setExchangeRate] = useState<number | "">("");
   const [mrrType, setMrrType] = useState<MaterialIn["mrrType"]>("Others");
   const [insurance, setInsurance] = useState<number | "">("");
   const [otherCharges, setOtherCharges] = useState<number | "">("");
@@ -129,6 +136,25 @@ export function MaterialInForm() {
   );
   const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
   const isServiceReturn = isReturnableReceiptFlow || mrrType === "Service Return";
+  const normalizedInvoiceCurrency = normalizeInvoiceCurrency(invoiceCurrency);
+  const isUsdInvoice = normalizedInvoiceCurrency === "USD";
+  const numericExchangeRate = isUsdInvoice ? Number(exchangeRate || 0) : 0;
+  const convertInrToUsd = (amount: number) => {
+    if (!numericExchangeRate || numericExchangeRate <= 0) return 0;
+    return roundCurrencyValue(Number(amount || 0) / numericExchangeRate);
+  };
+  const recalculateForCurrentCurrency = (line: MaterialLine) =>
+    recalculateMaterialLine(
+      {
+        ...line,
+        invoiceCurrency: normalizedInvoiceCurrency,
+        exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+      },
+      {
+        invoiceCurrency: normalizedInvoiceCurrency,
+        exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+      }
+    );
 
   const materialOptions = useMemo(
     () => {
@@ -207,12 +233,16 @@ export function MaterialInForm() {
     setDate(editingEntry.date || new Date().toISOString().split("T")[0]);
     setInvoiceNo(editingEntry.invoiceNo || "");
     setInvDate(editingEntry.invDate || "");
+    const loadedCurrency = normalizeInvoiceCurrency(editingEntry.invoiceCurrency);
+    const loadedExchangeRate = loadedCurrency === "USD" ? (editingEntry.exchangeRate ?? "") : "";
     setSupplierId(editingEntry.supplierId || "");
+    setInvoiceCurrency(loadedCurrency);
+    setExchangeRate(loadedExchangeRate as number | "");
     setMrrType(editingEntry.mrrType || "Others");
     setInsurance(editingEntry.insurance ?? "");
     setOtherCharges(editingEntry.otherCharges ?? "");
     setRoundOff(editingEntry.roundOff ?? "");
-    setLines((editingEntry.lines || []).map((line) => recalculateMaterialLine({ ...line })));
+    setLines((editingEntry.lines || []).map((line) => recalculateMaterialLine({ ...line }, { invoiceCurrency: loadedCurrency, exchangeRate: loadedCurrency === "USD" ? Number(editingEntry.exchangeRate || line.exchangeRate || 0) : undefined })));
 
     const existingPackingSlips = packingSlips.filter((row) => row.materialInId === editingEntry.id);
     const nextDrafts = existingPackingSlips.reduce<Record<string, PackingSlipDraft[]>>((acc, row) => {
@@ -241,6 +271,11 @@ export function MaterialInForm() {
       prev.map((line) => applySupplyTypeTaxRates(line, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true }))
     );
   }, [isInterState]);
+
+  useEffect(() => {
+    if (!lines.length) return;
+    setLines((prev) => prev.map((line) => recalculateForCurrentCurrency(line)));
+  }, [normalizedInvoiceCurrency, numericExchangeRate]);
 
   const pendingGatePassLines = useMemo(() => {
     if (!linkedSourceGatePass) return [];
@@ -390,7 +425,9 @@ export function MaterialInForm() {
 
   const {
     totalInvoiceValue,
+    totalInvoiceValueUsd,
     totalActualValue,
+    totalActualValueUsd,
     totalCgst,
     totalSgst,
     totalIgst,
@@ -399,7 +436,7 @@ export function MaterialInForm() {
     otherChargesValue,
     roundOffValue,
     totalAmount,
-  } = useMemo(() => summarizeMaterialInLines(lines, insurance, otherCharges, roundOff), [lines, insurance, otherCharges, roundOff]);
+  } = useMemo(() => summarizeMaterialInLines(lines, insurance, otherCharges, roundOff, { invoiceCurrency: normalizedInvoiceCurrency, exchangeRate: isUsdInvoice ? numericExchangeRate : undefined }), [lines, insurance, otherCharges, roundOff, normalizedInvoiceCurrency, numericExchangeRate, isUsdInvoice]);
 
   const getAllDraftSlips = () => Object.values(packingSlipDrafts).flat();
 
@@ -420,7 +457,7 @@ export function MaterialInForm() {
     setLines((prev) =>
       prev.map((line) =>
         line.id === lineId
-          ? recalculateMaterialLine({
+          ? recalculateForCurrentCurrency({
               ...line,
               qty: totalWeight,
               invoiceQty: totalWeight,
@@ -445,7 +482,21 @@ export function MaterialInForm() {
     if (!value) return;
     const poLine = getPurchaseOrderLine(value);
     if (!poLine) return;
-    setCurrentInvoiceRate(Number(poLine.rate || 0));
+    const poRate = Number(poLine.rate || 0);
+    if (isUsdInvoice) {
+      setCurrentInvoiceRate(numericExchangeRate > 0 ? convertInrToUsd(poRate) : "");
+      return;
+    }
+    setCurrentInvoiceRate(poRate);
+  };
+
+  const handleInvoiceCurrencyChange = (value: string) => {
+    const nextCurrency = normalizeInvoiceCurrency(value);
+    setInvoiceCurrency(nextCurrency);
+    if (nextCurrency === "INR") {
+      setExchangeRate("");
+    }
+    setCurrentInvoiceRate("");
   };
 
   const handleMrrTypeChange = (value: any) => {
@@ -457,22 +508,17 @@ export function MaterialInForm() {
 
   const handleAddLine = () => {
     if (!currentItemId) return;
-
-    if (mrrType === "Others") {
-      for (const line of linesForSubmit) {
-        if (!String(line.poLineId || "").trim() || !String(line.poNo || "").trim()) {
-          alert("Our PO No. is mandatory for every Others line.");
-          return;
-        }
-      }
+    if (isUsdInvoice && (!numericExchangeRate || numericExchangeRate <= 0)) {
+      alert("Exchange rate must be greater than 0 for USD invoices.");
+      return;
     }
 
     if (isServiceReturn) {
       const service = services.find((entry) => entry.id === currentItemId);
       const sourceLine = pendingGatePassLines.find((line) => line.id === currentSourceGatePassLineId);
       const qty = Number(currentQty || 0);
-      const invoiceRate = Number(currentInvoiceRate || 0);
-      if (!service || !sourceLine || qty <= 0 || qty > Number(sourceLine.pendingQty || 0) || invoiceRate <= 0) return;
+      const invoiceRateInput = Number(currentInvoiceRate || 0);
+      if (!service || !sourceLine || qty <= 0 || qty > Number(sourceLine.pendingQty || 0) || invoiceRateInput <= 0) return;
 
       const newLine = applySupplyTypeTaxRates({
         id: crypto.randomUUID(),
@@ -487,16 +533,22 @@ export function MaterialInForm() {
         sourceGatePassItemDescription: sourceLine.itemDescription || sourceLine.itemName,
         qty,
         uom: sourceLine.uom || "",
+        invoiceCurrency: normalizedInvoiceCurrency,
+        exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
         invoiceQty: qty,
-        invoiceRate,
+        ...(isUsdInvoice
+          ? { invoiceRateUsd: invoiceRateInput }
+          : { invoiceRate: invoiceRateInput, rate: invoiceRateInput, value: qty * invoiceRateInput }),
         actualQty: qty,
-        rate: invoiceRate,
-        value: qty * invoiceRate,
         gstRate: 0,
         cgstRate: 0,
         sgstRate: 0,
         igstRate: 0,
-      }, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
+      }, isInterState ? "INTER_STATE" : "INTRA_STATE", {
+        forceFromGstRate: true,
+        invoiceCurrency: normalizedInvoiceCurrency,
+        exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+      });
 
       setLines((prev) => [...prev, newLine]);
       resetLineDrafts();
@@ -504,20 +556,20 @@ export function MaterialInForm() {
     }
 
     const selectedPoLine = currentPoLineId ? getPurchaseOrderLine(currentPoLineId) : undefined;
-    const resolvedInvoiceRate =
+    const fallbackRate = isUsdInvoice ? convertInrToUsd(Number(selectedPoLine?.rate || 0)) : Number(selectedPoLine?.rate || 0);
+    const resolvedInvoiceRateInput =
       currentInvoiceRate !== "" && Number(currentInvoiceRate) > 0
         ? Number(currentInvoiceRate)
-        : Number(selectedPoLine?.rate || 0);
+        : fallbackRate;
 
     if (mrrType === "Others" && !currentPoLineId) {
       alert("Our PO No. is mandatory before adding an Others line.");
       return;
     }
-    if (mrrType === "Others" && (!resolvedInvoiceRate || resolvedInvoiceRate <= 0)) return;
-    
+    if (mrrType === "Others" && (!resolvedInvoiceRateInput || resolvedInvoiceRateInput <= 0)) return;
+
     const material = getMaterial(currentItemId);
     if (!material) return;
-
     if (mrrType === "Others" && (currentQty === "" || Number(currentQty) <= 0)) return;
     if (isFgType && (currentReceiptQty === "" || Number(currentReceiptQty) <= 0)) return;
 
@@ -525,9 +577,7 @@ export function MaterialInForm() {
     if (mrrType === "Others") qty = Number(currentQty);
     else if (isFgType) qty = Number(currentReceiptQty);
 
-    const invoiceRate = resolvedInvoiceRate;
     const selectedPo = selectedPoLine ? getPurchaseOrder(selectedPoLine.purchaseOrderId) : undefined;
-    
     const newLine = applySupplyTypeTaxRates({
       id: crypto.randomUUID(),
       itemId: currentItemId,
@@ -538,19 +588,24 @@ export function MaterialInForm() {
       poNo: selectedPo?.poNo,
       poLineId: selectedPoLine?.id,
       poRate: Number(selectedPoLine?.rate || 0),
+      invoiceCurrency: normalizedInvoiceCurrency,
+      exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
       invoiceQty: qty,
-      invoiceRate,
+      ...(isUsdInvoice
+        ? { invoiceRateUsd: resolvedInvoiceRateInput }
+        : { invoiceRate: resolvedInvoiceRateInput, rate: resolvedInvoiceRateInput, value: qty * resolvedInvoiceRateInput }),
       actualQty: qty,
-      rate: invoiceRate,
-      value: qty * invoiceRate,
       gstRate: 0,
       cgstRate: 0,
       sgstRate: 0,
       igstRate: 0,
-    }, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
+    }, isInterState ? "INTER_STATE" : "INTRA_STATE", {
+      forceFromGstRate: true,
+      invoiceCurrency: normalizedInvoiceCurrency,
+      exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+    });
 
     setLines((prev) => [...prev, newLine]);
-
     if (mrrType === "Reel") {
       setPackingSlipDrafts((prev) => ({ ...prev, [newLine.id]: [] }));
     }
@@ -564,10 +619,6 @@ export function MaterialInForm() {
         const poLineId = patch.poLineId ?? line.poLineId;
         const poLine = poLineId ? getPurchaseOrderLine(poLineId) : undefined;
         const po = poLine ? getPurchaseOrder(poLine.purchaseOrderId) : undefined;
-        const resolvedInvoiceRate =
-          patch.invoiceRate !== undefined
-            ? Number(patch.invoiceRate || 0)
-            : (line.invoiceRate ? Number(line.invoiceRate) : 0) || Number(poLine?.rate || 0);
         const selectedService = isServiceReturn && patch.itemId
           ? services.find((entry) => entry.id === String(patch.itemId))
           : undefined;
@@ -582,12 +633,23 @@ export function MaterialInForm() {
           poId: po?.id,
           poNo: po?.poNo,
           poRate: poLine ? Number(poLine.rate || 0) : Number(patch.poRate ?? line.poRate ?? 0),
-          invoiceRate: resolvedInvoiceRate,
+          invoiceCurrency: normalizedInvoiceCurrency,
+          exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+        }, {
+          invoiceCurrency: normalizedInvoiceCurrency,
+          exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
         });
         if (Object.prototype.hasOwnProperty.call(patch, "gstRate")) {
-          return applySupplyTypeTaxRates(nextLine, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true });
+          return applySupplyTypeTaxRates(nextLine, isInterState ? "INTER_STATE" : "INTRA_STATE", {
+            forceFromGstRate: true,
+            invoiceCurrency: normalizedInvoiceCurrency,
+            exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+          });
         }
-        return applySupplyTypeTaxRates(nextLine, isInterState ? "INTER_STATE" : "INTRA_STATE");
+        return applySupplyTypeTaxRates(nextLine, isInterState ? "INTER_STATE" : "INTRA_STATE", {
+          invoiceCurrency: normalizedInvoiceCurrency,
+          exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+        });
       })
     );
   };
@@ -971,18 +1033,32 @@ export function MaterialInForm() {
             const totalWeight = Number(
               (packingSlipDrafts[line.id] || []).reduce((sum, slip) => sum + Number(slip.weightKg || 0), 0).toFixed(2)
             );
-            const invoiceRate = Number(line.invoiceRate ?? line.rate ?? 0);
             return recalculateMaterialLine({
               ...line,
               qty: totalWeight,
               invoiceQty: totalWeight,
               actualQty: totalWeight,
-              invoiceRate,
-              rate: invoiceRate,
               uom: line.uom || "KG",
+              invoiceCurrency: normalizedInvoiceCurrency,
+              exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+            }, {
+              invoiceCurrency: normalizedInvoiceCurrency,
+              exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
             });
           })
-        : lines.map((line) => recalculateMaterialLine({ ...line }));
+        : lines.map((line) => recalculateMaterialLine({
+            ...line,
+            invoiceCurrency: normalizedInvoiceCurrency,
+            exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+          }, {
+            invoiceCurrency: normalizedInvoiceCurrency,
+            exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+          }));
+
+    if (isUsdInvoice && (!numericExchangeRate || numericExchangeRate <= 0)) {
+      alert("Exchange rate must be greater than 0 for USD invoices.");
+      return;
+    }
 
     if (linesForSubmit.some((line) => Number(line.invoiceRate ?? line.rate ?? 0) <= 0)) {
       alert("Invoice rate must be greater than 0 for every MRR line.");
@@ -1049,8 +1125,12 @@ export function MaterialInForm() {
           invoiceNo,
           invDate,
           supplierId,
+          invoiceCurrency: normalizedInvoiceCurrency,
+          exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
           totalInvoiceValue: submitSummary.totalInvoiceValue,
+          totalInvoiceValueUsd: isUsdInvoice ? submitSummary.totalInvoiceValueUsd : undefined,
           totalActualValue: submitSummary.totalActualValue,
+          totalActualValueUsd: isUsdInvoice ? submitSummary.totalActualValueUsd : undefined,
           totalCgst: submitSummary.totalCgst,
           totalSgst: submitSummary.totalSgst,
           totalIgst: submitSummary.totalIgst,
@@ -1130,6 +1210,8 @@ export function MaterialInForm() {
       setInvoiceNo("");
       setInvDate("");
       setSupplierId("");
+      setInvoiceCurrency("INR");
+      setExchangeRate("");
       setRoundOff("");
       setLines([]);
       setPackingSlipDrafts({});
@@ -1210,6 +1292,29 @@ export function MaterialInForm() {
               <Select options={mrrTypeOptions} value={mrrType} onChange={handleMrrTypeChange} required />
             )}
           </div>
+          <div className="flex flex-col space-y-1">
+            <label className="font-bold text-black">Invoice Currency</label>
+            <Select
+              options={[{ value: "INR", label: "INR" }, { value: "USD", label: "USD" }]}
+              value={normalizedInvoiceCurrency}
+              onChange={handleInvoiceCurrencyChange}
+            />
+          </div>
+          {isUsdInvoice ? (
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">
+                Exchange Rate (1 USD in INR) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.0001"
+                value={exchangeRate}
+                onChange={(e) => setExchangeRate(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full"
+              />
+            </div>
+          ) : null}
           <div className="flex flex-col space-y-1">
             <label className="font-bold text-black">
               Invoice No <span className="text-red-500">*</span>
@@ -1365,11 +1470,12 @@ export function MaterialInForm() {
               </div>
             ) : null}
             <div className="flex flex-col space-y-1 w-full md:w-24">
-              <label className="text-sm font-bold text-black">Invoice Rate</label>
+              <label className="text-sm font-bold text-black">{isUsdInvoice ? "Invoice Rate (USD)" : "Invoice Rate (INR)"}</label>
               <input
                 type="number"
                 value={currentInvoiceRate || ""}
                 onChange={(e) => setCurrentInvoiceRate(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                step={isUsdInvoice ? "0.0001" : "0.01"}
                 className="border-2 border-black rounded p-[6px] text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 bg-white"
               />
             </div>
@@ -1389,9 +1495,9 @@ export function MaterialInForm() {
                       {!isFgType && mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th> : null}
                       {!isFgType && mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th> : null}
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Return Qty" : isFgType ? "Item Receipt" : "Invoice Qty"}</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Rate</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isUsdInvoice ? "Invoice Rate (USD)" : "Invoice Rate (INR)"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GST %</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value (INR)</th>
                       {!isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">CGST %</th> : null}
                       {!isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">SGST %</th> : null}
                       {isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">IGST %</th> : null}
@@ -1446,9 +1552,11 @@ export function MaterialInForm() {
                             <input
                               type="number"
                               min="0"
-                              step="0.01"
-                              value={(line.invoiceRate ?? line.rate) === 0 ? "" : (line.invoiceRate ?? line.rate)}
-                              onChange={(e) => updateLine(line.id, { invoiceRate: Number(e.target.value || 0) })}
+                              step={isUsdInvoice ? "0.0001" : "0.01"}
+                              value={isUsdInvoice
+                                ? (Number(line.invoiceRateUsd || 0) === 0 ? "" : line.invoiceRateUsd)
+                                : ((line.invoiceRate ?? line.rate) === 0 ? "" : (line.invoiceRate ?? line.rate))}
+                              onChange={(e) => updateLine(line.id, isUsdInvoice ? { invoiceRateUsd: Number(e.target.value || 0) } : { invoiceRate: Number(e.target.value || 0) })}
                               className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                             />
                           </td>
@@ -1510,7 +1618,11 @@ export function MaterialInForm() {
                           <div>
                             <h4 className="font-bold text-black uppercase tracking-tight">{getMaterial(line.itemId)?.name || "Reel Material"}</h4>
                             <div className="flex gap-4 text-xs font-bold mt-1">
-                                <span className="text-indigo-600 uppercase">Invoice Rate: Rs {Number(line.invoiceRate || 0).toFixed(2)}</span>
+                                {isUsdInvoice ? (
+                                  <span className="text-indigo-600 uppercase">Invoice Rate: USD {Number(line.invoiceRateUsd || 0).toFixed(4)} | INR {Number(line.invoiceRate || 0).toFixed(2)}</span>
+                                ) : (
+                                  <span className="text-indigo-600 uppercase">Invoice Rate: Rs {Number(line.invoiceRate || 0).toFixed(2)}</span>
+                                )}
                                 <span className="text-amber-700 uppercase">PO Rate: Rs {Number(line.poRate || 0).toFixed(2)}</span>
                             </div>
                           </div>
@@ -1629,6 +1741,14 @@ export function MaterialInForm() {
             </div>
           )}
           <div className="mt-4 text-right font-bold text-black text-xl">
+            {isUsdInvoice ? (
+              <>
+                <div>Invoice Currency: <span className="text-slate-700">USD</span></div>
+                <div>Exchange Rate: <span className="text-slate-700">Rs {numericExchangeRate.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></div>
+                <div>Total Invoice Value (USD): <span className="text-amber-700">USD {totalInvoiceValueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+                <div>Total Actual Value (USD): <span className="text-indigo-700">USD {totalActualValueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+              </>
+            ) : null}
             <div>Total Invoice Value: <span className="text-amber-700">Rs {totalInvoiceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total CGST: <span className="text-slate-700">Rs {totalCgst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total SGST: <span className="text-slate-700">Rs {totalSgst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>

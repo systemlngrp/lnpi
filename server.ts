@@ -450,6 +450,20 @@ const COMPANY_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
   { column: "gstType", type: "VARCHAR(100)" },
   { column: "panNo", type: "VARCHAR(100)" },
 ];
+const MATERIAL_IN_CURRENCY_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
+  { column: "invoiceCurrency", type: "VARCHAR(10) NULL" },
+  { column: "exchangeRate", type: "DECIMAL(15,4) NULL" },
+  { column: "totalInvoiceValueUsd", type: "DECIMAL(15,2) NULL" },
+  { column: "totalActualValueUsd", type: "DECIMAL(15,2) NULL" },
+];
+
+const MATERIAL_IN_LINE_CURRENCY_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
+  { column: "invoiceCurrency", type: "VARCHAR(10) NULL" },
+  { column: "exchangeRate", type: "DECIMAL(15,4) NULL" },
+  { column: "invoiceRateUsd", type: "DECIMAL(15,4) NULL" },
+  { column: "invoiceValueUsd", type: "DECIMAL(15,2) NULL" },
+  { column: "actualValueUsd", type: "DECIMAL(15,2) NULL" },
+];
 
 const AUDIT_COLUMN_DEFINITIONS: Array<{ column: string; type: string }> = [
   { column: "updatedBy", type: "VARCHAR(255) NULL" },
@@ -1981,6 +1995,15 @@ async function ensureColumnExists(db: mysql.Pool, database: string, table: strin
 async function ensureCompaniesSchemaColumns(db: mysql.Pool, database: string) {
   for (const { column, type } of COMPANY_SCHEMA_COLUMNS) {
     await ensureColumnExists(db, database, "companies", column, type);
+  }
+}
+async function ensureMaterialInCurrencySchemaColumns(db: mysql.Pool, database: string) {
+  for (const { column, type } of MATERIAL_IN_CURRENCY_SCHEMA_COLUMNS) {
+    await ensureColumnExists(db, database, "material_in", column, type);
+  }
+
+  for (const { column, type } of MATERIAL_IN_LINE_CURRENCY_SCHEMA_COLUMNS) {
+    await ensureColumnExists(db, database, "material_in_lines", column, type);
   }
 }
 
@@ -4629,7 +4652,8 @@ await db.query(`
 
       try {
         await ensureCompaniesSchemaColumns(db, database);
-      await ensureAuditColumnsForAllTables(db, database);
+        await ensureMaterialInCurrencySchemaColumns(db, database);
+        await ensureAuditColumnsForAllTables(db, database);
       } catch (err) {
         console.warn("[DB] Could not ensure companies schema columns:", (err as Error).message);
       }
