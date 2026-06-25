@@ -41,8 +41,10 @@ export function ScheduledOrdersMaster() {
         .filter(p => p.scheduleId === s.id && p.status !== "Cancelled")
         .reduce((sum, p) => sum + (Number(p.plannedQty ?? p.qty) || 0), 0);
 
-      // 2. Produced FG Qty (actual finished goods reported on the schedule)
-      const producedFgQty = Number(s.producedQty || 0);
+      // 2. Production FFG Qty (workflow-managed value filled from Pending FFG)
+      const producedFgQty = productions
+        .filter(p => p.scheduleId === s.id && p.status !== "Cancelled")
+        .reduce((sum, p) => sum + (Number(p.prodFromFFG || 0) || 0), 0);
 
       // 2. Loaded (from loading slips via dispatch plans)
       const schedulePlans = plans.filter(p => p.scheduleId === s.id);
