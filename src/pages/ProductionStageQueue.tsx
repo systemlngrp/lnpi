@@ -631,7 +631,7 @@ export function ProductionStageQueue({
                           const prereqMissing = !!issuePrereqMachineName && !(prereqQty > 0);
 
                           const bypassControls = (
-                            <>
+                            <div className="flex flex-wrap items-center gap-2 whitespace-normal">
                               <label className="inline-flex items-center gap-2 text-[11px] font-black uppercase text-slate-700">
                                 <input
                                   type="checkbox"
@@ -647,28 +647,26 @@ export function ProductionStageQueue({
                                 Paper Not Required
                               </label>
                               {paperBypassDraft.checked ? (
-                                <>
-                                  <input
-                                    type="text"
-                                    value={paperBypassDraft.reason}
-                                    onChange={(e) => updatePaperBypassDraft(production, { reason: e.target.value })}
-                                    placeholder="Enter reason"
-                                    className="w-56 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                  />
-                                  {paperBypassErrors[production.id] ? (
-                                    <div className="text-[11px] font-semibold text-rose-700">{paperBypassErrors[production.id]}</div>
-                                  ) : null}
-                                </>
+                                <input
+                                  type="text"
+                                  value={paperBypassDraft.reason}
+                                  onChange={(e) => updatePaperBypassDraft(production, { reason: e.target.value })}
+                                  placeholder="Enter reason"
+                                  className="w-56 rounded border border-slate-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
                               ) : null}
                               <button
                                 type="button"
                                 onClick={() => void handleSavePaperBypass(production, actualPaperUsed)}
                                 disabled={paperBypassSavingId === production.id}
-                                className="self-start rounded border border-black bg-amber-400 px-3 py-1 text-[11px] font-black uppercase text-black disabled:opacity-50"
+                                className="rounded border border-black bg-amber-400 px-3 py-1 text-[11px] font-black uppercase text-black disabled:opacity-50"
                               >
                                 {paperBypassSavingId === production.id ? "Saving..." : paperBypassDraft.checked ? "Save Paper" : "Clear Paper"}
                               </button>
-                            </>
+                              {paperBypassErrors[production.id] ? (
+                                <div className="basis-full text-[11px] font-semibold text-rose-700">{paperBypassErrors[production.id]}</div>
+                              ) : null}
+                            </div>
                           );
 
                           if (prereqMissing) {
