@@ -671,7 +671,7 @@ export function ProductionStageQueue({
 
                           if (prereqMissing) {
                             return (
-                              <div className="flex flex-col gap-2 whitespace-normal">
+                              <div className="flex flex-wrap items-center gap-2 whitespace-normal">
                                 <button
                                   type="button"
                                   disabled
@@ -686,7 +686,7 @@ export function ProductionStageQueue({
                           }
 
                           return (
-                            <div className="flex flex-col gap-2 whitespace-normal">
+                            <div className="flex flex-wrap items-center gap-2 whitespace-normal">
                               {!requiresLiner || linerDone ? (
                                 <button
                                   type="button"
