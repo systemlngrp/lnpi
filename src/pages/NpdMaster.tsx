@@ -1,137 +1,18 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Search, Download } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
+import { useData } from "../hooks/useData";
+import { findLinkedItemByErp } from "../lib/linkedLoading";
+import { NPD_COLUMNS } from "../lib/npdCardConfig";
+import { downloadNpdCardPdf } from "../lib/npdCardPdf";
+import { normalizeOrderCatalogItem } from "../lib/orderItems";
+import type { Setting } from "../types";
 
 type NpdRecord = {
   id: string;
   [key: string]: string | number | boolean | null | undefined;
 };
-
-const NPD_COLUMNS: Array<{ key: string; label: string }> = [
-  { key: "boxType", label: "BOX TYPE" },
-  { key: "customerName", label: "Customer Name" },
-  { key: "itemName", label: "Item Name" },
-  { key: "opening", label: "Opening" },
-  { key: "receipt", label: "Receipt" },
-  { key: "production", label: "Production" },
-  { key: "invoiced", label: "Invoiced" },
-  { key: "balance", label: "Balance" },
-  { key: "stockValue", label: "Value" },
-  { key: "erp", label: "ERP" },
-  { key: "rate", label: "Last Approved Order Rate" },
-  { key: "uom", label: "UOM" },
-  { key: "fluteType", label: "Flute Type" },
-  { key: "ply", label: "Ply" },
-  { key: "noOfParts", label: "No Of Parts" },
-  { key: "noOfUps", label: "No Of Ups" },
-  { key: "idToOd2", label: "Id to Od 2" },
-  { key: "openLength", label: "Open Length" },
-  { key: "openWidth", label: "Open Width" },
-  { key: "lengthId", label: "Length (ID)" },
-  { key: "breadthId", label: "Breadth (ID)" },
-  { key: "heightId", label: "Height (ID)" },
-  { key: "lengthOd", label: "Length (OD)" },
-  { key: "breadthOd", label: "Breadth (OD)" },
-  { key: "heightOd", label: "Height (OD)" },
-  { key: "psL1", label: "PS-L1" },
-  { key: "psL1Bf", label: "PS L1-BF" },
-  { key: "psF1", label: "PS F1" },
-  { key: "psF1Bf", label: "PS F1-BF" },
-  { key: "psL2", label: "PS L2" },
-  { key: "psL2Bf", label: "PS L2-BF" },
-  { key: "psF2", label: "PS F2" },
-  { key: "psF2Bf", label: "PS F2-BF" },
-  { key: "psL3", label: "PS L3" },
-  { key: "psL3Bf", label: "PS L3-BF" },
-  { key: "materialWeightInsideInOneBox", label: "Material Weight inside in One Box" },
-  { key: "stackHeight", label: "Stack Height" },
-  { key: "safetyFactor", label: "Safety Factor" },
-  { key: "csKgStd", label: "CS (Kg) Std" },
-  { key: "csKgTarget", label: "CS (Kg) Target" },
-  { key: "bsKgCm2Std", label: "BS (kg/cm2) Std" },
-  { key: "bsKgCm2Calculated", label: "BS (kg/cm2) Calculated" },
-  { key: "takeUpFactor", label: "Take up Factor" },
-  { key: "ups", label: "UPS" },
-  { key: "rapc", label: "RAPC" },
-  { key: "gstRate", label: "GST Rate" },
-  { key: "part", label: "Part" },
-  { key: "cuttingWithTrimming", label: "Cutting with Trimming" },
-  { key: "standardWeightGms", label: "Standard Weight(gms)" },
-  { key: "calculatedWeightPerBox", label: "Calculated Weight per Box" },
-  { key: "standardBGsm", label: "Standard B GSM" },
-  { key: "calculatedBGsm", label: "Calculated B GSM" },
-  { key: "stitchingGluing", label: "Stitching/Gluing" },
-  { key: "rsl1", label: "RSL1" },
-  { key: "rsl1Bf", label: "RSL1-BF" },
-  { key: "rsf2", label: "RSF2" },
-  { key: "rsf2Bf", label: "RSF2-BF" },
-  { key: "rsl3", label: "RSL3" },
-  { key: "rsl3Bf", label: "RSL3-BF" },
-  { key: "rsf4", label: "RSF4" },
-  { key: "rsf4Bf", label: "RSF4-BF" },
-  { key: "rsl5", label: "RSL5" },
-  { key: "rsf5Bf", label: "RSF5-BF" },
-  { key: "flapSize", label: "Flap Size" },
-  { key: "deckleSize", label: "Deckle Size" },
-  { key: "topPaperShade", label: "Top Paper Shade" },
-  { key: "colorId1", label: "Color Id 1" },
-  { key: "printingColour1", label: "Printing Colour 1" },
-  { key: "colorId2", label: "Color Id 2" },
-  { key: "printingColour2", label: "Printing Colour 2" },
-  { key: "plainBox", label: "PLAIN BOX" },
-  { key: "whetherPlateApplicable", label: "Whether Plate Applicable" },
-  { key: "whetherPhpApplicable", label: "Whether PHP Applicable" },
-  { key: "dimensionsApproved", label: "Dimensions Approved" },
-  { key: "artworkApproved", label: "Artwork Approved" },
-  { key: "artworkUpload", label: "Artwork Upload" },
-  { key: "url", label: "URL" },
-  { key: "poDate", label: "PO Date" },
-  { key: "poNumber", label: "PO Number" },
-  { key: "supplier", label: "Supplier" },
-  { key: "printingBlockItemName", label: "Printing Block Item Name" },
-  { key: "blockSizeSqInch", label: "Block Size (Sq Inch)" },
-  { key: "approvedRateOfSupplier", label: "Approved Rate of Supplier" },
-  { key: "poPdf", label: "PO PDF" },
-  { key: "chargeableToCustomer", label: "Chargeable to Customer" },
-  { key: "amount", label: "Amount" },
-  { key: "poPdfApproval", label: "PO PDF Approval" },
-  { key: "emailSentToSupplier", label: "Email Sent to Supplier" },
-  { key: "emailTimestamp", label: "Email Timestamp" },
-  { key: "invoiceNo", label: "Invoice No." },
-  { key: "invoiceDate", label: "Invoice Date" },
-  { key: "invoiceAmount", label: "Invoice Amount" },
-  { key: "geNo", label: "GE No." },
-  { key: "mrrNo", label: "MRR No." },
-  { key: "dateOfReceipt", label: "Date of Receipt" },
-  { key: "supplierInvoiceNoMrr", label: "Supplier Invoice No.(MRR)" },
-  { key: "itemValueMrr", label: "Item Value (MRR)" },
-  { key: "invoiceValueMrr", label: "Invoice Value (MRR)" },
-  { key: "approvalStatus", label: "Approval Status" },
-  { key: "debitNoteNo", label: "Debit Note No." },
-  { key: "debitNoteDate", label: "Debit Note Date" },
-  { key: "debitNoteAmount", label: "Debit Note Amount" },
-  { key: "customerPoNo", label: "Customer PO No." },
-  { key: "customerPoDate", label: "Customer PO Date" },
-  { key: "orderQuantity", label: "Order Quantity" },
-  { key: "orderRate", label: "Last Order Rate" },
-  { key: "customerPoAmount", label: "Customer PO Amount" },
-  { key: "boxesPerSheetDieCut", label: "No. of Boxes per Sheet in case of Die Cut Box" },
-  { key: "reelSize", label: "Reel Size" },
-  { key: "cuttingSize", label: "Cutting Size" },
-  { key: "rapcForSingleBox", label: "Rapc for single box" },
-  { key: "dieCutUps", label: "No Of Die Cut Ups(No Of Boxes In One Die Sheet)" },
-  { key: "syncInItemMaster", label: "SYNC IN ITEM MASTER" },
-  { key: "platePhpWeight", label: "PLATE/PHP WEIGHT" },
-  { key: "item9001", label: "9001" },
-  { key: "item9002", label: "9002" },
-  { key: "item9003", label: "9003" },
-  { key: "item9004", label: "9004" },
-  { key: "gsmLeastCost", label: "GSM Least Cost" },
-  { key: "backingPaperShade", label: "Backing Paper Shade" },
-  { key: "artwork", label: "Artwork" },
-  { key: "spec", label: "Spec" },
-];
 
 function getHeaderLines(label: string) {
   const words = String(label || "").split(/\s+/).filter(Boolean);
@@ -163,6 +44,19 @@ export function NpdMaster() {
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [pageSize, setPageSize] = useState(100);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [phpRows] = useData<any>("php_item_master", []);
+  const [plateRows] = useData<any>("plate_item_master", []);
+  const [settings] = useData<Setting>("settings", []);
+
+  const phpItems = useMemo(
+    () => phpRows.map((row) => normalizeOrderCatalogItem(row, "PHP")).filter(Boolean),
+    [phpRows]
+  );
+  const plateItems = useMemo(
+    () => plateRows.map((row) => normalizeOrderCatalogItem(row, "PLATE")).filter(Boolean),
+    [plateRows]
+  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -250,6 +144,27 @@ export function NpdMaster() {
     return `${start}-${Math.min(total, end)} of ${total}`;
   }, [page, pageSize, rows.length, total, totalPages]);
 
+  const handleDownloadCard = async (row: NpdRecord) => {
+    setDownloadingId(row.id);
+    try {
+      const normalizedNpd = normalizeOrderCatalogItem(row, "FG");
+      const erpCode = normalizedNpd?.erp || String(row.erp || "").trim();
+      const linkedPhp = findLinkedItemByErp(phpItems as any, erpCode);
+      const linkedPlate = findLinkedItemByErp(plateItems as any, erpCode);
+      await downloadNpdCardPdf({
+        npdRow: row,
+        phpRow: (linkedPhp?.raw as Record<string, string | number | boolean | null | undefined>) || null,
+        plateRow: (linkedPlate?.raw as Record<string, string | number | boolean | null | undefined>) || null,
+        setting: settings[0] || null,
+      });
+    } catch (error) {
+      console.error("Failed to download NPD card:", error);
+      alert("Failed to download NPD card. Please check console for details.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 border-b border-black pb-4 md:flex-row md:items-center md:justify-between">
@@ -332,12 +247,15 @@ export function NpdMaster() {
                     </span>
                   </th>
                 ))}
+                <th className="border border-black px-3 py-3 text-left text-xs font-bold uppercase text-black align-top min-w-[120px] whitespace-nowrap">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={NPD_COLUMNS.length} className="px-6 py-12">
+                  <td colSpan={NPD_COLUMNS.length + 1} className="px-6 py-12">
                     <div className="flex items-center justify-center gap-3 text-black">
                       <Spinner size={28} />
                       <span className="font-semibold">Loading NPD items...</span>
@@ -346,7 +264,7 @@ export function NpdMaster() {
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={NPD_COLUMNS.length} className="px-6 py-8 text-center font-medium italic text-black">
+                  <td colSpan={NPD_COLUMNS.length + 1} className="px-6 py-8 text-center font-medium italic text-black">
                     No NPD records found.
                   </td>
                 </tr>
@@ -386,6 +304,17 @@ export function NpdMaster() {
                         </td>
                       );
                     })}
+                    <td className="border border-black px-3 py-3 text-sm text-black align-top">
+                      <button
+                        type="button"
+                        onClick={() => void handleDownloadCard(row)}
+                        disabled={downloadingId === row.id}
+                        className="inline-flex items-center gap-2 rounded border border-black bg-white px-3 py-2 text-xs font-bold uppercase hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {downloadingId === row.id ? <Spinner size={14} /> : <Download size={14} />}
+                        Download Card
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -396,4 +325,3 @@ export function NpdMaster() {
     </div>
   );
 }
-
