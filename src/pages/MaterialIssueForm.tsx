@@ -23,7 +23,7 @@ import { getAvailableReelPackingSlips, getNonReelAvailableQty } from "../lib/mat
 import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
 import { useNpdItems } from "../hooks/useNpdItems";
 
-type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean };
+type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean; isNpdConsumableItem?: boolean; npdSourceId?: string };
 
 function normalizeDate(value?: string | null) {
   return String(value || "").slice(0, 10);
@@ -32,6 +32,17 @@ function normalizeDate(value?: string | null) {
 function isWithoutJobIssue(issueType?: string) {
   const t = String(issueType || "").trim().toLowerCase();
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
+}
+
+function isConsumableNpdItem(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  const truthyValues = new Set(["1", "true", "yes", "y", "on"]);
+  return truthyValues.has(normalized);
 }
 
 export function MaterialIssueForm() {
@@ -108,30 +119,80 @@ export function MaterialIssueForm() {
 
   const issueMaterials = useMemo<IssueMaterialOption[]>(() => {
     const existingMaterialIds = new Set(materials.map((material) => String(material.id)));
+    const existingMaterialErpKeys = new Set(
+      materials
+        .map((material) => String(material.erpCode || "").trim().toLowerCase())
+        .filter((value) => value !== "")
+    );
+
     const fgItems = new Map<string, IssueMaterialOption>();
+    const fgErpKeys = new Set<string>();
 
     materialIn.forEach((receipt) => {
       if (receipt.mrrType !== "FG Purchase" && receipt.mrrType !== "Rejection In") return;
+
       (receipt.lines || []).forEach((line) => {
         const itemId = String(line.itemId || line.npdId || "").trim();
         if (!itemId || existingMaterialIds.has(itemId) || fgItems.has(itemId)) return;
-        const item = npdItems.find((entry) => entry.id === itemId);
-        if (!item) return;
+
+        const npdItem = npdItems.find((entry) => String(entry.id) === itemId);
+        if (!npdItem) return;
+
+        const erpCode = String(npdItem.erp || "").trim().toLowerCase();
+        const erpKey = erpCode || `npd:${itemId}`;
+
+        if (existingMaterialErpKeys.has(erpCode)) return;
+        if (fgErpKeys.has(erpCode)) return;
 
         fgItems.set(itemId, {
-          id: item.id,
+          id: npdItem.id,
           type: "Other",
-          erpCode: item.erp,
-          name: item.name,
-          uom: line.uom || item.uom || "PCS",
+          erpCode: npdItem.erp,
+          name: npdItem.name,
+          uom: line.uom || npdItem.uom || "PCS",
           active: "Yes",
           isFgPurchaseItem: true,
         });
+        fgErpKeys.add(erpKey);
       });
     });
 
-    return [...materials, ...Array.from(fgItems.values())];
-  }, [materialIn, materials, npdItems]);
+    const npdConsumableItems: IssueMaterialOption[] = [];
+
+    if (issueType === "Job") {
+      npdItems.forEach((item) => {
+        if (!isConsumableNpdItem(item.consumable)) return;
+
+        const itemId = String(item.id || "").trim();
+        if (!itemId) return;
+
+        const erpCode = String(item.erp || "").trim().toLowerCase();
+        const erpKey = erpCode || `npd:${itemId}`;
+
+        if (existingMaterialIds.has(itemId)) return;
+        if (fgItems.has(itemId)) return;
+        if (existingMaterialErpKeys.has(erpCode)) return;
+        if (fgErpKeys.has(erpKey)) return;
+
+        const syntheticId = `npd:${itemId}`;
+        if (npdConsumableItems.some((entry) => String(entry.id) === syntheticId)) return;
+
+        npdConsumableItems.push({
+          id: syntheticId,
+          type: "Other",
+          erpCode: item.erp,
+          name: item.name,
+          uom: item.uom || "PCS",
+          active: "Yes",
+          isNpdConsumableItem: true,
+          npdSourceId: itemId,
+        });
+      });
+    }
+
+    return [...materials, ...Array.from(fgItems.values()), ...npdConsumableItems];
+  }, [materialIn, materials, npdItems, issueType]);
+
   const materialOptions = useMemo(
     () =>
       issueMaterials
@@ -153,6 +214,12 @@ export function MaterialIssueForm() {
   const selectedProduction = productions.find((production) => production.id === productionId);
 
   const getMaterial = (materialId: string) => issueMaterials.find((material) => material.id === materialId);
+  const isNpdConsumableOption = (materialIdOrOption: string | IssueMaterialOption | undefined | null) => {
+    if (!materialIdOrOption) return false;
+    const material =
+      typeof materialIdOrOption === "string" ? getMaterial(materialIdOrOption) : materialIdOrOption;
+    return material?.isNpdConsumableItem === true;
+  };
 
   const handleAddLine = () => {
     if (!currentMaterialId) return;
@@ -160,6 +227,8 @@ export function MaterialIssueForm() {
     if (!material) return;
 
     const isReel = material.type === "Reel";
+    const isNpdConsumable = Boolean(material.isNpdConsumableItem);
+
     if (isReel && issueType !== "Job") {
       alert("Reels can only be issued against a job.");
       return;
@@ -169,20 +238,20 @@ export function MaterialIssueForm() {
       return;
     }
 
-	    if (!isReel) {
-	      const qty = Number(currentQty || 0);
-	      if (qty <= 0) return;
-	      if (issueType === "Job") {
-	        const availableQty = getNonReelAvailableQty(currentMaterialId, materialIn, materialIssueLines, materialReturnLines);
-	        if (qty > availableQty) {
-	          alert(`Available quantity is only ${availableQty}.`);
-	          return;
-	        }
-	      }
-	      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false }]);
-	    } else {
-	      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty: 0, uom: "KG", isReel: true }]);
-	    }
+    if (!isReel) {
+      const qty = Number(currentQty || 0);
+      if (qty <= 0) return;
+      if (issueType === "Job" && !isNpdConsumable) {
+        const availableQty = getNonReelAvailableQty(currentMaterialId, materialIn, materialIssueLines, materialReturnLines);
+        if (qty > availableQty) {
+          alert(`Available quantity is only ${availableQty}.`);
+          return;
+        }
+      }
+      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false }]);
+    } else {
+      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty: 0, uom: "KG", isReel: true }]);
+    }
 
     setCurrentMaterialId("");
     setCurrentQty("");
@@ -477,6 +546,7 @@ export function MaterialIssueForm() {
                   {lines.map((line, index) => {
                     const material = getMaterial(line.materialId);
                     const availableQty = !line.isReel ? getNonReelAvailableQty(line.materialId, materialIn, materialIssueLines, materialReturnLines) : null;
+                    const isConsumableNpdMaterial = isNpdConsumableOption(material);
                     const availableReels = line.isReel ? getLineAvailableReels(line.id, line.materialId) : [];
                     const selectedIds = selectedReels[line.id] || [];
 
@@ -492,7 +562,7 @@ export function MaterialIssueForm() {
                               <table className="min-w-full border-collapse">
                                 <thead className="bg-slate-50 border-b border-black">
                                   <tr>
-                                    {["", "Our Reel", "Weight"].map((h) => (
+                                     { ["", "Our Reel", "Weight"].map((h) => (
                                       <th key={h} className="px-2 py-1.5 text-left text-[10px] font-black uppercase text-slate-600">{h}</th>
                                     ))}
                                   </tr>
@@ -527,11 +597,11 @@ export function MaterialIssueForm() {
                           <div className="text-sm font-black text-indigo-700">
                             {line.isReel ? `${Number(line.qty || 0).toFixed(2)} KG` : `${line.qty} ${line.uom}`}
                           </div>
-                          {!line.isReel && !isWithoutJobIssue(issueType) && (
+                          {!line.isReel && !isWithoutJobIssue(issueType) && !isConsumableNpdMaterial ? (
                             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter bg-slate-100 p-1 rounded inline-block">
                               Avail: {availableQty} {line.uom}
                             </div>
-                          )}
+                          ) : null}
                         </td>
                         <td className="px-4 py-4 text-center">
                           <button

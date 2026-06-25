@@ -418,6 +418,7 @@ const NPD_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
     column,
     type: "LONGTEXT",
   })),
+  { column: "consumable", type: "VARCHAR(10) NULL" },
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
   { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" },
@@ -1557,6 +1558,17 @@ function stringOrEmpty(value: any) {
   return String(value ?? "").trim();
 }
 
+function normalizeConsumableValue(value: any) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  const truthyValues = new Set(["1", "true", "yes", "y", "on"]);
+  return truthyValues.has(normalized);
+}
+
 function normalizeSyncStatus(value: any) {
   return stringOrEmpty(value).toLowerCase() === "removed" ? "removed" : "active";
 }
@@ -1731,6 +1743,7 @@ function normalizeNpdRowForItemConsumers(row: any) {
     production,
     invoiced,
     balance,
+    consumable: normalizeConsumableValue(row?.consumable),
     syncStatus,
   };
 }

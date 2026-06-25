@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Download } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
@@ -14,6 +14,11 @@ type NpdRecord = {
   [key: string]: string | number | boolean | null | undefined;
 };
 
+type RowSaveState = {
+  status: "saving" | "success" | "error";
+  message: string;
+};
+
 function getHeaderLines(label: string) {
   const words = String(label || "").split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -21,6 +26,16 @@ function getHeaderLines(label: string) {
     lines.push(words.slice(i, i + 2).join(" "));
   }
   return lines;
+}
+
+function isConsumableValue(value: NpdRecord[string]) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  return new Set(["1", "true", "yes", "y", "on"]).has(normalized);
 }
 
 function formatCellValue(value: NpdRecord[string]) {
@@ -45,9 +60,17 @@ export function NpdMaster() {
   const [searchTerm, setSearchTerm] = useState("");
   const [pageSize, setPageSize] = useState(100);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [consumableDrafts, setConsumableDrafts] = useState<Record<string, boolean>>({});
+  const [savingRowIds, setSavingRowIds] = useState<Record<string, boolean>>({});
+  const [rowSaveStates, setRowSaveStates] = useState<Record<string, RowSaveState>>({});
   const [phpRows] = useData<any>("php_item_master", []);
   const [plateRows] = useData<any>("plate_item_master", []);
   const [settings] = useData<Setting>("settings", []);
+
+  const tableColumns = useMemo(
+    () => [...NPD_COLUMNS, { key: "consumable", label: "Consumable" }],
+    []
+  );
 
   const phpItems = useMemo(
     () => phpRows.map((row) => normalizeOrderCatalogItem(row, "PHP")).filter(Boolean),
@@ -56,6 +79,52 @@ export function NpdMaster() {
   const plateItems = useMemo(
     () => plateRows.map((row) => normalizeOrderCatalogItem(row, "PLATE")).filter(Boolean),
     [plateRows]
+  );
+
+  const loadRows = useCallback(
+    async (showLoader = true, customSearchTerm = searchTerm) => {
+      try {
+        if (showLoader) setLoading(true);
+
+        const token = window.localStorage.getItem("authToken") || "";
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(pageSize),
+        });
+        if (customSearchTerm) params.set("search", customSearchTerm);
+        params.set("status", "all");
+
+        const response = await fetch(`/api/npd?${params.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch NPD rows.");
+        }
+        const result = await response.json();
+        const nextRows = Array.isArray(result.rows) ? result.rows : [];
+
+        setRows(nextRows);
+        setTotal(Number(result.total || 0));
+        setConsumableDrafts((previous) => {
+          const next = { ...previous };
+          for (const row of nextRows) {
+            if (row?.id) {
+              next[String(row.id)] = isConsumableValue(row.consumable);
+            }
+          }
+          return next;
+        });
+      } catch (error) {
+        console.error("Failed to fetch NPD rows:", error);
+        if (showLoader || !page) {
+          setRows([]);
+          setTotal(0);
+        }
+      } finally {
+        if (showLoader) setLoading(false);
+      }
+    },
+    [page, pageSize, searchTerm]
   );
 
   useEffect(() => {
@@ -67,72 +136,11 @@ export function NpdMaster() {
   }, [searchInput]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchRows = async () => {
-      try {
-        setLoading(true);
-        const token = window.localStorage.getItem("authToken") || "";
-        const params = new URLSearchParams({
-          page: String(page),
-          pageSize: String(pageSize),
-        });
-        if (searchTerm) params.set("search", searchTerm);
-        params.set("status", "all");
-
-        const response = await fetch(`/api/npd?${params.toString()}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!response.ok) {
-          throw new Error("Failed to fetch NPD rows.");
-        }
-        const result = await response.json();
-        if (cancelled) return;
-        setRows(Array.isArray(result.rows) ? result.rows : []);
-        setTotal(Number(result.total || 0));
-      } catch (error) {
-        if (cancelled) return;
-        console.error("Failed to fetch NPD rows:", error);
-        setRows([]);
-        setTotal(0);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    fetchRows();
-    return () => {
-      cancelled = true;
-    };
-  }, [page, pageSize, searchTerm]);
+    void loadRows();
+  }, [loadRows]);
 
   useAutoRefreshEffect(() => {
-    setLoading(true);
-    const token = window.localStorage.getItem("authToken") || "";
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
-    });
-    if (searchTerm) params.set("search", searchTerm);
-    params.set("status", "all");
-
-    void fetch(`/api/npd?${params.toString()}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error("Failed to fetch NPD rows.");
-        return response.json();
-      })
-      .then((result) => {
-        setRows(Array.isArray(result.rows) ? result.rows : []);
-        setTotal(Number(result.total || 0));
-      })
-      .catch((error) => {
-        console.error("Failed to auto-refresh NPD rows:", error);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    void loadRows(false, searchTerm);
   });
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -162,6 +170,65 @@ export function NpdMaster() {
       alert("Failed to download NPD card. Please check console for details.");
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const setConsumableDraft = (id: string, value: boolean) => {
+    setConsumableDrafts((prev) => ({ ...prev, [id]: value }));
+    setRowSaveStates((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      if (next[id]?.status !== "saving") delete next[id];
+      return next;
+    });
+  };
+
+  const handleUpdateConsumable = async (row: NpdRecord) => {
+    const id = String(row.id || "").trim();
+    if (!id) return;
+
+    const payload = {
+      ...row,
+      consumable: isConsumableValue(consumableDrafts[id])
+    };
+
+    setSavingRowIds((prev) => ({ ...prev, [id]: true }));
+    setRowSaveStates((prev) => ({ ...prev, [id]: { status: "saving", message: "Saving..." } }));
+
+    try {
+      const token = window.localStorage.getItem("authToken") || "";
+      const response = await fetch("/api/npd", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to save consumable state.");
+      }
+
+      setRowSaveStates((prev) => ({ ...prev, [id]: { status: "success", message: "Saved" } }));
+      await loadRows(false);
+      setTimeout(() => {
+        setRowSaveStates((current) => {
+          if (current[id]?.status !== "success") return current;
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to save NPD consumable:", error);
+      setRowSaveStates((prev) => ({ ...prev, [id]: { status: "error", message: (error as Error).message || "Failed" } }));
+    } finally {
+      setSavingRowIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   };
 
@@ -236,7 +303,7 @@ export function NpdMaster() {
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black sticky top-0 z-10">
               <tr className="divide-x divide-black">
-                {NPD_COLUMNS.map((column) => (
+                {tableColumns.map((column) => (
                   <th key={column.key} className="border border-black px-3 py-3 text-left text-xs font-bold uppercase text-black align-top min-w-[92px] max-w-[180px] whitespace-normal break-words">
                     <span className="block leading-4">
                       {getHeaderLines(column.label).map((line, index) => (
@@ -247,7 +314,7 @@ export function NpdMaster() {
                     </span>
                   </th>
                 ))}
-                <th className="border border-black px-3 py-3 text-left text-xs font-bold uppercase text-black align-top min-w-[120px] whitespace-nowrap">
+                <th className="border border-black px-3 py-3 text-left text-xs font-bold uppercase text-black align-top min-w-[180px] whitespace-nowrap">
                   Action
                 </th>
               </tr>
@@ -255,7 +322,7 @@ export function NpdMaster() {
             <tbody className="divide-y divide-black bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={NPD_COLUMNS.length + 1} className="px-6 py-12">
+                  <td colSpan={tableColumns.length + 1} className="px-6 py-12">
                     <div className="flex items-center justify-center gap-3 text-black">
                       <Spinner size={28} />
                       <span className="font-semibold">Loading NPD items...</span>
@@ -264,59 +331,100 @@ export function NpdMaster() {
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={NPD_COLUMNS.length + 1} className="px-6 py-8 text-center font-medium italic text-black">
+                  <td colSpan={tableColumns.length + 1} className="px-6 py-8 text-center font-medium italic text-black">
                     No NPD records found.
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => (
-                  <tr key={row.id} className="divide-x divide-black transition-colors hover:bg-slate-50">
-                    {NPD_COLUMNS.map((column) => {
-                      const isWrappedText = column.key === "itemName" || column.key === "customerName";
-                      const rawValue =
-                        column.key === "stockValue"
-                          ? formatStockValue(row.rate, row.balance)
-                          : row[column.key];
-                      return (
-                        <td
-                          key={column.key}
-                          className={`border border-black px-3 py-3 text-sm text-black align-top ${
-                            isWrappedText
-                              ? "whitespace-normal break-words min-w-[240px] max-w-[320px]"
-                              : "whitespace-nowrap"
-                          }`}
-                        >
-                          {column.key === "url" ? (
-                            rawValue ? (
-                              <button
-                                type="button"
-                                onClick={() => window.open(String(rawValue), "_blank", "noopener,noreferrer")}
-                                className="rounded bg-indigo-600 px-3 py-1 font-bold text-white hover:bg-indigo-700"
-                              >
-                                Open
-                              </button>
+                rows.map((row) => {
+                  const hasConsumableChanges = isConsumableValue(consumableDrafts[row.id]) !== isConsumableValue(row.consumable);
+                  const isSaving = Boolean(savingRowIds[row.id]);
+                  const rowState = rowSaveStates[row.id];
+
+                  return (
+                    <tr key={row.id} className="divide-x divide-black transition-colors hover:bg-slate-50">
+                      {tableColumns.map((column) => {
+                        const isWrappedText = column.key === "itemName" || column.key === "customerName";
+                        const rawValue =
+                          column.key === "stockValue"
+                            ? formatStockValue(row.rate, row.balance)
+                            : column.key === "consumable"
+                              ? isConsumableValue(consumableDrafts[row.id])
+                              : row[column.key];
+
+                        return (
+                          <td
+                            key={column.key}
+                            className={`border border-black px-3 py-3 text-sm text-black align-top ${
+                              isWrappedText
+                                ? "whitespace-normal break-words min-w-[240px] max-w-[320px]"
+                                : "whitespace-nowrap"
+                            }`}
+                          >
+                            {column.key === "consumable" ? (
+                              <label className="inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(rawValue)}
+                                  onChange={(event) => setConsumableDraft(row.id, event.target.checked)}
+                                />
+                                <span className="text-xs font-bold">{Boolean(rawValue) ? "Yes" : "No"}</span>
+                              </label>
+                            ) : column.key === "url" ? (
+                              rawValue ? (
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(String(rawValue), "_blank", "noopener,noreferrer")}
+                                  className="rounded bg-indigo-600 px-3 py-1 font-bold text-white hover:bg-indigo-700"
+                                >
+                                  Open
+                                </button>
+                              ) : (
+                                "-"
+                              )
                             ) : (
-                              "-"
-                            )
-                          ) : (
-                            formatCellValue(rawValue)
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="border border-black px-3 py-3 text-sm text-black align-top">
-                      <button
-                        type="button"
-                        onClick={() => void handleDownloadCard(row)}
-                        disabled={downloadingId === row.id}
-                        className="inline-flex items-center gap-2 rounded border border-black bg-white px-3 py-2 text-xs font-bold uppercase hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {downloadingId === row.id ? <Spinner size={14} /> : <Download size={14} />}
-                        Download Card
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                              formatCellValue(rawValue)
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="border border-black px-3 py-3 text-sm text-black align-top">
+                        <div className="flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleDownloadCard(row)}
+                            disabled={downloadingId === row.id}
+                            className="inline-flex items-center gap-2 rounded border border-black bg-white px-3 py-2 text-xs font-bold uppercase hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {downloadingId === row.id ? <Spinner size={14} /> : <Download size={14} />}
+                            Download Card
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleUpdateConsumable(row)}
+                            disabled={isSaving || !hasConsumableChanges}
+                            className="rounded border border-black bg-black px-3 py-2 text-xs font-bold uppercase text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isSaving ? <Spinner size={12} /> : "Update"}
+                          </button>
+                          {rowState ? (
+                            <span
+                              className={`text-[11px] font-bold ${
+                                rowState.status === "success"
+                                  ? "text-green-700"
+                                  : rowState.status === "error"
+                                    ? "text-red-700"
+                                    : "text-slate-500"
+                              }`}
+                            >
+                              {rowState.message}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

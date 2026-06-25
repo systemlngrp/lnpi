@@ -51,6 +51,7 @@ export interface Item {
   uom: string;
   erp?: number;
   itemType?: "FG" | "Reel" | "Others";
+  consumable?: boolean | string | number | null;
   typeName?: string;
   customer?: string;
   openLength?: number;
@@ -911,3 +912,4 @@ export interface OperationDashboardSummary {
   comparisonLabel: string;
   groups: OperationDashboardMetricGroup[];
 }
+
