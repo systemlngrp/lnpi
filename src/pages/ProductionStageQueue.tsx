@@ -631,7 +631,7 @@ export function ProductionStageQueue({
                           const prereqMissing = !!issuePrereqMachineName && !(prereqQty > 0);
 
                           const bypassControls = (
-                            <div className="flex flex-wrap items-center gap-2 whitespace-normal">
+                            <div className="flex items-center gap-2 whitespace-nowrap">
                               <label className="inline-flex items-center gap-2 text-[11px] font-black uppercase text-slate-700">
                                 <input
                                   type="checkbox"
@@ -671,7 +671,7 @@ export function ProductionStageQueue({
 
                           if (prereqMissing) {
                             return (
-                              <div className="flex flex-wrap items-center gap-2 whitespace-normal">
+                              <div className="flex items-center gap-2 whitespace-nowrap">
                                 <button
                                   type="button"
                                   disabled
@@ -686,7 +686,7 @@ export function ProductionStageQueue({
                           }
 
                           return (
-                            <div className="flex flex-wrap items-center gap-2 whitespace-normal">
+                            <div className="flex items-center gap-2 whitespace-nowrap">
                               {!requiresLiner || linerDone ? (
                                 <button
                                   type="button"
