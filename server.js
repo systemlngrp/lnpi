@@ -415,6 +415,11 @@ const COMPANY_SCHEMA_COLUMNS = [
   { column: "gstType", type: "VARCHAR(100)" },
   { column: "panNo", type: "VARCHAR(100)" }
 ];
+const AUDIT_COLUMN_DEFINITIONS = [
+  { column: "updatedBy", type: "VARCHAR(255) NULL" },
+  { column: "updateTimestamp", type: "VARCHAR(255) NULL" }
+];
+const DEFAULT_SYSTEM_AUDIT_USER = "System User";
 function base64UrlEncode(input) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
   return buf.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
@@ -1703,6 +1708,33 @@ async function ensureCompaniesSchemaColumns(db, database) {
   for (const { column, type } of COMPANY_SCHEMA_COLUMNS) {
     await ensureColumnExists(db, database, "companies", column, type);
   }
+}
+async function ensureAuditColumnsForAllTables(db, database) {
+  const [rows] = await db.query(
+    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
+    [database]
+  );
+  for (const row of rows) {
+    const tableName = String(row.TABLE_NAME || "").trim();
+    if (!tableName) continue;
+    for (const { column, type } of AUDIT_COLUMN_DEFINITIONS) {
+      await ensureColumnExists(db, database, tableName, column, type);
+    }
+  }
+}
+function resolveAuditActorName(user, fallback = DEFAULT_SYSTEM_AUDIT_USER) {
+  const userId = String(user?.userId || "").trim();
+  if (userId) return userId;
+  const name = String(user?.name || "").trim();
+  if (name) return name;
+  return fallback;
+}
+function applyAuditFields(record, user, fallback = DEFAULT_SYSTEM_AUDIT_USER) {
+  return {
+    ...record,
+    updatedBy: resolveAuditActorName(user, fallback),
+    updateTimestamp: (/* @__PURE__ */ new Date()).toISOString()
+  };
 }
 async function ensureGatePassNullableColumns(db, database) {
   const nullableColumns = [
@@ -4136,6 +4168,7 @@ async function initDb(retries = 5) {
       }
       try {
         await ensureCompaniesSchemaColumns(db, database);
+        await ensureAuditColumnsForAllTables(db, database);
       } catch (err) {
         console.warn("[DB] Could not ensure companies schema columns:", err.message);
       }
@@ -4268,7 +4301,11 @@ const createHandlers = (tableName) => {
     upsert: async (req, res) => {
       const db = await getPool();
       if (!db) return res.status(500).json({ error: "DB connection not available" });
-      const data = normalizeNpdLinkedPayload(tableName, normalizeWorkflowStatus(tableName, req.body));
+      const requestUser = await getRequestUser(req);
+      const data = applyAuditFields(
+        normalizeNpdLinkedPayload(tableName, normalizeWorkflowStatus(tableName, req.body)),
+        requestUser
+      );
       try {
         if (tableName === "items") {
           delete data.receipt;
@@ -5029,6 +5066,9 @@ app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
 app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
+  const requestUser = await getRequestUser(req);
+  const auditActor = resolveAuditActorName(requestUser);
+  const auditTimestamp = (/* @__PURE__ */ new Date()).toISOString();
   const { poDate, remarks, lines } = req.body || {};
   if (!Array.isArray(lines) || lines.length === 0) {
     return res.status(400).json({ error: "No lines provided." });
@@ -5134,19 +5174,19 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
       }
       await conn.query(
         "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [purchaseOrderId, poNo, null, supplierId, dateStr, dateStr, totalQty, totalAmount, String(remarks || "").trim(), "Pending Approval", "System User", (/* @__PURE__ */ new Date()).toISOString()]
+        [purchaseOrderId, poNo, null, supplierId, dateStr, dateStr, totalQty, totalAmount, String(remarks || "").trim(), "Pending Approval", auditActor, auditTimestamp]
       );
       for (const line of poLinesToInsert) {
         await conn.query(
           "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, "System User", (/* @__PURE__ */ new Date()).toISOString()]
+          [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, auditActor, auditTimestamp]
         );
       }
       created.push({ supplierId, poNo, purchaseOrderId });
     }
     const indentIdsToCheck = /* @__PURE__ */ new Set();
     for (const [indentLineId, addQty] of indentLinesToUpdate.entries()) {
-      await conn.query("UPDATE `indent_lines` SET `orderedQty` = `orderedQty` + ?, `updateTimestamp` = ? WHERE id = ?", [addQty, (/* @__PURE__ */ new Date()).toISOString(), indentLineId]);
+      await conn.query("UPDATE `indent_lines` SET `orderedQty` = `orderedQty` + ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?", [addQty, auditActor, auditTimestamp, indentLineId]);
       const row = byId.get(indentLineId);
       if (row?.indentId) indentIdsToCheck.add(String(row.indentId));
     }
@@ -5155,8 +5195,8 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
       const allDone = linesRows.every((l) => Number(l.qty) <= Number(l.orderedQty) + Number(l.cancelledQty));
       if (allDone) {
         await conn.query(
-          "UPDATE `indents` SET `status` = 'Completed', `completedBy` = 'System User', `completedTimestamp` = ?, `updateTimestamp` = ? WHERE id = ?",
-          [(/* @__PURE__ */ new Date()).toISOString(), (/* @__PURE__ */ new Date()).toISOString(), indentId]
+          "UPDATE `indents` SET `status` = 'Completed', `completedBy` = ?, `completedTimestamp` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+          [auditActor, auditTimestamp, auditActor, auditTimestamp, indentId]
         );
       }
     }
@@ -5176,6 +5216,9 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
 app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
+  const requestUser = await getRequestUser(req);
+  const auditActor = resolveAuditActorName(requestUser);
+  const auditTimestamp = (/* @__PURE__ */ new Date()).toISOString();
   const { supplierId, poDate, requiredDate, remarks, items } = req.body;
   const conn = await db.getConnection();
   try {
@@ -5252,17 +5295,17 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
     if (poLines.length === 0) throw new Error("No quantities allocated to indent lines.");
     await conn.query(
       "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [purchaseOrderId, poNo, null, supplierId, poDate, requiredDate || poDate, totalQty, totalAmount, remarks, "Pending Approval", "System User", (/* @__PURE__ */ new Date()).toISOString()]
+      [purchaseOrderId, poNo, null, supplierId, poDate, requiredDate || poDate, totalQty, totalAmount, remarks, "Pending Approval", auditActor, auditTimestamp]
     );
     for (const line of poLines) {
       await conn.query(
         "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, "System User", (/* @__PURE__ */ new Date()).toISOString()]
+        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, auditActor, auditTimestamp]
       );
     }
     const indentIdsToCheck = /* @__PURE__ */ new Set();
     for (const [id, addQty] of indentLinesToUpdate.entries()) {
-      await conn.query("UPDATE `indent_lines` SET `orderedQty` = `orderedQty` + ?, `updateTimestamp` = ? WHERE id = ?", [addQty, (/* @__PURE__ */ new Date()).toISOString(), id]);
+      await conn.query("UPDATE `indent_lines` SET `orderedQty` = `orderedQty` + ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?", [addQty, auditActor, auditTimestamp, id]);
       const [ilRows] = await conn.query("SELECT indentId FROM `indent_lines` WHERE id = ?", [id]);
       if (ilRows.length) indentIdsToCheck.add(ilRows[0].indentId);
     }
@@ -5270,7 +5313,7 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
       const [lines] = await conn.query("SELECT qty, cancelledQty, orderedQty FROM `indent_lines` WHERE indentId = ?", [indentId]);
       const allDone = lines.every((l) => Number(l.qty) <= Number(l.orderedQty) + Number(l.cancelledQty));
       if (allDone) {
-        await conn.query("UPDATE `indents` SET `status` = 'Completed', `completedBy` = 'System User', `completedTimestamp` = ?, `updateTimestamp` = ? WHERE id = ?", [(/* @__PURE__ */ new Date()).toISOString(), (/* @__PURE__ */ new Date()).toISOString(), indentId]);
+        await conn.query("UPDATE `indents` SET `status` = 'Completed', `completedBy` = ?, `completedTimestamp` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?", [auditActor, auditTimestamp, auditActor, auditTimestamp, indentId]);
       }
     }
     await conn.commit();

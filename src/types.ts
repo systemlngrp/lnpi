@@ -805,6 +805,8 @@ export interface InvoiceLineItem {
   cgst: number;
   sgst: number;
   igst: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
 }
 
 export interface GatePassLine {
