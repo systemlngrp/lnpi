@@ -15,6 +15,7 @@ export function PlateItemMaster() {
       title="Plate Item Master"
       entity="plate_item_master"
       columns={PLATE_ITEM_MASTER_COLUMNS}
+      editableColumns={["openingQty"]}
       rowsOverride={buildPhpPlateInventoryRows(rows, jobs, [...standaloneLoadingSlips, ...commonLoadingSlips], "PLATE")}
       filters={[
         { key: "company", label: "Company" },

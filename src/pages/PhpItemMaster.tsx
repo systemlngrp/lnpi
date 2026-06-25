@@ -15,6 +15,7 @@ export function PhpItemMaster() {
       title="PHP Item Master"
       entity="php_item_master"
       columns={PHP_ITEM_MASTER_COLUMNS}
+      editableColumns={["openingQty"]}
       rowsOverride={buildPhpPlateInventoryRows(rows, jobs, [...standaloneLoadingSlips, ...commonLoadingSlips], "PHP")}
       filters={[
         { key: "company", label: "Company" },
