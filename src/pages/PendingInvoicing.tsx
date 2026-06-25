@@ -68,7 +68,7 @@ export function PendingInvoicing() {
   const [loadingSlips, , , loadingSlipApi] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem } = useOrderItemCatalog();
+  const { resolveOrderItem, findItemAcrossSources } = useOrderItemCatalog();
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const [invoices, , , invoiceApi] = useData<Invoice>("invoices", []);
@@ -149,6 +149,37 @@ export function PendingInvoicing() {
     setExpandedCompanies(next);
   };
 
+  const getMeaningfulItemName = (value: unknown) => {
+    const normalized = String(value || "").trim();
+    if (!normalized) return "";
+    const lower = normalized.toLowerCase();
+    if (lower === "unknown" || lower === "item") return "";
+    return normalized;
+  };
+
+  const resolveSlipLineItem = (line: LoadingSlip["lines"][number], order?: Order) => {
+    const itemSource = normalizeOrderItemSource(line.itemSource || order?.itemSource || "FG");
+    const directItemId = String(line.itemId || order?.itemId || "").trim();
+    const directErp = String(line.erpCode || line.masterErp || order?.erpCode || "").trim();
+
+    return (
+      findItemAcrossSources(directItemId, itemSource, directErp) ||
+      resolveOrderItem(order) ||
+      undefined
+    );
+  };
+
+  const resolveSlipLineItemName = (line: LoadingSlip["lines"][number], order?: Order) => {
+    const resolvedItem = resolveSlipLineItem(line, order);
+    return (
+      getMeaningfulItemName(resolvedItem?.name) ||
+      getMeaningfulItemName(line.itemName) ||
+      getMeaningfulItemName(line.erpCode) ||
+      getMeaningfulItemName(line.masterErp) ||
+      "Unknown"
+    );
+  };
+
   const buildInvoiceRowsFromSlips = (selected: any[]) => {
     const itemMap = new Map<string, InvoiceItemRow>();
     const itemOrderQtyMap = new Map<string, Map<string, number>>();
@@ -158,14 +189,14 @@ export function PendingInvoicing() {
         const plan = plans.find((p) => p.id === line.dispatchPlanId);
         const order = orders.find((o) => o.id === plan?.orderId);
         const itemSource = normalizeOrderItemSource(line.itemSource || order?.itemSource || "FG");
-        const item = resolveOrderItem(order) || (line.itemId ? resolveOrderItem({ itemId: line.itemId, itemSource } as any) : undefined);
-        const itemId = String(order?.itemId || line.itemId || item?.id || "").trim();
+        const item = resolveSlipLineItem(line, order);
+        const itemId = String(line.itemId || order?.itemId || item?.id || "").trim();
         if (!itemId) return;
 
         const qty = Number(line.loadedQty || 0);
         const gstRate = Number(line.gstRate ?? item?.gstRate ?? 18);
         const rate = Number(line.rate ?? item?.rate ?? order?.rate ?? 0);
-        const itemName = String(line.itemName || item?.name || "Item").trim() || "Item";
+        const itemName = resolveSlipLineItemName(line, order);
         const itemKey = `${itemSource}::${itemId}`;
         const existing = itemMap.get(itemKey);
 
@@ -275,7 +306,7 @@ export function PendingInvoicing() {
       const slipItems = s.lines.map(l => {
         const lp = plans.find(p => p.id === l.dispatchPlanId);
         const lo = orders.find(o => o.id === lp?.orderId);
-        return resolveOrderItem(lo)?.name || l.itemName || "Unknown";
+        return resolveSlipLineItemName(l, lo);
       });
 
       companyMap.get(groupId)!.slips.push({
@@ -288,7 +319,7 @@ export function PendingInvoicing() {
     return Array.from(companyMap.values())
       .filter(g => g.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
       .sort((a, b) => a.companyName.localeCompare(b.companyName));
-  }, [loadingSlips, companies, plans, orders, npdItems, searchTerm]);
+  }, [loadingSlips, companies, plans, orders, npdItems, searchTerm, findItemAcrossSources, resolveOrderItem]);
 
   useEffect(() => {
     if (didInitExpand.current) return;
