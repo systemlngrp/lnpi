@@ -21,7 +21,11 @@ import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { getAvailableReelPackingSlips, getReturnableReelLinesForJob } from "../lib/materialMovement";
-import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  syncProductionWorkflowFromUsage,
+} from "../lib/productionMaterialUsage";
 
 type ReelLineDraft = {
   id: string;
@@ -562,10 +566,18 @@ export function ReelIssueReturnForm() {
           nextMaterialIssueReelLines,
           nextMaterialReturnReelLines
         );
+        const corrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+          materials,
+          nextMaterialIssues,
+          nextMaterialIssueLines,
+          nextMaterialReturns,
+          nextMaterialReturnLines
+        );
         const netUsage = usageMap.get(productionId) || 0;
+        const hasCorrugatedSheetUsage = Number(corrugatedSheetUsageMap.get(productionId) || 0) > 0;
         await setProductions((prev) =>
           prev.map((production) =>
-            production.id === productionId ? syncProductionWorkflowFromUsage(production, netUsage, timestamp) : production
+            production.id === productionId ? syncProductionWorkflowFromUsage(production, netUsage, timestamp, hasCorrugatedSheetUsage) : production
           )
         );
       }
@@ -910,3 +922,4 @@ function Field({
     </div>
   );
 }
+

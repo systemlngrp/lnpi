@@ -20,7 +20,12 @@ import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { getAvailableReelPackingSlips, getNonReelAvailableQty } from "../lib/materialMovement";
-import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  isCorrugatedSheetMaterial,
+  syncProductionWorkflowFromUsage,
+} from "../lib/productionMaterialUsage";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean; isNpdConsumableItem?: boolean; npdSourceId?: string };
@@ -76,6 +81,8 @@ export function MaterialIssueForm() {
   const lockDate = searchParams.get("lockDate") === "1";
   const lockIssueType = searchParams.get("lockIssueType") === "1";
   const requestedIssueTypeRaw = String(searchParams.get("issueType") || "").trim();
+  const materialFilter = String(searchParams.get("materialFilter") || "").trim().toLowerCase();
+  const isCorrugatedSheetOnly = materialFilter === "corrugated-sheet";
 
   const [date, setDate] = useState(() => requestedDate || new Date().toISOString().split("T")[0]);
   const requestedProductionId = searchParams.get("productionId") || "";
@@ -198,12 +205,13 @@ export function MaterialIssueForm() {
       issueMaterials
         .filter((material) => material.active !== "No")
         .filter((material) => (isWithoutJobIssue(issueType) ? material.type !== "Reel" : true))
+        .filter((material) => !isCorrugatedSheetOnly || (material.type !== "Reel" && isCorrugatedSheetMaterial(material)))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((material) => ({
           value: material.id,
           label: `${material.name}${material.erpCode ? ` (${material.erpCode})` : ""}`,
         })),
-    [issueMaterials, issueType]
+    [isCorrugatedSheetOnly, issueMaterials, issueType]
   );
 
   const issueTypeOptions = [
@@ -396,11 +404,19 @@ export function MaterialIssueForm() {
           [...materialIssueReelLines, ...nextReelLines],
           materialReturnReelLines
         );
+        const corrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+          materials,
+          nextMaterialIssues,
+          nextIssueLines,
+          materialReturns,
+          materialReturnLines
+        );
         const netUsage = usageMap.get(productionId) || 0;
+        const hasCorrugatedSheetUsage = Number(corrugatedSheetUsageMap.get(productionId) || 0) > 0;
         await setProductions((prev) =>
           prev.map((production) =>
             production.id === productionId
-              ? syncProductionWorkflowFromUsage(production, netUsage, timestamp)
+              ? syncProductionWorkflowFromUsage(production, netUsage, timestamp, hasCorrugatedSheetUsage)
               : production
           )
         );
@@ -514,7 +530,7 @@ export function MaterialIssueForm() {
           <div className="flex flex-wrap gap-4 items-end bg-slate-50 p-4 rounded border border-black">
             <div className="w-full md:w-80 space-y-1">
               <label className="text-sm font-bold">Material</label>
-              <Select options={materialOptions} value={currentMaterialId} onChange={setCurrentMaterialId} placeholder="Select Material..." />
+              <Select options={materialOptions} value={currentMaterialId} onChange={setCurrentMaterialId} placeholder={isCorrugatedSheetOnly ? "Select Corrugated Sheet..." : "Select Material..."} />
             </div>
             {currentMaterialId && getMaterial(currentMaterialId)?.type !== "Reel" ? (
               <div className="w-full md:w-24 space-y-1">
@@ -652,3 +668,4 @@ function Field({ label, children, required = false, className = "" }: { label: s
     </div>
   );
 }
+

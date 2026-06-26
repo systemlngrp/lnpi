@@ -20,7 +20,12 @@ import type {
   Production,
   ProductionProcessing,
 } from "../types";
-import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "./productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  getProductionActualPaperUsed,
+  hasProductionCorrugatedSheetUsage,
+} from "./productionMaterialUsage";
 import { PROCESSING_MACHINE_COLUMNS } from "./productionProcessingSummary";
 import { isProductionReadyForTally } from "./productionStageFilters";
 import { getAvailableReelPackingSlips } from "./materialMovement";
@@ -405,6 +410,13 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
     args.issueReelLines,
     args.returnReelLines
   );
+  const corrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+    args.materials,
+    filteredMaterialIssues,
+    args.materialIssueLines,
+    filteredMaterialReturns,
+    args.materialReturnLines
+  );
 
   const totalProduction = sumProductionQty(filteredProductions);
   const previousProduction = sumProductionQty(previousProductions);
@@ -438,7 +450,7 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const activeJobs = filteredProductions.filter((row) => row.status !== "Cancelled" && !row.cancelTimestamp).length;
   const cancelledJobs = filteredProductions.filter((row) => row.status === "Cancelled" || !!row.cancelTimestamp).length;
   const pendingTallyJobs = filteredProductions.filter((row) =>
-    isProductionReadyForTally(row, getProductionActualPaperUsed(row, usageMap))
+    isProductionReadyForTally(row, getProductionActualPaperUsed(row, usageMap), hasProductionCorrugatedSheetUsage(row, corrugatedSheetUsageMap))
   ).length;
   const pendingConsumptionJobs = filteredProductions.filter((row) => row.status === "Pending Consumption").length;
   const wipQty = Math.max(0, totalProduction - loadingSlipQty);
@@ -484,3 +496,4 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
     groups,
   };
 }
+

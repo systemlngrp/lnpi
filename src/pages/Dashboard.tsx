@@ -34,7 +34,12 @@ import {
 } from "../types";
 import { cn, formatDate, formatNumber } from "../lib/utils";
 import { isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
-import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  getProductionActualPaperUsed,
+  hasProductionCorrugatedSheetUsage,
+} from "../lib/productionMaterialUsage";
 
 type Range = {
   from: string;
@@ -158,6 +163,13 @@ export function Dashboard() {
     materialIssueReelLines,
     materialReturnReelLines
   );
+  const productionCorrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+    materials,
+    filteredMaterialIssues,
+    materialIssueLines,
+    filteredMaterialReturns,
+    materialReturnLines
+  );
   const yesterdayDate = (() => {
     const date = parseAppDate(today);
     if (!date) return today;
@@ -181,7 +193,7 @@ export function Dashboard() {
   const pendingMD = filteredMaterialIn.filter((entry) => entry.status === "Pending MD").length;
 
   const tallyMatIn = filteredMaterialIn.filter((entry) => entry.status === "Pending Tally").length;
-  const tallyProd = filteredProductions.filter((entry) => isProductionReadyForTally(entry, getProductionActualPaperUsed(entry, productionUsageMap))).length;
+  const tallyProd = filteredProductions.filter((entry) => isProductionReadyForTally(entry, getProductionActualPaperUsed(entry, productionUsageMap), hasProductionCorrugatedSheetUsage(entry, productionCorrugatedSheetUsageMap))).length;
   const pendingDispatchPlanning = schedules.filter((s) => {
     if (!s?.scheduledDate) return false;
     const todayDate = parseAppDate(today);
@@ -667,3 +679,4 @@ function RankList({
     </div>
   );
 }
+

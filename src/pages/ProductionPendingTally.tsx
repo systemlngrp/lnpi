@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useData } from "../hooks/useData";
 import {
+  Material,
   MaterialIssue,
   MaterialIssueLine,
   MaterialIssueReelLine,
@@ -15,12 +16,18 @@ import { CheckCircle, Search } from "lucide-react";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { cn } from "../lib/utils";
-import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  getProductionActualPaperUsed,
+  hasProductionCorrugatedSheetUsage,
+} from "../lib/productionMaterialUsage";
 import { isProductionReadyForTally } from "../lib/productionStageFilters";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 export function ProductionPendingTally() {
   const [productions, setProductions] = useData<Production>("productions", []);
+  const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
@@ -38,6 +45,13 @@ export function ProductionPendingTally() {
     materialReturnLines,
     materialIssueReelLines,
     materialReturnReelLines
+  );
+  const corrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+    materials,
+    materialIssues,
+    materialIssueLines,
+    materialReturns,
+    materialReturnLines
   );
 
   const handleComplete = (id: string) => {
@@ -65,7 +79,7 @@ export function ProductionPendingTally() {
 
   const pendingList = productions
     .filter(p => 
-      isProductionReadyForTally(p, getProductionActualPaperUsed(p, usageMap)) && (
+      isProductionReadyForTally(p, getProductionActualPaperUsed(p, usageMap), hasProductionCorrugatedSheetUsage(p, corrugatedSheetUsageMap)) && (
         p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (npdItems.find(i => i.id === p.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
       )
@@ -182,3 +196,4 @@ export function ProductionPendingTally() {
     </div>
   );
 }
+

@@ -28,6 +28,7 @@ import { useNpdItems } from "../hooks/useNpdItems";
 import { useAuth } from "../auth/AuthContext";
 import {
   MaterialIn,
+  Material,
   Production,
   Order,
   Consumption,
@@ -50,7 +51,12 @@ import {
 import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { withIndentTotals } from "../lib/indentTotals";
-import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  getProductionActualPaperUsed,
+  hasProductionCorrugatedSheetUsage,
+} from "../lib/productionMaterialUsage";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
 
 interface SidebarProps {
@@ -316,6 +322,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
+  const [materials] = useData<Material>("materials", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
   const [consumptions] = useData<Consumption>("consumptions", []);
@@ -345,6 +352,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     materialReturnLines,
     materialIssueReelLines,
     materialReturnReelLines
+  );
+  const productionCorrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+    materials,
+    materialIssues,
+    materialIssueLines,
+    materialReturns,
+    materialReturnLines
   );
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
@@ -454,9 +468,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       const rapcValue = String((item as any)?.rapc ?? "").trim();
       return !boxType && !rapcValue;
     }).length,
-    "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
-    "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
-    "/production/pending-tally": productions.filter((p) => isProductionReadyForTally(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
+    "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
+    "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
+    "/production/pending-tally": productions.filter((p) => isProductionReadyForTally(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
     "/production/pending-job-closure": pendingJobClosureCount,
     "/indent/pending": normalizedIndents.filter(i => i.status === "Pending").length,
     "/indent/approved": normalizedIndents.filter(i => i.status === "Approved").length,
