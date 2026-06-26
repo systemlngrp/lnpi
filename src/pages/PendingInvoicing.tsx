@@ -556,6 +556,10 @@ export function PendingInvoicing() {
     if (!invoiceModal || isSubmitting) return;
     const company = companies.find(c => c.id === invoiceModal.companyId);
     if (!company) return;
+    if (!destination.trim()) {
+      alert("Please enter Destination.");
+      return;
+    }
     if (shouldShowTransporter && !transporter.trim()) {
       alert("Please enter Transporter when Truck No is Other.");
       return;
@@ -927,12 +931,13 @@ export function PendingInvoicing() {
             <div className="p-6 space-y-6 overflow-y-auto flex-1">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Destination</label>
+                  <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Destination <span className="text-rose-600">*</span></label>
                   <input
                     type="text"
                     value={destination}
                     onChange={(e) => setDestination(e.target.value)}
                     placeholder="Enter destination"
+                    required
                     className="w-full rounded border-2 border-black px-3 py-2 text-sm font-medium"
                   />
                 </div>
