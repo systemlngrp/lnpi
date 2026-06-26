@@ -454,6 +454,10 @@ export function MaterialInForm() {
 
   const syncReelLineTotals = (lineId: string, nextDrafts: PackingSlipDraft[]) => {
     const totalWeight = nextDrafts.reduce((sum, slip) => sum + Number(slip.weightKg || 0), 0);
+    const uniquePoLineIds = Array.from(new Set(nextDrafts.map((slip) => String(slip.ourPoId || "").trim()).filter(Boolean)));
+    const resolvedPoLine = uniquePoLineIds.length === 1 ? getPurchaseOrderLine(uniquePoLineIds[0]) : undefined;
+    const resolvedPo = resolvedPoLine ? getPurchaseOrder(resolvedPoLine.purchaseOrderId) : undefined;
+
     setLines((prev) =>
       prev.map((line) =>
         line.id === lineId
@@ -462,6 +466,10 @@ export function MaterialInForm() {
               qty: totalWeight,
               invoiceQty: totalWeight,
               actualQty: totalWeight,
+              poLineId: resolvedPoLine?.id || (uniquePoLineIds.length === 0 ? "" : line.poLineId),
+              poId: resolvedPo?.id || (uniquePoLineIds.length === 0 ? undefined : line.poId),
+              poNo: resolvedPo?.poNo || (uniquePoLineIds.length === 0 ? undefined : line.poNo),
+              poRate: resolvedPoLine ? Number(resolvedPoLine.rate || 0) : (uniquePoLineIds.length === 0 ? 0 : Number(line.poRate || 0)),
             })
           : line
       )
