@@ -1,5 +1,16 @@
 import { Item } from "../types";
 
+
+export function normalizeConsumableValue(raw: unknown) {
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "number") return raw === 1;
+
+  const normalized = String(raw || "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  const truthy = new Set(["1", "true", "yes", "y", "on"]);
+  return truthy.has(normalized);
+}
 export function getNpdItemDisplayName(item?: Partial<Item> | null) {
   return String(item?.name || (item as any)?.itemName || item?.erp || "").trim();
 }
@@ -22,9 +33,11 @@ export async function fetchNpdItems(pageSize = 10000): Promise<Item[]> {
     return {
       ...row,
       id: resolvedId,
+      consumable: normalizeConsumableValue(row?.consumable),
       itemId: resolvedId,
       npdId: resolvedId,
       name: getNpdItemDisplayName(row),
     };
   });
 }
+

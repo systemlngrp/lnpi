@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine } from "../types";
+import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, Machine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
@@ -8,12 +8,14 @@ import { ClipboardList, CheckCircle, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
-import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
+import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 import { getProductionDisplayStatus } from "../lib/productionStageFilters";
-import { fetchNpdItems } from "../lib/npdItems";
 import { cn } from "../lib/utils";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { getProductionEffectiveType, getRequiredMachinesForProduction } from "../lib/productionType";
+import { getProductionMatchingFields, hasProductionMatchingFieldChanges } from "../lib/productionMatching";
 
 export function ProductionMaster() {
   const navigate = useNavigate();
@@ -25,16 +27,8 @@ export function ProductionMaster() {
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const [npdItems, setNpdItems] = useState<Item[]>([]);
-
-  useEffect(() => {
-    fetchNpdItems()
-      .then(setNpdItems)
-      .catch((error) => {
-        console.error("Failed to fetch NPD items for Production Master:", error);
-        setNpdItems([]);
-      });
-  }, []);
+  const [machines] = useData<Machine>("machines", []);
+  const { findItemAcrossSources } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [closingId, setClosingId] = useState<string | null>(null);
@@ -42,6 +36,45 @@ export function ProductionMaster() {
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [cancelSubmittingId, setCancelSubmittingId] = useState<string | null>(null);
+
+  const resolveProductionItem = (production?: Production | null) => {
+    if (!production) return undefined;
+    return findItemAcrossSources(
+      String(production.itemId || ""),
+      production.itemSource,
+      production.erpCode
+    );
+  };
+
+  const getItemValue = (item: any, ...keys: string[]) => {
+    const raw = item?.raw || item || {};
+    for (const key of keys) {
+      const direct = item?.[key];
+      if (!(direct === null || direct === undefined || String(direct).trim() === "")) return direct;
+      const nested = raw?.[key];
+      if (!(nested === null || nested === undefined || String(nested).trim() === "")) return nested;
+    }
+    return undefined;
+  };
+
+  useEffect(() => {
+    const normalizedRows = productions.map((production) => {
+      const item = resolveProductionItem(production);
+      const nextValues = getProductionMatchingFields(production, item);
+      if (!hasProductionMatchingFieldChanges(production, nextValues)) {
+        return production;
+      }
+      return {
+        ...production,
+        ...nextValues,
+      };
+    });
+
+    const hasChanges = normalizedRows.some((row, index) => row !== productions[index]);
+    if (!hasChanges) return;
+
+    void setProductions(() => normalizedRows);
+  }, [productions]);
 
   const ffgSummaries = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
@@ -120,9 +153,9 @@ export function ProductionMaster() {
     const result = new Map<string, { canClose: boolean; reasons: string[] }>();
 
     productions.forEach((production) => {
-      const item = npdItems.find((i) => i.id === String(production.itemId || "").trim());
-      const boxType = (item as any)?.boxType;
-      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesByType, boxType).map((m) =>
+      const item = resolveProductionItem(production);
+      const effectiveType = getProductionEffectiveType(production, item);
+      const requiredMachines = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines).map((m) =>
         normalizeMachineName(m)
       );
 
@@ -132,7 +165,7 @@ export function ProductionMaster() {
       const reasons: string[] = [];
 
       if (requiredMachines.length === 0) {
-        reasons.push(`No required process steps configured for Type: ${String(boxType || "-")}`);
+        reasons.push(`No required process steps configured for Type: ${String(effectiveType || "-")}`);
       }
 
       const isEntryComplete = (entry: ProductionProcessing) => {
@@ -171,7 +204,7 @@ export function ProductionMaster() {
     });
 
     return result;
-  }, [productions, npdItems, processing, mandatoryMachinesByType]);
+  }, [productions, processing, mandatoryMachinesByType, machines]);
 
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -327,7 +360,7 @@ export function ProductionMaster() {
 
   const filteredList = productions
     .filter(p => {
-      const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
+      const item = resolveProductionItem(p);
       const schedule = schedules.find(s => s.id === p.scheduleId);
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
@@ -355,11 +388,11 @@ export function ProductionMaster() {
     return `${machines} (${totalQty})`;
   };
 
-  const getMandatoryStatus = (productionId: string, boxType?: string) => {
-    const required = getRequiredMachinesForType(mandatoryMachinesByType, boxType);
+  const getMandatoryStatus = (production: Production, item?: any) => {
+    const required = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines);
     if (required.length === 0) return { required, done: 0, missing: [] as string[] };
 
-    const doneSet = processingMachinesMap.get(productionId) || new Set<string>();
+    const doneSet = processingMachinesMap.get(production.id) || new Set<string>();
     const missing = required.filter((name) => !doneSet.has(normalizeMachineName(name)));
     return { required, done: required.length - missing.length, missing };
   };
@@ -367,7 +400,7 @@ export function ProductionMaster() {
   const cancelTarget = cancelModalJobId ? productions.find((p) => p.id === cancelModalJobId) : null;
   const cancelTargetSchedule = cancelTarget?.scheduleId ? schedules.find((schedule) => schedule.id === cancelTarget.scheduleId) : null;
   const cancelTargetOrder = cancelTargetSchedule ? orders.find((order) => order.id === cancelTargetSchedule.orderId) : null;
-  const cancelTargetItem = cancelTarget ? npdItems.find((item) => item.id === String(cancelTarget.itemId || "").trim()) : null;
+  const cancelTargetItem = cancelTarget ? resolveProductionItem(cancelTarget) || null : null;
 
   return (
     <div className="space-y-6">
@@ -404,12 +437,14 @@ export function ProductionMaster() {
                 const schedule = schedules.find(s => s.id === p.scheduleId);
                 const order = orders.find(o => o.id === schedule?.orderId);
                 const company = companies.find(c => c.id === order?.companyId);
-                const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
-                const erp = String(p.erpCode || "").trim();
+                const item = resolveProductionItem(p);
+                const normalizedFields = getProductionMatchingFields(p, item);
+                const displayRow = { ...p, ...normalizedFields };
+                const erp = String(displayRow.erpCode || "").trim();
                 const leastGsm = erpLeastGsmMap.get(erp);
-                const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
+                const isHighGsm = displayRow.gsm && leastGsm && Number(displayRow.gsm) > Number(leastGsm);
                 const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-                const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
+                const mandatory = getMandatoryStatus(p, item);
                 const displayStatus = getProductionDisplayStatus(p);
                 
                 return (
@@ -426,16 +461,16 @@ export function ProductionMaster() {
 	                      {order && (
 	                        <>
 	                          <div className="text-xs font-bold text-slate-700">Order: {order.orderNo} ({formatDate(order.orderDate)})</div>
-                          <div className="text-xs font-bold text-slate-700">ERP Code: {p.erpCode || "-"}</div>
-                          <div className="text-xs font-bold text-slate-700">Company: {company?.name || "Unknown"}</div>
+                          <div className="text-xs font-bold text-slate-700">ERP Code: {displayRow.erpCode || "-"}</div>
+                          <div className="text-xs font-bold text-slate-700">Company: {company?.name || displayRow.companyName || "Unknown"}</div>
                         </>
                       )}
                       <div className="text-sm font-bold">{item?.name || "Unknown"}</div>
                       <div className="text-[10px] text-slate-600 uppercase font-black">
-                        Type: {(item as any)?.boxType || "-"} | Print: {p.printingColor || "-"}
+                        Type: {getProductionEffectiveType(p, item) || "-"} | Print: {displayRow.printingColor || "-"}
                       </div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">
-                        OD: {item?.lOd || "-"}×{item?.wOd || "-"}×{item?.hOd || "-"}
+                        OD: {getItemValue(item, "lOd") || "-"}×{getItemValue(item, "wOd") || "-"}×{getItemValue(item, "hOd") || "-"}
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <div className="flex flex-col">
@@ -586,11 +621,13 @@ export function ProductionMaster() {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
-                  const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
-                  const mandatory = getMandatoryStatus(p.id, (item as any)?.boxType);
-                  const erp = String(p.erpCode || "").trim();
+                  const item = resolveProductionItem(p);
+                  const normalizedFields = getProductionMatchingFields(p, item);
+                  const displayRow = { ...p, ...normalizedFields };
+                  const mandatory = getMandatoryStatus(p, item);
+                  const erp = String(displayRow.erpCode || "").trim();
                   const leastGsm = erpLeastGsmMap.get(erp);
-                  const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
+                  const isHighGsm = displayRow.gsm && leastGsm && Number(displayRow.gsm) > Number(leastGsm);
                   const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
                   const paperRequiredNos = Number(p.paperRequiredNos || 0);
                   const linerRequiredNos = Number(p.lineRequiredNos || 0);
@@ -612,12 +649,12 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{srNo}</td>
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.erpCode || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{displayRow.erpCode || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || displayRow.companyName || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{item?.name || "Unknown"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.isSample ? "Yes" : "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{(item as any)?.boxType || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{getItemValue(item, "isSample") ? "Yes" : "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{getProductionEffectiveType(p, item) || "-"}</td>
                       <td className="px-4 py-4 text-[11px] text-black border border-black whitespace-nowrap">
                         {mandatory.required.length === 0 ? (
                           "-"
@@ -633,7 +670,7 @@ export function ProductionMaster() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
-                      <td className="px-4 py-4 text-center text-xs font-medium text-black border border-black whitespace-nowrap">{p.ups || (item as any)?.ups || "-"}</td>
+                      <td className="px-4 py-4 text-center text-xs font-medium text-black border border-black whitespace-nowrap">{p.ups || getItemValue(item, "ups") || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-amber-700 border border-black whitespace-nowrap bg-amber-50/40">
                         {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}
                       </td>
@@ -660,27 +697,27 @@ export function ProductionMaster() {
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.punching.toLocaleString()}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.gluing.toLocaleString()}</td>
                       
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.length || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.breadth || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.height || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.lOd || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.wOd || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{item?.hOd || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.length || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.breadth || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.height || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "lOd") || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "wOd") || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "hOd") || "-"}</td>
 
-                      <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{p.ply || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.flute || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.l1 || (item as any)?.l1 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.f1 || (item as any)?.f1 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.l2 || (item as any)?.l2 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.f2 || (item as any)?.f2 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.l3 || (item as any)?.l3 || "-"}</td>
+                      <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{displayRow.ply || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{displayRow.flute || displayRow.fluteType || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.l1 || (item as any)?.l1 || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.f1 || (item as any)?.f1 || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.l2 || (item as any)?.l2 || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.f2 || (item as any)?.f2 || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.l3 || (item as any)?.l3 || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.top || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-700">{p.gsm || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-700">{displayRow.gsm || displayRow.boardGsmReq || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-black text-emerald-700">{erpLeastGsmMap.get(erp) || "-"}</td>
 
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.color1 || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.color2 || "-"}</td>
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.printingColor || "-"}</td>
+                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{displayRow.printingColor || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.paperRequiredNos || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.topPaperWeightKg || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.linerWeightKg || "-"}</td>
@@ -695,7 +732,7 @@ export function ProductionMaster() {
                       </td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).reelAsPerCalc || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).reelActualWithTrimming || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).cuttingWithTrimming || item?.cuttingSize || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).cuttingWithTrimming || getItemValue(item, "cuttingSize") || "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.plannedProductionInMeter ?? "-"}</td>
                       <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.sheetWeight || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.fluteBatches || "-"}</td>

@@ -14,7 +14,7 @@ import {
 import { 
   Search, 
   FileText, 
-  Truck as TruckIcon, 
+  Plus,
   ChevronDown,
   ChevronRight,
   Download
@@ -23,9 +23,13 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { buildLinkedLoadingDetailsFromSlip } from "../lib/linkedLoading";
+import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
 import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { DirectLoadingSlipModal } from "../components/DirectLoadingSlipModal";
+import { isDirectLoadingSlip, resolveLoadingSlipLineContext, summarizeLoadingSlip } from "../lib/loadingSlipContext";
 
 function getSlipNoSortValue(slipNo: string) {
   const value = String(slipNo || "").trim();
@@ -36,13 +40,15 @@ function getSlipNoSortValue(slipNo: string) {
 export function LoadingMaster() {
   const [loadingSlips, setLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [trucks] = useData<Truck>("trucks", []);
-  const [plans] = useData<DispatchPlan>("dispatch_plans", []);
+  const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem } = useOrderItemCatalog();
+  const { resolveOrderItem, itemsBySource, allItems } = useOrderItemCatalog();
   const [companies] = useData<Company>("companies", []);
   const [invoices, setInvoices] = useData<Invoice>("invoices", []);
   const [invoiceLineItems, setInvoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
+  const [, setPhpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
+  const [, setPlateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,80 +59,54 @@ export function LoadingMaster() {
   const [editingSlipIds, setEditingSlipIds] = useState<Set<string>>(new Set());
   const [draftBySlipId, setDraftBySlipId] = useState<Record<string, LoadingSlip>>({});
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
-
-  const getTruckNo = (id: string) => trucks.find(t => t.id === id)?.truckNo || "Unknown";
+  const [isDirectModalOpen, setIsDirectModalOpen] = useState(false);
+  const [isSavingDirect, setIsSavingDirect] = useState(false);
 
   const companyOptions = useMemo(() => {
     const names = new Set<string>();
-    loadingSlips.forEach(slip => {
-      slip.lines.forEach(line => {
-        const plan = plans.find(p => p.id === line.dispatchPlanId);
-        const order = orders.find(o => o.id === plan?.orderId);
-        const company = companies.find(c => c.id === order?.companyId);
-        if (company?.name) names.add(company.name);
+    loadingSlips.forEach((slip) => {
+      summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem }).companyNames.forEach((name) => {
+        if (name) names.add(name);
       });
     });
     return ["All", ...Array.from(names).sort()];
-  }, [loadingSlips, plans, orders, companies]);
+  }, [loadingSlips, plans, orders, companies, resolveOrderItem]);
 
   const erpOptions = useMemo(() => {
     const codes = new Set<string>();
-    loadingSlips.forEach(slip => {
-      slip.lines.forEach(line => {
-        const plan = plans.find(p => p.id === line.dispatchPlanId);
-        const order = orders.find(o => o.id === plan?.orderId);
-        const erp = String(order?.erpCode || "").trim();
-        if (erp) codes.add(erp);
+    loadingSlips.forEach((slip) => {
+      summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem }).erpCodes.forEach((code) => {
+        if (code) codes.add(code);
       });
     });
     return ["All", ...Array.from(codes).sort()];
-  }, [loadingSlips, plans, orders]);
+  }, [loadingSlips, plans, orders, companies, resolveOrderItem]);
 
   const itemOptions = useMemo(() => {
     const names = new Set<string>();
-    loadingSlips.forEach(slip => {
-      slip.lines.forEach(line => {
-        const plan = plans.find(p => p.id === line.dispatchPlanId);
-        const order = orders.find(o => o.id === plan?.orderId);
-        const item = resolveOrderItem(order);
-        if (item?.name) names.add(item.name);
+    loadingSlips.forEach((slip) => {
+      summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem }).itemNames.forEach((name) => {
+        if (name) names.add(name);
       });
     });
     return ["All", ...Array.from(names).sort()];
-  }, [loadingSlips, plans, orders, npdItems]);
+  }, [loadingSlips, plans, orders, companies, resolveOrderItem]);
 
   const processedSlips = useMemo(() => {
-    return loadingSlips.map(slip => {
-      const totalQty = slip.lines.reduce((sum, line) => sum + line.loadedQty, 0);
-      
-      // Extract aggregated info for the main table
-      const uniqueItemNames = new Set<string>();
-      const uniqueCompanies = new Set<string>();
-      const uniqueErpCodes = new Set<string>();
-
-      slip.lines.forEach(line => {
-        const plan = plans.find(p => p.id === line.dispatchPlanId);
-        const order = orders.find(o => o.id === plan?.orderId);
-        const item = resolveOrderItem(order);
-        const company = companies.find(c => c.id === order?.companyId);
-        
-        if (item?.name) uniqueItemNames.add(item.name);
-        if (company?.name) uniqueCompanies.add(company.name);
-        
-        const erp = String(order?.erpCode || "").trim();
-        if (erp) uniqueErpCodes.add(erp);
-      });
-
+    return loadingSlips.map((slip) => {
+      const totalQty = slip.lines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0);
+      const summary = summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem });
       return {
         ...slip,
         totalQty,
-        itemNames: Array.from(uniqueItemNames).join(", "),
-        companyNames: Array.from(uniqueCompanies).join(", "),
-        erpCodes: Array.from(uniqueErpCodes).join(", ")
+        itemNames: summary.itemNames.join(", "),
+        companyNames: summary.companyNames.join(", "),
+        erpCodes: summary.erpCodes.join(", "),
+        loadingSourceLabel: isDirectLoadingSlip(slip) ? "Direct" : "Dispatch Plan",
       };
     }).filter(slip => {
       const q = searchTerm.toLowerCase().trim();
-      const matchesSearch = !q || slip.slipNo.toLowerCase().includes(q);
+      const matchesSearch = !q || slip.slipNo.toLowerCase().includes(q) || slip.itemNames.toLowerCase().includes(q) || slip.companyNames.toLowerCase().includes(q) || slip.erpCodes.toLowerCase().includes(q);
       const matchesCompany = companyFilter === "All" || slip.companyNames.includes(companyFilter);
       const matchesErp = erpFilter === "All" || slip.erpCodes.includes(erpFilter);
       const matchesItem = itemFilter === "All" || slip.itemNames.includes(itemFilter);
@@ -144,7 +124,7 @@ export function LoadingMaster() {
 
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
-  }, [loadingSlips, plans, orders, npdItems, companies, searchTerm, companyFilter, erpFilter, itemFilter]);
+  }, [loadingSlips, plans, orders, companies, resolveOrderItem, searchTerm, companyFilter, erpFilter, itemFilter]);
 
   const {
     page,
@@ -178,18 +158,13 @@ export function LoadingMaster() {
 
   const getSlipLines = (slip: LoadingSlip) =>
     slip.lines.map((line) => {
-      const plan = plans.find((p) => p.id === line.dispatchPlanId);
-      const order = orders.find((o) => o.id === plan?.orderId);
-      const item = resolveOrderItem(order);
-      const company = companies.find((c) => c.id === order?.companyId);
-      const plannedQty = Number(plan?.plannedQty || 0);
-      const cancelledQty = Number(plan?.canceledQty || 0);
-      const maxAllowed = Math.max(0, plannedQty - cancelledQty);
+      const context = resolveLoadingSlipLineContext({ slip, line, plans, orders, companies, resolveOrderItem });
+      const plannedQty = Number(context.plan?.plannedQty || 0);
+      const cancelledQty = Number(context.plan?.canceledQty || 0);
+      const maxAllowed = context.isDirect ? Number.MAX_SAFE_INTEGER : Math.max(0, plannedQty - cancelledQty);
       return {
         ...line,
-        orderNo: order?.orderNo || "N/A",
-        itemName: item?.name || "Unknown",
-        companyName: company?.name || "Unknown",
+        ...context,
         plannedQty,
         maxAllowed,
       };
@@ -240,12 +215,14 @@ export function LoadingMaster() {
     lines.forEach((line, index) => {
       const loadedQty = Number(line.loadedQty || 0);
       if (loadedQty < 0) errors.push(`Line ${index + 1}: Loaded qty cannot be negative.`);
-      if (loadedQty > line.maxAllowed) errors.push(`Line ${index + 1}: Loaded qty cannot exceed ${line.maxAllowed}.`);
-      const allocTotal = getAllocationTotal(line.allocations);
-      if (Math.abs(allocTotal - loadedQty) > 0.0001) errors.push(`Line ${index + 1}: Allocations must equal Loaded qty.`);
-      (line.allocations || []).forEach((a) => {
-        if (Number(a.qty || 0) < 0) errors.push(`Line ${index + 1}: Allocation qty cannot be negative.`);
-      });
+      if (!line.isDirect && loadedQty > line.maxAllowed) errors.push(`Line ${index + 1}: Loaded qty cannot exceed ${line.maxAllowed}.`);
+      if (!line.isDirect) {
+        const allocTotal = getAllocationTotal(line.allocations);
+        if (Math.abs(allocTotal - loadedQty) > 0.0001) errors.push(`Line ${index + 1}: Allocations must equal Loaded qty.`);
+        (line.allocations || []).forEach((a) => {
+          if (Number(a.qty || 0) < 0) errors.push(`Line ${index + 1}: Allocation qty cannot be negative.`);
+        });
+      }
     });
     return errors;
   };
@@ -266,8 +243,9 @@ export function LoadingMaster() {
     }
 
     const now = new Date().toISOString();
+    const direct = isDirectLoadingSlip(original);
 
-    if (original.invoiceId) {
+    if (original.invoiceId && !direct) {
       const invoice = invoices.find((inv) => inv.id === original.invoiceId);
       if (!invoice) {
         alert("Linked invoice not found. Cannot save changes.");
@@ -278,23 +256,50 @@ export function LoadingMaster() {
     const originalByPlan = new Map(original.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
     const draftByPlan = new Map(draft.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
     const allPlanIds = new Set<string>([...originalByPlan.keys(), ...draftByPlan.keys()]);
+    const phpDetails = buildLinkedLoadingDetailsFromSlip({
+      slip: draft,
+      source: "PHP",
+      plans,
+      orders,
+      resolveOrderItem,
+      sourceItems: itemsBySource.PHP || [],
+      existingDetails: draft.phpDetails,
+    });
+    const plateDetails = buildLinkedLoadingDetailsFromSlip({
+      slip: draft,
+      source: "PLATE",
+      plans,
+      orders,
+      resolveOrderItem,
+      sourceItems: itemsBySource.PLATE || [],
+      existingDetails: draft.plateDetails,
+    });
+    const syncedDraft: LoadingSlip = {
+      ...draft,
+      phpDetails,
+      plateDetails,
+    };
 
-    await setPlans((prev) =>
-      prev.map((plan) => {
-        if (!allPlanIds.has(plan.id)) return plan;
-        const delta = (draftByPlan.get(plan.id) || 0) - (originalByPlan.get(plan.id) || 0);
-        if (Math.abs(delta) < 0.0001) return plan;
-        return { ...plan, loadedQty: Math.max(0, Number(plan.loadedQty || 0) + delta), updateTimestamp: now, updatedBy: "System User" };
-      })
-    );
+    if (!direct) {
+      await setPlans((prev) =>
+        prev.map((plan) => {
+          if (!allPlanIds.has(plan.id)) return plan;
+          const delta = (draftByPlan.get(plan.id) || 0) - (originalByPlan.get(plan.id) || 0);
+          if (Math.abs(delta) < 0.0001) return plan;
+          return { ...plan, loadedQty: Math.max(0, Number(plan.loadedQty || 0) + delta), updateTimestamp: now, updatedBy: "System User" };
+        })
+      );
+    }
 
     await setLoadingSlips((prev) =>
       prev.map((s) =>
-        s.id === slipId ? { ...draft, updatedBy: "System User", updateTimestamp: now } : s
+        s.id === slipId ? { ...syncedDraft, updatedBy: "System User", updateTimestamp: now } : s
       )
     );
+    await setPhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: syncedDraft, details: phpDetails }));
+    await setPlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: syncedDraft, details: plateDetails }));
 
-    if (original.invoiceId) {
+    if (original.invoiceId && !direct) {
       const invoiceId = original.invoiceId;
       const invoice = invoices.find((inv) => inv.id === invoiceId);
       if (!invoice) return;
@@ -381,27 +386,69 @@ export function LoadingMaster() {
     if (slip.status === "Cancelled") return;
 
     const reason = window.prompt("Cancel reason (optional)") || "";
-    const confirmed = window.confirm("Cancel this loading slip? This will reverse loaded qty from dispatch plans.");
+    const confirmed = window.confirm(isDirectLoadingSlip(slip) ? "Cancel this direct loading slip? Linked PHP/Plate child slips will also be cancelled." : "Cancel this loading slip? This will reverse loaded qty from dispatch plans.");
     if (!confirmed) return;
 
     const now = new Date().toISOString();
-    const byPlan = new Map(slip.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
-
-    await setPlans((prev) =>
-      prev.map((plan) => {
-        if (!byPlan.has(plan.id)) return plan;
-        const qty = byPlan.get(plan.id) || 0;
-        return { ...plan, loadedQty: Math.max(0, Number(plan.loadedQty || 0) - qty), updateTimestamp: now, updatedBy: "System User" };
-      })
-    );
+    if (!isDirectLoadingSlip(slip)) {
+      const byPlan = new Map(slip.lines.map((l) => [l.dispatchPlanId, Number(l.loadedQty || 0)]));
+      await setPlans((prev) =>
+        prev.map((plan) => {
+          if (!byPlan.has(plan.id)) return plan;
+          const qty = byPlan.get(plan.id) || 0;
+          return { ...plan, loadedQty: Math.max(0, Number(plan.loadedQty || 0) - qty), updateTimestamp: now, updatedBy: "System User" };
+        })
+      );
+    }
 
     await setLoadingSlips((prev) =>
       prev.map((row) =>
         row.id === slip.id
-          ? { ...row, status: "Cancelled", cancelReason: reason, cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
+          ? { ...row, status: "Cancelled" as const, cancelReason: reason, cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
           : row
       )
     );
+    await setPhpLoadingSlips((prev) =>
+      prev.map((row) =>
+        String(row.fgLoadingId || "").trim() === slip.id
+          ? { ...row, status: "Cancelled" as const, cancelReason: reason || "Cancelled from parent FG loading slip", cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
+          : row
+      )
+    );
+    await setPlateLoadingSlips((prev) =>
+      prev.map((row) =>
+        String(row.fgLoadingId || "").trim() === slip.id
+          ? { ...row, status: "Cancelled" as const, cancelReason: reason || "Cancelled from parent FG loading slip", cancelledAt: now, cancelledBy: "System User", updatedBy: "System User", updateTimestamp: now }
+          : row
+      )
+    );
+  };
+
+  const saveDirectSlip = async ({ slip, phpDetails, plateDetails }: { slip: LoadingSlip; phpDetails: LoadingSlip["phpDetails"]; plateDetails: LoadingSlip["plateDetails"] }) => {
+    setIsSavingDirect(true);
+    try {
+      const timestamp = new Date().toISOString();
+      const newSlip: LoadingSlip = {
+        ...slip,
+        id: crypto.randomUUID(),
+        slipNo: "",
+        loadingSource: "DIRECT",
+        phpDetails,
+        plateDetails,
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+      };
+      await setLoadingSlips((prev) => [newSlip, ...prev]);
+      await setPhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: phpDetails || [] }));
+      await setPlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: plateDetails || [] }));
+      setIsDirectModalOpen(false);
+      alert("Direct loading slip created successfully.");
+    } catch (error) {
+      console.error("Failed to save direct loading slip:", error);
+      alert("Failed to save direct loading slip.");
+    } finally {
+      setIsSavingDirect(false);
+    }
   };
 
   return (
@@ -410,15 +457,21 @@ export function LoadingMaster() {
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Loading Master</h2>
         </div>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text"
-            placeholder="Search slip no..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-          />
+        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text"
+              placeholder="Search slip no..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            />
+          </div>
+          <button type="button" onClick={() => setIsDirectModalOpen(true)} className="inline-flex items-center justify-center gap-2 rounded border border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-slate-800">
+            <Plus size={16} />
+            Direct Loading Slip
+          </button>
         </div>
       </div>
 
@@ -458,11 +511,12 @@ export function LoadingMaster() {
         </div>
       </div>
 
-      <div className="bg-white border-2 border-black rounded shadow-sm overflow-hidden">
+      <div className="bg-white border-2 border-black rounded shadow-sm overflow-x-auto overflow-y-hidden">
         <table className="min-w-full border-collapse">
           <thead className="bg-slate-100">
             <tr className="divide-x divide-black">
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Slip No</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Source</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Status</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Date</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Company</th>
@@ -475,7 +529,7 @@ export function LoadingMaster() {
           <tbody className="bg-white divide-y divide-black">
             {paginatedSlips.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
+                <td colSpan={9} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
               </tr>
 ) : paginatedSlips.map((slip) => (
               <tr key={slip.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
@@ -484,6 +538,11 @@ export function LoadingMaster() {
                     <FileText size={16} className="text-indigo-600 mr-2" />
                     <span className="font-bold text-sm">{slip.slipNo}</span>
                   </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`rounded border px-2 py-0.5 text-[10px] font-black uppercase ${isDirectLoadingSlip(slip) ? "border-sky-700 bg-sky-100 text-sky-800" : "border-violet-700 bg-violet-100 text-violet-800"}`}>
+                    {slip.loadingSourceLabel}
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   {slip.status === "Cancelled" ? (
@@ -503,13 +562,13 @@ export function LoadingMaster() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   {formatDate(slip.date)}
                 </td>
-                <td className="px-6 py-4 text-sm text-black">
-                  <div className="max-w-[150px] truncate font-medium" title={slip.companyNames}>
+                <td className="px-6 py-4 text-sm text-black align-top">
+                  <div className="max-w-[240px] whitespace-normal break-words font-medium leading-5" title={slip.companyNames}>
                     {slip.companyNames || "-"}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-slate-600">
-                  <div className="max-w-[200px] truncate" title={slip.itemNames}>
+                <td className="px-6 py-4 text-sm text-slate-600 align-top">
+                  <div className="max-w-[280px] whitespace-normal break-words leading-5" title={slip.itemNames}>
                     {slip.itemNames || "-"}
                   </div>
                 </td>
@@ -573,7 +632,7 @@ export function LoadingMaster() {
               const lines = getSlipLines(draft);
               return (
                 <tr key={`${slip.id}-details`} className="bg-white">
-                  <td colSpan={8} className="px-6 pb-6 pt-2 border-t border-black">
+                  <td colSpan={9} className="px-6 pb-6 pt-2 border-t border-black">
                     <div className="rounded border border-black overflow-hidden">
                       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3 border-b border-black">
                         <div className="text-sm font-bold text-black">
@@ -634,16 +693,15 @@ export function LoadingMaster() {
                           </thead>
                           <tbody className="divide-y divide-black bg-white">
                             {lines.map((line, idx) => {
-                              const originalLine = slip.lines.find((l) => l.dispatchPlanId === line.dispatchPlanId);
                               const loadedValue = Number(line.loadedQty || 0);
                               const allocTotal = getAllocationTotal(line.allocations);
-                              const balanced = Math.abs(allocTotal - loadedValue) < 0.0001;
+                              const balanced = line.isDirect || Math.abs(allocTotal - loadedValue) < 0.0001;
                               return (
                                 <tr key={`${slip.id}-${idx}`} className="divide-x divide-black">
                                   <td className="px-4 py-3 text-xs border border-black">{line.companyName}</td>
                                   <td className="px-4 py-3 text-xs border border-black">{line.orderNo}</td>
                                   <td className="px-4 py-3 text-xs border border-black">{line.itemName}</td>
-                                  <td className="px-4 py-3 text-xs text-right border border-black">{Number(line.plannedQty || 0).toLocaleString()}</td>
+                                  <td className="px-4 py-3 text-xs text-right border border-black">{line.isDirect ? "-" : Number(line.plannedQty || 0).toLocaleString()}</td>
                                   <td className="px-4 py-3 text-xs text-right border border-black">
                                     {isEditing ? (
                                       <input
@@ -670,7 +728,9 @@ export function LoadingMaster() {
                                     {!balanced ? <div className="text-[10px] font-bold text-red-600">Alloc != Loaded</div> : null}
                                   </td>
                                   <td className="px-4 py-3 text-xs border border-black">
-                                    {Array.isArray(line.allocations) && line.allocations.length > 0 ? (
+                                    {line.isDirect ? (
+                                      <span className="font-bold text-sky-700">Direct Loading</span>
+                                    ) : Array.isArray(line.allocations) && line.allocations.length > 0 ? (
                                       <div className="space-y-1">
                                         {line.allocations.map((a, aidx) => (
                                           <div key={aidx} className="flex items-center gap-2">
@@ -711,6 +771,25 @@ export function LoadingMaster() {
                           </tbody>
                         </table>
                       </div>
+
+                      {slip.status !== "Cancelled" && isEditing ? (
+                        <div className="flex justify-end gap-3 border-t border-black bg-slate-50 px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => cancelEdit(slip.id)}
+                            className="px-3 py-1.5 text-xs font-bold border border-black rounded bg-white hover:bg-slate-100"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void saveEdit(slip.id)}
+                            className="px-3 py-1.5 text-xs font-bold border border-black rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -726,6 +805,20 @@ export function LoadingMaster() {
         totalItems={totalItems}
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
+      />
+
+      <DirectLoadingSlipModal
+        open={isDirectModalOpen}
+        companies={companies}
+        trucks={trucks}
+        allItems={allItems}
+        plans={plans}
+        orders={orders}
+        phpItems={itemsBySource.PHP || []}
+        plateItems={itemsBySource.PLATE || []}
+        resolveOrderItem={resolveOrderItem}
+        onClose={() => !isSavingDirect && setIsDirectModalOpen(false)}
+        onSave={saveDirectSlip}
       />
     </div>
   );

@@ -2,10 +2,11 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpDown, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { getRequiredMachinesForProduction } from "../lib/productionType";
 import {
   Company,
-  Item,
+  Material,
   MaterialIssue,
   MaterialIssueLine,
   MaterialIssueReelLine,
@@ -17,15 +18,21 @@ import {
   Production,
   ProductionProcessing,
   Setting,
+  Machine,
 } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
-import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  getProductionActualPaperUsed,
+  hasProductionCorrugatedSheetUsage,
+} from "../lib/productionMaterialUsage";
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
 import { normalizeMachineName } from "../lib/productionMachineNames";
-import { getRequiredMachinesForType, parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
+import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 
 type QueueMode = "consumption" | "ffg";
 
@@ -63,7 +70,7 @@ export function ProductionStageQueue({
 }: {
   title: string;
   emptyMessage: string;
-  predicate: (production: Production, actualPaperUsed: number) => boolean;
+  predicate: (production: Production, actualPaperUsed: number, hasCorrugatedSheetUsage: boolean) => boolean;
   enableFfgEditing?: boolean;
   enableIssueAction?: boolean;
   enableCloseAction?: boolean;
@@ -73,7 +80,8 @@ export function ProductionStageQueue({
 }) {
   const navigate = useNavigate();
   const [productions, setProductions] = useData<Production>("productions", []);
-  const npdItems = useNpdItems();
+  const [materials] = useData<Material>("materials", []);
+  const { findItemAcrossSources } = useOrderItemCatalog();
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
@@ -85,6 +93,7 @@ export function ProductionStageQueue({
   const [companies] = useData<Company>("companies", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
+  const [machines] = useData<Machine>("machines", []);
   const [searchTerm, setSearchTerm] = useState("");
   const [ffgValues, setFfgValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -103,6 +112,17 @@ export function ProductionStageQueue({
       ),
     [materialIssueLines, materialIssueReelLines, materialIssues, materialReturnLines, materialReturnReelLines, materialReturns]
   );
+  const corrugatedSheetUsageMap = useMemo(
+    () =>
+      buildProductionCorrugatedSheetUsageMap(
+        materials,
+        materialIssues,
+        materialIssueLines,
+        materialReturns,
+        materialReturnLines
+      ),
+    [materialIssueLines, materialIssues, materialReturnLines, materialReturns, materials]
+  );
 
   const toggleSort = (nextKey: SortKey) => {
     if (nextKey === sortKey) {
@@ -118,18 +138,22 @@ export function ProductionStageQueue({
     const mandatoryMap = parseMandatoryMachinesByType(settings[0]);
     const prereqMachine = issuePrereqMachineName ? normalizeMachineName(issuePrereqMachineName) : "";
     return productions
-      .filter((production) => predicate(production, getProductionActualPaperUsed(production, usageMap)))
+      .filter((production) => predicate(production, getProductionActualPaperUsed(production, usageMap), hasProductionCorrugatedSheetUsage(production, corrugatedSheetUsageMap)))
       .map((production) => {
         const schedule = schedules.find((row) => row.id === production.scheduleId);
         const order = orders.find((row) => row.id === schedule?.orderId);
-        const item = npdItems.find((row) => String(row.id) === String(production.itemId || order?.itemId || "").trim());
+        const item = findItemAcrossSources(
+          String(production.itemId || order?.itemId || "").trim(),
+          production.itemSource,
+          production.erpCode || order?.erpCode
+        );
         const company = companies.find((row) => row.id === order?.companyId);
         const prereqQty = prereqMachine
           ? processing
               .filter((entry) => entry.productionId === production.id && normalizeMachineName(entry.machineName) === prereqMachine)
               .reduce((sum, entry) => sum + Number(entry.qty || 0), 0)
           : 0;
-        const requiredMachines = getRequiredMachinesForType(mandatoryMap, item?.typeName);
+        const requiredMachines = getRequiredMachinesForProduction(production, item, mandatoryMap, machines);
         return {
           production,
           order,
@@ -219,7 +243,6 @@ export function ProductionStageQueue({
       });
   }, [
     companies,
-    npdItems,
     issuePrereqMachineName,
     orders,
     predicate,
@@ -228,9 +251,11 @@ export function ProductionStageQueue({
     schedules,
     searchTerm,
     settings,
+    machines,
     sortDir,
     sortKey,
     usageMap,
+    corrugatedSheetUsageMap,
   ]);
 
   const {
@@ -418,7 +443,12 @@ export function ProductionStageQueue({
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{production.erpCode || "-"}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{company?.name || "-"}</td>
-                    <td className="px-4 py-4 text-xs text-black border border-black">{item?.name || "Unknown"}</td>
+                    <td className="px-4 py-4 text-xs text-black border border-black">
+                      <div className="space-y-1">
+                        <div>{item?.name || "Unknown"}</div>
+
+                      </div>
+                    </td>
                     {issuePrereqMachineName ? (
                       <td className="px-4 py-4 text-right text-xs font-black text-emerald-700 border border-black whitespace-nowrap">
                         {prereqQty > 0 ? prereqQty.toFixed(2) : "-"}
@@ -454,29 +484,31 @@ export function ProductionStageQueue({
                     ) : null}
                     {enableFfgEditing ? (
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            step="0.00001"
-                            min={0}
-                            value={ffgValues[production.id] || ""}
-                            onChange={(e) => setFfgValues((prev) => ({ ...prev, [production.id]: e.target.value }))}
-                            placeholder="Enter FG"
-                            className="w-28 border-2 border-black rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void handleSaveFfg(production.id)}
-                            disabled={savingId === production.id || !ffgValues[production.id] || Number(ffgValues[production.id]) <= 0}
-                            className="bg-emerald-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black disabled:opacity-50"
-                          >
-                            {savingId === production.id ? "Saving..." : "Save"}
-                          </button>
+                        <div className="flex flex-col gap-3 whitespace-normal">
+                                                    <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              step="0.00001"
+                              min={0}
+                              value={ffgValues[production.id] || ""}
+                              onChange={(e) => setFfgValues((prev) => ({ ...prev, [production.id]: e.target.value }))}
+                              placeholder="Enter FG"
+                              className="w-28 border-2 border-black rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveFfg(production.id)}
+                              disabled={savingId === production.id || !ffgValues[production.id] || Number(ffgValues[production.id]) <= 0}
+                              className="bg-emerald-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black disabled:opacity-50"
+                            >
+                              {savingId === production.id ? "Saving..." : "Save"}
+                            </button>
+                          </div>
                         </div>
                       </td>
                     ) : null}
                     {enableIssueAction ? (
-                      <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
+                                            <td className="px-4 py-4 text-xs text-black border border-black">
                         {(() => {
                           const normalizedRequired = requiredMachines.map((m) => normalizeMachineName(m));
                           const requiresLiner = normalizedRequired.includes("Corrugation Liner");
@@ -490,19 +522,50 @@ export function ProductionStageQueue({
 
                           if (prereqMissing) {
                             return (
-                              <button
-                                type="button"
-                                disabled
-                                title={`${normalizeMachineName(issuePrereqMachineName || "Corrugation Liner")} entry pending`}
-                                className="bg-slate-200 text-slate-500 px-3 py-1 rounded font-bold text-[11px] uppercase border border-black cursor-not-allowed"
-                              >
-                                Issue Material
-                              </button>
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  disabled
+                                  title={`${normalizeMachineName(issuePrereqMachineName || "Corrugation Liner")} entry pending`}
+                                  className="bg-slate-200 text-slate-500 px-3 py-1 rounded font-bold text-[11px] uppercase border border-black cursor-not-allowed"
+                                >
+                                  Issue Material
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="bg-slate-200 text-slate-500 px-3 py-1 rounded font-bold text-[11px] uppercase border border-black cursor-not-allowed"
+                                >
+                                  Issue Sheet
+                                </button>
+                              </div>
                             );
                           }
 
-                          if (!requiresLiner || linerDone) {
-                            return (
+                          return (
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              {!requiresLiner || linerDone ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const date = String(production.date || "").slice(0, 10);
+                                    const params = new URLSearchParams({
+                                      productionId: production.id,
+                                      date,
+                                      lockDate: "1",
+                                      lockJob: "1",
+                                    });
+                                    navigate(`/material-movement/reel-issue-return?${params.toString()}`);
+                                  }}
+                                  className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
+                                >
+                                  Issue Material
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center rounded border border-amber-700 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-800">
+                                  Add Corrugation Liner entry
+                                </span>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -510,22 +573,18 @@ export function ProductionStageQueue({
                                   const params = new URLSearchParams({
                                     productionId: production.id,
                                     date,
+                                    issueType: "Job",
                                     lockDate: "1",
-                                    lockJob: "1",
+                                    lockIssueType: "1",
+                                    materialFilter: "corrugated-sheet",
                                   });
-                                  navigate(`/material-movement/reel-issue-return?${params.toString()}`);
+                                  navigate(`/material-movement/issue?${params.toString()}`);
                                 }}
-                                className="bg-indigo-600 text-white px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
+                                className="bg-amber-500 text-black px-3 py-1 rounded font-bold text-[11px] uppercase border border-black"
                               >
-                                Issue Material
+                                Issue Sheet
                               </button>
-                            );
-                          }
-
-                          return (
-                            <span className="inline-flex items-center rounded border border-amber-700 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-800">
-                              Add Corrugation Liner entry
-                            </span>
+                            </div>
                           );
                         })()}
                       </td>
@@ -574,3 +633,4 @@ export function ProductionPendingFFG() {
     />
   );
 }
+

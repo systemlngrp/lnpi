@@ -17,7 +17,11 @@ import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { getReturnableReelLinesForJob } from "../lib/materialMovement";
-import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  syncProductionWorkflowFromUsage,
+} from "../lib/productionMaterialUsage";
 
 export function MaterialReturnForm() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -248,11 +252,19 @@ export function MaterialReturnForm() {
           materialIssueReelLines,
           [...materialReturnReelLines, ...nextReelLines]
         );
+        const corrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+          materials,
+          materialIssues,
+          materialIssueLines,
+          nextMaterialReturns,
+          nextReturnLines
+        );
         const netUsage = usageMap.get(productionId) || 0;
+        const hasCorrugatedSheetUsage = Number(corrugatedSheetUsageMap.get(productionId) || 0) > 0;
         await setProductions((prev) =>
           prev.map((production) =>
             production.id === productionId
-              ? syncProductionWorkflowFromUsage(production, netUsage, timestamp)
+              ? syncProductionWorkflowFromUsage(production, netUsage, timestamp, hasCorrugatedSheetUsage)
               : production
           )
         );
@@ -408,3 +420,4 @@ function Field({ label, children, required = false, className = "" }: { label: s
     </div>
   );
 }
+

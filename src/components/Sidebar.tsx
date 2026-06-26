@@ -28,6 +28,7 @@ import { useNpdItems } from "../hooks/useNpdItems";
 import { useAuth } from "../auth/AuthContext";
 import {
   MaterialIn,
+  Material,
   Production,
   Order,
   Consumption,
@@ -50,7 +51,12 @@ import {
 import { cn } from "../lib/utils";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
 import { withIndentTotals } from "../lib/indentTotals";
-import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  getProductionActualPaperUsed,
+  hasProductionCorrugatedSheetUsage,
+} from "../lib/productionMaterialUsage";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
 
 interface SidebarProps {
@@ -186,7 +192,32 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "Production Processing",
+    section: "PHP / Plate Process",
+    color: "bg-emerald-800",
+    items: [
+      { name: "Pending PHP Planning", href: "/production/php/pending-planning", icon: ClipboardList },
+      { name: "Pending Plate Planning", href: "/production/plate/pending-planning", icon: ClipboardList },
+      { name: "Scheduling", href: "/production/php-plate/scheduling", icon: ClipboardList },
+      { name: "Sequencing", href: "/production/php-plate/pending-sequencing", icon: Activity },
+      { name: "Production", href: "/production/php-plate/pending-production", icon: Hammer },
+    ],
+  },
+  {
+    section: "PHP Master",
+    color: "bg-emerald-900",
+    items: [
+      { name: "PHP Production Master", href: "/production/php/master", icon: Database },
+    ],
+  },
+  {
+    section: "Plate Master",
+    color: "bg-green-900",
+    items: [
+      { name: "Plate Production Master", href: "/production/plate/master", icon: Database },
+    ],
+  },
+  {
+    section: "Production Processing" ,
     color: "bg-teal-800",
     items: [
       { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
@@ -217,6 +248,20 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { name: "Pending Loading", href: "/loading/pending", icon: Truck, countKey: "/loading/pending" },
       { name: "Loading Master", href: "/loading/master", icon: FileText },
+    ],
+  },
+  {
+    section: "PHP Loading",
+    color: "bg-indigo-700",
+    items: [
+      { name: "PHP Loading Slip Master", href: "/loading/php/master", icon: FileText },
+    ],
+  },
+  {
+    section: "Plate Loading",
+    color: "bg-violet-700",
+    items: [
+      { name: "Plate Loading Slip Master", href: "/loading/plate/master", icon: FileText },
     ],
   },
   {
@@ -277,6 +322,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
+  const [materials] = useData<Material>("materials", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
   const [consumptions] = useData<Consumption>("consumptions", []);
@@ -306,6 +352,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     materialReturnLines,
     materialIssueReelLines,
     materialReturnReelLines
+  );
+  const productionCorrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+    materials,
+    materialIssues,
+    materialIssueLines,
+    materialReturns,
+    materialReturnLines
   );
 
   const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
@@ -371,7 +424,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   });
 
   const counts: Record<string, number> = {
-    "/material-receipt/approvals": materialIn.filter(m => ["Pending MRR", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
+    "/material-receipt/approvals": materialIn.filter(m => ["Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"].includes(m.status)).length,
     "/material-receipt/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
     "/production/pending": (() => {
       const today = new Date();
@@ -415,9 +468,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       const rapcValue = String((item as any)?.rapc ?? "").trim();
       return !boxType && !rapcValue;
     }).length,
-    "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
-    "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
-    "/production/pending-tally": productions.filter((p) => isProductionReadyForTally(p, getProductionActualPaperUsed(p, productionUsageMap))).length,
+    "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
+    "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
+    "/production/pending-tally": productions.filter((p) => isProductionReadyForTally(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
     "/production/pending-job-closure": pendingJobClosureCount,
     "/indent/pending": normalizedIndents.filter(i => i.status === "Pending").length,
     "/indent/approved": normalizedIndents.filter(i => i.status === "Approved").length,
@@ -618,3 +671,4 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     </div>
   );
 }
+

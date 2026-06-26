@@ -161,7 +161,16 @@ export function OrderForm() {
       })
       .slice()
       .sort((a, b) => getOrderItemDisplayName(a).localeCompare(getOrderItemDisplayName(b)))
-      .map((item) => ({ value: item.id, label: getOrderItemDisplayName(item) }));
+      .map((item) => {
+        const itemDisplayName = getOrderItemDisplayName(item);
+        const itemErp = String(item.erp || "").trim();
+        const label = itemErp ? `${itemDisplayName} (${itemErp})` : itemDisplayName;
+        return {
+          value: item.id,
+          label,
+          searchText: [itemDisplayName, itemErp, label].filter(Boolean).join(" "),
+        };
+      });
   }, [companyId, companies, currentSourceItems, isUniversal]);
 
   const userOptions = users
@@ -673,9 +682,9 @@ export function OrderForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Item</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Item Name (ERP)</label>
               <div className="w-full">
-                <Select value={itemId} onChange={handleItemChange} options={itemOptions} placeholder="Select Item..." />
+                <Select value={itemId} onChange={handleItemChange} options={itemOptions} placeholder="Select Item Name / ERP..." />
               </div>
             </div>
 
@@ -775,3 +784,4 @@ export function OrderForm() {
     </div>
   );
 }
+

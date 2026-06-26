@@ -14,6 +14,7 @@ type MaterialType = Material["type"];
 type ActiveValue = NonNullable<Material["active"]>;
 type MaterialSortKey = "updated" | "size" | "gsm";
 type SortDirection = "asc" | "desc";
+type MaterialDisplayRow = Material & { isVirtualReceiptItem?: boolean; receiptQty?: number; receiptValue?: number };
 
 const TYPE_OPTIONS = [
   { value: "Reel", label: "Reel" },
@@ -252,13 +253,54 @@ export function Materials() {
     return map;
   }, [materials, packingSlips, materialIn, materialIssues, issueLines, reelIssueLines, materialReturnsHeader, returnLines, reelReturnLines, fromDate, toDate]);
 
+  const materialDisplayRows = useMemo<MaterialDisplayRow[]>(() => {
+    const existingMaterialIds = new Set(materials.map((material) => String(material.id)));
+    const virtualRows = new Map<string, MaterialDisplayRow>();
+
+    materialIn.forEach((receipt) => {
+      if (receipt.mrrType !== "FG Purchase" && receipt.mrrType !== "Rejection In") return;
+      (receipt.lines || []).forEach((line) => {
+        const itemId = String(line.itemId || line.npdId || "").trim();
+        if (!itemId || existingMaterialIds.has(itemId)) return;
+        const item = npdItems.find((entry) => entry.id === itemId);
+        if (!item) return;
+
+        const qty = Number(line.actualQty || line.qty || line.invoiceQty || 0);
+        const lineValue = Number(line.actualValue || line.value || line.invoiceValue || 0);
+        const lineRate = Number(line.rate || line.invoiceRate || (qty > 0 ? lineValue / qty : 0));
+        const existing = virtualRows.get(itemId);
+        const nextQty = Number(existing?.receiptQty || 0) + qty;
+        const nextValue = Number(existing?.receiptValue || 0) + lineValue;
+        const fallbackRate = lineRate || Number(item.rate || 0);
+
+        virtualRows.set(itemId, {
+          id: item.id,
+          type: "Other",
+          erpCode: item.erp,
+          name: item.name,
+          uom: line.uom || item.uom || "",
+          openingQty: 0,
+          openingRate: nextQty > 0 && nextValue > 0 ? nextValue / nextQty : fallbackRate,
+          openingValue: 0,
+          receiptQty: nextQty,
+          receiptValue: nextValue,
+          active: "Yes",
+          updatedBy: "Material Receipt",
+          updateTimestamp: receipt.updateTimestamp || receipt.timestamp,
+          isVirtualReceiptItem: true,
+        });
+      });
+    });
+
+    return [...materials, ...Array.from(virtualRows.values())];
+  }, [materialIn, materials, npdItems]);
   const filteredMaterials = useMemo(() => {
     const getSortNumber = (value: number | undefined | null) => {
       const numericValue = Number(value);
       return Number.isFinite(numericValue) ? numericValue : -Infinity;
     };
 
-    return [...materials]
+    return [...materialDisplayRows]
       .filter((material) => {
         const matchesSearch = !searchTerm || normalizeText(material.erpCode).includes(searchTerm.toLowerCase()) || normalizeText(material.name).includes(searchTerm.toLowerCase());
         const matchesType = typeFilter === "All" || material.type === typeFilter;
@@ -290,7 +332,7 @@ export function Materials() {
 
         return sortDirection === "asc" ? compare : -compare;
       });
-  }, [colorFilter, gsmFilter, materials, searchTerm, sizeFilter, sortDirection, sortKey, typeFilter]);
+  }, [colorFilter, gsmFilter, materialDisplayRows, searchTerm, sizeFilter, sortDirection, sortKey, typeFilter]);
 
   const metrics = useMemo(() => {
     let openingQtyTotal = 0;
@@ -307,7 +349,7 @@ export function Materials() {
       const movement = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
       const openingQty = Number(material.openingQty || 0);
       const openingRate = Number(material.openingRate || 0);
-      const openingValue = Number(material.openingValue ?? (openingQty * openingRate ?? 0));
+      const openingValue = Number(material.openingValue ?? (openingQty * openingRate));
       const receiptQty = Number(movement.receipts || 0);
       const issueQty = Number(movement.issues || 0);
       const returnQty = Number(movement.returns || 0);
@@ -1360,10 +1402,11 @@ export function Materials() {
                     </tr>
                   ) : (
                     paginatedMaterials.map((material, index) => {
+                      const isVirtualReceiptItem = Boolean((material as MaterialDisplayRow).isVirtualReceiptItem);
                       const mvt = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
                       const openingQty = Number(material.openingQty || 0);
                       const openingRate = Number(material.openingRate || 0);
-                      const openingValue = Number(material.openingValue ?? (openingQty * openingRate ?? 0));
+                      const openingValue = Number(material.openingValue ?? (openingQty * openingRate));
                       const balance = openingQty + mvt.receipts + mvt.returns - mvt.issues;
                       const receiptValue = mvt.receipts * openingRate;
                       const issueValue = mvt.issues * openingRate;
@@ -1381,7 +1424,7 @@ export function Materials() {
                             />
                           </td>
                           <td className="px-4 py-3 text-black font-bold text-xs">{(page - 1) * pageSize + index + 1}</td>
-                          <td className="px-4 py-3 text-black text-[10px] font-bold uppercase">{material.type}</td>
+                          <td className="px-4 py-3 text-black text-[10px] font-bold uppercase">{isVirtualReceiptItem ? "FG" : material.type}</td>
                           <td className="px-4 py-3 text-black text-xs font-black tracking-tight">{material.erpCode || ""}</td>
                           <td className="px-4 py-3 text-black text-xs font-bold min-w-[300px]">{material.name}</td>
                           <td className="px-4 py-3 text-black text-xs">{material.size ?? "-"}</td>
@@ -1421,33 +1464,39 @@ export function Materials() {
                             {material.tallyMaterialId || "-"}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleEdit(material)}
-                                className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition border border-transparent hover:border-indigo-200"
-                                title="Edit Item"
-                              >
-                                <Edit size={14} />
-                              </button>
-                              <button
-                                onClick={() => handleToggleActive(material)}
-                                className={`p-1.5 rounded transition border border-transparent ${
-                                  material.active === "No"
-                                    ? "text-slate-400 hover:bg-slate-50 hover:border-slate-200"
-                                    : "text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200"
-                                }`}
-                                title={material.active === "No" ? "Mark Active" : "Mark Inactive"}
-                              >
-                                <CheckCircle size={14} />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(material.id)}
-                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition border border-transparent hover:border-rose-200"
-                                title="Delete Item"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
+                            {isVirtualReceiptItem ? (
+                              <span className="rounded border border-slate-400 bg-slate-50 px-2 py-1 text-[9px] font-black uppercase text-slate-600">
+                                Receipt Item
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleEdit(material)}
+                                  className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition border border-transparent hover:border-indigo-200"
+                                  title="Edit Item"
+                                >
+                                  <Edit size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleToggleActive(material)}
+                                  className={`p-1.5 rounded transition border border-transparent ${
+                                    material.active === "No"
+                                      ? "text-slate-400 hover:bg-slate-50 hover:border-slate-200"
+                                      : "text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200"
+                                  }`}
+                                  title={material.active === "No" ? "Mark Active" : "Mark Inactive"}
+                                >
+                                  <CheckCircle size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(material.id)}
+                                  className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition border border-transparent hover:border-rose-200"
+                                  title="Delete Item"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );

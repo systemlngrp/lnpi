@@ -126,7 +126,7 @@ export function OrdersMaster() {
       const canceledQty = toNumber(canceledQtyByOrderId.get(order.id));
       const invoicedQty = toNumber(invoicedQtyByOrderId.get(order.id));
       const orderAmount = toNumber(order.orderAmount) || toNumber(order.qty) * toNumber(order.rate);
-      const pendingQty = Math.max(0, toNumber(order.qty) - canceledQty);
+      const pendingQty = Math.max(0, toNumber(order.qty) - canceledQty - invoicedQty);
 
       return {
         order,

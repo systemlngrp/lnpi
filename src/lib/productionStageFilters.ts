@@ -1,5 +1,5 @@
 import { Production } from "../types";
-import { hasWorkflowValue } from "./productionMaterialUsage";
+import { hasPaperNotRequiredBypass, hasWorkflowValue } from "./productionMaterialUsage";
 
 export function isProductionPendingPH(production: Production) {
   return false;
@@ -12,16 +12,31 @@ export function getProductionDisplayStatus(production: Production) {
   return production.status;
 }
 
-export function isProductionPendingConsumption(production: Production, actualPaperUsed = production.actualPaperUsed) {
-  // PH approval is not required for issuing material.
-  // Any open job without actual paper usage is eligible for "Pending Material Issue".
-  return !production.cancelTimestamp && !production.tallyTimestamp && !hasWorkflowValue(actualPaperUsed);
+function isFgUnlocked(production: Production, actualPaperUsed: unknown, hasCorrugatedSheetUsage = false) {
+  return hasWorkflowValue(actualPaperUsed) || hasCorrugatedSheetUsage || hasPaperNotRequiredBypass(production);
 }
 
-export function isProductionPendingFFG(production: Production, actualPaperUsed = production.actualPaperUsed) {
-  return !production.cancelTimestamp && !production.tallyTimestamp && hasWorkflowValue(actualPaperUsed) && !hasWorkflowValue(production.prodFromFFG);
+export function isProductionPendingConsumption(
+  production: Production,
+  actualPaperUsed = production.actualPaperUsed,
+  hasCorrugatedSheetUsage = false
+) {
+  return !production.cancelTimestamp && !production.tallyTimestamp && !isFgUnlocked(production, actualPaperUsed, hasCorrugatedSheetUsage);
 }
 
-export function isProductionReadyForTally(production: Production, actualPaperUsed = production.actualPaperUsed) {
-  return !production.cancelTimestamp && !production.tallyTimestamp && hasWorkflowValue(actualPaperUsed) && hasWorkflowValue(production.prodFromFFG);
+export function isProductionPendingFFG(
+  production: Production,
+  actualPaperUsed = production.actualPaperUsed,
+  hasCorrugatedSheetUsage = false
+) {
+  return !production.cancelTimestamp && !production.tallyTimestamp && isFgUnlocked(production, actualPaperUsed, hasCorrugatedSheetUsage) && !hasWorkflowValue(production.prodFromFFG);
 }
+
+export function isProductionReadyForTally(
+  production: Production,
+  actualPaperUsed = production.actualPaperUsed,
+  hasCorrugatedSheetUsage = false
+) {
+  return !production.cancelTimestamp && !production.tallyTimestamp && isFgUnlocked(production, actualPaperUsed, hasCorrugatedSheetUsage) && hasWorkflowValue(production.prodFromFFG);
+}
+

@@ -11,6 +11,8 @@ import {
   LoadingSlipLine,
   Production,
   PackingDetail,
+  LinkedLoadingDetail,
+  OrderItemSource,
 } from "../types";
 import {
   Truck as TruckIcon,
@@ -28,9 +30,13 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { normalizeOrderItemSource } from "../lib/orderItems";
+import { buildLinkedLoadingDetailsFromSlip, findLinkedItemByErp, getLinkedSetsPerBox } from "../lib/linkedLoading";
+import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
 
 interface PendingPlan extends DispatchPlan {
   companyName: string;
+  itemSource: OrderItemSource;
   orderNo: string;
   pendingQty: number;
 }
@@ -38,6 +44,7 @@ interface PendingPlan extends DispatchPlan {
 interface GroupedPlan {
   companyId: string;
   companyName: string;
+  itemSource: OrderItemSource;
   itemId: string;
   itemName: string;
   plans: PendingPlan[];
@@ -45,6 +52,7 @@ interface GroupedPlan {
 
 interface LoadingModalState {
   companyId: string;
+  itemSource: OrderItemSource;
   itemId: string;
   plans: PendingPlan[];
 }
@@ -53,6 +61,12 @@ interface JobOption {
   jobId: string;
   jobNo: string;
   ffg: number;
+}
+
+type LinkedSide = Extract<OrderItemSource, "PHP" | "PLATE">;
+
+function createEmptyPackingRows(): PackingDetail[] {
+  return [{ bundles: 0, packSize: 0, quantity: 0 }];
 }
 
 function getLoadingSlipJobAllocations(line: LoadingSlipLine): Array<{ jobId: string; jobNo: string; qty: number }> {
@@ -73,11 +87,15 @@ export function PendingLoading() {
   const [plans, updatePlans, plansLoading] = useData<DispatchPlan>("dispatch_plans", []);
   const [trucks] = useData<Truck>("trucks", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem } = useOrderItemCatalog();
+  const { resolveOrderItem, itemsBySource } = useOrderItemCatalog();
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [productions] = useData<Production>("productions", []);
+  const [phpJobs] = useData<Production>("php_job_master", []);
+  const [plateJobs] = useData<Production>("plate_job_master", []);
   const [loadingSlips, updateLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [, updatePhpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
+  const [, updatePlateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -91,10 +109,19 @@ export function PendingLoading() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [modalTruckId, setModalTruckId] = useState<string>("");
-  const [packingDetails, setPackingDetails] = useState<PackingDetail[]>([{ bundles: 0, packSize: 0, quantity: 0 }]);
+  const [packingDetails, setPackingDetails] = useState<PackingDetail[]>(createEmptyPackingRows());
   const [extraItemsQty, setExtraItemsQty] = useState<number | "">("");
+  const [linkedPackingDetails, setLinkedPackingDetails] = useState<Record<LinkedSide, PackingDetail[]>>({
+    PHP: createEmptyPackingRows(),
+    PLATE: createEmptyPackingRows(),
+  });
+  const [linkedExtraItemsQty, setLinkedExtraItemsQty] = useState<Record<LinkedSide, number | "">>({
+    PHP: "",
+    PLATE: "",
+  });
 
-  const productionMap = useMemo(() => new Map(productions.map((production) => [production.id, production])), [productions]);
+  const allProductionJobs = useMemo(() => [...productions, ...phpJobs, ...plateJobs], [phpJobs, plateJobs, productions]);
+  const productionMap = useMemo(() => new Map(allProductionJobs.map((production) => [production.id, production])), [allProductionJobs]);
 
   const isOpenJob = (production?: Production | null) => {
     if (!production) return false;
@@ -139,11 +166,13 @@ export function PendingLoading() {
       const company = companies.find((row) => row.id === order?.companyId);
       if (!item || !company) return;
 
-      const key = `${company.id}::${item.id}`;
+      const itemSource = normalizeOrderItemSource(order?.itemSource || item.source);
+      const key = `${company.id}::${itemSource}::${item.id}`;
       if (!map.has(key)) {
         map.set(key, {
           companyId: company.id,
           companyName: company.name,
+          itemSource,
           itemId: item.id,
           itemName: item.name,
           plans: [],
@@ -154,6 +183,7 @@ export function PendingLoading() {
       group.plans.push({
         ...plan,
         companyName: company.name,
+        itemSource,
         orderNo: order?.orderNo || "N/A",
         pendingQty: Number(plan.plannedQty || 0) - Number(plan.loadedQty || 0) - Number(plan.canceledQty || 0),
       });
@@ -173,7 +203,7 @@ export function PendingLoading() {
     });
 
     return final;
-  }, [companies, npdItems, orders, plans, searchTerm]);
+  }, [companies, orders, plans, resolveOrderItem, searchTerm]);
 
   useEffect(() => {
     if (didInitExpand.current) return;
@@ -198,20 +228,21 @@ export function PendingLoading() {
 
   const getRemainingCapacityForJob = (jobId: string, currentRowQty = 0) => {
     const production = productionMap.get(jobId);
-    const ffg = Number(production?.prodFromFFG || 0);
+    const jobSource = normalizeOrderItemSource(production?.itemSource);
+    const ffg = Number(jobSource === "FG" ? production?.prodFromFFG || 0 : production?.productionOutputQty || 0);
     const alreadyLoaded = getAlreadyLoadedForJob(jobId);
     const currentAdjustments = currentAdjustmentByJobId.get(jobId) || 0;
     return Math.max(0, ffg - alreadyLoaded - currentAdjustments + currentRowQty);
   };
 
-  const getModalKey = (companyId: string, itemId: string) => `${companyId}::${itemId}`;
+  const getModalKey = (companyId: string, itemSource: OrderItemSource, itemId: string) => `${companyId}::${itemSource}::${itemId}`;
 
   const getModalValidation = (modal: LoadingModalState) => {
-    const modalKey = getModalKey(modal.companyId, modal.itemId);
+    const modalKey = getModalKey(modal.companyId, modal.itemSource, modal.itemId);
     const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
     const byJobId = jobSplitQtys[modalKey] || {};
     const openingStockQty = getPlanOpeningStockQty(modalKey);
-    const jobAllocatedTotal = Object.values(byJobId).reduce((sum, qty) => sum + Number(qty || 0), 0);
+    const jobAllocatedTotal = Object.values(byJobId).reduce<number>((sum, qty) => sum + Number(qty || 0), 0);
     const allocatedTotal = jobAllocatedTotal + openingStockQty;
     const errors: string[] = [];
 
@@ -230,9 +261,10 @@ export function PendingLoading() {
       }
     });
 
-    if (openingStockQty < 0) errors.push("FG Stock quantity cannot be negative.");
+    const stockLabel = modal.itemSource === "FG" ? "FG Stock" : `${modal.itemSource} Stock`;
+    if (openingStockQty < 0) errors.push(`${stockLabel} quantity cannot be negative.`);
     if (allocatedTotal <= 0) errors.push("At least one positive adjustment is required.");
-    if (Math.abs(allocatedTotal - rowLoadedQty) > 0.0001) errors.push("Job/FG Stock total must exactly match Loaded qty.");
+    if (Math.abs(allocatedTotal - rowLoadedQty) > 0.0001) errors.push(`Job/${stockLabel} total must exactly match Loaded qty.`);
 
     const packingTotal = packingDetails.reduce((sum, d) => sum + Number(d.quantity || 0), 0) + Number(extraItemsQty || 0);
     if (Math.abs(packingTotal - rowLoadedQty) > 0.0001) {
@@ -247,19 +279,20 @@ export function PendingLoading() {
     return !getModalValidation(loadingModal).isValid;
   }, [jobSplitQtys, loadedQuantities, loadingModal, openingStockQtys, currentAdjustmentByJobId, existingLoadedByJobId, productionMap, modalTruckId, packingDetails, extraItemsQty]);
 
-  const handleOpenLoad = (companyId: string, itemId: string, itemPlans: PendingPlan[]) => {
-    setLoadingModal({ companyId, itemId, plans: itemPlans });
-    const modalKey = getModalKey(companyId, itemId);
+  const handleOpenLoad = (companyId: string, itemSource: OrderItemSource, itemId: string, itemPlans: PendingPlan[]) => {
+    setLoadingModal({ companyId, itemSource, itemId, plans: itemPlans });
+    const modalKey = getModalKey(companyId, itemSource, itemId);
     const totalPending = itemPlans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
-    const eligibleJobs = productions
+    const sourceJobs = itemSource === "PHP" ? phpJobs : itemSource === "PLATE" ? plateJobs : productions;
+    const eligibleJobs = sourceJobs
       .filter((p) => 
         p.itemId === itemId && 
         isOpenJob(p) &&
-        Number(p.prodFromFFG || 0) > 0
+        Number(itemSource === "FG" ? p.prodFromFFG || 0 : p.productionOutputQty || 0) > 0
       )
       .map((p) => {
-        const ffg = Number(p.prodFromFFG || 0);
+        const ffg = Number(itemSource === "FG" ? p.prodFromFFG || 0 : p.productionOutputQty || 0);
         const alreadyLoaded = getAlreadyLoadedForJob(p.id);
         return { jobId: p.id, jobNo: String(p.transactionNo || "").trim(), ffg, yetToLoad: Math.max(0, ffg - alreadyLoaded) };
       })
@@ -272,8 +305,10 @@ export function PendingLoading() {
       [modalKey]: Object.fromEntries(eligibleJobs.map((j) => [j.jobId, ""])),
     });
     setModalTruckId("");
-    setPackingDetails([{ bundles: 0, packSize: 0, quantity: 0 }]);
+    setPackingDetails(createEmptyPackingRows());
     setExtraItemsQty("");
+    setLinkedPackingDetails({ PHP: createEmptyPackingRows(), PLATE: createEmptyPackingRows() });
+    setLinkedExtraItemsQty({ PHP: "", PLATE: "" });
   };
 
   const handleCloseLoad = () => {
@@ -282,8 +317,42 @@ export function PendingLoading() {
     setJobSplitQtys({});
     setOpeningStockQtys({});
     setModalTruckId("");
-    setPackingDetails([{ bundles: 0, packSize: 0, quantity: 0 }]);
+    setPackingDetails(createEmptyPackingRows());
     setExtraItemsQty("");
+    setLinkedPackingDetails({ PHP: createEmptyPackingRows(), PLATE: createEmptyPackingRows() });
+    setLinkedExtraItemsQty({ PHP: "", PLATE: "" });
+  };
+
+  const getPreviewLinkedDetails = (source: LinkedSide, loadedQty: number): LinkedLoadingDetail[] => {
+    if (!loadingModal || !(loadedQty > 0)) return [];
+    const firstPlan = loadingModal.plans[0];
+    const order = orders.find((row) => row.id === firstPlan?.orderId);
+    const fgItem = resolveOrderItem(order);
+    const sourceItems = itemsBySource[source] || [];
+    const itemErp = String(order?.erpCode || fgItem?.erp || "").trim();
+    const linkedItem = findLinkedItemByErp(sourceItems, itemErp);
+    const setsPerBox = getLinkedSetsPerBox(linkedItem);
+    if (!linkedItem || !setsPerBox) return [];
+    const raw = linkedItem.raw || {};
+    const sidePackingDetails = linkedPackingDetails[source]
+      .filter((row) => Number(row.bundles || 0) > 0 && Number(row.packSize || 0) > 0)
+      .map((row) => ({
+        bundles: Number(row.bundles || 0),
+        packSize: Number(row.packSize || 0),
+        quantity: Number(row.quantity || 0),
+      }));
+    return [{
+      source,
+      itemId: linkedItem.id,
+      itemName: linkedItem.name,
+      companyName: linkedItem.companyName,
+      erpCode: itemErp || undefined,
+      masterErp: String(raw.masterItemNameErpCode || "").trim() || undefined,
+      setsPerBox,
+      requiredQty: parseFloat((loadedQty * setsPerBox).toFixed(2)),
+      packingDetails: sidePackingDetails.length > 0 ? sidePackingDetails : undefined,
+      extraItemsQty: Number(linkedExtraItemsQty[source] || 0) || undefined,
+    }];
   };
 
   const handleAddPackingRow = () => {
@@ -304,10 +373,44 @@ export function PendingLoading() {
     setPackingDetails(next);
   };
 
+  const getLinkedPackingTotal = (source: LinkedSide) =>
+    linkedPackingDetails[source].reduce((sum, row) => sum + Number(row.quantity || 0), 0) + Number(linkedExtraItemsQty[source] || 0);
+
+  const handleAddLinkedPackingRow = (source: LinkedSide) => {
+    setLinkedPackingDetails((prev) => ({
+      ...prev,
+      [source]: [...prev[source], { bundles: 0, packSize: 0, quantity: 0 }],
+    }));
+  };
+
+  const handleRemoveLinkedPackingRow = (source: LinkedSide, index: number) => {
+    setLinkedPackingDetails((prev) => {
+      const nextRows = [...prev[source]];
+      nextRows.splice(index, 1);
+      return {
+        ...prev,
+        [source]: nextRows.length > 0 ? nextRows : createEmptyPackingRows(),
+      };
+    });
+  };
+
+  const handleUpdateLinkedPackingRow = (source: LinkedSide, index: number, field: keyof PackingDetail, value: number) => {
+    setLinkedPackingDetails((prev) => {
+      const nextRows = [...prev[source]];
+      const row = { ...nextRows[index], [field]: value };
+      row.quantity = row.bundles * row.packSize;
+      nextRows[index] = row;
+      return {
+        ...prev,
+        [source]: nextRows,
+      };
+    });
+  };
+
   const handleSubmitLoading = async () => {
     if (!loadingModal) return;
 
-    const modalKey = getModalKey(loadingModal.companyId, loadingModal.itemId);
+    const modalKey = getModalKey(loadingModal.companyId, loadingModal.itemSource, loadingModal.itemId);
     const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
     const validation = getModalValidation(loadingModal);
 
@@ -330,7 +433,7 @@ export function PendingLoading() {
 
     const openingStockQty = getPlanOpeningStockQty(modalKey);
     if (openingStockQty > 0) {
-      allocationPool.push({ sourceType: "opening_stock", sourceRef: "FG Stock", qty: openingStockQty });
+      allocationPool.push({ sourceType: "opening_stock", sourceRef: loadingModal.itemSource === "FG" ? "FG Stock" : `${loadingModal.itemSource} Stock`, qty: openingStockQty });
     }
 
     const sortedPlans = [...loadingModal.plans].sort((a, b) =>
@@ -370,7 +473,22 @@ export function PendingLoading() {
         return;
       }
 
-      lines.push({ dispatchPlanId: plan.id, loadedQty: planLoad, allocations: consumed.allocations });
+      const order = orders.find((row) => row.id === plan.orderId);
+      const item = resolveOrderItem(order);
+      lines.push({
+        dispatchPlanId: plan.id,
+        loadedQty: planLoad,
+        allocations: consumed.allocations,
+        companyId: loadingModal.companyId,
+        companyName: plan.companyName,
+        itemId: loadingModal.itemId,
+        itemName: item?.name,
+        itemSource: loadingModal.itemSource,
+        erpCode: String(order?.erpCode || item?.erp || "").trim() || undefined,
+        rate: Number(order?.rate ?? item?.rate ?? 0) || undefined,
+        gstRate: Number((item as any)?.gstRate ?? 18),
+        uom: item?.uom,
+      });
       remainingToDistribute -= planLoad;
     }
 
@@ -381,7 +499,7 @@ export function PendingLoading() {
 
     setIsSubmitting(true);
     try {
-      const newSlip: LoadingSlip = {
+      const baseSlip: LoadingSlip = {
         id: crypto.randomUUID(),
         slipNo: "",
         date: new Date().toISOString().slice(0, 10),
@@ -390,8 +508,39 @@ export function PendingLoading() {
         packingDetails: packingDetails.filter(d => d.bundles > 0 && d.packSize > 0),
         extraItemsQty: Number(extraItemsQty || 0) || undefined,
       };
+      const phpDetails = buildLinkedLoadingDetailsFromSlip({
+        slip: baseSlip,
+        source: "PHP",
+        plans,
+        orders,
+        resolveOrderItem,
+        sourceItems: itemsBySource.PHP || [],
+      }).map((detail) => ({
+        ...detail,
+        packingDetails: linkedPackingDetails.PHP.filter((row) => Number(row.bundles || 0) > 0 && Number(row.packSize || 0) > 0),
+        extraItemsQty: Number(linkedExtraItemsQty.PHP || 0) || undefined,
+      }));
+      const plateDetails = buildLinkedLoadingDetailsFromSlip({
+        slip: baseSlip,
+        source: "PLATE",
+        plans,
+        orders,
+        resolveOrderItem,
+        sourceItems: itemsBySource.PLATE || [],
+      }).map((detail) => ({
+        ...detail,
+        packingDetails: linkedPackingDetails.PLATE.filter((row) => Number(row.bundles || 0) > 0 && Number(row.packSize || 0) > 0),
+        extraItemsQty: Number(linkedExtraItemsQty.PLATE || 0) || undefined,
+      }));
+      const newSlip: LoadingSlip = {
+        ...baseSlip,
+        phpDetails,
+        plateDetails,
+      };
 
       await updateLoadingSlips((prev) => [...prev, newSlip]);
+      await updatePhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: phpDetails }));
+      await updatePlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: plateDetails }));
 
       await updatePlans((prev) =>
         prev.map((plan) => {
@@ -504,7 +653,7 @@ export function PendingLoading() {
                           <span className="font-bold text-sm text-black uppercase tracking-wider">{itemGroup.itemName}</span>
                         </div>
                         <button
-                          onClick={() => handleOpenLoad(company.companyId, itemGroup.itemId, itemGroup.plans)}
+                          onClick={() => handleOpenLoad(company.companyId, itemGroup.itemSource, itemGroup.itemId, itemGroup.plans)}
                           className="bg-black text-white px-5 py-2 rounded text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition shadow-[4px_4px_0px_0px_rgba(79,70,229,1)] active:shadow-none active:translate-y-[2px]"
                         >
                           LOAD ITEM
@@ -623,22 +772,25 @@ export function PendingLoading() {
 
               <div className="space-y-6">
                 {(() => {
-                  const modalKey = getModalKey(loadingModal.companyId, loadingModal.itemId);
+                  const modalKey = getModalKey(loadingModal.companyId, loadingModal.itemSource, loadingModal.itemId);
                   const totalPlanned = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
                   const totalLoaded = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.loadedQty || 0), 0);
                   const totalCancelled = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.canceledQty || 0), 0);
                   const totalPending = loadingModal.plans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
                   const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
                   const validation = getModalValidation(loadingModal);
+                  const phpDetailsPreview = getPreviewLinkedDetails("PHP", rowLoadedQty);
+                  const plateDetailsPreview = getPreviewLinkedDetails("PLATE", rowLoadedQty);
 
-                  const jobs = productions
+                  const modalSourceJobs = loadingModal.itemSource === "PHP" ? phpJobs : loadingModal.itemSource === "PLATE" ? plateJobs : productions;
+                  const jobs = modalSourceJobs
                     .filter((p) => 
                       p.itemId === loadingModal.itemId && 
                       isOpenJob(p) &&
-                      Number(p.prodFromFFG || 0) > 0
+                      Number(loadingModal.itemSource === "FG" ? p.prodFromFFG || 0 : p.productionOutputQty || 0) > 0
                     )
                     .map((p) => {
-                      const ffg = Number(p.prodFromFFG || 0);
+                      const ffg = Number(loadingModal.itemSource === "FG" ? p.prodFromFFG || 0 : p.productionOutputQty || 0);
                       const alreadyLoaded = getAlreadyLoadedForJob(p.id);
                       const yetToLoad = Math.max(0, ffg - alreadyLoaded);
                       return { jobId: p.id, jobNo: String(p.transactionNo || "").trim(), ffg, alreadyLoaded, yetToLoad };
@@ -723,7 +875,7 @@ export function PendingLoading() {
                                 );
                               })}
                               <tr className="divide-x divide-black bg-emerald-50/40 border-t-2 border-black">
-                                <td className="px-4 py-4 text-xs font-black uppercase text-emerald-800">FG Stock</td>
+                                <td className="px-4 py-4 text-xs font-black uppercase text-emerald-800">{loadingModal.itemSource === "FG" ? "FG Stock" : `${loadingModal.itemSource} Stock`}</td>
                                 <td className="px-4 py-4 text-right text-xs text-slate-500">-</td>
                                 <td className="px-4 py-4 text-right text-xs text-slate-500">-</td>
                                 <td className="px-4 py-4 text-right text-xs text-slate-500">-</td>
@@ -751,6 +903,127 @@ export function PendingLoading() {
                             </tfoot>
                           </table>
                         </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        {[
+                          { source: "PHP" as const, title: "PHP Details", rows: phpDetailsPreview, emptyLabel: "No matched PHP item" },
+                          { source: "PLATE" as const, title: "Plate Details", rows: plateDetailsPreview, emptyLabel: "No matched Plate item" },
+                        ].map((section) => (
+                          <div key={section.title} className="border-2 border-black rounded overflow-hidden bg-white">
+                            <div className="bg-slate-900 px-4 py-3 text-sm font-black uppercase tracking-wider text-white">{section.title}</div>
+                            <table className="min-w-full divide-y divide-black border-collapse">
+                              <thead className="bg-slate-100">
+                                <tr className="divide-x divide-black">
+                                  <th className="px-4 py-2 text-left text-[10px] font-black uppercase">SL</th>
+                                  <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Item ERP</th>
+                                  <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Master ERP</th>
+                                  <th className="px-4 py-2 text-left text-[10px] font-black uppercase">{section.title === "PHP Details" ? "PHP Item Name" : "Plate Item Name"}</th>
+                                  <th className="px-4 py-2 text-right text-[10px] font-black uppercase">Sets/Box</th>
+                                  <th className="px-4 py-2 text-right text-[10px] font-black uppercase">Required Qty</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-black">
+                                {section.rows.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={6} className="px-4 py-5 text-center text-xs font-semibold text-slate-500">{section.emptyLabel}</td>
+                                  </tr>
+                                ) : (
+                                  section.rows.map((detail, index) => (
+                                    <tr key={`${section.title}-${detail.itemId}`} className="divide-x divide-black">
+                                      <td className="px-4 py-2 text-xs font-black">{index + 1}</td>
+                                      <td className="px-4 py-2 text-xs font-semibold text-slate-700">{detail.erpCode || "-"}</td>
+                                      <td className="px-4 py-2 text-xs font-semibold text-slate-700">{detail.masterErp || "-"}</td>
+                                      <td className="px-4 py-2 text-xs font-semibold text-black">{detail.itemName}</td>
+                                      <td className="px-4 py-2 text-right text-xs font-black text-slate-700">{detail.setsPerBox.toLocaleString()}</td>
+                                      <td className="px-4 py-2 text-right text-xs font-black text-indigo-700">{detail.requiredQty.toLocaleString()}</td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+
+                            {section.rows.length > 0 ? (
+                              <div className="border-t-2 border-black">
+                                <div className="flex items-center justify-between px-4 py-3 bg-indigo-50/60 border-b border-black">
+                                  <div className="text-xs font-black uppercase tracking-wider text-black">{section.source} Packing Details</div>
+                                  <div className="text-[11px] font-bold text-slate-500">
+                                    Total: <span className="text-sm font-black text-emerald-700">{getLinkedPackingTotal(section.source).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                                <table className="min-w-full divide-y divide-black border-collapse">
+                                  <thead className="bg-slate-100">
+                                    <tr className="divide-x divide-black">
+                                      <th className="px-4 py-2 text-left text-[10px] font-black uppercase">No. of Bundles</th>
+                                      <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Pack Size</th>
+                                      <th className="px-4 py-2 text-right text-[10px] font-black uppercase">Quantity</th>
+                                      <th className="px-4 py-2 text-center text-[10px] font-black uppercase w-16">Action</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-black">
+                                    {linkedPackingDetails[section.source].map((detail, idx) => (
+                                      <tr key={`${section.source}-${idx}`} className="divide-x divide-black">
+                                        <td className="px-4 py-2">
+                                          <input
+                                            type="number"
+                                            value={detail.bundles || ""}
+                                            onChange={(e) => handleUpdateLinkedPackingRow(section.source, idx, "bundles", parseFloat(e.target.value) || 0)}
+                                            className="w-full rounded border-2 border-yellow-400 bg-yellow-100 px-2 py-1 text-xs font-bold text-black focus:border-black focus:outline-none"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-2">
+                                          <input
+                                            type="number"
+                                            value={detail.packSize || ""}
+                                            onChange={(e) => handleUpdateLinkedPackingRow(section.source, idx, "packSize", parseFloat(e.target.value) || 0)}
+                                            className="w-full rounded border-2 border-yellow-400 bg-yellow-100 px-2 py-1 text-xs font-bold text-black focus:border-black focus:outline-none"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-2 text-right text-xs font-black bg-slate-50">
+                                          {detail.quantity.toLocaleString()}
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                          <button
+                                            onClick={() => handleRemoveLinkedPackingRow(section.source, idx)}
+                                            disabled={linkedPackingDetails[section.source].length <= 1}
+                                            className="text-rose-600 hover:text-rose-800 disabled:opacity-30"
+                                          >
+                                            <Trash2 size={16} />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    <tr className="bg-emerald-50/30 border-t-2 border-black">
+                                      <td colSpan={2} className="px-4 py-3 text-xs font-black uppercase text-emerald-800 italic">Extra ({section.source})</td>
+                                      <td className="px-4 py-2">
+                                        <input
+                                          type="number"
+                                          value={linkedExtraItemsQty[section.source] ?? ""}
+                                          onChange={(e) =>
+                                            setLinkedExtraItemsQty((prev) => ({
+                                              ...prev,
+                                              [section.source]: e.target.value === "" ? "" : parseFloat(e.target.value),
+                                            }))
+                                          }
+                                          className="w-full rounded border-2 border-yellow-500 bg-yellow-100 px-2 py-1.5 text-right font-black text-xs text-black focus:ring-0"
+                                          placeholder={`Enter ${section.source} Extra Qty`}
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2 text-center">
+                                        <button
+                                          onClick={() => handleAddLinkedPackingRow(section.source)}
+                                          className="bg-black text-white p-1.5 rounded-full hover:bg-slate-800 transition shadow-[2px_2px_0px_0px_rgba(79,70,229,1)] active:shadow-none"
+                                        >
+                                          <Plus size={16} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
 
                       <div className="space-y-4">
@@ -840,8 +1113,8 @@ export function PendingLoading() {
               <div className="flex justify-between items-center p-6 bg-slate-50 border-t-2 border-black sticky bottom-0 z-10">
                 <div className="flex flex-col">
                     <div className="text-[10px] font-black uppercase text-slate-500">Remaining Balance</div>
-                    <div className={cn("text-2xl font-black", Math.abs(getModalValidation(loadingModal).allocatedTotal - Number(loadedQuantities[getModalKey(loadingModal.companyId, loadingModal.itemId)] || 0)) < 0.0001 ? "text-emerald-600" : "text-rose-600")}>
-                        {(Number(loadedQuantities[getModalKey(loadingModal.companyId, loadingModal.itemId)] || 0) - getModalValidation(loadingModal).allocatedTotal).toLocaleString()}
+                    <div className={cn("text-2xl font-black", Math.abs(getModalValidation(loadingModal).allocatedTotal - Number(loadedQuantities[getModalKey(loadingModal.companyId, loadingModal.itemSource, loadingModal.itemId)] || 0)) < 0.0001 ? "text-emerald-600" : "text-rose-600")}>
+                        {(Number(loadedQuantities[getModalKey(loadingModal.companyId, loadingModal.itemSource, loadingModal.itemId)] || 0) - getModalValidation(loadingModal).allocatedTotal).toLocaleString()}
                     </div>
                 </div>
                 <div className="flex gap-4">

@@ -20,7 +20,15 @@ import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { getAvailableReelPackingSlips, getNonReelAvailableQty } from "../lib/materialMovement";
-import { buildProductionMaterialUsageMap, syncProductionWorkflowFromUsage } from "../lib/productionMaterialUsage";
+import {
+  buildProductionCorrugatedSheetUsageMap,
+  buildProductionMaterialUsageMap,
+  isCorrugatedSheetMaterial,
+  syncProductionWorkflowFromUsage,
+} from "../lib/productionMaterialUsage";
+import { useNpdItems } from "../hooks/useNpdItems";
+
+type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean; isNpdConsumableItem?: boolean; npdSourceId?: string };
 
 function normalizeDate(value?: string | null) {
   return String(value || "").slice(0, 10);
@@ -29,6 +37,17 @@ function normalizeDate(value?: string | null) {
 function isWithoutJobIssue(issueType?: string) {
   const t = String(issueType || "").trim().toLowerCase();
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
+}
+
+function isConsumableNpdItem(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  const truthyValues = new Set(["1", "true", "yes", "y", "on"]);
+  return truthyValues.has(normalized);
 }
 
 export function MaterialIssueForm() {
@@ -56,11 +75,14 @@ export function MaterialIssueForm() {
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [materialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
+  const npdItems = useNpdItems();
 
   const requestedDate = normalizeDate(searchParams.get("date"));
   const lockDate = searchParams.get("lockDate") === "1";
   const lockIssueType = searchParams.get("lockIssueType") === "1";
   const requestedIssueTypeRaw = String(searchParams.get("issueType") || "").trim();
+  const materialFilter = String(searchParams.get("materialFilter") || "").trim().toLowerCase();
+  const isCorrugatedSheetOnly = materialFilter === "corrugated-sheet";
 
   const [date, setDate] = useState(() => requestedDate || new Date().toISOString().split("T")[0]);
   const requestedProductionId = searchParams.get("productionId") || "";
@@ -102,17 +124,111 @@ export function MaterialIssueForm() {
     [productions]
   );
 
+  const issueMaterials = useMemo<IssueMaterialOption[]>(() => {
+    const existingMaterialIds = new Set(materials.map((material) => String(material.id)));
+    const existingMaterialErpKeys = new Set(
+      materials
+        .map((material) => String(material.erpCode || "").trim().toLowerCase())
+        .filter((value) => value !== "")
+    );
+
+    const fgItems = new Map<string, IssueMaterialOption>();
+    const fgErpKeys = new Set<string>();
+
+    materialIn.forEach((receipt) => {
+      if (receipt.mrrType !== "FG Purchase" && receipt.mrrType !== "Rejection In") return;
+
+      (receipt.lines || []).forEach((line) => {
+        const itemId = String(line.itemId || line.npdId || "").trim();
+        if (!itemId || existingMaterialIds.has(itemId) || fgItems.has(itemId)) return;
+
+        const npdItem = npdItems.find((entry) => String(entry.id) === itemId);
+        if (!npdItem) return;
+
+        const erpCode = String(npdItem.erp || "").trim().toLowerCase();
+        const erpKey = erpCode || `npd:${itemId}`;
+
+        if (existingMaterialErpKeys.has(erpCode)) return;
+        if (fgErpKeys.has(erpCode)) return;
+
+        fgItems.set(itemId, {
+          id: npdItem.id,
+          type: "Other",
+          erpCode: npdItem.erp,
+          name: npdItem.name,
+          uom: line.uom || npdItem.uom || "PCS",
+          active: "Yes",
+          isFgPurchaseItem: true,
+        });
+        fgErpKeys.add(erpKey);
+      });
+    });
+
+    const npdConsumableItems: IssueMaterialOption[] = [];
+    const npdCorrugatedSheetItems: IssueMaterialOption[] = [];
+
+    if (issueType === "Job") {
+      npdItems.forEach((item) => {
+        const itemId = String(item.id || "").trim();
+        if (!itemId) return;
+
+        const erpCode = String(item.erp || "").trim().toLowerCase();
+        const erpKey = erpCode || `npd:${itemId}`;
+
+        if (isCorrugatedSheetOnly && isCorrugatedSheetMaterial({ name: item.name })) {
+          const syntheticId = `npd:${itemId}`;
+          if (!npdCorrugatedSheetItems.some((entry) => String(entry.id) === syntheticId)) {
+            npdCorrugatedSheetItems.push({
+              id: syntheticId,
+              type: "Other",
+              erpCode: item.erp,
+              name: item.name,
+              uom: item.uom || "PCS",
+              active: "Yes",
+              isNpdConsumableItem: true,
+              npdSourceId: itemId,
+            });
+          }
+        }
+
+        if (!isConsumableNpdItem(item.consumable)) return;
+
+        if (existingMaterialIds.has(itemId)) return;
+        if (fgItems.has(itemId)) return;
+        if (existingMaterialErpKeys.has(erpCode)) return;
+        if (fgErpKeys.has(erpKey)) return;
+
+        const syntheticId = `npd:${itemId}`;
+        if (npdConsumableItems.some((entry) => String(entry.id) === syntheticId)) return;
+
+        npdConsumableItems.push({
+          id: syntheticId,
+          type: "Other",
+          erpCode: item.erp,
+          name: item.name,
+          uom: item.uom || "PCS",
+          active: "Yes",
+          isNpdConsumableItem: true,
+          npdSourceId: itemId,
+        });
+      });
+    }
+
+    return [...materials, ...Array.from(fgItems.values()), ...npdConsumableItems, ...npdCorrugatedSheetItems];
+  }, [isCorrugatedSheetOnly, materialIn, materials, npdItems, issueType]);
+
   const materialOptions = useMemo(
     () =>
-      materials
+      issueMaterials
         .filter((material) => material.active !== "No")
         .filter((material) => (isWithoutJobIssue(issueType) ? material.type !== "Reel" : true))
+        .filter((material) => !isCorrugatedSheetOnly || (material.type !== "Reel" && isCorrugatedSheetMaterial(material)))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((material) => ({
           value: material.id,
           label: `${material.name}${material.erpCode ? ` (${material.erpCode})` : ""}`,
         })),
-    [issueType, materials]
+    [isCorrugatedSheetOnly, issueMaterials, issueType]
   );
 
   const issueTypeOptions = [
@@ -122,7 +238,13 @@ export function MaterialIssueForm() {
 
   const selectedProduction = productions.find((production) => production.id === productionId);
 
-  const getMaterial = (materialId: string) => materials.find((material) => material.id === materialId);
+  const getMaterial = (materialId: string) => issueMaterials.find((material) => material.id === materialId);
+  const isNpdConsumableOption = (materialIdOrOption: string | IssueMaterialOption | undefined | null) => {
+    if (!materialIdOrOption) return false;
+    const material =
+      typeof materialIdOrOption === "string" ? getMaterial(materialIdOrOption) : materialIdOrOption;
+    return material?.isNpdConsumableItem === true;
+  };
 
   const handleAddLine = () => {
     if (!currentMaterialId) return;
@@ -130,6 +252,8 @@ export function MaterialIssueForm() {
     if (!material) return;
 
     const isReel = material.type === "Reel";
+    const isNpdConsumable = Boolean(material.isNpdConsumableItem);
+
     if (isReel && issueType !== "Job") {
       alert("Reels can only be issued against a job.");
       return;
@@ -139,20 +263,20 @@ export function MaterialIssueForm() {
       return;
     }
 
-	    if (!isReel) {
-	      const qty = Number(currentQty || 0);
-	      if (qty <= 0) return;
-	      if (issueType === "Job") {
-	        const availableQty = getNonReelAvailableQty(currentMaterialId, materialIn, materialIssueLines, materialReturnLines);
-	        if (qty > availableQty) {
-	          alert(`Available quantity is only ${availableQty}.`);
-	          return;
-	        }
-	      }
-	      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false }]);
-	    } else {
-	      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty: 0, uom: "KG", isReel: true }]);
-	    }
+    if (!isReel) {
+      const qty = Number(currentQty || 0);
+      if (qty <= 0) return;
+      if (issueType === "Job" && !isNpdConsumable) {
+        const availableQty = getNonReelAvailableQty(currentMaterialId, materialIn, materialIssueLines, materialReturnLines);
+        if (qty > availableQty) {
+          alert(`Available quantity is only ${availableQty}.`);
+          return;
+        }
+      }
+      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false }]);
+    } else {
+      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty: 0, uom: "KG", isReel: true }]);
+    }
 
     setCurrentMaterialId("");
     setCurrentQty("");
@@ -261,7 +385,6 @@ export function MaterialIssueForm() {
 
         if (line.isReel) {
           const reelIds = selectedReels[line.id] || [];
-          getLineAvailableReels(line.materialId)
           getAvailableReelPackingSlips(line.materialId, packingSlips, materialIssueReelLines, materialReturnReelLines)
             .filter((slip) => reelIds.includes(slip.id))
             .forEach((slip) => {
@@ -298,11 +421,19 @@ export function MaterialIssueForm() {
           [...materialIssueReelLines, ...nextReelLines],
           materialReturnReelLines
         );
+        const corrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
+          materials,
+          nextMaterialIssues,
+          nextIssueLines,
+          materialReturns,
+          materialReturnLines
+        );
         const netUsage = usageMap.get(productionId) || 0;
+        const hasCorrugatedSheetUsage = Number(corrugatedSheetUsageMap.get(productionId) || 0) > 0;
         await setProductions((prev) =>
           prev.map((production) =>
             production.id === productionId
-              ? syncProductionWorkflowFromUsage(production, netUsage, timestamp)
+              ? syncProductionWorkflowFromUsage(production, netUsage, timestamp, hasCorrugatedSheetUsage)
               : production
           )
         );
@@ -416,7 +547,7 @@ export function MaterialIssueForm() {
           <div className="flex flex-wrap gap-4 items-end bg-slate-50 p-4 rounded border border-black">
             <div className="w-full md:w-80 space-y-1">
               <label className="text-sm font-bold">Material</label>
-              <Select options={materialOptions} value={currentMaterialId} onChange={setCurrentMaterialId} placeholder="Select Material..." />
+              <Select options={materialOptions} value={currentMaterialId} onChange={setCurrentMaterialId} placeholder={isCorrugatedSheetOnly ? "Select Corrugated Sheet..." : "Select Material..."} />
             </div>
             {currentMaterialId && getMaterial(currentMaterialId)?.type !== "Reel" ? (
               <div className="w-full md:w-24 space-y-1">
@@ -448,6 +579,7 @@ export function MaterialIssueForm() {
                   {lines.map((line, index) => {
                     const material = getMaterial(line.materialId);
                     const availableQty = !line.isReel ? getNonReelAvailableQty(line.materialId, materialIn, materialIssueLines, materialReturnLines) : null;
+                    const isConsumableNpdMaterial = isNpdConsumableOption(material);
                     const availableReels = line.isReel ? getLineAvailableReels(line.id, line.materialId) : [];
                     const selectedIds = selectedReels[line.id] || [];
 
@@ -463,7 +595,7 @@ export function MaterialIssueForm() {
                               <table className="min-w-full border-collapse">
                                 <thead className="bg-slate-50 border-b border-black">
                                   <tr>
-                                    {["", "Our Reel", "Weight"].map((h) => (
+                                     { ["", "Our Reel", "Weight"].map((h) => (
                                       <th key={h} className="px-2 py-1.5 text-left text-[10px] font-black uppercase text-slate-600">{h}</th>
                                     ))}
                                   </tr>
@@ -498,11 +630,11 @@ export function MaterialIssueForm() {
                           <div className="text-sm font-black text-indigo-700">
                             {line.isReel ? `${Number(line.qty || 0).toFixed(2)} KG` : `${line.qty} ${line.uom}`}
                           </div>
-                          {!line.isReel && !isWithoutJobIssue(issueType) && (
+                          {!line.isReel && !isWithoutJobIssue(issueType) && !isConsumableNpdMaterial ? (
                             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter bg-slate-100 p-1 rounded inline-block">
                               Avail: {availableQty} {line.uom}
                             </div>
-                          )}
+                          ) : null}
                         </td>
                         <td className="px-4 py-4 text-center">
                           <button
@@ -553,3 +685,7 @@ function Field({ label, children, required = false, className = "" }: { label: s
     </div>
   );
 }
+
+
+
+

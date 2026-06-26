@@ -1,17 +1,18 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Item, Machine, ProductionProcessing, Setting } from "../types";
+import { Production, Machine, ProductionProcessing, Setting } from "../types";
 import { Hammer, Search, ChevronRight, ChevronDown, ClipboardList, ArrowLeft } from "lucide-react";
-import { parseMandatoryMachinesByType, getRequiredMachinesForType } from "../lib/mandatoryMachines";
+import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { useAuth } from "../auth/AuthContext";
+import { getRequiredMachinesForProduction } from "../lib/productionType";
 
 interface PendingMachineJob {
   production: Production;
-  item?: Item;
+  item?: any;
   companyName: string;
   erpCode: string;
   itemName: string;
@@ -33,7 +34,7 @@ export function MachinePendingProcessing() {
   const filterMachineId = searchParams.get("machineId") || "";
 
   const [productions] = useData<Production>("productions", []);
-  const npdItems = useNpdItems();
+  const { findItemAcrossSources } = useOrderItemCatalog();
   const [machines] = useData<Machine>("machines", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
@@ -86,8 +87,8 @@ export function MachinePendingProcessing() {
     );
 
     activeProductions.forEach(p => {
-      const item = npdItems.find(i => i.id === p.itemId);
-      const requiredMachines = getRequiredMachinesForType(mandatoryMachinesMapping, item?.typeName);
+      const item = findItemAcrossSources(String(p.itemId || "").trim(), p.itemSource, p.erpCode);
+      const requiredMachines = getRequiredMachinesForProduction(p, item, mandatoryMachinesMapping, machines);
       
       requiredMachines.forEach(machineName => {
         const machine = machines.find(m => m.name.trim().toLowerCase() === machineName.trim().toLowerCase());
@@ -106,8 +107,8 @@ export function MachinePendingProcessing() {
             group.jobs.push({
               production: p,
               item,
-              companyName: item?.customer || "",
-              erpCode: String(item?.erp || ""),
+              companyName: String(item?.companyName || item?.raw?.customer || item?.raw?.customerName || ""),
+              erpCode: String(item?.erp || p.erpCode || ""),
               itemName: item?.name || "",
               requiredQty: Number(p.qty || 0),
               reportedQty: reportedForThisMachine,
@@ -130,7 +131,7 @@ export function MachinePendingProcessing() {
       }))
       .filter(g => g.jobs.length > 0)
       .sort((a, b) => a.machineName.localeCompare(b.machineName));
-  }, [productions, npdItems, machines, processing, mandatoryMachinesMapping, searchTerm, filterMachineId, user]);
+  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, filterMachineId, user]);
 
   const toggleMachine = (id: string) => {
     const next = new Set(expandedMachines);

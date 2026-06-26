@@ -51,6 +51,7 @@ export interface Item {
   uom: string;
   erp?: number;
   itemType?: "FG" | "Reel" | "Others";
+  consumable?: boolean | string | number | null;
   typeName?: string;
   customer?: string;
   openLength?: number;
@@ -119,11 +120,16 @@ export interface MaterialLine {
   poNo?: string;
   poLineId?: string;
   poRate?: number;
+  invoiceCurrency?: InvoiceCurrency;
+  exchangeRate?: number;
   invoiceQty?: number;
   invoiceRate?: number;
+  invoiceRateUsd?: number;
   invoiceValue?: number;
+  invoiceValueUsd?: number;
   actualQty?: number;
   actualValue?: number;
+  actualValueUsd?: number;
   rate: number;
   value: number;
   gstRate?: number;
@@ -425,7 +431,8 @@ export interface Company {
 }
 
 export type POType = "Verbal" | "Ref No.";
-export type OrderItemSource = "FG" | "PHP" | "PLATE";
+export type InvoiceCurrency = "INR" | "USD";
+export type OrderItemSource = "FG" | "PHP" | "PLATE" | "MATERIAL";
 
 export interface Order {
   id: string;
@@ -475,9 +482,13 @@ export interface MaterialIn {
   invoiceNo: string;
   invDate: string;
   supplierId: string;
+  invoiceCurrency?: InvoiceCurrency;
+  exchangeRate?: number;
   totalPoValue?: number;
   totalInvoiceValue?: number;
+  totalInvoiceValueUsd?: number;
   totalActualValue?: number;
+  totalActualValueUsd?: number;
   totalCgst?: number;
   totalSgst?: number;
   totalIgst?: number;
@@ -500,7 +511,7 @@ export interface MaterialIn {
   mdEmailId?: string;
   md_approval_remark?: string;
   tallyTimestamp?: string;
-  status: "Pending MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally" | "Completed";
+  status: "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally" | "Completed";
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -526,6 +537,8 @@ export interface Production {
   date: string;
   scheduleId?: string;
   itemId: string;
+  itemSource?: OrderItemSource;
+  parentProductionId?: string;
   npdId?: string;
   qty: number;
   uom: string;
@@ -534,8 +547,23 @@ export interface Production {
   
   // New production fields
   jobCardNo?: string | number;
+  shift?: string;
+  category?: string;
+  masterErp?: string | number;
   erpCode?: string | number;
+  setsPerBox?: number;
   noOfParts?: number;
+  requiredQty?: number;
+  planningId?: string;
+  scheduledDate?: string;
+  plannedQty?: number;
+  methodology?: string;
+  jobType?: string;
+  sequence?: string | number;
+  jobCompletionTimeOutput?: string | number;
+  productionOutputQty?: number;
+  noOfHolesInPhp?: number;
+  fluteType?: string;
   ups?: number;
   length?: number;
   breadth?: number;
@@ -555,9 +583,12 @@ export interface Production {
   f2?: number;
   l3?: number;
   gsm?: number;
+  boardGsmReq?: number;
+  brustingStrengthReq?: number;
   color1?: string;
   color2?: string;
   printingColor?: string;
+  weightPerPcSetReq?: number;
   paperRequiredNos?: number;
   topPaperWeightKg?: number;
   linerWeightKg?: number;
@@ -570,9 +601,13 @@ export interface Production {
   realizationPerKg?: number;
   companyName?: string;
   actualPaperUsed?: number;
+  paperNotRequired?: boolean;
+  paperNotRequiredReason?: string;
   avgWeight?: number;
   prodFromSheetPlant?: number;
   prodFromFFG?: number;
+  phpScheduledJobId?: string;
+  plateScheduledJobId?: string;
   wastage?: number;
   productionInMeter?: number;
   plannedProductionInMeter?: number;
@@ -645,6 +680,7 @@ export interface DispatchPlan {
   planNo?: string;
   scheduleId: string;
   orderId: string;
+  productionId?: string;
   truckId: string;
   plannedQty: number;
   loadedQty?: number;
@@ -660,6 +696,16 @@ export interface LoadingSlipLine {
   loadedQty: number;
   jobNos?: Array<string | number>;
   allocations?: LoadingSlipAllocation[];
+  companyId?: string;
+  itemId?: string;
+  itemName?: string;
+  companyName?: string;
+  erpCode?: string;
+  masterErp?: string;
+  itemSource?: OrderItemSource;
+  rate?: number;
+  gstRate?: number;
+  uom?: string;
 }
 
 export type LoadingSlipAllocation =
@@ -671,14 +717,28 @@ export type LoadingSlipAllocation =
     }
   | {
       sourceType: "opening_stock";
-      sourceRef: "FG Stock";
+      sourceRef: "FG Stock" | "PHP Stock" | "PLATE Stock" | "MATERIAL Stock";
       qty: number;
     };
 
 export interface PackingDetail {
+  extra?: number;
   bundles: number;
   packSize: number;
   quantity: number;
+}
+
+export interface LinkedLoadingDetail {
+  source: Extract<OrderItemSource, "PHP" | "PLATE">;
+  itemId: string;
+  itemName: string;
+  companyName?: string;
+  erpCode?: string;
+  masterErp?: string;
+  setsPerBox: number;
+  requiredQty: number;
+  packingDetails?: PackingDetail[];
+  extraItemsQty?: number;
 }
 
 export interface LoadingSlip {
@@ -687,6 +747,12 @@ export interface LoadingSlip {
   date: string;
   truckId: string;
   lines: LoadingSlipLine[];
+  loadingSource?: "DISPATCH_PLAN" | "DIRECT";
+  companyId?: string;
+  companyName?: string;
+  fgLoadingId?: string;
+  phpDetails?: LinkedLoadingDetail[];
+  plateDetails?: LinkedLoadingDetail[];
   status?: "Active" | "Cancelled";
   cancelReason?: string;
   cancelledAt?: string;
@@ -741,6 +807,7 @@ export interface InvoiceLineItem {
   invoiceId: string;
   loadingSlipId: string;
   itemId: string;
+  itemSource?: OrderItemSource;
   npdId?: string;
   qty: number;
   rate: number;
@@ -749,6 +816,8 @@ export interface InvoiceLineItem {
   cgst: number;
   sgst: number;
   igst: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
 }
 
 export interface GatePassLine {
@@ -843,3 +912,4 @@ export interface OperationDashboardSummary {
   comparisonLabel: string;
   groups: OperationDashboardMetricGroup[];
 }
+

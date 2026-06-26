@@ -29,6 +29,7 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
+import { normalizeOrderItemSource } from "../lib/orderItems";
 import { buildGatePassFromInvoice } from "../lib/gatePasses";
 import { useAutoRefreshPause } from "../hooks/useAutoRefresh";
 
@@ -47,11 +48,16 @@ interface InvoiceAllocationRow {
   qty: number;
 }
 
+const DIRECT_ALLOCATION_ID = "__DIRECT__";
+
 interface InvoiceItemRow {
   id: string;
   itemId: string;
+  itemSource: "FG" | "PHP" | "PLATE" | "MATERIAL";
+  itemName: string;
   gstRate: number;
-  totalQty: number; // total qty from selected loading slips for this item
+  defaultRate: number;
+  totalQty: number;
   sources: Array<{ loadingSlipId: string; qty: number }>;
   allocations: InvoiceAllocationRow[];
 }
@@ -62,7 +68,7 @@ export function PendingInvoicing() {
   const [loadingSlips, , , loadingSlipApi] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem } = useOrderItemCatalog();
+  const { resolveOrderItem, findItemAcrossSources } = useOrderItemCatalog();
   const [plans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
   const [invoices, , , invoiceApi] = useData<Invoice>("invoices", []);
@@ -143,6 +149,37 @@ export function PendingInvoicing() {
     setExpandedCompanies(next);
   };
 
+  const getMeaningfulItemName = (value: unknown) => {
+    const normalized = String(value || "").trim();
+    if (!normalized) return "";
+    const lower = normalized.toLowerCase();
+    if (lower === "unknown" || lower === "item") return "";
+    return normalized;
+  };
+
+  const resolveSlipLineItem = (line: LoadingSlip["lines"][number], order?: Order) => {
+    const itemSource = normalizeOrderItemSource(line.itemSource || order?.itemSource || "FG");
+    const directItemId = String(line.itemId || order?.itemId || "").trim();
+    const directErp = String(line.erpCode || line.masterErp || order?.erpCode || "").trim();
+
+    return (
+      findItemAcrossSources(directItemId, itemSource, directErp) ||
+      resolveOrderItem(order) ||
+      undefined
+    );
+  };
+
+  const resolveSlipLineItemName = (line: LoadingSlip["lines"][number], order?: Order) => {
+    const resolvedItem = resolveSlipLineItem(line, order);
+    return (
+      getMeaningfulItemName(resolvedItem?.name) ||
+      getMeaningfulItemName(line.itemName) ||
+      getMeaningfulItemName(line.erpCode) ||
+      getMeaningfulItemName(line.masterErp) ||
+      "Unknown"
+    );
+  };
+
   const buildInvoiceRowsFromSlips = (selected: any[]) => {
     const itemMap = new Map<string, InvoiceItemRow>();
     const itemOrderQtyMap = new Map<string, Map<string, number>>();
@@ -151,35 +188,45 @@ export function PendingInvoicing() {
       slip.lines.forEach((line: any) => {
         const plan = plans.find((p) => p.id === line.dispatchPlanId);
         const order = orders.find((o) => o.id === plan?.orderId);
-        const item = resolveOrderItem(order);
-        if (!order || !item) return;
+        const itemSource = normalizeOrderItemSource(line.itemSource || order?.itemSource || "FG");
+        const item = resolveSlipLineItem(line, order);
+        const itemId = String(line.itemId || order?.itemId || item?.id || "").trim();
+        if (!itemId) return;
 
         const qty = Number(line.loadedQty || 0);
-        const gstRate = item.gstRate ?? 18;
-        const existing = itemMap.get(item.id);
+        const gstRate = Number(line.gstRate ?? item?.gstRate ?? 18);
+        const rate = Number(line.rate ?? item?.rate ?? order?.rate ?? 0);
+        const itemName = resolveSlipLineItemName(line, order);
+        const itemKey = `${itemSource}::${itemId}`;
+        const existing = itemMap.get(itemKey);
 
         if (existing) {
           existing.totalQty += qty;
           existing.sources.push({ loadingSlipId: slip.id, qty });
+          if (!existing.defaultRate && rate) existing.defaultRate = rate;
         } else {
-          itemMap.set(item.id, {
+          itemMap.set(itemKey, {
             id: crypto.randomUUID(),
-            itemId: item.id,
+            itemId,
+            itemSource,
+            itemName,
             gstRate,
+            defaultRate: rate,
             totalQty: qty,
             sources: [{ loadingSlipId: slip.id, qty }],
             allocations: [],
           });
         }
 
-        const byOrder = itemOrderQtyMap.get(item.id) || new Map<string, number>();
-        byOrder.set(order.id, (byOrder.get(order.id) || 0) + qty);
-        itemOrderQtyMap.set(item.id, byOrder);
+        const byOrder = itemOrderQtyMap.get(itemKey) || new Map<string, number>();
+        const allocationKey = order?.id ? order.id : DIRECT_ALLOCATION_ID;
+        byOrder.set(allocationKey, (byOrder.get(allocationKey) || 0) + qty);
+        itemOrderQtyMap.set(itemKey, byOrder);
       });
     });
 
-    itemMap.forEach((row, itemId) => {
-      const byOrder = itemOrderQtyMap.get(itemId) || new Map<string, number>();
+    itemMap.forEach((row, itemKey) => {
+      const byOrder = itemOrderQtyMap.get(itemKey) || new Map<string, number>();
       const allocations: InvoiceAllocationRow[] = Array.from(byOrder.entries()).map(([orderId, qty]) => ({
         id: crypto.randomUUID(),
         orderId,
@@ -196,7 +243,7 @@ export function PendingInvoicing() {
     if (lineItemsForInvoice.length === 0) return rows;
 
     return rows.map((row) => {
-      const matchingLines = lineItemsForInvoice.filter((line) => String(line.itemId || "").trim() === row.itemId);
+      const matchingLines = lineItemsForInvoice.filter((line) => String(line.itemId || "").trim() === row.itemId && normalizeOrderItemSource(line.itemSource || "FG") === row.itemSource);
       if (matchingLines.length === 0) return row;
 
       const allocationsByOrder = new Map<string, number>();
@@ -207,7 +254,8 @@ export function PendingInvoicing() {
         const slipLine = slip?.lines?.find((entry: any) => {
           const plan = plans.find((p) => p.id === entry.dispatchPlanId);
           const order = orders.find((o) => o.id === plan?.orderId);
-          return String(order?.itemId || "").trim() === row.itemId;
+          const source = normalizeOrderItemSource(entry.itemSource || order?.itemSource || "FG");
+          return String(order?.itemId || entry.itemId || "").trim() === row.itemId && source === row.itemSource;
         });
         const plan = slipLine ? plans.find((p) => p.id === slipLine.dispatchPlanId) : undefined;
         const orderId = String(plan?.orderId || "").trim();
@@ -240,14 +288,16 @@ export function PendingInvoicing() {
       if (!firstLine) return;
       const plan = plans.find(p => p.id === firstLine.dispatchPlanId);
       const order = orders.find(o => o.id === plan?.orderId);
-      const company = companies.find(c => c.id === order?.companyId);
+      const company = companies.find(c => c.id === (order?.companyId || s.companyId || firstLine.companyId));
+      const companyName = company?.name || s.companyName || firstLine.companyName || "";
 
-      if (!company) return;
+      if (!company && !companyName) return;
 
-      if (!companyMap.has(company.id)) {
-        companyMap.set(company.id, {
-          companyId: company.id,
-          companyName: company.name,
+      const groupId = company?.id || s.companyId || `direct-${companyName}`;
+      if (!companyMap.has(groupId)) {
+        companyMap.set(groupId, {
+          companyId: groupId,
+          companyName: company?.name || companyName,
           slips: []
         });
       }
@@ -256,10 +306,10 @@ export function PendingInvoicing() {
       const slipItems = s.lines.map(l => {
         const lp = plans.find(p => p.id === l.dispatchPlanId);
         const lo = orders.find(o => o.id === lp?.orderId);
-        return resolveOrderItem(lo)?.name || "Unknown";
+        return resolveSlipLineItemName(l, lo);
       });
 
-      companyMap.get(company.id)!.slips.push({
+      companyMap.get(groupId)!.slips.push({
         ...s,
         totalQty,
         items: Array.from(new Set(slipItems))
@@ -269,7 +319,7 @@ export function PendingInvoicing() {
     return Array.from(companyMap.values())
       .filter(g => g.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
       .sort((a, b) => a.companyName.localeCompare(b.companyName));
-  }, [loadingSlips, companies, plans, orders, npdItems, searchTerm]);
+  }, [loadingSlips, companies, plans, orders, npdItems, searchTerm, findItemAcrossSources, resolveOrderItem]);
 
   useEffect(() => {
     if (didInitExpand.current) return;
@@ -414,8 +464,8 @@ export function PendingInvoicing() {
     invoiceRows.forEach((itemRow) => {
       itemRow.allocations.forEach((alloc) => {
         const order = orders.find((o) => o.id === alloc.orderId);
-        if (!order) return;
-        const rate = Number(order.rate || 0);
+        const rate = alloc.orderId === DIRECT_ALLOCATION_ID ? Number(itemRow.defaultRate || 0) : Number(order?.rate || 0);
+        if (alloc.orderId !== DIRECT_ALLOCATION_ID && !order) return;
         const qty = Number(alloc.qty || 0);
         const amount = qty * rate;
         totalBeforeGst += amount;
@@ -517,7 +567,7 @@ export function PendingInvoicing() {
         const qty = Number(l.loadedQty || 0);
         const plan = plans.find(p => p.id === l.dispatchPlanId);
         const order = orders.find(o => o.id === plan?.orderId);
-        const itemId = String(order?.itemId || "").trim();
+        const itemId = String(order?.itemId || l.itemId || "").trim();
         if (itemId) loadedByItemId.set(itemId, (loadedByItemId.get(itemId) || 0) + qty);
         return lSum + qty;
       }, 0)
@@ -536,14 +586,14 @@ export function PendingInvoicing() {
     for (const itemRow of invoiceRows) {
       const allocTotal = itemRow.allocations.reduce((s, a) => s + Number(a.qty || 0), 0);
       if (Math.abs(allocTotal - Number(itemRow.totalQty || 0)) > 0.01) {
-        const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
+        const itemName = itemRow.itemName || "Item";
         alert(
           `Item-wise quantity mismatch for ${itemName}.\nLoaded: ${Number(itemRow.totalQty || 0).toLocaleString()}\nAllocated: ${allocTotal.toLocaleString()}`
         );
         return;
       }
       if (itemRow.allocations.some((a) => !String(a.orderId || "").trim())) {
-        const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
+        const itemName = itemRow.itemName || "Item";
         alert(`Please select Order for all allocation rows of ${itemName}.`);
         return;
       }
@@ -554,12 +604,12 @@ export function PendingInvoicing() {
     for (const itemRow of invoiceRows) {
       for (const alloc of itemRow.allocations) {
         const order = orders.find((o) => o.id === alloc.orderId);
-        if (!order) continue;
+        if (alloc.orderId === DIRECT_ALLOCATION_ID || !order) continue;
         const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
         const allowedMax = Number(order.qty || 0) * (1 + tolerancePercent / 100);
         const currentlyDispatched = totalDispatched + Number(alloc.qty || 0);
         if (currentlyDispatched > allowedMax + 0.01) {
-          const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
+          const itemName = itemRow.itemName || "Item";
           alert(`Dispatched quantity for ${itemName} exceeds allowed tolerance (${tolerancePercent}%). Max allowed: ${allowedMax.toLocaleString()}`);
           return;
         }
@@ -626,9 +676,11 @@ export function PendingInvoicing() {
         const pool = poolsByItemId.get(itemRow.itemId) || buildPool(itemRow.sources || []);
         for (const alloc of itemRow.allocations) {
           const order = orders.find((o) => o.id === alloc.orderId);
-          if (!order) continue;
-          if (order.itemId !== itemRow.itemId) continue;
-          const rate = Number(order.rate || 0);
+          if (alloc.orderId !== DIRECT_ALLOCATION_ID) {
+            if (!order) continue;
+            if (order.itemId !== itemRow.itemId || normalizeOrderItemSource(order.itemSource) !== itemRow.itemSource) continue;
+          }
+          const rate = alloc.orderId === DIRECT_ALLOCATION_ID ? Number(itemRow.defaultRate || 0) : Number(order?.rate || 0);
           const parts = consumeFromPool(pool, Number(alloc.qty || 0));
           for (const part of parts) {
             const amount = part.qty * rate;
@@ -638,7 +690,8 @@ export function PendingInvoicing() {
               invoiceId,
               loadingSlipId: part.loadingSlipId,
               itemId: itemRow.itemId,
-              npdId: itemRow.itemId,
+              itemSource: itemRow.itemSource,
+              npdId: itemRow.itemSource === "FG" ? itemRow.itemId : undefined,
               qty: part.qty,
               rate,
               amount,
@@ -917,11 +970,11 @@ export function PendingInvoicing() {
                   </thead>
                   <tbody className="divide-y divide-black">
                     {invoiceRows.flatMap((itemRow) => {
-                      const itemName = npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
+                      const itemName = itemRow.itemName || npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
                       const pendingOrdersForItem = orders.filter((o) => {
                         if (o.companyId !== invoiceModal.companyId) return false;
                         if (o.status === "Cancelled") return false;
-                        if (o.itemId !== itemRow.itemId) return false;
+                        if (o.itemId !== itemRow.itemId || normalizeOrderItemSource(o.itemSource) !== itemRow.itemSource) return false;
                         const dispatched = totalDispatchedByOrderId.get(o.id) || 0;
                         return Math.max(0, Number(o.qty || 0) - dispatched) > 0;
                       });
@@ -946,20 +999,6 @@ export function PendingInvoicing() {
                                 );
                               })()}
                               <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="text-[10px] font-black uppercase text-slate-500">GST</div>
-                                  <select
-                                    value={itemRow.gstRate}
-                                    onChange={(e) => updateItemGstRate(itemRow.id, Number(e.target.value))}
-                                    className="w-20 px-2 py-1 border-2 border-black rounded text-[11px] font-bold"
-                                  >
-                                    {[0, 5, 12, 18, 28].map((v) => (
-                                      <option key={v} value={v}>
-                                        {v}%
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
                                 <button
                                   type="button"
                                   onClick={() => addAllocationRow(itemRow.id)}
@@ -975,10 +1014,11 @@ export function PendingInvoicing() {
 
                       const childRows = itemRow.allocations.map((alloc) => {
                         const order = orders.find((o) => o.id === alloc.orderId);
+                        const isDirectAlloc = alloc.orderId === DIRECT_ALLOCATION_ID;
                         const dispatched = order ? (totalDispatchedByOrderId.get(order.id) || 0) : 0;
                         const orderQty = order ? Number(order.qty || 0) : 0;
                         const pending = order ? Math.max(0, orderQty - dispatched) : 0;
-                        const rate = order ? Number(order.rate || 0) : 0;
+                        const rate = isDirectAlloc ? Number(itemRow.defaultRate || 0) : order ? Number(order.rate || 0) : 0;
                         const amount = Number(alloc.qty || 0) * rate;
                         const otherAllocated = itemRow.allocations
                           .filter((a) => a.id !== alloc.id)
@@ -997,6 +1037,7 @@ export function PendingInvoicing() {
                                 className="w-full border-2 border-black rounded p-1 text-[11px] font-bold focus:ring-0"
                               >
                                 <option value="">-- Choose Order --</option>
+                                {alloc.orderId === DIRECT_ALLOCATION_ID ? <option value={DIRECT_ALLOCATION_ID}>Direct Loading</option> : null}
                                 {pendingOrdersForItem.map((o) => (
                                   <option key={o.id} value={o.id}>
                                     {o.orderNo} | {o.poNumber || "No PO"}
@@ -1004,10 +1045,10 @@ export function PendingInvoicing() {
                                 ))}
                               </select>
                             </td>
-                            <td className="px-2 py-2 text-right text-[11px] font-medium">{order ? orderQty.toLocaleString() : "-"}</td>
-                            <td className="px-2 py-2 text-right text-[11px] font-medium text-slate-500">{order ? dispatched.toLocaleString() : "-"}</td>
-                            <td className="px-2 py-2 text-right text-[11px] font-black text-indigo-700">{order ? pending.toLocaleString() : "-"}</td>
-                            <td className="px-2 py-2 text-right text-[11px] font-bold">{order ? rate : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-medium">{isDirectAlloc ? "-" : order ? orderQty.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-medium text-slate-500">{isDirectAlloc ? "-" : order ? dispatched.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-black text-indigo-700">{isDirectAlloc ? "Direct" : order ? pending.toLocaleString() : "-"}</td>
+                            <td className="px-2 py-2 text-right text-[11px] font-bold">{rate || "-"}</td>
                             <td className="px-2 py-2 text-right bg-indigo-50/30">
                               <input
                                 type="number"
@@ -1018,7 +1059,19 @@ export function PendingInvoicing() {
                                 className="w-24 px-1 py-1 border-2 border-indigo-600 rounded text-right text-[11px] font-black focus:ring-0"
                               />
                             </td>
-                            <td className="px-2 py-2 text-right text-[11px]">{itemRow.gstRate}%</td>
+                            <td className="px-2 py-2 text-right text-[11px]">
+                              <select
+                                value={itemRow.gstRate}
+                                onChange={(e) => updateItemGstRate(itemRow.id, Number(e.target.value))}
+                                className="w-20 border border-black rounded px-2 py-1 text-right text-[11px] font-bold bg-white"
+                              >
+                                {[0, 5, 12, 18, 28].map((v) => (
+                                  <option key={v} value={v}>
+                                    {v}%
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
                             <td className="px-2 py-2 text-right text-[11px] font-black">{format2(amount)}</td>
                             <td className="px-2 py-2 text-center">
                               <button onClick={() => removeAllocationRow(itemRow.id, alloc.id)} className="text-rose-600 hover:text-rose-800">

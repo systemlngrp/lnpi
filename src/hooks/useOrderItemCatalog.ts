@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useData } from "./useData";
-import { Order, OrderItemSource } from "../types";
+import { Material, Order, OrderItemSource } from "../types";
 import {
   getOrderItemCompositeKey,
   normalizeOrderCatalogItem,
@@ -17,11 +17,13 @@ const getLookupKeys = (source: OrderItemSource, row: any) => {
     row?.npdId,
     row?.phpId,
     row?.plateId,
+    row?.materialId,
     row?.raw?.id,
     row?.raw?.itemId,
     row?.raw?.npdId,
     row?.raw?.phpId,
     row?.raw?.plateId,
+    row?.raw?.materialId,
   ];
 
   return [...new Set(keys.map((value) => String(value || "").trim()).filter(Boolean))].map((value) =>
@@ -37,14 +39,16 @@ export function useOrderItemCatalog() {
   });
   const [phpRows] = useData<any>("php_item_master", []);
   const [plateRows] = useData<any>("plate_item_master", []);
+  const [materialRows] = useData<Material>("materials", []);
 
   const itemsBySource = useMemo<Record<OrderItemSource, OrderCatalogItem[]>>(
     () => ({
       FG: fgRows.map((row) => normalizeOrderCatalogItem(row, "FG")).filter(Boolean) as OrderCatalogItem[],
       PHP: phpRows.map((row) => normalizeOrderCatalogItem(row, "PHP")).filter(Boolean) as OrderCatalogItem[],
       PLATE: plateRows.map((row) => normalizeOrderCatalogItem(row, "PLATE")).filter(Boolean) as OrderCatalogItem[],
+      MATERIAL: materialRows.map((row) => normalizeOrderCatalogItem(row, "MATERIAL")).filter(Boolean) as OrderCatalogItem[],
     }),
-    [fgRows, phpRows, plateRows]
+    [fgRows, phpRows, plateRows, materialRows]
   );
 
   const itemMap = useMemo(() => {
@@ -68,6 +72,39 @@ export function useOrderItemCatalog() {
     return itemMap.get(getOrderItemCompositeKey(normalizedSource, normalizedItemId));
   };
 
+  const findItemAcrossSources = (
+    itemId: string | undefined,
+    preferredSource?: OrderItemSource,
+    erpCode?: string | number
+  ) => {
+    const normalizedItemId = String(itemId || "").trim();
+    const normalizedErp = String(erpCode || "").trim().toLowerCase();
+    const orderedSources = [preferredSource, "FG", "PHP", "PLATE", "MATERIAL"]
+      .map((source) => normalizeOrderItemSource(source))
+      .filter((source, index, arr) => arr.indexOf(source) === index) as OrderItemSource[];
+
+    if (normalizedItemId) {
+      for (const source of orderedSources) {
+        const match = findItem(source, normalizedItemId);
+        if (match) return match;
+      }
+    }
+
+    if (normalizedErp) {
+      for (const source of orderedSources) {
+        const match = (itemsBySource[source] || []).find((item) => {
+          const raw = item.raw || {};
+          return [item.erp, raw.erpCode, raw.erpItemCode, raw.masterItemNameErpCode]
+            .map((value) => String(value || "").trim().toLowerCase())
+            .filter(Boolean)
+            .includes(normalizedErp);
+        });
+        if (match) return match;
+      }
+    }
+
+    return undefined;
+  };
   const resolveOrderItem = (order?: Partial<Order> | null) => {
     if (!order) return undefined;
     const normalizedOrder = normalizeOrderRecord(order);
@@ -88,9 +125,14 @@ export function useOrderItemCatalog() {
     fgItems: itemsBySource.FG,
     phpItems: itemsBySource.PHP,
     plateItems: itemsBySource.PLATE,
+    materialItems: itemsBySource.MATERIAL,
+    allItems: (Object.values(itemsBySource).flat() as OrderCatalogItem[]).sort((left, right) =>
+      `${left.source} ${left.name}`.localeCompare(`${right.source} ${right.name}`, undefined, { sensitivity: "base" })
+    ),
     itemsBySource,
     itemMap,
     findItem,
+    findItemAcrossSources,
     resolveOrderItem,
   };
 }

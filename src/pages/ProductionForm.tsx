@@ -17,11 +17,15 @@ import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
-import { generateTransactionNo, formatDate } from "../lib/serial";
+import { generateTransactionNo, formatDate, getProductionJobPrefix } from "../lib/serial";
 import { CircleHelp } from "lucide-react";
 import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { fetchNpdItems } from "../lib/npdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { getProductionMatchingFields } from "../lib/productionMatching";
+
+const getJobMasterEntityName = (source: "PHP" | "PLATE") =>
+  source === "PHP" ? "php_job_master" : "plate_job_master";
 
 const REEL_FORMULA_MODE = {
   breadthHeightBased: "breadth-height-based",
@@ -80,7 +84,6 @@ function round2(value: number) {
 function roundUpWhole(value: number) {
   return Math.ceil(value);
 }
-
 function getPendingProductionQty(schedule: OrderSchedule) {
   return Math.max(
     Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
@@ -176,6 +179,8 @@ export function ProductionForm() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [productions, setProductions] = useData<Production>("productions", []);
+  const [phpJobMaster] = useData<Production>(getJobMasterEntityName("PHP"), []);
+  const [plateJobMaster] = useData<Production>(getJobMasterEntityName("PLATE"), []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -221,7 +226,7 @@ export function ProductionForm() {
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
     productions.forEach((production) => {
-      if (production.status === "Cancelled" || production.cancelTimestamp) return;
+      if ((production.itemSource || "FG") !== "FG" || production.status === "Cancelled" || production.cancelTimestamp) return;
 
       const erp = String(production.erpCode || "").trim();
       const gsm = Number(production.gsm || 0);
@@ -252,7 +257,7 @@ export function ProductionForm() {
   const latestRelevantProduction = useMemo(
     () =>
       [...productions]
-        .filter((production) => production.status !== "Cancelled" && !production.cancelTimestamp)
+        .filter((production) => (production.itemSource || "FG") === "FG" && production.status !== "Cancelled" && !production.cancelTimestamp)
         .sort((a, b) => {
           const timeA = new Date(a.updateTimestamp || a.date || 0).getTime();
           const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
@@ -324,6 +329,7 @@ export function ProductionForm() {
   );
 
   const currentQty = Number(formData.qty || 0);
+  const allJobRows = useMemo(() => [...productions, ...phpJobMaster, ...plateJobMaster], [productions, phpJobMaster, plateJobMaster]);
   const currentGsm = Number(formData.gsm || 0);
   const leastGsm = Number(formData.leastGsm || 0);
   const deviationLimit = isSameAsLastItem ? Number((lastPlanQty * (deviationAllowed / 100)).toFixed(2)) : 0;
@@ -664,28 +670,33 @@ export function ProductionForm() {
     try {
       const timestamp = new Date().toISOString();
       const nextPendingQty = pendingQty - qty;
-      const txnNo = generateTransactionNo("PR", productions, formData.date);
+      const txnNo = generateTransactionNo(getProductionJobPrefix("FG"), allJobRows, formData.date);
 
-      await setProductions((prev) => {
-        const newEntry: Production = {
-          id: crypto.randomUUID(),
-          transactionNo: txnNo,
-          date: formData.date,
-          scheduleId: selectedSchedule.id,
-          itemId: selectedItem.id,
-          npdId: selectedItem.id,
-          qty,
-          uom: selectedItem.uom || "",
-          remarks: formData.remarks,
-          status: "Pending Consumption",
-          updatedBy: "System User",
-          updateTimestamp: timestamp,
-          ...Object.fromEntries(
-            Object.entries(formData).filter(([key]) => !["date", "qty", "remarks"].includes(key))
-          ),
-        } as Production;
-        return [newEntry, ...prev];
-      });
+      const newEntry: Production = {
+        id: crypto.randomUUID(),
+        transactionNo: txnNo,
+        date: formData.date,
+        scheduleId: selectedSchedule.id,
+        itemId: selectedItem.id,
+        itemSource: "FG",
+        npdId: selectedItem.id,
+        qty,
+        uom: selectedItem.uom || "",
+        remarks: formData.remarks,
+        status: "Pending Consumption",
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+        ...Object.fromEntries(
+          Object.entries(formData).filter(([key]) => !["date", "qty", "remarks"].includes(key))
+        ),
+      } as Production;
+
+      const normalizedEntry: Production = {
+        ...newEntry,
+        ...getProductionMatchingFields(newEntry, selectedItem),
+      };
+
+      await setProductions((prev) => [normalizedEntry, ...prev]);
 
       if (isSampleItem && matchedSampleRequest?.id) {
         await setSampleRequests((prev) =>
@@ -773,7 +784,6 @@ export function ProductionForm() {
               <InfoTile label="Pending Qty" value={`${pendingQty} ${selectedItem?.uom || ""}`} />
             </div>
           )}
-
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {showField("Production Date") && <div className="flex flex-col space-y-1">
               <LabelWithHelp
@@ -1023,7 +1033,6 @@ export function ProductionForm() {
               {showField("Company Name") ? <FormInput label="Company Name" value={formData.companyName} readOnly helpText="Auto-fetched from the selected order's company." /> : null}
             </div>
           </div>
-
           <div className="pt-2">
             <button
               type="submit"
@@ -1064,6 +1073,7 @@ export function ProductionForm() {
               </tr>
             ) : (
               productions
+                .filter((production) => (production.itemSource || "FG") === "FG")
                 .sort((a, b) => {
                   const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
                   const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
@@ -1096,7 +1106,6 @@ export function ProductionForm() {
           No scheduled orders are pending production right now.
         </div>
       )}
-
       <div className="pt-2">
         <button
           type="button"

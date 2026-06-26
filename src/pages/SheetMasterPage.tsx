@@ -1,16 +1,16 @@
-import { useMemo, useState } from "react";
+import { KeyboardEvent, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useData } from "../hooks/useData";
 import type { SheetMasterColumn, SheetMasterFilter } from "../lib/sheetMasterConfigs";
 
-type SheetMasterRow = {
+export type SheetMasterRow = {
   id: string;
   [key: string]: string | number | boolean | null | undefined;
 };
 
-function formatCellValue(value: SheetMasterRow[string]) {
+export function formatCellValue(value: SheetMasterRow[string]) {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
@@ -22,33 +22,42 @@ export function SheetMasterPage({
   columns,
   searchPlaceholder,
   filters = [],
+  rowsOverride,
+  editableColumns = [],
 }: {
   title: string;
   entity: string;
   columns: SheetMasterColumn[];
   searchPlaceholder: string;
   filters?: SheetMasterFilter[];
+  rowsOverride?: SheetMasterRow[];
+  editableColumns?: string[];
 }) {
-  const [rows] = useData<SheetMasterRow>(entity, []);
+  const [rows, setRows] = useData<SheetMasterRow>(entity, []);
+  const effectiveRows = rowsOverride || rows;
   const [searchTerm, setSearchTerm] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [draftValues, setDraftValues] = useState<Record<string, string>>({});
+  const [savingCell, setSavingCell] = useState<string | null>(null);
+
+  const editableColumnSet = useMemo(() => new Set(editableColumns), [editableColumns]);
 
   const filterOptions = useMemo(() => {
     return filters.map((filter) => ({
       ...filter,
       options: Array.from(
         new Set(
-          rows
+          effectiveRows
             .map((row) => String(row[filter.key] ?? "").trim())
             .filter(Boolean)
         )
       ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true })),
     }));
-  }, [filters, rows]);
+  }, [effectiveRows, filters]);
 
   const filteredRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    return rows.filter((row) => {
+    return effectiveRows.filter((row) => {
       const matchesSearch = !query || columns.some((column) => String(row[column.key] ?? "").toLowerCase().includes(query));
       if (!matchesSearch) return false;
       return filters.every((filter) => {
@@ -57,7 +66,7 @@ export function SheetMasterPage({
         return String(row[filter.key] ?? "").trim() === selectedValue;
       });
     });
-  }, [columns, filterValues, filters, rows, searchTerm]);
+  }, [columns, effectiveRows, filterValues, filters, searchTerm]);
 
   const {
     page,
@@ -69,6 +78,80 @@ export function SheetMasterPage({
   } = useClientPagination(filteredRows, 25);
 
   const hasActiveFilters = Boolean(searchTerm.trim()) || filters.some((filter) => String(filterValues[filter.key] || "").trim());
+
+  const getCellDraftKey = (rowId: string, columnKey: string) => `${rowId}::${columnKey}`;
+
+  const getDisplayValue = (row: SheetMasterRow, columnKey: string) => {
+    const draftKey = getCellDraftKey(row.id, columnKey);
+    if (Object.prototype.hasOwnProperty.call(draftValues, draftKey)) {
+      return draftValues[draftKey];
+    }
+    const value = row[columnKey];
+    return value === null || value === undefined || value === "" ? "" : String(value);
+  };
+
+  const commitEditableCell = async (rowId: string, columnKey: string) => {
+    const draftKey = getCellDraftKey(rowId, columnKey);
+    if (!Object.prototype.hasOwnProperty.call(draftValues, draftKey)) return;
+
+    const rawValue = draftValues[draftKey].trim();
+    const normalizedValue = rawValue === "" ? 0 : Number(rawValue);
+    if (!Number.isFinite(normalizedValue)) {
+      setDraftValues((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      return;
+    }
+
+    const sourceRow = rows.find((entry) => entry.id === rowId);
+    if (!sourceRow) return;
+    if (Number(sourceRow[columnKey] || 0) === normalizedValue) {
+      setDraftValues((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      return;
+    }
+
+    setSavingCell(draftKey);
+    try {
+      await setRows((prev) =>
+        prev.map((entry) =>
+          entry.id === rowId
+            ? {
+                ...entry,
+                [columnKey]: normalizedValue,
+              }
+            : entry
+        )
+      );
+      setDraftValues((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+    } finally {
+      setSavingCell((current) => (current === draftKey ? null : current));
+    }
+  };
+
+  const handleEditableKeyDown = (event: KeyboardEvent<HTMLInputElement>, rowId: string, columnKey: string) => {
+    if (event.key === "Enter") {
+      event.currentTarget.blur();
+    }
+    if (event.key === "Escape") {
+      const draftKey = getCellDraftKey(rowId, columnKey);
+      setDraftValues((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      event.currentTarget.blur();
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -139,11 +222,33 @@ export function SheetMasterPage({
               ) : (
                 paginatedRows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50">
-                    {columns.map((column) => (
-                      <td key={column.key} className="whitespace-nowrap border border-black px-3 py-2 align-top">
-                        {formatCellValue(row[column.key])}
-                      </td>
-                    ))}
+                    {columns.map((column) => {
+                      const draftKey = getCellDraftKey(row.id, column.key);
+                      const isEditable = editableColumnSet.has(column.key);
+                      return (
+                        <td key={column.key} className="whitespace-nowrap border border-black px-3 py-2 align-top">
+                          {isEditable ? (
+                            <input
+                              type="number"
+                              step="any"
+                              value={getDisplayValue(row, column.key)}
+                              onChange={(e) =>
+                                setDraftValues((prev) => ({
+                                  ...prev,
+                                  [draftKey]: e.target.value,
+                                }))
+                              }
+                              onBlur={() => void commitEditableCell(row.id, column.key)}
+                              onKeyDown={(e) => handleEditableKeyDown(e, row.id, column.key)}
+                              disabled={savingCell === draftKey}
+                              className="w-24 rounded border border-black px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-black disabled:bg-slate-100"
+                            />
+                          ) : (
+                            formatCellValue(row[column.key])
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))
               )}

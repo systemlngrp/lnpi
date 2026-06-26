@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier } from "../types";
+import { Company, Material, MaterialIn, Service, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Download } from "lucide-react";
@@ -10,7 +10,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useNpdItems } from "../hooks/useNpdItems";
 
-type Stage = "Pending PH" | "Pending Accounts" | "Pending MD";
+type Stage = "All MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally";
 
 export function MrrApprovals() {
   const navigate = useNavigate();
@@ -18,37 +18,53 @@ export function MrrApprovals() {
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
+  const [services] = useData<Service>("services", []);
   
-  const [activeStage, setActiveStage] = useState<Stage>("Pending PH");
+  const [activeStage, setActiveStage] = useState<Stage>("All MRR");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
 
+  const getSupplierName = (id: string) => {
+    const supplier = suppliers.find(s => s.id === id);
+    if (supplier) return supplier.name;
+    const company = companies.find(c => c.id === id);
+    if (company) return company.name;
+    return id;
+  };
+
   const stages: { label: string; value: Stage }[] = [
+    { label: "All MRR", value: "All MRR" },
     { label: "Plant Head", value: "Pending PH" },
     { label: "Accounts", value: "Pending Accounts" },
     { label: "MD Approval", value: "Pending MD" },
+    { label: "Pending Tally", value: "Pending Tally" },
   ];
+
+  const approvalStatuses: Stage[] = ["Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"];
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     stages.forEach(s => {
-      c[s.value] = materialIn.filter(m => m.status === s.value).length;
+      c[s.value] = s.value === "All MRR"
+        ? materialIn.filter(m => approvalStatuses.includes(m.status as Stage)).length
+        : materialIn.filter(m => m.status === s.value).length;
     });
     return c;
   }, [materialIn]);
 
   const filteredList = useMemo(() => {
     return materialIn
-      .filter(m => m.status === activeStage)
+      .filter(m => activeStage === "All MRR" ? approvalStatuses.includes(m.status as Stage) : m.status === activeStage)
       .filter(m => {
-        const supplierName = suppliers.find(s => s.id === m.supplierId)?.name || "";
-        const searchStr = `${m.transactionNo} ${m.gateEntryNo || ""} ${supplierName} ${m.invoiceNo}`.toLowerCase();
+        const supplierName = getSupplierName(m.supplierId);
+        const searchStr = `${m.transactionNo} ${m.gateEntryNo || ""} ${supplierName} ${m.invoiceNo} ${m.mrrType || ""}`.toLowerCase();
         return searchStr.includes(searchTerm.toLowerCase());
       })
       .sort((a, b) => new Date(b.updateTimestamp || b.timestamp).getTime() - new Date(a.updateTimestamp || a.timestamp).getTime());
-  }, [materialIn, activeStage, searchTerm, suppliers]);
+  }, [materialIn, activeStage, searchTerm, suppliers, companies]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -66,6 +82,12 @@ export function MrrApprovals() {
     const mrr = materialIn.find(m => m.id === mrrId);
     if (!mrr) return;
 
+    const currentStage = mrr.status as Stage;
+    if (!["Pending PH", "Pending Accounts", "Pending MD"].includes(currentStage)) {
+      alert(`No approval action is available for status ${mrr.status || "-"}.`);
+      return;
+    }
+
     const remark = remarks[mrrId] || "";
     if (action === "Reject" && !remark.trim()) {
       alert("Please provide a remark for rejection.");
@@ -74,21 +96,21 @@ export function MrrApprovals() {
 
     setIsSubmitting(mrrId);
     const timestamp = new Date().toISOString();
-    const email = activeStage === "Pending PH" ? "ph@lngrp.in" : 
-                  activeStage === "Pending Accounts" ? "accounts@lngrp.in" : 
-                  activeStage === "Pending MD" ? "md@lngrp.in" : "system@lngrp.in";
+    const email = currentStage === "Pending PH" ? "ph@lngrp.in" : 
+                  currentStage === "Pending Accounts" ? "accounts@lngrp.in" : 
+                  currentStage === "Pending MD" ? "md@lngrp.in" : "system@lngrp.in";
 
     let nextStatus: MaterialIn["status"] = mrr.status;
     const patch: Partial<MaterialIn> = { updateTimestamp: timestamp, updatedBy: email };
 
     if (action === "Approve") {
-      if (activeStage === "Pending PH") {
+      if (currentStage === "Pending PH") {
         nextStatus = "Pending Accounts";
         patch.phTimestamp = timestamp;
         patch.phEmailId = email;
         patch.plant_head_remark = remark;
       }
-      else if (activeStage === "Pending Accounts") {
+      else if (currentStage === "Pending Accounts") {
         nextStatus = "Pending MD";
         patch.accTimestamp = timestamp;
         patch.accEmailId = email;
@@ -108,17 +130,17 @@ export function MrrApprovals() {
            }
         }
       }
-      else if (activeStage === "Pending MD") {
+      else if (currentStage === "Pending MD") {
         nextStatus = "Pending Tally";
         patch.mdTimestamp = timestamp;
         patch.mdEmailId = email;
         patch.md_approval_remark = remark;
       }
     } else {
-      nextStatus = "Pending MRR";
-      if (activeStage === "Pending PH") patch.plant_head_remark = `REJECTED: ${remark}`;
-      if (activeStage === "Pending Accounts") patch.accounts_remark = `REJECTED: ${remark}`;
-      if (activeStage === "Pending MD") patch.md_approval_remark = `REJECTED: ${remark}`;
+      nextStatus = "Pending PH";
+      if (currentStage === "Pending PH") patch.plant_head_remark = `REJECTED: ${remark}`;
+      if (currentStage === "Pending Accounts") patch.accounts_remark = `REJECTED: ${remark}`;
+      if (currentStage === "Pending MD") patch.md_approval_remark = `REJECTED: ${remark}`;
     }
 
     patch.status = nextStatus;
@@ -141,15 +163,23 @@ export function MrrApprovals() {
 
   const handleBulkApprove = async () => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to approve ${selectedIds.length} MRRs?`)) return;
-    for (const id of selectedIds) {
+    const actionableIds = selectedIds.filter((id) => {
+      const mrr = materialIn.find((m) => m.id === id);
+      return mrr && ["Pending PH", "Pending Accounts", "Pending MD"].includes(mrr.status || "");
+    });
+    if (actionableIds.length === 0) {
+      alert("No selected MRR is available for approval.");
+      return;
+    }
+    if (!confirm(`Are you sure you want to approve ${actionableIds.length} MRRs?`)) return;
+    for (const id of actionableIds) {
       await handleAction(id, "Approve");
     }
   };
 
   const downloadPdf = (mrr: MaterialIn) => {
     const doc = new jsPDF();
-    const supplier = suppliers.find(s => s.id === mrr.supplierId);
+    const supplierName = getSupplierName(mrr.supplierId);
     
     doc.setFontSize(18);
     doc.text("MATERIAL RECEIPT", 105, 15, { align: "center" });
@@ -157,7 +187,7 @@ export function MrrApprovals() {
     doc.setFontSize(10);
     doc.text(`MRR No: ${mrr.transactionNo}`, 14, 25);
     doc.text(`Date: ${formatDate(mrr.date)}`, 14, 30);
-    doc.text(`Supplier: ${supplier?.name || "N/A"}`, 14, 35);
+    doc.text(`Supplier/Customer: ${supplierName || "N/A"}`, 14, 35);
     doc.text(`Invoice No: ${mrr.invoiceNo}`, 14, 40);
     
     const tableData = mrr.lines.map((l, i) => [
@@ -174,28 +204,45 @@ export function MrrApprovals() {
       head: [["S.No", "Item Description", "Qty", "UOM", "Rate", "Amount"]],
       body: tableData,
       theme: "grid",
-      headStyles: { fillStyle: "black", textColor: "white" }
+      headStyles: { fillColor: [0, 0, 0], textColor: "white" }
     });
 
     doc.save(`MRR_${mrr.transactionNo}.pdf`);
   };
 
-  const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
-
-  const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
-    const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
-    if (isFgType) {
-      const item = npdItems.find(i => i.id === line.itemId);
-      return item ? item.name : line.itemId;
-    }
-    const material = materials.find(m => m.id === line.itemId);
-    if (!material) return line.itemId;
+  const getMaterialSpecs = (material: Material) => {
     const specs = [];
     if (material.size) specs.push(`Size: ${material.size} CM`);
     if (material.gsm) specs.push(`GSM: ${material.gsm}`);
     if (material.bf) specs.push(`BF: ${material.bf}`);
     const specStr = specs.join(" X ");
     return specStr ? `${material.name} - ${specStr}` : material.name;
+  };
+
+  const getItemSpecs = (line: MaterialIn["lines"][0], mrrType?: MaterialIn["mrrType"]) => {
+    const isServiceReturn = mrrType === "Service Return" || line.lineType === "Service";
+    if (isServiceReturn) {
+      const baseLabel = line.sourceGatePassItemDescription?.trim() || line.itemName?.trim() || line.itemId;
+      const resolvedServiceName = services.find((service) => service.id === (line.serviceId || line.itemId))?.name?.trim() || line.serviceName?.trim();
+      if (resolvedServiceName) {
+        return `${baseLabel} (${resolvedServiceName})`;
+      }
+      return baseLabel;
+    }
+
+    const npdItem = npdItems.find(i => i.id === line.itemId);
+    const material = materials.find(m => m.id === line.itemId);
+    const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
+
+    if (isFgType) {
+      if (npdItem) return npdItem.name;
+      if (material) return getMaterialSpecs(material);
+      return line.itemName?.trim() || line.itemId;
+    }
+
+    if (material) return getMaterialSpecs(material);
+    if (npdItem) return npdItem.name;
+    return line.itemName?.trim() || line.itemId;
   };
 
   return (
@@ -254,6 +301,8 @@ export function MrrApprovals() {
                   <th className="px-4 py-3 text-left">GE No</th>
                   <th className="px-4 py-3 text-left">MRR No</th>
                   <th className="px-4 py-3 text-left">Supplier/Customer</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-left">MRR Type</th>
                   <th className="px-4 py-3 text-left min-w-[300px]">Items</th>
                   <th className="px-4 py-3 text-right">MRR Qty</th>
                   <th className="px-4 py-3 text-right">Inv Qty</th>
@@ -267,7 +316,7 @@ export function MrrApprovals() {
               <tbody className="divide-y divide-black bg-white">
                 {filteredList.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
+                    <td colSpan={14} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
                       No records found in this stage
                     </td>
                   </tr>
@@ -277,7 +326,7 @@ export function MrrApprovals() {
                     
                     const mrrWeight = linesToDisplay.reduce((s, l) => s + (l.actualQty || l.qty || 0), 0);
                     const invWeight = linesToDisplay.reduce((s, l) => s + (l.invoiceQty || 0), 0);
-                    const firstLine = linesToDisplay[0] || {};
+                    const firstLine: Partial<MaterialIn["lines"][0]> = linesToDisplay[0] || {};
                     const basicValue = linesToDisplay.reduce((s, l) => s + (l.actualValue || l.value || 0), 0);
 
                     return (
@@ -292,11 +341,13 @@ export function MrrApprovals() {
                         </td>
                         <td className="px-4 py-4">{m.gateEntryNo || "-"}</td>
                         <td className="px-4 py-4">{m.transactionNo}</td>
-                        <td className="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{getSupplierName(m.supplierId)}</td>
+                        <td className="px-4 py-4 w-[170px] max-w-[170px] whitespace-normal break-words leading-snug">{getSupplierName(m.supplierId)}</td>
+                        <td className="px-4 py-4 whitespace-nowrap font-bold">{m.status || "-"}</td>
+                        <td className="px-4 py-4 whitespace-nowrap font-bold">{m.mrrType || "-"}</td>
                         <td className="px-4 py-4 leading-relaxed">
                           {linesToDisplay.map((l, i) => (
                             <div key={i} className="mb-2 last:mb-0 border-b border-black/5 pb-1 last:border-0">
-                              <div className="font-bold lowercase first-letter:uppercase">{getItemSpecs(l, m.mrrType)}</div>
+                              <div className="font-bold">{getItemSpecs(l, m.mrrType)}</div>
                             </div>
                           ))}
                         </td>
@@ -315,7 +366,7 @@ export function MrrApprovals() {
                               >
                                 <Download size={10} /> PDF
                               </button>
-                              {activeStage === "Pending Accounts" && (
+                              {m.status === "Pending Accounts" && (
                                 <button 
                                   onClick={() => navigate(`/material-in/form?edit=${m.id}`)}
                                   className="border border-indigo-600 text-indigo-600 py-1 rounded text-[9px] font-black hover:bg-indigo-50 flex items-center justify-center gap-1"
@@ -324,28 +375,36 @@ export function MrrApprovals() {
                                 </button>
                               )}
                             </div>
-                            <div className="grid grid-cols-2 gap-1">
-                              <button 
-                                disabled={!!isSubmitting}
-                                onClick={() => handleAction(m.id, "Approve")}
-                                className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100"
-                              >
-                                {isSubmitting === m.id ? <Spinner size={10} /> : "APPROVE"}
-                              </button>
-                              <button 
-                                disabled={!!isSubmitting}
-                                onClick={() => handleAction(m.id, "Reject")}
-                                className="bg-red-600 text-white py-1 rounded text-[9px] font-black hover:bg-red-700"
-                              >
-                                REJECT
-                              </button>
-                            </div>
-                            <textarea
-                              value={remarks[m.id] || ""}
-                              onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
-                              placeholder="Remark *"
-                              className="w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
-                            />
+                            {["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "") ? (
+                              <>
+                                <div className="grid grid-cols-2 gap-1">
+                                  <button 
+                                    disabled={!!isSubmitting}
+                                    onClick={() => handleAction(m.id, "Approve")}
+                                    className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100"
+                                  >
+                                    {isSubmitting === m.id ? <Spinner size={10} /> : "APPROVE"}
+                                  </button>
+                                  <button 
+                                    disabled={!!isSubmitting}
+                                    onClick={() => handleAction(m.id, "Reject")}
+                                    className="bg-red-600 text-white py-1 rounded text-[9px] font-black hover:bg-red-700"
+                                  >
+                                    REJECT
+                                  </button>
+                                </div>
+                                <textarea
+                                  value={remarks[m.id] || ""}
+                                  onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
+                                  placeholder="Remark *"
+                                  className="w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
+                                />
+                              </>
+                            ) : (
+                              <div className="rounded border border-black bg-slate-50 px-2 py-2 text-center text-[9px] font-black uppercase text-slate-500">
+                                No approval action
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -392,5 +451,6 @@ export function MrrApprovals() {
     </div>
   );
 }
+
 
 

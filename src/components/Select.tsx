@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 interface OptionType {
   value: string;
   label: string;
+  searchText?: string;
 }
 
 interface SelectProps {
@@ -31,13 +32,20 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
   };
 
   return (
-    <div className="grid w-full grid-cols-[minmax(0,1fr)_42px] items-start gap-2">
+    <div className={`grid w-full items-start gap-2 ${onAdd ? "grid-cols-[minmax(0,1fr)_42px]" : "grid-cols-1"}`}>
       <div className="min-w-0">
         <ReactSelect
           inputId={id}
           value={selectedOption}
           onChange={handleChange}
           options={options}
+          filterOption={(candidate, inputValue) => {
+            const query = inputValue.trim().toLowerCase();
+            if (!query) return true;
+            const option = candidate.data as OptionType;
+            const haystack = `${option.searchText || option.label}`.toLowerCase();
+            return haystack.includes(query);
+          }}
           getOptionLabel={(option: OptionType) => option.label}
           getOptionValue={(option: OptionType) => option.value}
           noOptionsMessage={() => "No items found"}
