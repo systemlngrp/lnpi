@@ -115,6 +115,14 @@ def normalize_uom(value):
     return TALLY_UOM_ALIASES.get(normalized.upper(), normalized)
 
 
+def normalize_part_no(value):
+    if value is None:
+        return ""
+
+    normalized = re.sub(r"\s+", " ", str(value).strip())
+    return normalized.upper()
+
+
 def join_unique_values(values):
     unique_values = []
     seen = set()
@@ -653,6 +661,120 @@ def check_tally_object_exists(object_type, object_name):
     return result
 
 
+def extract_first_matching_tag(xml_block, tag_names):
+    for tag_name in tag_names:
+        escaped_tag = re.escape(tag_name)
+        pattern = rf"<{escaped_tag}\b[^>]*>(.*?)</{escaped_tag}>"
+        match = re.search(pattern, xml_block, flags=re.IGNORECASE | re.DOTALL)
+        if match:
+            return re.sub(r"\s+", " ", match.group(1).strip())
+    return ""
+
+
+def fetch_tally_stock_item_details(item_name):
+    if not item_name:
+        return {}, "Stock Item name missing"
+
+    cache_key = ("STOCK_ITEM_DETAILS", item_name.strip().upper())
+    if cache_key in TALLY_MASTER_CACHE:
+        return TALLY_MASTER_CACHE[cache_key]
+
+    xml = f"""<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Object</TYPE>
+        <SUBTYPE>Stock Item</SUBTYPE>
+        <ID TYPE="Name">{esc(item_name)}</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+                <FETCH>BaseUnits</FETCH>
+                <FETCH>PartNo</FETCH>
+                <FETCH>PartNumber</FETCH>
+                <FETCH>MailingName.LIST</FETCH>
+                <FETCH>LanguageName.LIST</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>"""
+
+    response_text = tally_request(xml)
+    if not response_text:
+        result = ({}, "Empty response from Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    upper_response = response_text.upper()
+    if "CONNECTION ERROR:" in upper_response or "HTTP ERROR FROM TALLY:" in upper_response:
+        result = ({}, response_text)
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    if "UNKNOWN REQUEST" in upper_response or "<LINEERROR>" in upper_response:
+        result = ({}, f"Stock Item '{item_name}' not found in Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    cleaned_xml = sanitize_tally_xml(response_text)
+    try:
+        root = ET.fromstring(cleaned_xml)
+    except Exception:
+        result = ({}, f"Could not read Stock Item details for '{item_name}' from Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    stock_item = root.find(".//STOCKITEM")
+    if stock_item is None:
+        result = ({}, f"Stock Item '{item_name}' not found in Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    base_units = ""
+    for child in stock_item:
+        if child.tag.upper() == "BASEUNITS":
+            base_units = (child.text or "").strip()
+            break
+
+    normalized_base_units = normalize_uom(base_units)
+    if not normalized_base_units:
+        result = ({}, f"Stock Item '{item_name}' has no Base Unit in Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    stock_item_block_match = re.search(r"<STOCKITEM\b.*?</STOCKITEM>", cleaned_xml, flags=re.IGNORECASE | re.DOTALL)
+    stock_item_block = stock_item_block_match.group(0) if stock_item_block_match else cleaned_xml
+    part_no = extract_first_matching_tag(stock_item_block, ["PARTNO", "PARTNUMBER"])
+
+    mailing_names = re.findall(
+        r"<MAILINGNAME\b[^>]*>(.*?)</MAILINGNAME>",
+        stock_item_block,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    language_names = re.findall(
+        r"<NAME\b[^>]*>(.*?)</NAME>",
+        stock_item_block,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    result = (
+        {
+            "base_uom": normalized_base_units,
+            "part_no": re.sub(r"\s+", " ", part_no.strip()) if part_no else "",
+            "mailing_names": [re.sub(r"\s+", " ", value.strip()) for value in mailing_names if value.strip()],
+            "language_names": [re.sub(r"\s+", " ", value.strip()) for value in language_names if value.strip()],
+        },
+        "",
+    )
+    TALLY_MASTER_CACHE[cache_key] = result
+    return result
+
+
 def get_company_details(conn, company_id):
     if not company_id:
         return {}
@@ -689,6 +811,7 @@ def get_invoice_lines(conn, invoice_id):
     for row in rows:
         item_name = ""
         uom = ""
+        npd_part = ""
 
         item_id = row.get("itemId")
         npd_id = row.get("npdId")
@@ -711,7 +834,7 @@ def get_invoice_lines(conn, invoice_id):
         if not item_name and npd_id:
             cursor.execute(
                 """
-                SELECT itemName, uom
+                SELECT itemName, uom, part
                 FROM npd
                 WHERE id = %s
                 LIMIT 1
@@ -723,6 +846,7 @@ def get_invoice_lines(conn, invoice_id):
                 item_name = npd_row.get("itemName") or ""
                 if not uom:
                     uom = npd_row.get("uom") or ""
+                npd_part = npd_row.get("part") or ""
 
         processed_lines.append(
             {
@@ -733,6 +857,7 @@ def get_invoice_lines(conn, invoice_id):
                 "npdId": npd_id,
                 "itemName": item_name or "Unknown Item",
                 "uom": normalize_uom(uom),
+                "npdPartNo": str(npd_part or "").strip(),
                 "qty": to_float(row.get("qty")),
                 "rate": to_float(row.get("rate")),
                 "amount": to_float(row.get("amount")),
@@ -1175,7 +1300,209 @@ def validate_tally_masters(customer_name, sales_ledger_name, item_lines, invoice
         if not exists:
             errors.append(message)
 
+    for line in item_lines:
+        item_name = str(line.get("itemName") or "").strip()
+        erp_uom = normalize_uom(line.get("uom"))
+        if not item_name or not erp_uom:
+            continue
+
+        tally_stock_item, error_message = fetch_tally_stock_item_details(item_name)
+        if error_message:
+            errors.append(error_message)
+            continue
+        tally_uom = tally_stock_item.get("base_uom") or ""
+        if tally_uom != erp_uom:
+            errors.append(f"{item_name}: UOM mismatch. ERP={erp_uom}, Tally={tally_uom}")
+
+        if line.get("npdId"):
+            erp_part_no = normalize_part_no(line.get("npdPartNo"))
+            if erp_part_no:
+                tally_part_no = normalize_part_no(tally_stock_item.get("part_no"))
+                tally_aliases = {
+                    normalize_part_no(value)
+                    for value in (tally_stock_item.get("mailing_names") or [])
+                    if normalize_part_no(value)
+                }
+                if not tally_part_no and erp_part_no not in tally_aliases:
+                    errors.append(f"{item_name}: Part No missing in Tally. ERP={line.get('npdPartNo')}")
+                elif erp_part_no != tally_part_no and erp_part_no not in tally_aliases:
+                    display_part = tally_stock_item.get("part_no") or ", ".join(tally_stock_item.get("mailing_names") or [])
+                    errors.append(
+                        f"{item_name}: Part No mismatch. ERP={line.get('npdPartNo')}, Tally={display_part or 'blank'}"
+                    )
+
     return errors
+
+
+def prevalidate_pending_invoices(conn, pending_invoice_rows):
+    valid_contexts = []
+    precheck_summary = {
+        "customers_ok": set(),
+        "stock_items_ok": set(),
+        "item_uom_ok": set(),
+        "invoice_numbers_clear": set(),
+        "invoice_numbers_existing": [],
+        "npd_part_matches": set(),
+    }
+
+    print("==========================================")
+    print("Prechecking pending invoices before posting")
+    print("==========================================")
+
+    for invoice_row in pending_invoice_rows:
+        invoice_id = invoice_row.get("id")
+        invoice_no = str(invoice_row.get("invoiceNo") or "").strip()
+
+        print(f"Precheck Invoice ID: {invoice_id} | Invoice No: {invoice_no}")
+
+        try:
+            company_row = get_company_details(conn, invoice_row.get("companyId"))
+            company_name = (company_row or {}).get("name") or ""
+            if not company_name:
+                remark = "Company ledger not found in companies table"
+                update_invoice_tally_status(conn, invoice_id, False, remark)
+                log_terminal("PRECHECK", remark)
+                continue
+
+            item_lines = get_invoice_lines(conn, invoice_id)
+            if not item_lines:
+                remark = "No invoice line items found"
+                update_invoice_tally_status(conn, invoice_id, False, remark)
+                log_terminal("PRECHECK", remark)
+                continue
+
+            line_errors = validate_invoice_lines(item_lines)
+            if line_errors:
+                remark = " | ".join(line_errors[:10])
+                update_invoice_tally_status(conn, invoice_id, False, remark)
+                log_terminal("PRECHECK", remark)
+                continue
+
+            if not invoice_no:
+                remark = "Invoice No missing"
+                update_invoice_tally_status(conn, invoice_id, False, remark)
+                log_terminal("PRECHECK", remark)
+                continue
+
+            precheck_summary["customers_ok"].add(company_name)
+
+            sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row, item_lines)
+            dispatch_details = get_invoice_dispatch_details(conn, invoice_id, item_lines)
+            narration_text = build_invoice_narration(dispatch_details)
+
+            existing_tally_id = str(invoice_row.get("tallyInvId") or "").strip()
+            tally_reference = fetch_tally_voucher_by_id(existing_tally_id) if existing_tally_id else {}
+            if existing_tally_id and tally_reference:
+                remark = "Voucher already exists in Tally. Matched by saved Tally ID."
+                update_invoice_tally_status(
+                    conn,
+                    invoice_id,
+                    True,
+                    remark,
+                    invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
+                    tally_reference.get("tallyInvNo") or invoice_no,
+                    format_iso_date(tally_reference.get("tallyInvDate")),
+                    existing_tally_id,
+                )
+                precheck_summary["invoice_numbers_existing"].append(invoice_no)
+                log_terminal("PRECHECK", f"{invoice_no}: {remark}")
+                continue
+
+            voucher_by_number = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
+            if voucher_by_number:
+                remark = "This Invoice already exists in tally."
+                update_invoice_tally_status(
+                    conn,
+                    invoice_id,
+                    True,
+                    remark,
+                    invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
+                    voucher_by_number.get("tallyInvNo") or invoice_no,
+                    format_iso_date(voucher_by_number.get("tallyInvDate")),
+                    voucher_by_number.get("tallyInvId"),
+                )
+                precheck_summary["invoice_numbers_existing"].append(invoice_no)
+                log_terminal("PRECHECK", f"{invoice_no}: {remark}")
+                continue
+
+            tally_master_errors = validate_tally_masters(
+                company_name,
+                sales_ledger_name,
+                item_lines,
+                invoice_row,
+            )
+            if tally_master_errors:
+                remark = " | ".join(tally_master_errors[:10])
+                update_invoice_tally_status(conn, invoice_id, False, remark)
+                log_terminal("PRECHECK", remark)
+                continue
+
+            for line in item_lines:
+                item_name = str(line.get("itemName") or "").strip()
+                item_uom = normalize_uom(line.get("uom"))
+                if item_name:
+                    precheck_summary["stock_items_ok"].add(item_name)
+                if item_name and item_uom:
+                    precheck_summary["item_uom_ok"].add((item_name, item_uom))
+                if line.get("npdId"):
+                    npd_part_no = normalize_part_no(line.get("npdPartNo"))
+                    if item_name and npd_part_no:
+                        precheck_summary["npd_part_matches"].add((item_name, npd_part_no))
+
+            precheck_summary["invoice_numbers_clear"].add(invoice_no)
+            valid_contexts.append(
+                {
+                    "invoice_row": invoice_row,
+                    "invoice_id": invoice_id,
+                    "invoice_no": invoice_no,
+                    "company_row": company_row,
+                    "company_name": company_name,
+                    "item_lines": item_lines,
+                    "sales_ledger_name": sales_ledger_name,
+                    "dispatch_details": dispatch_details,
+                    "narration_text": narration_text,
+                }
+            )
+        except Exception as exc:
+            error_message = str(exc)[:1000]
+            update_invoice_tally_status(conn, invoice_id, False, error_message)
+            log_terminal("PRECHECK", error_message)
+
+    print("==========================================")
+    print("Precheck Summary Before Posting")
+    print("==========================================")
+    if precheck_summary["customers_ok"]:
+        print(f"[OK] All Customers exist in Tally for {len(precheck_summary['customers_ok'])} customer ledger(s).")
+    else:
+        print("[INFO] No customer ledgers were cleared in precheck.")
+
+    if precheck_summary["stock_items_ok"]:
+        print(f"[OK] All Stock Items exist in Tally for {len(precheck_summary['stock_items_ok'])} unique item name(s).")
+    else:
+        print("[INFO] No stock items were cleared in precheck.")
+
+    if precheck_summary["item_uom_ok"]:
+        print(f"[OK] All Items exist with matching Unit for {len(precheck_summary['item_uom_ok'])} unique item/unit combination(s).")
+    else:
+        print("[INFO] No item/unit combinations were cleared in precheck.")
+
+    if precheck_summary["invoice_numbers_clear"]:
+        print(f"[OK] There is no existing Invoice No. in Tally for {len(precheck_summary['invoice_numbers_clear'])} invoice(s) cleared for posting.")
+    else:
+        print("[INFO] No invoice numbers were cleared for posting.")
+
+    if precheck_summary["invoice_numbers_existing"]:
+        print(f"[INFO] Existing Invoice No. already found in Tally for {len(precheck_summary['invoice_numbers_existing'])} invoice(s).")
+
+    if precheck_summary["npd_part_matches"]:
+        print(
+            f"[OK] NPD Stock Items exist with matching Name and Part No for "
+            f"{len(precheck_summary['npd_part_matches'])} unique item/part combination(s)."
+        )
+    else:
+        print("[INFO] No NPD Part No comparisons were applicable in this precheck.")
+
+    return valid_contexts
 
 
 def update_invoice_tally_status(
@@ -1237,44 +1564,25 @@ def sync_invoices_to_tally():
         print(f"Pending invoices found: {len(pending_invoice_rows)}")
         print("==========================================")
 
-        for invoice_row in pending_invoice_rows:
-            invoice_id = invoice_row.get("id")
-            invoice_no = str(invoice_row.get("invoiceNo") or "").strip()
+        valid_contexts = prevalidate_pending_invoices(conn, pending_invoice_rows)
+
+        print("==========================================")
+        print(f"Invoices cleared for posting: {len(valid_contexts)}")
+        print("==========================================")
+
+        for context in valid_contexts:
+            invoice_row = context["invoice_row"]
+            invoice_id = context["invoice_id"]
+            invoice_no = context["invoice_no"]
 
             print(f"\nProcessing Invoice ID: {invoice_id} | Invoice No: {invoice_no}")
 
             try:
-                company_row = get_company_details(conn, invoice_row.get("companyId"))
-                company_name = (company_row or {}).get("name") or ""
-                if not company_name:
-                    remark = "Company ledger not found in companies table"
-                    update_invoice_tally_status(conn, invoice_id, False, remark)
-                    print(remark)
-                    continue
-
-                item_lines = get_invoice_lines(conn, invoice_id)
-                if not item_lines:
-                    remark = "No invoice line items found"
-                    update_invoice_tally_status(conn, invoice_id, False, remark)
-                    print(remark)
-                    continue
-
-                line_errors = validate_invoice_lines(item_lines)
-                if line_errors:
-                    remark = " | ".join(line_errors[:10])
-                    update_invoice_tally_status(conn, invoice_id, False, remark)
-                    log_terminal("VALIDATION", remark)
-                    continue
-
-                if not invoice_no:
-                    remark = "Invoice No missing"
-                    update_invoice_tally_status(conn, invoice_id, False, remark)
-                    log_terminal("VALIDATION", remark)
-                    continue
-
-                sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row, item_lines)
-                dispatch_details = get_invoice_dispatch_details(conn, invoice_id, item_lines)
-                narration_text = build_invoice_narration(dispatch_details)
+                company_name = context["company_name"]
+                item_lines = context["item_lines"]
+                sales_ledger_name = context["sales_ledger_name"]
+                dispatch_details = context["dispatch_details"]
+                narration_text = context["narration_text"]
 
                 existing_tally_id = str(invoice_row.get("tallyInvId") or "").strip()
                 tally_reference = fetch_tally_voucher_by_id(existing_tally_id) if existing_tally_id else {}
@@ -1321,18 +1629,6 @@ def sync_invoices_to_tally():
                 print(f"Using sales ledger: {sales_ledger_name}")
                 if narration_text:
                     print(f"Narration: {narration_text}")
-
-                tally_master_errors = validate_tally_masters(
-                    company_name,
-                    sales_ledger_name,
-                    item_lines,
-                    invoice_row,
-                )
-                if tally_master_errors:
-                    remark = " | ".join(tally_master_errors[:10])
-                    update_invoice_tally_status(conn, invoice_id, False, remark)
-                    log_terminal("PRECHECK", remark)
-                    continue
 
                 tally_xml = create_sales_voucher_xml(
                     invoice_row,
