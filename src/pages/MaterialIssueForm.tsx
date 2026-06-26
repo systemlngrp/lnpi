@@ -165,16 +165,33 @@ export function MaterialIssueForm() {
     });
 
     const npdConsumableItems: IssueMaterialOption[] = [];
+    const npdCorrugatedSheetItems: IssueMaterialOption[] = [];
 
     if (issueType === "Job") {
       npdItems.forEach((item) => {
-        if (!isConsumableNpdItem(item.consumable)) return;
-
         const itemId = String(item.id || "").trim();
         if (!itemId) return;
 
         const erpCode = String(item.erp || "").trim().toLowerCase();
         const erpKey = erpCode || `npd:${itemId}`;
+
+        if (isCorrugatedSheetOnly && isCorrugatedSheetMaterial({ name: item.name })) {
+          const syntheticId = `npd:${itemId}`;
+          if (!npdCorrugatedSheetItems.some((entry) => String(entry.id) === syntheticId)) {
+            npdCorrugatedSheetItems.push({
+              id: syntheticId,
+              type: "Other",
+              erpCode: item.erp,
+              name: item.name,
+              uom: item.uom || "PCS",
+              active: "Yes",
+              isNpdConsumableItem: true,
+              npdSourceId: itemId,
+            });
+          }
+        }
+
+        if (!isConsumableNpdItem(item.consumable)) return;
 
         if (existingMaterialIds.has(itemId)) return;
         if (fgItems.has(itemId)) return;
@@ -197,8 +214,8 @@ export function MaterialIssueForm() {
       });
     }
 
-    return [...materials, ...Array.from(fgItems.values()), ...npdConsumableItems];
-  }, [materialIn, materials, npdItems, issueType]);
+    return [...materials, ...Array.from(fgItems.values()), ...npdConsumableItems, ...npdCorrugatedSheetItems];
+  }, [isCorrugatedSheetOnly, materialIn, materials, npdItems, issueType]);
 
   const materialOptions = useMemo(
     () =>
@@ -668,4 +685,7 @@ function Field({ label, children, required = false, className = "" }: { label: s
     </div>
   );
 }
+
+
+
 
