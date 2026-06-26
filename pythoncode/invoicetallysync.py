@@ -63,6 +63,9 @@ TALLY_UOM_ALIASES = {
     "PC": os.getenv("TALLY_UOM_PC", "PCS"),
 }
 TALLY_MASTER_CACHE = {}
+TALLY_CONNECT_TIMEOUT = float(os.getenv("TALLY_CONNECT_TIMEOUT", "5"))
+TALLY_READ_TIMEOUT = float(os.getenv("TALLY_READ_TIMEOUT", "15"))
+
 
 
 def log_terminal(level, message):
@@ -590,11 +593,15 @@ def tally_request(xml_data):
             TALLY_URL,
             data=xml_data.encode("utf-8"),
             headers={"Content-Type": "text/xml"},
-            timeout=60,
+            timeout=(TALLY_CONNECT_TIMEOUT, TALLY_READ_TIMEOUT),
         )
         if response.status_code == 200:
             return response.text
         return f"HTTP error from Tally: {response.status_code}"
+    except requests.exceptions.ReadTimeout:
+        return f"Connection error: Tally request timed out after {TALLY_READ_TIMEOUT} seconds while waiting for response"
+    except requests.exceptions.ConnectTimeout:
+        return f"Connection error: Could not connect to Tally within {TALLY_CONNECT_TIMEOUT} seconds"
     except Exception as error:
         return f"Connection error: {error}"
 
@@ -1390,6 +1397,7 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
             dispatch_details = get_invoice_dispatch_details(conn, invoice_id, item_lines)
             narration_text = build_invoice_narration(dispatch_details)
 
+            log_terminal("PRECHECK", f"{invoice_no}: checking saved Tally ID")
             existing_tally_id = str(invoice_row.get("tallyInvId") or "").strip()
             tally_reference = fetch_tally_voucher_by_id(existing_tally_id) if existing_tally_id else {}
             if existing_tally_id and tally_reference:
@@ -1408,6 +1416,7 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                 log_terminal("PRECHECK", f"{invoice_no}: {remark}")
                 continue
 
+            log_terminal("PRECHECK", f"{invoice_no}: checking existing invoice number in Tally")
             voucher_by_number = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
             if voucher_by_number:
                 remark = "This Invoice already exists in tally."
@@ -1425,6 +1434,7 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                 log_terminal("PRECHECK", f"{invoice_no}: {remark}")
                 continue
 
+            log_terminal("PRECHECK", f"{invoice_no}: validating ledgers and stock items in Tally")
             tally_master_errors = validate_tally_masters(
                 company_name,
                 sales_ledger_name,
