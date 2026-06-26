@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
-import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, Plus, X } from "lucide-react";
+import { Eye, Pencil, Plus, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, GateEntry, GateEntryPhoto, Supplier } from "../types";
+
+function hasLinkedMrr(entry: GateEntry) {
+  return Boolean(String(entry.mrrId || "").trim() || String(entry.mrrNo || "").trim() || String(entry.mrrDate || "").trim());
+}
 
 export function GateEntryMaster() {
   const navigate = useNavigate();
@@ -22,7 +25,7 @@ export function GateEntryMaster() {
         .filter((entry) => {
           const s = suppliers.find((supplier) => supplier.id === entry.supplierId);
           const c = companies.find((company) => company.id === entry.supplierId);
-          const supplierName = s ? s.name : (c ? c.name : "");
+          const supplierName = s ? s.name : c ? c.name : "";
           const haystack = [entry.gateEntryNo, supplierName, entry.invoiceNo, entry.truckNo]
             .filter(Boolean)
             .join(" ")
@@ -45,12 +48,13 @@ export function GateEntryMaster() {
     : [];
 
   const getSupplierName = (supplierId: string) => {
-    const s = suppliers.find((supplier) => supplier.id === supplierId);
-    if (s) return s.name;
-    const c = companies.find((company) => company.id === supplierId);
-    if (c) return c.name;
+    const supplier = suppliers.find((row) => row.id === supplierId);
+    if (supplier) return supplier.name;
+    const company = companies.find((row) => row.id === supplierId);
+    if (company) return company.name;
     return "";
   };
+
   const getPhotoCount = (gateEntryId: string) => gateEntryPhotos.filter((photo) => photo.gateEntryId === gateEntryId).length;
 
   return (
@@ -89,33 +93,47 @@ export function GateEntryMaster() {
           <tbody>
             {filteredEntries.length === 0 ? (
               <tr>
-                  <td colSpan={10} className="border border-black px-6 py-10 text-center font-medium text-black">
-                    No gate entries found.
-                  </td>
-                </tr>
+                <td colSpan={10} className="border border-black px-6 py-10 text-center font-medium text-black">
+                  No gate entries found.
+                </td>
+              </tr>
             ) : (
-              filteredEntries.map((entry) => (
-                <tr key={entry.id} className="hover:bg-slate-50">
-                  <td className="border border-black px-4 py-3 text-sm font-semibold text-black">{entry.gateEntryNo || "Syncing..."}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{entry.date}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{getSupplierName(entry.supplierId)}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{entry.invoiceNo}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{Number(entry.invoiceValue || 0).toFixed(2)}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{entry.truckNo}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{entry.mrrNo || "-"}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{entry.mrrDate || "-"}</td>
-                  <td className="border border-black px-4 py-3 text-sm text-black">{getPhotoCount(entry.id)} Photos</td>
-                  <td className="border border-black px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedEntryId(entry.id)}
-                      className="inline-flex items-center gap-2 rounded border border-black px-3 py-2 text-sm font-semibold text-black transition hover:bg-slate-100"
-                    >
-                      <Eye size={15} /> View
-                    </button>
-                  </td>
-                </tr>
-              ))
+              filteredEntries.map((entry) => {
+                const editable = !hasLinkedMrr(entry);
+                return (
+                  <tr key={entry.id} className="hover:bg-slate-50">
+                    <td className="border border-black px-4 py-3 text-sm font-semibold text-black">{entry.gateEntryNo || "Syncing..."}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black">{entry.date}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black">{getSupplierName(entry.supplierId)}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black">{entry.invoiceNo}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black">{Number(entry.invoiceValue || 0).toFixed(2)}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black">{entry.truckNo}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black">{entry.mrrNo || "-"}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black">{entry.mrrDate || "-"}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black">{getPhotoCount(entry.id)} Photos</td>
+                    <td className="border border-black px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEntryId(entry.id)}
+                          className="inline-flex items-center gap-2 rounded border border-black px-3 py-2 text-sm font-semibold text-black transition hover:bg-slate-100"
+                        >
+                          <Eye size={15} /> View
+                        </button>
+                        {editable ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/gate-entry/form?id=${entry.id}`)}
+                            className="inline-flex items-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
+                          >
+                            <Pencil size={15} /> Edit
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -146,6 +164,8 @@ export function GateEntryMaster() {
               <InfoCard label="Invoice No" value={selectedEntry.invoiceNo} />
               <InfoCard label="Invoice Value" value={Number(selectedEntry.invoiceValue || 0).toFixed(2)} />
               <InfoCard label="Truck No" value={selectedEntry.truckNo} />
+              <InfoCard label="MRR No" value={selectedEntry.mrrNo || "Pending"} />
+              <InfoCard label="MRR Date" value={selectedEntry.mrrDate || "Pending"} />
               <InfoCard label="Photos" value={`${selectedPhotos.length}`} />
             </div>
 
@@ -206,10 +226,10 @@ function PhotoCard({
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
       {isPdf ? (
-        <div className="h-44 w-full flex flex-col items-center justify-center bg-red-50 text-red-700 gap-2 border-b border-slate-200">
+        <div className="flex h-44 w-full flex-col items-center justify-center gap-2 border-b border-slate-200 bg-red-50 text-red-700">
           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           <span className="text-xs font-bold uppercase">PDF Document</span>
-          <a href={href} target="_blank" rel="noreferrer" className="mt-2 text-[10px] bg-red-700 text-white px-3 py-1 rounded-full uppercase tracking-wider hover:bg-red-800 transition">View PDF</a>
+          <a href={href} target="_blank" rel="noreferrer" className="mt-2 rounded-full bg-red-700 px-3 py-1 text-[10px] uppercase tracking-wider text-white transition hover:bg-red-800">View PDF</a>
         </div>
       ) : (
         <button
@@ -220,7 +240,7 @@ function PhotoCard({
           <img
             src={href}
             alt={`Gate entry slot ${slotNo}`}
-            className="h-44 w-full object-cover cursor-zoom-in"
+            className="h-44 w-full cursor-zoom-in object-cover"
           />
         </button>
       )}

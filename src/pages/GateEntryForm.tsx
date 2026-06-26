@@ -17,6 +17,17 @@ function createInitialSlots(): PhotoSlot[] {
   return Array.from({ length: PHOTO_SLOTS }, () => ({ filename: "", uploading: false }));
 }
 
+function buildPhotoSlots(photos: GateEntryPhoto[]) {
+  const slots = createInitialSlots();
+  photos.forEach((photo) => {
+    const index = Number(photo.slotNo || 0) - 1;
+    if (index >= 0 && index < PHOTO_SLOTS) {
+      slots[index] = { filename: photo.photo, uploading: false };
+    }
+  });
+  return slots;
+}
+
 function toInputDate(value?: string) {
   if (!value) return new Date().toISOString().slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
@@ -24,9 +35,18 @@ function toInputDate(value?: string) {
   return Number.isNaN(date.getTime()) ? new Date().toISOString().slice(0, 10) : date.toISOString().slice(0, 10);
 }
 
+function hasLinkedMrr(entry?: Pick<GateEntry, "mrrId" | "mrrNo" | "mrrDate"> | null) {
+  return Boolean(
+    String(entry?.mrrId || "").trim() ||
+    String(entry?.mrrNo || "").trim() ||
+    String(entry?.mrrDate || "").trim()
+  );
+}
+
 export function GateEntryForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const editGateEntryId = searchParams.get("id") || "";
   const sourceGatePassId = searchParams.get("sourceGatePassId") || "";
   const purposeFromQuery = searchParams.get("purpose") === "Returnable Receipt" ? "Returnable Receipt" : "Material Receipt";
 
@@ -37,14 +57,22 @@ export function GateEntryForm() {
   const [gatePasses] = useData<GatePass>("gate_passes", []);
   const [materialIn] = useData("material-in", []);
 
-  const sourceGatePass = gatePasses.find((gatePass) => gatePass.id === sourceGatePassId) || null;
+  const editingEntry = gateEntries.find((entry) => entry.id === editGateEntryId) || null;
+  const isEditing = Boolean(editingEntry);
+  const editingLocked = hasLinkedMrr(editingEntry);
+  const effectiveSourceGatePassId = editingEntry?.sourceGatePassId || sourceGatePassId;
+  const sourceGatePass = gatePasses.find((gatePass) => gatePass.id === effectiveSourceGatePassId) || null;
+  const entryPhotos = useMemo(
+    () => gateEntryPhotos.filter((photo) => photo.gateEntryId === editGateEntryId).sort((a, b) => a.slotNo - b.slotNo),
+    [editGateEntryId, gateEntryPhotos]
+  );
 
   const [date, setDate] = useState(toInputDate());
-  const [supplierId, setSupplierId] = useState(sourceGatePass?.recipientId || "");
+  const [supplierId, setSupplierId] = useState("");
   const [purpose, setPurpose] = useState<GateEntry["purpose"]>(purposeFromQuery);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [invoiceValue, setInvoiceValue] = useState("");
-  const [truckNo, setTruckNo] = useState(sourceGatePass?.truckNo || "");
+  const [truckNo, setTruckNo] = useState("");
   const [photoSlots, setPhotoSlots] = useState<PhotoSlot[]>(createInitialSlots);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,43 +82,60 @@ export function GateEntryForm() {
         .filter((gatePass) => isReturnableGatePass(gatePass))
         .filter((gatePass) => !gatePass.clearOffReason || !gatePass.clearedOffAt)
         .filter((gatePass) => getPendingQtyForGatePass(gatePass, materialIn) > 0)
-        .filter((gatePass) => !hasSavedReturnableReceiptGateEntry(gatePass, gateEntries))
+        .filter((gatePass) => !hasSavedReturnableReceiptGateEntry(gatePass, materialIn))
         .map((gatePass) => String(gatePass.recipientId || "").trim())
         .filter(Boolean)
     );
-  }, [gateEntries, gatePasses, materialIn]);
+  }, [gatePasses, materialIn]);
 
   const supplierOptions = useMemo(() => {
     const combined = [
-      ...suppliers.filter((s) => s.active !== "No").map((s) => ({ value: s.id, label: s.name })),
-      ...companies.map((c) => ({ value: c.id, label: c.name })),
+      ...suppliers.filter((supplier) => supplier.active !== "No").map((supplier) => ({ value: supplier.id, label: supplier.name })),
+      ...companies.map((company) => ({ value: company.id, label: company.name })),
     ];
     const filtered =
       purpose === "Returnable Receipt"
         ? combined.filter((option) => eligibleReturnableRecipientIds.has(option.value))
         : combined;
     return filtered.sort((a, b) => a.label.localeCompare(b.label));
-  }, [suppliers, companies, purpose, eligibleReturnableRecipientIds]);
+  }, [companies, eligibleReturnableRecipientIds, purpose, suppliers]);
 
   const hasUploadingPhoto = photoSlots.some((slot) => slot.uploading);
-  const purposeLocked = Boolean(sourceGatePassId);
+  const purposeLocked = Boolean(effectiveSourceGatePassId || isEditing);
+
+  useEffect(() => {
+    if (!isEditing || !editingEntry) {
+      setDate(toInputDate());
+      setSupplierId(sourceGatePass?.recipientId || "");
+      setPurpose(purposeFromQuery);
+      setInvoiceNo("");
+      setInvoiceValue("");
+      setTruckNo(sourceGatePass?.truckNo || "");
+      setPhotoSlots(createInitialSlots());
+      return;
+    }
+
+    setDate(toInputDate(editingEntry.date));
+    setSupplierId(editingEntry.supplierId || sourceGatePass?.recipientId || "");
+    setPurpose((editingEntry.purpose || purposeFromQuery) as GateEntry["purpose"]);
+    setInvoiceNo(editingEntry.invoiceNo || "");
+    setInvoiceValue(String(editingEntry.invoiceValue ?? ""));
+    setTruckNo(editingEntry.truckNo || sourceGatePass?.truckNo || "");
+    setPhotoSlots(buildPhotoSlots(entryPhotos));
+  }, [editingEntry, entryPhotos, isEditing, purposeFromQuery, sourceGatePass?.recipientId, sourceGatePass?.truckNo]);
+
+  useEffect(() => {
+    if (!isEditing || !editingLocked) return;
+    alert("Gate Entry cannot be edited after MRR is created.");
+    navigate("/gate-entry/master", { replace: true });
+  }, [editingLocked, isEditing, navigate]);
 
   useEffect(() => {
     if (purpose !== "Returnable Receipt") return;
     if (!supplierId) return;
     if (eligibleReturnableRecipientIds.has(supplierId)) return;
-    setSupplierId(sourceGatePass?.recipientId || "");
-  }, [purpose, supplierId, eligibleReturnableRecipientIds, sourceGatePass?.recipientId]);
-
-  const resetForm = () => {
-    setDate(toInputDate());
-    setSupplierId(sourceGatePass?.recipientId || "");
-    setPurpose(purposeFromQuery);
-    setInvoiceNo("");
-    setInvoiceValue("");
-    setTruckNo(sourceGatePass?.truckNo || "");
-    setPhotoSlots(createInitialSlots());
-  };
+    setSupplierId(sourceGatePass?.recipientId || editingEntry?.supplierId || "");
+  }, [editingEntry?.supplierId, eligibleReturnableRecipientIds, purpose, sourceGatePass?.recipientId, supplierId]);
 
   const updateSlot = (index: number, next: Partial<PhotoSlot>) => {
     setPhotoSlots((prev) => prev.map((slot, slotIndex) => (slotIndex === index ? { ...slot, ...next } : slot)));
@@ -138,8 +183,9 @@ export function GateEntryForm() {
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      const gateEntryId = crypto.randomUUID();
+      const gateEntryId = editingEntry?.id || crypto.randomUUID();
       const nextEntry: GateEntry = {
+        ...(editingEntry || {}),
         id: gateEntryId,
         date,
         supplierId,
@@ -147,37 +193,39 @@ export function GateEntryForm() {
         invoiceNo: invoiceNo.trim(),
         invoiceValue: Number(invoiceValue || 0),
         truckNo: truckNo.trim(),
-        sourceGatePassId: sourceGatePass?.id,
-        sourceGatePassNo: sourceGatePass?.gatePassNo,
+        sourceGatePassId: sourceGatePass?.id || editingEntry?.sourceGatePassId,
+        sourceGatePassNo: sourceGatePass?.gatePassNo || editingEntry?.sourceGatePassNo,
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
 
-      const nextPhotos = photoSlots
-        .map((slot, index) =>
-          slot.filename
-            ? ({
-                id: crypto.randomUUID(),
-                gateEntryId,
-                photo: slot.filename,
-                slotNo: index + 1,
-                updatedBy: "System User",
-                updateTimestamp: timestamp,
-              } satisfies GateEntryPhoto)
-            : null
-        )
-        .filter((row): row is GateEntryPhoto => row !== null);
+      const currentPhotos = photoSlots
+        .map((slot, index) => ({ slot, slotNo: index + 1 }))
+        .filter(({ slot }) => Boolean(slot.filename));
+      const existingPhotoBySlot = new Map(entryPhotos.map((photo) => [photo.slotNo, photo]));
+      const nextPhotos: GateEntryPhoto[] = currentPhotos.map(({ slot, slotNo }) => ({
+        id: existingPhotoBySlot.get(slotNo)?.id || crypto.randomUUID(),
+        gateEntryId,
+        photo: slot.filename,
+        slotNo,
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+      }));
 
-      await setGateEntries([nextEntry, ...gateEntries]);
-      if (nextPhotos.length > 0) {
-        await setGateEntryPhotos([...nextPhotos, ...gateEntryPhotos]);
-      }
+      await setGateEntries((prev) =>
+        editingEntry
+          ? prev.map((entry) => (entry.id === gateEntryId ? nextEntry : entry))
+          : [nextEntry, ...prev]
+      );
+      await setGateEntryPhotos((prev) => [
+        ...prev.filter((photo) => photo.gateEntryId !== gateEntryId),
+        ...nextPhotos,
+      ]);
 
-      resetForm();
       navigate("/gate-entry/master");
     } catch (error) {
       console.error("Failed to save gate entry:", error);
-      alert("Failed to save gate entry.");
+      alert(isEditing ? "Failed to update gate entry." : "Failed to save gate entry.");
     } finally {
       setIsSubmitting(false);
     }
@@ -188,7 +236,7 @@ export function GateEntryForm() {
       <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-black text-blue-700">Add Gate Entry</h2>
+            <h2 className="text-3xl font-black text-blue-700">{isEditing ? "Edit Gate Entry" : "Add Gate Entry"}</h2>
             <p className="mt-1 text-sm text-slate-500">Use `Returnable Receipt` only when items are coming back against a returnable gate pass.</p>
           </div>
           <button type="button" onClick={() => navigate("/gate-entry/master")} className="rounded-2xl border border-slate-300 px-6 py-3 font-bold text-indigo-700 transition hover:bg-slate-50">
@@ -210,7 +258,7 @@ export function GateEntryForm() {
 
             <Field label="Purpose" required>
               {purposeLocked ? (
-                <input value={purpose || "Material Receipt"} disabled className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg bg-slate-50" />
+                <input value={purpose || "Material Receipt"} disabled className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-5 py-4 text-lg" />
               ) : (
                 <select value={purpose || "Material Receipt"} onChange={(e) => setPurpose(e.target.value as GateEntry["purpose"])} className="w-full rounded-2xl border border-slate-300 px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                   <option value="Material Receipt">Material Receipt</option>
@@ -288,7 +336,7 @@ export function GateEntryForm() {
 
           <div className="flex justify-end">
             <button type="submit" disabled={isSubmitting || hasUploadingPhoto} className="rounded-2xl bg-indigo-700 px-8 py-3 font-bold text-white transition hover:bg-indigo-800 disabled:opacity-50">
-              {isSubmitting ? "Saving..." : "Save Gate Entry"}
+              {isSubmitting ? (isEditing ? "Updating..." : "Saving...") : (isEditing ? "Update Gate Entry" : "Save Gate Entry")}
             </button>
           </div>
         </form>
@@ -310,13 +358,10 @@ function Field({
 }) {
   return (
     <div className={className || ""}>
-      <label className="mb-2 block text-blue-700 font-bold">
+      <label className="mb-2 block font-bold text-blue-700">
         {label} {required ? <span className="text-red-500">*</span> : null}
       </label>
       {children}
     </div>
   );
 }
-
-
-
