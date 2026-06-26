@@ -4962,6 +4962,14 @@ const createHandlers = (tableName: string) => {
               data.id = String(existingNpd.id);
             }
           }
+
+          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+          const allowedColumns = await getExistingColumnNames(db, schemaName, "npd");
+          Object.keys(data).forEach((key) => {
+            if (!allowedColumns.has(key)) {
+              delete data[key];
+            }
+          });
         }
 
         if (tableName === "production_processing") {

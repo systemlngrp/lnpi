@@ -188,8 +188,11 @@ export function NpdMaster() {
     if (!id) return;
 
     const payload = {
-      ...row,
-      consumable: isConsumableValue(consumableDrafts[id])
+      id,
+      erp: String(row.erp || "").trim(),
+      consumable: isConsumableValue(consumableDrafts[id]),
+      updatedBy: "System User",
+      updateTimestamp: new Date().toISOString(),
     };
 
     setSavingRowIds((prev) => ({ ...prev, [id]: true }));
