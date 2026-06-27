@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { 
   Invoice, 
@@ -27,14 +26,14 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { useNavigate } from "react-router-dom";
+import { normalizeOrderItemSource } from "../lib/orderItems";
 
 export function BillingPendingTally() {
   const navigate = useNavigate();
   const [invoices, setInvoices, isLoading] = useData<Invoice>("invoices", []);
   const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [companies] = useData<Company>("companies", []);
-  const npdItems = useNpdItems();
-  const { resolveOrderItem } = useOrderItemCatalog();
+  const { findItem, resolveOrderItem } = useOrderItemCatalog();
   const [slips] = useData<LoadingSlip>("loading_slips", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [orders] = useData<Order>("orders", []);
@@ -58,6 +57,7 @@ export function BillingPendingTally() {
     const rows: Array<{
       itemName: string;
       erp: string;
+      uom: string;
       slipNo: string;
       qty: number;
       rate: number;
@@ -75,6 +75,7 @@ export function BillingPendingTally() {
         rows.push({
           itemName: item?.name || order?.poNumber || "Unknown",
           erp: String(order?.erpCode || (item as any)?.erp || "").trim(),
+          uom: String((item as any)?.uom || slipLine.uom || "").trim(),
           slipNo: slip.slipNo || `Slip ${index + 1}`,
           qty,
           rate,
@@ -111,11 +112,12 @@ export function BillingPendingTally() {
         const poNumbers = getPoNumbers(inv.id);
         const details = invLines.length > 0
           ? invLines.map((li) => {
-              const item = npdItems.find((i) => i.id === li.itemId);
+              const item = findItem(normalizeOrderItemSource(li.itemSource), li.itemId);
               return {
                 ...li,
                 itemName: item?.name || "Unknown",
-                erp: String((item as any)?.erp || "").trim(),
+                erp: String(item?.erp || "").trim(),
+                uom: String(item?.uom || "").trim(),
                 slipNo: slips.find((s) => s.id === li.loadingSlipId)?.slipNo || "N/A"
               };
             })
@@ -135,7 +137,7 @@ export function BillingPendingTally() {
         return searchStr.includes(searchTerm.toLowerCase());
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [invoices, companies, lineItems, npdItems, slips, dispatchPlans, orders, searchTerm]);
+  }, [invoices, companies, lineItems, findItem, slips, dispatchPlans, orders, searchTerm]);
 
   const handleMarkPosted = async (id: string) => {
     if (!confirm("Mark this invoice as Posted to Tally?")) return;
@@ -264,6 +266,7 @@ export function BillingPendingTally() {
                               <tr className="divide-x divide-black text-[10px] font-black uppercase">
                                 <th className="px-3 py-2 text-left">Item Name</th>
                                 <th className="px-3 py-2 text-left">ERP</th>
+                                <th className="px-3 py-2 text-left">UOM</th>
                                 <th className="px-3 py-2 text-left">Slip No</th>
                                 <th className="px-3 py-2 text-right">Qty</th>
                                 <th className="px-3 py-2 text-right">Rate</th>
@@ -273,7 +276,7 @@ export function BillingPendingTally() {
                             <tbody className="bg-white divide-y divide-black">
                               {inv.details.length === 0 ? (
                                 <tr className="divide-x divide-black text-[11px]">
-                                  <td colSpan={6} className="px-3 py-4 text-center text-slate-500 italic">
+                                  <td colSpan={7} className="px-3 py-4 text-center text-slate-500 italic">
                                     No item breakup found for this invoice.
                                   </td>
                                 </tr>
@@ -284,6 +287,7 @@ export function BillingPendingTally() {
                                     <tr key={idx} className="divide-x divide-black text-[11px]">
                                       <td className="px-3 py-2 font-bold uppercase">{line.itemName}</td>
                                       <td className="px-3 py-2">{line.erp || "-"}</td>
+                                      <td className="px-3 py-2">{line.uom || "-"}</td>
                                       <td className="px-3 py-2">{line.slipNo}</td>
                                       <td className="px-3 py-2 text-right">{Number(line.qty || 0).toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right">{Number(line.rate || 0).toFixed(2)}</td>

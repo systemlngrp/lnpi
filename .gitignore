@@ -59,3 +59,5 @@ env/
 *.txt
 
 *.yml
+pythoncode/Log/invoice_sync_logs.xlsx
+dist/Log/invoice_sync_logs.xlsx

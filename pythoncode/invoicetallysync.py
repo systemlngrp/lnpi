@@ -9,6 +9,7 @@ from datetime import datetime, date
 import xml.sax.saxutils as saxutils
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
+from openpyxl import Workbook, load_workbook
 
 
 def load_runtime_env():
@@ -65,11 +66,125 @@ TALLY_UOM_ALIASES = {
 TALLY_MASTER_CACHE = {}
 TALLY_CONNECT_TIMEOUT = float(os.getenv("TALLY_CONNECT_TIMEOUT", "5"))
 TALLY_READ_TIMEOUT = float(os.getenv("TALLY_READ_TIMEOUT", "15"))
+LOG_FOLDER_NAME = "Log"
+LOG_WORKBOOK_NAME = "invoice_sync_logs.xlsx"
+LOG_SHEET_NAME = "SyncLogs"
+TALLY_DEBUG_FOLDER_NAME = "tally_debug"
+LOG_HEADERS = [
+    "Timestamp",
+    "Status",
+    "Stage",
+    "Invoice ID",
+    "Invoice No",
+    "Company Name",
+    "Message",
+    "Tally Invoice No",
+    "Tally Invoice Date",
+    "Tally Invoice ID",
+    "Runtime Path",
+]
 
 
 
 def log_terminal(level, message):
     print(f"[{level}] {message}")
+
+
+def get_runtime_base_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def get_log_workbook_path():
+    log_dir = os.path.join(get_runtime_base_dir(), LOG_FOLDER_NAME)
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, LOG_WORKBOOK_NAME)
+
+
+def get_log_dir():
+    log_dir = os.path.join(get_runtime_base_dir(), LOG_FOLDER_NAME)
+    os.makedirs(log_dir, exist_ok=True)
+    return log_dir
+
+
+def write_tally_debug_dump(prefix, item_name, xml_text):
+    try:
+        debug_dir = os.path.join(get_log_dir(), TALLY_DEBUG_FOLDER_NAME)
+        os.makedirs(debug_dir, exist_ok=True)
+        safe_name = re.sub(r'[^A-Za-z0-9._-]+', "_", str(item_name or "").strip())[:120] or "unknown_item"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path = os.path.join(debug_dir, f"{prefix}_{timestamp}_{safe_name}.xml")
+        with open(file_path, "w", encoding="utf-8") as handle:
+            handle.write(xml_text or "")
+        return file_path
+    except Exception as debug_error:
+        log_terminal("LOG", f"Could not write Tally debug XML: {debug_error}")
+        return ""
+
+
+def ensure_log_workbook():
+    workbook_path = get_log_workbook_path()
+
+    if os.path.exists(workbook_path):
+        workbook = load_workbook(workbook_path)
+    else:
+        workbook = Workbook()
+
+    if LOG_SHEET_NAME in workbook.sheetnames:
+        sheet = workbook[LOG_SHEET_NAME]
+    else:
+        if workbook.active and workbook.active.max_row == 1 and workbook.active.max_column == 1 and workbook.active["A1"].value is None:
+            sheet = workbook.active
+            sheet.title = LOG_SHEET_NAME
+        else:
+            sheet = workbook.create_sheet(LOG_SHEET_NAME)
+        sheet.append(LOG_HEADERS)
+
+    if sheet.max_row == 1:
+        current_headers = [sheet.cell(row=1, column=index + 1).value for index in range(len(LOG_HEADERS))]
+        if current_headers != LOG_HEADERS:
+            for index, header in enumerate(LOG_HEADERS, start=1):
+                sheet.cell(row=1, column=index).value = header
+
+    workbook.save(workbook_path)
+    return workbook_path
+
+
+def append_excel_log(
+    status,
+    stage,
+    message,
+    invoice_row=None,
+    company_name="",
+    tally_inv_no="",
+    tally_inv_date="",
+    tally_inv_id="",
+):
+    try:
+        workbook_path = ensure_log_workbook()
+        workbook = load_workbook(workbook_path)
+        sheet = workbook[LOG_SHEET_NAME]
+        runtime_path = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__)
+        sheet.append(
+            [
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                str(status or "").strip(),
+                str(stage or "").strip(),
+                str((invoice_row or {}).get("id") or "").strip(),
+                str((invoice_row or {}).get("invoiceNo") or "").strip(),
+                str(company_name or "").strip(),
+                str(message or "").strip(),
+                str(tally_inv_no or "").strip(),
+                str(tally_inv_date or "").strip(),
+                str(tally_inv_id or "").strip(),
+                runtime_path,
+            ]
+        )
+        workbook.save(workbook_path)
+        workbook.close()
+    except Exception as log_error:
+        log_terminal("LOG", f"Could not write Excel log: {log_error}")
 
 
 def esc(value):
@@ -678,6 +793,17 @@ def extract_first_matching_tag(xml_block, tag_names):
     return ""
 
 
+def extract_recursive_tag_text(element, tag_names):
+    normalized_tags = {str(tag or "").upper() for tag in tag_names}
+    for node in element.iter():
+        tag_name = str(node.tag or "").upper()
+        if tag_name in normalized_tags:
+            text_value = re.sub(r"\s+", " ", "".join(node.itertext()).strip())
+            if text_value:
+                return text_value
+    return ""
+
+
 def fetch_tally_stock_item_details(item_name):
     if not item_name:
         return {}, "Stock Item name missing"
@@ -742,20 +868,27 @@ def fetch_tally_stock_item_details(item_name):
         TALLY_MASTER_CACHE[cache_key] = result
         return result
 
-    base_units = ""
-    for child in stock_item:
-        if child.tag.upper() == "BASEUNITS":
-            base_units = (child.text or "").strip()
-            break
+    stock_item_block_match = re.search(r"<STOCKITEM\b.*?</STOCKITEM>", cleaned_xml, flags=re.IGNORECASE | re.DOTALL)
+    stock_item_block = stock_item_block_match.group(0) if stock_item_block_match else cleaned_xml
+
+    base_units = extract_recursive_tag_text(
+        stock_item,
+        ["BASEUNITS", "BASEUNIT", "BASEUNAME", "UNITS", "UNIT"],
+    )
+    if not base_units:
+        base_units = extract_first_matching_tag(
+            stock_item_block,
+            ["BASEUNITS", "BASEUNIT", "BASEUNAME", "UNITS", "UNIT"],
+        )
 
     normalized_base_units = normalize_uom(base_units)
     if not normalized_base_units:
-        result = ({}, f"Stock Item '{item_name}' has no Base Unit in Tally")
+        debug_path = write_tally_debug_dump("stock_item_no_unit", item_name, cleaned_xml)
+        debug_suffix = f" Debug XML: {debug_path}" if debug_path else ""
+        result = ({}, f"Stock Item '{item_name}' has no Base Unit in Tally (or parser could not read it).{debug_suffix}")
         TALLY_MASTER_CACHE[cache_key] = result
         return result
 
-    stock_item_block_match = re.search(r"<STOCKITEM\b.*?</STOCKITEM>", cleaned_xml, flags=re.IGNORECASE | re.DOTALL)
-    stock_item_block = stock_item_block_match.group(0) if stock_item_block_match else cleaned_xml
     part_no = extract_first_matching_tag(stock_item_block, ["PARTNO", "PARTNUMBER"])
 
     mailing_names = re.findall(
@@ -801,6 +934,154 @@ def get_company_details(conn, company_id):
     return row or {}
 
 
+def normalize_item_source(value):
+    normalized = str(value or "").strip().upper()
+    if normalized == "PHP":
+        return "PHP"
+    if normalized == "PLATE":
+        return "PLATE"
+    if normalized == "MATERIAL":
+        return "MATERIAL"
+    return "FG"
+
+
+def resolve_invoice_line_item_details(cursor, item_source, item_id, npd_id):
+    item_name = ""
+    uom = ""
+    npd_part = ""
+
+    lookup_npd_id = str(npd_id or item_id or "").strip()
+    lookup_item_id = str(item_id or "").strip()
+
+    if item_source == "FG" and lookup_npd_id:
+        cursor.execute(
+            """
+            SELECT itemName, uom, part
+            FROM npd
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (lookup_npd_id,),
+        )
+        npd_row = cursor.fetchone()
+        if npd_row:
+            item_name = npd_row.get("itemName") or ""
+            uom = npd_row.get("uom") or ""
+            npd_part = npd_row.get("part") or ""
+
+    elif item_source == "PHP" and lookup_item_id:
+        cursor.execute(
+            """
+            SELECT itemName
+            FROM php_item_master
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (lookup_item_id,),
+        )
+        php_row = cursor.fetchone()
+        if php_row:
+            item_name = php_row.get("itemName") or ""
+            uom = "PCS"
+
+    elif item_source == "PLATE" and lookup_item_id:
+        cursor.execute(
+            """
+            SELECT itemName
+            FROM plate_item_master
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (lookup_item_id,),
+        )
+        plate_row = cursor.fetchone()
+        if plate_row:
+            item_name = plate_row.get("itemName") or ""
+            uom = "PCS"
+
+    elif item_source == "MATERIAL" and lookup_item_id:
+        cursor.execute(
+            """
+            SELECT name, uom
+            FROM materials
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (lookup_item_id,),
+        )
+        material_row = cursor.fetchone()
+        if material_row:
+            item_name = material_row.get("name") or ""
+            uom = material_row.get("uom") or ""
+
+    if not item_name and lookup_npd_id:
+        cursor.execute(
+            """
+            SELECT itemName, uom, part
+            FROM npd
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (lookup_npd_id,),
+        )
+        npd_row = cursor.fetchone()
+        if npd_row:
+            item_name = npd_row.get("itemName") or ""
+            if not uom:
+                uom = npd_row.get("uom") or ""
+            npd_part = npd_row.get("part") or ""
+
+    if not item_name and lookup_item_id and item_source != "PHP":
+        cursor.execute(
+            """
+            SELECT itemName
+            FROM php_item_master
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (lookup_item_id,),
+        )
+        php_row = cursor.fetchone()
+        if php_row:
+            item_name = php_row.get("itemName") or ""
+            if not uom:
+                uom = "PCS"
+
+    if not item_name and lookup_item_id and item_source != "PLATE":
+        cursor.execute(
+            """
+            SELECT itemName
+            FROM plate_item_master
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (lookup_item_id,),
+        )
+        plate_row = cursor.fetchone()
+        if plate_row:
+            item_name = plate_row.get("itemName") or ""
+            if not uom:
+                uom = "PCS"
+
+    if not item_name and lookup_item_id and item_source != "MATERIAL":
+        cursor.execute(
+            """
+            SELECT name, uom
+            FROM materials
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (lookup_item_id,),
+        )
+        material_row = cursor.fetchone()
+        if material_row:
+            item_name = material_row.get("name") or ""
+            if not uom:
+                uom = material_row.get("uom") or ""
+
+    return item_name, uom, npd_part
+
+
 def get_invoice_lines(conn, invoice_id):
     cursor = get_db_cursor(conn, dictionary=True)
     cursor.execute(
@@ -816,44 +1097,10 @@ def get_invoice_lines(conn, invoice_id):
 
     processed_lines = []
     for row in rows:
-        item_name = ""
-        uom = ""
-        npd_part = ""
-
         item_id = row.get("itemId")
         npd_id = row.get("npdId")
-
-        if item_id:
-            cursor.execute(
-                """
-                SELECT name, uom
-                FROM items
-                WHERE id = %s
-                LIMIT 1
-                """,
-                (item_id,),
-            )
-            item_row = cursor.fetchone()
-            if item_row:
-                item_name = item_row.get("name") or ""
-                uom = item_row.get("uom") or ""
-
-        if not item_name and npd_id:
-            cursor.execute(
-                """
-                SELECT itemName, uom, part
-                FROM npd
-                WHERE id = %s
-                LIMIT 1
-                """,
-                (npd_id,),
-            )
-            npd_row = cursor.fetchone()
-            if npd_row:
-                item_name = npd_row.get("itemName") or ""
-                if not uom:
-                    uom = npd_row.get("uom") or ""
-                npd_part = npd_row.get("part") or ""
+        item_source = normalize_item_source(row.get("itemSource"))
+        item_name, uom, npd_part = resolve_invoice_line_item_details(cursor, item_source, item_id, npd_id)
 
         processed_lines.append(
             {
@@ -861,6 +1108,7 @@ def get_invoice_lines(conn, invoice_id):
                 "invoiceId": row.get("invoiceId"),
                 "loadingSlipId": row.get("loadingSlipId"),
                 "itemId": item_id,
+                "itemSource": item_source,
                 "npdId": npd_id,
                 "itemName": item_name or "Unknown Item",
                 "uom": normalize_uom(uom),
@@ -1359,6 +1607,7 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
     for invoice_row in pending_invoice_rows:
         invoice_id = invoice_row.get("id")
         invoice_no = str(invoice_row.get("invoiceNo") or "").strip()
+        company_name = ""
 
         print(f"Precheck Invoice ID: {invoice_id} | Invoice No: {invoice_no}")
 
@@ -1367,27 +1616,59 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
             company_name = (company_row or {}).get("name") or ""
             if not company_name:
                 remark = "Company ledger not found in companies table"
-                update_invoice_tally_status(conn, invoice_id, False, remark)
+                update_invoice_tally_status(
+                    conn,
+                    invoice_id,
+                    False,
+                    remark,
+                    invoice_row=invoice_row,
+                    company_name=company_name,
+                    stage="PRECHECK",
+                )
                 log_terminal("PRECHECK", remark)
                 continue
 
             item_lines = get_invoice_lines(conn, invoice_id)
             if not item_lines:
                 remark = "No invoice line items found"
-                update_invoice_tally_status(conn, invoice_id, False, remark)
+                update_invoice_tally_status(
+                    conn,
+                    invoice_id,
+                    False,
+                    remark,
+                    invoice_row=invoice_row,
+                    company_name=company_name,
+                    stage="PRECHECK",
+                )
                 log_terminal("PRECHECK", remark)
                 continue
 
             line_errors = validate_invoice_lines(item_lines)
             if line_errors:
                 remark = " | ".join(line_errors[:10])
-                update_invoice_tally_status(conn, invoice_id, False, remark)
+                update_invoice_tally_status(
+                    conn,
+                    invoice_id,
+                    False,
+                    remark,
+                    invoice_row=invoice_row,
+                    company_name=company_name,
+                    stage="PRECHECK",
+                )
                 log_terminal("PRECHECK", remark)
                 continue
 
             if not invoice_no:
                 remark = "Invoice No missing"
-                update_invoice_tally_status(conn, invoice_id, False, remark)
+                update_invoice_tally_status(
+                    conn,
+                    invoice_id,
+                    False,
+                    remark,
+                    invoice_row=invoice_row,
+                    company_name=company_name,
+                    stage="PRECHECK",
+                )
                 log_terminal("PRECHECK", remark)
                 continue
 
@@ -1411,6 +1692,9 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                     tally_reference.get("tallyInvNo") or invoice_no,
                     format_iso_date(tally_reference.get("tallyInvDate")),
                     existing_tally_id,
+                    invoice_row=invoice_row,
+                    company_name=company_name,
+                    stage="PRECHECK",
                 )
                 precheck_summary["invoice_numbers_existing"].append(invoice_no)
                 log_terminal("PRECHECK", f"{invoice_no}: {remark}")
@@ -1429,6 +1713,9 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                     voucher_by_number.get("tallyInvNo") or invoice_no,
                     format_iso_date(voucher_by_number.get("tallyInvDate")),
                     voucher_by_number.get("tallyInvId"),
+                    invoice_row=invoice_row,
+                    company_name=company_name,
+                    stage="PRECHECK",
                 )
                 precheck_summary["invoice_numbers_existing"].append(invoice_no)
                 log_terminal("PRECHECK", f"{invoice_no}: {remark}")
@@ -1443,7 +1730,15 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
             )
             if tally_master_errors:
                 remark = " | ".join(tally_master_errors[:10])
-                update_invoice_tally_status(conn, invoice_id, False, remark)
+                update_invoice_tally_status(
+                    conn,
+                    invoice_id,
+                    False,
+                    remark,
+                    invoice_row=invoice_row,
+                    company_name=company_name,
+                    stage="PRECHECK",
+                )
                 log_terminal("PRECHECK", remark)
                 continue
 
@@ -1475,7 +1770,15 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
             )
         except Exception as exc:
             error_message = str(exc)[:1000]
-            update_invoice_tally_status(conn, invoice_id, False, error_message)
+            update_invoice_tally_status(
+                conn,
+                invoice_id,
+                False,
+                error_message,
+                invoice_row=invoice_row,
+                company_name=company_name,
+                stage="PRECHECK",
+            )
             log_terminal("PRECHECK", error_message)
 
     print("==========================================")
@@ -1524,6 +1827,9 @@ def update_invoice_tally_status(
     tally_inv_no=None,
     tally_inv_date=None,
     tally_inv_id=None,
+    invoice_row=None,
+    company_name="",
+    stage="SYNC",
 ):
     cursor = get_db_cursor(conn)
     if success:
@@ -1561,6 +1867,16 @@ def update_invoice_tally_status(
         )
     conn.commit()
     cursor.close()
+    append_excel_log(
+        "SUCCESS" if success else "FAILURE",
+        stage,
+        remark,
+        invoice_row=invoice_row or {"id": invoice_id},
+        company_name=company_name,
+        tally_inv_no=tally_inv_no,
+        tally_inv_date=tally_inv_date,
+        tally_inv_id=tally_inv_id,
+    )
 
 
 def sync_invoices_to_tally():
@@ -1607,6 +1923,9 @@ def sync_invoices_to_tally():
                         tally_reference.get("tallyInvNo") or invoice_no,
                         format_iso_date(tally_reference.get("tallyInvDate")),
                         existing_tally_id,
+                        invoice_row=invoice_row,
+                        company_name=company_name,
+                        stage="SYNC",
                     )
                     print(f"Skipping creation: {remark} | {tally_reference}")
                     continue
@@ -1623,6 +1942,9 @@ def sync_invoices_to_tally():
                         voucher_by_number.get("tallyInvNo") or invoice_no,
                         format_iso_date(voucher_by_number.get("tallyInvDate")),
                         voucher_by_number.get("tallyInvId"),
+                        invoice_row=invoice_row,
+                        company_name=company_name,
+                        stage="SYNC",
                     )
                     print(f"Skipping creation: {remark} | {voucher_by_number}")
                     continue
@@ -1710,18 +2032,37 @@ def sync_invoices_to_tally():
                         created_tally_voucher.get("tallyInvNo"),
                         format_iso_date(created_tally_voucher.get("tallyInvDate")),
                         created_tally_voucher.get("tallyInvId"),
+                        invoice_row=invoice_row,
+                        company_name=company_name,
+                        stage="SYNC",
                     )
                     if created_tally_voucher:
                         print(f"Fetched Tally invoice reference: {created_tally_voucher}")
                     print(remark)
                 else:
                     error_detail = extract_tally_error(tally_response)
-                    update_invoice_tally_status(conn, invoice_id, False, error_detail)
+                    update_invoice_tally_status(
+                        conn,
+                        invoice_id,
+                        False,
+                        error_detail,
+                        invoice_row=invoice_row,
+                        company_name=company_name,
+                        stage="SYNC",
+                    )
                     print(f"Posting failed: {error_detail}")
 
             except Exception as exc:
                 error_message = str(exc)[:1000]
-                update_invoice_tally_status(conn, invoice_id, False, error_message)
+                update_invoice_tally_status(
+                    conn,
+                    invoice_id,
+                    False,
+                    error_message,
+                    invoice_row=invoice_row,
+                    company_name=company_name,
+                    stage="SYNC",
+                )
                 print(f"Error in Invoice ID {invoice_id}: {error_message}")
 
     finally:
