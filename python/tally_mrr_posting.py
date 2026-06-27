@@ -127,25 +127,67 @@ def escape_xml(text: Any) -> str:
     )
 
 
-def format_tally_date(mrr: dict[str, Any]) -> str:
-    timestamp_value = str(mrr.get("timestamp") or "").strip()
-    if timestamp_value:
+def _parse_tally_date(raw_value: Any) -> datetime | None:
+    raw_text = str(raw_value or "").strip()
+    if not raw_text:
+        return None
+
+    if re.fullmatch(r"\d{8}", raw_text):
+        return datetime(int(raw_text[:4]), int(raw_text[4:6]), int(raw_text[6:8]))
+
+    try:
+        return datetime.fromisoformat(raw_text.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
+    for fmt in (
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%d-%b-%Y",
+        "%d-%B-%Y",
+        "%d-%b-%Y %H:%M:%S",
+        "%d-%B-%Y %H:%M:%S",
+    ):
         try:
-            parsed = datetime.fromisoformat(timestamp_value.replace("Z", "+00:00"))
-            return parsed.strftime("%Y%m%d")
+            return datetime.strptime(raw_text, fmt)
         except ValueError:
-            match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", timestamp_value)
-            if match:
-                return "".join(match.groups())
+            pass
 
-    date_value = str(mrr.get("date") or "").strip()
-    if date_value:
-        match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", date_value)
-        if match:
-            return "".join(match.groups())
+    match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", raw_text)
+    if match:
+        year, month, day = match.groups()
+        return datetime(int(year), int(month), int(day))
 
-    raise RuntimeError("Voucher date could not be resolved from timestamp/date.")
+    match = re.match(r"^(\d{2})-(\d{2})-(\d{4})", raw_text)
+    if match:
+        day, month, year = match.groups()
+        return datetime(int(year), int(month), int(day))
 
+    return None
+
+
+def format_tally_date(mrr: dict[str, Any]) -> str:
+    inv_date = mrr.get("invDate") or mrr.get("InvDate") or mrr.get("inv_date") or mrr.get("invdate")
+    for raw in (
+        inv_date,
+        mrr.get("date"),
+        mrr.get("Date"),
+        mrr.get("timestamp"),
+        mrr.get("ts"),
+        mrr.get("createdAt"),
+    ):
+        parsed = _parse_tally_date(raw)
+        if parsed:
+            return parsed.strftime("%Y%m%d")
+
+    raise RuntimeError(
+        "Voucher date could not be resolved from invDate/date/timestamp. "
+        f"invDate={inv_date!r}, date={mrr.get('date')!r}, timestamp={mrr.get('timestamp')!r}"
+    )
 
 def post_xml_to_tally(xml_text: str) -> str:
     global ACTIVE_TALLY_URL
