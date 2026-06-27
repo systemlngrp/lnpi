@@ -1,8 +1,4 @@
 import { Company, GatePass, GatePassLine, Invoice, InvoiceLineItem, LoadingSlip, Truck } from "../types";
-type NpdLike = {
-  id: string;
-  name: string;
-};
 
 type BuildGatePassOptions = {
   company?: Company;
@@ -11,7 +7,7 @@ type BuildGatePassOptions = {
   gatePassNo?: string;
   invoice: Invoice;
   lineItems: InvoiceLineItem[];
-  npdItems: NpdLike[];
+  resolveItemName?: (line: InvoiceLineItem) => string;
   overrideTruckId?: string;
   remarks?: string;
   selectedLoadingSlipIds: string[];
@@ -32,7 +28,7 @@ export function buildGatePassFromInvoice({
   gatePassNo,
   invoice,
   lineItems,
-  npdItems,
+  resolveItemName,
   overrideTruckId,
   remarks,
   selectedLoadingSlipIds,
@@ -50,7 +46,7 @@ export function buildGatePassFromInvoice({
   const lineMap = new Map<string, GatePassLine>();
   relevantLineItems.forEach((line) => {
     const itemId = String(line.itemId || "").trim();
-    const itemName = npdItems.find((item) => item.id === itemId)?.name || "Unknown";
+    const itemName = String(resolveItemName?.(line) || (line as InvoiceLineItem & { itemName?: string }).itemName || "Unknown").trim() || "Unknown";
     const slip = selectedSlips.find((row) => row.id === line.loadingSlipId);
     const nextQty = Number(line.qty || 0);
     const nextRate = Number(line.rate || 0);

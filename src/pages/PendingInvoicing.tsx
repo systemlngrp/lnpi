@@ -180,6 +180,11 @@ export function PendingInvoicing() {
     );
   };
 
+  const resolveCanonicalSlipLineItemId = (line: LoadingSlip["lines"][number], order?: Order) => {
+    const resolvedItem = resolveSlipLineItem(line, order);
+    return String(resolvedItem?.id || line.itemId || order?.itemId || "").trim();
+  };
+
   const buildInvoiceRowsFromSlips = (selected: any[]) => {
     const itemMap = new Map<string, InvoiceItemRow>();
     const itemOrderQtyMap = new Map<string, Map<string, number>>();
@@ -190,7 +195,7 @@ export function PendingInvoicing() {
         const order = orders.find((o) => o.id === plan?.orderId);
         const itemSource = normalizeOrderItemSource(line.itemSource || order?.itemSource || "FG");
         const item = resolveSlipLineItem(line, order);
-        const itemId = String(line.itemId || order?.itemId || item?.id || "").trim();
+        const itemId = resolveCanonicalSlipLineItemId(line, order);
         if (!itemId) return;
 
         const qty = Number(line.loadedQty || 0);
@@ -255,7 +260,7 @@ export function PendingInvoicing() {
           const plan = plans.find((p) => p.id === entry.dispatchPlanId);
           const order = orders.find((o) => o.id === plan?.orderId);
           const source = normalizeOrderItemSource(entry.itemSource || order?.itemSource || "FG");
-          return String(order?.itemId || entry.itemId || "").trim() === row.itemId && source === row.itemSource;
+          return resolveCanonicalSlipLineItemId(entry, order) === row.itemId && source === row.itemSource;
         });
         const plan = slipLine ? plans.find((p) => p.id === slipLine.dispatchPlanId) : undefined;
         const orderId = String(plan?.orderId || "").trim();
@@ -571,7 +576,7 @@ export function PendingInvoicing() {
         const qty = Number(l.loadedQty || 0);
         const plan = plans.find(p => p.id === l.dispatchPlanId);
         const order = orders.find(o => o.id === plan?.orderId);
-        const itemId = String(order?.itemId || l.itemId || "").trim();
+        const itemId = resolveCanonicalSlipLineItemId(l, order);
         if (itemId) loadedByItemId.set(itemId, (loadedByItemId.get(itemId) || 0) + qty);
         return lSum + qty;
       }, 0)
@@ -751,7 +756,21 @@ export function PendingInvoicing() {
           gatePassNo: existingGatePass?.gatePassNo,
           invoice: persistedInvoice,
           lineItems,
-          npdItems,
+          resolveItemName: (line) => {
+            const slip = updatedSlips.find((entry) => entry.id === line.loadingSlipId);
+            const slipLine = slip?.lines?.find((entry: any) => {
+              const plan = plans.find((p) => p.id === entry.dispatchPlanId);
+              const order = orders.find((o) => o.id === plan?.orderId);
+              return (
+                resolveCanonicalSlipLineItemId(entry, order) === String(line.itemId || "").trim() &&
+                normalizeOrderItemSource(entry.itemSource || order?.itemSource || "FG") ===
+                  normalizeOrderItemSource(line.itemSource || "FG")
+              );
+            });
+            const plan = slipLine ? plans.find((p) => p.id === slipLine.dispatchPlanId) : undefined;
+            const order = plan ? orders.find((entry) => entry.id === plan.orderId) : undefined;
+            return resolveSlipLineItemName(slipLine || { itemId: line.itemId, itemSource: line.itemSource } as any, order);
+          },
           selectedLoadingSlipIds: updatedSlips.map((slip) => slip.id),
           slips: updatedSlips,
           trucks,
@@ -975,7 +994,7 @@ export function PendingInvoicing() {
                   </thead>
                   <tbody className="divide-y divide-black">
                     {invoiceRows.flatMap((itemRow) => {
-                      const itemName = itemRow.itemName || npdItems.find((i) => i.id === itemRow.itemId)?.name || "Item";
+                      const itemName = itemRow.itemName || "Item";
                       const pendingOrdersForItem = orders.filter((o) => {
                         if (o.companyId !== invoiceModal.companyId) return false;
                         if (o.status === "Cancelled") return false;

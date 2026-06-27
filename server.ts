@@ -1451,14 +1451,6 @@ async function ensureBestEffortForeignKeys(db: mysql.Pool, database: string) {
       indexName: "idx_invoice_line_items_loadingSlipId",
     },
     {
-      table: "invoice_line_items",
-      column: "itemId",
-      refTable: "npd",
-      refColumn: "id",
-      constraintName: "fk_invoice_line_items_itemId_npd",
-      indexName: "idx_invoice_line_items_itemId",
-    },
-    {
       table: "gate_passes",
       column: "invoiceId",
       refTable: "invoices",
@@ -4658,6 +4650,18 @@ await db.query(`
       }
 
       try {
+        const [rows] = await db.query(
+          "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_NAME = 'invoice_line_items' AND CONSTRAINT_NAME = 'fk_invoice_line_items_itemId_npd' AND REFERENCED_TABLE_NAME = 'npd'"
+        );
+        if (Array.isArray(rows) && rows.length > 0) {
+          console.log("[DB] Dropping incompatible foreign key fk_invoice_line_items_itemId_npd...");
+          await db.query("ALTER TABLE `invoice_line_items` DROP FOREIGN KEY `fk_invoice_line_items_itemId_npd` ");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not drop incompatible invoice_line_items itemId foreign key:", (err as Error).message);
+      }
+
+      try {
         await ensureNpdSchemaColumns(db, database);
       } catch (err) {
         console.warn("[DB] Could not ensure npd schema columns:", (err as Error).message);
@@ -4745,9 +4749,12 @@ const createHandlers = (tableName: string) => {
             SELECT
               ili.*,
               COALESCE(
-                NULLIF(TRIM(i.name), ''),
+                NULLIF(TRIM(CASE WHEN COALESCE(NULLIF(TRIM(ili.itemSource), ''), 'FG') = 'MATERIAL' THEN m.name END), ''),
+                NULLIF(TRIM(CASE WHEN COALESCE(NULLIF(TRIM(ili.itemSource), ''), 'FG') = 'PHP' THEN pm.itemName END), ''),
+                NULLIF(TRIM(CASE WHEN COALESCE(NULLIF(TRIM(ili.itemSource), ''), 'FG') = 'PLATE' THEN plm.itemName END), ''),
                 NULLIF(TRIM(n.itemName), ''),
                 NULLIF(TRIM(n.name), ''),
+                NULLIF(TRIM(i.name), ''),
                 'UNKNOWN'
               ) AS resolvedItemName
             FROM \`invoice_line_items\` ili
@@ -4755,6 +4762,12 @@ const createHandlers = (tableName: string) => {
               ON i.id = ili.itemId
             LEFT JOIN \`npd\` n
               ON n.id = COALESCE(NULLIF(ili.npdId, ''), NULLIF(ili.itemId, ''))
+            LEFT JOIN \`php_item_master\` pm
+              ON pm.id = ili.itemId
+            LEFT JOIN \`plate_item_master\` plm
+              ON plm.id = ili.itemId
+            LEFT JOIN \`materials\` m
+              ON m.id = ili.itemId
           `);
         } else if (tableName === "npd") {
           const page = Math.max(1, Number(req.query.page || 1));
