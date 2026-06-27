@@ -52,6 +52,12 @@ export function BillingPendingTally() {
   const getInvoiceSlips = (invoiceId: string) =>
     slips.filter((slip) => slip.invoiceId === invoiceId && slip.status !== "Cancelled");
 
+  const resolveDisplayUom = (itemSource: string | undefined, rawUom: string | undefined) => {
+    const normalizedSource = normalizeOrderItemSource(itemSource);
+    if (normalizedSource === "PHP" || normalizedSource === "PLATE") return "PCS";
+    return String(rawUom || "").trim();
+  };
+
   const buildSlipDerivedDetails = (invoiceId: string) => {
     const invoiceSlips = getInvoiceSlips(invoiceId);
     const rows: Array<{
@@ -69,13 +75,14 @@ export function BillingPendingTally() {
         const plan = dispatchPlans.find((dp) => dp.id === slipLine.dispatchPlanId);
         const order = orders.find((o) => o.id === plan?.orderId);
         const item = resolveOrderItem(order);
+        const itemSource = normalizeOrderItemSource(order?.itemSource || slipLine.itemSource);
         const qty = Number(slipLine.loadedQty || 0);
         const rate = Number(order?.rate || 0);
 
         rows.push({
           itemName: item?.name || order?.poNumber || "Unknown",
           erp: String(order?.erpCode || (item as any)?.erp || "").trim(),
-          uom: String((item as any)?.uom || slipLine.uom || "").trim(),
+          uom: resolveDisplayUom(itemSource, String((item as any)?.uom || slipLine.uom || "").trim()),
           slipNo: slip.slipNo || `Slip ${index + 1}`,
           qty,
           rate,
@@ -112,12 +119,13 @@ export function BillingPendingTally() {
         const poNumbers = getPoNumbers(inv.id);
         const details = invLines.length > 0
           ? invLines.map((li) => {
-              const item = findItem(normalizeOrderItemSource(li.itemSource), li.itemId);
+              const itemSource = normalizeOrderItemSource(li.itemSource);
+              const item = findItem(itemSource, li.itemId);
               return {
                 ...li,
                 itemName: item?.name || "Unknown",
                 erp: String(item?.erp || "").trim(),
-                uom: String(item?.uom || "").trim(),
+                uom: resolveDisplayUom(itemSource, String(item?.uom || "").trim()),
                 slipNo: slips.find((s) => s.id === li.loadingSlipId)?.slipNo || "N/A"
               };
             })
