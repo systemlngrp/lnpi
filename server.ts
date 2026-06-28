@@ -5500,6 +5500,21 @@ function tallySyncSecretGuard(req: express.Request, res: express.Response, next:
 
   const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();
   if (!providedSecret || providedSecret !== TALLY_SYNC_SECRET) {
+    const maskSecret = (value: string) => {
+      if (!value) return "(empty)";
+      if (value.length <= 2) return `${value[0] || ""}*`;
+      return `${value[0]}${"*".repeat(Math.max(1, value.length - 2))}${value[value.length - 1]}`;
+    };
+    console.warn(
+      "[TALLY_SYNC_AUTH] Unauthorized request",
+      JSON.stringify({
+        providedLength: providedSecret.length,
+        expectedLength: TALLY_SYNC_SECRET.length,
+        providedMasked: maskSecret(providedSecret),
+        expectedMasked: maskSecret(TALLY_SYNC_SECRET),
+        headerPresent: Boolean(req.header("x-tally-sync-secret")),
+      })
+    );
     return res.status(401).json({ error: "Unauthorized" });
   }
 
