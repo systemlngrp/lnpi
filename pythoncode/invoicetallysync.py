@@ -83,11 +83,80 @@ LOG_HEADERS = [
     "Tally Invoice ID",
     "Runtime Path",
 ]
+TALLY_SYNC_API_URL = os.getenv(
+    "TALLY_SYNC_API_URL",
+    "https://darkred-lobster-409686.hostingersite.com",
+).strip().rstrip("/")
+TALLY_SYNC_API_SECRET = os.getenv("TALLY_SYNC_API_SECRET", "!Office1@").strip()
 
 
 
 def log_terminal(level, message):
     print(f"[{level}] {message}")
+
+
+def use_tally_sync_api():
+    return bool(TALLY_SYNC_API_URL and TALLY_SYNC_API_SECRET)
+
+
+def call_tally_sync_api(method, path, payload=None, params=None):
+    if not use_tally_sync_api():
+        raise RuntimeError("Tally Sync API mode is not configured")
+
+    url = f"{TALLY_SYNC_API_URL}{path}"
+    response = requests.request(
+        method=method.upper(),
+        url=url,
+        json=payload,
+        params=params,
+        headers={
+            "x-tally-sync-secret": TALLY_SYNC_API_SECRET,
+            "Content-Type": "application/json",
+        },
+        timeout=(TALLY_CONNECT_TIMEOUT, max(TALLY_READ_TIMEOUT, 30)),
+    )
+
+    try:
+        body = response.json()
+    except Exception:
+        body = {"error": response.text[:1000]}
+
+    if response.status_code >= 400:
+        raise RuntimeError(body.get("error") or f"HTTP {response.status_code}")
+
+    return body
+
+
+def get_pending_invoice_rows_api():
+    rows = call_tally_sync_api("GET", "/api/tally-sync/pending-invoices")
+    return sorted(rows or [], key=cmp_to_key(compare_pending_invoice_rows))
+
+
+def get_invoice_context_api(invoice_id):
+    return call_tally_sync_api("GET", f"/api/tally-sync/invoices/{invoice_id}/context")
+
+
+def update_invoice_tally_status_api(
+    invoice_id,
+    success,
+    remark,
+    tally_by=None,
+    tally_inv_no=None,
+    tally_inv_date=None,
+    tally_inv_id=None,
+):
+    call_tally_sync_api(
+        "POST",
+        f"/api/tally-sync/invoices/{invoice_id}/status",
+        payload={
+            "success": bool(success),
+            "remark": remark,
+            "tallyBy": tally_by or DEFAULT_UPDATED_BY,
+            "tallyInvNo": tally_inv_no,
+            "tallyInvDate": tally_inv_date,
+            "tallyInvId": tally_inv_id,
+        },
+    )
 
 
 def get_runtime_base_dir():
@@ -283,6 +352,26 @@ def format_iso_date(value):
     return raw_value
 
 
+def normalize_invoice_number(value):
+    return re.sub(r"\s+", "", str(value or "").strip()).upper()
+
+
+def is_probable_voucher_element(element):
+    if element is None:
+        return False
+    if element.attrib.get("VOUCHERNUMBER") or element.attrib.get("GUID") or element.attrib.get("VOUCHERKEY"):
+        return True
+    child_tags = {str(child.tag or "").upper() for child in list(element)}
+    return bool(child_tags.intersection({"VOUCHERNUMBER", "DATE", "GUID", "VOUCHERKEY", "REMOTEID", "PARTYLEDGERNAME"}))
+
+
+def find_first_voucher_element(root):
+    for candidate in root.findall(".//VOUCHER"):
+        if is_probable_voucher_element(candidate):
+            return candidate
+    return None
+
+
 def parse_tally_voucher_response(response_text):
     if not response_text:
         return {}
@@ -292,7 +381,7 @@ def parse_tally_voucher_response(response_text):
 
     try:
         root = ET.fromstring(cleaned)
-        voucher = root.find('.//VOUCHER')
+        voucher = find_first_voucher_element(root)
         if voucher is not None:
             result.update(extract_voucher_summary(voucher))
         else:
@@ -328,6 +417,7 @@ def extract_voucher_summary(voucher):
         "tallyInvDate": voucher.get("DATE") or "",
         "tallyInvId": voucher.get("GUID") or voucher.get("VOUCHERKEY") or voucher.get("REMOTEID") or "",
         "partyLedgerName": voucher.get("PARTYLEDGERNAME") or "",
+        "voucherTypeName": voucher.get("VOUCHERTYPENAME") or "",
         "narration": "",
     }
 
@@ -344,6 +434,8 @@ def extract_voucher_summary(voucher):
             summary["tallyInvId"] = text
         elif tag == "PARTYLEDGERNAME" and not summary["partyLedgerName"]:
             summary["partyLedgerName"] = text
+        elif tag == "VOUCHERTYPENAME" and not summary["voucherTypeName"]:
+            summary["voucherTypeName"] = text
         elif tag == "NARRATION" and not summary["narration"]:
             summary["narration"] = text
 
@@ -362,15 +454,85 @@ def parse_tally_voucher_collection(response_text):
 
     vouchers = []
     for voucher in root.findall(".//VOUCHER"):
+        if not is_probable_voucher_element(voucher):
+            continue
         summary = extract_voucher_summary(voucher)
         if summary:
             vouchers.append(summary)
     return vouchers
 
 
-def fetch_tally_voucher_reference(invoice_no, voucher_type=None):
+def fetch_tally_vouchers_for_date(invoice_date, voucher_type=None):
+    tally_date = format_tally_date(invoice_date)
+    if not tally_date:
+        return []
+
+    xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Export Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <EXPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>Voucher Register</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVFROMDATE>{esc(tally_date)}</SVFROMDATE>
+                    <SVTODATE>{esc(tally_date)}</SVTODATE>
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+                <FETCHLIST>
+                    <FETCH>Date</FETCH>
+                    <FETCH>VoucherNumber</FETCH>
+                    <FETCH>GUID</FETCH>
+                    <FETCH>VoucherKey</FETCH>
+                    <FETCH>RemoteID</FETCH>
+                    <FETCH>PartyLedgerName</FETCH>
+                    <FETCH>VoucherTypeName</FETCH>
+                    <FETCH>Narration</FETCH>
+                </FETCHLIST>
+            </REQUESTDESC>
+        </EXPORTDATA>
+    </BODY>
+</ENVELOPE>
+"""
+    response_text = tally_request(xml)
+    vouchers = parse_tally_voucher_collection(response_text)
+    if not voucher_type:
+        return vouchers
+
+    normalized_voucher_type = str(voucher_type or "").strip().upper()
+    return [
+        voucher
+        for voucher in vouchers
+        if str(voucher.get("voucherTypeName") or "").strip().upper() == normalized_voucher_type
+    ]
+
+
+def fetch_tally_voucher_reference(invoice_no, voucher_type=None, invoice_date=None, party_name=None):
     if not invoice_no:
         return {}
+
+    normalized_invoice_no = normalize_invoice_number(invoice_no)
+    normalized_party_name = str(party_name or "").strip().upper()
+
+    if invoice_date:
+        vouchers = fetch_tally_vouchers_for_date(invoice_date, voucher_type=voucher_type)
+        exact_matches = [
+            voucher
+            for voucher in vouchers
+            if normalize_invoice_number(voucher.get("tallyInvNo")) == normalized_invoice_no
+        ]
+        if normalized_party_name:
+            party_matches = [
+                voucher
+                for voucher in exact_matches
+                if str(voucher.get("partyLedgerName") or "").strip().upper() == normalized_party_name
+            ]
+            if party_matches:
+                return party_matches[-1]
+        if exact_matches:
+            return exact_matches[-1]
 
     voucher_type_attr = f' VOUCHERTYPENAME="{esc(voucher_type)}"' if voucher_type else ""
     xml = f"""
@@ -396,7 +558,10 @@ def fetch_tally_voucher_reference(invoice_no, voucher_type=None):
 </ENVELOPE>
 """
     response_text = tally_request(xml)
-    return parse_tally_voucher_response(response_text)
+    voucher = parse_tally_voucher_response(response_text)
+    if normalize_invoice_number(voucher.get("tallyInvNo")) == normalized_invoice_no:
+        return voucher
+    return {}
 
 
 def fetch_tally_voucher_by_id(tally_inv_id):
@@ -862,14 +1027,20 @@ def fetch_tally_stock_item_details(item_name):
         TALLY_MASTER_CACHE[cache_key] = result
         return result
 
-    stock_item = root.find(".//STOCKITEM")
+    stock_item = None
+    for candidate in root.findall(".//STOCKITEM"):
+        if candidate.attrib.get("NAME") or candidate.attrib.get("REQNAME") or candidate.attrib.get("ID"):
+            stock_item = candidate
+            break
     if stock_item is None:
         result = ({}, f"Stock Item '{item_name}' not found in Tally")
         TALLY_MASTER_CACHE[cache_key] = result
         return result
 
-    stock_item_block_match = re.search(r"<STOCKITEM\b.*?</STOCKITEM>", cleaned_xml, flags=re.IGNORECASE | re.DOTALL)
-    stock_item_block = stock_item_block_match.group(0) if stock_item_block_match else cleaned_xml
+    try:
+        stock_item_block = ET.tostring(stock_item, encoding="unicode")
+    except Exception:
+        stock_item_block = cleaned_xml
 
     base_units = extract_recursive_tag_text(
         stock_item,
@@ -915,6 +1086,129 @@ def fetch_tally_stock_item_details(item_name):
     return result
 
 
+def fetch_tally_ledger_details(ledger_name):
+    if not ledger_name:
+        return {}, "Ledger name missing"
+
+    cache_key = ("LEDGER_DETAILS", ledger_name.strip().upper())
+    if cache_key in TALLY_MASTER_CACHE:
+        return TALLY_MASTER_CACHE[cache_key]
+
+    xml = f"""<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Object</TYPE>
+        <SUBTYPE>Ledger</SUBTYPE>
+        <ID TYPE="Name">{esc(ledger_name)}</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+                <FETCH>MailingName</FETCH>
+                <FETCH>MailingName.LIST</FETCH>
+                <FETCH>Address</FETCH>
+                <FETCH>Address.LIST</FETCH>
+                <FETCH>StateName</FETCH>
+                <FETCH>CountryName</FETCH>
+                <FETCH>PINCode</FETCH>
+                <FETCH>IncomeTaxNumber</FETCH>
+                <FETCH>GSTRegistrationType</FETCH>
+                <FETCH>PartyGSTIN</FETCH>
+                <FETCH>GSTIN</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>"""
+
+    response_text = tally_request(xml)
+    if not response_text:
+        result = ({}, "Empty response from Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    upper_response = response_text.upper()
+    if "CONNECTION ERROR:" in upper_response or "HTTP ERROR FROM TALLY:" in upper_response:
+        result = ({}, response_text)
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    if "UNKNOWN REQUEST" in upper_response or "<LINEERROR>" in upper_response:
+        result = ({}, f"Ledger '{ledger_name}' not found in Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    cleaned_xml = sanitize_tally_xml(response_text)
+    try:
+        root = ET.fromstring(cleaned_xml)
+    except Exception:
+        result = ({}, f"Could not read Ledger details for '{ledger_name}' from Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    ledger = None
+    for candidate in root.findall(".//LEDGER"):
+        if candidate.attrib.get("NAME") or candidate.attrib.get("REQNAME") or candidate.attrib.get("ID"):
+            ledger = candidate
+            break
+    if ledger is None:
+        result = ({}, f"Ledger '{ledger_name}' not found in Tally")
+        TALLY_MASTER_CACHE[cache_key] = result
+        return result
+
+    try:
+        ledger_block = ET.tostring(ledger, encoding="unicode")
+    except Exception:
+        ledger_block = cleaned_xml
+
+    mailing_name = extract_recursive_tag_text(ledger, ["MAILINGNAME", "NAME"]) or extract_first_matching_tag(
+        ledger_block,
+        ["MAILINGNAME", "NAME"],
+    )
+    state_name = extract_recursive_tag_text(ledger, ["STATENAME"]) or extract_first_matching_tag(ledger_block, ["STATENAME"])
+    country_name = extract_recursive_tag_text(ledger, ["COUNTRYNAME"]) or extract_first_matching_tag(ledger_block, ["COUNTRYNAME"])
+    pin_code = extract_recursive_tag_text(ledger, ["PINCODE"]) or extract_first_matching_tag(ledger_block, ["PINCODE"])
+    gst_registration_type = extract_recursive_tag_text(
+        ledger,
+        ["GSTREGISTRATIONTYPE", "REGISTRATIONTYPE"],
+    ) or extract_first_matching_tag(ledger_block, ["GSTREGISTRATIONTYPE", "REGISTRATIONTYPE"])
+    gstin = extract_recursive_tag_text(ledger, ["PARTYGSTIN", "GSTIN"]) or extract_first_matching_tag(
+        ledger_block,
+        ["PARTYGSTIN", "GSTIN"],
+    )
+
+    address_lines = re.findall(
+        r"<ADDRESS\b[^>]*>(.*?)</ADDRESS>",
+        ledger_block,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    normalized_address_lines = [
+        sanitize_party_address_line(value)
+        for value in address_lines
+        if sanitize_party_address_line(value)
+    ]
+
+    result = (
+        {
+            "name": str(ledger.attrib.get("NAME") or ledger_name).strip(),
+            "mailing_name": re.sub(r"\s+", " ", mailing_name.strip()) if mailing_name else "",
+            "address_lines": normalized_address_lines,
+            "state": re.sub(r"\s+", " ", state_name.strip()) if state_name else "",
+            "country": re.sub(r"\s+", " ", country_name.strip()) if country_name else "",
+            "pin": re.sub(r"\s+", " ", pin_code.strip()) if pin_code else "",
+            "gst_registration_type": re.sub(r"\s+", " ", gst_registration_type.strip()) if gst_registration_type else "",
+            "gstin": re.sub(r"\s+", " ", gstin.strip()) if gstin else "",
+        },
+        "",
+    )
+    TALLY_MASTER_CACHE[cache_key] = result
+    return result
+
+
 def get_company_details(conn, company_id):
     if not company_id:
         return {}
@@ -922,7 +1216,7 @@ def get_company_details(conn, company_id):
     cursor = get_db_cursor(conn, dictionary=True)
     cursor.execute(
         """
-        SELECT name, gstSupplyType, state
+        SELECT name, address, district, state, gstNo, gstType, gstSupplyType, pin
         FROM companies
         WHERE id = %s
         LIMIT 1
@@ -934,6 +1228,112 @@ def get_company_details(conn, company_id):
     return row or {}
 
 
+def sanitize_party_address_line(value):
+    cleaned = re.sub(r"</?ADDRESS\b[^>]*>", "", str(value or ""), flags=re.IGNORECASE)
+    cleaned = cleaned.replace("&amp;", "&")
+    cleaned = re.sub(r"[\x00-\x1F\x7F-\x9F]+", " ", cleaned)
+    cleaned = re.sub(r"\]\s*\[|\[\s*\]", ", ", cleaned)
+    cleaned = re.sub(r"[\[\]{}()]+", " ", cleaned)
+    cleaned = re.sub(r"[|;:]+", ", ", cleaned)
+    cleaned = re.sub(r"\s*[-–—]\s*", ", ", cleaned)
+    cleaned = re.sub(r"\s*,\s*", ", ", cleaned)
+    cleaned = re.sub(r",\s*,+", ", ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,")
+    return cleaned
+
+
+def build_party_address_lines(company_row):
+    if not company_row:
+        return []
+
+    address_lines = []
+
+    primary_address = str(company_row.get("address") or "").strip()
+    if primary_address:
+        split_lines = [sanitize_party_address_line(part) for part in re.split(r"[\r\n]+", primary_address) if sanitize_party_address_line(part)]
+        address_lines.extend(split_lines)
+
+    location_parts = [
+        str(company_row.get("district") or "").strip(),
+        str(company_row.get("state") or "").strip(),
+        str(company_row.get("pin") or "").strip(),
+        "India",
+    ]
+    location_line = ", ".join([part for part in location_parts if part])
+    if location_line and location_line not in address_lines:
+        address_lines.append(location_line)
+
+    unique_lines = []
+    for line in address_lines:
+        cleaned_line = sanitize_party_address_line(line)
+        if cleaned_line and cleaned_line not in unique_lines:
+            unique_lines.append(cleaned_line)
+    return unique_lines
+
+
+def build_party_details(customer_name, company_row):
+    tally_ledger_details, tally_error = fetch_tally_ledger_details(customer_name)
+    if tally_error:
+        log_terminal("PARTY", f"{customer_name}: {tally_error}. Falling back to company table values.")
+
+    party_name = str((tally_ledger_details or {}).get("name") or customer_name).strip()
+    party_mailing_name = str(
+        (tally_ledger_details or {}).get("mailing_name")
+        or (company_row or {}).get("name")
+        or customer_name
+    ).strip()
+    party_state = str((tally_ledger_details or {}).get("state") or (company_row or {}).get("state") or "").strip()
+    party_country = str((tally_ledger_details or {}).get("country") or "India").strip()
+    party_pin = str((tally_ledger_details or {}).get("pin") or (company_row or {}).get("pin") or "").strip()
+    party_gstin = str((tally_ledger_details or {}).get("gstin") or (company_row or {}).get("gstNo") or "").strip()
+    party_gst_registration_type = str(
+        (tally_ledger_details or {}).get("gst_registration_type")
+        or resolve_party_gst_registration_type(company_row)
+    ).strip()
+    party_address_lines = (
+        (tally_ledger_details or {}).get("address_lines")
+        or build_party_address_lines(company_row)
+    )
+
+    return {
+        "party_name": party_name,
+        "mailing_name": party_mailing_name,
+        "state": party_state,
+        "country": party_country or "India",
+        "pin": party_pin,
+        "gstin": party_gstin,
+        "gst_registration_type": party_gst_registration_type,
+        "address_lines": party_address_lines,
+    }
+
+
+def resolve_party_gst_registration_type(company_row):
+    gst_type = str((company_row or {}).get("gstType") or "").strip()
+    gst_no = str((company_row or {}).get("gstNo") or "").strip()
+
+    normalized_map = {
+        "REGULAR": "Regular",
+        "COMPOSITION": "Composition",
+        "CONSUMER": "Consumer",
+        "UNREGISTERED": "Unregistered",
+        "SEZ": "SEZ",
+        "SEZ UNIT": "SEZ",
+        "SEZ DEVELOPER": "SEZ",
+        "EXEMPT": "Consumer",
+    }
+
+    if gst_type:
+        normalized = normalized_map.get(gst_type.upper())
+        if normalized:
+            return normalized
+        return gst_type
+
+    if gst_no:
+        return "Regular"
+
+    return "Unregistered"
+
+
 def normalize_item_source(value):
     normalized = str(value or "").strip().upper()
     if normalized == "PHP":
@@ -943,6 +1343,16 @@ def normalize_item_source(value):
     if normalized == "MATERIAL":
         return "MATERIAL"
     return "FG"
+
+
+def resolve_effective_line_uom(line):
+    item_source = normalize_item_source(line.get("itemSource"))
+    raw_uom = normalize_uom(line.get("uom"))
+    if raw_uom:
+        return raw_uom
+    if item_source in {"PHP", "PLATE"}:
+        return "PCS"
+    return ""
 
 
 def resolve_invoice_line_item_details(cursor, item_source, item_id, npd_id):
@@ -1111,7 +1521,7 @@ def get_invoice_lines(conn, invoice_id):
                 "itemSource": item_source,
                 "npdId": npd_id,
                 "itemName": item_name or "Unknown Item",
-                "uom": normalize_uom(uom),
+                "uom": normalize_uom(uom) or ("PCS" if item_source in {"PHP", "PLATE"} else ""),
                 "npdPartNo": str(npd_part or "").strip(),
                 "qty": to_float(row.get("qty")),
                 "rate": to_float(row.get("rate")),
@@ -1138,7 +1548,10 @@ def get_invoice_dispatch_details(conn, invoice_id, item_lines):
 
     slip_nos = []
     truck_nos = []
-    order_nos = []
+    po_numbers = []
+    order_dates = []
+    order_details = []
+    transporter = ""
     dispatch_plan_ids = []
     cursor = get_db_cursor(conn, dictionary=True)
 
@@ -1172,10 +1585,14 @@ def get_invoice_dispatch_details(conn, invoice_id, item_lines):
                         if dispatch_plan_id and dispatch_plan_id not in dispatch_plan_ids:
                             dispatch_plan_ids.append(dispatch_plan_id)
 
-        if not truck_nos:
+        if not truck_nos or not transporter:
+            gate_pass_fields = ["truckNo"]
+            if column_exists(conn, "gate_passes", "transporter"):
+                gate_pass_fields.append("transporter")
+            gate_pass_select = ", ".join(gate_pass_fields)
             cursor.execute(
-                """
-                SELECT truckNo
+                f"""
+                SELECT {gate_pass_select}
                 FROM gate_passes
                 WHERE invoiceId = %s
                 """,
@@ -1183,33 +1600,49 @@ def get_invoice_dispatch_details(conn, invoice_id, item_lines):
             )
             for row in cursor.fetchall():
                 truck_no = str(row.get("truckNo") or "").strip()
+                transporter_name = str(row.get("transporter") or "").strip()
                 if truck_no and truck_no not in truck_nos:
                     truck_nos.append(truck_no)
+                if transporter_name and not transporter:
+                    transporter = transporter_name
 
         if dispatch_plan_ids:
             placeholders = ", ".join(["%s"] * len(dispatch_plan_ids))
             cursor.execute(
                 f"""
-                SELECT DISTINCT o.orderNo
+                SELECT DISTINCT o.poNumber, o.orderDate
                 FROM dispatch_plans dp
                 INNER JOIN orders_schedule os ON os.id = dp.scheduleId
                 INNER JOIN orders o ON o.id = os.orderId
                 WHERE dp.id IN ({placeholders})
-                ORDER BY o.orderNo
+                ORDER BY o.orderDate, o.poNumber
                 """,
                 tuple(dispatch_plan_ids),
             )
             for row in cursor.fetchall():
-                order_no = str(row.get("orderNo") or "").strip()
-                if order_no and order_no not in order_nos:
-                    order_nos.append(order_no)
+                po_number = str(row.get("poNumber") or "").strip()
+                order_date = str(row.get("orderDate") or "").strip()
+                if po_number and po_number not in po_numbers:
+                    po_numbers.append(po_number)
+                if order_date and order_date not in order_dates:
+                    order_dates.append(order_date)
+                if po_number:
+                    order_entry = {
+                        "poNumber": po_number,
+                        "orderDate": order_date,
+                    }
+                    if order_entry not in order_details:
+                        order_details.append(order_entry)
     finally:
         cursor.close()
 
     return {
         "loadingSlipNos": slip_nos,
         "truckNos": truck_nos,
-        "orderNos": order_nos,
+        "orderNos": po_numbers,
+        "orderDates": order_dates,
+        "orderDetails": order_details,
+        "transporter": transporter,
     }
 
 
@@ -1231,6 +1664,7 @@ def validate_invoice_lines(item_lines):
 
     for index, line in enumerate(item_lines, start=1):
         item_name = line.get("itemName") or f"Line {index}"
+        effective_uom = resolve_effective_line_uom(line)
 
         if to_float(line.get("qty")) <= 0:
             errors.append(f"{item_name}: qty missing or zero")
@@ -1238,7 +1672,7 @@ def validate_invoice_lines(item_lines):
             errors.append(f"{item_name}: rate missing or zero")
         if to_float(line.get("amount")) <= 0:
             errors.append(f"{item_name}: amount missing or zero")
-        if not (line.get("uom") or "").strip():
+        if not effective_uom:
             errors.append(f"{item_name}: uom missing")
         if item_name == "Unknown Item":
             errors.append(f"Line {index}: item name not found")
@@ -1317,9 +1751,14 @@ def derive_tax_rates(invoice_row, item_lines):
     }
 
 
+def compute_effective_round_off(invoice_row, total_item_amount=0.0):
+    return round(to_float(invoice_row.get("roundOff")), 2)
+
+
 def create_sales_voucher_xml(
     invoice_row,
     customer_name,
+    company_row,
     item_lines,
     sales_ledger_name,
     narration_text="",
@@ -1334,7 +1773,6 @@ def create_sales_voucher_xml(
     sgst = round(to_float(invoice_row.get("sgst")), 2)
     igst = round(to_float(invoice_row.get("igst")), 2)
     other_charges = round(to_float(invoice_row.get("otherCharges")), 2)
-    round_off = round(to_float(invoice_row.get("roundOff")), 2)
     derived_tax_rates = derive_tax_rates(invoice_row, item_lines)
     cgst_rate = derived_tax_rates["cgst_rate"] if cgst > 0 else 0
     sgst_rate = derived_tax_rates["sgst_rate"] if sgst > 0 else 0
@@ -1351,7 +1789,7 @@ def create_sales_voucher_xml(
         qty = to_float(line.get("qty"))
         rate = to_float(line.get("rate"))
         amount = round(to_float(line.get("amount")) or qty * rate, 2)
-        uom = line.get("uom") or ""
+        uom = resolve_effective_line_uom(line)
         qty_text = f"{qty:g} {esc(uom)}".strip()
         rate_text = f"{rate:g}/{esc(uom)}" if uom else f"{rate:g}"
 
@@ -1375,6 +1813,7 @@ def create_sales_voucher_xml(
 """
 
     total_item_amount = round(total_item_amount, 2)
+    round_off = compute_effective_round_off(invoice_row, total_item_amount)
     total_invoice_amount = round(total_item_amount + cgst + sgst + igst + other_charges + round_off, 2)
 
     ledger_entries_xml = f"""
@@ -1422,12 +1861,11 @@ def create_sales_voucher_xml(
         """
 
     if round_off != 0:
-        round_off_amount = f"{abs(round_off):.2f}"
-        deemed_positive = "No" if round_off > 0 else "Yes"
+        round_off_amount = f"{round_off:.2f}"
         ledger_entries_xml += f"""
                         <LEDGERENTRIES.LIST>
                             <LEDGERNAME>{esc(ROUND_OFF_LEDGER_NAME)}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>{deemed_positive}</ISDEEMEDPOSITIVE>
+                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
                             <AMOUNT>{round_off_amount}</AMOUNT>
                         </LEDGERENTRIES.LIST>
         """
@@ -1435,8 +1873,55 @@ def create_sales_voucher_xml(
     dispatch_doc_no = join_unique_values(dispatch_details.get("loadingSlipNos"))
     vehicle_no = join_unique_values(dispatch_details.get("truckNos"))
     order_nos = join_unique_values(dispatch_details.get("orderNos"))
+    order_dates = dispatch_details.get("orderDates") or []
+    order_date = format_tally_date(order_dates[0]) if order_dates else ""
+    order_details = dispatch_details.get("orderDetails") or []
     destination = str(invoice_row.get("destination") or dispatch_details.get("destination") or "").strip()
+    transporter = str(invoice_row.get("transporter") or dispatch_details.get("transporter") or "").strip()
     dispatch_through = "By Road"
+    party_details = build_party_details(customer_name, company_row)
+    party_name = str(party_details.get("party_name") or customer_name).strip()
+    party_mailing_name = str(party_details.get("mailing_name") or customer_name).strip()
+    party_state = str(party_details.get("state") or "").strip()
+    party_country = str(party_details.get("country") or "India").strip()
+    party_pin = str(party_details.get("pin") or "").strip()
+    party_gstin = str(party_details.get("gstin") or "").strip()
+    party_gst_registration_type = str(party_details.get("gst_registration_type") or "").strip()
+    party_address_lines = party_details.get("address_lines") or []
+    party_address_xml = (
+        "\n".join(f"                            <ADDRESS>{esc(line)}</ADDRESS>" for line in party_address_lines)
+        if party_address_lines
+        else ""
+    )
+    basic_buyer_address_xml = (
+        "\n".join(f"                            <BASICBUYERADDRESS>{esc(line)}</BASICBUYERADDRESS>" for line in party_address_lines)
+        if party_address_lines
+        else ""
+    )
+    consignee_address_xml = (
+        "\n".join(f"                            <ADDRESS>{esc(line)}</ADDRESS>" for line in party_address_lines)
+        if party_address_lines
+        else ""
+    )
+
+    if order_details:
+        invoice_order_list_xml = "".join(
+            f"""
+                        <INVOICEORDERLIST.LIST>
+                            <BASICORDERDATE>{esc(format_tally_date(order_detail.get("orderDate") or ""))}</BASICORDERDATE>
+                            <BASICPURCHASEORDERNO>{esc(order_detail.get("poNumber") or "")}</BASICPURCHASEORDERNO>
+                        </INVOICEORDERLIST.LIST>"""
+            for order_detail in order_details
+            if str(order_detail.get("poNumber") or "").strip()
+        )
+    elif order_nos:
+        invoice_order_list_xml = f"""
+                        <INVOICEORDERLIST.LIST>
+                            <BASICORDERDATE>{esc(order_date)}</BASICORDERDATE>
+                            <BASICPURCHASEORDERNO>{esc(order_nos)}</BASICPURCHASEORDERNO>
+                        </INVOICEORDERLIST.LIST>"""
+    else:
+        invoice_order_list_xml = ""
 
     return f"""
 <ENVELOPE>
@@ -1457,15 +1942,87 @@ def create_sales_voucher_xml(
                         <DATE>{invoice_date}</DATE>
                         <VOUCHERNUMBER>{esc(invoice_no)}</VOUCHERNUMBER>
                         <VOUCHERTYPENAME>{esc(VOUCHER_TYPE_NAME)}</VOUCHERTYPENAME>
+                        <PARTYNAME>{esc(party_name)}</PARTYNAME>
                         <PARTYLEDGERNAME>{esc(customer_name)}</PARTYLEDGERNAME>
+                        <BASICBUYERNAME>{esc(party_name)}</BASICBUYERNAME>
+                        <PARTYMAILINGNAME>{esc(party_mailing_name)}</PARTYMAILINGNAME>
+                        <PARTYGSTIN>{esc(party_gstin)}</PARTYGSTIN>
+                        <GSTREGISTRATIONTYPE>{esc(party_gst_registration_type)}</GSTREGISTRATIONTYPE>
+                        <GSTBUYERNAME>{esc(party_name)}</GSTBUYERNAME>
+                        <GSTBUYERMAILINGNAME>{esc(party_mailing_name)}</GSTBUYERMAILINGNAME>
+                        <GSTBUYERSTATE>{esc(party_state)}</GSTBUYERSTATE>
+                        <GSTBUYERPINCODE>{esc(party_pin)}</GSTBUYERPINCODE>
+                        <GSTBUYERGSTIN>{esc(party_gstin)}</GSTBUYERGSTIN>
+                        <STATENAME>{esc(party_state)}</STATENAME>
+                        <COUNTRYOFRESIDENCE>{esc(party_country)}</COUNTRYOFRESIDENCE>
+                        <CONSIGNEENAME>{esc(party_name)}</CONSIGNEENAME>
+                        <CONSIGNEEMAILINGNAME>{esc(party_mailing_name)}</CONSIGNEEMAILINGNAME>
+                        <CONSIGNEESTATENAME>{esc(party_state)}</CONSIGNEESTATENAME>
+                        <CONSIGNEECOUNTRYNAME>{esc(party_country)}</CONSIGNEECOUNTRYNAME>
+                        <CONSIGNEEGSTIN>{esc(party_gstin)}</CONSIGNEEGSTIN>
+                        <CONSIGNEEPINCODE>{esc(party_pin)}</CONSIGNEEPINCODE>
+                        <CONSIGNEEPINNUMBER>{esc(party_pin)}</CONSIGNEEPINNUMBER>
+                        <GSTCONSIGNEENAME>{esc(party_name)}</GSTCONSIGNEENAME>
+                        <GSTCONSIGNEEMAILINGNAME>{esc(party_mailing_name)}</GSTCONSIGNEEMAILINGNAME>
+                        <GSTCONSIGNEESTATE>{esc(party_state)}</GSTCONSIGNEESTATE>
+                        <GSTCONSIGNEEPINCODE>{esc(party_pin)}</GSTCONSIGNEEPINCODE>
+                        <GSTCONSIGNEEGSTIN>{esc(party_gstin)}</GSTCONSIGNEEGSTIN>
+                        <PLACEOFSUPPLY>{esc(party_state)}</PLACEOFSUPPLY>
+                        <PARTYPINCODE>{esc(party_pin)}</PARTYPINCODE>
+                        <PARTYPINNUMBER>{esc(party_pin)}</PARTYPINNUMBER>
+                        <BUYERPINNUMBER>{esc(party_pin)}</BUYERPINNUMBER>
                         <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
                         <ISINVOICE>Yes</ISINVOICE>
                         <NARRATION>{esc(narration_text)}</NARRATION>
+                        <ADDRESS.LIST TYPE="String">
+{party_address_xml}
+                        </ADDRESS.LIST>
+                        <BASICBUYERADDRESS.LIST TYPE="String">
+{basic_buyer_address_xml}
+                        </BASICBUYERADDRESS.LIST>
+                        <GSTBUYERADDRESS.LIST TYPE="String">
+{party_address_xml}
+                        </GSTBUYERADDRESS.LIST>
+                        <CONSIGNEEADDRESS.LIST TYPE="String">
+{consignee_address_xml}
+                        </CONSIGNEEADDRESS.LIST>
+                        <GSTCONSIGNEEADDRESS.LIST TYPE="String">
+{consignee_address_xml}
+                        </GSTCONSIGNEEADDRESS.LIST>
+                        <BASICSHIPTOADDRESS.LIST TYPE="String">
+{consignee_address_xml}
+                        </BASICSHIPTOADDRESS.LIST>
+                        <BASICCONSIGNEEADDRESS.LIST TYPE="String">
+{consignee_address_xml}
+                        </BASICCONSIGNEEADDRESS.LIST>
+                        <TRANSPORTERNAME>{esc(dispatch_through)}</TRANSPORTERNAME>
+                        <TRANSPORTMODE>Road</TRANSPORTMODE>
+                        <DESPATCHEDTHROUGH>{esc(dispatch_through)}</DESPATCHEDTHROUGH>
+                        <CARRIERNAME>{esc(transporter)}</CARRIERNAME>
+                        <CARRIERNAMEAGENCY>{esc(transporter)}</CARRIERNAMEAGENCY>
+                        <EICHECKPOST>{esc(transporter)}</EICHECKPOST>
+                        <BASICSHIPPEDBY>{esc(dispatch_through)}</BASICSHIPPEDBY>
                         <BASICSHIPDOCUMENTNO>{esc(dispatch_doc_no)}</BASICSHIPDOCUMENTNO>
-                        <BASICDISPATCHTHROUGH>{esc(dispatch_through)}</BASICDISPATCHTHROUGH>
+                        <SHIPPEDVIA>{esc(transporter or dispatch_through)}</SHIPPEDVIA>
+                        <BASICSHIPMETHOD>{esc(dispatch_through)}</BASICSHIPMETHOD>
                         <BASICFINALDESTINATION>{esc(destination)}</BASICFINALDESTINATION>
-                        <BASICVEHICLENO>{esc(vehicle_no)}</BASICVEHICLENO>
+                        <BASICSHIPFORWARDER>{esc(transporter)}</BASICSHIPFORWARDER>
+                        <BASICSHIPVESSELNO>{esc(vehicle_no)}</BASICSHIPVESSELNO>
                         <BASICORDERREF>{esc(order_nos)}</BASICORDERREF>
+                        <BASICORDERDATE>{esc(order_date)}</BASICORDERDATE>
+                        {invoice_order_list_xml}
+                        <INVOICESHIPLIST.LIST>
+                            <BASICSHIPMETHOD>{esc(dispatch_through)}</BASICSHIPMETHOD>
+                            <BASICSHIPFORWARDER>{esc(transporter)}</BASICSHIPFORWARDER>
+                        </INVOICESHIPLIST.LIST>
+                        <BASICSHIPDELIVERYPROPERTIES.LIST>
+                            <BASICSHIPMETHOD>{esc(dispatch_through)}</BASICSHIPMETHOD>
+                            <BASICSHIPFORWARDER>{esc(transporter)}</BASICSHIPFORWARDER>
+                        </BASICSHIPDELIVERYPROPERTIES.LIST>
+                        <EWAYBILLDETAILS.LIST>
+                            <TRANSPORTERNAME>{esc(transporter)}</TRANSPORTERNAME>
+                            <TRANSMODE>Road</TRANSMODE>
+                        </EWAYBILLDETAILS.LIST>
                         {inventory_xml}
                         {ledger_entries_xml}
                     </VOUCHER>
@@ -1519,10 +2076,11 @@ def validate_tally_masters(customer_name, sales_ledger_name, item_lines, invoice
     master_checks = [("Ledger", customer_name), ("Ledger", sales_ledger_name)]
 
     other_charges = round(to_float(invoice_row.get("otherCharges")), 2)
-    round_off = round(to_float(invoice_row.get("roundOff")), 2)
     cgst = round(to_float(invoice_row.get("cgst")), 2)
     sgst = round(to_float(invoice_row.get("sgst")), 2)
     igst = round(to_float(invoice_row.get("igst")), 2)
+    total_item_amount = round(sum(round(to_float(line.get("amount")), 2) for line in item_lines), 2)
+    round_off = compute_effective_round_off(invoice_row, total_item_amount)
     derived_tax_rates = derive_tax_rates(invoice_row, item_lines)
 
     if other_charges != 0:
@@ -1557,7 +2115,7 @@ def validate_tally_masters(customer_name, sales_ledger_name, item_lines, invoice
 
     for line in item_lines:
         item_name = str(line.get("itemName") or "").strip()
-        erp_uom = normalize_uom(line.get("uom"))
+        erp_uom = resolve_effective_line_uom(line)
         if not item_name or not erp_uom:
             continue
 
@@ -1599,6 +2157,8 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
         "invoice_numbers_existing": [],
         "npd_part_matches": set(),
     }
+    halted_invoice_no = ""
+    halted_remark = ""
 
     print("==========================================")
     print("Prechecking pending invoices before posting")
@@ -1612,7 +2172,17 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
         print(f"Precheck Invoice ID: {invoice_id} | Invoice No: {invoice_no}")
 
         try:
-            company_row = get_company_details(conn, invoice_row.get("companyId"))
+            if conn is None and use_tally_sync_api():
+                invoice_context = get_invoice_context_api(invoice_id)
+                invoice_row = invoice_context.get("invoiceRow") or invoice_row
+                company_row = invoice_context.get("companyRow") or {}
+                item_lines = invoice_context.get("itemLines") or []
+                dispatch_details = invoice_context.get("dispatchDetails") or {}
+            else:
+                company_row = get_company_details(conn, invoice_row.get("companyId"))
+                item_lines = get_invoice_lines(conn, invoice_id)
+                dispatch_details = None
+
             company_name = (company_row or {}).get("name") or ""
             if not company_name:
                 remark = "Company ledger not found in companies table"
@@ -1626,9 +2196,10 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                     stage="PRECHECK",
                 )
                 log_terminal("PRECHECK", remark)
-                continue
+                halted_invoice_no = invoice_no
+                halted_remark = remark
+                break
 
-            item_lines = get_invoice_lines(conn, invoice_id)
             if not item_lines:
                 remark = "No invoice line items found"
                 update_invoice_tally_status(
@@ -1641,7 +2212,9 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                     stage="PRECHECK",
                 )
                 log_terminal("PRECHECK", remark)
-                continue
+                halted_invoice_no = invoice_no
+                halted_remark = remark
+                break
 
             line_errors = validate_invoice_lines(item_lines)
             if line_errors:
@@ -1656,7 +2229,9 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                     stage="PRECHECK",
                 )
                 log_terminal("PRECHECK", remark)
-                continue
+                halted_invoice_no = invoice_no
+                halted_remark = remark
+                break
 
             if not invoice_no:
                 remark = "Invoice No missing"
@@ -1670,12 +2245,15 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                     stage="PRECHECK",
                 )
                 log_terminal("PRECHECK", remark)
-                continue
+                halted_invoice_no = invoice_no
+                halted_remark = remark
+                break
 
             precheck_summary["customers_ok"].add(company_name)
 
             sales_ledger_name = resolve_sales_ledger_name(invoice_row, company_row, item_lines)
-            dispatch_details = get_invoice_dispatch_details(conn, invoice_id, item_lines)
+            if dispatch_details is None:
+                dispatch_details = get_invoice_dispatch_details(conn, invoice_id, item_lines)
             narration_text = build_invoice_narration(dispatch_details)
 
             log_terminal("PRECHECK", f"{invoice_no}: checking saved Tally ID")
@@ -1701,7 +2279,12 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                 continue
 
             log_terminal("PRECHECK", f"{invoice_no}: checking existing invoice number in Tally")
-            voucher_by_number = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
+            voucher_by_number = fetch_tally_voucher_reference(
+                invoice_no,
+                VOUCHER_TYPE_NAME,
+                invoice_row.get("date"),
+                company_name,
+            )
             if voucher_by_number:
                 remark = "This Invoice already exists in tally."
                 update_invoice_tally_status(
@@ -1740,7 +2323,9 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                     stage="PRECHECK",
                 )
                 log_terminal("PRECHECK", remark)
-                continue
+                halted_invoice_no = invoice_no
+                halted_remark = remark
+                break
 
             for line in item_lines:
                 item_name = str(line.get("itemName") or "").strip()
@@ -1780,6 +2365,9 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
                 stage="PRECHECK",
             )
             log_terminal("PRECHECK", error_message)
+            halted_invoice_no = invoice_no
+            halted_remark = error_message
+            break
 
     print("==========================================")
     print("Precheck Summary Before Posting")
@@ -1815,6 +2403,12 @@ def prevalidate_pending_invoices(conn, pending_invoice_rows):
     else:
         print("[INFO] No NPD Part No comparisons were applicable in this precheck.")
 
+    if halted_invoice_no:
+        print(
+            f"[STOP] Precheck halted at Invoice No. {halted_invoice_no}. "
+            f"No later invoices will be posted in this run. Reason: {halted_remark}"
+        )
+
     return valid_contexts
 
 
@@ -1831,6 +2425,28 @@ def update_invoice_tally_status(
     company_name="",
     stage="SYNC",
 ):
+    if conn is None and use_tally_sync_api():
+        update_invoice_tally_status_api(
+            invoice_id,
+            success,
+            remark,
+            tally_by=tally_by,
+            tally_inv_no=tally_inv_no,
+            tally_inv_date=tally_inv_date,
+            tally_inv_id=tally_inv_id,
+        )
+        append_excel_log(
+            "SUCCESS" if success else "FAILURE",
+            stage,
+            remark,
+            invoice_row=invoice_row or {"id": invoice_id},
+            company_name=company_name,
+            tally_inv_no=tally_inv_no,
+            tally_inv_date=tally_inv_date,
+            tally_inv_id=tally_inv_id,
+        )
+        return
+
     cursor = get_db_cursor(conn)
     if success:
         sql = """
@@ -1880,12 +2496,16 @@ def update_invoice_tally_status(
 
 
 def sync_invoices_to_tally():
-    conn = get_db_connection()
+    conn = None
 
-    try:
+    if use_tally_sync_api():
+        pending_invoice_rows = get_pending_invoice_rows_api()
+    else:
+        conn = get_db_connection()
         ensure_invoice_sync_columns(conn)
         pending_invoice_rows = get_pending_invoice_rows(conn)
 
+    try:
         print("==========================================")
         print(f"Pending invoices found: {len(pending_invoice_rows)}")
         print("==========================================")
@@ -1905,6 +2525,7 @@ def sync_invoices_to_tally():
 
             try:
                 company_name = context["company_name"]
+                company_row = context["company_row"]
                 item_lines = context["item_lines"]
                 sales_ledger_name = context["sales_ledger_name"]
                 dispatch_details = context["dispatch_details"]
@@ -1930,7 +2551,12 @@ def sync_invoices_to_tally():
                     print(f"Skipping creation: {remark} | {tally_reference}")
                     continue
 
-                voucher_by_number = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
+                voucher_by_number = fetch_tally_voucher_reference(
+                    invoice_no,
+                    VOUCHER_TYPE_NAME,
+                    invoice_row.get("date"),
+                    company_name,
+                )
                 if voucher_by_number:
                     remark = "This Invoice already exists in tally."
                     update_invoice_tally_status(
@@ -1965,6 +2591,7 @@ def sync_invoices_to_tally():
                 tally_xml = create_sales_voucher_xml(
                     invoice_row,
                     company_name,
+                    company_row,
                     item_lines,
                     sales_ledger_name,
                     narration_text,
@@ -1988,7 +2615,12 @@ def sync_invoices_to_tally():
                         created_tally_voucher.get("tallyInvDate")
                         and created_tally_voucher.get("tallyInvId")
                     ):
-                        voucher_by_number = fetch_tally_voucher_reference(invoice_no, VOUCHER_TYPE_NAME)
+                        voucher_by_number = fetch_tally_voucher_reference(
+                            invoice_no,
+                            VOUCHER_TYPE_NAME,
+                            invoice_row.get("date"),
+                            company_name,
+                        )
                         if voucher_by_number:
                             created_tally_voucher = {
                                 **created_tally_voucher,
@@ -2051,6 +2683,11 @@ def sync_invoices_to_tally():
                         stage="SYNC",
                     )
                     print(f"Posting failed: {error_detail}")
+                    print(
+                        f"Stopping batch at Invoice No: {invoice_no}. "
+                        "No later invoices will be posted in this run."
+                    )
+                    break
 
             except Exception as exc:
                 error_message = str(exc)[:1000]
@@ -2064,10 +2701,35 @@ def sync_invoices_to_tally():
                     stage="SYNC",
                 )
                 print(f"Error in Invoice ID {invoice_id}: {error_message}")
+                print(
+                    f"Stopping batch at Invoice No: {invoice_no}. "
+                    "No later invoices will be posted in this run."
+                )
+                break
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":
-    sync_invoices_to_tally()
+    try:
+        sync_invoices_to_tally()
+    except mysql.connector.Error as exc:
+        print("==========================================")
+        print("Database connection failed")
+        print("==========================================")
+        print(
+            f"Could not connect to MySQL at "
+            f"{DB_CONFIG['host']}:{DB_CONFIG['port']}."
+        )
+        print(f"Connector message: {exc}")
+        print(
+            "Please check whether outbound access to MySQL port 3306 is "
+            "allowed from this machine, and whether the server is accepting "
+            "connections from your current IP."
+        )
+        sys.exit(1)
+    except Exception as exc:
+        print(f"Unexpected error: {exc}")
+        raise

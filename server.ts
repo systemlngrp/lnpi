@@ -62,6 +62,7 @@ const AUTH_TTL_SECONDS = Number(process.env.AUTH_TTL_SECONDS || 60 * 60 * 24); /
 const NPD_SYNC_SECRET = String(process.env.NPD_SYNC_SECRET || "").trim();
 const NPD_SYNC_ALLOWED_TAB = String(process.env.NPD_SYNC_ALLOWED_TAB || "NPD").trim();
 const NPD_SYNC_LOG_PREFIX = "[NPD_SYNC]";
+const TALLY_SYNC_SECRET = String(process.env.TALLY_SYNC_SECRET || "!Office1@").trim();
 
 const NPD_SYNC_HEADER_MAP = {
   "NPD ID": "npdId",
@@ -5493,8 +5494,334 @@ const createHandlers = (tableName: string) => {
   };
 };
 
+function tallySyncSecretGuard(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!TALLY_SYNC_SECRET) {
+    return res.status(500).json({ error: "TALLY_SYNC_SECRET is not configured on server." });
+  }
+
+  const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();
+  if (!providedSecret || providedSecret !== TALLY_SYNC_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  return next();
+}
+
+async function fetchTallyPendingInvoices(db: mysql.Pool) {
+  const [rows] = await db.query(`
+    SELECT *
+    FROM \`invoices\`
+    WHERE \`tallyTimestamp\` IS NULL
+       OR TRIM(\`tallyTimestamp\`) = ''
+  `);
+
+  return (rows as any[]).map((row) => normalizeFetchedRow("invoices", row));
+}
+
+async function fetchTallyInvoiceContext(db: mysql.Pool, invoiceId: string) {
+  const [invoiceRows] = await db.query(
+    `
+      SELECT *
+      FROM \`invoices\`
+      WHERE \`id\` = ?
+      LIMIT 1
+    `,
+    [invoiceId]
+  );
+  const invoiceRow = (invoiceRows as any[])[0];
+  if (!invoiceRow) return null;
+
+  const normalizedInvoiceRow = normalizeFetchedRow("invoices", invoiceRow);
+
+  const [companyRows] = await db.query(
+    `
+      SELECT name, address, district, state, gstNo, gstType, gstSupplyType, pin
+      FROM \`companies\`
+      WHERE \`id\` = ?
+      LIMIT 1
+    `,
+    [String(invoiceRow.companyId || "")]
+  );
+  const companyRow = (companyRows as any[])[0] || {};
+
+  const [lineRows] = await db.query(
+    `
+      SELECT
+        ili.*,
+        n.itemName AS npdItemName,
+        n.uom AS npdUom,
+        n.part AS npdPart,
+        pm.itemName AS phpItemName,
+        plm.itemName AS plateItemName,
+        m.name AS materialName,
+        m.uom AS materialUom
+      FROM \`invoice_line_items\` ili
+      LEFT JOIN \`npd\` n
+        ON n.id = COALESCE(NULLIF(ili.npdId, ''), NULLIF(ili.itemId, ''))
+      LEFT JOIN \`php_item_master\` pm
+        ON pm.id = ili.itemId
+      LEFT JOIN \`plate_item_master\` plm
+        ON plm.id = ili.itemId
+      LEFT JOIN \`materials\` m
+        ON m.id = ili.itemId
+      WHERE ili.invoiceId = ?
+      ORDER BY ili.id
+    `,
+    [invoiceId]
+  );
+
+  const itemLines = (lineRows as any[]).map((row) => {
+    const itemSource = String(row.itemSource || "FG").trim().toUpperCase();
+    const normalizedItemSource =
+      itemSource === "PHP" || itemSource === "PLATE" || itemSource === "MATERIAL"
+        ? itemSource
+        : "FG";
+
+    let itemName = "";
+    let uom = "";
+
+    if (normalizedItemSource === "FG") {
+      itemName = String(row.npdItemName || "").trim();
+      uom = String(row.npdUom || "").trim();
+    } else if (normalizedItemSource === "PHP") {
+      itemName = String(row.phpItemName || "").trim();
+      uom = "PCS";
+    } else if (normalizedItemSource === "PLATE") {
+      itemName = String(row.plateItemName || "").trim();
+      uom = "PCS";
+    } else if (normalizedItemSource === "MATERIAL") {
+      itemName = String(row.materialName || "").trim();
+      uom = String(row.materialUom || "").trim();
+    }
+
+    if (!itemName) {
+      itemName =
+        String(row.npdItemName || "").trim() ||
+        String(row.phpItemName || "").trim() ||
+        String(row.plateItemName || "").trim() ||
+        String(row.materialName || "").trim() ||
+        "Unknown Item";
+    }
+
+    if (!uom && normalizedItemSource !== "FG") {
+      uom = normalizedItemSource === "MATERIAL" ? String(row.materialUom || "").trim() : "PCS";
+    }
+
+    return {
+      id: row.id,
+      invoiceId: row.invoiceId,
+      loadingSlipId: row.loadingSlipId,
+      itemId: row.itemId,
+      itemSource: normalizedItemSource,
+      npdId: row.npdId,
+      itemName,
+      uom,
+      npdPartNo: String(row.npdPart || "").trim(),
+      qty: Number(row.qty || 0),
+      rate: Number(row.rate || 0),
+      amount: Number(row.amount || 0),
+      gstRate: Number(row.gstRate || 0),
+      cgst: Number(row.cgst || 0),
+      sgst: Number(row.sgst || 0),
+      igst: Number(row.igst || 0),
+    };
+  });
+
+  const loadingSlipIds = Array.from(
+    new Set(
+      itemLines
+        .map((line) => String(line.loadingSlipId || "").trim())
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const slipNos: string[] = [];
+  const truckNos: string[] = [];
+  const orderNos: string[] = [];
+  const orderDates: string[] = [];
+  const orderDetails: { poNumber: string; orderDate: string }[] = [];
+  const dispatchPlanIds: string[] = [];
+
+  if (loadingSlipIds.length) {
+    const [loadingSlipRows] = await db.query(
+      `
+        SELECT ls.id, ls.slipNo, ls.lines, tr.truckNo
+        FROM \`loading_slips\` ls
+        LEFT JOIN \`trucks\` tr ON tr.id = ls.truckId
+        WHERE ls.id IN (${loadingSlipIds.map(() => "?").join(",")})
+      `,
+      loadingSlipIds
+    );
+
+    for (const row of loadingSlipRows as any[]) {
+      const slipNo = String(row.slipNo || "").trim();
+      const truckNo = String(row.truckNo || "").trim();
+      if (slipNo && !slipNos.includes(slipNo)) slipNos.push(slipNo);
+      if (truckNo && !truckNos.includes(truckNo)) truckNos.push(truckNo);
+
+      let slipLines: any[] = [];
+      try {
+        if (Array.isArray(row.lines)) {
+          slipLines = row.lines;
+        } else if (typeof row.lines === "string" && row.lines.trim()) {
+          slipLines = JSON.parse(row.lines);
+        }
+      } catch {
+        slipLines = [];
+      }
+
+      for (const slipLine of slipLines) {
+        const dispatchPlanId = String(slipLine?.dispatchPlanId || "").trim();
+        if (dispatchPlanId && !dispatchPlanIds.includes(dispatchPlanId)) {
+          dispatchPlanIds.push(dispatchPlanId);
+        }
+      }
+    }
+  }
+
+  const [gatePassRows] = await db.query(
+    `
+      SELECT truckNo
+      FROM \`gate_passes\`
+      WHERE invoiceId = ?
+    `,
+    [invoiceId]
+  );
+  for (const row of gatePassRows as any[]) {
+    const truckNo = String(row.truckNo || "").trim();
+    if (truckNo && !truckNos.includes(truckNo)) truckNos.push(truckNo);
+  }
+
+  if (dispatchPlanIds.length) {
+    const [orderRows] = await db.query(
+      `
+        SELECT DISTINCT o.poNumber, o.orderDate
+        FROM \`dispatch_plans\` dp
+        INNER JOIN \`orders_schedule\` os ON os.id = dp.scheduleId
+        INNER JOIN \`orders\` o ON o.id = os.orderId
+        WHERE dp.id IN (${dispatchPlanIds.map(() => "?").join(",")})
+        ORDER BY o.orderDate, o.poNumber
+      `,
+      dispatchPlanIds
+    );
+
+    for (const row of orderRows as any[]) {
+      const poNumber = String(row.poNumber || "").trim();
+      const orderDate = String(row.orderDate || "").trim();
+      if (poNumber && !orderNos.includes(poNumber)) orderNos.push(poNumber);
+      if (orderDate && !orderDates.includes(orderDate)) orderDates.push(orderDate);
+      if (
+        poNumber &&
+        !orderDetails.some((detail) => detail.poNumber === poNumber && detail.orderDate === orderDate)
+      ) {
+        orderDetails.push({ poNumber, orderDate });
+      }
+    }
+  }
+
+  return {
+    invoiceRow: normalizedInvoiceRow,
+    companyRow,
+    itemLines,
+    dispatchDetails: {
+      loadingSlipNos: slipNos,
+      truckNos,
+      orderNos,
+      orderDates,
+      orderDetails,
+      transporter: String(invoiceRow.transporter || "").trim(),
+      destination: String(invoiceRow.destination || "").trim(),
+    },
+  };
+}
+
 // Routes
 const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings"];
+
+app.get("/api/tally-sync/pending-invoices", tallySyncSecretGuard, async (_req, res) => {
+  try {
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+    const rows = await fetchTallyPendingInvoices(db);
+    return res.json(rows);
+  } catch (error) {
+    console.error("[TALLY_SYNC_API] pending-invoices failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.get("/api/tally-sync/invoices/:id/context", tallySyncSecretGuard, async (req, res) => {
+  try {
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+    const invoiceId = String(req.params.id || "").trim();
+    if (!invoiceId) return res.status(400).json({ error: "Invoice ID is required." });
+
+    const context = await fetchTallyInvoiceContext(db, invoiceId);
+    if (!context) return res.status(404).json({ error: "Invoice not found." });
+
+    return res.json(context);
+  } catch (error) {
+    console.error("[TALLY_SYNC_API] invoice context failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/tally-sync/invoices/:id/status", tallySyncSecretGuard, async (req, res) => {
+  try {
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+    const invoiceId = String(req.params.id || "").trim();
+    if (!invoiceId) return res.status(400).json({ error: "Invoice ID is required." });
+
+    const success = Boolean(req.body?.success);
+    const remark = String(req.body?.remark || "").trim();
+    const tallyBy = String(req.body?.tallyBy || "system").trim();
+    const tallyInvNo = req.body?.tallyInvNo ? String(req.body.tallyInvNo).trim() : null;
+    const tallyInvDate = req.body?.tallyInvDate ? String(req.body.tallyInvDate).trim() : null;
+    const tallyInvId = req.body?.tallyInvId ? String(req.body.tallyInvId).trim() : null;
+
+    if (success) {
+      await db.query(
+        `
+          UPDATE \`invoices\`
+          SET
+            \`tallyTimestamp\` = ?,
+            \`tallyBy\` = ?,
+            \`tallySyncRemark\` = ?,
+            \`tallyInvNo\` = ?,
+            \`tallyInvDate\` = ?,
+            \`tallyInvId\` = ?
+          WHERE \`id\` = ?
+        `,
+        [
+          new Date().toISOString().slice(0, 19).replace("T", " "),
+          tallyBy,
+          remark,
+          tallyInvNo,
+          tallyInvDate,
+          tallyInvId,
+          invoiceId,
+        ]
+      );
+    } else {
+      await db.query(
+        `
+          UPDATE \`invoices\`
+          SET \`tallySyncRemark\` = ?
+          WHERE \`id\` = ?
+        `,
+        [remark, invoiceId]
+      );
+    }
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("[TALLY_SYNC_API] invoice status update failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
 
 app.get("/api/legacy-items", async (req, res) => {
   try {

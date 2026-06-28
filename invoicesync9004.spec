@@ -3,10 +3,8 @@ from PyInstaller.utils.hooks import collect_data_files
 from PyInstaller.utils.hooks import collect_submodules
 
 datas = []
-hiddenimports = ['mysql.connector', 'mysql.connector.plugins.mysql_native_password']
+hiddenimports = ['mysql.connector.locales.eng.client_error']
 datas += collect_data_files('mysql.connector')
-datas += collect_data_files('mysql.connector.locales')
-hiddenimports += collect_submodules('mysql.connector.plugins')
 hiddenimports += collect_submodules('mysql.connector.locales')
 
 
@@ -28,20 +26,26 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='invoicesync9004',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='invoicesync9004',
 )

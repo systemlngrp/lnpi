@@ -61,3 +61,6 @@ env/
 *.yml
 pythoncode/Log/invoice_sync_logs.xlsx
 dist/Log/invoice_sync_logs.xlsx
+dist/Log/tally_debug/stock_item_no_unit_20260627_163100_L-400_X_B-400_X_H-260MM_OD_5PLY_SHIPPER_PMTR00024.xml
+dist/Log/tally_debug/stock_item_no_unit_20260627_163101_MASTER_CARTON_BULB_LB_12-15W_420X350X260_.xml
+dist/Log/tally_debug/stock_item_no_unit_20260627_163102_CBB_5P_GDB_200G_48G_20P_REV00_-_2010764_-_U_PLATE.xml
