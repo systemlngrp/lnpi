@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import traceback
 from functools import cmp_to_key
 import mysql.connector
 import requests
@@ -169,6 +170,15 @@ def get_log_workbook_path():
     log_dir = os.path.join(get_runtime_base_dir(), LOG_FOLDER_NAME)
     os.makedirs(log_dir, exist_ok=True)
     return os.path.join(log_dir, LOG_WORKBOOK_NAME)
+
+
+def pause_before_exit():
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        input("Press Enter to close...")
+    except EOFError:
+        pass
 
 
 def get_log_dir():
@@ -2729,7 +2739,10 @@ if __name__ == "__main__":
             "allowed from this machine, and whether the server is accepting "
             "connections from your current IP."
         )
+        pause_before_exit()
         sys.exit(1)
     except Exception as exc:
         print(f"Unexpected error: {exc}")
-        raise
+        traceback.print_exc()
+        pause_before_exit()
+        sys.exit(1)
