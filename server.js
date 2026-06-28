@@ -1873,7 +1873,7 @@ async function migrateLinkedTableToNpd(db, database, table, itemToNpdId) {
   console.log(`[DB] ${table}: migrated ${migrated} item links to NPD, unmatched ${unmatched}`);
 }
 async function migrateMaterialInLinesToNpd(db, itemToNpdId) {
-  const [rows] = await db.query("SELECT id, lines FROM `material_in`");
+  const [rows] = await db.query("SELECT `id`, `lines` FROM `material_in`");
   let migrated = 0;
   let unmatched = 0;
   for (const row of rows) {

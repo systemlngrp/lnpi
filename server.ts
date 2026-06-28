@@ -2184,7 +2184,7 @@ async function migrateLinkedTableToNpd(db: mysql.Pool, database: string, table: 
 }
 
 async function migrateMaterialInLinesToNpd(db: mysql.Pool, itemToNpdId: Map<string, string>) {
-  const [rows] = await db.query("SELECT id, lines FROM `material_in`");
+  const [rows] = await db.query("SELECT `id`, `lines` FROM `material_in`");
   let migrated = 0;
   let unmatched = 0;
 
