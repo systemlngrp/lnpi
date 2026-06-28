@@ -4269,7 +4269,6 @@ const createHandlers = (tableName) => {
               COALESCE(
                 NULLIF(TRIM(i.name), ''),
                 NULLIF(TRIM(n.itemName), ''),
-                NULLIF(TRIM(n.name), ''),
                 'UNKNOWN'
               ) AS resolvedItemName
             FROM \`invoice_line_items\` ili

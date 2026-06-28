@@ -4754,7 +4754,6 @@ const createHandlers = (tableName: string) => {
                 NULLIF(TRIM(CASE WHEN COALESCE(NULLIF(TRIM(ili.itemSource), ''), 'FG') = 'PHP' THEN pm.itemName END), ''),
                 NULLIF(TRIM(CASE WHEN COALESCE(NULLIF(TRIM(ili.itemSource), ''), 'FG') = 'PLATE' THEN plm.itemName END), ''),
                 NULLIF(TRIM(n.itemName), ''),
-                NULLIF(TRIM(n.name), ''),
                 NULLIF(TRIM(i.name), ''),
                 'UNKNOWN'
               ) AS resolvedItemName
