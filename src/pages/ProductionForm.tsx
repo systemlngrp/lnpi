@@ -23,6 +23,7 @@ import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns"
 import { fetchNpdItems } from "../lib/npdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getProductionMatchingFields } from "../lib/productionMatching";
+import { buildProducedQtyByScheduleId } from "../lib/productionScheduleQty";
 
 const getJobMasterEntityName = (source: "PHP" | "PLATE") =>
   source === "PHP" ? "php_job_master" : "plate_job_master";
@@ -211,17 +212,10 @@ export function ProductionForm() {
       });
   }, []);
 
-  const producedQtyByScheduleId = useMemo(() => {
-    const map = new Map<string, number>();
-    productions
-      .filter((production) => production.status !== "Cancelled")
-      .forEach((production) => {
-        const scheduleId = String(production.scheduleId || "").trim();
-        if (!scheduleId) return;
-        map.set(scheduleId, (map.get(scheduleId) || 0) + Number(production.prodFromFFG || 0));
-      });
-    return map;
-  }, [productions]);
+  const producedQtyByScheduleId = useMemo(
+    () => buildProducedQtyByScheduleId(productions, phpJobMaster, plateJobMaster),
+    [phpJobMaster, plateJobMaster, productions]
+  );
 
   const pendingSchedules = useMemo(
     () =>

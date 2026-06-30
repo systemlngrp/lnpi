@@ -10,6 +10,7 @@ import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/serial";
 import { normalizeOrderItemSource } from "../lib/orderItems";
+import { buildProducedQtyByScheduleId } from "../lib/productionScheduleQty";
 
 function getPendingProductionQty(schedule: OrderSchedule, producedQty: number) {
   return Math.max(
@@ -37,6 +38,8 @@ export function PendingProduction() {
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [productions] = useData<Production>("productions", []);
+  const [phpJobs] = useData<Production>("php_job_master", []);
+  const [plateJobs] = useData<Production>("plate_job_master", []);
   const [orders] = useData<Order>("orders", []);
   const { resolveOrderItem } = useOrderItemCatalog();
   const [companies] = useData<Company>("companies", []);
@@ -54,17 +57,10 @@ export function PendingProduction() {
     return cutoff;
   }, []);
 
-  const producedQtyByScheduleId = useMemo(() => {
-    const map = new Map<string, number>();
-    productions
-      .filter((production) => production.status !== "Cancelled")
-      .forEach((production) => {
-        const scheduleId = String(production.scheduleId || "").trim();
-        if (!scheduleId) return;
-        map.set(scheduleId, (map.get(scheduleId) || 0) + Number(production.prodFromFFG || 0));
-      });
-    return map;
-  }, [productions]);
+  const producedQtyByScheduleId = useMemo(
+    () => buildProducedQtyByScheduleId(productions, phpJobs, plateJobs),
+    [plateJobs, phpJobs, productions]
+  );
 
   const pendingRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
