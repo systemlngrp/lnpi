@@ -231,7 +231,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           supplierMap.get(order.supplierId) || "Unknown",
           itemsSummary,
           Number(order.totalQty || 0).toLocaleString(),
-          Number(order.grandTotal ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
           ...(mode === "rejected" ? [order.rejectedRemarks || ""] : []),
           order.status,
         ];
@@ -276,7 +276,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       doc.text(`Required Date: ${formatDate(order.requiredDate)}`, 140, y);
       y += 6;
       doc.text(`Total Qty: ${Number(order.totalQty || 0).toLocaleString()}`, 14, y);
-      doc.text(`Grand Total: Rs. ${Number(order.grandTotal ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, y);
+      doc.text(`Grand Total: Rs. ${Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, y);
       y += 8;
       if (order.rejectedRemarks?.trim()) {
         doc.setFont("helvetica", "normal");
@@ -321,11 +321,11 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       });
 
       const finalY = (doc as any).lastAutoTable?.finalY || y;
-      const taxableAmount = Number(order.taxableAmount ?? order.totalAmount || 0);
+      const taxableAmount = Number(order.taxableAmount ?? order.totalAmount ?? 0);
       const cgst = Number(order.cgst || 0);
       const sgst = Number(order.sgst || 0);
       const igst = Number(order.igst || 0);
-      const grandTotal = Number(order.grandTotal ?? order.totalAmount || 0);
+      const grandTotal = Number(order.grandTotal ?? order.totalAmount ?? 0);
       const summaryY = finalY + 8;
       doc.setFont("helvetica", "bold");
       doc.text("Summary", 140, summaryY);
@@ -433,7 +433,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                         </ul>
                       </td>
                       <td className="px-4 py-4 text-sm text-black text-right font-bold">{Number(order.totalQty || 0).toLocaleString()}</td>
-                      <td className="px-4 py-4 text-sm text-black text-right font-mono font-bold">₹{Number(order.grandTotal ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-4 text-sm text-black text-right font-mono font-bold">₹{Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       {mode === "rejected" ? (
                         <td className="px-4 py-4 text-sm text-red-700 italic">{order.rejectedRemarks || ""}</td>
                       ) : null}
@@ -557,8 +557,8 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                 ))}
                                 <tr className="divide-x divide-black bg-slate-100 text-[10px] font-black">
                                   <td className="px-3 py-2" colSpan={9}>Summary</td>
-                                  <td className="px-3 py-2 text-right">₹{Number(order.taxableAmount ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                  <td className="px-3 py-2 text-right">₹{Number(order.grandTotal ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                  <td className="px-3 py-2 text-right">₹{Number(order.taxableAmount ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                  <td className="px-3 py-2 text-right">₹{Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 </tr>
                               </tbody>
                             </table>
