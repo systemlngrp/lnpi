@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import socket
 import traceback
 from functools import cmp_to_key
 import mysql.connector
@@ -11,6 +12,8 @@ import xml.sax.saxutils as saxutils
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 from openpyxl import Workbook, load_workbook
+from urllib.parse import urlparse
+from urllib3.util import connection as urllib3_connection
 
 
 def load_runtime_env():
@@ -89,6 +92,8 @@ TALLY_SYNC_API_URL = os.getenv(
     "https://darkred-lobster-409686.hostingersite.com",
 ).strip().rstrip("/")
 TALLY_SYNC_API_SECRET = os.getenv("TALLY_SYNC_API_SECRET", "!Office1@").strip()
+FORCE_IPV4_HTTP = os.getenv("TALLY_SYNC_FORCE_IPV4", "1").strip() != "0"
+_HTTP_IPV4_PATCHED = False
 
 
 
@@ -100,22 +105,56 @@ def use_tally_sync_api():
     return bool(TALLY_SYNC_API_URL and TALLY_SYNC_API_SECRET)
 
 
+def ensure_ipv4_http():
+    global _HTTP_IPV4_PATCHED
+    if _HTTP_IPV4_PATCHED or not FORCE_IPV4_HTTP:
+        return
+
+    # Prefer IPv4 for packaged builds to avoid Windows socket-policy issues
+    # seen on some machines when urllib/requests chooses IPv6 first.
+    urllib3_connection.allowed_gai_family = lambda: socket.AF_INET
+    _HTTP_IPV4_PATCHED = True
+
+
+def build_connectivity_error(url, exc):
+    parsed = urlparse(url)
+    host = parsed.hostname or url
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    message = str(exc)
+
+    if "WinError 10013" in message:
+        return (
+            f"Could not open HTTPS connection to {host}:{port}. "
+            "Windows is refusing socket access for this EXE process "
+            "(WinError 10013). "
+            "Please allow this EXE in Windows Security/antivirus, or run "
+            "the Python script directly if Python is already able to access "
+            "the same URL."
+        )
+
+    return f"Could not connect to {host}:{port}. Details: {message}"
+
+
 def call_tally_sync_api(method, path, payload=None, params=None):
     if not use_tally_sync_api():
         raise RuntimeError("Tally Sync API mode is not configured")
 
+    ensure_ipv4_http()
     url = f"{TALLY_SYNC_API_URL}{path}"
-    response = requests.request(
-        method=method.upper(),
-        url=url,
-        json=payload,
-        params=params,
-        headers={
-            "x-tally-sync-secret": TALLY_SYNC_API_SECRET,
-            "Content-Type": "application/json",
-        },
-        timeout=(TALLY_CONNECT_TIMEOUT, max(TALLY_READ_TIMEOUT, 30)),
-    )
+    try:
+        response = requests.request(
+            method=method.upper(),
+            url=url,
+            json=payload,
+            params=params,
+            headers={
+                "x-tally-sync-secret": TALLY_SYNC_API_SECRET,
+                "Content-Type": "application/json",
+            },
+            timeout=(TALLY_CONNECT_TIMEOUT, max(TALLY_READ_TIMEOUT, 30)),
+        )
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(build_connectivity_error(url, exc)) from exc
 
     try:
         body = response.json()

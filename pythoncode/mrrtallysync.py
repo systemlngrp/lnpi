@@ -5,6 +5,7 @@ import mysql.connector
 import requests
 from datetime import datetime, date
 import xml.sax.saxutils as saxutils
+import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 
 
@@ -33,19 +34,26 @@ if DB_HOST in ('.', 'localhost'):
 
 DB_CONFIG = {
     "host": DB_HOST,
-    "user": os.getenv('DB_USER', 'u380633007_Inpidata'),
+    "user": os.getenv('DB_USER', 'u380633007_lnpidata'),
     "password": os.getenv('DB_PASSWORD', '!Office1@'),
-    "database": os.getenv('DB_NAME', 'u380633007_Inpidata'),
+    "database": os.getenv('DB_NAME', 'u380633007_lnpidata'),
     "port": int(os.getenv('DB_PORT', '3306'))
 }
 
 # Tally Config from Environment
-TALLY_URL = os.getenv('TALLY_URL', 'http://localhost:9000').strip()
+TALLY_URL = os.getenv('TALLY_URL', 'http://localhost:9004').strip()
 TALLY_COMPANY_NAME = os.getenv('TALLY_COMPANY_NAME', 'Laxmi Narayan Packaging Industries')
+TALLY_COMPANY_FALLBACKS = []
+for company_name in (TALLY_COMPANY_NAME, os.getenv('TALLY_COMPANY_ALT_NAME', 'LNPI')):
+    cleaned_name = (company_name or "").strip()
+    if cleaned_name and cleaned_name not in TALLY_COMPANY_FALLBACKS:
+        TALLY_COMPANY_FALLBACKS.append(cleaned_name)
 VOUCHER_TYPE_NAME = os.getenv('VOUCHER_TYPE_NAME', 'Purchase')
 PURCHASE_LEDGER_NAME = os.getenv('PURCHASE_LEDGER_NAME', 'Purchase')
-INSURANCE_LEDGER_NAME = os.getenv('INSURANCE_LEDGER_NAME', 'Insurance Charges')
-OTHER_CHARGES_LEDGER_NAME = os.getenv('OTHER_CHARGES_LEDGER_NAME', 'Other Charges')
+PURCHASE_PAPER_LEDGER_NAME = os.getenv('PURCHASE_PAPER_LEDGER_NAME', 'PURCHASE PAPER')
+REEL_STOCK_GROUP_NAME = os.getenv('REEL_STOCK_GROUP_NAME', 'PAPER IN REEL FORM')
+INSURANCE_LEDGER_NAME = os.getenv('INSURANCE_LEDGER_NAME', 'INSURANCE & OTHER EXP. ON PURCHASE')
+OTHER_CHARGES_LEDGER_NAME = os.getenv('OTHER_CHARGES_LEDGER_NAME', 'INSURANCE & OTHER EXP. ON PURCHASE')
 CGST_LEDGER_NAME = os.getenv('CGST_LEDGER_NAME', 'Input CGST')
 SGST_LEDGER_NAME = os.getenv('SGST_LEDGER_NAME', 'Input SGST')
 IGST_LEDGER_NAME = os.getenv('IGST_LEDGER_NAME', 'Input IGST')
@@ -151,8 +159,50 @@ def normalize_uom(value):
     return TALLY_UOM_ALIASES.get(key, normalized)
 
 
+def get_mrr_reference(mrr_row):
+    """
+    Return the best available MRR reference for logging.
+    """
+    for key in ("mrrNo", "mrrNumber", "transactionNo", "documentNo", "id"):
+        value = mrr_row.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
 def get_db_connection():
     return mysql.connector.connect(**DB_CONFIG)
+
+
+def get_purchase_ledger_name(material_type):
+    """
+    Use a dedicated purchase ledger for reel material lines.
+    """
+    if str(material_type or "").strip().upper() == "REEL":
+        return PURCHASE_PAPER_LEDGER_NAME
+    return PURCHASE_LEDGER_NAME
+
+
+def is_reel_type(material_type):
+    return str(material_type or "").strip().upper() == "REEL"
+
+
+def get_tally_uom_candidates(uom):
+    """
+    Return preferred Tally UOM candidates, with KG -> KGS fallback.
+    """
+    normalized = normalize_uom(uom) or "KG"
+    candidates = [normalized]
+
+    if normalized.upper() == "KG":
+        candidates.append("KGS")
+
+    unique_candidates = []
+    for candidate in candidates:
+        cleaned = str(candidate or "").strip()
+        if cleaned and cleaned not in unique_candidates:
+            unique_candidates.append(cleaned)
+    return unique_candidates
 
 
 # =====================================================
@@ -161,14 +211,17 @@ def get_db_connection():
 
 def get_pending_mrr_rows(conn):
     """
-    Fetch all material_in records where tallyTimestamp is empty.
+    Fetch only unsynced material_in records that are ready for Tally.
     """
 
     sql = """
         SELECT *
         FROM material_in
-        WHERE tallyTimestamp IS NULL
-           OR tallyTimestamp = ''
+        WHERE status = 'Pending Tally'
+          AND (
+                tallyTimestamp IS NULL
+             OR tallyTimestamp = ''
+          )
     """
 
     cursor = conn.cursor(dictionary=True)
@@ -233,6 +286,7 @@ def get_material_lines(conn, mrr_row):
         return []
 
     processed_lines = []
+    material_in_type = str(mrr_row.get("mrrType") or "").strip()
     cursor = conn.cursor(dictionary=True)
 
     for line in lines:
@@ -242,18 +296,21 @@ def get_material_lines(conn, mrr_row):
             continue
 
         # Look up in materials table first
-        cursor.execute("SELECT name FROM materials WHERE id = %s LIMIT 1", (item_id,))
+        cursor.execute("SELECT name, erpCode FROM materials WHERE id = %s LIMIT 1", (item_id,))
         m_row = cursor.fetchone()
         
         item_name = ""
+        item_erp = str(line.get("erpCode") or "").strip()
         if m_row:
             item_name = m_row.get("name")
+            item_erp = str(m_row.get("erpCode") or item_erp).strip()
         else:
             # Look up in npd table if not found in materials
-            cursor.execute("SELECT itemName as name FROM npd WHERE id = %s LIMIT 1", (item_id,))
+            cursor.execute("SELECT itemName as name, erp FROM npd WHERE id = %s LIMIT 1", (item_id,))
             n_row = cursor.fetchone()
             if n_row:
                 item_name = n_row.get("name")
+                item_erp = str(n_row.get("erp") or item_erp).strip()
 
         # Fetch packing slips for this specific line
         packing_slips = []
@@ -269,6 +326,8 @@ def get_material_lines(conn, mrr_row):
             "lineId": line_id,
             "itemId": item_id,
             "itemName": item_name or "Unknown Item",
+            "itemErp": item_erp,
+            "mrrType": material_in_type,
             "qty": get_first_numeric(line, ["actualQty", "invoiceQty", "qty"]),
             "uom": normalize_uom(line.get("uom")),
             "rate": get_first_numeric(line, ["rate", "invoiceRate", "poRate"]),
@@ -307,7 +366,7 @@ def validate_item_lines(item_lines):
 # CREATE TALLY PURCHASE VOUCHER XML
 # =====================================================
 
-def create_purchase_voucher_xml(mrr, supplier_name, item_lines):
+def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=None):
     """
     Create Tally XML for Purchase Voucher.
     """
@@ -335,6 +394,8 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines):
         rate = to_float(line.get("rate"))
         cost = to_float(line.get("cost"))
         line_amount = to_float(line.get("amount"))
+        material_type = line.get("mrrType") or ""
+        purchase_ledger_name = get_purchase_ledger_name(material_type)
         packing_slips = line.get("packingSlips") or []
         qty_text = f"{qty:g} {esc(uom)}".strip()
         rate_text = f"{rate:g}/{esc(uom)}" if uom else f"{rate:g}"
@@ -383,7 +444,7 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines):
                             <AMOUNT>-{amount:.2f}</AMOUNT>
 
                             <ACCOUNTINGALLOCATIONS.LIST>
-                                <LEDGERNAME>{esc(PURCHASE_LEDGER_NAME)}</LEDGERNAME>
+                                <LEDGERNAME>{esc(purchase_ledger_name)}</LEDGERNAME>
                                 <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
                                 <AMOUNT>-{amount:.2f}</AMOUNT>
                             </ACCOUNTINGALLOCATIONS.LIST>
@@ -467,6 +528,8 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines):
                         </LEDGERENTRIES.LIST>
         """
 
+    current_company_name = company_name or TALLY_COMPANY_NAME
+
     xml = f"""
 <ENVELOPE>
     <HEADER>
@@ -478,7 +541,7 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines):
             <REQUESTDESC>
                 <REPORTNAME>Vouchers</REPORTNAME>
                 <STATICVARIABLES>
-                    <SVCURRENTCOMPANY>{esc(TALLY_COMPANY_NAME)}</SVCURRENTCOMPANY>
+                    <SVCURRENTCOMPANY>{esc(current_company_name)}</SVCURRENTCOMPANY>
                 </STATICVARIABLES>
             </REQUESTDESC>
 
@@ -532,6 +595,145 @@ def post_to_tally(xml_data):
     return response.text
 
 
+def query_tally_stock_item(item_name, company_name):
+    """
+    Check whether a stock item already exists in Tally for the selected company.
+    """
+    if not item_name:
+        return False
+
+    xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Object</TYPE>
+        <SUBTYPE>Stock Item</SUBTYPE>
+        <ID TYPE="Name">{esc(item_name)}</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVCURRENTCOMPANY>{esc(company_name)}</SVCURRENTCOMPANY>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+                <FETCH>PartNo</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>
+"""
+
+    response_text = post_to_tally(xml)
+    if not response_text:
+        return False
+
+    try:
+        root = ET.fromstring(response_text)
+        for stock_item in root.findall(".//STOCKITEM"):
+            name_elem = stock_item.find("NAME")
+            name_attr = stock_item.get("NAME")
+            found_name = (
+                name_elem.text.strip()
+                if name_elem is not None and name_elem.text
+                else (name_attr.strip() if name_attr else "")
+            )
+            if found_name.upper() == item_name.strip().upper():
+                return True
+    except Exception:
+        pass
+
+    return f"<NAME>{esc(item_name)}</NAME>" in response_text or f'NAME="{esc(item_name)}"' in response_text
+
+
+def create_tally_stock_item(item_name, item_erp, uom, company_name):
+    """
+    Create a reel stock item in Tally under the configured stock group.
+    """
+    candidate_uoms = get_tally_uom_candidates(uom)
+    last_response_text = ""
+
+    for base_unit in candidate_uoms:
+        xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Import Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <IMPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>All Masters</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVCURRENTCOMPANY>{esc(company_name)}</SVCURRENTCOMPANY>
+                </STATICVARIABLES>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE xmlns:UDF="TallyUDF">
+                    <STOCKITEM NAME="{esc(item_name)}" ACTION="Create">
+                        <NAME.LIST>
+                            <NAME>{esc(item_name)}</NAME>
+                        </NAME.LIST>
+                        <PARENT>{esc(REEL_STOCK_GROUP_NAME)}</PARENT>
+                        <PARTNO>{esc(item_erp)}</PARTNO>
+                        <BASEUNITS>{esc(base_unit)}</BASEUNITS>
+                    </STOCKITEM>
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </IMPORTDATA>
+    </BODY>
+</ENVELOPE>
+"""
+
+        response_text = post_to_tally(xml)
+        last_response_text = response_text
+
+        if is_tally_success(response_text):
+            return True, response_text, base_unit
+
+        error_detail = extract_tally_error(response_text).upper()
+        if base_unit.upper() == "KG" and "KG" in error_detail and ("DOES NOT EXIST" in error_detail or "NOT FOUND" in error_detail):
+            print(f"Tally UOM KG not found for {item_name}. Retrying with KGS.")
+            continue
+
+        return False, response_text, base_unit
+
+    return False, last_response_text, candidate_uoms[-1]
+
+
+def ensure_reel_stock_items(item_lines, company_name):
+    """
+    Create missing reel stock items in Tally before posting the voucher.
+    """
+    for line in item_lines:
+        if not is_reel_type(line.get("mrrType")):
+            continue
+
+        item_name = (line.get("itemName") or "").strip()
+        item_erp = (line.get("itemErp") or "").strip()
+        uom = (line.get("uom") or "").strip()
+
+        if not item_name:
+            return False, "Reel stock item name missing"
+        if not item_erp:
+            return False, f"{item_name}: item ERP missing"
+
+        if query_tally_stock_item(item_name, company_name):
+            continue
+
+        print(
+            f"Creating missing Tally stock item: {item_name} | "
+            f"ERP={item_erp} | Group={REEL_STOCK_GROUP_NAME}"
+        )
+        created, response_text, used_uom = create_tally_stock_item(item_name, item_erp, uom, company_name)
+        if not created:
+            return False, extract_tally_error(response_text)
+        line["uom"] = used_uom
+
+    return True, ""
+
+
 # =====================================================
 # CHECK TALLY RESPONSE
 # =====================================================
@@ -569,6 +771,15 @@ def extract_tally_error(response_text):
         return "Tally returned an exception. Check response for details."
 
     return response_text[:200]
+
+
+def is_company_selection_error(response_text):
+    """
+    Check whether Tally rejected the selected company name.
+    """
+    if not response_text:
+        return False
+    return "SVCurrentCompany" in response_text
 
 
 # =====================================================
@@ -627,17 +838,18 @@ def sync_mrr_to_tally():
 
         for mrr in pending_mrr_rows:
             material_in_id = mrr.get("id")
-
-            print(f"\nProcessing Material In ID: {material_in_id}")
+            mrr_reference = get_mrr_reference(mrr)
 
             try:
-                # Only sync if status is Pending Tally
-                if mrr.get("status") != "Pending Tally":
-                    print(f"Skipping: Status is {mrr.get('status')}, not Pending Tally")
-                    continue
-
                 supplier_id = mrr.get("supplierId")
                 supplier_name = get_supplier_name(conn, supplier_id)
+                supplier_log_name = supplier_name or "Unknown Supplier"
+
+                print(
+                    f"\nProcessing Material In ID: {material_in_id} | "
+                    f"MRR No: {mrr_reference} | "
+                    f"Supplier: {supplier_log_name}"
+                )
 
                 if not supplier_name:
                     remark = "Supplier not found in suppliers table"
@@ -661,38 +873,65 @@ def sync_mrr_to_tally():
                     continue
 
                 for line in item_lines:
+                    purchase_ledger_name = get_purchase_ledger_name(line.get("mrrType"))
                     print(
                         "Line -> "
                         f"item={line.get('itemName')}, "
+                        f"erp={line.get('itemErp')}, "
+                        f"mrrType={line.get('mrrType')}, "
+                        f"ledger={purchase_ledger_name}, "
                         f"qty={line.get('qty')}, "
                         f"uom={line.get('uom')}, "
                         f"rate={line.get('rate')}, "
                         f"amount={line.get('amount')}"
                     )
 
-                tally_xml = create_purchase_voucher_xml(
-                    mrr=mrr,
-                    supplier_name=supplier_name,
-                    item_lines=item_lines
-                )
+                tally_response = ""
+                company_used = ""
 
-                if DEBUG_TALLY_XML:
-                    print("Generated Tally XML:")
-                    print(tally_xml)
+                for company_name in TALLY_COMPANY_FALLBACKS:
+                    company_used = company_name
+                    stock_items_ready, stock_item_error = ensure_reel_stock_items(item_lines, company_name)
+                    if not stock_items_ready:
+                        tally_response = stock_item_error
+                        if "SVCurrentCompany" in stock_item_error:
+                            continue
+                        break
 
-                tally_response = post_to_tally(tally_xml)
+                    tally_xml = create_purchase_voucher_xml(
+                        mrr=mrr,
+                        supplier_name=supplier_name,
+                        item_lines=item_lines,
+                        company_name=company_name
+                    )
+
+                    if DEBUG_TALLY_XML:
+                        print(f"Generated Tally XML for company: {company_name}")
+                        print(tally_xml)
+
+                    print(f"Posting to Tally company: {company_name}")
+                    tally_response = post_to_tally(tally_xml)
+
+                    if is_tally_success(tally_response):
+                        break
+
+                    if not is_company_selection_error(tally_response):
+                        break
 
                 print("Tally Response:")
                 print(tally_response)
 
                 if is_tally_success(tally_response):
-                    remark = "Posted successfully to Tally"
+                    remark = f"Posted successfully to Tally ({company_used})"
                     update_mrr_tally_status(conn, material_in_id, True, remark)
-                    print(remark)
+                    print(f"{remark} | MRR No: {mrr_reference} | Supplier: {supplier_name}")
                 else:
                     error_detail = extract_tally_error(tally_response)
                     update_mrr_tally_status(conn, material_in_id, False, error_detail)
-                    print(f"Posting failed: {error_detail}")
+                    print(
+                        f"Posting failed: {error_detail} | "
+                        f"MRR No: {mrr_reference} | Supplier: {supplier_name}"
+                    )
 
             except Exception as e:
                 error_message = str(e)
@@ -702,7 +941,10 @@ def sync_mrr_to_tally():
                     False,
                     error_message[:1000]
                 )
-                print(f"Error in Material In ID {material_in_id}: {error_message}")
+                print(
+                    f"Error in Material In ID {material_in_id} | "
+                    f"MRR No: {mrr_reference}: {error_message}"
+                )
 
     finally:
         conn.close()

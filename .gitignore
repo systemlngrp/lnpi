@@ -7,6 +7,8 @@ pnpm-debug.log*
 package-lock.json
 .npm/
 .npm-cache/
+.py
+.exe
 
 # Build output
 
@@ -65,3 +67,4 @@ dist/Log/tally_debug/stock_item_no_unit_20260627_163100_L-400_X_B-400_X_H-260MM_
 dist/Log/tally_debug/stock_item_no_unit_20260627_163101_MASTER_CARTON_BULB_LB_12-15W_420X350X260_.xml
 dist/Log/tally_debug/stock_item_no_unit_20260627_163102_CBB_5P_GDB_200G_48G_20P_REV00_-_2010764_-_U_PLATE.xml
 allow_invoice_sync_outbound.ps1
+dist/invoicesync9004/InvoiceTallySync.exe
