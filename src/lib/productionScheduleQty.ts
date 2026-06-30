@@ -19,8 +19,8 @@ function buildLinkedScheduleMap(rows: Production[]) {
 }
 
 function hasFilledFfgValue(production: Production) {
-  const value = production.prodFromFFG;
-  return !(value === null || value === undefined || String(value) === "");
+  const value = Number(production.prodFromFFG);
+  return Number.isFinite(value) && value > 0;
 }
 
 export function buildScheduleConsumptionByScheduleId(
