@@ -253,8 +253,8 @@ export function ProductionForm() {
   const selectedScheduleActualProducedQty = selectedSchedule
     ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.actualProducedQty || 0)
     : 0;
-  const selectedSchedulePlannedWithoutFfgQty = selectedSchedule
-    ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.plannedWithoutFfgQty || 0)
+  const selectedSchedulePlannedQty = selectedSchedule
+    ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.plannedQty || 0)
     : 0;
   const selectedScheduleConsumedQty = selectedSchedule
     ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.effectiveConsumedQty || 0)
@@ -794,8 +794,8 @@ export function ProductionForm() {
               <InfoTile label="ERP Code" value={selectedOrder.erpCode || "-"} />
               <InfoTile label="Schedule Date" value={formatDate(selectedSchedule.scheduledDate)} />
               <InfoTile label="Scheduled Qty" value={`${selectedSchedule.qty || 0} ${selectedItem?.uom || ""}`} />
-              <InfoTile label="Produced Qty" value={`${selectedScheduleActualProducedQty} ${selectedItem?.uom || ""}`} />
-              <InfoTile label="Planned W/O FFG" value={`${selectedSchedulePlannedWithoutFfgQty} ${selectedItem?.uom || ""}`} />
+              <InfoTile label="Planned Qty" value={`${selectedSchedulePlannedQty} ${selectedItem?.uom || ""}`} />
+              <InfoTile label="Actual FFG" value={`${selectedScheduleActualProducedQty} ${selectedItem?.uom || ""}`} />
               <InfoTile label="Cancelled Qty" value={`${selectedSchedule.canceledQty || 0} ${selectedItem?.uom || ""}`} />
               <InfoTile label="Pending Qty" value={`${pendingQty} ${selectedItem?.uom || ""}`} />
             </div>

@@ -85,16 +85,16 @@ export function UpcomingScheduledOrders() {
           const order = orders.find((row) => row.id === schedule.orderId);
           const item = resolveOrderItem(order);
           const company = companies.find((row) => row.id === order?.companyId);
+          const plannedQty = Number(consumptionByScheduleId.get(schedule.id)?.plannedQty || 0);
           const actualProducedQty = Number(consumptionByScheduleId.get(schedule.id)?.actualProducedQty || 0);
-          const plannedWithoutFfgQty = Number(consumptionByScheduleId.get(schedule.id)?.plannedWithoutFfgQty || 0);
           const consumedQty = Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0);
           return {
             schedule,
             order,
             item,
             company,
+            plannedQty,
             actualProducedQty,
-            plannedWithoutFfgQty,
             pendingQty: getPendingProductionQty(schedule, consumedQty),
           };
         })
@@ -172,8 +172,8 @@ export function UpcomingScheduledOrders() {
               <th className="px-3 py-2 border border-black">Company</th>
               <th className="px-3 py-2 border border-black">Item</th>
               <th className="px-3 py-2 border border-black">Scheduled Qty</th>
-              <th className="px-3 py-2 border border-black">Produced Qty</th>
-              <th className="px-3 py-2 border border-black">Planned W/O FFG</th>
+              <th className="px-3 py-2 border border-black">Planned Qty</th>
+              <th className="px-3 py-2 border border-black">Actual FFG</th>
               <th className="px-3 py-2 border border-black">Canceled Qty</th>
               <th className="px-3 py-2 border border-black text-indigo-700">Pending Qty</th>
               <th className="px-3 py-2 border border-black w-40">Cancel Qty</th>
@@ -188,15 +188,15 @@ export function UpcomingScheduledOrders() {
                 </td>
               </tr>
             ) : (
-              upcomingRows.map(({ schedule, order, item, company, pendingQty, actualProducedQty, plannedWithoutFfgQty }) => (
+              upcomingRows.map(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty }) => (
                 <tr key={schedule.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 border border-black font-medium">{order?.orderNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap font-bold text-indigo-700">{formatDate(schedule.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>
                   <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
                   <td className="px-3 py-2 border border-black text-right">{schedule.qty || 0}</td>
+                  <td className="px-3 py-2 border border-black text-right">{plannedQty}</td>
                   <td className="px-3 py-2 border border-black text-right">{actualProducedQty}</td>
-                  <td className="px-3 py-2 border border-black text-right">{plannedWithoutFfgQty}</td>
                   <td className="px-3 py-2 border border-black text-right">{schedule.canceledQty || 0}</td>
                   <td className="px-3 py-2 border border-black text-right font-bold bg-indigo-50/30">{pendingQty}</td>
                   <td className="px-3 py-2 border border-black">

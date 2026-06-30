@@ -1,6 +1,7 @@
 import type { Production } from "../types";
 
 export type ScheduleConsumptionSummary = {
+  plannedQty: number;
   actualProducedQty: number;
   plannedWithoutFfgQty: number;
   effectiveConsumedQty: number;
@@ -45,6 +46,7 @@ export function buildScheduleConsumptionByScheduleId(
       if (!effectiveScheduleId) return;
 
       const current = map.get(effectiveScheduleId) || {
+        plannedQty: 0,
         actualProducedQty: 0,
         plannedWithoutFfgQty: 0,
         effectiveConsumedQty: 0,
@@ -56,6 +58,7 @@ export function buildScheduleConsumptionByScheduleId(
         current.plannedWithoutFfgQty += Number(production.qty || 0);
       }
 
+      current.plannedQty = current.actualProducedQty + current.plannedWithoutFfgQty;
       current.effectiveConsumedQty = current.actualProducedQty + current.plannedWithoutFfgQty;
       map.set(effectiveScheduleId, current);
     });

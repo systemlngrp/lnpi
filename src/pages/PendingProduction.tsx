@@ -79,6 +79,7 @@ export function PendingProduction() {
         const item = resolveOrderItem(order);
         const company = companies.find((row) => row.id === order?.companyId);
         const summary = consumptionByScheduleId.get(schedule.id);
+        const plannedQty = Number(summary?.plannedQty || 0);
         const actualProducedQty = Number(summary?.actualProducedQty || 0);
         const plannedWithoutFfgQty = Number(summary?.plannedWithoutFfgQty || 0);
         const consumedQty = Number(summary?.effectiveConsumedQty || 0);
@@ -87,13 +88,14 @@ export function PendingProduction() {
           order,
           item,
           company,
+          plannedQty,
           actualProducedQty,
           plannedWithoutFfgQty,
           consumedQty,
           pendingQty: getPendingProductionQty(schedule, consumedQty),
         };
       })
-      .filter(({ schedule, order, item, company, pendingQty, actualProducedQty, plannedWithoutFfgQty, consumedQty }) => {
+      .filter(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty, plannedWithoutFfgQty, consumedQty }) => {
         if (!normalizedSearch) return true;
         const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
         const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
@@ -104,6 +106,7 @@ export function PendingProduction() {
           item?.name,
           boxType,
           String(schedule.qty || 0),
+          String(plannedQty),
           String(actualProducedQty),
           String(plannedWithoutFfgQty),
           String(consumedQty),
@@ -198,8 +201,8 @@ export function PendingProduction() {
               <th className="px-3 py-2 border border-black">Item</th>
               <th className="px-3 py-2 border border-black">Box Type</th>
               <th className="px-3 py-2 border border-black">Scheduled Qty</th>
-              <th className="px-3 py-2 border border-black">Produced Qty</th>
-              <th className="px-3 py-2 border border-black">Planned W/O FFG</th>
+              <th className="px-3 py-2 border border-black">Planned Qty</th>
+              <th className="px-3 py-2 border border-black">Actual FFG</th>
               <th className="px-3 py-2 border border-black">Canceled Qty</th>
               <th className="px-3 py-2 border border-black">Pending Qty</th>
               <th className="px-3 py-2 border border-black">Cancel Qty</th>
@@ -214,7 +217,7 @@ export function PendingProduction() {
                 </td>
               </tr>
             ) : (
-              paginatedRows.map(({ schedule, order, item, company, pendingQty, actualProducedQty, plannedWithoutFfgQty }) => {
+              paginatedRows.map(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty }) => {
                 const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
     const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
                 const hasBoxType = Boolean(boxType);
@@ -226,8 +229,8 @@ export function PendingProduction() {
                   <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
                   <td className={`px-3 py-2 border border-black font-bold ${hasBoxType ? "text-black" : "bg-red-100 text-red-700"}`}>{boxType || "Missing"}</td>
                   <td className="px-3 py-2 border border-black">{schedule.qty || 0}</td>
+                  <td className="px-3 py-2 border border-black">{plannedQty}</td>
                   <td className="px-3 py-2 border border-black">{actualProducedQty}</td>
-                  <td className="px-3 py-2 border border-black">{plannedWithoutFfgQty}</td>
                   <td className="px-3 py-2 border border-black">{schedule.canceledQty || 0}</td>
                   <td className="px-3 py-2 border border-black font-bold">{pendingQty}</td>
                   <td className="px-3 py-2 border border-black">
