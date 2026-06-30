@@ -3965,6 +3965,7 @@ await db.query(`
         { table: "purchase_orders", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_orders", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_orders", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_orders", column: "grandTotal", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_orders", column: "remarks", type: "TEXT" },
         { table: "purchase_orders", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending Approval'" },
@@ -6250,7 +6251,7 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
       const indentIdForOrder = indentIdsForOrder.size === 1 ? Array.from(indentIdsForOrder)[0] : null;
 
       await conn.query(
-        "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, taxableAmount, cgst, sgst, igst, grandTotal, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, taxableAmount, cgst, sgst, igst, roundOff, grandTotal, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
           purchaseOrderId,
           poNo,
@@ -6264,6 +6265,7 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
           totals.cgst,
           totals.sgst,
           totals.igst,
+          0,
           totals.grandTotal,
           String(remarks || "").trim(),
           "Pending Approval",
@@ -6433,7 +6435,7 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
     const indentIdForOrder = indentIdsForOrder.size === 1 ? Array.from(indentIdsForOrder)[0] : null;
 
     await conn.query(
-      "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, taxableAmount, cgst, sgst, igst, grandTotal, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, taxableAmount, cgst, sgst, igst, roundOff, grandTotal, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         purchaseOrderId,
         poNo,
@@ -6447,6 +6449,7 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
         totals.cgst,
         totals.sgst,
         totals.igst,
+        0,
         totals.grandTotal,
         remarks,
         "Pending Approval",

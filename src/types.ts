@@ -282,6 +282,7 @@ export interface PurchaseOrder {
   cgst?: number;
   sgst?: number;
   igst?: number;
+  roundOff?: number;
   grandTotal?: number;
   remarks?: string;
   status: "Pending Approval" | "Approved" | "Rejected";

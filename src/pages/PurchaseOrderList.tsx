@@ -1,36 +1,52 @@
 import React, { useCallback, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { useData } from "../hooks/useData";
-import { 
-  PurchaseOrder, 
-  PurchaseOrderLine, 
-  Material, 
-  Supplier, 
-  Indent,
-  IndentLine,
-  Setting
-} from "../types";
-import { 
-  ChevronRight, 
-  ChevronDown, 
-  Check, 
-  X,
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Pencil,
+  Save,
   Search,
-  FileText
+  X,
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { ClientPagination } from "../components/ClientPagination";
+import { useData } from "../hooks/useData";
+import { useClientPagination } from "../hooks/useClientPagination";
+import { computePurchaseOrderTaxes, summarizePurchaseOrderLines } from "../lib/purchaseOrderTaxes";
+import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
-import { ClientPagination } from "../components/ClientPagination";
-import { useClientPagination } from "../hooks/useClientPagination";
+import type {
+  Indent,
+  IndentLine,
+  Material,
+  PurchaseOrder,
+  PurchaseOrderLine,
+  Setting,
+  Supplier,
+} from "../types";
 
 type Mode = "pending-approval" | "approved" | "rejected" | "all";
 
 interface PurchaseOrderListProps {
   mode?: Mode;
 }
+
+type EditingHeader = {
+  poDate: string;
+  requiredDate: string;
+  roundOff: string;
+};
+
+type EditingLineDraft = {
+  qty: string;
+  rate: string;
+  gstRate: string;
+  targetDeliveryDate: string;
+};
 
 export function PurchaseOrderAll() {
   return <PurchaseOrderList mode="all" />;
@@ -48,9 +64,12 @@ export function PurchaseOrderRejected() {
   return <PurchaseOrderList mode="rejected" />;
 }
 
+const formatMoney = (value: number) =>
+  `Rs. ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [purchaseOrders, setPurchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
-  const [orderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
+  const [orderLines, setPurchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
   const [materials] = useData<Material>("materials", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [indents] = useData<Indent>("indents", []);
@@ -64,10 +83,14 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [remarks, setRemarks] = useState("");
   const [pdfOrderId, setPdfOrderId] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editingHeader, setEditingHeader] = useState<EditingHeader | null>(null);
+  const [editingLines, setEditingLines] = useState<Record<string, EditingLineDraft>>({});
 
   const currentSetting = settings[0];
-  const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
-  const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.name])), [suppliers]);
+  const materialMap = useMemo(() => new Map(materials.map((m) => [m.id, m])), [materials]);
+  const supplierMap = useMemo(() => new Map(suppliers.map((s) => [s.id, s])), [suppliers]);
+  const supplierNameMap = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
   const indentMap = useMemo(() => new Map(indents.map((indent) => [indent.id, indent])), [indents]);
   const indentLineMap = useMemo(() => new Map(indentLines.map((line) => [line.id, line])), [indentLines]);
 
@@ -94,13 +117,17 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         return true;
       })
       .filter((po) => {
-        const supplierName = (supplierMap.get(po.supplierId) || "").toLowerCase();
+        const supplierName = (supplierNameMap.get(po.supplierId) || "").toLowerCase();
         const poNo = (po.poNo || "").toLowerCase();
         const search = searchTerm.toLowerCase();
         return supplierName.includes(search) || poNo.includes(search);
       })
-      .sort((a, b) => new Date(b.updateTimestamp || b.timestamp || 0).getTime() - new Date(a.updateTimestamp || a.timestamp || 0).getTime());
-  }, [purchaseOrders, mode, supplierMap, searchTerm]);
+      .sort(
+        (a, b) =>
+          new Date(b.updateTimestamp || b.poDate || 0).getTime() -
+          new Date(a.updateTimestamp || a.poDate || 0).getTime(),
+      );
+  }, [mode, purchaseOrders, searchTerm, supplierNameMap]);
 
   const {
     page,
@@ -118,7 +145,166 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     setExpandedRows(next);
   };
 
+  const cancelEditing = useCallback(() => {
+    setEditingOrderId(null);
+    setEditingHeader(null);
+    setEditingLines({});
+  }, []);
+
+  const startEditing = useCallback((order: PurchaseOrder, lines: PurchaseOrderLine[]) => {
+    setEditingOrderId(order.id);
+    setEditingHeader({
+      poDate: order.poDate || "",
+      requiredDate: order.requiredDate || "",
+      roundOff: String(Number(order.roundOff || 0)),
+    });
+    setEditingLines(
+      Object.fromEntries(
+        lines.map((line) => [
+          line.id,
+          {
+            qty: String(Number(line.qty || 0)),
+            rate: String(Number(line.rate || 0)),
+            gstRate: String(Number(line.gstRate || 0)),
+            targetDeliveryDate: line.targetDeliveryDate || "",
+          },
+        ]),
+      ),
+    );
+    setRejectingId(null);
+    setConfirmId(null);
+    setRemarks("");
+    setExpandedRows((prev) => new Set(prev).add(order.id));
+  }, []);
+
+  const getRenderedLines = useCallback((order: PurchaseOrder, lines: PurchaseOrderLine[]) => {
+    if (editingOrderId !== order.id) return lines;
+    const supplyType = supplierMap.get(order.supplierId)?.gstSupplyType;
+
+    return lines.map((line) => {
+      const draft = editingLines[line.id];
+      if (!draft) return line;
+
+      const taxes = computePurchaseOrderTaxes(
+        Number(draft.qty || 0),
+        Number(draft.rate || 0),
+        Number(draft.gstRate || 0),
+        supplyType,
+      );
+
+      return {
+        ...line,
+        qty: Number(draft.qty || 0),
+        rate: Number(draft.rate || 0),
+        gstRate: taxes.gstRate,
+        amount: taxes.amount,
+        cgst: taxes.cgst,
+        sgst: taxes.sgst,
+        igst: taxes.igst,
+        lineTotal: taxes.lineTotal,
+        targetDeliveryDate: draft.targetDeliveryDate || undefined,
+      };
+    });
+  }, [editingLines, editingOrderId, supplierMap]);
+
+  const getRenderedTotals = useCallback((order: PurchaseOrder, lines: PurchaseOrderLine[]) => {
+    const previewLines = getRenderedLines(order, lines);
+    const totals = summarizePurchaseOrderLines(previewLines);
+    const roundOff = editingOrderId === order.id
+      ? Number(editingHeader?.roundOff || 0)
+      : Number(order.roundOff || 0);
+
+    return {
+      ...totals,
+      roundOff,
+      grandTotal: Number((totals.grandTotal + roundOff).toFixed(2)),
+    };
+  }, [editingHeader?.roundOff, editingOrderId, getRenderedLines]);
+
+  const handleSaveEdit = async (order: PurchaseOrder, lines: PurchaseOrderLine[]) => {
+    if (editingOrderId !== order.id || !editingHeader) return;
+
+    const roundOff = Number(editingHeader.roundOff || 0);
+    if (!Number.isFinite(roundOff)) {
+      alert("Please enter a valid round off value.");
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const supplyType = supplierMap.get(order.supplierId)?.gstSupplyType;
+
+    try {
+      const updatedLines = lines.map((line) => {
+        const draft = editingLines[line.id];
+        const itemName = materialMap.get(line.materialId)?.name || "the item";
+        const qty = Number(draft?.qty || 0);
+        const rate = Number(draft?.rate || 0);
+        const gstRate = Number(draft?.gstRate || 0);
+
+        if (!Number.isFinite(qty) || qty <= 0) {
+          throw new Error(`Please enter a valid qty for ${itemName}.`);
+        }
+        if (!Number.isFinite(rate) || rate < 0) {
+          throw new Error(`Please enter a valid rate for ${itemName}.`);
+        }
+        if (!Number.isFinite(gstRate) || gstRate < 0) {
+          throw new Error(`Please enter a valid GST Rate for ${itemName}.`);
+        }
+
+        const taxes = computePurchaseOrderTaxes(qty, rate, gstRate, supplyType);
+
+        return {
+          ...line,
+          qty,
+          rate,
+          amount: taxes.amount,
+          gstRate: taxes.gstRate,
+          cgst: taxes.cgst,
+          sgst: taxes.sgst,
+          igst: taxes.igst,
+          lineTotal: taxes.lineTotal,
+          targetDeliveryDate: draft?.targetDeliveryDate || undefined,
+          updatedBy: "System User",
+          updateTimestamp: timestamp,
+        };
+      });
+
+      const totals = summarizePurchaseOrderLines(updatedLines);
+      const updatedOrder: PurchaseOrder = {
+        ...order,
+        poDate: editingHeader.poDate || order.poDate,
+        requiredDate: editingHeader.requiredDate || order.requiredDate,
+        totalQty: totals.totalQty,
+        totalAmount: totals.taxableAmount,
+        taxableAmount: totals.taxableAmount,
+        cgst: totals.cgst,
+        sgst: totals.sgst,
+        igst: totals.igst,
+        roundOff,
+        grandTotal: Number((totals.grandTotal + roundOff).toFixed(2)),
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+      };
+
+      await setPurchaseOrderLines((prev) =>
+        prev.map((row) => updatedLines.find((line) => line.id === row.id) || row),
+      );
+      await setPurchaseOrders((prev) =>
+        prev.map((row) => (row.id === order.id ? updatedOrder : row)),
+      );
+      cancelEditing();
+    } catch (error) {
+      console.error("Failed to save purchase order:", error);
+      alert((error as Error).message || "Failed to save purchase order.");
+    }
+  };
+
   const handleApprove = async (order: PurchaseOrder) => {
+    if (editingOrderId) {
+      alert("Please save or cancel the current edit before approving a purchase order.");
+      return;
+    }
+
     if (confirmId !== order.id) {
       setConfirmId(order.id);
       setRejectingId(null);
@@ -140,8 +326,8 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                 updatedBy: "System User",
                 updateTimestamp: timestamp,
               }
-            : row
-        )
+            : row,
+        ),
       );
       setConfirmId(null);
     } catch (error) {
@@ -153,6 +339,11 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   };
 
   const handleReject = async (order: PurchaseOrder) => {
+    if (editingOrderId && editingOrderId !== order.id) {
+      alert("Please save or cancel the current edit before rejecting another purchase order.");
+      return;
+    }
+
     if (rejectingId !== order.id) {
       setRejectingId(order.id);
       setConfirmId(null);
@@ -180,10 +371,11 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                 updatedBy: "System User",
                 updateTimestamp: timestamp,
               }
-            : row
-        )
+            : row,
+        ),
       );
       setConfirmId(null);
+      cancelEditing();
     } catch (error) {
       console.error("Failed to reject purchase order:", error);
       alert("Failed to reject purchase order.");
@@ -194,10 +386,14 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
 
   const getTitle = (m: Mode) => {
     switch (m) {
-      case "pending-approval": return "Pending PO Approvals";
-      case "approved": return "Approved Purchase Orders";
-      case "rejected": return "Rejected Purchase Orders";
-      default: return "Purchase Orders Master";
+      case "pending-approval":
+        return "Pending PO Approvals";
+      case "approved":
+        return "Approved Purchase Orders";
+      case "rejected":
+        return "Rejected Purchase Orders";
+      default:
+        return "Purchase Orders Master";
     }
   };
 
@@ -227,11 +423,14 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
 
         return [
           order.poNo || "DRAFT",
-          formatDate(order.date),
-          supplierMap.get(order.supplierId) || "Unknown",
+          formatDate(order.poDate),
+          supplierNameMap.get(order.supplierId) || "Unknown",
           itemsSummary,
           Number(order.totalQty || 0).toLocaleString(),
-          Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
           ...(mode === "rejected" ? [order.rejectedRemarks || ""] : []),
           order.status,
         ];
@@ -251,7 +450,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const handleRowPdf = async (order: PurchaseOrder) => {
     const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
     const indentRefs = getOrderIndentRefs(order, lines);
-    const supplierName = supplierMap.get(order.supplierId) || "Unknown";
+    const supplierName = supplierNameMap.get(order.supplierId) || "Unknown";
     const doc = new jsPDF("p", "mm", "a4");
     setPdfOrderId(order.id);
 
@@ -276,8 +475,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       doc.text(`Required Date: ${formatDate(order.requiredDate)}`, 140, y);
       y += 6;
       doc.text(`Total Qty: ${Number(order.totalQty || 0).toLocaleString()}`, 14, y);
-      doc.text(`Grand Total: Rs. ${Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, y);
+      doc.text(`Grand Total: ${formatMoney(Number(order.grandTotal ?? order.totalAmount ?? 0))}`, 140, y);
       y += 8;
+
       if (order.rejectedRemarks?.trim()) {
         doc.setFont("helvetica", "normal");
         const noteLines = doc.splitTextToSize(`Rejection Reason: ${order.rejectedRemarks.trim()}`, 180);
@@ -309,13 +509,13 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           materialMap.get(line.materialId)?.name || "Unknown",
           Number(line.qty || 0).toLocaleString(),
           line.uom || "",
-          `Rs. ${Number(line.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          formatMoney(Number(line.rate || 0)),
           `${Number(line.gstRate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
-          `Rs. ${Number(line.cgst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          `Rs. ${Number(line.sgst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          `Rs. ${Number(line.igst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          `Rs. ${Number(line.amount || line.qty * line.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          `Rs. ${Number(line.lineTotal ?? ((Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0)) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          formatMoney(Number(line.cgst || 0)),
+          formatMoney(Number(line.sgst || 0)),
+          formatMoney(Number(line.igst || 0)),
+          formatMoney(Number(line.amount || line.qty * line.rate || 0)),
+          formatMoney(Number(line.lineTotal ?? (Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0)))),
           line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-",
         ]),
       });
@@ -325,17 +525,20 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       const cgst = Number(order.cgst || 0);
       const sgst = Number(order.sgst || 0);
       const igst = Number(order.igst || 0);
+      const roundOff = Number(order.roundOff || 0);
       const grandTotal = Number(order.grandTotal ?? order.totalAmount ?? 0);
       const summaryY = finalY + 8;
+
       doc.setFont("helvetica", "bold");
       doc.text("Summary", 140, summaryY);
       doc.setFont("helvetica", "normal");
-      doc.text(`Taxable Amount: Rs. ${taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 6);
-      doc.text(`CGST: Rs. ${cgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 12);
-      doc.text(`SGST: Rs. ${sgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 18);
-      doc.text(`IGST: Rs. ${igst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 24);
+      doc.text(`Taxable Amount: ${formatMoney(taxableAmount)}`, 140, summaryY + 6);
+      doc.text(`CGST: ${formatMoney(cgst)}`, 140, summaryY + 12);
+      doc.text(`SGST: ${formatMoney(sgst)}`, 140, summaryY + 18);
+      doc.text(`IGST: ${formatMoney(igst)}`, 140, summaryY + 24);
+      doc.text(`Round Off: ${formatMoney(roundOff)}`, 140, summaryY + 30);
       doc.setFont("helvetica", "bold");
-      doc.text(`Grand Total: Rs. ${grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 32);
+      doc.text(`Grand Total: ${formatMoney(grandTotal)}`, 140, summaryY + 38);
 
       doc.save(`PO_${order.poNo || order.id}.pdf`);
     } finally {
@@ -350,7 +553,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:justify-end">
           <div className="relative w-full md:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
+            <input
               type="text"
               placeholder="Search PO, supplier..."
               value={searchTerm}
@@ -387,9 +590,13 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
             ) : (
               paginatedOrders.map((order) => {
                 const isExpanded = expandedRows.has(order.id);
-                const lines = orderLines.filter((l) => l.purchaseOrderId === order.id);
+                const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
+                const renderedLines = getRenderedLines(order, lines);
+                const renderedTotals = getRenderedTotals(order, lines);
                 const indentRefs = getOrderIndentRefs(order, lines);
-                
+                const isEditing = editingOrderId === order.id;
+                const isAnotherOrderEditing = Boolean(editingOrderId && editingOrderId !== order.id);
+
                 return (
                   <React.Fragment key={order.id}>
                     <tr className={cn("hover:bg-slate-50 transition-colors divide-x divide-black", isExpanded && "bg-slate-50/50")}>
@@ -403,37 +610,43 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                       </td>
                       <td className="px-4 py-4">
                         <div className="font-bold text-sm text-black uppercase">{order.poNo || "DRAFT"}</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase">{formatDate(order.poDate)}</div>
                         {mode !== "pending-approval" && (
-                          <>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase">{formatDate(order.date)}</div>
-                            <div className={cn(
+                          <div
+                            className={cn(
                               "mt-1 inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase",
-                              order.status === "Approved" ? "border-emerald-700 bg-emerald-100 text-emerald-800" :
-                              order.status === "Rejected" ? "border-red-700 bg-red-100 text-red-800" :
-                              "border-amber-700 bg-amber-100 text-amber-800"
-                            )}>
-                              {order.status}
-                            </div>
-                          </>
+                              order.status === "Approved"
+                                ? "border-emerald-700 bg-emerald-100 text-emerald-800"
+                                : order.status === "Rejected"
+                                  ? "border-red-700 bg-red-100 text-red-800"
+                                  : "border-amber-700 bg-amber-100 text-amber-800",
+                            )}
+                          >
+                            {order.status}
+                          </div>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-sm text-black font-medium">{supplierMap.get(order.supplierId) || "Unknown"}</td>
+                      <td className="px-4 py-4 text-sm text-black font-medium">{supplierNameMap.get(order.supplierId) || "Unknown"}</td>
                       <td className="px-4 py-4">
                         <ul className="list-none space-y-0.5">
-                          {lines.slice(0, 2).map((l, idx) => (
+                          {renderedLines.slice(0, 2).map((line, idx) => (
                             <li key={idx} className="text-[10px] text-slate-700 font-bold uppercase truncate max-w-[200px]">
-                              • {materialMap.get(l.materialId)?.name || "Unknown"}
+                              - {materialMap.get(line.materialId)?.name || "Unknown"}
                             </li>
                           ))}
-                          {lines.length > 2 && (
+                          {renderedLines.length > 2 && (
                             <li className="text-[9px] text-indigo-600 font-black uppercase">
-                              + {lines.length - 2} MORE ITEMS
+                              + {renderedLines.length - 2} MORE ITEMS
                             </li>
                           )}
                         </ul>
                       </td>
-                      <td className="px-4 py-4 text-sm text-black text-right font-bold">{Number(order.totalQty || 0).toLocaleString()}</td>
-                      <td className="px-4 py-4 text-sm text-black text-right font-mono font-bold">₹{Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-4 text-sm text-black text-right font-bold">
+                        {Number(renderedTotals.totalQty || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-black text-right font-mono font-bold">
+                        {formatMoney(Number(renderedTotals.grandTotal || 0))}
+                      </td>
                       {mode === "rejected" ? (
                         <td className="px-4 py-4 text-sm text-red-700 italic">{order.rejectedRemarks || ""}</td>
                       ) : null}
@@ -449,66 +662,90 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                             PDF
                           </button>
                           {mode === "pending-approval" ? (
-                            <>
-                              {rejectingId === order.id ? (
-                                <div className="flex flex-col gap-2 min-w-[200px]">
-                                  <textarea
-                                    value={remarks}
-                                    onChange={(e) => setRemarks(e.target.value)}
-                                    placeholder="Enter reason for rejection..."
-                                    className="w-full rounded border-2 border-red-600 p-2 text-xs focus:outline-none"
-                                    rows={2}
-                                    autoFocus
-                                  />
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => void handleReject(order)}
-                                      disabled={submittingId === order.id}
-                                      className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded text-[10px] font-black uppercase"
-                                    >
-                                      Confirm Reject
-                                    </button>
-                                    <button
-                                      onClick={() => setRejectingId(null)}
-                                      className="bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-[10px] font-black uppercase"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => void handleApprove(order)}
-                                    disabled={submittingId === order.id}
-                                    className={cn(
-                                      "flex items-center gap-1.5 px-3 py-1.5 rounded border-2 font-black text-[10px] uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
-                                      confirmId === order.id ? "bg-emerald-600 text-white border-black animate-pulse" : "bg-emerald-50 text-emerald-700 border-emerald-700 hover:bg-emerald-100"
-                                    )}
-                                  >
-                                    {submittingId === order.id ? <Spinner size={12} /> : (
-                                      <>
-                                        <Check size={14} />
-                                        {confirmId === order.id ? "Confirm Approve?" : "Approve"}
-                                      </>
-                                    )}
-                                  </button>
+                            isEditing ? (
+                              <>
+                                <button
+                                  onClick={() => void handleSaveEdit(order, lines)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-emerald-700 bg-emerald-50 text-emerald-700 font-black text-[10px] uppercase hover:bg-emerald-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                >
+                                  <Save size={14} /> Save
+                                </button>
+                                <button
+                                  onClick={cancelEditing}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-slate-500 bg-slate-50 text-slate-700 font-black text-[10px] uppercase hover:bg-slate-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                >
+                                  <X size={14} /> Cancel
+                                </button>
+                              </>
+                            ) : rejectingId === order.id ? (
+                              <div className="flex flex-col gap-2 min-w-[200px]">
+                                <textarea
+                                  value={remarks}
+                                  onChange={(e) => setRemarks(e.target.value)}
+                                  placeholder="Enter reason for rejection..."
+                                  className="w-full rounded border-2 border-red-600 p-2 text-xs focus:outline-none"
+                                  rows={2}
+                                  autoFocus
+                                />
+                                <div className="flex gap-2">
                                   <button
                                     onClick={() => void handleReject(order)}
                                     disabled={submittingId === order.id}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-red-700 bg-red-50 text-red-700 font-black text-[10px] uppercase hover:bg-red-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                    className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded text-[10px] font-black uppercase"
                                   >
-                                    <X size={14} /> Reject
+                                    Confirm Reject
                                   </button>
-                                </>
-                              )}
-                            </>
+                                  <button
+                                    onClick={() => setRejectingId(null)}
+                                    className="bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-[10px] font-black uppercase"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => startEditing(order, lines)}
+                                  disabled={isAnotherOrderEditing}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-indigo-700 bg-indigo-50 text-indigo-700 font-black text-[10px] uppercase hover:bg-indigo-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                                >
+                                  <Pencil size={14} /> Edit
+                                </button>
+                                <button
+                                  onClick={() => void handleApprove(order)}
+                                  disabled={submittingId === order.id || isAnotherOrderEditing}
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1.5 rounded border-2 font-black text-[10px] uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50",
+                                    confirmId === order.id
+                                      ? "bg-emerald-600 text-white border-black animate-pulse"
+                                      : "bg-emerald-50 text-emerald-700 border-emerald-700 hover:bg-emerald-100",
+                                  )}
+                                >
+                                  {submittingId === order.id ? (
+                                    <Spinner size={12} />
+                                  ) : (
+                                    <>
+                                      <Check size={14} />
+                                      {confirmId === order.id ? "Confirm Approve?" : "Approve"}
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => void handleReject(order)}
+                                  disabled={submittingId === order.id || isAnotherOrderEditing}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-red-700 bg-red-50 text-red-700 font-black text-[10px] uppercase hover:bg-red-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                                >
+                                  <X size={14} /> Reject
+                                </button>
+                              </>
+                            )
                           ) : (
                             <button
                               onClick={() => void handleToggleRow(order.id)}
                               className="text-indigo-600 hover:text-indigo-900 font-bold uppercase flex items-center gap-1 text-[11px]"
                             >
-                              {isExpanded ? "Hide" : "Details"}{" "}
+                              {isExpanded ? "Hide" : "Details"}
                               {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                             </button>
                           )}
@@ -522,6 +759,43 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                             <div className="bg-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-wider flex justify-between border-b border-black">
                               <span>PO Items Details</span>
                               <span>Indent Ref: {indentRefs.join(", ") || "-"}</span>
+                            </div>
+                            <div className="grid gap-3 border-b border-black bg-white px-4 py-3 md:grid-cols-4">
+                              <label className="text-[10px] font-black uppercase text-slate-600">
+                                PO Date
+                                <input
+                                  type="date"
+                                  value={isEditing ? editingHeader?.poDate || "" : order.poDate || ""}
+                                  onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, poDate: e.target.value } : prev))}
+                                  disabled={!isEditing}
+                                  className="mt-1 w-full rounded border border-black px-2 py-1.5 text-xs font-medium text-black disabled:bg-slate-100"
+                                />
+                              </label>
+                              <label className="text-[10px] font-black uppercase text-slate-600">
+                                Required Date
+                                <input
+                                  type="date"
+                                  value={isEditing ? editingHeader?.requiredDate || "" : order.requiredDate || ""}
+                                  onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, requiredDate: e.target.value } : prev))}
+                                  disabled={!isEditing}
+                                  className="mt-1 w-full rounded border border-black px-2 py-1.5 text-xs font-medium text-black disabled:bg-slate-100"
+                                />
+                              </label>
+                              <label className="text-[10px] font-black uppercase text-slate-600">
+                                Round Off
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={isEditing ? editingHeader?.roundOff || "0" : String(Number(order.roundOff || 0))}
+                                  onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, roundOff: e.target.value } : prev))}
+                                  disabled={!isEditing}
+                                  className="mt-1 w-full rounded border border-black px-2 py-1.5 text-xs font-medium text-black disabled:bg-slate-100"
+                                />
+                              </label>
+                              <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+                                <div className="text-[10px] font-black uppercase text-slate-600">Grand Total</div>
+                                <div className="mt-1 text-sm font-black text-slate-900">{formatMoney(renderedTotals.grandTotal)}</div>
+                              </div>
                             </div>
                             <table className="min-w-full divide-y divide-black">
                               <thead className="bg-slate-100">
@@ -537,28 +811,103 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                   <th className="px-3 py-2 text-right">IGST</th>
                                   <th className="px-3 py-2 text-right">Amount</th>
                                   <th className="px-3 py-2 text-right">Line Total</th>
+                                  <th className="px-3 py-2 text-left">Target Delivery</th>
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-black">
-                                {lines.map((l, lidx) => (
-                                  <tr key={lidx} className="divide-x divide-black text-[10px] font-bold">
-                                    <td className="px-3 py-2 text-black">{l.erpCode || materialMap.get(l.materialId)?.erpCode || ""}</td>
-                                    <td className="px-3 py-2 text-black uppercase">{materialMap.get(l.materialId)?.name || "Unknown"}</td>
-                                    <td className="px-3 py-2 text-right">{l.qty.toLocaleString()}</td>
-                                    <td className="px-3 py-2 text-center">{l.uom}</td>
-                                    <td className="px-3 py-2 text-right">₹{Number(l.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2 text-right">{Number(l.gstRate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
-                                    <td className="px-3 py-2 text-right">₹{Number(l.cgst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2 text-right">₹{Number(l.sgst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2 text-right">₹{Number(l.igst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2 text-right">₹{Number(l.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2 text-right">₹{Number(l.lineTotal ?? (Number(l.amount || 0) + Number(l.cgst || 0) + Number(l.sgst || 0) + Number(l.igst || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                {renderedLines.map((line) => (
+                                  <tr key={line.id} className="divide-x divide-black text-[10px] font-bold">
+                                    <td className="px-3 py-2 text-black">{line.erpCode || materialMap.get(line.materialId)?.erpCode || ""}</td>
+                                    <td className="px-3 py-2 text-black uppercase">{materialMap.get(line.materialId)?.name || "Unknown"}</td>
+                                    <td className="px-3 py-2 text-right">
+                                      {isEditing ? (
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editingLines[line.id]?.qty || ""}
+                                          onChange={(e) =>
+                                            setEditingLines((prev) => ({
+                                              ...prev,
+                                              [line.id]: { ...prev[line.id], qty: e.target.value },
+                                            }))
+                                          }
+                                          className="w-20 rounded border border-black px-2 py-1 text-right"
+                                        />
+                                      ) : (
+                                        Number(line.qty || 0).toLocaleString()
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2 text-center">{line.uom}</td>
+                                    <td className="px-3 py-2 text-right">
+                                      {isEditing ? (
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editingLines[line.id]?.rate || ""}
+                                          onChange={(e) =>
+                                            setEditingLines((prev) => ({
+                                              ...prev,
+                                              [line.id]: { ...prev[line.id], rate: e.target.value },
+                                            }))
+                                          }
+                                          className="w-24 rounded border border-black px-2 py-1 text-right"
+                                        />
+                                      ) : (
+                                        formatMoney(Number(line.rate || 0))
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                      {isEditing ? (
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editingLines[line.id]?.gstRate || ""}
+                                          onChange={(e) =>
+                                            setEditingLines((prev) => ({
+                                              ...prev,
+                                              [line.id]: { ...prev[line.id], gstRate: e.target.value },
+                                            }))
+                                          }
+                                          className="w-20 rounded border border-black px-2 py-1 text-right"
+                                        />
+                                      ) : (
+                                        `${Number(line.gstRate || 0).toLocaleString(undefined, {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })}%`
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">{formatMoney(Number(line.cgst || 0))}</td>
+                                    <td className="px-3 py-2 text-right">{formatMoney(Number(line.sgst || 0))}</td>
+                                    <td className="px-3 py-2 text-right">{formatMoney(Number(line.igst || 0))}</td>
+                                    <td className="px-3 py-2 text-right">{formatMoney(Number(line.amount || 0))}</td>
+                                    <td className="px-3 py-2 text-right">
+                                      {formatMoney(Number(line.lineTotal ?? (Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0))))}
+                                    </td>
+                                    <td className="px-3 py-2 text-left">
+                                      {isEditing ? (
+                                        <input
+                                          type="date"
+                                          value={editingLines[line.id]?.targetDeliveryDate || ""}
+                                          onChange={(e) =>
+                                            setEditingLines((prev) => ({
+                                              ...prev,
+                                              [line.id]: { ...prev[line.id], targetDeliveryDate: e.target.value },
+                                            }))
+                                          }
+                                          className="rounded border border-black px-2 py-1"
+                                        />
+                                      ) : (
+                                        line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-"
+                                      )}
+                                    </td>
                                   </tr>
                                 ))}
                                 <tr className="divide-x divide-black bg-slate-100 text-[10px] font-black">
                                   <td className="px-3 py-2" colSpan={9}>Summary</td>
-                                  <td className="px-3 py-2 text-right">₹{Number(order.taxableAmount ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                  <td className="px-3 py-2 text-right">₹{Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                  <td className="px-3 py-2 text-right">{formatMoney(renderedTotals.taxableAmount)}</td>
+                                  <td className="px-3 py-2 text-right">{formatMoney(renderedTotals.grandTotal)}</td>
+                                  <td className="px-3 py-2 text-left">Round Off: {formatMoney(renderedTotals.roundOff)}</td>
                                 </tr>
                               </tbody>
                             </table>
