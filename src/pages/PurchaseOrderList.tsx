@@ -65,7 +65,7 @@ export function PurchaseOrderRejected() {
 }
 
 const formatMoney = (value: number) =>
-  `Rs. ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [purchaseOrders, setPurchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
@@ -451,6 +451,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
     const indentRefs = getOrderIndentRefs(order, lines);
     const supplierName = supplierNameMap.get(order.supplierId) || "Unknown";
+    const showIntegratedTax = Number(order.igst || 0) > 0 && Number(order.cgst || 0) === 0 && Number(order.sgst || 0) === 0;
     const doc = new jsPDF("p", "mm", "a4");
     setPdfOrderId(order.id);
 
@@ -497,11 +498,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           "UOM",
           "Rate",
           "GST Rate",
-          "CGST",
-          "SGST",
-          "IGST",
+          ...(showIntegratedTax ? ["IGST"] : ["CGST", "SGST"]),
           "Amount",
-          "Line Total",
+          "Amount after GST",
           "Target Delivery",
         ]],
         body: lines.map((line) => [
@@ -511,9 +510,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           line.uom || "",
           formatMoney(Number(line.rate || 0)),
           `${Number(line.gstRate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
-          formatMoney(Number(line.cgst || 0)),
-          formatMoney(Number(line.sgst || 0)),
-          formatMoney(Number(line.igst || 0)),
+          ...(showIntegratedTax
+            ? [formatMoney(Number(line.igst || 0))]
+            : [formatMoney(Number(line.cgst || 0)), formatMoney(Number(line.sgst || 0))]),
           formatMoney(Number(line.amount || line.qty * line.rate || 0)),
           formatMoney(Number(line.lineTotal ?? (Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0)))),
           line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-",
@@ -533,12 +532,18 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       doc.text("Summary", 140, summaryY);
       doc.setFont("helvetica", "normal");
       doc.text(`Taxable Amount: ${formatMoney(taxableAmount)}`, 140, summaryY + 6);
-      doc.text(`CGST: ${formatMoney(cgst)}`, 140, summaryY + 12);
-      doc.text(`SGST: ${formatMoney(sgst)}`, 140, summaryY + 18);
-      doc.text(`IGST: ${formatMoney(igst)}`, 140, summaryY + 24);
-      doc.text(`Round Off: ${formatMoney(roundOff)}`, 140, summaryY + 30);
-      doc.setFont("helvetica", "bold");
-      doc.text(`Grand Total: ${formatMoney(grandTotal)}`, 140, summaryY + 38);
+      if (showIntegratedTax) {
+        doc.text(`IGST: ${formatMoney(igst)}`, 140, summaryY + 12);
+        doc.text(`Round Off: ${formatMoney(roundOff)}`, 140, summaryY + 18);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Grand Total: ${formatMoney(grandTotal)}`, 140, summaryY + 26);
+      } else {
+        doc.text(`CGST: ${formatMoney(cgst)}`, 140, summaryY + 12);
+        doc.text(`SGST: ${formatMoney(sgst)}`, 140, summaryY + 18);
+        doc.text(`Round Off: ${formatMoney(roundOff)}`, 140, summaryY + 24);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Grand Total: ${formatMoney(grandTotal)}`, 140, summaryY + 32);
+      }
 
       doc.save(`PO_${order.poNo || order.id}.pdf`);
     } finally {
@@ -594,6 +599,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                 const renderedLines = getRenderedLines(order, lines);
                 const renderedTotals = getRenderedTotals(order, lines);
                 const indentRefs = getOrderIndentRefs(order, lines);
+                const showIntegratedTax = Number(renderedTotals.igst || 0) > 0 && Number(renderedTotals.cgst || 0) === 0 && Number(renderedTotals.sgst || 0) === 0;
                 const isEditing = editingOrderId === order.id;
                 const isAnotherOrderEditing = Boolean(editingOrderId && editingOrderId !== order.id);
 
@@ -806,11 +812,16 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                   <th className="px-3 py-2 text-center">UOM</th>
                                   <th className="px-3 py-2 text-right">Rate</th>
                                   <th className="px-3 py-2 text-right">GST Rate</th>
-                                  <th className="px-3 py-2 text-right">CGST</th>
-                                  <th className="px-3 py-2 text-right">SGST</th>
-                                  <th className="px-3 py-2 text-right">IGST</th>
+                                  {showIntegratedTax ? (
+                                    <th className="px-3 py-2 text-right">IGST</th>
+                                  ) : (
+                                    <>
+                                      <th className="px-3 py-2 text-right">CGST</th>
+                                      <th className="px-3 py-2 text-right">SGST</th>
+                                    </>
+                                  )}
                                   <th className="px-3 py-2 text-right">Amount</th>
-                                  <th className="px-3 py-2 text-right">Line Total</th>
+                                  <th className="px-3 py-2 text-right">Amount after GST</th>
                                   <th className="px-3 py-2 text-left">Target Delivery</th>
                                 </tr>
                               </thead>
@@ -877,9 +888,14 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                         })}%`
                                       )}
                                     </td>
-                                    <td className="px-3 py-2 text-right">{formatMoney(Number(line.cgst || 0))}</td>
-                                    <td className="px-3 py-2 text-right">{formatMoney(Number(line.sgst || 0))}</td>
-                                    <td className="px-3 py-2 text-right">{formatMoney(Number(line.igst || 0))}</td>
+                                    {showIntegratedTax ? (
+                                      <td className="px-3 py-2 text-right">{formatMoney(Number(line.igst || 0))}</td>
+                                    ) : (
+                                      <>
+                                        <td className="px-3 py-2 text-right">{formatMoney(Number(line.cgst || 0))}</td>
+                                        <td className="px-3 py-2 text-right">{formatMoney(Number(line.sgst || 0))}</td>
+                                      </>
+                                    )}
                                     <td className="px-3 py-2 text-right">{formatMoney(Number(line.amount || 0))}</td>
                                     <td className="px-3 py-2 text-right">
                                       {formatMoney(Number(line.lineTotal ?? (Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0))))}
@@ -904,7 +920,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                   </tr>
                                 ))}
                                 <tr className="divide-x divide-black bg-slate-100 text-[10px] font-black">
-                                  <td className="px-3 py-2" colSpan={9}>Summary</td>
+                                  <td className="px-3 py-2" colSpan={showIntegratedTax ? 7 : 8}>Summary</td>
                                   <td className="px-3 py-2 text-right">{formatMoney(renderedTotals.taxableAmount)}</td>
                                   <td className="px-3 py-2 text-right">{formatMoney(renderedTotals.grandTotal)}</td>
                                   <td className="px-3 py-2 text-left">Round Off: {formatMoney(renderedTotals.roundOff)}</td>
