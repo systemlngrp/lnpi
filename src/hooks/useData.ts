@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAutoRefreshEffect } from "./useAutoRefresh";
 
 type UseDataOptions = {
+  cacheToLocalStorage?: boolean;
   endpointOverride?: string;
   storageKey?: string;
   syncEventKey?: string;
@@ -62,6 +63,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const endpoint = options?.endpointOverride || `/api/${resolvedEntity.replace(/_/g, "-")}`;
   const storageKey = `udc_${options?.storageKey || resolvedEntity}`;
   const syncEvent = options?.syncEventKey || `sync-data-${resolvedEntity}`;
+  const shouldCacheToLocalStorage = options?.cacheToLocalStorage !== false;
 
   // Keep ref in sync
   useEffect(() => {
@@ -93,21 +95,25 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       dataRef.current = finalData;
       setError(null);
       lastFetchAtRef.current = Date.now();
-      safeSetLocalStorage(storageKey, JSON.stringify(finalData));
+      if (shouldCacheToLocalStorage) {
+        safeSetLocalStorage(storageKey, JSON.stringify(finalData));
+      }
     } catch (err) {
       console.error(`Error fetching ${entity}:`, err);
       setError((err as Error).message);
-      const saved = safeGetLocalStorage(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setDataState(parsed);
-        dataRef.current = parsed;
+      if (shouldCacheToLocalStorage) {
+        const saved = safeGetLocalStorage(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setDataState(parsed);
+          dataRef.current = parsed;
+        }
       }
     } finally {
       if (!background) setLoading(false);
       isFetchingRef.current = false;
     }
-  }, [endpoint, entity, storageKey]);
+  }, [endpoint, entity, shouldCacheToLocalStorage, storageKey]);
 
   useEffect(() => {
     fetchData({ force: true });
@@ -142,7 +148,9 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
     // Optimistic update
     setDataState(resolvedData);
     dataRef.current = resolvedData;
-    safeSetLocalStorage(storageKey, JSON.stringify(resolvedData));
+    if (shouldCacheToLocalStorage) {
+      safeSetLocalStorage(storageKey, JSON.stringify(resolvedData));
+    }
 
     // Emit sync event immediately for other local components
     window.dispatchEvent(new CustomEvent(syncEvent));
@@ -191,7 +199,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       window.dispatchEvent(new CustomEvent(syncEvent));
       throw err;
     }
-  }, [endpoint, entity, fetchData, storageKey, syncEvent]);
+  }, [endpoint, entity, fetchData, shouldCacheToLocalStorage, storageKey, syncEvent]);
 
   // Providing a more robust interface
   const addItem = async (item: T) => {

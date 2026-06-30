@@ -33,6 +33,7 @@ const getLookupKeys = (source: OrderItemSource, row: any) => {
 
 export function useOrderItemCatalog() {
   const [fgRows] = useData<any>("npd", [], {
+    cacheToLocalStorage: false,
     endpointOverride: "/api/npd?page=1&pageSize=10000&status=all",
     storageKey: "npd_order_catalog",
     syncEventKey: "sync-data-npd",
