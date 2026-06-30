@@ -11,7 +11,7 @@ import { generateTransactionNo, getProductionJobPrefix, formatDate } from "../li
 import { cn } from "../lib/utils";
 import type { Company, Order, OrderItemSource, OrderSchedule, Production } from "../types";
 import type { OrderCatalogItem } from "../lib/orderItems";
-import { buildProducedQtyByScheduleId } from "../lib/productionScheduleQty";
+import { buildScheduleConsumptionByScheduleId } from "../lib/productionScheduleQty";
 
 type PlanningSource = Extract<OrderItemSource, "PHP" | "PLATE">;
 type SortKey = "scheduledDate" | "orderNo" | "companyName" | "fgItemName" | "linkedItemName" | "remainingQty";
@@ -205,8 +205,8 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
   const setJobRows = source === "PHP" ? setPhpJobMaster : setPlateJobMaster;
   const allJobRows = useMemo(() => [...fgProductions, ...phpJobMaster, ...plateJobMaster], [fgProductions, phpJobMaster, plateJobMaster]);
   const sourceItems = itemsBySource[source] || [];
-  const producedQtyByScheduleId = useMemo(
-    () => buildProducedQtyByScheduleId(fgProductions, phpJobMaster, plateJobMaster),
+  const consumptionByScheduleId = useMemo(
+    () => buildScheduleConsumptionByScheduleId(fgProductions, phpJobMaster, plateJobMaster),
     [fgProductions, phpJobMaster, plateJobMaster]
   );
   const todayStr = useMemo(() => {
@@ -232,8 +232,8 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
         const order = orders.find((row) => row.id === schedule.orderId);
         const fgItem = resolveOrderItem(order);
         const company = companies.find((row) => row.id === order?.companyId);
-        const producedQty = Number(producedQtyByScheduleId.get(schedule.id) || 0);
-        const fgPendingQty = getPendingFgQty(schedule, producedQty);
+        const consumedQty = Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0);
+        const fgPendingQty = getPendingFgQty(schedule, consumedQty);
         const isDirectSourceOrder = order?.itemSource === source;
         const scheduleErp = String(order?.erpCode || fgItem?.erp || "").trim();
         const linkedItem = isDirectSourceOrder
@@ -281,7 +281,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
         if (row.fgPendingQty <= 0 || !row.selectable || !row.linkedItem || row.remainingQty <= 0) return false;
         return row.isDirectSourceOrder || Boolean(row.setsPerBox);
       });
-  }, [companies, orders, plannedQtyByScheduleId, producedQtyByScheduleId, resolveOrderItem, schedules, source, sourceItems]);
+  }, [companies, consumptionByScheduleId, orders, plannedQtyByScheduleId, resolveOrderItem, schedules, source, sourceItems]);
 
   const availableCompanies = useMemo(() => {
     const ids = new Set(rows.map((row) => row.company?.id).filter(Boolean));

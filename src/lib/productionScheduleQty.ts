@@ -1,5 +1,11 @@
 import type { Production } from "../types";
 
+export type ScheduleConsumptionSummary = {
+  actualProducedQty: number;
+  plannedWithoutFfgQty: number;
+  effectiveConsumedQty: number;
+};
+
 function buildLinkedScheduleMap(rows: Production[]) {
   const map = new Map<string, string>();
   rows.forEach((row) => {
@@ -11,12 +17,17 @@ function buildLinkedScheduleMap(rows: Production[]) {
   return map;
 }
 
-export function buildProducedQtyByScheduleId(
+function hasFilledFfgValue(production: Production) {
+  const value = production.prodFromFFG;
+  return !(value === null || value === undefined || String(value) === "");
+}
+
+export function buildScheduleConsumptionByScheduleId(
   productions: Production[],
   phpJobs: Production[] = [],
   plateJobs: Production[] = [],
 ) {
-  const map = new Map<string, number>();
+  const map = new Map<string, ScheduleConsumptionSummary>();
   const phpScheduleByJobId = buildLinkedScheduleMap(phpJobs);
   const plateScheduleByJobId = buildLinkedScheduleMap(plateJobs);
 
@@ -32,10 +43,21 @@ export function buildProducedQtyByScheduleId(
       ).trim();
       const effectiveScheduleId = directScheduleId || phpLinkedScheduleId || plateLinkedScheduleId;
       if (!effectiveScheduleId) return;
-      map.set(
-        effectiveScheduleId,
-        (map.get(effectiveScheduleId) || 0) + Number(production.prodFromFFG || 0),
-      );
+
+      const current = map.get(effectiveScheduleId) || {
+        actualProducedQty: 0,
+        plannedWithoutFfgQty: 0,
+        effectiveConsumedQty: 0,
+      };
+
+      if (hasFilledFfgValue(production)) {
+        current.actualProducedQty += Number(production.prodFromFFG || 0);
+      } else {
+        current.plannedWithoutFfgQty += Number(production.qty || 0);
+      }
+
+      current.effectiveConsumedQty = current.actualProducedQty + current.plannedWithoutFfgQty;
+      map.set(effectiveScheduleId, current);
     });
 
   return map;

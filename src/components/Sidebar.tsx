@@ -58,6 +58,7 @@ import {
   hasProductionCorrugatedSheetUsage,
 } from "../lib/productionMaterialUsage";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
+import { buildScheduleConsumptionByScheduleId } from "../lib/productionScheduleQty";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -322,6 +323,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
+  const [phpJobMaster] = useData<Production>("php_job_master", []);
+  const [plateJobMaster] = useData<Production>("plate_job_master", []);
   const [materials] = useData<Material>("materials", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
@@ -433,9 +436,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       cutoffDate.setDate(cutoffDate.getDate() + 2);
       cutoffDate.setHours(23, 59, 59, 999);
 
+      const consumptionByScheduleId = buildScheduleConsumptionByScheduleId(productions, phpJobMaster, plateJobMaster);
       const getPendingProductionQty = (schedule: OrderSchedule) =>
         Math.max(
-          Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
+          Number(schedule.qty || 0) - Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0) - Number(schedule.canceledQty || 0),
           0
         );
 
@@ -531,9 +535,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         return date;
       };
 
+      const consumptionByScheduleId = buildScheduleConsumptionByScheduleId(productions, phpJobMaster, plateJobMaster);
       const getPendingProductionQty = (schedule: OrderSchedule) =>
         Math.max(
-          Number(schedule.qty || 0) - Number(schedule.producedQty || 0) - Number(schedule.canceledQty || 0),
+          Number(schedule.qty || 0) - Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0) - Number(schedule.canceledQty || 0),
           0
         );
 

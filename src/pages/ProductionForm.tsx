@@ -23,7 +23,7 @@ import { parseProductionFormVisibleColumns } from "../lib/productionFormColumns"
 import { fetchNpdItems } from "../lib/npdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getProductionMatchingFields } from "../lib/productionMatching";
-import { buildProducedQtyByScheduleId } from "../lib/productionScheduleQty";
+import { buildScheduleConsumptionByScheduleId } from "../lib/productionScheduleQty";
 
 const getJobMasterEntityName = (source: "PHP" | "PLATE") =>
   source === "PHP" ? "php_job_master" : "plate_job_master";
@@ -85,9 +85,9 @@ function round2(value: number) {
 function roundUpWhole(value: number) {
   return Math.ceil(value);
 }
-function getPendingProductionQty(schedule: OrderSchedule, producedQty: number) {
+function getPendingProductionQty(schedule: OrderSchedule, consumedQty: number) {
   return Math.max(
-    Number(schedule.qty || 0) - Number(producedQty || 0) - Number(schedule.canceledQty || 0),
+    Number(schedule.qty || 0) - Number(consumedQty || 0) - Number(schedule.canceledQty || 0),
     0
   );
 }
@@ -212,21 +212,21 @@ export function ProductionForm() {
       });
   }, []);
 
-  const producedQtyByScheduleId = useMemo(
-    () => buildProducedQtyByScheduleId(productions, phpJobMaster, plateJobMaster),
+  const consumptionByScheduleId = useMemo(
+    () => buildScheduleConsumptionByScheduleId(productions, phpJobMaster, plateJobMaster),
     [phpJobMaster, plateJobMaster, productions]
   );
 
   const pendingSchedules = useMemo(
     () =>
       schedules
-        .filter((schedule) => getPendingProductionQty(schedule, Number(producedQtyByScheduleId.get(schedule.id) || 0)) > 0)
+        .filter((schedule) => getPendingProductionQty(schedule, Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0)) > 0)
         .sort((a, b) => {
           const timeA = new Date(a.updateTimestamp || a.scheduledDate || 0).getTime();
           const timeB = new Date(b.updateTimestamp || b.scheduledDate || 0).getTime();
           return timeB - timeA;
         }),
-    [producedQtyByScheduleId, schedules]
+    [consumptionByScheduleId, schedules]
   );
 
   const erpLeastGsmMap = useMemo(() => {
@@ -250,10 +250,16 @@ export function ProductionForm() {
   const selectedItem = npdItems.find((item) => item.id === String(selectedOrder?.itemId || "").trim());
   const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
   const selectedErp = String(selectedOrder?.erpCode || "").trim();
-  const selectedScheduleProducedQty = selectedSchedule
-    ? Number(producedQtyByScheduleId.get(selectedSchedule.id) || 0)
+  const selectedScheduleActualProducedQty = selectedSchedule
+    ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.actualProducedQty || 0)
     : 0;
-  const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule, selectedScheduleProducedQty) : 0;
+  const selectedSchedulePlannedWithoutFfgQty = selectedSchedule
+    ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.plannedWithoutFfgQty || 0)
+    : 0;
+  const selectedScheduleConsumedQty = selectedSchedule
+    ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.effectiveConsumedQty || 0)
+    : 0;
+  const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule, selectedScheduleConsumedQty) : 0;
   const reelFormulaMode = settings[0]?.reelAsPerCalculation || REEL_FORMULA_MODE.breadthHeightBased;
   const cuttingSizeFormulaMode = settings[0]?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_MODE.currentLogic;
   const gsmFormulaMode = settings[0]?.gsmAsPerCalculation || GSM_FORMULA_MODE.currentLogic;
@@ -659,7 +665,7 @@ export function ProductionForm() {
     const order = orders.find((row) => row.id === schedule.orderId);
     const item = resolveOrderItem(order);
     const company = companies.find((row) => row.id === order?.companyId);
-    const pending = getPendingProductionQty(schedule, Number(producedQtyByScheduleId.get(schedule.id) || 0));
+    const pending = getPendingProductionQty(schedule, Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0));
 
     return {
       value: schedule.id,
@@ -788,7 +794,8 @@ export function ProductionForm() {
               <InfoTile label="ERP Code" value={selectedOrder.erpCode || "-"} />
               <InfoTile label="Schedule Date" value={formatDate(selectedSchedule.scheduledDate)} />
               <InfoTile label="Scheduled Qty" value={`${selectedSchedule.qty || 0} ${selectedItem?.uom || ""}`} />
-              <InfoTile label="Produced Qty" value={`${selectedScheduleProducedQty} ${selectedItem?.uom || ""}`} />
+              <InfoTile label="Produced Qty" value={`${selectedScheduleActualProducedQty} ${selectedItem?.uom || ""}`} />
+              <InfoTile label="Planned W/O FFG" value={`${selectedSchedulePlannedWithoutFfgQty} ${selectedItem?.uom || ""}`} />
               <InfoTile label="Cancelled Qty" value={`${selectedSchedule.canceledQty || 0} ${selectedItem?.uom || ""}`} />
               <InfoTile label="Pending Qty" value={`${pendingQty} ${selectedItem?.uom || ""}`} />
             </div>
