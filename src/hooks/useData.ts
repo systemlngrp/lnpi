@@ -104,9 +104,21 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       if (shouldCacheToLocalStorage) {
         const saved = safeGetLocalStorage(storageKey);
         if (saved) {
-          const parsed = JSON.parse(saved);
-          setDataState(parsed);
-          dataRef.current = parsed;
+          try {
+            const parsed = JSON.parse(saved);
+            setDataState(parsed);
+            dataRef.current = parsed;
+          } catch (parseError) {
+            console.warn(
+              `[useData] Invalid cached JSON for "${storageKey}". Clearing corrupted cache entry.`,
+              parseError,
+            );
+            try {
+              window.localStorage.removeItem(storageKey);
+            } catch (removeError) {
+              console.warn(`[useData] Failed to clear corrupted localStorage key "${storageKey}":`, removeError);
+            }
+          }
         }
       }
     } finally {
