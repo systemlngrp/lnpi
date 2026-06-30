@@ -31,7 +31,7 @@ import { cn } from "../lib/utils";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { normalizeOrderItemSource } from "../lib/orderItems";
-import { buildLinkedLoadingDetailsFromSlip, findLinkedItemByErp, getLinkedSetsPerBox } from "../lib/linkedLoading";
+import { buildLinkedLoadingDetailsFromSlip, findLinkedItemByMasterErp, getLinkedSetsPerBox } from "../lib/linkedLoading";
 import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
 
 interface PendingPlan extends DispatchPlan {
@@ -331,7 +331,7 @@ export function PendingLoading() {
     const fgItem = resolveOrderItem(order);
     const sourceItems = itemsBySource[source] || [];
     const itemErp = String(order?.erpCode || fgItem?.erp || "").trim();
-    const linkedItem = findLinkedItemByErp(sourceItems, itemErp);
+    const linkedItem = findLinkedItemByMasterErp(sourceItems, itemErp);
     const setsPerBox = getLinkedSetsPerBox(linkedItem);
     if (!linkedItem || !setsPerBox) return [];
     const raw = linkedItem.raw || {};

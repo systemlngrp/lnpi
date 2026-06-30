@@ -47,6 +47,12 @@ export function findLinkedItemByErp(items: OrderCatalogItem[], erpCode: unknown)
   });
 }
 
+export function findLinkedItemByMasterErp(items: OrderCatalogItem[], erpCode: unknown) {
+  const normalizedErp = normalizeErpCode(erpCode);
+  if (!normalizedErp) return undefined;
+  return items.find((item) => normalizeErpCode(item.raw?.masterItemNameErpCode) === normalizedErp);
+}
+
 export function getLinkedSetsPerBox(item?: OrderCatalogItem) {
   return toPositiveNumber(item?.raw?.numberOfSetsPerBox);
 }
@@ -79,7 +85,7 @@ export function buildLinkedLoadingDetailsFromSlip({
     if (lineSource !== "FG") return;
 
     const scheduleErp = String(line.erpCode || order?.erpCode || fgItem?.erp || "").trim();
-    const linkedItem = findLinkedItemByErp(sourceItems, scheduleErp);
+    const linkedItem = findLinkedItemByMasterErp(sourceItems, scheduleErp);
     const setsPerBox = getLinkedSetsPerBox(linkedItem);
     if (!linkedItem || !setsPerBox) return;
 
