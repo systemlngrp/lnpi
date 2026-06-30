@@ -54,6 +54,7 @@ interface LoadingModalState {
   companyId: string;
   itemSource: OrderItemSource;
   itemId: string;
+  itemName: string;
   plans: PendingPlan[];
 }
 
@@ -279,8 +280,8 @@ export function PendingLoading() {
     return !getModalValidation(loadingModal).isValid;
   }, [jobSplitQtys, loadedQuantities, loadingModal, openingStockQtys, currentAdjustmentByJobId, existingLoadedByJobId, productionMap, modalTruckId, packingDetails, extraItemsQty]);
 
-  const handleOpenLoad = (companyId: string, itemSource: OrderItemSource, itemId: string, itemPlans: PendingPlan[]) => {
-    setLoadingModal({ companyId, itemSource, itemId, plans: itemPlans });
+  const handleOpenLoad = (companyId: string, itemSource: OrderItemSource, itemId: string, itemName: string, itemPlans: PendingPlan[]) => {
+    setLoadingModal({ companyId, itemSource, itemId, itemName, plans: itemPlans });
     const modalKey = getModalKey(companyId, itemSource, itemId);
     const totalPending = itemPlans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
@@ -653,7 +654,7 @@ export function PendingLoading() {
                           <span className="font-bold text-sm text-black uppercase tracking-wider">{itemGroup.itemName}</span>
                         </div>
                         <button
-                          onClick={() => handleOpenLoad(company.companyId, itemGroup.itemSource, itemGroup.itemId, itemGroup.plans)}
+                          onClick={() => handleOpenLoad(company.companyId, itemGroup.itemSource, itemGroup.itemId, itemGroup.itemName, itemGroup.plans)}
                           className="bg-black text-white px-5 py-2 rounded text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition shadow-[4px_4px_0px_0px_rgba(79,70,229,1)] active:shadow-none active:translate-y-[2px]"
                         >
                           LOAD ITEM
@@ -744,7 +745,7 @@ export function PendingLoading() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-slate-50 p-4 border border-black rounded shadow-inner">
                   <div className="text-[10px] text-slate-500 uppercase font-black mb-1">Item Being Loaded</div>
-                  <div className="font-bold text-black text-sm">{npdItems.find((item) => item.id === loadingModal.itemId)?.name}</div>
+                  <div className="font-bold text-black text-sm">{loadingModal.itemName}</div>
                 </div>
                 
                 <div className="bg-slate-50 p-4 border border-black rounded shadow-inner">
