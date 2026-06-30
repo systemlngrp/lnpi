@@ -9,6 +9,7 @@ import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import type { Supplier } from "../types";
 import { useAutoRefreshEffect, useAutoRefreshPause } from "../hooks/useAutoRefresh";
+import { computePurchaseOrderTaxes } from "../lib/purchaseOrderTaxes";
 
 type PendingIndentLineRow = {
   indentLineId: string;
@@ -38,7 +39,7 @@ export function PurchaseOrderPendingIndentLines() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [rowInputs, setRowInputs] = useState<Record<string, { supplierId: string; qty: string; rate: string }>>({});
+  const [rowInputs, setRowInputs] = useState<Record<string, { supplierId: string; qty: string; rate: string; gstRate: string }>>({});
   const [creating, setCreating] = useState(false);
 
   useAutoRefreshPause(
@@ -133,6 +134,7 @@ export function PurchaseOrderPendingIndentLines() {
           supplierId: "",
           qty: String(Number(row.pendingQty || 0)),
           rate: String(Number.isFinite(suggestedRate) ? suggestedRate : 0),
+          gstRate: "18",
         },
       };
     });
@@ -157,6 +159,7 @@ export function PurchaseOrderPendingIndentLines() {
             supplierId: "",
             qty: String(Number(r.pendingQty || 0)),
             rate: String(Number.isFinite(suggestedRate) ? suggestedRate : 0),
+            gstRate: "18",
           };
         }
       });
@@ -164,10 +167,10 @@ export function PurchaseOrderPendingIndentLines() {
     });
   };
 
-  const updateInput = (indentLineId: string, patch: Partial<{ supplierId: string; qty: string; rate: string }>) => {
+  const updateInput = (indentLineId: string, patch: Partial<{ supplierId: string; qty: string; rate: string; gstRate: string }>) => {
     setRowInputs((prev) => ({
       ...prev,
-      [indentLineId]: { supplierId: "", qty: "0", rate: "0", ...(prev[indentLineId] || {}), ...patch },
+      [indentLineId]: { supplierId: "", qty: "0", rate: "0", gstRate: "18", ...(prev[indentLineId] || {}), ...patch },
     }));
   };
 
@@ -181,8 +184,10 @@ export function PurchaseOrderPendingIndentLines() {
       if (!input?.supplierId) return false;
       const qty = Number(input.qty || 0);
       const rate = Number(input.rate || 0);
+      const gstRate = Number(input.gstRate || 0);
       if (!Number.isFinite(qty) || qty <= 0) return false;
       if (!Number.isFinite(rate) || rate <= 0) return false;
+      if (!Number.isFinite(gstRate) || gstRate < 0) return false;
     }
     return true;
   }, [creating, filteredRowIds, rowInputs, selectedIds]);
@@ -198,6 +203,7 @@ export function PurchaseOrderPendingIndentLines() {
         supplierId: input?.supplierId,
         qty: Number(input?.qty || 0),
         rate: Number(input?.rate || 0),
+        gstRate: Number(input?.gstRate || 0),
       };
     });
 
@@ -213,6 +219,11 @@ export function PurchaseOrderPendingIndentLines() {
 
     if (payloadLines.some((l) => !Number.isFinite(l.rate) || l.rate < 0)) {
       alert("Please enter valid rate (>= 0) for all selected lines.");
+      return;
+    }
+
+    if (payloadLines.some((l) => !Number.isFinite(l.gstRate) || l.gstRate < 0)) {
+      alert("Please enter valid GST Rate (>= 0) for all selected lines.");
       return;
     }
 
@@ -309,6 +320,10 @@ export function PurchaseOrderPendingIndentLines() {
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Last PO Date</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Indent Qty <span className="text-red-500">*</span></th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Rate <span className="text-red-500">*</span></th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">GST Rate</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">CGST</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">SGST</th>
+              <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">IGST</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Qty</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">Cancelled</th>
               <th className="border border-black bg-slate-100 px-4 py-3 text-right text-xs font-bold uppercase text-black whitespace-nowrap">PO Created</th>
@@ -320,12 +335,21 @@ export function PurchaseOrderPendingIndentLines() {
           <tbody>
             {paginatedRows.length === 0 ? (
               <tr>
-                <td colSpan={18} className="border border-black px-6 py-10 text-center text-sm text-slate-600">
+                <td colSpan={22} className="border border-black px-6 py-10 text-center text-sm text-slate-600">
                   No pending indent lines found.
                 </td>
               </tr>
             ) : (
-              paginatedRows.map((row) => (
+              paginatedRows.map((row) => {
+                  const input = rowInputs[row.indentLineId];
+                  const supplier = suppliers.find((s) => s.id === input?.supplierId);
+                  const taxes = computePurchaseOrderTaxes(
+                    Number(input?.qty || 0),
+                    Number(input?.rate || 0),
+                    Number(input?.gstRate || 0),
+                    supplier?.gstSupplyType,
+                  );
+                  return (
                   <tr key={row.indentLineId} className="hover:bg-slate-50">
                     <td className="border border-black px-3 py-3 text-center">
                       <input
@@ -391,6 +415,20 @@ export function PurchaseOrderPendingIndentLines() {
                         className={`w-24 rounded border ${!rowInputs[row.indentLineId]?.rate || Number(rowInputs[row.indentLineId]?.rate) <= 0 ? 'border-red-500' : 'border-black'} bg-white px-2 py-1 text-right text-sm disabled:opacity-50`}
                       />
                     </td>
+                    <td className="border border-black px-4 py-3 text-sm text-black text-right whitespace-nowrap">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={rowInputs[row.indentLineId]?.gstRate || "18"}
+                        onChange={(e) => updateInput(row.indentLineId, { gstRate: e.target.value })}
+                        disabled={!selectedIds.has(row.indentLineId)}
+                        className="w-20 rounded border border-black bg-white px-2 py-1 text-right text-sm disabled:opacity-50"
+                      />
+                    </td>
+                    <td className="border border-black px-4 py-3 text-sm text-black text-right">{taxes.cgst ? taxes.cgst.toFixed(2) : "-"}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black text-right">{taxes.sgst ? taxes.sgst.toFixed(2) : "-"}</td>
+                    <td className="border border-black px-4 py-3 text-sm text-black text-right">{taxes.igst ? taxes.igst.toFixed(2) : "-"}</td>
                     <td className="border border-black px-4 py-3 text-sm text-black text-right">{Number(row.qty || 0).toLocaleString()}</td>
                     <td className="border border-black px-4 py-3 text-sm text-black text-right">{Number(row.cancelledQty || 0).toLocaleString()}</td>
                     <td className="border border-black px-4 py-3 text-sm text-black text-right">{Number(row.poQtyCreated || 0).toLocaleString()}</td>
@@ -413,7 +451,7 @@ export function PurchaseOrderPendingIndentLines() {
                       </div>
                     </td>
                   </tr>
-                ))
+                )})
             )}
           </tbody>
         </table>

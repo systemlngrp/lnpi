@@ -6,6 +6,7 @@ import { formatDate } from "../lib/serial";
 import { Spinner } from "../components/Spinner";
 import { Search, ChevronDown, ChevronUp, CheckSquare, Square } from "lucide-react";
 import { useAutoRefreshEffect, useAutoRefreshPause } from "../hooks/useAutoRefresh";
+import { computePurchaseOrderTaxes } from "../lib/purchaseOrderTaxes";
 
 interface PendingProcurementSource {
   indentLineId: string;
@@ -41,7 +42,7 @@ export function PurchaseOrderPending() {
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [supplierId, setSupplierId] = useState("");
-  const [rowInputs, setRowInputs] = useState<Record<string, { orderQty: string; rate: string }>>({});
+  const [rowInputs, setRowInputs] = useState<Record<string, { orderQty: string; rate: string; gstRate: string }>>({});
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -64,12 +65,13 @@ export function PurchaseOrderPending() {
       setRows(data);
       
       // Initialize inputs
-      const initialInputs: Record<string, { orderQty: string; rate: string }> = {};
+      const initialInputs: Record<string, { orderQty: string; rate: string; gstRate: string }> = {};
       data.forEach((row: PendingProcurementRow) => {
         const key = `${row.materialId}_${row.uom}`;
         initialInputs[key] = {
           orderQty: String(row.totalPendingQty),
-          rate: String(row.suggestedRate || 0)
+          rate: String(row.suggestedRate || 0),
+          gstRate: "18",
         };
       });
       setRowInputs(initialInputs);
@@ -118,7 +120,7 @@ export function PurchaseOrderPending() {
     setExpandedRows(next);
   };
 
-  const handleInputChange = (key: string, field: "orderQty" | "rate", value: string) => {
+  const handleInputChange = (key: string, field: "orderQty" | "rate" | "gstRate", value: string) => {
     setRowInputs(prev => ({
       ...prev,
       [key]: { ...prev[key], [field]: value }
@@ -142,7 +144,8 @@ export function PurchaseOrderPending() {
         materialId: row!.materialId,
         uom: row!.uom,
         orderQty: Number(input.orderQty),
-        rate: Number(input.rate)
+        rate: Number(input.rate),
+        gstRate: Number(input.gstRate || 0),
       };
     });
 
@@ -153,6 +156,11 @@ export function PurchaseOrderPending() {
 
     if (itemsToCreate.some(item => isNaN(item.rate) || item.rate < 0)) {
       alert("Please enter valid rates.");
+      return;
+    }
+
+    if (itemsToCreate.some(item => isNaN(item.gstRate) || item.gstRate < 0)) {
+      alert("Please enter valid GST Rates.");
       return;
     }
 
@@ -255,13 +263,17 @@ export function PurchaseOrderPending() {
               <th className="border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black">UOM</th>
               <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black text-indigo-700">Pending Indent</th>
               <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">Rate</th>
+              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">GST Rate</th>
+              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">CGST</th>
+              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">SGST</th>
+              <th className="border border-black px-4 py-3 text-right text-xs font-bold uppercase text-black">IGST</th>
               <th className="border border-black px-4 py-3 text-center text-xs font-bold uppercase text-black">Details</th>
             </tr>
           </thead>
           <tbody>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="border border-black px-6 py-10 text-center font-medium text-black">
+                <td colSpan={11} className="border border-black px-6 py-10 text-center font-medium text-black">
                   {searchTerm ? "No matching items found." : "No approved indents are waiting for purchase orders."}
                 </td>
               </tr>
@@ -270,7 +282,14 @@ export function PurchaseOrderPending() {
                 const key = `${row.materialId}_${row.uom}`;
                 const isSelected = selectedIds.has(key);
                 const isExpanded = expandedRows.has(key);
-                const inputs = rowInputs[key] || { orderQty: "0", rate: "0" };
+                const inputs = rowInputs[key] || { orderQty: "0", rate: "0", gstRate: "18" };
+                const supplier = suppliers.find((s) => s.id === supplierId);
+                const taxes = computePurchaseOrderTaxes(
+                  Number(inputs.orderQty || 0),
+                  Number(inputs.rate || 0),
+                  Number(inputs.gstRate || 0),
+                  supplier?.gstSupplyType,
+                );
 
                 return (
                   <>
@@ -307,6 +326,17 @@ export function PurchaseOrderPending() {
                           className="w-24 rounded border border-black bg-white px-2 py-1 text-right text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </td>
+                      <td className="border border-black px-4 py-2 text-right">
+                        <input
+                          type="number"
+                          value={inputs.gstRate}
+                          onChange={(e) => handleInputChange(key, "gstRate", e.target.value)}
+                          className="w-20 rounded border border-black bg-white px-2 py-1 text-right text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </td>
+                      <td className="border border-black px-4 py-4 text-right text-sm">{taxes.cgst ? taxes.cgst.toFixed(2) : "-"}</td>
+                      <td className="border border-black px-4 py-4 text-right text-sm">{taxes.sgst ? taxes.sgst.toFixed(2) : "-"}</td>
+                      <td className="border border-black px-4 py-4 text-right text-sm">{taxes.igst ? taxes.igst.toFixed(2) : "-"}</td>
                       <td className="border border-black px-4 py-4 text-center">
                         <button onClick={() => toggleExpand(key)} className="text-slate-400 hover:text-black">
                           {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
@@ -315,7 +345,7 @@ export function PurchaseOrderPending() {
                     </tr>
                     {isExpanded && (
                       <tr className="bg-slate-50">
-                        <td colSpan={7} className="border border-black p-0">
+                        <td colSpan={11} className="border border-black p-0">
                           <div className="p-4 overflow-x-auto">
                             <table className="min-w-full border-collapse bg-white text-xs">
                               <thead>

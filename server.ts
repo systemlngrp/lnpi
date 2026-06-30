@@ -2875,6 +2875,11 @@ async function initDb(retries = 5) {
           \`requiredDate\` VARCHAR(50) NOT NULL,
           \`totalQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`totalAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`taxableAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`cgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`sgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`igst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`grandTotal\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`remarks\` TEXT,
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending Approval',
           \`approvedBy\` VARCHAR(255),
@@ -2912,6 +2917,11 @@ async function initDb(retries = 5) {
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`amount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`gstRate\` DECIMAL(5,2) NOT NULL DEFAULT 18.00,
+          \`cgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`sgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`igst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`lineTotal\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`targetDeliveryDate\` VARCHAR(50),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
@@ -3951,6 +3961,11 @@ await db.query(`
         { table: "purchase_orders", column: "requiredDate", type: "VARCHAR(50) NOT NULL" },
         { table: "purchase_orders", column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_orders", column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "taxableAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "grandTotal", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_orders", column: "remarks", type: "TEXT" },
         { table: "purchase_orders", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending Approval'" },
         { table: "purchase_orders", column: "approvedBy", type: "VARCHAR(255)" },
@@ -3968,6 +3983,11 @@ await db.query(`
         { table: "purchase_order_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "purchase_order_lines", column: "rate", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "amount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "gstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 18.00" },
+        { table: "purchase_order_lines", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "lineTotal", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "targetDeliveryDate", type: "VARCHAR(50)" },
         { table: "purchase_order_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "purchase_order_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
@@ -5950,6 +5970,55 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
   }
 });
 
+const roundPoValue = (value: number) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
+function calculatePurchaseOrderLineTaxes(
+  qty: number,
+  rate: number,
+  gstRate: number,
+  gstSupplyType?: string,
+) {
+  const safeQty = Number(qty || 0);
+  const safeRate = Number(rate || 0);
+  const safeGstRate = Number(gstRate || 0);
+  const amount = roundPoValue(safeQty * safeRate);
+  const gstAmount = roundPoValue((amount * safeGstRate) / 100);
+
+  if (gstSupplyType === "INTER_STATE") {
+    return {
+      gstRate: safeGstRate,
+      amount,
+      cgst: 0,
+      sgst: 0,
+      igst: gstAmount,
+      lineTotal: roundPoValue(amount + gstAmount),
+    };
+  }
+
+  const halfTax = roundPoValue(gstAmount / 2);
+  return {
+    gstRate: safeGstRate,
+    amount,
+    cgst: halfTax,
+    sgst: halfTax,
+    igst: 0,
+    lineTotal: roundPoValue(amount + halfTax + halfTax),
+  };
+}
+
+function summarizePurchaseOrderTaxTotals(
+  lines: Array<{ qty: number; amount: number; cgst: number; sgst: number; igst: number; lineTotal: number }>,
+) {
+  return {
+    totalQty: roundPoValue(lines.reduce((sum, line) => sum + Number(line.qty || 0), 0)),
+    taxableAmount: roundPoValue(lines.reduce((sum, line) => sum + Number(line.amount || 0), 0)),
+    cgst: roundPoValue(lines.reduce((sum, line) => sum + Number(line.cgst || 0), 0)),
+    sgst: roundPoValue(lines.reduce((sum, line) => sum + Number(line.sgst || 0), 0)),
+    igst: roundPoValue(lines.reduce((sum, line) => sum + Number(line.igst || 0), 0)),
+    grandTotal: roundPoValue(lines.reduce((sum, line) => sum + Number(line.lineTotal || 0), 0)),
+  };
+}
+
 app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
@@ -6144,41 +6213,87 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
       }
       const poNo = `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
 
+      const [[supplierRow]] = await conn.query("SELECT gstSupplyType FROM `suppliers` WHERE id = ? LIMIT 1", [supplierId]) as any;
+      const supplierGstSupplyType = String(supplierRow?.gstSupplyType || "INTRA_STATE");
       const purchaseOrderId = crypto.randomUUID();
-      let totalQty = 0;
-      let totalAmount = 0;
 
       const poLinesToInsert: any[] = [];
+      const indentIdsForOrder = new Set<string>();
       for (const l of groupLines) {
         const row = byId.get(l.indentLineId);
         const qty = Number(l.qty || 0);
         const rate = Number(l.rate || 0);
-        const amount = qty * rate;
-        totalQty += qty;
-        totalAmount += amount;
+        const gstRate = Number(l.gstRate || 18);
+        const taxBreakup = calculatePurchaseOrderLineTaxes(qty, rate, gstRate, supplierGstSupplyType);
         poLinesToInsert.push({
           id: crypto.randomUUID(),
           purchaseOrderId,
           indentLineId: l.indentLineId,
           materialId: String(row.materialId),
+          erpCode: String(row.erpCode || ""),
           uom: String(row.uom || ""),
           qty,
           rate,
-          amount,
+          amount: taxBreakup.amount,
+          gstRate: taxBreakup.gstRate,
+          cgst: taxBreakup.cgst,
+          sgst: taxBreakup.sgst,
+          igst: taxBreakup.igst,
+          lineTotal: taxBreakup.lineTotal,
           targetDeliveryDate: String(row.targetDeliveryDate || ""),
         });
         indentLinesToUpdate.set(l.indentLineId, (indentLinesToUpdate.get(l.indentLineId) || 0) + qty);
+        if (row?.indentId) indentIdsForOrder.add(String(row.indentId));
       }
 
+      const totals = summarizePurchaseOrderTaxTotals(poLinesToInsert);
+      const indentIdForOrder = indentIdsForOrder.size === 1 ? Array.from(indentIdsForOrder)[0] : null;
+
       await conn.query(
-        "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [purchaseOrderId, poNo, null, supplierId, dateStr, dateStr, totalQty, totalAmount, String(remarks || "").trim(), "Pending Approval", auditActor, auditTimestamp]
+        "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, taxableAmount, cgst, sgst, igst, grandTotal, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          purchaseOrderId,
+          poNo,
+          indentIdForOrder,
+          supplierId,
+          dateStr,
+          dateStr,
+          totals.totalQty,
+          totals.taxableAmount,
+          totals.taxableAmount,
+          totals.cgst,
+          totals.sgst,
+          totals.igst,
+          totals.grandTotal,
+          String(remarks || "").trim(),
+          "Pending Approval",
+          auditActor,
+          auditTimestamp,
+        ]
       );
 
       for (const line of poLinesToInsert) {
         await conn.query(
-          "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, auditActor, auditTimestamp]
+          "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, erpCode, uom, qty, rate, amount, gstRate, cgst, sgst, igst, lineTotal, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            line.id,
+            line.purchaseOrderId,
+            line.indentLineId,
+            line.materialId,
+            line.erpCode,
+            line.uom,
+            line.qty,
+            line.rate,
+            line.amount,
+            line.gstRate,
+            line.cgst,
+            line.sgst,
+            line.igst,
+            line.lineTotal,
+            line.targetDeliveryDate,
+            auditActor,
+            auditTimestamp,
+          ]
         );
       }
 
@@ -6249,19 +6364,21 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
     }
     const poNo = `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
 
+    const [[supplierRow]] = await conn.query("SELECT gstSupplyType FROM `suppliers` WHERE id = ? LIMIT 1", [supplierId]) as any;
+    const supplierGstSupplyType = String(supplierRow?.gstSupplyType || "INTRA_STATE");
     const purchaseOrderId = crypto.randomUUID();
-    let totalQty = 0;
-    let totalAmount = 0;
     const poLines: any[] = [];
     const indentLinesToUpdate = new Map<string, number>();
+    const indentIdsForOrder = new Set<string>();
 
     for (const item of items) {
       const { materialId, uom, orderQty, rate } = item;
+      const gstRate = Number(item?.gstRate || 18);
       let remainingToAllocate = Number(orderQty);
 
       const [sourceRows] = await conn.query(`
         SELECT 
-          il.id, il.qty, il.cancelledQty, il.orderedQty, il.targetDeliveryDate, i.requisitionDate,
+          il.id, il.indentId, il.erpCode, il.qty, il.cancelledQty, il.orderedQty, il.targetDeliveryDate, i.requisitionDate,
           COALESCE(pol_sum.poQtyCreated, 0) as poQtyCreated
         FROM indent_lines il
         JOIN indents i ON i.id = il.indentId
@@ -6284,37 +6401,64 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
         const pendingQty = Number(source.qty) - Number(source.cancelledQty) - Number(source.poQtyCreated || 0);
         const allocate = Math.min(remainingToAllocate, pendingQty);
         if (allocate > 0) {
+          const taxBreakup = calculatePurchaseOrderLineTaxes(allocate, Number(rate), gstRate, supplierGstSupplyType);
           poLines.push({
             id: crypto.randomUUID(),
             purchaseOrderId,
             indentLineId: source.id,
             materialId,
+            erpCode: source.erpCode,
             uom,
             qty: allocate,
             rate: Number(rate),
-            amount: allocate * Number(rate),
+            amount: taxBreakup.amount,
+            gstRate: taxBreakup.gstRate,
+            cgst: taxBreakup.cgst,
+            sgst: taxBreakup.sgst,
+            igst: taxBreakup.igst,
+            lineTotal: taxBreakup.lineTotal,
             targetDeliveryDate: source.targetDeliveryDate
           });
-          totalQty += allocate;
-          totalAmount += allocate * Number(rate);
           remainingToAllocate -= allocate;
           const existingAdd = indentLinesToUpdate.get(source.id) || 0;
           indentLinesToUpdate.set(source.id, existingAdd + allocate);
+          if (source.indentId) indentIdsForOrder.add(String(source.indentId));
         }
       }
     }
 
     if (poLines.length === 0) throw new Error("No quantities allocated to indent lines.");
 
+    const totals = summarizePurchaseOrderTaxTotals(poLines);
+    const indentIdForOrder = indentIdsForOrder.size === 1 ? Array.from(indentIdsForOrder)[0] : null;
+
     await conn.query(
-      "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [purchaseOrderId, poNo, null, supplierId, poDate, requiredDate || poDate, totalQty, totalAmount, remarks, "Pending Approval", auditActor, auditTimestamp]
+      "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, taxableAmount, cgst, sgst, igst, grandTotal, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        purchaseOrderId,
+        poNo,
+        indentIdForOrder,
+        supplierId,
+        poDate,
+        requiredDate || poDate,
+        totals.totalQty,
+        totals.taxableAmount,
+        totals.taxableAmount,
+        totals.cgst,
+        totals.sgst,
+        totals.igst,
+        totals.grandTotal,
+        remarks,
+        "Pending Approval",
+        auditActor,
+        auditTimestamp,
+      ]
     );
 
     for (const line of poLines) {
       await conn.query(
-        "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, auditActor, auditTimestamp]
+        "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, erpCode, uom, qty, rate, amount, gstRate, cgst, sgst, igst, lineTotal, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.erpCode, line.uom, line.qty, line.rate, line.amount, line.gstRate, line.cgst, line.sgst, line.igst, line.lineTotal, line.targetDeliveryDate, auditActor, auditTimestamp]
       );
     }
 

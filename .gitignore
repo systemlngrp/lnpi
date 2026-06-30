@@ -68,3 +68,5 @@ dist/Log/tally_debug/stock_item_no_unit_20260627_163101_MASTER_CARTON_BULB_LB_12
 dist/Log/tally_debug/stock_item_no_unit_20260627_163102_CBB_5P_GDB_200G_48G_20P_REV00_-_2010764_-_U_PLATE.xml
 allow_invoice_sync_outbound.ps1
 dist/invoicesync9004/InvoiceTallySync.exe
+pythoncode/mrrtallysync.py
+pythoncode/debug_tally_stock_item_xml.py

@@ -8,12 +8,14 @@ import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
 import { formatDate, generateTransactionNo } from "../lib/serial";
 import { normalizeIndentLine, summarizeIndentLines, withIndentTotals } from "../lib/indentTotals";
+import { computePurchaseOrderTaxes, summarizePurchaseOrderLines } from "../lib/purchaseOrderTaxes";
 
 type RowDraft = {
   supplierId: string;
   poQty: string;
   cancelQty: string;
   rate: string;
+  gstRate: string;
 };
 
 export function PurchaseOrderCreate() {
@@ -64,22 +66,27 @@ export function PurchaseOrderCreate() {
 
   const materialMap = useMemo(() => new Map(materials.map((material) => [material.id, material])), [materials]);
   const purchaseOrderMap = useMemo(() => new Map(purchaseOrders.map((po) => [po.id, po])), [purchaseOrders]);
+  const supplierMap = useMemo(() => new Map(suppliers.map((supplier) => [supplier.id, supplier])), [suppliers]);
 
   const lastOrderMap = useMemo(() => {
-    const best = new Map<string, { rate: number; poDate: string }>();
+    const best = new Map<string, { rate: number; gstRate: number; poDate: string }>();
     for (const line of purchaseOrderLines) {
       const po = purchaseOrderMap.get(line.purchaseOrderId);
       if (!po?.poDate) continue;
       const materialId = line.materialId;
       const existing = best.get(materialId);
       if (!existing || new Date(po.poDate).getTime() > new Date(existing.poDate).getTime()) {
-        best.set(materialId, { rate: Number(line.rate || 0), poDate: po.poDate });
+        best.set(materialId, {
+          rate: Number(line.rate || 0),
+          gstRate: Number(line.gstRate || 18),
+          poDate: po.poDate,
+        });
       }
     }
     return best;
   }, [purchaseOrderLines, purchaseOrderMap]);
 
-  const getDraft = (lineId: string): RowDraft => rowDrafts[lineId] || { supplierId: "", poQty: "", cancelQty: "", rate: "" };
+  const getDraft = (lineId: string): RowDraft => rowDrafts[lineId] || { supplierId: "", poQty: "", cancelQty: "", rate: "", gstRate: "18" };
 
   const setDraftField = (lineId: string, patch: Partial<RowDraft>) => {
     setRowDrafts((prev) => ({
@@ -105,12 +112,37 @@ export function PurchaseOrderCreate() {
           poQty: balanceQty > 0 ? String(balanceQty) : "",
           cancelQty: "",
           rate: last?.rate ? String(last.rate) : "",
+          gstRate: String(last?.gstRate || 18),
         };
         changed = true;
       }
       return changed ? next : prev;
     });
   }, [lastOrderMap, relevantLines]);
+
+  const computedPreviewLines = useMemo(() => {
+    return relevantLines
+      .map((line) => {
+        const draft = getDraft(line.id);
+        const poQty = Number(draft.poQty || 0);
+        const rate = Number(draft.rate || 0);
+        const gstRate = Number(draft.gstRate || 0);
+        const supplier = supplierMap.get(draft.supplierId);
+        const taxes = computePurchaseOrderTaxes(poQty, rate, gstRate, supplier?.gstSupplyType);
+        return {
+          lineId: line.id,
+          supplierId: draft.supplierId,
+          ...taxes,
+          qty: poQty,
+        };
+      })
+      .filter((line) => line.qty > 0);
+  }, [relevantLines, rowDrafts, supplierMap]);
+
+  const previewTotals = useMemo(
+    () => summarizePurchaseOrderLines(computedPreviewLines),
+    [computedPreviewLines],
+  );
 
   const handleCreatePo = async () => {
     if (!indent || !normalizedIndent) return;
@@ -119,8 +151,9 @@ export function PurchaseOrderCreate() {
       const draft = getDraft(line.id);
       const poQty = Number(draft.poQty || 0);
       const cancelQty = Number(draft.cancelQty || 0);
-      const rate = Number(draft.rate || 0);
-      return { line, draft, poQty, cancelQty, rate };
+          const rate = Number(draft.rate || 0);
+          const gstRate = Number(draft.gstRate || 0);
+      return { line, draft, poQty, cancelQty, rate, gstRate };
     });
 
     const hasAnyAction = actionableLines.some(({ poQty, cancelQty }) => poQty > 0 || cancelQty > 0);
@@ -130,7 +163,7 @@ export function PurchaseOrderCreate() {
     }
 
     for (const entry of actionableLines) {
-      const { line, draft, poQty, cancelQty, rate } = entry;
+      const { line, draft, poQty, cancelQty, rate, gstRate } = entry;
       const balanceQty = Number(line.balanceQty || 0);
       if (poQty < 0 || cancelQty < 0) {
         alert("PO Quantity and Cancel Quantity cannot be negative.");
@@ -148,18 +181,22 @@ export function PurchaseOrderCreate() {
         alert("Please enter a rate greater than 0 for each ordered line.");
         return;
       }
+      if (poQty > 0 && gstRate < 0) {
+        alert("Please enter a GST Rate greater than or equal to 0 for each ordered line.");
+        return;
+      }
     }
 
     setIsSubmitting(true);
     const timestamp = new Date().toISOString();
     const newOrders: PurchaseOrder[] = [];
     const newOrderLines: PurchaseOrderLine[] = [];
-    const orderGroups = new Map<string, { supplierId: string; lines: Array<{ line: IndentLine; poQty: number; rate: number }> }>();
+    const orderGroups = new Map<string, { supplierId: string; lines: Array<{ line: IndentLine; poQty: number; rate: number; gstRate: number }> }>();
 
-    actionableLines.forEach(({ line, draft, poQty, rate }) => {
+    actionableLines.forEach(({ line, draft, poQty, rate, gstRate }) => {
       if (poQty <= 0 || !draft.supplierId) return;
       const existing = orderGroups.get(draft.supplierId) || { supplierId: draft.supplierId, lines: [] };
-      existing.lines.push({ line, poQty, rate });
+      existing.lines.push({ line, poQty, rate, gstRate });
       orderGroups.set(draft.supplierId, existing);
     });
 
@@ -174,26 +211,11 @@ export function PurchaseOrderCreate() {
           poDate
         );
         const purchaseOrderId = crypto.randomUUID();
-        const totalQty = group.lines.reduce((sum, row) => sum + row.poQty, 0);
-        const totalAmount = group.lines.reduce((sum, row) => sum + row.poQty * row.rate, 0);
-        const nextOrder: PurchaseOrder = {
-          id: purchaseOrderId,
-          poNo,
-          indentId: indent.id,
-          supplierId: group.supplierId,
-          poDate,
-          requiredDate: indent.requiredDate,
-          totalQty,
-          totalAmount,
-          remarks: remarks.trim() || undefined,
-          status: "Pending Approval",
-          updatedBy: "System User",
-          updateTimestamp: timestamp,
-        };
-        newOrders.push(nextOrder);
-
-        group.lines.forEach(({ line, poQty, rate }) => {
-          newOrderLines.push({
+        const supplier = supplierMap.get(group.supplierId);
+        const nextOrderLines: PurchaseOrderLine[] = [];
+        group.lines.forEach(({ line, poQty, rate, gstRate }) => {
+          const taxes = computePurchaseOrderTaxes(poQty, rate, gstRate, supplier?.gstSupplyType);
+          nextOrderLines.push({
             id: crypto.randomUUID(),
             purchaseOrderId,
             indentLineId: line.id,
@@ -202,12 +224,39 @@ export function PurchaseOrderCreate() {
             uom: line.uom,
             qty: poQty,
             rate,
-            amount: poQty * rate,
+            amount: taxes.amount,
+            gstRate: taxes.gstRate,
+            cgst: taxes.cgst,
+            sgst: taxes.sgst,
+            igst: taxes.igst,
+            lineTotal: taxes.lineTotal,
             targetDeliveryDate: (line.targetDeliveryDate || "").trim() || undefined,
             updatedBy: "System User",
             updateTimestamp: timestamp,
           });
         });
+        const totals = summarizePurchaseOrderLines(nextOrderLines);
+        const nextOrder: PurchaseOrder = {
+          id: purchaseOrderId,
+          poNo,
+          indentId: indent.id,
+          supplierId: group.supplierId,
+          poDate,
+          requiredDate: indent.requiredDate,
+          totalQty: totals.totalQty,
+          totalAmount: totals.taxableAmount,
+          taxableAmount: totals.taxableAmount,
+          cgst: totals.cgst,
+          sgst: totals.sgst,
+          igst: totals.igst,
+          grandTotal: totals.grandTotal,
+          remarks: remarks.trim() || undefined,
+          status: "Pending Approval",
+          updatedBy: "System User",
+          updateTimestamp: timestamp,
+        };
+        newOrders.push(nextOrder);
+        newOrderLines.push(...nextOrderLines);
       });
 
       const nextIndentLines = indentLines.map((line) => {
@@ -346,8 +395,13 @@ export function PurchaseOrderCreate() {
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[140px]">New PO Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[150px]">New Cancel Qty</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[140px]">Rate</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[120px]">GST Rate</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[120px]">CGST</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[120px]">SGST</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[120px]">IGST</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[150px]">Last PO</th>
                 <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[160px]">Amount</th>
+                <th className="border-2 border-black px-4 py-3 text-right text-sm font-bold min-w-[160px]">Line Total</th>
               </tr>
             </thead>
             <tbody>
@@ -356,7 +410,9 @@ export function PurchaseOrderCreate() {
                 const draft = getDraft(line.id);
                 const poQty = Number(draft.poQty || 0);
                 const rate = Number(draft.rate || 0);
-                const amount = poQty * rate;
+                const gstRate = Number(draft.gstRate || 0);
+                const supplier = supplierMap.get(draft.supplierId);
+                const taxes = computePurchaseOrderTaxes(poQty, rate, gstRate, supplier?.gstSupplyType);
                 const last = lastOrderMap.get(line.materialId);
                 return (
                   <tr key={line.id} className="bg-white hover:bg-slate-50">
@@ -408,6 +464,19 @@ export function PurchaseOrderCreate() {
                         className="w-[120px] rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                       />
                     </td>
+                    <td className="border-2 border-black px-3 py-3">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={draft.gstRate}
+                        onChange={(e) => setDraftField(line.id, { gstRate: e.target.value })}
+                        className="w-[100px] rounded border border-slate-300 px-3 py-2 text-right text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                      />
+                    </td>
+                    <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{taxes.cgst ? taxes.cgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+                    <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{taxes.sgst ? taxes.sgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
+                    <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{taxes.igst ? taxes.igst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
                     <td className="border-2 border-black px-4 py-3 text-xs text-slate-700 whitespace-nowrap">
                       {last ? (
                         <div>
@@ -418,13 +487,27 @@ export function PurchaseOrderCreate() {
                         "-"
                       )}
                     </td>
-                    <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{amount ? amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}</td>
+                    <td className="border-2 border-black px-4 py-3 text-sm text-black text-right">{taxes.amount ? taxes.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}</td>
+                    <td className="border-2 border-black px-4 py-3 text-sm font-bold text-black text-right">{taxes.lineTotal ? taxes.lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
           </div>
+        </div>
+
+        <div className="ml-auto grid max-w-md grid-cols-2 gap-x-6 gap-y-2 rounded border border-black bg-slate-50 p-4 text-sm">
+          <div className="font-bold text-slate-700">Taxable Amount</div>
+          <div className="text-right font-bold text-black">{previewTotals.taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className="font-bold text-slate-700">CGST</div>
+          <div className="text-right font-bold text-black">{previewTotals.cgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className="font-bold text-slate-700">SGST</div>
+          <div className="text-right font-bold text-black">{previewTotals.sgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className="font-bold text-slate-700">IGST</div>
+          <div className="text-right font-bold text-black">{previewTotals.igst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className="font-black text-black">Grand Total</div>
+          <div className="text-right font-black text-black">{previewTotals.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
 
         <div className="flex justify-end">

@@ -278,6 +278,11 @@ export interface PurchaseOrder {
   requiredDate: string;
   totalQty: number;
   totalAmount: number;
+  taxableAmount?: number;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
+  grandTotal?: number;
   remarks?: string;
   status: "Pending Approval" | "Approved" | "Rejected";
   approvedBy?: string;
@@ -299,6 +304,11 @@ export interface PurchaseOrderLine {
   qty: number;
   rate: number;
   amount: number;
+  gstRate?: number;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
+  lineTotal?: number;
   targetDeliveryDate?: string;
   updatedBy?: string;
   updateTimestamp?: string;

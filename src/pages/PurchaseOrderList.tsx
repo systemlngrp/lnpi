@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useData } from "../hooks/useData";
@@ -8,6 +8,7 @@ import {
   Material, 
   Supplier, 
   Indent,
+  IndentLine,
   Setting
 } from "../types";
 import { 
@@ -53,6 +54,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [materials] = useData<Material>("materials", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [indents] = useData<Indent>("indents", []);
+  const [indentLines] = useData<IndentLine>("indent-lines", []);
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -66,6 +68,22 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const currentSetting = settings[0];
   const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
   const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.name])), [suppliers]);
+  const indentMap = useMemo(() => new Map(indents.map((indent) => [indent.id, indent])), [indents]);
+  const indentLineMap = useMemo(() => new Map(indentLines.map((line) => [line.id, line])), [indentLines]);
+
+  const getOrderIndentRefs = useCallback((order: PurchaseOrder, lines: PurchaseOrderLine[]) => {
+    const refs = new Set<string>();
+    if (order.indentId) {
+      const indentNo = indentMap.get(order.indentId)?.indentNo;
+      if (indentNo) refs.add(indentNo);
+    }
+    for (const line of lines) {
+      const indentId = indentLineMap.get(line.indentLineId)?.indentId;
+      const indentNo = indentId ? indentMap.get(indentId)?.indentNo : "";
+      if (indentNo) refs.add(indentNo);
+    }
+    return Array.from(refs);
+  }, [indentLineMap, indentMap]);
 
   const filteredOrders = useMemo(() => {
     return purchaseOrders
@@ -213,7 +231,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           supplierMap.get(order.supplierId) || "Unknown",
           itemsSummary,
           Number(order.totalQty || 0).toLocaleString(),
-          Number(order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          Number(order.grandTotal ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
           ...(mode === "rejected" ? [order.rejectedRemarks || ""] : []),
           order.status,
         ];
@@ -232,7 +250,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
 
   const handleRowPdf = async (order: PurchaseOrder) => {
     const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
-    const indent = indents.find((row) => row.id === order.indentId);
+    const indentRefs = getOrderIndentRefs(order, lines);
     const supplierName = supplierMap.get(order.supplierId) || "Unknown";
     const doc = new jsPDF("p", "mm", "a4");
     setPdfOrderId(order.id);
@@ -252,21 +270,17 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       doc.text(`Status: ${order.status}`, 140, y);
       y += 6;
       doc.text(`Supplier: ${supplierName}`, 14, y);
-      doc.text(`Indent Ref: ${indent?.indentNo || "-"}`, 140, y);
+      doc.text(`Indent Ref: ${indentRefs.join(", ") || "-"}`, 140, y);
       y += 6;
       doc.text(`PO Date: ${formatDate(order.poDate)}`, 14, y);
       doc.text(`Required Date: ${formatDate(order.requiredDate)}`, 140, y);
       y += 6;
       doc.text(`Total Qty: ${Number(order.totalQty || 0).toLocaleString()}`, 14, y);
-      doc.text(`Total Amount: Rs. ${Number(order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, y);
+      doc.text(`Grand Total: Rs. ${Number(order.grandTotal ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, y);
       y += 8;
-
-      const notes: string[] = [];
-      if (order.remarks?.trim()) notes.push(`Remarks: ${order.remarks.trim()}`);
-      if (order.rejectedRemarks?.trim()) notes.push(`Rejection Reason: ${order.rejectedRemarks.trim()}`);
-      if (notes.length > 0) {
+      if (order.rejectedRemarks?.trim()) {
         doc.setFont("helvetica", "normal");
-        const noteLines = doc.splitTextToSize(notes.join("   "), 180);
+        const noteLines = doc.splitTextToSize(`Rejection Reason: ${order.rejectedRemarks.trim()}`, 180);
         doc.text(noteLines, 14, y);
         y += noteLines.length * 5 + 2;
       }
@@ -282,19 +296,46 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           "Qty",
           "UOM",
           "Rate",
+          "GST Rate",
+          "CGST",
+          "SGST",
+          "IGST",
           "Amount",
+          "Line Total",
           "Target Delivery",
         ]],
         body: lines.map((line) => [
-          line.erpCode || "",
+          line.erpCode || materialMap.get(line.materialId)?.erpCode || "",
           materialMap.get(line.materialId)?.name || "Unknown",
           Number(line.qty || 0).toLocaleString(),
           line.uom || "",
           `Rs. ${Number(line.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `${Number(line.gstRate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
+          `Rs. ${Number(line.cgst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `Rs. ${Number(line.sgst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `Rs. ${Number(line.igst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           `Rs. ${Number(line.amount || line.qty * line.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `Rs. ${Number(line.lineTotal ?? ((Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0)) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-",
         ]),
       });
+
+      const finalY = (doc as any).lastAutoTable?.finalY || y;
+      const taxableAmount = Number(order.taxableAmount ?? order.totalAmount || 0);
+      const cgst = Number(order.cgst || 0);
+      const sgst = Number(order.sgst || 0);
+      const igst = Number(order.igst || 0);
+      const grandTotal = Number(order.grandTotal ?? order.totalAmount || 0);
+      const summaryY = finalY + 8;
+      doc.setFont("helvetica", "bold");
+      doc.text("Summary", 140, summaryY);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Taxable Amount: Rs. ${taxableAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 6);
+      doc.text(`CGST: Rs. ${cgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 12);
+      doc.text(`SGST: Rs. ${sgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 18);
+      doc.text(`IGST: Rs. ${igst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 24);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Grand Total: Rs. ${grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 140, summaryY + 32);
 
       doc.save(`PO_${order.poNo || order.id}.pdf`);
     } finally {
@@ -347,7 +388,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
               paginatedOrders.map((order) => {
                 const isExpanded = expandedRows.has(order.id);
                 const lines = orderLines.filter((l) => l.purchaseOrderId === order.id);
-                const indent = indents.find((i) => i.id === order.indentId);
+                const indentRefs = getOrderIndentRefs(order, lines);
                 
                 return (
                   <React.Fragment key={order.id}>
@@ -392,7 +433,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                         </ul>
                       </td>
                       <td className="px-4 py-4 text-sm text-black text-right font-bold">{Number(order.totalQty || 0).toLocaleString()}</td>
-                      <td className="px-4 py-4 text-sm text-black text-right font-mono font-bold">₹{Number(order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-4 text-sm text-black text-right font-mono font-bold">₹{Number(order.grandTotal ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       {mode === "rejected" ? (
                         <td className="px-4 py-4 text-sm text-red-700 italic">{order.rejectedRemarks || ""}</td>
                       ) : null}
@@ -480,28 +521,45 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                           <div className="border-2 border-black rounded overflow-hidden shadow-sm">
                             <div className="bg-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-wider flex justify-between border-b border-black">
                               <span>PO Items Details</span>
-                              {indent && <span>Indent Ref: {indent.indentNo}</span>}
+                              <span>Indent Ref: {indentRefs.join(", ") || "-"}</span>
                             </div>
                             <table className="min-w-full divide-y divide-black">
                               <thead className="bg-slate-100">
                                 <tr className="divide-x divide-black text-[9px] font-black uppercase text-slate-500">
+                                  <th className="px-3 py-2 text-left">ERP</th>
                                   <th className="px-3 py-2 text-left">Item Name</th>
                                   <th className="px-3 py-2 text-right">Qty</th>
                                   <th className="px-3 py-2 text-center">UOM</th>
                                   <th className="px-3 py-2 text-right">Rate</th>
-                                  <th className="px-3 py-2 text-right">Total</th>
+                                  <th className="px-3 py-2 text-right">GST Rate</th>
+                                  <th className="px-3 py-2 text-right">CGST</th>
+                                  <th className="px-3 py-2 text-right">SGST</th>
+                                  <th className="px-3 py-2 text-right">IGST</th>
+                                  <th className="px-3 py-2 text-right">Amount</th>
+                                  <th className="px-3 py-2 text-right">Line Total</th>
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-black">
                                 {lines.map((l, lidx) => (
                                   <tr key={lidx} className="divide-x divide-black text-[10px] font-bold">
+                                    <td className="px-3 py-2 text-black">{l.erpCode || materialMap.get(l.materialId)?.erpCode || ""}</td>
                                     <td className="px-3 py-2 text-black uppercase">{materialMap.get(l.materialId)?.name || "Unknown"}</td>
                                     <td className="px-3 py-2 text-right">{l.qty.toLocaleString()}</td>
                                     <td className="px-3 py-2 text-center">{l.uom}</td>
-                                    <td className="px-3 py-2 text-right">₹{l.rate.toLocaleString()}</td>
-                                    <td className="px-3 py-2 text-right">₹{(l.qty * l.rate).toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right">₹{Number(l.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2 text-right">{Number(l.gstRate || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
+                                    <td className="px-3 py-2 text-right">₹{Number(l.cgst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2 text-right">₹{Number(l.sgst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2 text-right">₹{Number(l.igst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2 text-right">₹{Number(l.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2 text-right">₹{Number(l.lineTotal ?? (Number(l.amount || 0) + Number(l.cgst || 0) + Number(l.sgst || 0) + Number(l.igst || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                   </tr>
                                 ))}
+                                <tr className="divide-x divide-black bg-slate-100 text-[10px] font-black">
+                                  <td className="px-3 py-2" colSpan={9}>Summary</td>
+                                  <td className="px-3 py-2 text-right">₹{Number(order.taxableAmount ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                  <td className="px-3 py-2 text-right">₹{Number(order.grandTotal ?? order.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                </tr>
                               </tbody>
                             </table>
                           </div>
