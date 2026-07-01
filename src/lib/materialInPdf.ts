@@ -37,7 +37,7 @@ export async function downloadMaterialInPdf({
   companies?: Company[];
   setting?: Setting | null;
 }) {
-  const doc = new jsPDF("p", "mm", "a4");
+  const doc = new jsPDF("l", "mm", "a4");
   let currentY = (await renderOrganizationHeader(doc, setting)).currentY;
 
   doc.setFont("helvetica", "bold");
@@ -142,37 +142,37 @@ export async function downloadMaterialInPdf({
 
   const columnStyles: Record<number, any> = {
     0: { halign: "center", cellWidth: 10 },
-    1: { cellWidth: 44 },
-    2: { cellWidth: 18 },
-    3: { halign: "center", cellWidth: 10 },
-    4: { halign: "right", cellWidth: 12 },
-    5: { halign: "right", cellWidth: 12 },
-    6: { halign: "right", cellWidth: 12 },
-    7: { halign: "right", cellWidth: 10 },
+    1: { cellWidth: 88 },
+    2: { cellWidth: 26 },
+    3: { halign: "center", cellWidth: 14 },
+    4: { halign: "right", cellWidth: 18 },
+    5: { halign: "right", cellWidth: 18 },
+    6: { halign: "right", cellWidth: 18 },
+    7: { halign: "right", cellWidth: 14 },
   };
 
   let columnIndex = 8;
   if (hasCgstOrSgst) {
-    columnStyles[columnIndex] = { halign: "right", cellWidth: 12 };
-    columnStyles[columnIndex + 1] = { halign: "right", cellWidth: 12 };
+    columnStyles[columnIndex] = { halign: "right", cellWidth: 16 };
+    columnStyles[columnIndex + 1] = { halign: "right", cellWidth: 16 };
     columnIndex += 2;
   }
   if (hasIgst) {
-    columnStyles[columnIndex] = { halign: "right", cellWidth: 12 };
+    columnStyles[columnIndex] = { halign: "right", cellWidth: 16 };
     columnIndex += 1;
   }
-  columnStyles[columnIndex] = { halign: "right", cellWidth: 14 };
-  columnStyles[columnIndex + 1] = { halign: "right", cellWidth: 14 };
+  columnStyles[columnIndex] = { halign: "right", cellWidth: 22 };
+  columnStyles[columnIndex + 1] = { halign: "right", cellWidth: 22 };
 
   autoTable(doc, {
     startY: currentY,
     head: [lineTableHead],
     body: lineTableRows,
     theme: "grid",
-    headStyles: { fillColor: [43, 63, 100], textColor: 255, fontStyle: "bold" },
+    headStyles: { fillColor: [43, 63, 100], textColor: 255, fontStyle: "bold", fontSize: 7.2, cellPadding: 2.2 },
     bodyStyles: { lineColor: [170, 170, 170], lineWidth: 0.15 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    styles: { fontSize: 8.3, cellPadding: 2.5, textColor: 0, valign: "middle", overflow: "linebreak" },
+    styles: { fontSize: 8.7, cellPadding: 2.5, textColor: 0, valign: "middle", overflow: "linebreak" },
     columnStyles,
     margin: { left: 14, right: 14 },
   });
