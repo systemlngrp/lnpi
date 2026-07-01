@@ -1,14 +1,13 @@
 import { Fragment, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Company, Material, MaterialIn, Service, Supplier } from "../types";
+import { Company, Material, MaterialIn, Service, Supplier, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { CheckCircle, XCircle, Search, FileText, ChevronRight, ChevronDown, ArrowLeft, Edit2, Download, ArrowUp, ArrowDown } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { downloadMaterialInPdf } from "../lib/materialInPdf";
 
 type Stage = "All MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally";
 type SortField = "timestamp" | "gateEntryNo" | "transactionNo";
@@ -22,6 +21,7 @@ export function MrrApprovals() {
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
   const [services] = useData<Service>("services", []);
+  const [settings] = useData<Setting>("settings", []);
   
   const [activeStage, setActiveStage] = useState<Stage>("All MRR");
   const [searchTerm, setSearchTerm] = useState("");
@@ -220,37 +220,16 @@ export function MrrApprovals() {
     }
   };
 
-  const downloadPdf = (mrr: MaterialIn) => {
-    const doc = new jsPDF();
-    const supplierName = getSupplierName(mrr.supplierId);
-    
-    doc.setFontSize(18);
-    doc.text("MATERIAL RECEIPT", 105, 15, { align: "center" });
-    
-    doc.setFontSize(10);
-    doc.text(`MRR No: ${mrr.transactionNo}`, 14, 25);
-    doc.text(`Date: ${formatDate(mrr.date)}`, 14, 30);
-    doc.text(`Supplier/Customer: ${supplierName || "N/A"}`, 14, 35);
-    doc.text(`Invoice No: ${mrr.invoiceNo}`, 14, 40);
-    
-    const tableData = mrr.lines.map((l, i) => [
-      i + 1,
-      getItemSpecs(l, mrr.mrrType),
-      l.actualQty || l.qty,
-      l.uom,
-      l.invoiceRate || l.rate,
-      l.actualValue || l.value
-    ]);
-
-    autoTable(doc, {
-      startY: 45,
-      head: [["S.No", "Item Description", "Qty", "UOM", "Rate", "Amount"]],
-      body: tableData,
-      theme: "grid",
-      headStyles: { fillColor: [0, 0, 0], textColor: "white" }
+  const downloadPdf = async (mrr: MaterialIn) => {
+    await downloadMaterialInPdf({
+      mrr,
+      materials,
+      npdItems,
+      services,
+      suppliers,
+      companies,
+      setting: settings[0] || null,
     });
-
-    doc.save(`MRR_${mrr.transactionNo}.pdf`);
   };
 
   const getMaterialSpecs = (material: Material) => {
