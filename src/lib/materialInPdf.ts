@@ -51,37 +51,17 @@ export async function downloadMaterialInPdf({
   const hasIgst = Number(mrr.totalIgst || 0) > 0;
   const hasCgstOrSgst = Number(mrr.totalCgst || 0) > 0 || Number(mrr.totalSgst || 0) > 0;
 
-  const metadataRows: Array<[string, string, string, string]> = [
-    [
-      "MRR No",
-      mrr.transactionNo,
-      "MRR Date",
-      formatDisplayDate(mrr.date),
-    ],
-    [
-      "Gate Entry No",
-      mrr.gateEntryNo || "-",
-      "Supplier / Customer",
-      supplierLabel,
-    ],
-    [
-      "Invoice No",
-      mrr.invoiceNo || "-",
-      "Invoice Date",
-      formatDisplayDate(mrr.invDate),
-    ],
-    [
-      "Status",
-      mrr.status || "-",
-      "MRR Type",
-      mrr.mrrType || "Others",
-    ],
-    [
-      "Invoice Currency",
-      mrr.invoiceCurrency || "INR",
-      "Exchange Rate",
-      mrr.invoiceCurrency === "USD" ? Number(mrr.exchangeRate || 0).toFixed(4) : "-",
-    ],
+  const metadataRows: Array<[string, string]> = [
+    ["MRR No", mrr.transactionNo],
+    ["MRR Date", formatDisplayDate(mrr.date)],
+    ["Gate Entry No", mrr.gateEntryNo || "-"],
+    ["Supplier / Customer", supplierLabel],
+    ["Invoice No", mrr.invoiceNo || "-"],
+    ["Invoice Date", formatDisplayDate(mrr.invDate)],
+    ["Status", mrr.status || "-"],
+    ["MRR Type", mrr.mrrType || "Others"],
+    ["Invoice Currency", mrr.invoiceCurrency || "INR"],
+    ["Exchange Rate", mrr.invoiceCurrency === "USD" ? Number(mrr.exchangeRate || 0).toFixed(4) : "-"],
   ];
 
   autoTable(doc, {
@@ -89,8 +69,8 @@ export async function downloadMaterialInPdf({
     body: metadataRows,
     theme: "grid",
     styles: {
-      fontSize: 10.5,
-      cellPadding: { top: 3.2, right: 3, bottom: 3.2, left: 3 },
+      fontSize: 9.5,
+      cellPadding: { top: 2.6, right: 3, bottom: 2.6, left: 3 },
       textColor: 0,
       lineColor: [0, 0, 0],
       lineWidth: 0.2,
@@ -98,10 +78,8 @@ export async function downloadMaterialInPdf({
     },
     margin: { left: 14, right: 14 },
     columnStyles: {
-      0: { cellWidth: 27, fontStyle: "bold", fillColor: [247, 248, 251] },
-      1: { cellWidth: 56 },
-      2: { cellWidth: 29, fontStyle: "bold", fillColor: [247, 248, 251] },
-      3: { cellWidth: 56 },
+      0: { cellWidth: 42, fontStyle: "bold", fillColor: [247, 248, 251] },
+      1: { cellWidth: 140 },
     },
   });
 
