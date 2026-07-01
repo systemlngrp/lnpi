@@ -367,6 +367,23 @@ export function MaterialInForm() {
     return materials.find((material) => material.id === materialId);
   };
 
+  const getLineDisplayName = (line: MaterialLine) => {
+    if (isServiceReturn) {
+      return line.itemName || services.find((service) => service.id === (line.serviceId || line.itemId))?.name || "Unknown";
+    }
+
+    if (isFgType) {
+      return line.itemName || npdItems.find((item) => item.id === line.itemId)?.name || "Unknown";
+    }
+
+    return (
+      line.itemName ||
+      materials.find((item) => item.id === line.itemId)?.name ||
+      npdItems.find((item) => item.id === line.itemId)?.name ||
+      "Unknown"
+    );
+  };
+
   const getApprovedPoOptionsForMaterial = (materialId: string) => {
     const approvedOrders = purchaseOrders.filter(
       (order) =>
@@ -1533,7 +1550,7 @@ export function MaterialInForm() {
                   </thead>
                   <tbody className="divide-y divide-black bg-white">
                     {lines.map((line) => {
-                      const materialName = (line.itemName || getMaterial(line.itemId)?.name || "Unknown");
+                      const materialName = getLineDisplayName(line);
                       return (
                         <tr key={line.id} className="divide-x divide-black">
                           <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
