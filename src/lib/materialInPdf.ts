@@ -8,25 +8,16 @@ function formatMoney(value: number) {
   return `Rs ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function drawLabelValueRow(
-  doc: jsPDF,
-  labelX: number,
-  valueX: number,
-  y: number,
-  label: string,
-  value: string,
-  valueWidth?: number
-) {
-  doc.setFont("helvetica", "bold");
-  doc.text(`${label}:`, labelX, y);
-  doc.setFont("helvetica", "normal");
-  if (valueWidth && valueWidth > 0) {
-    const lines = doc.splitTextToSize(String(value || "-"), valueWidth);
-    doc.text(lines, valueX, y);
-    return lines.length;
-  }
-  doc.text(String(value || "-"), valueX, y);
-  return 1;
+function formatQty(value: number) {
+  return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatRate(value: number) {
+  return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatDisplayDate(value?: string) {
+  return value ? formatDate(value) : "-";
 }
 
 export async function downloadMaterialInPdf({
@@ -57,49 +48,84 @@ export async function downloadMaterialInPdf({
   const supplier = suppliers.find((s) => s.id === mrr.supplierId);
   const company = companies?.find((entry) => entry.id === mrr.supplierId);
   const supplierLabel = supplier?.name || company?.name || mrr.supplierId;
+  const hasIgst = Number(mrr.totalIgst || 0) > 0;
+  const hasCgstOrSgst = Number(mrr.totalCgst || 0) > 0 || Number(mrr.totalSgst || 0) > 0;
 
-  const cardX = 14;
-  const cardY = currentY;
-  const cardWidth = 182;
-  const leftLabelX = 20;
-  const leftValueX = 48;
-  const rightLabelX = 109;
-  const rightValueX = 139;
-  const leftValueWidth = 50;
-  const rightValueWidth = 52;
-  const rowGap = 8;
-
-  const leftRows: Array<[string, string]> = [
-    ["MRR No", mrr.transactionNo],
-    ["Gate Entry No", mrr.gateEntryNo || "-"],
-    ["Invoice No", mrr.invoiceNo || "-"],
-    ["Status", mrr.status || "-"],
-    ["Invoice Currency", mrr.invoiceCurrency || "INR"],
+  const metadataRows: Array<[string, string, string, string]> = [
+    [
+      "MRR No",
+      mrr.transactionNo,
+      "MRR Date",
+      formatDisplayDate(mrr.date),
+    ],
+    [
+      "Gate Entry No",
+      mrr.gateEntryNo || "-",
+      "Supplier / Customer",
+      supplierLabel,
+    ],
+    [
+      "Invoice No",
+      mrr.invoiceNo || "-",
+      "Invoice Date",
+      formatDisplayDate(mrr.invDate),
+    ],
+    [
+      "Status",
+      mrr.status || "-",
+      "MRR Type",
+      mrr.mrrType || "Others",
+    ],
+    [
+      "Invoice Currency",
+      mrr.invoiceCurrency || "INR",
+      "Exchange Rate",
+      mrr.invoiceCurrency === "USD" ? Number(mrr.exchangeRate || 0).toFixed(4) : "-",
+    ],
   ];
 
-  const rightRows: Array<[string, string]> = [
-    ["MRR Date", formatDate(mrr.date)],
-    ["Supplier / Customer", supplierLabel],
-    ["Invoice Date", formatDate(mrr.invDate)],
-    ["MRR Type", mrr.mrrType || "Others"],
-    ["Exchange Rate", mrr.invoiceCurrency === "USD" ? Number(mrr.exchangeRate || 0).toFixed(4) : "-"],
+  autoTable(doc, {
+    startY: currentY,
+    body: metadataRows,
+    theme: "grid",
+    styles: {
+      fontSize: 10.5,
+      cellPadding: { top: 3.2, right: 3, bottom: 3.2, left: 3 },
+      textColor: 0,
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
+      valign: "middle",
+    },
+    margin: { left: 14, right: 14 },
+    columnStyles: {
+      0: { cellWidth: 27, fontStyle: "bold", fillColor: [247, 248, 251] },
+      1: { cellWidth: 56 },
+      2: { cellWidth: 29, fontStyle: "bold", fillColor: [247, 248, 251] },
+      3: { cellWidth: 56 },
+    },
+  });
+
+  currentY = ((doc as any).lastAutoTable?.finalY || currentY) + 8;
+
+  const lineTableHead = [
+    "SL",
+    "Item Name",
+    "Our PO No.",
+    "UOM",
+    "Inv Qty",
+    "Act Qty",
+    "Rate",
+    "GST %",
   ];
 
-  const leftLineCounts = leftRows.map(([label, value], index) =>
-    drawLabelValueRow(doc, leftLabelX, leftValueX, cardY + 10 + index * rowGap, label, value, leftValueWidth)
-  );
-  const rightLineCounts = rightRows.map(([label, value], index) =>
-    drawLabelValueRow(doc, rightLabelX, rightValueX, cardY + 10 + index * rowGap, label, value, rightValueWidth)
-  );
+  if (hasCgstOrSgst) {
+    lineTableHead.push("CGST", "SGST");
+  }
+  if (hasIgst) {
+    lineTableHead.push("IGST");
+  }
 
-  const extraRightLines = Math.max(0, ...(rightLineCounts.map((count) => count - 1)));
-  const cardHeight = 48 + extraRightLines * 4.5;
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 2, 2);
-  doc.line(105, cardY + 4, 105, cardY + cardHeight - 4);
-
-  currentY = cardY + cardHeight + 8;
+  lineTableHead.push("Inv Value", "Act Value");
 
   const lineTableRows = mrr.lines.map((line, index) => {
     const itemName =
@@ -109,39 +135,67 @@ export async function downloadMaterialInPdf({
       materials.find(m => m.id === line.itemId)?.name ||
       npdItems.find(i => i.id === line.itemId)?.name ||
       "Unknown";
-    return [
+
+    const row = [
       index + 1,
       line.sourceGatePassItemDescription ? `${itemName} (${line.sourceGatePassItemDescription})` : itemName,
       line.poNo || "-",
-      line.uom,
-      Number(line.invoiceQty || 0).toFixed(2),
-      Number(line.actualQty || line.qty || 0).toFixed(2),
-      Number(line.invoiceRate || line.rate || 0).toFixed(2),
-      Number(line.gstRate || 0).toFixed(2),
-      Number(line.invoiceValue || 0).toFixed(2),
+      line.uom || "-",
+      formatQty(Number(line.invoiceQty || 0)),
+      formatQty(Number(line.actualQty || line.qty || 0)),
+      formatRate(Number(line.invoiceRate || line.rate || 0)),
+      formatRate(Number(line.gstRate || 0)),
     ];
+
+    if (hasCgstOrSgst) {
+      row.push(formatRate(Number(line.cgst || 0)), formatRate(Number(line.sgst || 0)));
+    }
+    if (hasIgst) {
+      row.push(formatRate(Number(line.igst || 0)));
+    }
+
+    row.push(
+      formatRate(Number(line.invoiceValue || 0)),
+      formatRate(Number(line.actualValue || line.value || 0)),
+    );
+
+    return row;
   });
+
+  const columnStyles: Record<number, any> = {
+    0: { halign: "center", cellWidth: 10 },
+    1: { cellWidth: 44 },
+    2: { cellWidth: 18 },
+    3: { halign: "center", cellWidth: 10 },
+    4: { halign: "right", cellWidth: 12 },
+    5: { halign: "right", cellWidth: 12 },
+    6: { halign: "right", cellWidth: 12 },
+    7: { halign: "right", cellWidth: 10 },
+  };
+
+  let columnIndex = 8;
+  if (hasCgstOrSgst) {
+    columnStyles[columnIndex] = { halign: "right", cellWidth: 12 };
+    columnStyles[columnIndex + 1] = { halign: "right", cellWidth: 12 };
+    columnIndex += 2;
+  }
+  if (hasIgst) {
+    columnStyles[columnIndex] = { halign: "right", cellWidth: 12 };
+    columnIndex += 1;
+  }
+  columnStyles[columnIndex] = { halign: "right", cellWidth: 14 };
+  columnStyles[columnIndex + 1] = { halign: "right", cellWidth: 14 };
 
   autoTable(doc, {
     startY: currentY,
-    head: [["SL", "Item Name", "Our PO No.", "UOM", "Inv Qty", "Act Qty", "Rate", "GST %", "Invoice Value"]],
+    head: [lineTableHead],
     body: lineTableRows,
     theme: "grid",
     headStyles: { fillColor: [43, 63, 100], textColor: 255, fontStyle: "bold" },
     bodyStyles: { lineColor: [170, 170, 170], lineWidth: 0.15 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    styles: { fontSize: 8.5, cellPadding: 2.8, textColor: 0, valign: "middle" },
-    columnStyles: {
-      0: { halign: "center", cellWidth: 10 },
-      1: { cellWidth: 60 },
-      2: { cellWidth: 26 },
-      3: { halign: "center", cellWidth: 12 },
-      4: { halign: "right", cellWidth: 16 },
-      5: { halign: "right", cellWidth: 16 },
-      6: { halign: "right", cellWidth: 16 },
-      7: { halign: "right", cellWidth: 14 },
-      8: { halign: "right", cellWidth: 22 },
-    },
+    styles: { fontSize: 8.3, cellPadding: 2.5, textColor: 0, valign: "middle", overflow: "linebreak" },
+    columnStyles,
     margin: { left: 14, right: 14 },
   });
 
@@ -149,14 +203,17 @@ export async function downloadMaterialInPdf({
   const summaryRows: Array<[string, string]> = [
     ["Invoice Value", formatMoney(Number(mrr.totalInvoiceValue || 0))],
     ["Actual Value", formatMoney(Number(mrr.totalActualValue || 0))],
-    ["CGST", formatMoney(Number(mrr.totalCgst || 0))],
-    ["SGST", formatMoney(Number(mrr.totalSgst || 0))],
-    ["IGST", formatMoney(Number(mrr.totalIgst || 0))],
     ["Invoice After GST", formatMoney(Number(mrr.totalInvoiceValueAfterGst || 0))],
     ["Insurance", formatMoney(Number(mrr.insurance || 0))],
     ["Other Charges", formatMoney(Number(mrr.otherCharges || 0))],
     ["Round Off", formatMoney(Number(mrr.roundOff || 0))],
   ];
+  if (hasCgstOrSgst) {
+    summaryRows.splice(2, 0, ["CGST", formatMoney(Number(mrr.totalCgst || 0))], ["SGST", formatMoney(Number(mrr.totalSgst || 0))]);
+  }
+  if (hasIgst) {
+    summaryRows.splice(hasCgstOrSgst ? 4 : 2, 0, ["IGST", formatMoney(Number(mrr.totalIgst || 0))]);
+  }
   const summaryBoxX = 118;
   const summaryBoxY = footerY;
   const summaryBoxWidth = 78;
@@ -208,7 +265,7 @@ export async function downloadMaterialInPdf({
 
   doc.setFontSize(9);
   doc.setTextColor(80);
-  doc.text(`Generated on ${formatDate(new Date().toISOString())}`, 14, Math.min(footerY + 6, 285));
+  doc.text(`Generated on ${formatDisplayDate(new Date().toISOString())}`, 14, Math.min(footerY + 6, 285));
 
   doc.save(`MRR_${mrr.transactionNo}.pdf`);
 }
