@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Company, Material, MaterialIn, Service, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Download, ArrowUp, ArrowDown } from "lucide-react";
+import { CheckCircle, XCircle, Search, FileText, ChevronRight, ChevronDown, ArrowLeft, Edit2, Download, ArrowUp, ArrowDown } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -28,6 +28,7 @@ export function MrrApprovals() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [sortField, setSortField] = useState<SortField>("timestamp");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
@@ -114,6 +115,10 @@ export function MrrApprovals() {
     } else {
       setSelectedIds(filteredList.map(m => m.id));
     }
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds(prev => prev.includes(id) ? prev.filter(expandedId => expandedId !== id) : [...prev, id]);
   };
 
   const handleAction = async (mrrId: string, action: "Approve" | "Reject") => {
@@ -328,6 +333,7 @@ export function MrrApprovals() {
             <table className="min-w-full divide-y divide-black border-collapse">
               <thead className="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest">
                 <tr className="divide-x divide-white/20">
+                  <th className="px-2 py-3 text-center"></th>
                   <th className="px-2 py-3 text-center">
                     <input 
                       type="checkbox" 
@@ -359,7 +365,7 @@ export function MrrApprovals() {
                   <th className="px-4 py-3 text-left">Supplier/Customer</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">MRR Type</th>
-                  <th className="px-4 py-3 text-left min-w-[300px]">Items</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Items</th>
                   <th className="px-4 py-3 text-right">MRR Qty</th>
                   <th className="px-4 py-3 text-right">Inv Qty</th>
                   <th className="px-4 py-3 text-right">PO Rate</th>
@@ -372,13 +378,14 @@ export function MrrApprovals() {
               <tbody className="divide-y divide-black bg-white">
                 {filteredList.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
+                    <td colSpan={15} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
                       No records found in this stage
                     </td>
                   </tr>
                 ) : (
                   filteredList.map((m) => {
                     const linesToDisplay = m.lines;
+                    const isExpanded = expandedIds.includes(m.id);
                     
                     const mrrWeight = linesToDisplay.reduce((s, l) => s + (l.actualQty || l.qty || 0), 0);
                     const invWeight = linesToDisplay.reduce((s, l) => s + (l.invoiceQty || 0), 0);
@@ -386,84 +393,106 @@ export function MrrApprovals() {
                     const basicValue = linesToDisplay.reduce((s, l) => s + (l.actualValue || l.value || 0), 0);
 
                     return (
-                      <tr key={m.id} className="divide-x divide-black hover:bg-slate-50 transition-colors text-[11px] text-black font-medium uppercase">
-                        <td className="px-2 py-4 text-center">
-                          <input 
-                            type="checkbox" 
-                            checked={selectedIds.includes(m.id)}
-                            onChange={() => toggleSelect(m.id)}
-                            className="accent-indigo-600 h-4 w-4"
-                          />
-                        </td>
-                        <td className="px-4 py-4">{m.gateEntryNo || "-"}</td>
-                        <td className="px-4 py-4">{m.transactionNo}</td>
-                        <td className="px-4 py-4 w-[170px] max-w-[170px] whitespace-normal break-words leading-snug">{getSupplierName(m.supplierId)}</td>
-                        <td className="px-4 py-4 whitespace-nowrap font-bold">{m.status || "-"}</td>
-                        <td className="px-4 py-4 whitespace-nowrap font-bold">{m.mrrType || "-"}</td>
-                        <td className="px-4 py-4 leading-relaxed">
-                          {linesToDisplay.map((l, i) => (
-                            <div key={i} className="mb-2 last:mb-0 border-b border-black/5 pb-1 last:border-0">
-                              <div className="font-bold">{getItemSpecs(l, m.mrrType)}</div>
-                            </div>
-                          ))}
-                        </td>
-                        <td className="px-4 py-4 text-right font-bold">{Number(mrrWeight || 0).toFixed(2)}</td>
-                        <td className="px-4 py-4 text-right font-bold">{Number(invWeight || 0).toFixed(2)}</td>
-                        <td className="px-4 py-4 text-right">{Number(firstLine.poRate || 0).toFixed(2)}</td>
-                        <td className="px-4 py-4 text-right">{Number(firstLine.invoiceRate || 0).toFixed(2)}</td>
-                        <td className="px-4 py-4 text-right">{Number(firstLine.gstRate || 0)}%</td>
-                        <td className="px-4 py-4 text-right font-black">{Number(basicValue || 0).toFixed(2)}</td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col gap-1">
-                            <div className="grid grid-cols-2 gap-1">
-                              <button 
-                                onClick={() => downloadPdf(m)}
-                                className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100 flex items-center justify-center gap-1"
-                              >
-                                <Download size={10} /> PDF
-                              </button>
-                              {m.status === "Pending Accounts" && (
+                      <Fragment key={m.id}>
+                        <tr className="divide-x divide-black hover:bg-slate-50 transition-colors text-[11px] text-black font-medium uppercase">
+                          <td className="px-2 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpanded(m.id)}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded border border-black/20 bg-white hover:bg-slate-100"
+                              aria-label={isExpanded ? "Collapse item details" : "Expand item details"}
+                            >
+                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            </button>
+                          </td>
+                          <td className="px-2 py-4 text-center">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.includes(m.id)}
+                              onChange={() => toggleSelect(m.id)}
+                              className="accent-indigo-600 h-4 w-4"
+                            />
+                          </td>
+                          <td className="px-4 py-4">{m.gateEntryNo || "-"}</td>
+                          <td className="px-4 py-4">{m.transactionNo}</td>
+                          <td className="px-4 py-4 w-[170px] max-w-[170px] whitespace-normal break-words leading-snug">{getSupplierName(m.supplierId)}</td>
+                          <td className="px-4 py-4 whitespace-nowrap font-bold">{m.status || "-"}</td>
+                          <td className="px-4 py-4 whitespace-nowrap font-bold">{m.mrrType || "-"}</td>
+                          <td className="px-4 py-4 whitespace-nowrap font-bold">{linesToDisplay.length} {linesToDisplay.length === 1 ? "item" : "items"}</td>
+                          <td className="px-4 py-4 text-right font-bold">{Number(mrrWeight || 0).toFixed(2)}</td>
+                          <td className="px-4 py-4 text-right font-bold">{Number(invWeight || 0).toFixed(2)}</td>
+                          <td className="px-4 py-4 text-right">{Number(firstLine.poRate || 0).toFixed(2)}</td>
+                          <td className="px-4 py-4 text-right">{Number(firstLine.invoiceRate || 0).toFixed(2)}</td>
+                          <td className="px-4 py-4 text-right">{Number(firstLine.gstRate || 0)}%</td>
+                          <td className="px-4 py-4 text-right font-black">{Number(basicValue || 0).toFixed(2)}</td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col gap-1">
+                              <div className="grid grid-cols-2 gap-1">
                                 <button 
-                                  onClick={() => navigate(`/material-in/form?edit=${m.id}`)}
-                                  className="border border-indigo-600 text-indigo-600 py-1 rounded text-[9px] font-black hover:bg-indigo-50 flex items-center justify-center gap-1"
+                                  onClick={() => downloadPdf(m)}
+                                  className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100 flex items-center justify-center gap-1"
                                 >
-                                  <Edit2 size={10} /> EDIT
+                                  <Download size={10} /> PDF
                                 </button>
+                                {m.status === "Pending Accounts" && (
+                                  <button 
+                                    onClick={() => navigate(`/material-in/form?edit=${m.id}`)}
+                                    className="border border-indigo-600 text-indigo-600 py-1 rounded text-[9px] font-black hover:bg-indigo-50 flex items-center justify-center gap-1"
+                                  >
+                                    <Edit2 size={10} /> EDIT
+                                  </button>
+                                )}
+                              </div>
+                              {["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "") ? (
+                                <>
+                                  <div className="grid grid-cols-2 gap-1">
+                                    <button 
+                                      disabled={!!isSubmitting}
+                                      onClick={() => handleAction(m.id, "Approve")}
+                                      className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100"
+                                    >
+                                      {isSubmitting === m.id ? <Spinner size={10} /> : "APPROVE"}
+                                    </button>
+                                    <button 
+                                      disabled={!!isSubmitting}
+                                      onClick={() => handleAction(m.id, "Reject")}
+                                      className="bg-red-600 text-white py-1 rounded text-[9px] font-black hover:bg-red-700"
+                                    >
+                                      REJECT
+                                    </button>
+                                  </div>
+                                  <textarea
+                                    value={remarks[m.id] || ""}
+                                    onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
+                                    placeholder="Remark *"
+                                    className="w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
+                                  />
+                                </>
+                              ) : (
+                                <div className="rounded border border-black bg-slate-50 px-2 py-2 text-center text-[9px] font-black uppercase text-slate-500">
+                                  No approval action
+                                </div>
                               )}
                             </div>
-                            {["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "") ? (
-                              <>
-                                <div className="grid grid-cols-2 gap-1">
-                                  <button 
-                                    disabled={!!isSubmitting}
-                                    onClick={() => handleAction(m.id, "Approve")}
-                                    className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100"
-                                  >
-                                    {isSubmitting === m.id ? <Spinner size={10} /> : "APPROVE"}
-                                  </button>
-                                  <button 
-                                    disabled={!!isSubmitting}
-                                    onClick={() => handleAction(m.id, "Reject")}
-                                    className="bg-red-600 text-white py-1 rounded text-[9px] font-black hover:bg-red-700"
-                                  >
-                                    REJECT
-                                  </button>
-                                </div>
-                                <textarea
-                                  value={remarks[m.id] || ""}
-                                  onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
-                                  placeholder="Remark *"
-                                  className="w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
-                                />
-                              </>
-                            ) : (
-                              <div className="rounded border border-black bg-slate-50 px-2 py-2 text-center text-[9px] font-black uppercase text-slate-500">
-                                No approval action
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-slate-50 text-[11px] text-black uppercase">
+                            <td colSpan={15} className="px-6 py-4">
+                              <div className="space-y-2">
+                                {linesToDisplay.map((l, i) => (
+                                  <div key={i} className="rounded border border-black/10 bg-white px-3 py-2">
+                                    <div className="font-bold">{getItemSpecs(l, m.mrrType)}</div>
+                                    <div className="mt-1 text-[10px] font-medium text-slate-600">
+                                      MRR Qty: {Number(l.actualQty || l.qty || 0).toFixed(2)} {l.uom || "-"} | Inv Qty: {Number(l.invoiceQty || 0).toFixed(2)} | PO Rate: {Number(l.poRate || 0).toFixed(2)} | Inv Rate: {Number(l.invoiceRate || 0).toFixed(2)} | GST: {Number(l.gstRate || 0)}%
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })
                 )}
