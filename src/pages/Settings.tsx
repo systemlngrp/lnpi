@@ -9,6 +9,7 @@ import { normalizeMachineName } from "../lib/productionMachineNames";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { getFinancialYear } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { PO_MANDATORY_MRR_TYPES, parsePoMandatoryMrrTypes } from "../lib/materialInPoMandatory";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -155,6 +156,7 @@ export function SettingsPage() {
     organizationLogo: "",
   });
   const [invoiceSeriesDraft, setInvoiceSeriesDraft] = useState<InvoiceSeriesRow[]>([]);
+  const [poMandatoryDraft, setPoMandatoryDraft] = useState<string[]>([]);
 
   const currentSetting = settings[0];
 
@@ -238,6 +240,11 @@ export function SettingsPage() {
   useEffect(() => {
     setInvoiceSeriesDraft(parseInvoiceNumberSeries(currentSetting?.invoiceNumberSeries));
   }, [currentSetting?.invoiceNumberSeries]);
+
+  useEffect(() => {
+    setPoMandatoryDraft(parsePoMandatoryMrrTypes(currentSetting));
+  }, [currentSetting?.poMandatoryMrrTypes]);
+
   const selectedReelFormula = currentSetting?.reelAsPerCalculation || REEL_FORMULA_OPTIONS[0].value;
   const selectedReelOption = useMemo(
     () => REEL_FORMULA_OPTIONS.find((option) => option.value === selectedReelFormula) || REEL_FORMULA_OPTIONS[0],
@@ -318,6 +325,7 @@ export function SettingsPage() {
         cuttingSizeAsPerCalculation: currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value,
         gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
         productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
+        poMandatoryMrrTypes: currentSetting?.poMandatoryMrrTypes || JSON.stringify(["Reel"]),
         realizationPerKgTargets: currentSetting?.realizationPerKgTargets || JSON.stringify([]),
         invoiceNumberSeries: currentSetting?.invoiceNumberSeries || JSON.stringify([]),
         mandatoryMachinesByType: currentSetting?.mandatoryMachinesByType || JSON.stringify({}),
@@ -526,6 +534,52 @@ export function SettingsPage() {
               className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all"
             >
               {saving ? <Spinner size={18} className="text-white" /> : "Save Realization Setup"}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4 border-b border-dashed border-black pb-5">
+            <div>
+              <h3 className="text-sm font-black uppercase text-slate-600 mb-2">PO Mandatory In MRR</h3>
+              <p className="text-sm text-black leading-6">
+                Choose which Material Receipt types must have <span className="font-bold">Our PO No.</span>. Rejection In and Service Return always remain optional.
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {PO_MANDATORY_MRR_TYPES.map((type) => {
+                const checked = poMandatoryDraft.includes(type);
+                return (
+                  <label key={type} className="flex items-center justify-between gap-3 rounded border-2 border-black bg-white px-4 py-3 text-sm font-bold text-black">
+                    <span>{type}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const nextChecked = e.target.checked;
+                        setPoMandatoryDraft((prev) => {
+                          const current = new Set(prev);
+                          if (nextChecked) current.add(type);
+                          else current.delete(type);
+                          return PO_MANDATORY_MRR_TYPES.filter((value) => current.has(value));
+                        });
+                      }}
+                      disabled={loading || saving}
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => void handleChange({ poMandatoryMrrTypes: JSON.stringify(poMandatoryDraft) })}
+                disabled={loading || saving}
+                className="bg-indigo-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all disabled:opacity-50"
+              >
+                {saving ? <Spinner size={18} className="text-white" /> : "Save PO Mandatory"}
               </button>
             </div>
           </div>

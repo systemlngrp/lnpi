@@ -889,6 +889,7 @@ export interface Setting {
   cuttingSizeAsPerCalculation?: string;
   gsmAsPerCalculation?: string;
   productionFormVisibleColumns?: string;
+  poMandatoryMrrTypes?: string;
   realizationPerKgTargets?: string;
   invoiceNumberSeries?: string;
   mandatoryMachinesByType?: string;

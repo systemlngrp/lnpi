@@ -15,6 +15,7 @@ import {
   InvoiceCurrency,
   PurchaseOrder,
   PurchaseOrderLine,
+  Setting,
   Service,
   Supplier,
 } from "../types";
@@ -25,6 +26,7 @@ import * as XLSX from "xlsx";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { applySupplyTypeTaxRates, normalizeInvoiceCurrency, recalculateMaterialLine, summarizeMaterialInLines } from "../lib/materialInTaxes";
 import { getGatePassLinesWithReturns } from "../lib/gatePassState";
+import { parsePoMandatoryMrrTypes, supportsPoMandatorySetting } from "../lib/materialInPoMandatory";
 
 type PackingSlipDraft = {
   id: string;
@@ -73,6 +75,7 @@ export function MaterialInForm() {
   const [gstRateMasters] = useData<GstRateMaster>("gst_rate_masters", []);
   const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
   const [purchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
+  const [settings] = useData<Setting>("settings", []);
 
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [invoiceNo, setInvoiceNo] = useState("");
@@ -136,6 +139,10 @@ export function MaterialInForm() {
   );
   const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
   const isServiceReturn = isReturnableReceiptFlow || mrrType === "Service Return";
+  const poMandatoryMrrTypes = useMemo(() => new Set(parsePoMandatoryMrrTypes(settings[0])), [settings]);
+  const supportsPoSettingForCurrentMrrType = supportsPoMandatorySetting(mrrType);
+  const isPoMandatoryForCurrentMrrType = supportsPoSettingForCurrentMrrType && poMandatoryMrrTypes.has(mrrType);
+  const showPoLineSelection = !isServiceReturn && (mrrType === "Others" || mrrType === "FG Purchase");
   const normalizedInvoiceCurrency = normalizeInvoiceCurrency(invoiceCurrency);
   const isUsdInvoice = normalizedInvoiceCurrency === "USD";
   const numericExchangeRate = isUsdInvoice ? Number(exchangeRate || 0) : 0;
@@ -361,7 +368,6 @@ export function MaterialInForm() {
   };
 
   const getApprovedPoOptionsForMaterial = (materialId: string) => {
-    if (isFgType) return [];
     const approvedOrders = purchaseOrders.filter(
       (order) =>
         order.status === "Approved" &&
@@ -570,11 +576,11 @@ export function MaterialInForm() {
         ? Number(currentInvoiceRate)
         : fallbackRate;
 
-    if (mrrType === "Others" && !currentPoLineId) {
-      alert("Our PO No. is mandatory before adding an Others line.");
+    if (showPoLineSelection && isPoMandatoryForCurrentMrrType && !currentPoLineId) {
+      alert(`Our PO No. is mandatory before adding a ${mrrType} line.`);
       return;
     }
-    if (mrrType === "Others" && (!resolvedInvoiceRateInput || resolvedInvoiceRateInput <= 0)) return;
+    if ((mrrType === "Others" || mrrType === "FG Purchase") && (!resolvedInvoiceRateInput || resolvedInvoiceRateInput <= 0)) return;
 
     const material = getMaterial(currentItemId);
     if (!material) return;
@@ -736,11 +742,11 @@ export function MaterialInForm() {
         throw new Error(`Row ${index + 2}: Invoice Rate must be a valid number.`);
       }
 
-      if (!ourPoSearch) {
+      if (isPoMandatoryForCurrentMrrType && !ourPoSearch) {
         throw new Error(`Row ${index + 2}: Our PO No. is mandatory for ${material.name}.`);
       }
-      const resolvedPo = getResolvedPoForMaterial(material.id, ourPoSearch);
-      if (!resolvedPo) {
+      const resolvedPo = ourPoSearch ? getResolvedPoForMaterial(material.id, ourPoSearch) : null;
+      if (ourPoSearch && !resolvedPo) {
         throw new Error(`Row ${index + 2}: Our PO No. not matched for ${material.name}.`);
       }
 
@@ -1099,10 +1105,18 @@ export function MaterialInForm() {
           alert("Each packing slip row must have weight in KG.");
           return;
         }
-        if (slips.some((slip) => !String(slip.ourPoId || "").trim() || !String(slip.ourPoNo || "").trim())) {
+        if (isPoMandatoryForCurrentMrrType && slips.some((slip) => !String(slip.ourPoId || "").trim() || !String(slip.ourPoNo || "").trim())) {
           alert("Our PO No. is mandatory for every reel row.");
           return;
         }
+      }
+    }
+
+    if (showPoLineSelection && isPoMandatoryForCurrentMrrType) {
+      const hasMissingPo = linesForSubmit.some((line) => !String(line.poLineId || line.poNo || "").trim());
+      if (hasMissingPo) {
+        alert(`Our PO No. is mandatory for every ${mrrType} row.`);
+        return;
       }
     }
 
@@ -1466,9 +1480,11 @@ export function MaterialInForm() {
                 />
               </div>
             ) : null}
-            {!isFgType && mrrType === "Others" ? (
+            {showPoLineSelection ? (
               <div className="flex flex-col space-y-1 w-full md:w-80">
-                <label className="text-sm font-bold text-black">Our PO No. <span className="text-red-600">*</span></label>
+                <label className="text-sm font-bold text-black">
+                  Our PO No. {isPoMandatoryForCurrentMrrType ? <span className="text-red-600">*</span> : null}
+                </label>
                 <Select
                   options={currentItemId ? getApprovedPoOptionsForMaterial(currentItemId) : []}
                   value={currentPoLineId}
@@ -1500,8 +1516,8 @@ export function MaterialInForm() {
                     <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Service" : isFgType ? "Item" : "Material"}</th>
                       {isServiceReturn ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Returned Item</th> : null}
-                      {!isFgType && mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th> : null}
-                      {!isFgType && mrrType === "Others" ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th> : null}
+                      {showPoLineSelection ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th> : null}
+                      {showPoLineSelection ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th> : null}
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Return Qty" : isFgType ? "Item Receipt" : "Invoice Qty"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isUsdInvoice ? "Invoice Rate (USD)" : "Invoice Rate (INR)"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GST %</th>
@@ -1531,7 +1547,7 @@ export function MaterialInForm() {
                             ) : materialName}
                           </td>
                           {isServiceReturn ? <td className="px-4 py-3 text-sm text-black border border-black">{line.sourceGatePassItemDescription || "-"}</td> : null}
-                          {!isFgType && mrrType === "Others" ? (
+                          {showPoLineSelection ? (
                             <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
                               <Select
                                 options={getApprovedPoOptionsForMaterial(line.itemId)}
@@ -1541,7 +1557,7 @@ export function MaterialInForm() {
                               />
                             </td>
                           ) : null}
-                          {!isFgType && mrrType === "Others" ? (
+                          {showPoLineSelection ? (
                             <td className="px-4 py-3 text-sm text-black border border-black">{Number(line.poRate || 0).toFixed(2)}</td>
                           ) : null}
                           <td className="px-4 py-3 text-sm text-black border border-black">
@@ -1665,7 +1681,7 @@ export function MaterialInForm() {
                           <table className="min-w-full border-collapse border border-black">
                             <thead className="bg-slate-100">
                               <tr>
-                                {["Supplier Reel No.", "Our Reel No.", "Weight (KG)", "Supplier PO No.", "Our PO No.", "Action"].map((heading) => (
+                                {["Supplier Reel No.", "Our Reel No.", "Weight (KG)", "Supplier PO No.", isPoMandatoryForCurrentMrrType ? "Our PO No. *" : "Our PO No.", "Action"].map((heading) => (
                                   <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase text-black">
                                     {heading}
                                   </th>
