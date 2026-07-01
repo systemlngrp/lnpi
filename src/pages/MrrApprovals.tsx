@@ -3,7 +3,7 @@ import { useData } from "../hooks/useData";
 import { Company, Material, MaterialIn, Service, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Download } from "lucide-react";
+import { CheckCircle, XCircle, Search, FileText, ChevronRight, ArrowLeft, Edit2, Download, ArrowUp, ArrowDown } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -11,6 +11,8 @@ import autoTable from "jspdf-autotable";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 type Stage = "All MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally";
+type SortField = "timestamp" | "gateEntryNo" | "transactionNo";
+type SortDirection = "asc" | "desc";
 
 export function MrrApprovals() {
   const navigate = useNavigate();
@@ -26,6 +28,30 @@ export function MrrApprovals() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>("timestamp");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  const getSeriesNumber = (value?: string) => {
+    const suffix = String(value || "").trim().split("/").pop() || "";
+    const parsed = Number(suffix);
+    return Number.isFinite(parsed) ? parsed : -1;
+  };
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortField(field);
+    setSortDirection(field === "timestamp" ? "desc" : "asc");
+  };
+
+  const renderSortIcon = (field: SortField) =>
+    sortField === field ? (
+      sortDirection === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+    ) : (
+      <ArrowDown size={12} className="opacity-40" />
+    );
 
   const getSupplierName = (id: string) => {
     const supplier = suppliers.find(s => s.id === id);
@@ -63,8 +89,20 @@ export function MrrApprovals() {
         const searchStr = `${m.transactionNo} ${m.gateEntryNo || ""} ${supplierName} ${m.invoiceNo} ${m.mrrType || ""}`.toLowerCase();
         return searchStr.includes(searchTerm.toLowerCase());
       })
-      .sort((a, b) => new Date(b.updateTimestamp || b.timestamp).getTime() - new Date(a.updateTimestamp || a.timestamp).getTime());
-  }, [materialIn, activeStage, searchTerm, suppliers, companies]);
+      .sort((a, b) => {
+        let comparison = 0;
+
+        if (sortField === "gateEntryNo") {
+          comparison = getSeriesNumber(a.gateEntryNo) - getSeriesNumber(b.gateEntryNo);
+        } else if (sortField === "transactionNo") {
+          comparison = getSeriesNumber(a.transactionNo) - getSeriesNumber(b.transactionNo);
+        } else {
+          comparison = new Date(a.updateTimestamp || a.timestamp).getTime() - new Date(b.updateTimestamp || b.timestamp).getTime();
+        }
+
+        return sortDirection === "asc" ? comparison : -comparison;
+      });
+  }, [materialIn, activeStage, searchTerm, suppliers, companies, sortField, sortDirection]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -298,8 +336,26 @@ export function MrrApprovals() {
                       className="accent-white h-4 w-4"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left">GE No</th>
-                  <th className="px-4 py-3 text-left">MRR No</th>
+                  <th className="px-4 py-3 text-left">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("gateEntryNo")}
+                      className="inline-flex items-center gap-1 uppercase"
+                    >
+                      GE No
+                      {renderSortIcon("gateEntryNo")}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("transactionNo")}
+                      className="inline-flex items-center gap-1 uppercase"
+                    >
+                      MRR No
+                      {renderSortIcon("transactionNo")}
+                    </button>
+                  </th>
                   <th className="px-4 py-3 text-left">Supplier/Customer</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">MRR Type</th>

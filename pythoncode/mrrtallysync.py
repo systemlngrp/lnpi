@@ -57,6 +57,7 @@ PURCHASE_PAPER_LEDGER_NAME = os.getenv('PURCHASE_PAPER_LEDGER_NAME', 'PURCHASE P
 SERVICE_PURCHASE_LEDGER_NAME = os.getenv('SERVICE_PURCHASE_LEDGER_NAME', 'REPAIR & MAINTANANCE')
 REEL_STOCK_GROUP_NAME = os.getenv('REEL_STOCK_GROUP_NAME', 'PAPER IN REEL FORM')
 DEFAULT_STOCK_GROUP_NAME = os.getenv('DEFAULT_STOCK_GROUP_NAME', 'Primary')
+APP_CREATED_STOCK_GROUP_NAME = os.getenv('APP_CREATED_STOCK_GROUP_NAME', 'App Group')
 INSURANCE_LEDGER_NAME = os.getenv('INSURANCE_LEDGER_NAME', 'INSURANCE & OTHER EXP. ON PURCHASE')
 OTHER_CHARGES_LEDGER_NAME = os.getenv('OTHER_CHARGES_LEDGER_NAME', 'INSURANCE & OTHER EXP. ON PURCHASE')
 CGST_LEDGER_NAME = os.getenv('CGST_LEDGER_NAME', 'Input CGST')
@@ -260,22 +261,32 @@ def get_pending_mrr_rows(conn):
 
 def get_supplier_name(conn, supplier_id):
     """
-    Get supplier name from suppliers table.
+    Get supplier/customer name from suppliers table first, then companies table.
     """
 
     if not supplier_id:
         return ""
 
-    sql = """
+    supplier_sql = """
         SELECT name
         FROM suppliers
         WHERE id = %s
         LIMIT 1
     """
 
+    company_sql = """
+        SELECT name
+        FROM companies
+        WHERE id = %s
+        LIMIT 1
+    """
+
     cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, (supplier_id,))
+    cursor.execute(supplier_sql, (supplier_id,))
     row = cursor.fetchone()
+    if not row:
+        cursor.execute(company_sql, (supplier_id,))
+        row = cursor.fetchone()
     cursor.close()
 
     if row:
@@ -317,22 +328,53 @@ def get_material_lines(conn, mrr_row):
         if not item_id:
             continue
 
+        line_type = str(line.get("lineType") or "").strip().upper()
+        is_service_line = material_in_type.upper() == "SERVICE RETURN" or line_type == "SERVICE"
+
+        if is_service_line:
+            cursor.execute("SELECT name FROM services WHERE id = %s LIMIT 1", (item_id,))
+            service_row = cursor.fetchone()
+            service_name = (
+                (service_row or {}).get("name")
+                or line.get("serviceName")
+                or line.get("itemName")
+                or "Unknown Service"
+            )
+            processed_lines.append({
+                "lineId": line_id,
+                "itemId": item_id,
+                "itemName": service_name,
+                "itemErp": str(line.get("erpCode") or "").strip(),
+                "mrrType": material_in_type,
+                "lineType": "Service",
+                "qty": get_first_numeric(line, ["actualQty", "invoiceQty", "qty"]),
+                "uom": normalize_uom(line.get("uom")),
+                "masterUom": "",
+                "rate": get_first_numeric(line, ["rate", "invoiceRate", "poRate"]),
+                "cost": get_first_numeric(line, ["cost", "rate", "invoiceRate", "poRate"]),
+                "amount": get_first_numeric(line, ["actualValue", "invoiceValue", "value"]),
+            })
+            continue
+
         # Look up in materials table first
-        cursor.execute("SELECT name, erpCode FROM materials WHERE id = %s LIMIT 1", (item_id,))
+        cursor.execute("SELECT name, erpCode, uom FROM materials WHERE id = %s LIMIT 1", (item_id,))
         m_row = cursor.fetchone()
         
         item_name = ""
         item_erp = str(line.get("erpCode") or "").strip()
+        master_uom = ""
         if m_row:
             item_name = m_row.get("name")
             item_erp = str(m_row.get("erpCode") or item_erp).strip()
+            master_uom = normalize_uom(m_row.get("uom"))
         else:
             # Look up in npd table if not found in materials
-            cursor.execute("SELECT itemName as name, erp FROM npd WHERE id = %s LIMIT 1", (item_id,))
+            cursor.execute("SELECT itemName as name, erp, uom FROM npd WHERE id = %s LIMIT 1", (item_id,))
             n_row = cursor.fetchone()
             if n_row:
                 item_name = n_row.get("name")
                 item_erp = str(n_row.get("erp") or item_erp).strip()
+                master_uom = normalize_uom(n_row.get("uom"))
 
         processed_lines.append({
             "lineId": line_id,
@@ -342,6 +384,7 @@ def get_material_lines(conn, mrr_row):
             "mrrType": material_in_type,
             "qty": get_first_numeric(line, ["actualQty", "invoiceQty", "qty"]),
             "uom": normalize_uom(line.get("uom")),
+            "masterUom": master_uom,
             "rate": get_first_numeric(line, ["rate", "invoiceRate", "poRate"]),
             "cost": get_first_numeric(line, ["cost", "rate", "invoiceRate", "poRate"]),
             "amount": get_first_numeric(line, ["actualValue", "invoiceValue", "value"]),
@@ -394,6 +437,7 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=Non
 
     inventory_xml = ""
     total_item_amount = 0.0
+    service_ledger_entries_xml = ""
 
     for line in item_lines:
         item_name = line.get("itemName") or ""
@@ -409,6 +453,16 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=Non
 
         amount = round(line_amount if line_amount > 0 else qty * rate, 2)
         total_item_amount += amount
+
+        if str(line.get("lineType") or "").strip().upper() == "SERVICE":
+            service_ledger_entries_xml += f"""
+                        <LEDGERENTRIES.LIST>
+                            <LEDGERNAME>{esc(purchase_ledger_name)}</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>-{amount:.2f}</AMOUNT>
+                        </LEDGERENTRIES.LIST>
+"""
+            continue
 
         batch_allocations_xml = f"""
                             <BATCHALLOCATIONS.LIST>
@@ -470,6 +524,8 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=Non
                             </BILLALLOCATIONS.LIST>
                         </LEDGERENTRIES.LIST>
     """
+
+    ledger_entries_xml += service_ledger_entries_xml
 
     if insurance > 0:
         ledger_entries_xml += f"""
@@ -741,6 +797,122 @@ def query_tally_ledger(ledger_name, company_name):
     return f"<NAME>{esc(ledger_name)}</NAME>" in response_text or f'NAME="{esc(ledger_name)}"' in response_text
 
 
+def query_tally_stock_group(group_name, company_name):
+    """
+    Check whether a stock group already exists in Tally for the selected company.
+    """
+    if not group_name:
+        return False
+
+    xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <VERSION>1</VERSION>
+        <TALLYREQUEST>Export</TALLYREQUEST>
+        <TYPE>Object</TYPE>
+        <SUBTYPE>Stock Group</SUBTYPE>
+        <ID TYPE="Name">{esc(group_name)}</ID>
+    </HEADER>
+    <BODY>
+        <DESC>
+            <STATICVARIABLES>
+                <SVCURRENTCOMPANY>{esc(company_name)}</SVCURRENTCOMPANY>
+                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+            </STATICVARIABLES>
+            <FETCHLIST>
+                <FETCH>Name</FETCH>
+                <FETCH>Parent</FETCH>
+            </FETCHLIST>
+        </DESC>
+    </BODY>
+</ENVELOPE>
+"""
+
+    response_text = post_to_tally(xml)
+    if not response_text:
+        return False
+
+    try:
+        root = ET.fromstring(response_text)
+        for stock_group in root.findall(".//STOCKGROUP"):
+            name_elem = stock_group.find("NAME")
+            name_attr = stock_group.get("NAME")
+            found_name = (
+                name_elem.text.strip()
+                if name_elem is not None and name_elem.text
+                else (name_attr.strip() if name_attr else "")
+            )
+            if found_name.upper() == group_name.strip().upper():
+                return True
+    except Exception:
+        pass
+
+    return f"<NAME>{esc(group_name)}</NAME>" in response_text or f'NAME="{esc(group_name)}"' in response_text
+
+
+def create_tally_stock_group(group_name, company_name, parent_group_name="Primary"):
+    """
+    Create a stock group in Tally under the selected parent stock group.
+    """
+    xml = f"""
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Import Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <IMPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>All Masters</REPORTNAME>
+                <STATICVARIABLES>
+                    <SVCURRENTCOMPANY>{esc(company_name)}</SVCURRENTCOMPANY>
+                </STATICVARIABLES>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE xmlns:UDF="TallyUDF">
+                    <STOCKGROUP NAME="{esc(group_name)}" ACTION="Create">
+                        <NAME.LIST>
+                            <NAME>{esc(group_name)}</NAME>
+                        </NAME.LIST>
+                        <PARENT>{esc(parent_group_name)}</PARENT>
+                    </STOCKGROUP>
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </IMPORTDATA>
+    </BODY>
+</ENVELOPE>
+"""
+
+    response_text = post_to_tally(xml)
+    return is_tally_success(response_text), response_text
+
+
+def ensure_tally_stock_group(group_name, company_name):
+    """
+    Ensure the target stock group exists. If the configured group is missing,
+    fall back to a reusable app-created stock group.
+    """
+    desired_group = str(group_name or "").strip()
+    fallback_group = str(APP_CREATED_STOCK_GROUP_NAME or "").strip()
+
+    if desired_group and query_tally_stock_group(desired_group, company_name):
+        return True, "", desired_group, False
+
+    if fallback_group and query_tally_stock_group(fallback_group, company_name):
+        return True, "", fallback_group, desired_group.upper() != fallback_group.upper()
+
+    group_to_create = fallback_group or desired_group
+    if not group_to_create:
+        return False, "Stock group name missing", "", False
+
+    print(f"Creating missing Tally stock group: {group_to_create}")
+    created, response_text = create_tally_stock_group(group_to_create, company_name)
+    if not created:
+        return False, extract_tally_error(response_text), "", False
+
+    used_fallback = bool(desired_group and group_to_create.upper() != desired_group.upper())
+    return True, "", group_to_create, used_fallback
+
+
 def create_tally_supplier_ledger(supplier_name, company_name):
     """
     Create a supplier ledger in Tally under Sundry Creditors.
@@ -804,8 +976,12 @@ def resolve_item_line_uoms(item_lines, company_name):
     errors = []
 
     for index, line in enumerate(item_lines, start=1):
+        if str(line.get("lineType") or "").strip().upper() == "SERVICE":
+            continue
+
         item_name = (line.get("itemName") or f"Line {index}").strip()
         app_uom = normalize_uom(line.get("uom"))
+        master_uom = normalize_uom(line.get("masterUom"))
         tally_item = query_tally_stock_item_details(item_name, company_name)
         tally_uom = normalize_uom(tally_item.get("baseUnit"))
 
@@ -823,8 +999,16 @@ def resolve_item_line_uoms(item_lines, company_name):
                 )
                 continue
 
+            if master_uom:
+                line["uom"] = master_uom
+                print(
+                    f"Tally item found without readable base unit for {item_name}. "
+                    f"Using current master UOM: {master_uom}"
+                )
+                continue
+
             errors.append(
-                f"{item_name}: app UOM missing and existing Tally stock item has no readable base unit"
+                f"{item_name}: app UOM missing, master UOM missing, and existing Tally stock item has no readable base unit"
             )
             continue
 
@@ -833,7 +1017,12 @@ def resolve_item_line_uoms(item_lines, company_name):
             print(f"Tally item not found for {item_name}. Using app UOM: {app_uom}")
             continue
 
-        errors.append(f"{item_name}: app UOM missing and Tally stock item not found")
+        if master_uom:
+            line["uom"] = master_uom
+            print(f"Tally item not found for {item_name}. Using current master UOM: {master_uom}")
+            continue
+
+        errors.append(f"{item_name}: app UOM missing, master UOM missing, and Tally stock item not found")
 
     return errors
 
@@ -899,19 +1088,30 @@ def ensure_tally_stock_items(item_lines, company_name):
     created_items = []
 
     for line in item_lines:
+        if str(line.get("lineType") or "").strip().upper() == "SERVICE":
+            continue
+
         item_name = (line.get("itemName") or "").strip()
         item_erp = (line.get("itemErp") or "").strip()
         uom = (line.get("uom") or "").strip()
         material_type = line.get("mrrType")
-        stock_group_name = get_stock_group_name(material_type)
+        requested_stock_group_name = get_stock_group_name(material_type)
 
         if not item_name:
             return False, "Stock item name missing", created_items
-        if not item_erp:
-            return False, f"{item_name}: item ERP missing", created_items
 
         if query_tally_stock_item(item_name, company_name):
             continue
+
+        if not item_erp:
+            return False, f"{item_name}: item ERP missing", created_items
+
+        stock_group_ready, stock_group_error, stock_group_name, used_fallback_group = ensure_tally_stock_group(
+            requested_stock_group_name,
+            company_name,
+        )
+        if not stock_group_ready:
+            return False, stock_group_error, created_items
 
         print(
             f"Creating missing Tally stock item: {item_name} | "
@@ -927,7 +1127,10 @@ def ensure_tally_stock_items(item_lines, company_name):
         if not created:
             return False, extract_tally_error(response_text), created_items
         line["uom"] = used_uom
-        created_items.append(f"{item_name} [{item_erp}]")
+        if used_fallback_group:
+            created_items.append(f"{item_name} [{item_erp}] under stock group {stock_group_name}")
+        else:
+            created_items.append(f"{item_name} [{item_erp}]")
 
     return True, "", created_items
 
@@ -1076,7 +1279,7 @@ def sync_mrr_to_tally():
                 )
 
                 if not supplier_name:
-                    remark = "Supplier not found in suppliers table"
+                    remark = "Supplier/customer not found in suppliers or companies table"
                     update_mrr_tally_status(conn, material_in_id, False, remark)
                     print(remark)
                     continue
