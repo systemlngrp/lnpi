@@ -86,6 +86,9 @@ export function MaterialInForm() {
   const [mrrType, setMrrType] = useState<MaterialIn["mrrType"]>("Others");
   const [insurance, setInsurance] = useState<number | "">("");
   const [otherCharges, setOtherCharges] = useState<number | "">("");
+  const [expenseCGST, setExpenseCGST] = useState<number | "">("");
+  const [expenseSGST, setExpenseSGST] = useState<number | "">("");
+  const [expenseIGST, setExpenseIGST] = useState<number | "">("");
   const [roundOff, setRoundOff] = useState<number | "">("");
 
   const [lines, setLines] = useState<MaterialLine[]>([]);
@@ -132,6 +135,8 @@ export function MaterialInForm() {
   }, [companies, supplierId, suppliers]);
 
   const isInterState = supplierGstSupplyType === "INTER_STATE";
+  const totalExpenseBase = Number(insurance || 0) + Number(otherCharges || 0);
+  const hasExpenseBase = totalExpenseBase > 0;
 
   const isReturnableReceiptFlow = Boolean(
     (linkedGateEntry?.purpose === "Returnable Receipt" && linkedGateEntry?.sourceGatePassId) ||
@@ -162,6 +167,24 @@ export function MaterialInForm() {
         exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
       }
     );
+  const parseNumberInput = (value: string) => (value === "" ? "" : parseFloat(value));
+  const handleExpenseCgstChange = (value: string) => {
+    const nextValue = parseNumberInput(value);
+    setExpenseCGST(nextValue);
+    if (!isInterState) {
+      setExpenseSGST(nextValue);
+    }
+  };
+  const handleExpenseSgstChange = (value: string) => {
+    const nextValue = parseNumberInput(value);
+    setExpenseSGST(nextValue);
+    if (!isInterState) {
+      setExpenseCGST(nextValue);
+    }
+  };
+  const handleExpenseIgstChange = (value: string) => {
+    setExpenseIGST(parseNumberInput(value));
+  };
 
   const materialOptions = useMemo(
     () => {
@@ -248,6 +271,9 @@ export function MaterialInForm() {
     setMrrType(editingEntry.mrrType || "Others");
     setInsurance(editingEntry.insurance ?? "");
     setOtherCharges(editingEntry.otherCharges ?? "");
+    setExpenseCGST(editingEntry.expenseCGST ?? "");
+    setExpenseSGST(editingEntry.expenseSGST ?? "");
+    setExpenseIGST(editingEntry.expenseIGST ?? "");
     setRoundOff(editingEntry.roundOff ?? "");
     setLines((editingEntry.lines || []).map((line) => recalculateMaterialLine({ ...line }, { invoiceCurrency: loadedCurrency, exchangeRate: loadedCurrency === "USD" ? Number(editingEntry.exchangeRate || line.exchangeRate || 0) : undefined })));
 
@@ -278,6 +304,38 @@ export function MaterialInForm() {
       prev.map((line) => applySupplyTypeTaxRates(line, isInterState ? "INTER_STATE" : "INTRA_STATE", { forceFromGstRate: true }))
     );
   }, [isInterState]);
+
+  useEffect(() => {
+    if (!hasExpenseBase) {
+      if (expenseCGST !== "") setExpenseCGST("");
+      if (expenseSGST !== "") setExpenseSGST("");
+      if (expenseIGST !== "") setExpenseIGST("");
+      return;
+    }
+
+    if (isInterState) {
+      if (expenseCGST !== "") setExpenseCGST("");
+      if (expenseSGST !== "") setExpenseSGST("");
+      return;
+    }
+
+    if (expenseIGST !== "") {
+      setExpenseIGST("");
+      return;
+    }
+
+    if (expenseCGST === "" && expenseSGST !== "") {
+      setExpenseCGST(expenseSGST);
+      return;
+    }
+    if (expenseSGST === "" && expenseCGST !== "") {
+      setExpenseSGST(expenseCGST);
+      return;
+    }
+    if (expenseCGST !== "" && expenseSGST !== "" && expenseCGST !== expenseSGST) {
+      setExpenseSGST(expenseCGST);
+    }
+  }, [expenseCGST, expenseIGST, expenseSGST, hasExpenseBase, isInterState]);
 
   useEffect(() => {
     if (!lines.length) return;
@@ -454,12 +512,33 @@ export function MaterialInForm() {
     totalCgst,
     totalSgst,
     totalIgst,
+    expenseCGSTValue,
+    expenseSGSTValue,
+    expenseIGSTValue,
     totalInvoiceValueAfterGst,
     insuranceValue,
     otherChargesValue,
     roundOffValue,
     totalAmount,
-  } = useMemo(() => summarizeMaterialInLines(lines, insurance, otherCharges, roundOff, { invoiceCurrency: normalizedInvoiceCurrency, exchangeRate: isUsdInvoice ? numericExchangeRate : undefined }), [lines, insurance, otherCharges, roundOff, normalizedInvoiceCurrency, numericExchangeRate, isUsdInvoice]);
+  } = useMemo(
+    () =>
+      summarizeMaterialInLines(
+        lines,
+        insurance,
+        otherCharges,
+        roundOff,
+        {
+          expenseCGST,
+          expenseSGST,
+          expenseIGST,
+        },
+        {
+          invoiceCurrency: normalizedInvoiceCurrency,
+          exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+        }
+      ),
+    [lines, insurance, otherCharges, roundOff, expenseCGST, expenseSGST, expenseIGST, normalizedInvoiceCurrency, numericExchangeRate, isUsdInvoice]
+  );
 
   const getAllDraftSlips = () => Object.values(packingSlipDrafts).flat();
 
@@ -1137,7 +1216,47 @@ export function MaterialInForm() {
       }
     }
 
-    const submitSummary = summarizeMaterialInLines(linesForSubmit, insurance, otherCharges, roundOff);
+    const numericExpenseCGST = Number(expenseCGST || 0);
+    const numericExpenseSGST = Number(expenseSGST || 0);
+    const numericExpenseIGST = Number(expenseIGST || 0);
+
+    if ([numericExpenseCGST, numericExpenseSGST, numericExpenseIGST].some((value) => value < 0)) {
+      alert("Expense GST values cannot be negative.");
+      return;
+    }
+
+    if (!hasExpenseBase && (numericExpenseCGST > 0 || numericExpenseSGST > 0 || numericExpenseIGST > 0)) {
+      alert("Expense GST can be entered only when Insurance or Other Charges is greater than 0.");
+      return;
+    }
+
+    if (isInterState) {
+      if (numericExpenseCGST > 0 || numericExpenseSGST > 0) {
+        alert("For interstate parties, expense CGST and SGST must be zero.");
+        return;
+      }
+    } else {
+      if (numericExpenseIGST > 0) {
+        alert("For intrastate parties, expense IGST must be zero.");
+        return;
+      }
+      if (numericExpenseCGST !== numericExpenseSGST) {
+        alert("For intrastate parties, expense CGST and expense SGST must be equal.");
+        return;
+      }
+    }
+
+    const submitSummary = summarizeMaterialInLines(
+      linesForSubmit,
+      insurance,
+      otherCharges,
+      roundOff,
+      {
+        expenseCGST: numericExpenseCGST,
+        expenseSGST: numericExpenseSGST,
+        expenseIGST: numericExpenseIGST,
+      }
+    );
 
     setIsSubmitting(true);
     try {
@@ -1176,6 +1295,9 @@ export function MaterialInForm() {
           totalInvoiceValueAfterGst: submitSummary.totalInvoiceValueAfterGst,
           insurance: submitSummary.insuranceValue,
           otherCharges: submitSummary.otherChargesValue,
+          expenseCGST: submitSummary.expenseCGSTValue,
+          expenseSGST: submitSummary.expenseSGSTValue,
+          expenseIGST: submitSummary.expenseIGSTValue,
           roundOff: submitSummary.roundOffValue,
           totalAmount: submitSummary.totalAmount,
           lines: submitSummary.lines,
@@ -1251,6 +1373,11 @@ export function MaterialInForm() {
       setSupplierId("");
       setInvoiceCurrency("INR");
       setExchangeRate("");
+      setInsurance("");
+      setOtherCharges("");
+      setExpenseCGST("");
+      setExpenseSGST("");
+      setExpenseIGST("");
       setRoundOff("");
       setLines([]);
       setPackingSlipDrafts({});
@@ -1401,6 +1528,42 @@ export function MaterialInForm() {
             />
           </div>
           <div className="flex flex-col space-y-1">
+            <label className="font-bold text-black">Expense CGST</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={expenseCGST}
+              onChange={(e) => handleExpenseCgstChange(e.target.value)}
+              disabled={!hasExpenseBase || isInterState}
+              className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full disabled:bg-slate-100 disabled:text-slate-500"
+            />
+          </div>
+          <div className="flex flex-col space-y-1">
+            <label className="font-bold text-black">Expense SGST</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={expenseSGST}
+              onChange={(e) => handleExpenseSgstChange(e.target.value)}
+              disabled={!hasExpenseBase || isInterState}
+              className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full disabled:bg-slate-100 disabled:text-slate-500"
+            />
+          </div>
+          <div className="flex flex-col space-y-1">
+            <label className="font-bold text-black">Expense IGST</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={expenseIGST}
+              onChange={(e) => handleExpenseIgstChange(e.target.value)}
+              disabled={!hasExpenseBase || !isInterState}
+              className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full disabled:bg-slate-100 disabled:text-slate-500"
+            />
+          </div>
+          <div className="flex flex-col space-y-1">
             <label className="font-bold text-black">Round Off</label>
             <input
               type="number"
@@ -1409,6 +1572,9 @@ export function MaterialInForm() {
               onChange={(e) => setRoundOff(e.target.value === "" ? "" : parseFloat(e.target.value))}
               className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full"
             />
+          </div>
+          <div className="md:col-span-2 text-xs text-slate-600">
+            Expense GST follows the selected party supply type. For intrastate, CGST and SGST stay equal. For interstate, only IGST is allowed.
           </div>
           <div className="flex flex-col space-y-1 md:col-span-2">
             <label className="font-bold text-black">
@@ -1798,6 +1964,9 @@ export function MaterialInForm() {
             <div>Total Actual Value: <span className="text-indigo-700">Rs {totalActualValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Insurance: <span className="text-slate-700">Rs {insuranceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Other Charges: <span className="text-slate-700">Rs {otherChargesValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Expense CGST: <span className="text-slate-700">Rs {expenseCGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Expense SGST: <span className="text-slate-700">Rs {expenseSGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Expense IGST: <span className="text-slate-700">Rs {expenseIGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Round Off: <span className="text-slate-700">Rs {roundOffValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total Amount: <span className="text-emerald-700">Rs {totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
           </div>

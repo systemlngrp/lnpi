@@ -184,6 +184,9 @@ export async function downloadMaterialInPdf({
     ["Invoice After GST", formatMoney(Number(mrr.totalInvoiceValueAfterGst || 0))],
     ["Insurance", formatMoney(Number(mrr.insurance || 0))],
     ["Other Charges", formatMoney(Number(mrr.otherCharges || 0))],
+    ["Expense CGST", formatMoney(Number(mrr.expenseCGST || 0))],
+    ["Expense SGST", formatMoney(Number(mrr.expenseSGST || 0))],
+    ["Expense IGST", formatMoney(Number(mrr.expenseIGST || 0))],
     ["Round Off", formatMoney(Number(mrr.roundOff || 0))],
   ];
   if (hasCgstOrSgst) {

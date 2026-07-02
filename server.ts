@@ -3262,6 +3262,9 @@ async function initDb(retries = 5) {
           \`totalInvoiceValueAfterGst\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`insurance\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`otherCharges\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`expenseCGST\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`expenseSGST\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`expenseIGST\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`roundOff\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`totalAmount\` DECIMAL(15, 2) NOT NULL,
           \`lines\` JSON NOT NULL,
@@ -4116,6 +4119,9 @@ await db.query(`
         { table: "material_in", column: "totalInvoiceValueAfterGst", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "insurance", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "otherCharges", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "expenseCGST", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "expenseSGST", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "expenseIGST", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "roundOff", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "totalAmount", type: "DECIMAL(15, 2) NOT NULL" },
         { table: "material_in", column: "phTimestamp", type: "VARCHAR(255)" },
@@ -4575,6 +4581,9 @@ await db.query(`
         { table: "material_in", column: "tallyTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "insurance", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "material_in", column: "otherCharges", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_in", column: "expenseCGST", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_in", column: "expenseSGST", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_in", column: "expenseIGST", type: "DECIMAL(15,2) DEFAULT 0" },
       ];
 
 

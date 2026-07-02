@@ -1,6 +1,11 @@
 import { MaterialIn, MaterialLine } from "../types";
 
 export type MaterialInSupplyType = "INTRA_STATE" | "INTER_STATE";
+export type MaterialInExpenseTaxes = {
+  expenseCGST?: number | string;
+  expenseSGST?: number | string;
+  expenseIGST?: number | string;
+};
 
 function round2(value: number) {
   return Number(Number(value || 0).toFixed(2));
@@ -117,6 +122,7 @@ export function summarizeMaterialInLines(
   insurance?: number | string,
   otherCharges?: number | string,
   roundOff?: number | string,
+  expenseTaxes?: MaterialInExpenseTaxes,
   options?: { invoiceCurrency?: "INR" | "USD"; exchangeRate?: number | string }
 ) {
   const normalizedLines = (Array.isArray(lines) ? lines : []).map((line) =>
@@ -126,12 +132,18 @@ export function summarizeMaterialInLines(
   const totalInvoiceValueUsd = round2(normalizedLines.reduce((sum, line) => sum + Number(line.invoiceValueUsd || 0), 0));
   const totalActualValue = round2(normalizedLines.reduce((sum, line) => sum + Number(line.actualValue || line.value || 0), 0));
   const totalActualValueUsd = round2(normalizedLines.reduce((sum, line) => sum + Number(line.actualValueUsd || 0), 0));
-  const totalCgst = round2(normalizedLines.reduce((sum, line) => sum + Number(line.cgst || 0), 0));
-  const totalSgst = round2(normalizedLines.reduce((sum, line) => sum + Number(line.sgst || 0), 0));
-  const totalIgst = round2(normalizedLines.reduce((sum, line) => sum + Number(line.igst || 0), 0));
+  const lineCgst = round2(normalizedLines.reduce((sum, line) => sum + Number(line.cgst || 0), 0));
+  const lineSgst = round2(normalizedLines.reduce((sum, line) => sum + Number(line.sgst || 0), 0));
+  const lineIgst = round2(normalizedLines.reduce((sum, line) => sum + Number(line.igst || 0), 0));
   const insuranceValue = round2(Number(insurance || 0));
   const otherChargesValue = round2(Number(otherCharges || 0));
+  const expenseCGSTValue = round2(Number(expenseTaxes?.expenseCGST || 0));
+  const expenseSGSTValue = round2(Number(expenseTaxes?.expenseSGST || 0));
+  const expenseIGSTValue = round2(Number(expenseTaxes?.expenseIGST || 0));
   const roundOffValue = round2(Number(roundOff || 0));
+  const totalCgst = round2(lineCgst + expenseCGSTValue);
+  const totalSgst = round2(lineSgst + expenseSGSTValue);
+  const totalIgst = round2(lineIgst + expenseIGSTValue);
   const totalInvoiceValueAfterGst = round2(totalInvoiceValue + totalCgst + totalSgst + totalIgst);
   const totalAmount = round2(totalActualValue + totalCgst + totalSgst + totalIgst + insuranceValue + otherChargesValue + roundOffValue);
 
@@ -144,6 +156,12 @@ export function summarizeMaterialInLines(
     totalCgst,
     totalSgst,
     totalIgst,
+    lineCgst,
+    lineSgst,
+    lineIgst,
+    expenseCGSTValue,
+    expenseSGSTValue,
+    expenseIGSTValue,
     totalInvoiceValueAfterGst,
     insuranceValue,
     otherChargesValue,
@@ -155,10 +173,21 @@ export function summarizeMaterialInLines(
 export function normalizeMaterialInRecord(entry: MaterialIn): MaterialIn {
   const invoiceCurrency = normalizeInvoiceCurrency(entry.invoiceCurrency);
   const exchangeRate = normalizeExchangeRate(invoiceCurrency, entry.exchangeRate);
-  const summary = summarizeMaterialInLines(entry.lines || [], entry.insurance, entry.otherCharges, entry.roundOff, {
-    invoiceCurrency,
-    exchangeRate,
-  });
+  const summary = summarizeMaterialInLines(
+    entry.lines || [],
+    entry.insurance,
+    entry.otherCharges,
+    entry.roundOff,
+    {
+      expenseCGST: entry.expenseCGST,
+      expenseSGST: entry.expenseSGST,
+      expenseIGST: entry.expenseIGST,
+    },
+    {
+      invoiceCurrency,
+      exchangeRate,
+    }
+  );
   return {
     ...entry,
     invoiceCurrency,
@@ -174,6 +203,9 @@ export function normalizeMaterialInRecord(entry: MaterialIn): MaterialIn {
     totalInvoiceValueAfterGst: summary.totalInvoiceValueAfterGst,
     insurance: summary.insuranceValue,
     otherCharges: summary.otherChargesValue,
+    expenseCGST: summary.expenseCGSTValue,
+    expenseSGST: summary.expenseSGSTValue,
+    expenseIGST: summary.expenseIGSTValue,
     roundOff: summary.roundOffValue,
     totalAmount: summary.totalAmount,
   };

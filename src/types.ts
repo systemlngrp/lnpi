@@ -506,6 +506,9 @@ export interface MaterialIn {
   totalInvoiceValueAfterGst?: number;
   insurance?: number;
   otherCharges?: number;
+  expenseCGST?: number;
+  expenseSGST?: number;
+  expenseIGST?: number;
   roundOff?: number;
   totalAmount: number;
   lines: MaterialLine[];
