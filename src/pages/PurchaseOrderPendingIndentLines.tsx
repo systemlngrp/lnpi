@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Eye } from "lucide-react";
+import { Search, Eye, RotateCcw } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { ExcelExport } from "../components/ExcelExport";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
-import type { Supplier } from "../types";
+import type { Indent, IndentLine, Supplier } from "../types";
 import { useAutoRefreshEffect, useAutoRefreshPause } from "../hooks/useAutoRefresh";
 import { computePurchaseOrderTaxes } from "../lib/purchaseOrderTaxes";
+import { canIndentBeUnapproved, revertIndentToPending } from "../lib/indentTotals";
 
 type PendingIndentLineRow = {
   indentLineId: string;
@@ -35,6 +36,8 @@ type PendingIndentLineRow = {
 export function PurchaseOrderPendingIndentLines() {
   const navigate = useNavigate();
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [indents, setIndents] = useData<Indent>("indents", []);
+  const [indentLines] = useData<IndentLine>("indent-lines", []);
   const [rows, setRows] = useState<PendingIndentLineRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export function PurchaseOrderPendingIndentLines() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [rowInputs, setRowInputs] = useState<Record<string, { supplierId: string; qty: string; rate: string; gstRate: string }>>({});
   const [creating, setCreating] = useState(false);
+  const [unapprovingIndentId, setUnapprovingIndentId] = useState<string | null>(null);
 
   useAutoRefreshPause(
     selectedIds.size > 0 ||
@@ -264,6 +268,44 @@ export function PurchaseOrderPendingIndentLines() {
     }
   };
 
+  const handleUnapproveIndent = async (indentId: string) => {
+    const indent = indents.find((row) => row.id === indentId);
+    if (!indent) {
+      alert("Indent not found.");
+      return;
+    }
+
+    const indentSpecificLines = indentLines.filter((line) => line.indentId === indentId);
+    if (!canIndentBeUnapproved(indentSpecificLines)) {
+      alert("This indent cannot be unapproved because PO quantity has already been created against it.");
+      return;
+    }
+
+    setUnapprovingIndentId(indentId);
+    try {
+      const nextIndent = revertIndentToPending(indent, indentSpecificLines);
+      await setIndents(indents.map((row) => (row.id === indentId ? nextIndent : row)));
+      await fetchRows();
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        rows.filter((row) => row.indentId === indentId).forEach((row) => next.delete(row.indentLineId));
+        return next;
+      });
+      setRowInputs((prev) => {
+        const next = { ...prev };
+        rows.filter((row) => row.indentId === indentId).forEach((row) => {
+          delete next[row.indentLineId];
+        });
+        return next;
+      });
+    } catch (error) {
+      console.error(`Failed to unapprove indent ${indentId}:`, error);
+      alert("Failed to move indent back to Pending.");
+    } finally {
+      setUnapprovingIndentId(null);
+    }
+  };
+
   if (loading && rows.length === 0) return <Spinner />;
 
   return (
@@ -441,14 +483,28 @@ export function PurchaseOrderPendingIndentLines() {
                     </td>
                     <td className="border border-black px-4 py-3">
                       <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/indent/view/${row.indentId}`)}
-                          title="View Indent"
-                          className="inline-flex h-9 w-9 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-50 transition"
-                        >
-                          <Eye size={16} />
-                        </button>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleUnapproveIndent(row.indentId)}
+                            disabled={
+                              unapprovingIndentId === row.indentId ||
+                              !canIndentBeUnapproved(indentLines.filter((line) => line.indentId === row.indentId))
+                            }
+                            title="Move indent back to Pending"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded border border-orange-700 bg-orange-100 text-orange-800 hover:bg-orange-200 transition disabled:opacity-50"
+                          >
+                            {unapprovingIndentId === row.indentId ? <Spinner size={16} /> : <RotateCcw size={16} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/indent/view/${row.indentId}`)}
+                            title="View Indent"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-50 transition"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        </div>
                       </div>
                     </td>
                   </tr>

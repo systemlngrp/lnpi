@@ -70,3 +70,7 @@ allow_invoice_sync_outbound.ps1
 dist/invoicesync9004/InvoiceTallySync.exe
 pythoncode/mrrtallysync.py
 pythoncode/debug_tally_stock_item_xml.py
+pythoncode/mrrtallysync.py
+pythoncode/mrrtallysync.py
+pythoncode/mrrtallysync.py
+pythoncode/mrrtallysync.py

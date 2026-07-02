@@ -480,7 +480,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/indent/approved": normalizedIndents.filter(i => i.status === "Approved").length,
     "/indent/completed": normalizedIndents.filter(i => i.status === "Completed").length,
     "/indent/rejected": normalizedIndents.filter(i => i.status === "Rejected").length,
-    "/purchase-orders/pending-indent-lines": indentLines.filter((l) => Number(l.qty || 0) - Number(l.cancelledQty || 0) - Number(l.orderedQty || 0) > 0).length,
+    "/purchase-orders/pending-indent-lines": indentLines.filter((l) =>
+      normalizedIndents.some((indent) => indent.id === l.indentId && indent.status === "Approved") &&
+      Number(l.qty || 0) - Number(l.cancelledQty || 0) - Number(l.orderedQty || 0) > 0
+    ).length,
     "/purchase-orders/all": purchaseOrders.length,
     "/purchase-orders/pending-approval": purchaseOrders.filter(po => po.status === "Pending Approval").length,
     "/purchase-orders/approved": purchaseOrders.filter(po => po.status === "Approved").length,

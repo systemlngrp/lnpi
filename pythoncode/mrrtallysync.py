@@ -63,6 +63,7 @@ OTHER_CHARGES_LEDGER_NAME = os.getenv('OTHER_CHARGES_LEDGER_NAME', 'INSURANCE & 
 CGST_LEDGER_NAME = os.getenv('CGST_LEDGER_NAME', 'Input CGST')
 SGST_LEDGER_NAME = os.getenv('SGST_LEDGER_NAME', 'Input SGST')
 IGST_LEDGER_NAME = os.getenv('IGST_LEDGER_NAME', 'Input IGST')
+ROUND_OFF_LEDGER_NAME = os.getenv('ROUND_OFF_LEDGER_NAME', 'Round Off')
 SUPPLIER_GROUP_NAME = os.getenv('SUPPLIER_GROUP_NAME', 'Sundry Creditors')
 DEFAULT_GODOWN_NAME = os.getenv('DEFAULT_GODOWN_NAME', 'Main Location')
 DEFAULT_BATCH_NAME = os.getenv('DEFAULT_BATCH_NAME', 'Primary Batch')
@@ -118,6 +119,44 @@ def get_first_numeric(source, keys, default=0.0):
     return default
 
 
+def round2(value):
+    return round(to_float(value), 2)
+
+
+def resolve_total_tax_amount(stored_total, line_total, expense_total):
+    """
+    Prefer the stored MRR tax total when available. Otherwise derive it from
+    line tax plus expense tax so the sync stays compatible with older rows too.
+    """
+    stored_total = round2(stored_total)
+    line_total = round2(line_total)
+    expense_total = round2(expense_total)
+
+    if stored_total != 0:
+        return stored_total
+    return round(line_total + expense_total, 2)
+
+
+def build_ledger_entry_xml(ledger_name, amount):
+    """
+    Build a Tally ledger entry with proper polarity handling.
+    Negative amount -> ISDEEMEDPOSITIVE Yes
+    Positive amount -> ISDEEMEDPOSITIVE No
+    """
+    amount = round2(amount)
+    if amount == 0:
+        return ""
+
+    is_deemed_positive = "Yes" if amount < 0 else "No"
+    return f"""
+                        <LEDGERENTRIES.LIST>
+                            <LEDGERNAME>{esc(ledger_name)}</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>{is_deemed_positive}</ISDEEMEDPOSITIVE>
+                            <AMOUNT>{amount:.2f}</AMOUNT>
+                        </LEDGERENTRIES.LIST>
+        """
+
+
 def format_tally_date(value):
     """
     Tally date format: YYYYMMDD
@@ -149,6 +188,29 @@ def format_tally_date(value):
             pass
 
     return datetime.today().strftime("%Y%m%d")
+
+
+def format_narration_date(value):
+    """
+    Human-friendly date for narration text.
+    """
+    if value is None or value == "":
+        return ""
+
+    if isinstance(value, datetime):
+        return value.strftime("%d-%b-%Y")
+
+    if isinstance(value, date):
+        return value.strftime("%d-%b-%Y")
+
+    raw_value = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(raw_value, fmt).strftime("%d-%b-%Y")
+        except Exception:
+            pass
+
+    return raw_value
 
 
 def normalize_uom(value):
@@ -295,6 +357,64 @@ def get_supplier_name(conn, supplier_id):
     return ""
 
 
+def get_user_display_name(conn, identifier):
+    """
+    Resolve user display name from email/userId. Falls back to the raw identifier.
+    """
+    raw_identifier = str(identifier or "").strip()
+    if not raw_identifier:
+        return ""
+
+    sql = """
+        SELECT name
+        FROM users
+        WHERE email = %s OR userId = %s
+        LIMIT 1
+    """
+
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(sql, (raw_identifier, raw_identifier))
+    row = cursor.fetchone()
+    cursor.close()
+
+    resolved_name = str((row or {}).get("name") or "").strip()
+    return resolved_name or raw_identifier
+
+
+def build_mrr_narration(conn, mrr):
+    """
+    Build narration with MRR reference and approval trail.
+    """
+    mrr_no = get_mrr_reference(mrr)
+    mrr_date = format_narration_date(mrr.get("date"))
+
+    approval_parts = []
+    ph_name = get_user_display_name(conn, mrr.get("phEmailId"))
+    acc_name = get_user_display_name(conn, mrr.get("accEmailId"))
+    md_name = get_user_display_name(conn, mrr.get("mdEmailId"))
+
+    if ph_name:
+        approval_parts.append(f"PH Approver: {ph_name}")
+    if acc_name:
+        approval_parts.append(f"Account Approver: {acc_name}")
+    if md_name:
+        approval_parts.append(f"MD Approver: {md_name}")
+
+    narration_parts = []
+    if mrr_no:
+        if mrr_date:
+            narration_parts.append(f"MRR No: {mrr_no} Dt: {mrr_date}")
+        else:
+            narration_parts.append(f"MRR No: {mrr_no}")
+    elif mrr_date:
+        narration_parts.append(f"MRR Dt: {mrr_date}")
+
+    if approval_parts:
+        narration_parts.append(f"Approved by {', '.join(approval_parts)}")
+
+    return " | ".join(part for part in narration_parts if part)
+
+
 # =====================================================
 # FETCH MATERIAL IN LINES WITH MATERIAL NAME
 # =====================================================
@@ -353,6 +473,9 @@ def get_material_lines(conn, mrr_row):
                 "rate": get_first_numeric(line, ["rate", "invoiceRate", "poRate"]),
                 "cost": get_first_numeric(line, ["cost", "rate", "invoiceRate", "poRate"]),
                 "amount": get_first_numeric(line, ["actualValue", "invoiceValue", "value"]),
+                "cgst": get_first_numeric(line, ["cgst"]),
+                "sgst": get_first_numeric(line, ["sgst"]),
+                "igst": get_first_numeric(line, ["igst"]),
             })
             continue
 
@@ -388,6 +511,9 @@ def get_material_lines(conn, mrr_row):
             "rate": get_first_numeric(line, ["rate", "invoiceRate", "poRate"]),
             "cost": get_first_numeric(line, ["cost", "rate", "invoiceRate", "poRate"]),
             "amount": get_first_numeric(line, ["actualValue", "invoiceValue", "value"]),
+            "cgst": get_first_numeric(line, ["cgst"]),
+            "sgst": get_first_numeric(line, ["sgst"]),
+            "igst": get_first_numeric(line, ["igst"]),
         })
 
     cursor.close()
@@ -417,23 +543,30 @@ def validate_item_lines_basic(item_lines):
 # CREATE TALLY PURCHASE VOUCHER XML
 # =====================================================
 
-def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=None):
+def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=None, narration_text=""):
     """
     Create Tally XML for Purchase Voucher.
     """
 
-    invoice_no = mrr.get("invoiceNo") or ""
-    invoice_date = format_tally_date(mrr.get("invDate") or mrr.get("date"))
+    invoice_no = str(mrr.get("invoiceNo") or "").strip()
+    voucher_date = format_tally_date(mrr.get("date"))
+    reference_date = format_tally_date(mrr.get("invDate") or mrr.get("date"))
     transaction_no = mrr.get("transactionNo") or ""
 
     supplier_name = supplier_name or "Unknown Supplier"
 
     insurance = to_float(mrr.get("insurance"))
     other_charges = to_float(mrr.get("otherCharges"))
-
-    cgst = to_float(mrr.get("totalCgst"))
-    sgst = to_float(mrr.get("totalSgst"))
-    igst = to_float(mrr.get("totalIgst"))
+    round_off = round2(mrr.get("roundOff"))
+    expense_cgst = round2(mrr.get("expenseCGST"))
+    expense_sgst = round2(mrr.get("expenseSGST"))
+    expense_igst = round2(mrr.get("expenseIGST"))
+    line_cgst = round(sum(round2(line.get("cgst")) for line in item_lines), 2)
+    line_sgst = round(sum(round2(line.get("sgst")) for line in item_lines), 2)
+    line_igst = round(sum(round2(line.get("igst")) for line in item_lines), 2)
+    cgst = resolve_total_tax_amount(mrr.get("totalCgst"), line_cgst, expense_cgst)
+    sgst = resolve_total_tax_amount(mrr.get("totalSgst"), line_sgst, expense_sgst)
+    igst = resolve_total_tax_amount(mrr.get("totalIgst"), line_igst, expense_igst)
 
     inventory_xml = ""
     total_item_amount = 0.0
@@ -510,6 +643,11 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=Non
         + igst,
         2
     )
+    total_invoice_amount = round(
+        total_invoice_amount
+        + round_off,
+        2
+    )
 
     ledger_entries_xml = f"""
                         <LEDGERENTRIES.LIST>
@@ -528,49 +666,22 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=Non
     ledger_entries_xml += service_ledger_entries_xml
 
     if insurance > 0:
-        ledger_entries_xml += f"""
-                        <LEDGERENTRIES.LIST>
-                            <LEDGERNAME>{esc(INSURANCE_LEDGER_NAME)}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>-{insurance:.2f}</AMOUNT>
-                        </LEDGERENTRIES.LIST>
-        """
+        ledger_entries_xml += build_ledger_entry_xml(INSURANCE_LEDGER_NAME, -insurance)
 
     if other_charges > 0:
-        ledger_entries_xml += f"""
-                        <LEDGERENTRIES.LIST>
-                            <LEDGERNAME>{esc(OTHER_CHARGES_LEDGER_NAME)}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>-{other_charges:.2f}</AMOUNT>
-                        </LEDGERENTRIES.LIST>
-        """
+        ledger_entries_xml += build_ledger_entry_xml(OTHER_CHARGES_LEDGER_NAME, -other_charges)
 
     if cgst > 0:
-        ledger_entries_xml += f"""
-                        <LEDGERENTRIES.LIST>
-                            <LEDGERNAME>{esc(CGST_LEDGER_NAME)}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>-{cgst:.2f}</AMOUNT>
-                        </LEDGERENTRIES.LIST>
-        """
+        ledger_entries_xml += build_ledger_entry_xml(CGST_LEDGER_NAME, -cgst)
 
     if sgst > 0:
-        ledger_entries_xml += f"""
-                        <LEDGERENTRIES.LIST>
-                            <LEDGERNAME>{esc(SGST_LEDGER_NAME)}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>-{sgst:.2f}</AMOUNT>
-                        </LEDGERENTRIES.LIST>
-        """
+        ledger_entries_xml += build_ledger_entry_xml(SGST_LEDGER_NAME, -sgst)
 
     if igst > 0:
-        ledger_entries_xml += f"""
-                        <LEDGERENTRIES.LIST>
-                            <LEDGERNAME>{esc(IGST_LEDGER_NAME)}</LEDGERNAME>
-                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                            <AMOUNT>-{igst:.2f}</AMOUNT>
-                        </LEDGERENTRIES.LIST>
-        """
+        ledger_entries_xml += build_ledger_entry_xml(IGST_LEDGER_NAME, -igst)
+
+    if round_off != 0:
+        ledger_entries_xml += build_ledger_entry_xml(ROUND_OFF_LEDGER_NAME, -round_off)
 
     current_company_name = company_name or TALLY_COMPANY_NAME
 
@@ -593,11 +704,13 @@ def create_purchase_voucher_xml(mrr, supplier_name, item_lines, company_name=Non
                 <TALLYMESSAGE xmlns:UDF="TallyUDF">
                     <VOUCHER VCHTYPE="{esc(VOUCHER_TYPE_NAME)}" ACTION="Create">
 
-                        <DATE>{invoice_date}</DATE>
+                        <DATE>{voucher_date}</DATE>
                         <VOUCHERTYPENAME>{esc(VOUCHER_TYPE_NAME)}</VOUCHERTYPENAME>
-                        <VOUCHERNUMBER>{esc(invoice_no or transaction_no)}</VOUCHERNUMBER>
-                        <REFERENCE>{esc(transaction_no or invoice_no)}</REFERENCE>
+                        <VOUCHERNUMBER>{esc(transaction_no or invoice_no)}</VOUCHERNUMBER>
+                        <REFERENCE>{esc(invoice_no or transaction_no)}</REFERENCE>
+                        <REFERENCEDATE>{reference_date}</REFERENCEDATE>
                         <PARTYLEDGERNAME>{esc(supplier_name)}</PARTYLEDGERNAME>
+                        <NARRATION>{esc(narration_text)}</NARRATION>
                         <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
                         <ISINVOICE>Yes</ISINVOICE>
 
@@ -1271,12 +1384,31 @@ def sync_mrr_to_tally():
                 supplier_id = mrr.get("supplierId")
                 supplier_name = get_supplier_name(conn, supplier_id)
                 supplier_log_name = supplier_name or "Unknown Supplier"
+                narration_text = build_mrr_narration(conn, mrr)
 
                 print(
                     f"\nProcessing Material In ID: {material_in_id} | "
                     f"MRR No: {mrr_reference} | "
                     f"Supplier: {supplier_log_name}"
                 )
+                print(
+                    "Header -> "
+                    f"mrrType={mrr_type or 'Unknown'}, "
+                    f"invoiceNo={str(mrr.get('invoiceNo') or '').strip()}, "
+                    f"invoiceDate={format_narration_date(mrr.get('invDate') or mrr.get('date'))}, "
+                    f"insurance={round2(mrr.get('insurance'))}, "
+                    f"otherCharges={round2(mrr.get('otherCharges'))}, "
+                    f"expenseCGST={round2(mrr.get('expenseCGST'))}, "
+                    f"expenseSGST={round2(mrr.get('expenseSGST'))}, "
+                    f"expenseIGST={round2(mrr.get('expenseIGST'))}, "
+                    f"roundOff={round2(mrr.get('roundOff'))}, "
+                    f"totalCgst={round2(mrr.get('totalCgst'))}, "
+                    f"totalSgst={round2(mrr.get('totalSgst'))}, "
+                    f"totalIgst={round2(mrr.get('totalIgst'))}, "
+                    f"totalAmount={round2(mrr.get('totalAmount'))}"
+                )
+                if narration_text:
+                    print(f"Narration -> {narration_text}")
 
                 if not supplier_name:
                     remark = "Supplier/customer not found in suppliers or companies table"
@@ -1347,7 +1479,8 @@ def sync_mrr_to_tally():
                         mrr=mrr,
                         supplier_name=supplier_name,
                         item_lines=item_lines,
-                        company_name=company_name
+                        company_name=company_name,
+                        narration_text=narration_text,
                     )
 
                     if DEBUG_TALLY_XML:

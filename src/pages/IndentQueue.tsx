@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { CheckCircle, Eye, FileText, ThumbsUp, X } from "lucide-react";
+import { CheckCircle, Eye, FileText, RotateCcw, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { ClientPagination } from "../components/ClientPagination";
@@ -13,7 +13,7 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
 import { Indent, IndentLine, Material, Setting } from "../types";
-import { withIndentTotals } from "../lib/indentTotals";
+import { canIndentBeUnapproved, revertIndentToPending, withIndentTotals } from "../lib/indentTotals";
 
 type QueueMode = "Pending" | "Approved" | "Completed" | "Rejected";
 
@@ -45,6 +45,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
   const [settings] = useData<Setting>("settings", []);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [unapproveConfirmId, setUnapproveConfirmId] = useState<string | null>(null);
   const [pdfIndentId, setPdfIndentId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -317,6 +318,33 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
     await updateIndent(indent, "Rejected", remarks.trim());
   };
 
+  const handleUnapprove = async (indent: Indent) => {
+    const indentSpecificLines = indentLines.filter((line) => line.indentId === indent.id);
+    if (!canIndentBeUnapproved(indentSpecificLines)) {
+      alert("This indent cannot be unapproved because PO quantity has already been created against it.");
+      return;
+    }
+
+    if (unapproveConfirmId !== indent.id) {
+      setUnapproveConfirmId(indent.id);
+      setConfirmId(null);
+      setTimeout(() => setUnapproveConfirmId(null), 3000);
+      return;
+    }
+
+    setSubmittingId(indent.id);
+    try {
+      const nextIndent = revertIndentToPending(indent, indentSpecificLines);
+      await setIndents(indents.map((row) => (row.id === indent.id ? nextIndent : row)));
+      setUnapproveConfirmId(null);
+    } catch (error) {
+      console.error(`Failed to unapprove indent ${indent.id}:`, error);
+      alert("Failed to move indent back to Pending.");
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 border-b border-black pb-4">
@@ -370,6 +398,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
               paginatedDisplayRows.map(({ indent, line }) => {
                 const lineRows = indentLines.filter((row) => row.indentId === indent.id);
                 const material = line ? materials.find((row) => row.id === line.materialId) : null;
+                const canUnapprove = mode === "Approved" && canIndentBeUnapproved(lineRows);
 
                 return (
                   <tr key={line ? `${indent.id}-${line.id}` : indent.id} className="hover:bg-slate-50">
@@ -457,6 +486,26 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                               <X size={16} />
                             </button>
                           </>
+                        ) : null}
+                        {mode === "Approved" ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleUnapprove(indent)}
+                            disabled={submittingId === indent.id || !canUnapprove}
+                            title={
+                              canUnapprove
+                                ? (unapproveConfirmId === indent.id ? "Confirm Unapprove" : "Move back to Pending")
+                                : "Cannot unapprove after PO quantity has been created"
+                            }
+                            className={cn(
+                              "inline-flex h-9 w-9 items-center justify-center rounded border transition disabled:opacity-50",
+                              unapproveConfirmId === indent.id
+                                ? "border-amber-700 bg-amber-100 text-amber-800"
+                                : "border-orange-700 bg-orange-100 text-orange-800 hover:bg-orange-200"
+                            )}
+                          >
+                            {submittingId === indent.id ? <Spinner size={16} /> : <RotateCcw size={16} />}
+                          </button>
                         ) : null}
                       </div>
                     </td>

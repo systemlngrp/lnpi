@@ -49,3 +49,29 @@ export function withIndentTotals(indent: Indent, lines: IndentLine[]): Indent {
     totalBalanceQty: totals.totalBalanceQty,
   };
 }
+
+export function canIndentBeUnapproved(lines: IndentLine[]) {
+  return lines.every((line) => Number(line.orderedQty || 0) <= 0);
+}
+
+export function revertIndentToPending(
+  indent: Indent,
+  lines: IndentLine[],
+  actor = "System User",
+  timestamp = new Date().toISOString()
+): Indent {
+  const nextIndent = withIndentTotals(indent, lines);
+  return {
+    ...nextIndent,
+    status: "Pending",
+    approvedTimestamp: undefined,
+    approvedBy: undefined,
+    completedTimestamp: undefined,
+    completedBy: undefined,
+    rejectedTimestamp: undefined,
+    rejectedBy: undefined,
+    rejectedRemarks: undefined,
+    updatedBy: actor,
+    updateTimestamp: timestamp,
+  };
+}
