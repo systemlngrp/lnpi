@@ -9,6 +9,7 @@ package-lock.json
 .npm-cache/
 .py
 .exe
+.spec
 
 # Build output
 

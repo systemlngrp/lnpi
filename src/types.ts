@@ -636,6 +636,15 @@ export interface Production {
 	  phTimestamp?: string;
 	  phEmailId?: string;
 	  tallyTimestamp?: string;
+  tallyPostingStatus?: string;
+  tallyVoucherNo?: string;
+  tallyVoucherDate?: string;
+  tallyVoucherId?: string;
+  tallyPostedBy?: string;
+  tallyPostingRemark?: string;
+  tallyPostingError?: string;
+  tallyLastAttemptAt?: string;
+  tallyPostingAttemptCount?: number;
 	  closeBy?: string;
 	  closeDate?: string;
 	  cancelTimestamp?: string;
