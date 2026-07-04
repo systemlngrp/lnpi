@@ -2,7 +2,7 @@ import requests
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
-TALLY_URL = "http://127.0.0.1:9000"
+TALLY_URL = "http://127.0.0.1:9004"
 
 def get_stock_item_details(item_name):
     safe_name = escape(item_name)
@@ -34,6 +34,6 @@ def get_stock_item_details(item_name):
     except Exception as e:
         return str(e)
 
-item_name = "1001 - Size: 120 CM X GSM: 150 X BF: 18"
+item_name = "7020654 - Size: 114.3 CM X GSM: 140 X BF: 18   Color - LG"
 print(f"Fetching details for: {item_name}")
 print(get_stock_item_details(item_name))

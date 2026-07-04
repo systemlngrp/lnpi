@@ -1,0 +1,12 @@
+UPDATE `productions`
+SET
+    `tallyTimestamp` = NULL,
+    `tallyPostingStatus` = NULL,
+    `tallyVoucherNo` = NULL,
+    `tallyVoucherDate` = NULL,
+    `tallyVoucherId` = NULL,
+    `tallyPostedBy` = NULL,
+    `tallyPostingRemark` = NULL,
+    `tallyPostingError` = NULL,
+    `tallyLastAttemptAt` = NULL,
+    `tallyPostingAttemptCount` = NULL;

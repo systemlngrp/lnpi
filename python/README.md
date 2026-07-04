@@ -10,6 +10,7 @@ and posts them into the **currently open Tally company** on `http://localhost:90
 ## Files
 
 - `D:\lnpi\python\tally_mrr_posting.py`
+- `D:\lnpi\python\tally_manufacturing_journal_posting.py`
 - `D:\lnpi\python\requirements.txt`
 
 ## What the script does
@@ -21,6 +22,17 @@ and posts them into the **currently open Tally company** on `http://localhost:90
    - `Purchase` voucher for `Reel`, `Others`, `FG Purchase`, `Rejection In`
    - `Journal` voucher for `Service Return`
 5. Marks the MRR as `Completed` and fills `tallyTimestamp`
+
+## Manufacturing Journal script
+
+`tally_manufacturing_journal_posting.py`:
+
+1. Reads eligible `productions` rows where `prodFromFFG > 0`
+2. Builds one Manufacturing Journal per job from net material issue minus return
+3. Uses exact reel-linked rates where available and fallback rates for other RM items
+4. Auto-creates missing raw-material stock items in Tally when possible
+5. Never auto-creates FG items during MJ posting
+6. Updates production-level Tally posting control columns after attempt/success/failure
 
 ## MRR types from your system
 

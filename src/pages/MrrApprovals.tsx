@@ -29,8 +29,8 @@ export function MrrApprovals() {
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
-  const [sortField, setSortField] = useState<SortField>("timestamp");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortField, setSortField] = useState<SortField>("transactionNo");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const getSeriesNumber = (value?: string) => {
     const suffix = String(value || "").trim().split("/").pop() || "";
