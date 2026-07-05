@@ -162,11 +162,23 @@ export interface MaterialInPackingSlip {
 export interface MaterialIssue {
   id: string;
   issueNo: string;
+  consumptionTransactionNo?: string;
   date: string;
   issueType: "Job" | "Without Job" | "General";
   productionId?: string;
   jobNo?: string;
   remarks?: string;
+  tallyTimestamp?: string;
+  tallyPostingStatus?: string;
+  tallyVoucherNo?: string;
+  tallyVoucherDate?: string;
+  tallyVoucherType?: string;
+  tallyVoucherId?: string;
+  tallyPostedBy?: string;
+  tallyPostingRemark?: string;
+  tallyPostingError?: string;
+  tallyLastAttemptAt?: string;
+  tallyPostingAttemptCount?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

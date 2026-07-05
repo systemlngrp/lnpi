@@ -355,15 +355,26 @@ export function MaterialIssueForm() {
         materialIssues.map((row) => ({ transactionNo: row.issueNo, date: row.date })),
         date
       );
+      const consumptionTransactionNo = isWithoutJobIssue(issueType)
+        ? generateTransactionNo(
+            "CON",
+            materialIssues
+              .filter((row) => isWithoutJobIssue(row.issueType))
+              .map((row) => ({ transactionNo: row.consumptionTransactionNo, date: row.date })),
+            date
+          )
+        : undefined;
 
       const issue: MaterialIssue = {
         id: issueId,
         issueNo,
+        consumptionTransactionNo,
         date,
         issueType: issueType === "General" ? "Without Job" : issueType,
         productionId: issueType === "Job" ? productionId : undefined,
         jobNo: issueType === "Job" ? (selectedProduction?.transactionNo || "") : undefined,
         remarks: remarks.trim() || undefined,
+        tallyPostingStatus: isWithoutJobIssue(issueType) ? "Pending" : undefined,
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
@@ -447,7 +458,11 @@ export function MaterialIssueForm() {
       setCurrentQty("");
       setLines([]);
       setSelectedReels({});
-      alert(`Material Issue created with Issue No: ${issueNo}`);
+      alert(
+        isWithoutJobIssue(issueType) && consumptionTransactionNo
+          ? `Material Issue created with Issue No: ${issueNo} | Consumption No: ${consumptionTransactionNo}`
+          : `Material Issue created with Issue No: ${issueNo}`
+      );
 
       // Redirect back to relevant pending view
       if (isWithoutJobIssue(issueType)) {

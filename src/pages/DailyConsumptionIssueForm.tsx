@@ -72,13 +72,22 @@ export function DailyConsumptionIssueForm() {
         materialIssues.map((row) => ({ transactionNo: row.issueNo, date: row.date })),
         date
       );
+      const consumptionTransactionNo = generateTransactionNo(
+        "CON",
+        materialIssues
+          .filter((row) => String(row.issueType || "").trim().toLowerCase() === "general" || String(row.issueType || "").trim().toLowerCase() === "without job")
+          .map((row) => ({ transactionNo: row.consumptionTransactionNo, date: row.date })),
+        date
+      );
 
       const issue: MaterialIssue = {
         id: issueId,
         issueNo,
+        consumptionTransactionNo,
         date,
         issueType: "General",
         remarks: remarks.trim() || undefined,
+        tallyPostingStatus: "Pending",
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
@@ -104,7 +113,7 @@ export function DailyConsumptionIssueForm() {
       setCurrentMaterialId("");
       setCurrentQty("");
       setLines([]);
-      alert(`Daily Consumption saved with Issue No: ${issueNo}`);
+      alert(`Daily Consumption saved with Issue No: ${issueNo} | Consumption No: ${consumptionTransactionNo}`);
     } catch (error) {
       console.error("Failed to save daily consumption issue:", error);
       alert("Failed to save daily consumption issue.");

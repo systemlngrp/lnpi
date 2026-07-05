@@ -30,6 +30,7 @@ import { MaterialIssueMaster } from "./pages/MaterialIssueMaster";
 import { MaterialReturnMaster } from "./pages/MaterialReturnMaster";
 import { PendingNonJobMaterialIssue } from "./pages/PendingNonJobMaterialIssue";
 import { NonJobIssueMaster } from "./pages/NonJobIssueMaster";
+import { PendingConsumptionTallyPosting } from "./pages/PendingConsumptionTallyPosting";
 import { ReelIssueReturnForm } from "./pages/ReelIssueReturnForm";
 import { DailyConsumptionIssueForm } from "./pages/DailyConsumptionIssueForm";
 import { DailyConsumptionMaster } from "./pages/DailyConsumptionMaster";
@@ -203,6 +204,7 @@ export default function App() {
           <Route path="material-movement/issue" element={<MaterialIssueForm />} />
           <Route path="material-movement/issue-master" element={<MaterialIssueMaster />} />
           <Route path="material-movement/pending-non-job-issue" element={<PendingNonJobMaterialIssue />} />
+          <Route path="material-movement/pending-consumption-tally" element={<PendingConsumptionTallyPosting />} />
           <Route path="material-movement/non-job-issue-master" element={<NonJobIssueMaster />} />
           <Route path="material-movement/return" element={<MaterialReturnForm />} />
           <Route path="material-movement/return-master" element={<MaterialReturnMaster />} />

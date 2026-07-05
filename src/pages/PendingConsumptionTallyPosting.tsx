@@ -2,7 +2,6 @@ import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { MaterialIssue } from "../types";
 import { TableControls } from "../components/TableControls";
-import { Trash2 } from "lucide-react";
 import { formatDate } from "../lib/serial";
 
 function isWithoutJobIssue(issueType?: string) {
@@ -10,44 +9,52 @@ function isWithoutJobIssue(issueType?: string) {
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
 }
 
-export function NonJobIssueMaster() {
-  const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
-
+export function PendingConsumptionTallyPosting() {
+  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [searchTerm, setSearchTerm] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
+  const pendingRows = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return [...materialIssues]
       .filter((row) => isWithoutJobIssue(row.issueType))
+      .filter((row) => String(row.consumptionTransactionNo || "").trim() !== "")
+      .filter((row) => String(row.tallyTimestamp || "").trim() === "")
       .filter((row) => {
         if (!q) return true;
-        const haystack = [row.issueNo, row.consumptionTransactionNo, row.date, row.remarks, row.tallyPostingStatus]
+        const haystack = [
+          row.issueNo,
+          row.consumptionTransactionNo,
+          row.date,
+          row.remarks,
+          row.tallyPostingStatus,
+          row.tallyPostingError,
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
         return haystack.includes(q);
       })
-      .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.issueNo || "").localeCompare(a.issueNo || ""));
+      .sort(
+        (a, b) =>
+          String(a.date || "").localeCompare(String(b.date || "")) ||
+          String(a.consumptionTransactionNo || "").localeCompare(String(b.consumptionTransactionNo || "")) ||
+          String(a.issueNo || "").localeCompare(String(b.issueNo || ""))
+      );
   }, [materialIssues, searchTerm]);
-
-  const handleDelete = (id: string) => {
-    if (deletingId !== id) {
-      setDeletingId(id);
-      setTimeout(() => setDeletingId(null), 3000);
-      return;
-    }
-    setMaterialIssues((prev) => prev.filter((row) => row.id !== id));
-    setDeletingId(null);
-  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Non-Job Issue Master</h2>
+        <div>
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Consumption Tally Posting</h2>
+          <p className="text-sm font-medium text-slate-600 mt-1">
+            Shows non-job issues where <span className="font-bold">tallyTimestamp</span> is blank.
+          </p>
+        </div>
+        <div className="text-sm font-bold text-slate-700">Pending: {pendingRows.length}</div>
       </div>
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search issue no, consumption no, date, remarks..." />
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search issue no, consumption no, date, error..." />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
@@ -57,36 +64,27 @@ export function NonJobIssueMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Consumption No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Tally Status</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remarks</th>
-                <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remark</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Error</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black">
-              {filtered.length === 0 ? (
+              {pendingRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-slate-600 font-medium">
-                    No “Without Job” material issues found.
+                    No pending Consumption Tally posting rows found.
                   </td>
                 </tr>
               ) : (
-                filtered.map((row) => (
+                pendingRows.map((row) => (
                   <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
                     <td className="px-4 py-3 text-sm font-bold">{row.issueNo}</td>
                     <td className="px-4 py-3 text-sm font-semibold text-indigo-700">{row.consumptionTransactionNo || "-"}</td>
                     <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
                     <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        title={deletingId === row.id ? "Confirm delete" : "Delete"}
-                        onClick={() => handleDelete(row.id)}
-                        className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-end`}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
+                    <td className="px-4 py-3 text-sm">{row.tallyPostingRemark || row.remarks || "-"}</td>
+                    <td className="px-4 py-3 text-sm text-red-700">{row.tallyPostingError || "-"}</td>
                   </tr>
                 ))
               )}

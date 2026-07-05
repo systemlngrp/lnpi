@@ -159,6 +159,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
       { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
       { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
+      { name: "Pending Consumption Tally Posting", href: "/material-movement/pending-consumption-tally", icon: FileText, countKey: "/material-movement/pending-consumption-tally" },
       { name: "Non-Job Issue Master", href: "/material-movement/non-job-issue-master", icon: Database },
       { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
       { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
@@ -397,6 +398,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     return count;
   })();
 
+  const pendingConsumptionTallyCount = materialIssues.filter(
+    (issue) =>
+      isWithoutJobIssue(issue.issueType) &&
+      String(issue.consumptionTransactionNo || "").trim() !== "" &&
+      String(issue.tallyTimestamp || "").trim() === ""
+  ).length;
+
   const [pendingJobClosureCount, setPendingJobClosureCount] = useState<number>(0);
 
   const refreshPendingJobClosureCount = useCallback(async () => {
@@ -491,6 +499,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/material-receipt/pending-mrr": gateEntries.filter(entry => !(entry.mrrId || "").trim() && !(entry.mrrNo || "").trim() && !(entry.mrrDate || "").trim()).length,
     "/material-receipt/pending-debit-note": 0,
     "/material-movement/pending-non-job-issue": pendingNonJobIssueCount,
+    "/material-movement/pending-consumption-tally": pendingConsumptionTallyCount,
     "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
     "/orders/pending-ph": orders.filter(o => isPendingPH(o.status)).length,
     "/orders/pending-scheduling": orders.filter(o => o.status === "Pending Scheduling").length,

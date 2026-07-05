@@ -2618,6 +2618,37 @@ function buildInvoiceNumber(prefix: string, fy: string, separator: string, nextN
   return `${prefix}${separator}${fy}${separator}${String(nextNumber).padStart(paddingLength, "0")}`;
 }
 
+function isWithoutJobIssueType(issueType: unknown) {
+  const normalized = String(issueType || "").trim().toLowerCase();
+  return normalized === "without job" || normalized === "withoutjob" || normalized === "without_job" || normalized === "general";
+}
+
+async function generateSimpleTransactionNumber(
+  db: mysql.Pool,
+  tableName: string,
+  columnName: string,
+  prefix: string,
+  dateStr?: string
+) {
+  const fy = getShortFinancialYear(dateStr);
+  if (!fy) throw new Error(`Could not generate ${columnName} because date is invalid.`);
+
+  const likePattern = `${prefix}/${fy}/%`;
+  const [rows] = await db.query(
+    `SELECT \`${columnName}\` AS serialValue FROM \`${tableName}\` WHERE \`${columnName}\` LIKE ? ORDER BY CAST(SUBSTRING_INDEX(\`${columnName}\`,'/',-1) AS UNSIGNED) DESC LIMIT 1`,
+    [likePattern]
+  );
+
+  let lastNum = 0;
+  const latestValue = String(((rows as any[])[0] || {}).serialValue || "").trim();
+  if (latestValue) {
+    const suffix = latestValue.split("/").pop() || "0";
+    lastNum = Number.parseInt(suffix, 10) || 0;
+  }
+
+  return `${prefix}/${fy}/${String(lastNum + 1).padStart(5, "0")}`;
+}
+
 async function generateDynamicInvoiceNo(db: mysql.Pool, dateStr?: string) {
   const fy = getShortFinancialYear(dateStr);
   if (!fy) throw new Error("Invoice date is invalid for invoice series generation.");
@@ -2980,11 +3011,23 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`material_issues\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`issueNo\` VARCHAR(100) NOT NULL,
+          \`consumptionTransactionNo\` VARCHAR(100),
           \`date\` VARCHAR(50) NOT NULL,
           \`issueType\` VARCHAR(50) NOT NULL,
           \`productionId\` VARCHAR(36),
           \`jobNo\` VARCHAR(100),
           \`remarks\` TEXT,
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyPostingStatus\` VARCHAR(50),
+          \`tallyVoucherNo\` VARCHAR(100),
+          \`tallyVoucherDate\` VARCHAR(50),
+          \`tallyVoucherType\` VARCHAR(100),
+          \`tallyVoucherId\` VARCHAR(255),
+          \`tallyPostedBy\` VARCHAR(255),
+          \`tallyPostingRemark\` TEXT,
+          \`tallyPostingError\` TEXT,
+          \`tallyLastAttemptAt\` VARCHAR(255),
+          \`tallyPostingAttemptCount\` INT DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -4036,11 +4079,23 @@ await db.query(`
         { table: "material_in_packing_slips", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_in_packing_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_issues", column: "issueNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_issues", column: "consumptionTransactionNo", type: "VARCHAR(100)" },
         { table: "material_issues", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "material_issues", column: "issueType", type: "VARCHAR(50) NOT NULL" },
         { table: "material_issues", column: "productionId", type: "VARCHAR(36)" },
         { table: "material_issues", column: "jobNo", type: "VARCHAR(100)" },
         { table: "material_issues", column: "remarks", type: "TEXT" },
+        { table: "material_issues", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "tallyPostingStatus", type: "VARCHAR(50)" },
+        { table: "material_issues", column: "tallyVoucherNo", type: "VARCHAR(100)" },
+        { table: "material_issues", column: "tallyVoucherDate", type: "VARCHAR(50)" },
+        { table: "material_issues", column: "tallyVoucherType", type: "VARCHAR(100)" },
+        { table: "material_issues", column: "tallyVoucherId", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "tallyPostedBy", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "tallyPostingRemark", type: "TEXT" },
+        { table: "material_issues", column: "tallyPostingError", type: "TEXT" },
+        { table: "material_issues", column: "tallyLastAttemptAt", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "tallyPostingAttemptCount", type: "INT DEFAULT 0" },
         { table: "material_issues", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_issues", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_issue_lines", column: "materialIssueId", type: "VARCHAR(36) NOT NULL" },
@@ -5283,6 +5338,36 @@ const createHandlers = (tableName: string) => {
             }
           } catch (err) {
             console.warn('[DB] Could not auto-generate gateEntryNo:', (err as Error).message);
+          }
+        }
+
+        if (tableName === "material_issues") {
+          try {
+            const issueDate = String(data.date || new Date().toISOString().slice(0, 10));
+            if (!data.issueNo) {
+              data.issueNo = await generateSimpleTransactionNumber(db, "material_issues", "issueNo", "MIS", issueDate);
+            }
+
+            if (isWithoutJobIssueType(data.issueType)) {
+              if (!data.consumptionTransactionNo) {
+                data.consumptionTransactionNo = await generateSimpleTransactionNumber(
+                  db,
+                  "material_issues",
+                  "consumptionTransactionNo",
+                  "CON",
+                  issueDate
+                );
+              }
+              if (!data.tallyPostingStatus) {
+                data.tallyPostingStatus = "Pending";
+              }
+            } else if (!data.consumptionTransactionNo) {
+              data.consumptionTransactionNo = null;
+            }
+          } catch (err) {
+            const message = (err as Error).message || "Could not auto-generate material issue serial.";
+            console.warn("[DB] Could not auto-generate material issue serials:", message);
+            return res.status(400).json({ error: message });
           }
         }
 

@@ -11,6 +11,7 @@ and posts them into the **currently open Tally company** on `http://localhost:90
 
 - `D:\lnpi\python\tally_mrr_posting.py`
 - `D:\lnpi\python\tally_manufacturing_journal_posting.py`
+- `D:\lnpi\python\tally_consumption_journal_posting.py`
 - `D:\lnpi\python\requirements.txt`
 
 ## What the script does
@@ -33,6 +34,16 @@ and posts them into the **currently open Tally company** on `http://localhost:90
 4. Auto-creates missing raw-material stock items in Tally when possible
 5. Never auto-creates FG items during MJ posting
 6. Updates production-level Tally posting control columns after attempt/success/failure
+
+## Consumption Journal script
+
+`tally_consumption_journal_posting.py`:
+
+1. Reads eligible non-job material issues from `material_issues`
+2. Uses `consumptionTransactionNo` as the Tally voucher number
+3. Uses `issueNo` as the Tally reference number
+4. Posts one `Consumption Journal` per non-job issue on port `9004`
+5. Updates material-issue-level Tally posting control columns after attempt/success/failure
 
 ## MRR types from your system
 
