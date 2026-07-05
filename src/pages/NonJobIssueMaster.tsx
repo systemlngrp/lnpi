@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialIssue } from "../types";
+import { useNpdItems } from "../hooks/useNpdItems";
+import { Material, MaterialIssue, MaterialIssueLine } from "../types";
 import { TableControls } from "../components/TableControls";
 import { Trash2 } from "lucide-react";
 import { formatDate } from "../lib/serial";
@@ -12,9 +13,41 @@ function isWithoutJobIssue(issueType?: string) {
 
 export function NonJobIssueMaster() {
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
+  const [materials] = useData<Material>("materials", []);
+  const [issueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const npdItems = useNpdItems();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const itemNameByIssueId = useMemo(() => {
+    const materialNameMap = new Map(materials.map((row) => [String(row.id), String(row.name || "").trim()]));
+    const npdNameMap = new Map(npdItems.map((row) => [String((row as any).id || ""), String((row as any).name || "").trim()]));
+    const issueMap = new Map<string, string>();
+
+    for (const line of issueLines) {
+      const issueId = String(line.materialIssueId || "").trim();
+      if (!issueId) continue;
+
+      const materialId = String(line.materialId || "").trim();
+      const itemName = materialNameMap.get(materialId) || npdNameMap.get(materialId) || materialId;
+      if (!itemName) continue;
+
+      const existing = issueMap.get(issueId);
+      if (!existing) {
+        issueMap.set(issueId, itemName);
+        continue;
+      }
+
+      const existingParts = existing.split(", ").filter(Boolean);
+      if (!existingParts.includes(itemName)) {
+        existingParts.push(itemName);
+        issueMap.set(issueId, existingParts.join(", "));
+      }
+    }
+
+    return issueMap;
+  }, [issueLines, materials, npdItems]);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -22,14 +55,14 @@ export function NonJobIssueMaster() {
       .filter((row) => isWithoutJobIssue(row.issueType))
       .filter((row) => {
         if (!q) return true;
-        const haystack = [row.issueNo, row.consumptionTransactionNo, row.date, row.remarks, row.tallyPostingStatus]
+        const haystack = [row.issueNo, row.consumptionTransactionNo, row.date, row.remarks, row.tallyPostingStatus, itemNameByIssueId.get(row.id)]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
         return haystack.includes(q);
       })
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.issueNo || "").localeCompare(a.issueNo || ""));
-  }, [materialIssues, searchTerm]);
+  }, [itemNameByIssueId, materialIssues, searchTerm]);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -47,7 +80,7 @@ export function NonJobIssueMaster() {
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Non-Job Issue Master</h2>
       </div>
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search issue no, consumption no, date, remarks..." />
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search issue no, consumption no, date, item, remarks..." />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
@@ -58,6 +91,7 @@ export function NonJobIssueMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Consumption No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Tally Status</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Items</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remarks</th>
                 <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th>
               </tr>
@@ -65,7 +99,7 @@ export function NonJobIssueMaster() {
             <tbody className="divide-y divide-black">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-600 font-medium">
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">
                     No “Without Job” material issues found.
                   </td>
                 </tr>
@@ -76,6 +110,7 @@ export function NonJobIssueMaster() {
                     <td className="px-4 py-3 text-sm font-semibold text-indigo-700">{row.consumptionTransactionNo || "-"}</td>
                     <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
                     <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
+                    <td className="px-4 py-3 text-sm">{itemNameByIssueId.get(row.id) || "-"}</td>
                     <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
                     <td className="px-4 py-3 text-right">
                       <button

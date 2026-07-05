@@ -2649,6 +2649,46 @@ async function generateSimpleTransactionNumber(
   return `${prefix}/${fy}/${String(lastNum + 1).padStart(5, "0")}`;
 }
 
+async function backfillMissingConsumptionTransactionNos(db: mysql.Pool) {
+  const [rows] = await db.query(
+    `
+      SELECT \`id\`, \`date\`, \`issueNo\`, \`issueType\`, \`tallyPostingStatus\`
+      FROM \`material_issues\`
+      WHERE COALESCE(TRIM(\`consumptionTransactionNo\`), '') = ''
+        AND (
+              LOWER(TRIM(COALESCE(\`issueType\`, ''))) = 'without job'
+           OR LOWER(TRIM(COALESCE(\`issueType\`, ''))) = 'withoutjob'
+           OR LOWER(TRIM(COALESCE(\`issueType\`, ''))) = 'without_job'
+           OR LOWER(TRIM(COALESCE(\`issueType\`, ''))) = 'general'
+        )
+      ORDER BY \`date\` ASC, \`issueNo\` ASC, \`id\` ASC
+    `
+  );
+
+  for (const row of rows as any[]) {
+    const issueId = String(row?.id || "").trim();
+    if (!issueId) continue;
+    const issueDate = String(row?.date || "").trim() || new Date().toISOString().slice(0, 10);
+    const conNo = await generateSimpleTransactionNumber(db, "material_issues", "consumptionTransactionNo", "CON", issueDate);
+    const hasStatus = String(row?.tallyPostingStatus || "").trim() !== "";
+
+    await db.query(
+      `
+        UPDATE \`material_issues\`
+        SET \`consumptionTransactionNo\` = ?,
+            \`tallyPostingStatus\` = CASE
+              WHEN ? THEN \`tallyPostingStatus\`
+              ELSE 'Pending'
+            END
+        WHERE \`id\` = ?
+      `,
+      [conNo, hasStatus ? 1 : 0, issueId]
+    );
+  }
+
+  return (rows as any[]).length;
+}
+
 async function generateDynamicInvoiceNo(db: mysql.Pool, dateStr?: string) {
   const fy = getShortFinancialYear(dateStr);
   if (!fy) throw new Error("Invoice date is invalid for invoice series generation.");
@@ -4702,6 +4742,15 @@ await db.query(`
         await ensureGatePassNullableColumns(db, database);
       } catch (err) {
         console.warn("[DB] Could not normalize gate_passes nullable invoice fields:", (err as Error).message);
+      }
+
+      try {
+        const backfilledCount = await backfillMissingConsumptionTransactionNos(db);
+        if (backfilledCount > 0) {
+          console.log(`[DB] Backfilled consumptionTransactionNo for ${backfilledCount} non-job material issue row(s).`);
+        }
+      } catch (err) {
+        console.warn("[DB] Could not backfill material_issues.consumptionTransactionNo:", (err as Error).message);
       }
 
       try {
