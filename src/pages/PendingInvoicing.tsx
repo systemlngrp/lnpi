@@ -608,22 +608,6 @@ export function PendingInvoicing() {
       }
     }
 
-    // Tolerance Check (per allocation row)
-    const tolerancePercent = Math.min(company.toleranceAllowed || 0, 10);
-    for (const itemRow of invoiceRows) {
-      for (const alloc of itemRow.allocations) {
-        const order = orders.find((o) => o.id === alloc.orderId);
-        if (alloc.orderId === DIRECT_ALLOCATION_ID || !order) continue;
-        const totalDispatched = totalDispatchedByOrderId.get(order.id) || 0;
-        const allowedMax = Number(order.qty || 0) * (1 + tolerancePercent / 100);
-        const currentlyDispatched = totalDispatched + Number(alloc.qty || 0);
-        if (currentlyDispatched > allowedMax + 0.01) {
-          const itemName = itemRow.itemName || "Item";
-          alert(`Dispatched quantity for ${itemName} exceeds allowed tolerance (${tolerancePercent}%). Max allowed: ${allowedMax.toLocaleString()}`);
-          return;
-        }
-      }
-    }
 
     setIsSubmitting(true);
     try {
