@@ -166,7 +166,7 @@ async function drawHeader(doc: jsPDF, npdRow: RowRecord, setting?: Setting | nul
   const y = SHEET_Y;
   doc.setDrawColor(0);
   doc.setLineWidth(0.35);
-  doc.rect(SHEET_X, y, SHEET_W, 257);
+  doc.rect(SHEET_X, y, SHEET_W, 270);
 
   cell(doc, SHEET_X, y, 38, 28, `FILE NO.-\n${formatValue(npdRow.erp)}`, { bold: true, align: "left", fontSize: FONT_TINY, padding: 1.5 });
   cell(doc, SHEET_X + 38, y, 64, 28, "", { fill: WHITE });
@@ -300,7 +300,7 @@ function drawPhpPlateSection(doc: jsPDF, y: number, phpRow?: RowRecord | null, p
   const phpHeaders = ["LENGTH", "WIDTH", "HEIGHT"];
   phpHeaders.forEach((header, index) => cell(doc, SHEET_X + index * (86 / 3), y, 86 / 3, 6, header, { bold: true, fill: LIGHT_CYAN, fontSize: FONT_MICRO }));
   const plateHeaders = ["PLATE TYPE", "ERP", "LENGTH", "WIDTH", "PLY", "FLUTE", "BS", "QTY/BOX"];
-  const plateWidths = [18, 18, 15, 15, 12, 14, 12, 16];
+  const plateWidths = [14, 14, 13, 13, 10, 12, 10, 14];
   let x = SHEET_X + 86;
   plateHeaders.forEach((header, index) => {
     cell(doc, x, y, plateWidths[index], 6, header, { bold: true, fill: PLATE_GOLD, fontSize: FONT_MICRO });
@@ -330,36 +330,36 @@ function drawPhpPlateSection(doc: jsPDF, y: number, phpRow?: RowRecord | null, p
   ];
 
   for (const [phpLabel, phpValue, plateLabel, plateValue] of detailRows) {
-    labelValue(doc, SHEET_X, y, 38, 48, 6, phpLabel, phpValue, LIGHT_CYAN);
-    labelValue(doc, SHEET_X + 86, y, 36, 64, 6, plateLabel, plateValue, plateLabel === "CREASER" ? PINK : PINK);
-    y += 6;
+    labelValue(doc, SHEET_X, y, 34, 52, 5.2, phpLabel, phpValue, LIGHT_CYAN);
+    labelValue(doc, SHEET_X + 86, y, 32, 68, 5.2, plateLabel, plateValue, PINK);
+    y += 5.2;
   }
 
-  cell(doc, SHEET_X, y, SHEET_W, 7, "PHP DIAGRAM", { bold: true, fontSize: FONT_TINY });
-  return y + 7;
+  cell(doc, SHEET_X, y, SHEET_W, 6, "PHP DIAGRAM", { bold: true, fontSize: FONT_TINY });
+  return y + 6;
 }
 
 function drawRevisionFooter(doc: jsPDF, y: number) {
-  cell(doc, SHEET_X, y, 38, 8, "REMARK", { bold: true, align: "left", fontSize: FONT_10PX });
-  cell(doc, SHEET_X + 38, y, 148, 8, "", { fontSize: FONT_TINY });
+  cell(doc, SHEET_X, y, 38, 6, "REMARK", { bold: true, align: "left", fontSize: FONT_10PX });
+  cell(doc, SHEET_X + 38, y, 148, 6, "", { fontSize: FONT_TINY });
+  y += 6;
+
+  cell(doc, SHEET_X, y, SHEET_W, 5, "Revision", { bold: true, align: "left", fontSize: FONT_TINY });
+  y += 5;
+  cell(doc, SHEET_X, y, 16, 5, "No.", { bold: true, fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 16, y, 28, 5, "Rev Date", { bold: true, fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 44, y, 58, 5, "Description of revision", { bold: true, fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 102, y, 84, 5, "Reason for Revision", { bold: true, fontSize: FONT_MICRO });
+  y += 5;
+  cell(doc, SHEET_X, y, 16, 8, "4", { fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 16, y, 28, 8, "", { fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 44, y, 58, 8, "Auto calculated sheet weight/B.S.Gsm", { fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 102, y, 84, 8, "For better accuracy.", { fontSize: FONT_MICRO });
   y += 8;
 
-  cell(doc, SHEET_X, y, SHEET_W, 6, "Revision", { bold: true, align: "left", fontSize: FONT_TINY });
-  y += 6;
-  cell(doc, SHEET_X, y, 16, 6, "No.", { bold: true, fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 16, y, 28, 6, "Rev Date", { bold: true, fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 44, y, 58, 6, "Description of revision", { bold: true, fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 102, y, 84, 6, "Reason for Revision", { bold: true, fontSize: FONT_MICRO });
-  y += 6;
-  cell(doc, SHEET_X, y, 16, 10, "4", { fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 16, y, 28, 10, "", { fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 44, y, 58, 10, "Auto calculated sheet weight/B.S.Gsm", { fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 102, y, 84, 10, "For better accuracy.", { fontSize: FONT_MICRO });
-  y += 10;
-
-  cell(doc, SHEET_X, y, 62, 9, "PREPARED BY", { bold: true, align: "left", fontSize: FONT_TINY });
-  cell(doc, SHEET_X + 62, y, 62, 9, "MASTER COPY", { bold: true, textColor: BLUE, fontSize: FONT_10PX });
-  cell(doc, SHEET_X + 124, y, 62, 9, "APPROVED BY", { bold: true, textColor: RED, fontSize: FONT_TINY });
+  cell(doc, SHEET_X, y, 62, 7, "PREPARED BY", { bold: true, align: "left", fontSize: FONT_TINY });
+  cell(doc, SHEET_X + 62, y, 62, 7, "MASTER COPY", { bold: true, textColor: BLUE, fontSize: FONT_10PX });
+  cell(doc, SHEET_X + 124, y, 62, 7, "APPROVED BY", { bold: true, textColor: RED, fontSize: FONT_TINY });
 }
 
 export async function downloadNpdCardPdf({ npdRow, phpRow, plateRow, setting }: DownloadNpdCardPdfArgs) {
