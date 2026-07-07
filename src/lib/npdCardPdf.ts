@@ -235,20 +235,39 @@ function drawSpecifications(doc: jsPDF, y: number, npdRow: RowRecord) {
   ]);
 }
 
+function drawPaperLayerTable(doc: jsPDF, y: number, rows: RowRecord[string][][]) {
+  const widths = [30, 52, 52, 52];
+  const headerFill: [number, number, number] = [204, 222, 245];
+  let x = LEFT;
+
+  drawCell(doc, x, y, widths[0] + widths[1], 8, "LAYERS", { bold: true, align: "center", fill: headerFill, fontSize: FONT_12PX });
+  x += widths[0] + widths[1];
+  drawCell(doc, x, y, widths[2], 8, "GSM", { bold: true, align: "center", fill: headerFill, fontSize: FONT_12PX });
+  x += widths[2];
+  drawCell(doc, x, y, widths[3], 8, "BF", { bold: true, align: "center", fill: headerFill, fontSize: FONT_12PX });
+  y += 8;
+
+  for (const row of rows) {
+    x = LEFT;
+    row.forEach((value, index) => {
+      drawCell(doc, x, y, widths[index], 8, value, { bold: true, align: "center", fontSize: FONT_10PX });
+      x += widths[index];
+    });
+    y += 8;
+  }
+
+  return y;
+}
+
 function drawLayers(doc: jsPDF, y: number, npdRow: RowRecord) {
   y = drawSectionTitle(doc, "PAPER LAYERS", y + 3, GREEN);
-  return drawSimpleTable(
-    doc,
-    y,
-    ["Layer", "GSM", "BF", "Layer", "GSM", "BF"],
-    [
-      [...getLayerRows(npdRow)[0], ...getLayerRows(npdRow)[1]],
-      [...getLayerRows(npdRow)[2], ...getLayerRows(npdRow)[3]],
-      [...getLayerRows(npdRow)[4], ...getLayerRows(npdRow)[5]],
-    ],
-    [31, 31, 31, 31, 31, 31],
-    GREEN,
-  );
+  return drawPaperLayerTable(doc, y, [
+    ["", "Top Layer", valueOf(npdRow, "psL1"), valueOf(npdRow, "psL1Bf")],
+    ["Fluting 1", "C FLUTING", valueOf(npdRow, "psF1"), valueOf(npdRow, "psF1Bf")],
+    ["Backing 1", "C BACKING", valueOf(npdRow, "psL2"), valueOf(npdRow, "psL2Bf")],
+    ["Fluting 2", "B FLUTING", valueOf(npdRow, "psF2"), valueOf(npdRow, "psF2Bf")],
+    ["Backing 2", "B BACKING", "", ""],
+  ]);
 }
 
 function drawLinkedItems(doc: jsPDF, y: number, phpRow?: RowRecord | null, plateRow?: RowRecord | null) {
