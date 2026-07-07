@@ -15,6 +15,32 @@ function normalizeErpCode(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
+function compactErpCode(value: unknown) {
+  return normalizeErpCode(value).replace(/[^a-z0-9]/g, "");
+}
+
+function digitErpCode(value: unknown) {
+  return normalizeErpCode(value).replace(/\D/g, "");
+}
+
+function erpCodesMatch(source: unknown, candidate: unknown) {
+  const sourceText = normalizeErpCode(source);
+  const candidateText = normalizeErpCode(candidate);
+  if (!sourceText || !candidateText) return false;
+  if (sourceText === candidateText) return true;
+
+  const sourceCompact = compactErpCode(sourceText);
+  const candidateCompact = compactErpCode(candidateText);
+  if (!sourceCompact || !candidateCompact) return false;
+  if (sourceCompact === candidateCompact) return true;
+  if (sourceCompact.length >= 4 && candidateCompact.includes(sourceCompact)) return true;
+  if (candidateCompact.length >= 4 && sourceCompact.includes(candidateCompact)) return true;
+
+  const sourceDigits = digitErpCode(sourceText);
+  const candidateDigits = digitErpCode(candidateText);
+  return sourceDigits.length >= 4 && sourceDigits === candidateDigits;
+}
+
 function toPositiveNumber(value: unknown) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
@@ -40,10 +66,15 @@ export function findLinkedItemByErp(items: OrderCatalogItem[], erpCode: unknown)
   if (!normalizedErp) return undefined;
   return items.find((item) => {
     const raw = item.raw || {};
-    return [item.erp, raw.erpItemCode, raw.masterItemNameErpCode]
-      .map((value) => normalizeErpCode(value))
-      .filter(Boolean)
-      .includes(normalizedErp);
+    return [
+      item.erp,
+      raw.erp,
+      raw.erpCode,
+      raw.erpItemCode,
+      raw.masterErp,
+      raw.masterErpCode,
+      raw.masterItemNameErpCode,
+    ].some((value) => erpCodesMatch(normalizedErp, value));
   });
 }
 
