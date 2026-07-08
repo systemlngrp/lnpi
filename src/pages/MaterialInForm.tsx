@@ -442,17 +442,56 @@ export function MaterialInForm() {
     );
   };
 
+  const normalizeMatchText = (value?: string | number | null) =>
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  const normalizePartyName = (value?: string | null) =>
+    normalizeMatchText(value)
+      .replace(/\b(cr|dr)\b$/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const getPartyName = (partyId?: string) =>
+    suppliers.find((supplier) => supplier.id === partyId)?.name ||
+    companies.find((company) => company.id === partyId)?.name ||
+    "";
+
+  const isApprovedOrderForSelectedSupplier = (order: PurchaseOrder) => {
+    if (order.status !== "Approved") return false;
+    if (!supplierId) return true;
+    if (order.supplierId === supplierId) return true;
+
+    const selectedPartyName = normalizePartyName(getPartyName(supplierId));
+    const orderPartyName = normalizePartyName(getPartyName(order.supplierId));
+    return Boolean(selectedPartyName && orderPartyName && selectedPartyName === orderPartyName);
+  };
+
+  const getMaterialErpCode = (materialId: string) => {
+    const item = getMaterial(materialId);
+    if (!item) return "";
+    if ("erpCode" in item) return normalizeMatchText(item.erpCode);
+    if ("erp" in item) return normalizeMatchText(item.erp);
+    return "";
+  };
+
+  const poLineMatchesMaterial = (line: PurchaseOrderLine, materialId: string) => {
+    if (line.materialId === materialId) return true;
+
+    const materialErpCode = getMaterialErpCode(materialId);
+    const lineErpCode = normalizeMatchText(line.erpCode);
+    return Boolean(materialErpCode && lineErpCode && materialErpCode === lineErpCode);
+  };
+
   const getApprovedPoOptionsForMaterial = (materialId: string) => {
-    const approvedOrders = purchaseOrders.filter(
-      (order) =>
-        order.status === "Approved" &&
-        (!supplierId || order.supplierId === supplierId)
-    );
+    const approvedOrders = purchaseOrders.filter(isApprovedOrderForSelectedSupplier);
 
     return approvedOrders
       .flatMap((order) =>
         purchaseOrderLines
-          .filter((line) => line.purchaseOrderId === order.id && line.materialId === materialId)
+          .filter((line) => line.purchaseOrderId === order.id && poLineMatchesMaterial(line, materialId))
           .map((line) => ({
             value: line.id,
             label: `${order.poNo} | Qty ${Number(line.qty || 0)} @ ${Number(line.rate || 0).toFixed(2)}`,
@@ -464,14 +503,12 @@ export function MaterialInForm() {
     const search = String(ourPoNoRaw || "").trim().toLowerCase();
     if (!search) return null;
 
-    const approvedOrders = purchaseOrders.filter(
-      (order) => order.status === "Approved" && (!supplierId || order.supplierId === supplierId)
-    );
+    const approvedOrders = purchaseOrders.filter(isApprovedOrderForSelectedSupplier);
 
     for (const order of approvedOrders) {
       if (!String(order.poNo || "").trim().toLowerCase().includes(search)) continue;
       const matchingLine = purchaseOrderLines.find(
-        (line) => line.purchaseOrderId === order.id && line.materialId === materialId
+        (line) => line.purchaseOrderId === order.id && poLineMatchesMaterial(line, materialId)
       );
       if (matchingLine) {
         return {

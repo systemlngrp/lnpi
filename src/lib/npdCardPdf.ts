@@ -45,9 +45,9 @@ const RED: Color = [220, 0, 0];
 
 const FONT_10PX = 7.5;
 const FONT_12PX = 9;
-const FONT_TINY = 5.4;
-const FONT_MICRO = 4.4;
-const FONT_TITLE = 10.5;
+const FONT_TINY = FONT_10PX;
+const FONT_MICRO = 6.2;
+const FONT_TITLE = 10;
 
 function valueOf(row: RowRecord | null | undefined, ...keys: string[]) {
   if (!row) return "";
@@ -147,7 +147,7 @@ function cell(doc: jsPDF, x: number, y: number, w: number, h: number, text: RowR
   doc.setFont("helvetica", bold ? "bold" : "normal");
   doc.setFontSize(fontSize);
   const maxWidth = Math.max(2, w - padding * 2);
-  const lineHeight = fontSize * 0.36;
+  const lineHeight = fontSize * 0.3;
   const maxLines = Math.max(1, Math.floor((h - 1) / lineHeight));
   const lines = doc.splitTextToSize(content, maxWidth).slice(0, maxLines);
   let textX = x + padding;
@@ -166,11 +166,11 @@ async function drawHeader(doc: jsPDF, npdRow: RowRecord, setting?: Setting | nul
   const y = SHEET_Y;
   doc.setDrawColor(0);
   doc.setLineWidth(0.35);
-  doc.rect(SHEET_X, y, SHEET_W, 270);
+  doc.rect(SHEET_X, y, SHEET_W, 262);
 
-  cell(doc, SHEET_X, y, 38, 28, `FILE NO.-\n${formatValue(npdRow.erp)}`, { bold: true, align: "left", fontSize: FONT_TINY, padding: 1.5 });
-  cell(doc, SHEET_X + 38, y, 64, 28, "", { fill: WHITE });
-  const hasLogo = await drawOrganizationLogo(doc, setting, SHEET_X + 52, y + 3, 36, 14);
+  cell(doc, SHEET_X, y, 38, 22, `FILE NO.-\n${formatValue(npdRow.erp)}`, { bold: true, align: "left", fontSize: FONT_TINY, padding: 1.5 });
+  cell(doc, SHEET_X + 38, y, 64, 22, "", { fill: WHITE });
+  const hasLogo = await drawOrganizationLogo(doc, setting, SHEET_X + 52, y + 2, 36, 11);
   if (!hasLogo) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(FONT_TITLE);
@@ -180,41 +180,41 @@ async function drawHeader(doc: jsPDF, npdRow: RowRecord, setting?: Setting | nul
   doc.setFont("helvetica", "bold");
   doc.setFontSize(FONT_MICRO);
   doc.setTextColor(0);
-  doc.text("LAXMINARAYAN CORRUGATED BOARDS LLP", SHEET_X + 70, y + 24, { align: "center" });
+  doc.text("LAXMINARAYAN CORRUGATED BOARDS LLP", SHEET_X + 70, y + 19, { align: "center" });
 
-  cell(doc, SHEET_X + 102, y, 24, 28, "Special\nRemarks", { bold: true, fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 126, y, 60, 28, "", { fontSize: FONT_TINY });
+  cell(doc, SHEET_X + 102, y, 24, 22, "Special\nRemarks", { bold: true, fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 126, y, 60, 22, "", { fontSize: FONT_TINY });
 
-  const y2 = y + 28;
-  cell(doc, SHEET_X, y2, 38, 7, "Sample No.-", { bold: true, align: "left", fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 38, y2, 64, 7, `ERP-      ${formatValue(npdRow.erp)}`, { bold: true, fontSize: FONT_10PX });
-  cell(doc, SHEET_X + 102, y2, 28, 7, "ISSUE DATE :", { bold: true, fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 130, y2, 56, 7, new Date().toLocaleDateString("en-GB"), { bold: true, fontSize: FONT_MICRO });
+  const y2 = y + 22;
+  cell(doc, SHEET_X, y2, 38, 6, "Sample No.-", { bold: true, align: "left", fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 38, y2, 64, 6, `ERP-      ${formatValue(npdRow.erp)}`, { bold: true, fontSize: FONT_10PX });
+  cell(doc, SHEET_X + 102, y2, 28, 6, "ISSUE DATE :", { bold: true, fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 130, y2, 56, 6, new Date().toLocaleDateString("en-GB"), { bold: true, fontSize: FONT_MICRO });
 
-  const y3 = y2 + 7;
-  cell(doc, SHEET_X, y3, 93, 5, "Doc.No. L.N./NPD/", { align: "left", fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 93, y3, 93, 5, "Rev.No./Date :", { align: "right", fontSize: FONT_MICRO });
-  return y3 + 5;
+  const y3 = y2 + 6;
+  cell(doc, SHEET_X, y3, 93, 4, "Doc.No. L.N./NPD/", { align: "left", fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 93, y3, 93, 4, "Rev.No./Date :", { align: "right", fontSize: FONT_MICRO });
+  return y3 + 4;
 }
 
 function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
-  cell(doc, SHEET_X, y, SHEET_W, 8, "SPECIFICATION SHEET - CFB", { bold: true, fontSize: FONT_TITLE, fill: YELLOW });
-  y += 8;
-
-  labelValue(doc, SHEET_X, y, 35, 70, 7, "ITEM NAME", valueOf(npdRow, "itemName"));
-  labelValue(doc, SHEET_X + 105, y, 30, 51, 7, "PARTY\nNAME", valueOf(npdRow, "customerName"));
+  cell(doc, SHEET_X, y, SHEET_W, 7, "SPECIFICATION SHEET - CFB", { bold: true, fontSize: FONT_TITLE, fill: YELLOW });
   y += 7;
 
-  labelValue(doc, SHEET_X, y, 35, 70, 7, "BOX DIMENSION (ID)", formatDimension(npdRow.lengthId, npdRow.breadthId, npdRow.heightId));
-  labelValue(doc, SHEET_X + 105, y, 30, 51, 7, "REEL DECKLE SIZE (MM)", valueOf(npdRow, "deckleSize", "reelSize"), LIGHT_GRAY);
-  cell(doc, SHEET_X + 168, y, 18, 7, valueOf(npdRow, "rapc", "rapcForSingleBox"), { bold: true, fill: GREEN, fontSize: FONT_10PX });
-  y += 7;
+  labelValue(doc, SHEET_X, y, 35, 70, 5.8, "ITEM NAME", valueOf(npdRow, "itemName"));
+  labelValue(doc, SHEET_X + 105, y, 30, 51, 5.8, "PARTY\nNAME", valueOf(npdRow, "customerName"));
+  y += 5.8;
 
-  labelValue(doc, SHEET_X, y, 35, 70, 7, "ROTARY DIMENSION (OD)", formatDimension(npdRow.lengthOd, npdRow.breadthOd, npdRow.heightOd));
-  labelValue(doc, SHEET_X + 105, y, 30, 51, 7, "CUTTING\nLENGTH", valueOf(npdRow, "cuttingSize", "cuttingWithTrimming"));
-  y += 7;
+  labelValue(doc, SHEET_X, y, 35, 70, 5.8, "BOX DIMENSION (ID)", formatDimension(npdRow.lengthId, npdRow.breadthId, npdRow.heightId));
+  labelValue(doc, SHEET_X + 105, y, 30, 51, 5.8, "REEL DECKLE SIZE (MM)", valueOf(npdRow, "deckleSize", "reelSize"), LIGHT_GRAY);
+  cell(doc, SHEET_X + 168, y, 18, 5.8, valueOf(npdRow, "rapc", "rapcForSingleBox"), { bold: true, fill: GREEN, fontSize: FONT_10PX });
+  y += 5.8;
 
-  const rowH = 6;
+  labelValue(doc, SHEET_X, y, 35, 70, 5.8, "ROTARY DIMENSION (OD)", formatDimension(npdRow.lengthOd, npdRow.breadthOd, npdRow.heightOd));
+  labelValue(doc, SHEET_X + 105, y, 30, 51, 5.8, "CUTTING\nLENGTH", valueOf(npdRow, "cuttingSize", "cuttingWithTrimming"));
+  y += 5.8;
+
+  const rowH = 5.2;
   const leftRows: Array<[string, RowRecord[string]]> = [
     ["NO.OF PLY", valueOf(npdRow, "ply")],
     ["FLAP", valueOf(npdRow, "flapSize")],
@@ -261,11 +261,11 @@ function drawLayersAndUps(doc: jsPDF, y: number, npdRow: RowRecord) {
   const upsW = SHEET_W - layerW;
   const headerFill: Color = HEADER_BLUE;
 
-  cell(doc, SHEET_X, y, 38, 7, "LAYERS", { bold: true, fill: headerFill, fontSize: FONT_TINY });
-  cell(doc, SHEET_X + 38, y, 27, 7, "GSM", { bold: true, fill: headerFill, fontSize: FONT_TINY });
-  cell(doc, SHEET_X + 65, y, 27, 7, "BF", { bold: true, fill: headerFill, fontSize: FONT_TINY });
-  cell(doc, upsX, y, upsW, 7, "NO OF UPS", { bold: true, fill: LIGHT_GRAY, fontSize: FONT_TINY });
-  y += 7;
+  cell(doc, SHEET_X, y, 38, 6, "LAYERS", { bold: true, fill: headerFill, fontSize: FONT_TINY });
+  cell(doc, SHEET_X + 38, y, 27, 6, "GSM", { bold: true, fill: headerFill, fontSize: FONT_TINY });
+  cell(doc, SHEET_X + 65, y, 27, 6, "BF", { bold: true, fill: headerFill, fontSize: FONT_TINY });
+  cell(doc, upsX, y, upsW, 6, "NO OF UPS", { bold: true, fill: LIGHT_GRAY, fontSize: FONT_TINY });
+  y += 6;
 
   const layerRows: RowRecord[string][][] = [
     ["Top Layer", valueOf(npdRow, "psL1"), valueOf(npdRow, "psL1Bf")],
@@ -276,26 +276,26 @@ function drawLayersAndUps(doc: jsPDF, y: number, npdRow: RowRecord) {
   ];
 
   const upsHeaders = ["1 UPS", "2 UPS", "3 UPS", "4 UPS", "5 UPS"];
-  upsHeaders.forEach((label, index) => cell(doc, upsX + index * (upsW / 5), y, upsW / 5, 6, label, { bold: true, fill: LIGHT_GRAY, fontSize: FONT_MICRO }));
-  const upsStartY = y + 6;
+  upsHeaders.forEach((label, index) => cell(doc, upsX + index * (upsW / 5), y, upsW / 5, 5.2, label, { bold: true, fill: LIGHT_GRAY, fontSize: FONT_MICRO }));
+  const upsStartY = y + 5.2;
   for (let index = 0; index < 5; index += 1) {
-    cell(doc, upsX + index * (upsW / 5), upsStartY, upsW / 5, 29, index === 0 ? valueOf(npdRow, "ups", "noOfUps") : index === 2 ? valueOf(npdRow, "dieCutUps") : "", { bold: true, fontSize: FONT_TINY });
+    cell(doc, upsX + index * (upsW / 5), upsStartY, upsW / 5, 22.8, index === 0 ? valueOf(npdRow, "ups", "noOfUps") : index === 2 ? valueOf(npdRow, "dieCutUps") : "", { bold: true, fontSize: FONT_TINY });
   }
 
   for (const row of layerRows) {
-    cell(doc, SHEET_X, y, 38, 7, row[0], { bold: true, fontSize: FONT_MICRO });
-    cell(doc, SHEET_X + 38, y, 27, 7, row[1], { bold: true, fontSize: FONT_TINY });
-    cell(doc, SHEET_X + 65, y, 27, 7, row[2], { bold: true, fontSize: FONT_TINY });
-    y += 7;
+    cell(doc, SHEET_X, y, 38, 5.6, row[0], { bold: true, fontSize: FONT_MICRO });
+    cell(doc, SHEET_X + 38, y, 27, 5.6, row[1], { bold: true, fontSize: FONT_TINY });
+    cell(doc, SHEET_X + 65, y, 27, 5.6, row[2], { bold: true, fontSize: FONT_TINY });
+    y += 5.8;
   }
 
   return y;
 }
 
 function drawPhpPlateSection(doc: jsPDF, y: number, phpRow?: RowRecord | null, plateRow?: RowRecord | null) {
-  cell(doc, SHEET_X, y, 86, 7, "PHP", { bold: true, fill: LIGHT_CYAN, fontSize: FONT_10PX });
-  cell(doc, SHEET_X + 86, y, 100, 7, "PLATE", { bold: true, fill: GOLD, textColor: WHITE, fontSize: FONT_10PX });
-  y += 7;
+  cell(doc, SHEET_X, y, 86, 6, "PHP", { bold: true, fill: LIGHT_CYAN, fontSize: FONT_10PX });
+  cell(doc, SHEET_X + 86, y, 100, 6, "PLATE", { bold: true, fill: GOLD, textColor: WHITE, fontSize: FONT_10PX });
+  y += 5.8;
 
   const phpHeaders = ["LENGTH", "WIDTH", "HEIGHT"];
   phpHeaders.forEach((header, index) => cell(doc, SHEET_X + index * (86 / 3), y, 86 / 3, 6, header, { bold: true, fill: LIGHT_CYAN, fontSize: FONT_MICRO }));
@@ -306,7 +306,7 @@ function drawPhpPlateSection(doc: jsPDF, y: number, phpRow?: RowRecord | null, p
     cell(doc, x, y, plateWidths[index], 6, header, { bold: true, fill: PLATE_GOLD, fontSize: FONT_MICRO });
     x += plateWidths[index];
   });
-  y += 6;
+  y += 5.2;
 
   const phpValues = [valueOf(phpRow, "length"), valueOf(phpRow, "breadth", "width"), valueOf(phpRow, "height")];
   phpValues.forEach((value, index) => cell(doc, SHEET_X + index * (86 / 3), y, 86 / 3, 8, value, { bold: true, fontSize: FONT_TINY }));
@@ -316,7 +316,7 @@ function drawPhpPlateSection(doc: jsPDF, y: number, phpRow?: RowRecord | null, p
     cell(doc, x, y, plateWidths[index], 8, value, { bold: true, fontSize: FONT_MICRO });
     x += plateWidths[index];
   });
-  y += 8;
+  y += 5.8;
 
   const detailRows: Array<[string, RowRecord[string], string, RowRecord[string]]> = [
     ["NO.OF PLY", valueOf(phpRow, "noOfPly"), "V PLATE", ""],
@@ -335,31 +335,31 @@ function drawPhpPlateSection(doc: jsPDF, y: number, phpRow?: RowRecord | null, p
     y += 5.2;
   }
 
-  cell(doc, SHEET_X, y, SHEET_W, 6, "PHP DIAGRAM", { bold: true, fontSize: FONT_TINY });
-  return y + 6;
+  cell(doc, SHEET_X, y, SHEET_W, 5.2, "PHP DIAGRAM", { bold: true, fontSize: FONT_TINY });
+  return y + 5.2;
 }
 
 function drawRevisionFooter(doc: jsPDF, y: number) {
-  cell(doc, SHEET_X, y, 38, 6, "REMARK", { bold: true, align: "left", fontSize: FONT_10PX });
-  cell(doc, SHEET_X + 38, y, 148, 6, "", { fontSize: FONT_TINY });
-  y += 6;
+  cell(doc, SHEET_X, y, 38, 5.2, "REMARK", { bold: true, align: "left", fontSize: FONT_10PX });
+  cell(doc, SHEET_X + 38, y, 148, 5.2, "", { fontSize: FONT_TINY });
+  y += 5.2;
 
-  cell(doc, SHEET_X, y, SHEET_W, 5, "Revision", { bold: true, align: "left", fontSize: FONT_TINY });
-  y += 5;
-  cell(doc, SHEET_X, y, 16, 5, "No.", { bold: true, fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 16, y, 28, 5, "Rev Date", { bold: true, fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 44, y, 58, 5, "Description of revision", { bold: true, fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 102, y, 84, 5, "Reason for Revision", { bold: true, fontSize: FONT_MICRO });
-  y += 5;
-  cell(doc, SHEET_X, y, 16, 8, "4", { fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 16, y, 28, 8, "", { fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 44, y, 58, 8, "Auto calculated sheet weight/B.S.Gsm", { fontSize: FONT_MICRO });
-  cell(doc, SHEET_X + 102, y, 84, 8, "For better accuracy.", { fontSize: FONT_MICRO });
-  y += 8;
+  cell(doc, SHEET_X, y, SHEET_W, 4.8, "Revision", { bold: true, align: "left", fontSize: FONT_TINY });
+  y += 4.8;
+  cell(doc, SHEET_X, y, 16, 4.8, "No.", { bold: true, fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 16, y, 28, 4.8, "Rev Date", { bold: true, fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 44, y, 58, 4.8, "Description of revision", { bold: true, fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 102, y, 84, 4.8, "Reason for Revision", { bold: true, fontSize: FONT_MICRO });
+  y += 4.8;
+  cell(doc, SHEET_X, y, 16, 6.5, "4", { fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 16, y, 28, 6.5, "", { fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 44, y, 58, 6.5, "Auto calculated sheet weight/B.S.Gsm", { fontSize: FONT_MICRO });
+  cell(doc, SHEET_X + 102, y, 84, 6.5, "For better accuracy.", { fontSize: FONT_MICRO });
+  y += 6.5;
 
-  cell(doc, SHEET_X, y, 62, 7, "PREPARED BY", { bold: true, align: "left", fontSize: FONT_TINY });
-  cell(doc, SHEET_X + 62, y, 62, 7, "MASTER COPY", { bold: true, textColor: BLUE, fontSize: FONT_10PX });
-  cell(doc, SHEET_X + 124, y, 62, 7, "APPROVED BY", { bold: true, textColor: RED, fontSize: FONT_TINY });
+  cell(doc, SHEET_X, y, 62, 6, "PREPARED BY", { bold: true, align: "left", fontSize: FONT_TINY });
+  cell(doc, SHEET_X + 62, y, 62, 6, "MASTER COPY", { bold: true, textColor: BLUE, fontSize: FONT_10PX });
+  cell(doc, SHEET_X + 124, y, 62, 6, "APPROVED BY", { bold: true, textColor: RED, fontSize: FONT_TINY });
 }
 
 export async function downloadNpdCardPdf({ npdRow, phpRow, plateRow, setting }: DownloadNpdCardPdfArgs) {
