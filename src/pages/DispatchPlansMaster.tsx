@@ -71,6 +71,9 @@ export function DispatchPlansMaster() {
 
   const editingPlan = editingPlanId ? plans.find((plan) => plan.id === editingPlanId) || null : null;
   const editingSchedule = editingPlan ? schedules.find((schedule) => schedule.id === editingPlan.scheduleId) || null : null;
+  const editingOrder = editingPlan ? orders.find((order) => order.id === editingPlan.orderId) || null : null;
+  const editingCompany = editingOrder ? companies.find((company) => company.id === editingOrder.companyId) || null : null;
+  const editingTolerancePercent = Math.max(0, Number(editingCompany?.toleranceAllowed || 0));
   const editingLoaded = Number(editingPlan?.loadedQty || 0);
   const editingCancelled = Number(editingPlan?.canceledQty || 0);
   const otherEffectivePlanned = editingPlan
@@ -78,10 +81,14 @@ export function DispatchPlansMaster() {
         .filter((plan) => plan.scheduleId === editingPlan.scheduleId && plan.id !== editingPlan.id)
         .reduce((sum, plan) => sum + Math.max(0, Number(plan.plannedQty || 0) - Number(plan.canceledQty || 0)), 0)
     : 0;
+  const baseEditableScheduleQty = editingSchedule
+    ? Math.max(0, Number(editingSchedule.qty || 0) - Number(editingSchedule.canceledQty || 0))
+    : 0;
+  const toleratedEditableScheduleQty = Number((baseEditableScheduleQty * (1 + editingTolerancePercent / 100)).toFixed(2));
   const maxEditablePlannedQty = editingSchedule
     ? Math.max(
         editingLoaded + editingCancelled,
-        Number(editingSchedule.qty || 0) - Number(editingSchedule.canceledQty || 0) - otherEffectivePlanned
+        toleratedEditableScheduleQty - otherEffectivePlanned + editingCancelled
       )
     : Infinity;
 
@@ -318,12 +325,14 @@ export function DispatchPlansMaster() {
                 />
                 <div className="mt-1 text-[11px] text-slate-500">
                   Max allowed: {Number.isFinite(maxEditablePlannedQty) ? maxEditablePlannedQty.toLocaleString() : "-"}
+                  {editingTolerancePercent > 0 ? ` (${editingTolerancePercent}% tolerance)` : ""}
                 </div>
               </div>
               <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <div><span className="font-bold text-black">Loaded:</span> {editingLoaded.toLocaleString()}</div>
                 <div><span className="font-bold text-black">Cancelled:</span> {editingCancelled.toLocaleString()}</div>
                 <div><span className="font-bold text-black">Schedule Qty:</span> {Number(editingSchedule?.qty || 0).toLocaleString()}</div>
+                <div><span className="font-bold text-black">Tolerance:</span> {editingTolerancePercent.toLocaleString()}%</div>
               </div>
             </div>
 
