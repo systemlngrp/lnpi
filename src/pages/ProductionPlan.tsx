@@ -187,7 +187,15 @@ export function ProductionPlan() {
       startY: 20,
       theme: 'grid',
       styles: { fontSize: 6, cellPadding: 1 },
-      headStyles: { fillColor: [200, 200, 200], textColor: 0, fontStyle: 'bold' }
+      headStyles: { fillColor: [200, 200, 200], textColor: 0, fontStyle: 'bold' },
+      didParseCell: (data) => {
+        if (data.section !== "body") return;
+        const production = sortedList[data.row.index];
+        if (!production) return;
+        const isSample = isSampleProduction(production);
+        if (!shouldHighlightProduction(production, isSample)) return;
+        data.cell.styles.fillColor = [255, 153, 153];
+      },
     });
 
     doc.save(`Production_Plan_${selectedDate}.pdf`);
