@@ -5,6 +5,7 @@ import { RapcRange } from "../types";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { buildSeedRapcRanges } from "../lib/rapcRanges";
 
@@ -190,11 +191,19 @@ export function RapcRangeMaster() {
         )}
       </div>
 
+      <DataSummaryTiles
+        totalRecords={ranges.length}
+        filteredRecords={filteredRanges.length}
+        showingRecords={paginatedRanges.length}
+        pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`}
+      />
+
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-scroll-shell max-h-[70vh] overflow-auto">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 sticky top-0 z-10">
               <tr className="divide-x divide-black">
+                <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">SL No</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">From</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">To</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">RAPC Range</th>
@@ -206,7 +215,7 @@ export function RapcRangeMaster() {
             <tbody className="bg-white divide-y divide-black">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="border border-black px-6 py-8 text-center text-black">
+                  <td colSpan={7} className="border border-black px-6 py-8 text-center text-black">
                     <div className="flex justify-center">
                       <Spinner />
                     </div>
@@ -214,13 +223,14 @@ export function RapcRangeMaster() {
                 </tr>
               ) : paginatedRanges.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="border border-black px-6 py-8 text-center text-black font-medium">
+                  <td colSpan={7} className="border border-black px-6 py-8 text-center text-black font-medium">
                     No RAPC ranges found.
                   </td>
                 </tr>
               ) : (
-                paginatedRanges.map((row) => (
+                paginatedRanges.map((row, index) => (
                   <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black text-right">{(page - 1) * pageSize + index + 1}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{row.from}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.to}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.rapcRange}</td>

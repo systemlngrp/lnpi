@@ -1,6 +1,7 @@
 import { KeyboardEvent, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { ClientPagination } from "../components/ClientPagination";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useData } from "../hooks/useData";
 import type { SheetMasterColumn, SheetMasterFilter } from "../lib/sheetMasterConfigs";
@@ -200,6 +201,13 @@ export function SheetMasterPage({
         </div>
       </div>
 
+      <DataSummaryTiles
+        totalRecords={effectiveRows.length}
+        filteredRecords={filteredRows.length}
+        showingRecords={paginatedRows.length}
+        pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`}
+      />
+
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse border border-black text-sm">
@@ -215,7 +223,7 @@ export function SheetMasterPage({
             <tbody>
               {paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="border border-black px-3 py-8 text-center font-medium italic text-black">
+                  <td colSpan={columns.length + 1} className="border border-black px-3 py-8 text-center font-medium italic text-black">
                     No records found.
                   </td>
                 </tr>

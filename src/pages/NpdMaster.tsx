@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Download } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
 import { useData } from "../hooks/useData";
 import { findLinkedItemByErp } from "../lib/linkedLoading";
@@ -251,6 +252,13 @@ export function NpdMaster() {
         </div>
       </div>
 
+      <DataSummaryTiles
+        totalRecords={total}
+        filteredRecords={total}
+        showingRecords={rows.length}
+        pageLabel={`${page} / ${totalPages}`}
+      />
+
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-black bg-slate-50 px-4 py-3 text-sm font-semibold text-black md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
@@ -306,6 +314,7 @@ export function NpdMaster() {
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black sticky top-0 z-10">
               <tr className="divide-x divide-black">
+                <th className="border border-black px-3 py-3 text-right text-xs font-bold uppercase text-black align-top min-w-[72px] whitespace-nowrap">SL No</th>
                 {tableColumns.map((column) => (
                   <th key={column.key} className="border border-black px-3 py-3 text-left text-xs font-bold uppercase text-black align-top min-w-[92px] max-w-[180px] whitespace-normal break-words">
                     <span className="block leading-4">
@@ -325,7 +334,7 @@ export function NpdMaster() {
             <tbody className="divide-y divide-black bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={tableColumns.length + 1} className="px-6 py-12">
+                  <td colSpan={tableColumns.length + 2} className="px-6 py-12">
                     <div className="flex items-center justify-center gap-3 text-black">
                       <Spinner size={28} />
                       <span className="font-semibold">Loading NPD items...</span>
@@ -334,18 +343,21 @@ export function NpdMaster() {
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={tableColumns.length + 1} className="px-6 py-8 text-center font-medium italic text-black">
+                  <td colSpan={tableColumns.length + 2} className="px-6 py-8 text-center font-medium italic text-black">
                     No NPD records found.
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => {
+                rows.map((row, index) => {
                   const hasConsumableChanges = isConsumableValue(consumableDrafts[row.id]) !== isConsumableValue(row.consumable);
                   const isSaving = Boolean(savingRowIds[row.id]);
                   const rowState = rowSaveStates[row.id];
 
                   return (
                     <tr key={row.id} className="divide-x divide-black transition-colors hover:bg-slate-50">
+                      <td className="border border-black px-3 py-3 text-right text-sm font-bold text-black align-top whitespace-nowrap">
+                        {(page - 1) * pageSize + index + 1}
+                      </td>
                       {tableColumns.map((column) => {
                         const isWrappedText = column.key === "itemName" || column.key === "customerName";
                         const rawValue =

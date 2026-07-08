@@ -4,6 +4,7 @@ import { Plus, Edit, Trash2 } from "lucide-react";
 import { Machine, User } from "../types";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { normalizeMachineName } from "../lib/productionMachineNames";
 
 const DEFAULT_MACHINES = [
@@ -218,11 +219,19 @@ export function Machines() {
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search machines..." />
       
+      <DataSummaryTiles
+        totalRecords={machines.length}
+        filteredRecords={filtered.length}
+        showingRecords={filtered.length}
+        pageLabel="1 / 1"
+      />
+      
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-scroll-shell">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100">
               <tr className="divide-x divide-black">
+                <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">SL No</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine Name</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Maximum Output</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Assigned Operators</th>
@@ -234,7 +243,7 @@ export function Machines() {
             <tbody className="bg-white divide-y divide-black">
               {machinesLoading ? (
                 <tr>
-                  <td colSpan={6} className="border border-black px-6 py-8 text-center text-black">
+                  <td colSpan={7} className="border border-black px-6 py-8 text-center text-black">
                     <div className="flex justify-center">
                       <Spinner />
                     </div>
@@ -242,13 +251,14 @@ export function Machines() {
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="border border-black px-6 py-8 text-center text-black font-medium">
+                  <td colSpan={7} className="border border-black px-6 py-8 text-center text-black font-medium">
                     No machines found.
                   </td>
                 </tr>
               ) : (
-                filtered.map((machine) => (
+                filtered.map((machine, index) => (
                   <tr key={machine.id} className="divide-x divide-black hover:bg-slate-50">
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black text-right">{index + 1}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{normalizeMachineName(machine.name)}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{machine.maxOutputPerHour || 0}</td>
                     <td className="border border-black px-6 py-4 text-sm text-black">{getAssignedOperatorNames(machine).length > 0 ? getAssignedOperatorNames(machine).join(", ") : "-"}</td>

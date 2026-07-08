@@ -5,6 +5,7 @@ import { Company } from "../types";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { MandatoryLabel, MandatoryLegend } from "../components/Mandatory";
 import { isMandatoryField } from "../lib/mandatoryFields";
 import { useClientPagination } from "../hooks/useClientPagination";
@@ -439,9 +440,16 @@ export function Companies() {
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search companies..." />
 
+      <DataSummaryTiles
+        totalRecords={companies.length}
+        filteredRecords={filteredCompanies.length}
+        showingRecords={paginatedCompanies.length}
+        pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`}
+      />
+
       <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
         <div className="block md:hidden space-y-4 p-4">
-          {paginatedCompanies.map((c) => (
+          {paginatedCompanies.map((c, index) => (
             <div
               key={c.id}
               onClick={() => handleEdit(c)}
@@ -449,6 +457,7 @@ export function Companies() {
             >
               <div className="flex justify-between items-start">
                 <div>
+                  <div className="text-xs font-black uppercase text-slate-500">SL No: {(page - 1) * pageSize + index + 1}</div>
                   <div className="text-sm font-bold">{c.name}</div>
                   <div className="text-xs text-slate-700">{c.contactPerson} {c.contactNumber ? `| ${c.contactNumber}` : ""}</div>
                   <div className="text-xs text-slate-700">{c.email}</div>
@@ -472,6 +481,7 @@ export function Companies() {
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black sticky top-0 z-10">
               <tr className="divide-x divide-black">
+                <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">SL No</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Company</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Contact Person</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Contact Number</th>
@@ -491,19 +501,20 @@ export function Companies() {
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
-              {sortedCompanies.length === 0 ? (
+              {filteredCompanies.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                  <td colSpan={17} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                     {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found.'}
                   </td>
                 </tr>
               ) : (
-                paginatedCompanies.map((c) => (
+                paginatedCompanies.map((c, index) => (
                   <tr
                     key={c.id}
                     onClick={() => handleEdit(c)}
                     className="cursor-pointer hover:bg-slate-50 transition-colors divide-x divide-black"
                   >
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-black text-right border border-black">{(page - 1) * pageSize + index + 1}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.name}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.contactPerson}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.contactNumber}</td>
