@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, OrderSchedule, Order, Company, SampleRequest, Item } from "../types";
+import { Production, OrderSchedule, Order, Company, SampleRequest, Item, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
@@ -12,6 +12,8 @@ import autoTable from "jspdf-autotable";
 import { exportsAllowed } from "../lib/exportPolicy";
 import { fetchNpdItems } from "../lib/npdItems";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { sortProductionPlanRows } from "../lib/productionPlanSorting";
+import { findRealizationTargetForDate, parseRealizationTargets } from "../lib/realizationTargets";
 
 export function ProductionPlan() {
   const [productions, , productionsLoading] = useData<Production>("productions", []);
@@ -19,6 +21,7 @@ export function ProductionPlan() {
   const [orders, , ordersLoading] = useData<Order>("orders", []);
   const [companies, , companiesLoading] = useData<Company>("companies", []);
   const [sampleRequests, , sampleRequestsLoading] = useData<SampleRequest>("sample_requests", []);
+  const [settings, , settingsLoading] = useData<Setting>("settings", []);
   const [npdItems, setNpdItems] = useState<Item[]>([]);
   const [npdLoading, setNpdLoading] = useState(true);
 
@@ -47,6 +50,7 @@ export function ProductionPlan() {
     ordersLoading ||
     companiesLoading ||
     sampleRequestsLoading ||
+    settingsLoading ||
     npdLoading;
 
   const normalizeDate = (dStr: string) => {
@@ -60,6 +64,34 @@ export function ProductionPlan() {
     if (value === "" || value === null || value === undefined) return "-";
     const num = Number(value);
     return Number.isFinite(num) ? num.toFixed(2) : "-";
+  };
+
+  const sampleJobKeys = useMemo(() => {
+    return new Set(
+      sampleRequests.map((row) => `${String(row.itemId || "").trim()}::${String(row.jobCardNo || "").trim()}`)
+    );
+  }, [sampleRequests]);
+
+  const isSampleProduction = (production: Production) => {
+    return sampleJobKeys.has(
+      `${String(production.itemId || "").trim()}::${String(production.transactionNo || production.jobCardNo || "").trim()}`
+    );
+  };
+
+  const realizationTargets = useMemo(
+    () => parseRealizationTargets(settings[0]?.realizationPerKgTargets),
+    [settings]
+  );
+  const selectedRealizationTarget = useMemo(
+    () => findRealizationTargetForDate(realizationTargets, selectedDate),
+    [realizationTargets, selectedDate]
+  );
+  const requiredRealization = selectedRealizationTarget ? Number(selectedRealizationTarget.value || 0) * 0.98 : null;
+  const shouldHighlightProduction = (production: Production, isSample: boolean) => {
+    if (isSample || requiredRealization === null) return false;
+    const realizationPerKg = Number(production.realizationPerKg);
+    if (!Number.isFinite(realizationPerKg)) return false;
+    return realizationPerKg < requiredRealization;
   };
 
   const filteredList = useMemo(() => {
@@ -76,8 +108,17 @@ export function ProductionPlan() {
         (order?.orderNo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (company?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
       })
-      .sort((a, b) => a.transactionNo.localeCompare(b.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
+      .map((production) => {
+        const schedule = schedules.find(s => s.id === production.scheduleId);
+        const order = orders.find(o => o.id === schedule?.orderId);
+        const company = companies.find(c => c.id === order?.companyId);
+        return {
+          ...production,
+          productionPlanCompanyName: company?.name || production.companyName || "",
+        };
+      });
   }, [productions, selectedDate, searchTerm, npdItems, schedules, orders, companies]);
+  const sortedList = useMemo(() => sortProductionPlanRows(filteredList), [filteredList]);
   const {
     page,
     setPage,
@@ -85,7 +126,7 @@ export function ProductionPlan() {
     setPageSize,
     totalItems,
     paginatedItems: paginatedList,
-  } = useClientPagination(filteredList, 25);
+  } = useClientPagination(sortedList, 25);
 
   const getExportData = (data: Production[]) => {
     return data.map((p, index) => {
@@ -93,11 +134,7 @@ export function ProductionPlan() {
       const order = orders.find(o => o.id === schedule?.orderId);
       const company = companies.find(c => c.id === order?.companyId);
       const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
-      const isSample = sampleRequests.some(
-        (row) =>
-          String(row.itemId || "").trim() === String(p.itemId || "").trim() &&
-          String(row.jobCardNo || "").trim() === String(p.transactionNo || p.jobCardNo || "").trim()
-      );
+      const isSample = isSampleProduction(p);
       const value = (Number(p.qty || 0) || 0) * (Number(p.rate || 0) || 0);
 
       return {
@@ -138,7 +175,7 @@ export function ProductionPlan() {
     doc.text(`Production Plan - ${formatDate(selectedDate)}`, 14, 15);
     doc.setFontSize(10);
     
-    const exportData = getExportData(filteredList);
+    const exportData = getExportData(sortedList);
     if (exportData.length === 0) return;
 
     const tableColumn = Object.keys(exportData[0]);
@@ -150,7 +187,7 @@ export function ProductionPlan() {
       startY: 20,
       theme: 'grid',
       styles: { fontSize: 6, cellPadding: 1 },
-      headStyles: { fillGray: 200, textColor: 0, fontStyle: 'bold' }
+      headStyles: { fillColor: [200, 200, 200], textColor: 0, fontStyle: 'bold' }
     });
 
     doc.save(`Production_Plan_${selectedDate}.pdf`);
@@ -172,7 +209,7 @@ export function ProductionPlan() {
           </div>
           {allowExports ? (
             <>
-              <ExcelExport data={getExportData(filteredList)} fileName={`Production_Plan_${selectedDate}`} />
+              <ExcelExport data={getExportData(sortedList)} fileName={`Production_Plan_${selectedDate}`} />
               <button
                 onClick={handleExportPDF}
                 className="flex items-center gap-2 bg-red-600 text-white px-3 py-1.5 rounded font-bold hover:bg-red-700 transition shadow border border-black text-sm"
@@ -236,7 +273,7 @@ export function ProductionPlan() {
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
-              {filteredList.length === 0 ? (
+              {sortedList.length === 0 ? (
                 <tr>
                   <td colSpan={30} className="px-6 py-8 text-center text-black font-medium">No productions found for this date.</td>
                 </tr>
@@ -246,15 +283,16 @@ export function ProductionPlan() {
                   const order = orders.find(o => o.id === schedule?.orderId);
                   const company = companies.find(c => c.id === order?.companyId);
                   const item = npdItems.find(i => i.id === String(p.itemId || "").trim());
-                  const isSample = sampleRequests.some(
-                    (row) =>
-                      String(row.itemId || "").trim() === String(p.itemId || "").trim() &&
-                      String(row.jobCardNo || "").trim() === String(p.transactionNo || p.jobCardNo || "").trim()
-                  );
+                  const isSample = isSampleProduction(p);
                   const value = (Number(p.qty || 0) || 0) * (Number(p.rate || 0) || 0);
+                  const highlightRow = shouldHighlightProduction(p, isSample);
 
                   return (
-                    <tr key={p.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
+                    <tr
+                      key={p.id}
+                      className={`divide-x divide-black transition-colors ${highlightRow ? "hover:bg-[#FF9999]" : "hover:bg-slate-50"}`}
+                      style={highlightRow ? { backgroundColor: "#FF9999" } : undefined}
+                    >
                       <td className="px-4 py-3 text-right text-[11px] font-bold text-black border border-black whitespace-nowrap">{(page - 1) * pageSize + index + 1}</td>
                       <td className="px-4 py-3 text-[11px] text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                       <td className="px-4 py-3 text-[11px] font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>

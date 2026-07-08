@@ -8,6 +8,7 @@ import { Building2, Calendar, Download, FileText, RotateCcw, TrendingUp, User2 }
 import { useData } from "../hooks/useData";
 import { Company, Order, OrderSchedule, Production, Setting, User } from "../types";
 import { formatDate, getFinancialYear } from "../lib/serial";
+import { parseRealizationTargets } from "../lib/realizationTargets";
 
 type TargetRow = {
   fy: string;
@@ -74,23 +75,6 @@ function getTargetBadgeClass(value: number, benchmark: number) {
 function weightedAverage(weightedValue: number, qty: number) {
   if (!Number.isFinite(weightedValue) || !Number.isFinite(qty) || qty <= 0) return 0;
   return Number((weightedValue / qty).toFixed(2));
-}
-
-function parseRealizationTargets(raw?: string | null): TargetRow[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((row) => ({
-        fy: String((row?.fy ?? row?.year) || "").trim(),
-        month: String(row?.month || "All").trim() || "All",
-        value: Number(row?.value || 0),
-      }))
-      .filter((row) => row.fy && Number.isFinite(row.value));
-  } catch {
-    return [];
-  }
 }
 
 function findTargetForDate(targets: TargetRow[], date: Date) {
