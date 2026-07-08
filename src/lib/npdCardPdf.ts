@@ -43,11 +43,11 @@ const GREEN: Color = [0, 255, 0];
 const BLUE: Color = [0, 0, 180];
 const RED: Color = [220, 0, 0];
 
-const FONT_10PX = 7.5;
-const FONT_12PX = 9;
+const FONT_10PX = 9;
+const FONT_12PX = 10.5;
 const FONT_TINY = FONT_10PX;
 const FONT_MICRO = 6.2;
-const FONT_TITLE = 10;
+const FONT_TITLE = FONT_12PX;
 
 function valueOf(row: RowRecord | null | undefined, ...keys: string[]) {
   if (!row) return "";
