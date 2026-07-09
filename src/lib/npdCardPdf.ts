@@ -34,6 +34,8 @@ const YELLOW: Color = [255, 242, 0];
 const DARK_TEAL: Color = [21, 86, 97];
 const HEADER_BLUE: Color = [204, 222, 245];
 const LIGHT_CYAN: Color = [204, 246, 252];
+const PRINT_CYAN: Color = [0, 225, 230];
+const CREAM: Color = [255, 242, 204];
 const LIGHT_GRAY: Color = [242, 244, 247];
 const GOLD: Color = [128, 96, 0];
 const PLATE_GOLD: Color = [255, 213, 51];
@@ -251,10 +253,10 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
   labelValue(doc, rightX, y, 27, 79, rowH, "CUTTING\nLENGTH", valueOf(npdRow, "cuttingSize", "cuttingWithTrimming"));
   y += rowH;
 
-  const rows: Array<[string, RowRecord[string], string, RowRecord[string], string, RowRecord[string], Color?]> = [
+  const rows: Array<[string, RowRecord[string], string, RowRecord[string], RowRecord[string], RowRecord[string], Color?]> = [
     ["NO.OF PLY", valueOf(npdRow, "ply"), "FLUTING %", "B-37%", "A-45%", calculateRatePerSheetWeight(npdRow)],
-    ["FLAP", valueOf(npdRow, "flapSize"), "CREASEING\nTYPE (M/F)", "", "Cal. Box\nWeight", valueOf(npdRow, "standardWeightGms", "calculatedWeightPerBox")],
-    ["TRIMMING", valueOf(npdRow, "trimming", "trim", "trimSize"), "PRINTING\nCOLOUR", valueOf(npdRow, "printingColour1"), "NO.OF COLOUR", valueOf(npdRow, "printingColour2") ? 2 : valueOf(npdRow, "printingColour1") ? 1 : "", PINK],
+    ["FLAP", valueOf(npdRow, "flapSize"), "CREASEING\nTYPE (M/F)", "M/F", "Glue / Stitch", valueOf(npdRow, "standardWeightGms", "calculatedWeightPerBox")],
+    ["TRIMMING", 16, "PRINTING\nCOLOUR", valueOf(npdRow, "printingColour1"), valueOf(npdRow, "printingColour2"), valueOf(npdRow, "printingColour2") ? 2 : valueOf(npdRow, "printingColour1") ? 1 : "", PINK],
     ["REQUIRED BS", valueOf(npdRow, "bsKgCm2Calculated", "bsKgCm2Std"), "FLUTE", valueOf(npdRow, "fluteType"), "Box\nType", "RSC"],
     ["REQUIRED BOARD GSM", valueOf(npdRow, "standardBGsm", "calculatedBGsm"), "Cal. BGSM", valueOf(npdRow, "calculatedBGsm", "standardBGsm"), "TOP", valueOf(npdRow, "topPaperShade"), PINK],
     ["REQUIRED CS", valueOf(npdRow, "csKgTarget", "csKgStd"), "TARGET CS", valueOf(npdRow, "rapc"), "BOTTOM", valueOf(npdRow, "backingPaperShade"), PINK],
@@ -262,8 +264,30 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
 
   for (const [leftLabel, leftValue, middleLabel, middleValue, rightLabel, rightValue, rightFill] of rows) {
     labelValue(doc, SHEET_X, y, 39, 51, rowH, leftLabel, leftValue);
+
+    if (middleLabel === "CREASEING\nTYPE (M/F)") {
+      cell(doc, rightX, y, 27, rowH, middleLabel, { bold: true, fill: LIGHT_GRAY, fontSize: FONT_SMALL, padding: 0.5 });
+      cell(doc, rightX + 27, y, 21, rowH, middleValue, { bold: true, fontSize: FONT_SMALL });
+      cell(doc, rightX + 48, y, 22, rowH, rightLabel, { bold: true, fill: CREAM, fontSize: FONT_SMALL });
+      cell(doc, rightX + 70, y, 16, rowH, "GLUED", { bold: true, fill: PINK, fontSize: FONT_SMALL });
+      cell(doc, rightX + 86, y, 12, rowH, "Cal. Box\nWeight", { bold: true, fill: LIGHT_GRAY, fontSize: FONT_MICRO, padding: 0.4 });
+      cell(doc, rightX + 98, y, 8, rowH, rightValue, { bold: true, fontSize: FONT_SMALL, padding: 0.3 });
+      y += rowH;
+      continue;
+    }
+
+    if (middleLabel === "PRINTING\nCOLOUR") {
+      cell(doc, rightX, y, 27, rowH, middleLabel, { bold: true, fill: LIGHT_GRAY, fontSize: FONT_SMALL, padding: 0.5 });
+      cell(doc, rightX + 27, y, 30, rowH, middleValue, { bold: true, fill: PRINT_CYAN, fontSize: FONT_SMALL });
+      cell(doc, rightX + 57, y, 28, rowH, rightLabel, { bold: true, fill: CREAM, fontSize: FONT_SMALL });
+      cell(doc, rightX + 85, y, 16, rowH, "NO.OF\nCOLOUR", { bold: true, fill: WHITE, fontSize: FONT_MICRO, padding: 0.4 });
+      cell(doc, rightX + 101, y, 5, rowH, rightValue, { bold: true, fontSize: FONT_SMALL, padding: 0.2 });
+      y += rowH;
+      continue;
+    }
+
     labelValue(doc, rightX, y, 27, 32, rowH, middleLabel, middleValue);
-    labelValue(doc, rightX + 59, y, 26, 20, rowH, rightLabel, rightValue, rightFill || LIGHT_GRAY);
+    labelValue(doc, rightX + 59, y, 26, 20, rowH, String(rightLabel || ""), rightValue, rightFill || LIGHT_GRAY);
     y += rowH;
   }
 
