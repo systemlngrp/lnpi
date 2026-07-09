@@ -62,6 +62,19 @@ function formatValue(value: RowRecord[string]) {
   return String(value);
 }
 
+
+function formatNumber(value: number, decimals = 3) {
+  if (!Number.isFinite(value)) return "";
+  const fixed = value.toFixed(decimals);
+  return fixed.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+}
+
+function calculateRatePerSheetWeight(row: RowRecord) {
+  const rate = Number(valueOf(row, "rate"));
+  const sheetWeight = Number(valueOf(row, "sheetWeight", "calculatedSheetWeight", "calSheetWeight", "weightPerPcSetReq", "weightPerPcReq"));
+  if (!Number.isFinite(rate) || !Number.isFinite(sheetWeight) || sheetWeight === 0) return "";
+  return formatNumber(rate / sheetWeight / 100, 3);
+}
 function formatDimension(...values: Array<RowRecord[string]>) {
   const parts = values.map(formatValue);
   if (parts.every((part) => part === "-")) return "-";
@@ -164,9 +177,9 @@ async function drawHeader(doc: jsPDF, npdRow: RowRecord, setting?: Setting | nul
   doc.setLineWidth(0.35);
   doc.rect(SHEET_X, y, SHEET_W, SHEET_H);
 
-  cell(doc, SHEET_X, y, 39, 30, `FILE NO.-\n${formatValue(npdRow.erp)}`, { bold: true, align: "left", fontSize: FONT_BODY_12PX, padding: 1.3 });
-  cell(doc, SHEET_X + 39, y, 68, 30, "", { fill: WHITE });
-  const hasLogo = await drawOrganizationLogo(doc, setting, SHEET_X + 55, y + 2, 36, 16);
+  cell(doc, SHEET_X, y, 39, 28, `FILE NO.-\n${formatValue(npdRow.erp)}`, { bold: true, align: "left", fontSize: FONT_BODY_12PX, padding: 1.3 });
+  cell(doc, SHEET_X + 39, y, 68, 28, "", { fill: WHITE });
+  const hasLogo = await drawOrganizationLogo(doc, setting, SHEET_X + 55, y + 2, 36, 14);
   if (!hasLogo) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(FONT_HEADING_14PX);
@@ -176,12 +189,12 @@ async function drawHeader(doc: jsPDF, npdRow: RowRecord, setting?: Setting | nul
   doc.setFont("helvetica", "bold");
   doc.setFontSize(FONT_SMALL);
   doc.setTextColor(0);
-  doc.text("LAXMINARAYAN CORRUGATED BOARDS LLP", SHEET_X + 73, y + 27, { align: "center" });
+  doc.text("LAXMINARAYAN CORRUGATED BOARDS LLP", SHEET_X + 73, y + 25, { align: "center" });
 
-  cell(doc, SHEET_X + 107, y, 23, 30, "Special\nRemarks", { bold: true, fontSize: FONT_SMALL });
-  cell(doc, SHEET_X + 130, y, 66, 30, "", { fontSize: FONT_BODY_12PX });
+  cell(doc, SHEET_X + 107, y, 23, 28, "Special\nRemarks", { bold: true, fontSize: FONT_SMALL });
+  cell(doc, SHEET_X + 130, y, 66, 28, "", { fontSize: FONT_BODY_12PX });
 
-  const y2 = y + 30;
+  const y2 = y + 28;
   cell(doc, SHEET_X, y2, 39, 8, "Sample No.-", { bold: true, align: "left", fontSize: FONT_BODY_12PX, padding: 0.8 });
   cell(doc, SHEET_X + 39, y2, 68, 8, `ERP-      ${formatValue(npdRow.erp)}`, { bold: true, fontSize: FONT_HEADING_14PX });
   cell(doc, SHEET_X + 107, y2, 24, 8, "ISSUE DATE :", { bold: true, fontSize: FONT_SMALL });
@@ -198,11 +211,12 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
   y += 8;
 
   const rowH = 6;
+  const itemRowH = 10;
   const rightX = SHEET_X + 90;
 
-  labelValue(doc, SHEET_X, y, 39, 51, rowH, "ITEM NAME", valueOf(npdRow, "itemName"));
-  labelValue(doc, rightX, y, 27, 79, rowH, "PARTY\nNAME", valueOf(npdRow, "customerName"));
-  y += rowH;
+  labelValue(doc, SHEET_X, y, 39, 65, itemRowH, "ITEM NAME", valueOf(npdRow, "itemName"));
+  labelValue(doc, SHEET_X + 104, y, 20, 72, itemRowH, "PARTY\nNAME", valueOf(npdRow, "customerName"));
+  y += itemRowH;
 
   labelValue(doc, SHEET_X, y, 39, 51, rowH, "BOX DIMENSION (ID)", formatDimension(npdRow.lengthId, npdRow.breadthId, npdRow.heightId));
   labelValue(doc, rightX, y, 27, 33, rowH, "REEL\nDECKLE", valueOf(npdRow, "deckleSize", "reelSize"));
@@ -215,7 +229,7 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
   y += rowH;
 
   const rows: Array<[string, RowRecord[string], string, RowRecord[string], string, RowRecord[string], Color?]> = [
-    ["NO.OF PLY", valueOf(npdRow, "ply"), "FLUTING %", "", "BF %", ""],
+    ["NO.OF PLY", valueOf(npdRow, "ply"), "FLUTING %", "B-37%", "A-45%", calculateRatePerSheetWeight(npdRow)],
     ["FLAP", valueOf(npdRow, "flapSize"), "CREASEING\nTYPE (M/F)", "", "Cal. Box\nWeight", valueOf(npdRow, "standardWeightGms", "calculatedWeightPerBox")],
     ["TRIMMING", valueOf(npdRow, "trimming", "trim", "trimSize"), "PRINTING\nCOLOUR", valueOf(npdRow, "printingColour1"), "NO.OF COLOUR", valueOf(npdRow, "printingColour2") ? 2 : valueOf(npdRow, "printingColour1") ? 1 : "", PINK],
     ["REQUIRED BS", valueOf(npdRow, "bsKgCm2Calculated", "bsKgCm2Std"), "FLUTE", valueOf(npdRow, "fluteType"), "Box\nType", "RSC"],
