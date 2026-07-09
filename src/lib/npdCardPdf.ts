@@ -77,6 +77,15 @@ function calculateRatePerSheetWeight(row: RowRecord) {
   if (!Number.isFinite(rate) || !Number.isFinite(sheetWeight) || sheetWeight === 0) return "";
   return formatNumber(rate / sheetWeight / 100, 3);
 }
+
+function reelDeckleSizeCm(row: RowRecord) {
+  const reelSize = valueOf(row, "reelSize");
+  if (reelSize !== "") return reelSize;
+
+  const deckleSizeMm = Number(valueOf(row, "deckleSize"));
+  if (!Number.isFinite(deckleSizeMm) || deckleSizeMm === 0) return "";
+  return formatNumber(deckleSizeMm / 10, 1);
+}
 function formatDimension(...values: Array<RowRecord[string]>) {
   const parts = values.map(formatValue);
   if (parts.every((part) => part === "-")) return "-";
@@ -246,7 +255,7 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
   labelValue(doc, SHEET_X, y, 39, 51, rowH, "BOX DIMENSION (ID)", formatDimension(npdRow.lengthId, npdRow.breadthId, npdRow.heightId));
   labelValue(doc, rightX, y, 27, 33, rowH, "REEL\nDECKLE", valueOf(npdRow, "deckleSize", "reelSize"));
   cell(doc, rightX + 60, y, 32, rowH, "REEL DECKLE SIZE", { bold: true, fill: GREEN, fontSize: FONT_SMALL });
-  cell(doc, rightX + 92, y, 14, rowH, valueOf(npdRow, "rapc", "rapcForSingleBox"), { bold: true, fill: GREEN, fontSize: FONT_HEADING_14PX });
+  cell(doc, rightX + 92, y, 14, rowH, reelDeckleSizeCm(npdRow), { bold: true, fill: GREEN, fontSize: FONT_HEADING_14PX });
   y += rowH;
 
   labelValue(doc, SHEET_X, y, 39, 51, rowH, "ROTARY DIMENSION (OD)", formatDimension(npdRow.lengthOd, npdRow.breadthOd, npdRow.heightOd));
