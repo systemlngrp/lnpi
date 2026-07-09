@@ -170,6 +170,28 @@ function labelValue(doc: jsPDF, x: number, y: number, labelW: number, valueW: nu
 function sectionCell(doc: jsPDF, x: number, y: number, w: number, h: number, text: RowRecord[string], fill: Color, textColor: Color = BLACK) {
   cell(doc, x, y, w, h, text, { bold: true, fill, textColor, fontSize: FONT_HEADING_14PX });
 }
+function linkCell(doc: jsPDF, x: number, y: number, w: number, h: number, url: RowRecord[string]) {
+  cell(doc, x, y, w, h, "", { fontSize: FONT_MICRO });
+  const link = String(url || "").trim();
+  if (!link) return;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(FONT_MICRO);
+  doc.setTextColor(0, 0, 200);
+  const padding = 0.7;
+  const lineHeight = FONT_MICRO * 0.34;
+  const lines = doc.splitTextToSize(link, Math.max(2, w - padding * 2)).slice(0, 2);
+  const textX = x + w / 2;
+  const textY = y + h / 2 - ((lines.length - 1) * lineHeight) / 2 + lineHeight * 0.35;
+  doc.text(lines, textX, textY, { align: "center" });
+  doc.setDrawColor(0, 0, 200);
+  doc.setLineWidth(0.08);
+  const underlineY = Math.min(y + h - 0.8, textY + (lines.length - 1) * lineHeight + 0.5);
+  doc.line(x + padding, underlineY, x + w - padding, underlineY);
+  (doc as jsPDF & { link?: (x: number, y: number, w: number, h: number, options: { url: string }) => void }).link?.(x, y, w, h, { url: link });
+  doc.setDrawColor(0);
+  doc.setTextColor(0);
+}
 
 async function drawHeader(doc: jsPDF, npdRow: RowRecord, setting?: Setting | null) {
   const y = SHEET_Y;
@@ -201,8 +223,9 @@ async function drawHeader(doc: jsPDF, npdRow: RowRecord, setting?: Setting | nul
   cell(doc, SHEET_X + 131, y2, 65, 8, new Date().toLocaleDateString("en-GB"), { bold: true, fontSize: FONT_BODY_12PX });
 
   const y3 = y2 + 8;
-  cell(doc, SHEET_X, y3, 98, 5, "Doc.No. L.N./NPD/", { align: "left", fontSize: FONT_MICRO, padding: 0.7 });
-  cell(doc, SHEET_X + 98, y3, 98, 5, "Rev.No./Date - 01/25.02.26", { align: "right", fontSize: FONT_MICRO, padding: 0.7 });
+  cell(doc, SHEET_X, y3, 55, 5, "Doc.No. L.N./NPD/", { align: "left", fontSize: FONT_MICRO, padding: 0.7 });
+  linkCell(doc, SHEET_X + 55, y3, 86, 5, valueOf(npdRow, "url", "URL", "link", "driveLink"));
+  cell(doc, SHEET_X + 141, y3, 55, 5, "Rev.No./Date - 01/25.02.26", { align: "right", fontSize: FONT_MICRO, padding: 0.7 });
   return y3 + 5;
 }
 
