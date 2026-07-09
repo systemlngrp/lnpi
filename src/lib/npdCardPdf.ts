@@ -72,6 +72,10 @@ function formatNumber(value: number, decimals = 3) {
 }
 
 
+
+function calculatedWeightPerBox(row: RowRecord) {
+  return valueOf(row, "calculatedWeightPerBox", "standardWeightGms");
+}
 function calculateRatePerBoxWeight(row: RowRecord) {
   const rate = Number(valueOf(row, "rate"));
   const boxWeight = Number(valueOf(row, "calculatedWeightPerBox", "standardWeightGms"));
@@ -276,8 +280,8 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
   y += rowH;
 
   const rows: Array<[string, RowRecord[string], string, RowRecord[string], RowRecord[string], RowRecord[string], Color?]> = [
-    ["NO.OF PLY", valueOf(npdRow, "ply"), "FLUTING %", "B-37%", "A-45%", calculateRatePerBoxWeight(npdRow)],
-    ["FLAP", valueOf(npdRow, "flapSize"), "CREASEING\nTYPE (M/F)", "M/F", "Glue / Stitch", calculateRatePerBoxWeight(npdRow)],
+    ["NO.OF PLY", valueOf(npdRow, "ply"), "FLUTING %", "B-37%", "A-45%", calculatedWeightPerBox(npdRow)],
+    ["FLAP", valueOf(npdRow, "flapSize"), "CREASEING\nTYPE (M/F)", "M/F", "Glue / Stitch", calculatedWeightPerBox(npdRow)],
     ["TRIMMING", 16, "PRINTING\nCOLOUR", valueOf(npdRow, "printingColour1"), valueOf(npdRow, "printingColour2"), valueOf(npdRow, "printingColour2") ? 2 : valueOf(npdRow, "printingColour1") ? 1 : "", PINK],
     ["REQUIRED BS", valueOf(npdRow, "bsKgCm2Calculated", "bsKgCm2Std"), "FLUTE", valueOf(npdRow, "fluteType"), "Box\nType", "RSC"],
     ["REQUIRED BOARD GSM", valueOf(npdRow, "standardBGsm", "calculatedBGsm"), "Cal. BGSM", valueOf(npdRow, "calculatedBGsm", "standardBGsm"), "TOP", valueOf(npdRow, "topPaperShade"), PINK],
