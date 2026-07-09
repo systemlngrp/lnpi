@@ -79,12 +79,18 @@ function calculateRatePerSheetWeight(row: RowRecord) {
 }
 
 function reelDeckleSizeCm(row: RowRecord) {
-  const reelSize = valueOf(row, "reelSize");
-  if (reelSize !== "") return reelSize;
+  const reelSizeMm = Number(valueOf(row, "reelSize"));
+  if (Number.isFinite(reelSizeMm) && reelSizeMm !== 0) return formatNumber(reelSizeMm / 10, 1);
 
   const deckleSizeMm = Number(valueOf(row, "deckleSize"));
   if (!Number.isFinite(deckleSizeMm) || deckleSizeMm === 0) return "";
   return formatNumber(deckleSizeMm / 10, 1);
+}
+
+function reelDeckleInches(row: RowRecord) {
+  const reelSizeCm = Number(reelDeckleSizeCm(row));
+  if (!Number.isFinite(reelSizeCm) || reelSizeCm === 0) return "";
+  return formatNumber(reelSizeCm / 2.54, 2);
 }
 function formatDimension(...values: Array<RowRecord[string]>) {
   const parts = values.map(formatValue);
@@ -253,7 +259,7 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
   y += itemRowH;
 
   labelValue(doc, SHEET_X, y, 39, 51, rowH, "BOX DIMENSION (ID)", formatDimension(npdRow.lengthId, npdRow.breadthId, npdRow.heightId));
-  labelValue(doc, rightX, y, 27, 33, rowH, "REEL\nDECKLE", valueOf(npdRow, "deckleSize", "reelSize"));
+  labelValue(doc, rightX, y, 27, 33, rowH, "REEL\nDECKLE", reelDeckleInches(npdRow));
   cell(doc, rightX + 60, y, 32, rowH, "REEL DECKLE SIZE", { bold: true, fill: GREEN, fontSize: FONT_SMALL });
   cell(doc, rightX + 92, y, 14, rowH, reelDeckleSizeCm(npdRow), { bold: true, fill: GREEN, fontSize: FONT_HEADING_14PX });
   y += rowH;
