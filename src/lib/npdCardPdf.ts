@@ -276,7 +276,7 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
   y += rowH;
 
   const rows: Array<[string, RowRecord[string], string, RowRecord[string], RowRecord[string], RowRecord[string], Color?]> = [
-    ["NO.OF PLY", valueOf(npdRow, "ply"), "FLUTING %", "B-37%", "A-45%", calculateRatePerSheetWeight(npdRow)],
+    ["NO.OF PLY", valueOf(npdRow, "ply"), "FLUTING %", "B-37%", "A-45%", calculateRatePerBoxWeight(npdRow)],
     ["FLAP", valueOf(npdRow, "flapSize"), "CREASEING\nTYPE (M/F)", "M/F", "Glue / Stitch", calculateRatePerBoxWeight(npdRow)],
     ["TRIMMING", 16, "PRINTING\nCOLOUR", valueOf(npdRow, "printingColour1"), valueOf(npdRow, "printingColour2"), valueOf(npdRow, "printingColour2") ? 2 : valueOf(npdRow, "printingColour1") ? 1 : "", PINK],
     ["REQUIRED BS", valueOf(npdRow, "bsKgCm2Calculated", "bsKgCm2Std"), "FLUTE", valueOf(npdRow, "fluteType"), "Box\nType", "RSC"],
@@ -289,10 +289,11 @@ function drawSpecBlock(doc: jsPDF, y: number, npdRow: RowRecord) {
 
     if (middleLabel === "FLUTING %") {
       cell(doc, rightX, y, 27, rowH, middleLabel, { bold: true, fill: LIGHT_GRAY, fontSize: FONT_SMALL, padding: 0.5 });
-      cell(doc, rightX + 27, y, 26, rowH, middleValue, { bold: true, fontSize: FONT_SMALL });
-      cell(doc, rightX + 53, y, 26, rowH, rightLabel, { bold: true, fontSize: FONT_SMALL });
-      cell(doc, rightX + 79, y, 17, rowH, "Cal. Sheet\nWeight", { bold: true, fill: LIGHT_GRAY, fontSize: FONT_MICRO, padding: 0.4 });
-      cell(doc, rightX + 96, y, 10, rowH, rightValue, { bold: true, fontSize: FONT_SMALL, padding: 0.3 });
+      cell(doc, rightX + 27, y, 24, rowH, middleValue, { bold: true, fontSize: FONT_SMALL });
+      cell(doc, rightX + 51, y, 24, rowH, rightLabel, { bold: true, fontSize: FONT_SMALL });
+      cell(doc, rightX + 75, y, 17, rowH, calculateRatePerBoxWeight(npdRow), { bold: true, fontSize: FONT_SMALL, padding: 0.3 });
+      cell(doc, rightX + 92, y, 8, rowH, "Cal. Sheet\nWeight", { bold: true, fill: LIGHT_GRAY, fontSize: FONT_MICRO, padding: 0.2 });
+      cell(doc, rightX + 100, y, 6, rowH, rightValue, { bold: true, fontSize: FONT_MICRO, padding: 0.2 });
       y += rowH;
       continue;
     }
