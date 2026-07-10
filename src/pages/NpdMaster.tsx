@@ -310,7 +310,7 @@ export function NpdMaster() {
           </div>
         </div>
 
-        <div className="table-scroll-shell max-h-[70vh] overflow-x-auto overflow-y-auto">
+        <div className="table-sticky-scroll">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black sticky top-0 z-10">
               <tr className="divide-x divide-black">

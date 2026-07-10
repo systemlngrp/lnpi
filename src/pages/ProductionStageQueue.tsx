@@ -351,7 +351,7 @@ export function ProductionStageQueue({
       <DataSummaryTiles totalRecords={productions.length} filteredRecords={rows.length} showingRecords={paginatedRows.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <div className="overflow-x-auto">
+        <div className="table-sticky-scroll">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">

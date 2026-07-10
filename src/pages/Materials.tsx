@@ -1353,7 +1353,7 @@ export function Materials() {
           </div>
 
           <div className="bg-white rounded shadow-sm border border-black overflow-hidden mt-6">
-            <div className="max-h-[70vh] overflow-auto">
+            <div className="table-sticky-scroll">
               <table className="min-w-full border-collapse">
                 <thead className="sticky top-0 z-20">
                   <tr className="bg-indigo-700 text-white divide-x divide-indigo-800">

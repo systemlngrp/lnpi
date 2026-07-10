@@ -189,7 +189,7 @@ export function Trucks() {
         pageLabel="1 / 1"
       />
 
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
+      <div className="bg-white rounded-lg shadow-sm border border-black table-sticky-scroll">
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4">
             {filteredTrucks.map((truck, index) => (

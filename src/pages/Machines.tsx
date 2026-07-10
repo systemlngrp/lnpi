@@ -227,7 +227,7 @@ export function Machines() {
       />
       
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <div className="table-scroll-shell">
+        <div className="table-sticky-scroll">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100">
               <tr className="divide-x divide-black">

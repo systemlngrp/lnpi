@@ -112,7 +112,7 @@ export function ColorMasters() {
       ) : (
         <>
           <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search colors..." />
-          <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+          <div className="bg-white rounded shadow-sm border border-black table-sticky-scroll">
             <div className="block md:hidden space-y-4 p-2">
               {filteredColors.map((color) => (
                 <div key={color.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded">

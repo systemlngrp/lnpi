@@ -510,7 +510,7 @@ export function Users() {
                 ))}
             </div>
 
-            <div className="table-scroll-shell hidden md:block">
+            <div className="table-sticky-scroll hidden md:block">
               <table className="min-w-max divide-y divide-black border-collapse border border-black">
                 <thead className="bg-slate-100 divide-x divide-black">
                   <tr className="divide-x divide-black">

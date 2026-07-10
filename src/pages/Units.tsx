@@ -150,7 +150,7 @@ export function Units() {
 
           <div className="bg-white rounded-[22px] border border-slate-300 overflow-hidden">
             <div className="px-4 py-3 text-slate-600">Showing {filteredUnits.length} entries</div>
-            <div className="overflow-x-auto">
+            <div className="table-sticky-scroll">
               <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-indigo-700 text-white">

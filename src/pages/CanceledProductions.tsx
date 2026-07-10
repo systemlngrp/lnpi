@@ -87,7 +87,7 @@ const canceledProductions = useMemo(() => productions.filter((production) => pro
       <DataSummaryTiles totalRecords={canceledProductions.length} filteredRecords={filteredList.length} showingRecords={filteredList.length} pageLabel="1 / 1" />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <div className="overflow-x-auto">
+        <div className="table-sticky-scroll">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">

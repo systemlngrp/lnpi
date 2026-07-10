@@ -534,7 +534,7 @@ export function PendingJobClosure() {
                 );
             })}
         </div>
-        <div className="hidden md:block overflow-x-auto pb-2 w-full">
+        <div className="table-sticky-scroll hidden md:block pb-2">
           <table className="min-w-max w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">

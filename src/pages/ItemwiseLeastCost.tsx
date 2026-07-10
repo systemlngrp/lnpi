@@ -129,7 +129,7 @@ export function ItemwiseLeastCost() {
       <DataSummaryTiles totalRecords={leastCostData.length} filteredRecords={filteredData.length} showingRecords={paginatedData.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <div className="overflow-x-auto">
+        <div className="table-sticky-scroll">
           <table className="min-w-full divide-y divide-black border-collapse">
             <thead className="bg-slate-50 whitespace-nowrap">
               <tr className="divide-x divide-black">

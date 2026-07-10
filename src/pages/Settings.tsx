@@ -416,7 +416,7 @@ export function SettingsPage() {
             </p>
           </div>
 
-          <div className="overflow-x-auto border border-black rounded">
+          <div className="table-sticky-scroll border border-black rounded">
             <table className="min-w-full divide-y divide-black border-collapse">
               <thead className="bg-slate-100">
                 <tr className="divide-x divide-black">
@@ -592,7 +592,7 @@ export function SettingsPage() {
               </p>
             </div>
 
-            <div className="overflow-x-auto border border-black rounded">
+            <div className="table-sticky-scroll border border-black rounded">
               <table className="min-w-full divide-y divide-black border-collapse">
                 <thead className="bg-slate-100">
                   <tr className="divide-x divide-black">
@@ -784,7 +784,7 @@ export function SettingsPage() {
             </button>
           </div>
 
-          <div className="overflow-x-auto rounded border border-black">
+          <div className="table-sticky-scroll rounded border border-black">
             <table className="min-w-full border-collapse border border-black">
               <thead className="bg-slate-100">
                 <tr className="divide-x divide-black">

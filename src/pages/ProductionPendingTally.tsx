@@ -117,7 +117,7 @@ export function ProductionPendingTally() {
 
       <DataSummaryTiles totalRecords={productions.length} filteredRecords={pendingList.length} showingRecords={paginatedPendingList.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
 
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+      <div className="bg-white rounded shadow-sm border border-black table-sticky-scroll">
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4 p-2">
             {paginatedPendingList.map((p, index) => (

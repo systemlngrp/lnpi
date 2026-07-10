@@ -8,17 +8,34 @@
     scrollbar-gutter: stable both-edges;
   }
 
-  .table-scroll-shell > table {
+  .table-scroll-shell > table,
+  .table-sticky-scroll > table {
     min-width: max-content;
   }
 
+  .table-sticky-scroll {
+    max-height: calc(100vh - 260px);
+    overflow: auto;
+    position: relative;
+    width: 100%;
+    scrollbar-gutter: stable both-edges;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table thead {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
 
   table thead th {
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 31;
     background-color: inherit;
+    box-shadow: inset 0 -1px 0 currentColor;
   }
+
   .bg-transparency {
     background-color: #ffffff;
     background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%),

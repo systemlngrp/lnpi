@@ -82,7 +82,7 @@ export function PendingNpd() {
 
       <DataSummaryTiles totalRecords={schedules.length} filteredRecords={pendingRows.length} showingRecords={pendingRows.length} pageLabel="1 / 1" />
 
-      <div className="overflow-auto border border-black">
+      <div className="table-sticky-scroll border border-black">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-100">
             <tr>

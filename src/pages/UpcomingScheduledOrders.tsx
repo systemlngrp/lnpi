@@ -161,7 +161,7 @@ export function UpcomingScheduledOrders() {
 
       <DataSummaryTiles totalRecords={schedules.length} filteredRecords={upcomingRows.length} showingRecords={upcomingRows.length} pageLabel="1 / 1" />
 
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+      <div className="bg-white rounded shadow-sm border border-black table-sticky-scroll">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">
             <tr>

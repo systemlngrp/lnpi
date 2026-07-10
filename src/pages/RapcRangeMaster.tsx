@@ -199,7 +199,7 @@ export function RapcRangeMaster() {
       />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <div className="table-scroll-shell max-h-[70vh] overflow-auto">
+        <div className="table-sticky-scroll">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 sticky top-0 z-10">
               <tr className="divide-x divide-black">
