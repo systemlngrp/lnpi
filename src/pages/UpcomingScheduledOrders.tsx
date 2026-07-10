@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Company, Order, OrderSchedule, Production } from "../types";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { formatDate } from "../lib/serial";
 import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
@@ -32,16 +33,9 @@ function parseLocalYmd(dateStr?: string) {
 
 export function UpcomingScheduledOrders() {
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
+  const [companyFilter, setCompanyFilter] = useState("All");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -71,9 +65,11 @@ export function UpcomingScheduledOrders() {
     [phpJobs, plateJobs, productions]
   );
 
-  const upcomingRows = useMemo(
-    () =>
-      schedules
+  const upcomingRows = useMemo(() => {
+    const lowered = searchTerm.trim().toLowerCase();
+    const from = fromDate ? parseLocalYmd(fromDate) : null;
+    const to = toDate ? parseLocalYmd(toDate) : null;
+    return schedules
         .filter((schedule) => {
           const consumedQty = Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0);
           if (getPendingProductionQty(schedule, consumedQty) <= 0) return false;
@@ -98,13 +94,23 @@ export function UpcomingScheduledOrders() {
             pendingQty: getPendingProductionQty(schedule, consumedQty),
           };
         })
+        .filter(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty }) => {
+          if (companyFilter !== "All" && company?.id !== companyFilter) return false;
+          const scheduledDate = parseLocalYmd(schedule.scheduledDate);
+          if (from && scheduledDate && scheduledDate.getTime() < from.getTime()) return false;
+          if (to && scheduledDate && scheduledDate.getTime() > to.getTime()) return false;
+          if (!lowered) return true;
+          return [order?.orderNo, formatDate(schedule.scheduledDate), company?.name, item?.name, schedule.qty, plannedQty, actualProducedQty, schedule.canceledQty, pendingQty]
+            .join(" ")
+            .toLowerCase()
+            .includes(lowered);
+        })
         .sort((a, b) => {
           const timeA = new Date(a.schedule.scheduledDate || 0).getTime();
           const timeB = new Date(b.schedule.scheduledDate || 0).getTime();
           return timeA - timeB; // Ascending by date
-        }),
-    [companies, consumptionByScheduleId, cutoffDate, npdItems, orders, schedules]
-  );
+        });
+  }, [companies, companyFilter, consumptionByScheduleId, cutoffDate, fromDate, orders, resolveOrderItem, schedules, searchTerm, toDate]);
 
   const handleCancelQty = async (schedule: OrderSchedule) => {
     const rawValue = cancelValues[schedule.id];
@@ -163,10 +169,28 @@ export function UpcomingScheduledOrders() {
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
+      <div className="flex flex-wrap items-end gap-3 rounded border border-black bg-white p-4 shadow-sm">
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">
+          Company
+          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="min-w-56 rounded border-2 border-black px-3 py-2 text-sm font-medium text-black">
+            <option value="All">All Companies</option>
+            {[...companies].sort((a, b) => a.name.localeCompare(b.name)).map((company) => (
+              <option key={company.id} value={company.id}>{company.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">From Date<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">To Date<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter("All"); setFromDate(""); setToDate(""); }} className="rounded border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100">Reset</button>
+      </div>
+
+      <DataSummaryTiles totalRecords={schedules.length} filteredRecords={upcomingRows.length} showingRecords={upcomingRows.length} pageLabel="1 / 1" />
+
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">
             <tr>
+              <th className="px-3 py-2 border border-black">SL No</th>
               <th className="px-3 py-2 border border-black">Order No</th>
               <th className="px-3 py-2 border border-black">Schedule Date</th>
               <th className="px-3 py-2 border border-black">Company</th>
@@ -183,13 +207,14 @@ export function UpcomingScheduledOrders() {
           <tbody>
             {upcomingRows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-6 py-8 text-center text-black font-medium italic">
+                <td colSpan={12} className="px-6 py-8 text-center text-black font-medium italic">
                   No upcoming production schedules (beyond today + 2 days).
                 </td>
               </tr>
             ) : (
-              upcomingRows.map(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty }) => (
+              upcomingRows.map(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty }, index) => (
                 <tr key={schedule.id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 border border-black font-bold">{index + 1}</td>
                   <td className="px-3 py-2 border border-black font-medium">{order?.orderNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap font-bold text-indigo-700">{formatDate(schedule.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>

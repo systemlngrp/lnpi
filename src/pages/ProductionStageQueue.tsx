@@ -23,6 +23,7 @@ import {
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useClientPagination } from "../hooks/useClientPagination";
 import {
   buildProductionCorrugatedSheetUsageMap,
@@ -95,6 +96,10 @@ export function ProductionStageQueue({
   const [settings] = useData<Setting>("settings", []);
   const [machines] = useData<Machine>("machines", []);
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [ffgValues, setFfgValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
@@ -135,6 +140,8 @@ export function ProductionStageQueue({
 
   const rows = useMemo(() => {
     const lowered = searchTerm.toLowerCase();
+    const from = fromDate ? new Date(fromDate).getTime() : null;
+    const to = toDate ? new Date(toDate).getTime() : null;
     const mandatoryMap = parseMandatoryMachinesByType(settings[0]);
     const prereqMachine = issuePrereqMachineName ? normalizeMachineName(issuePrereqMachineName) : "";
     return productions
@@ -165,6 +172,11 @@ export function ProductionStageQueue({
         };
       })
       .filter(({ production, order, item, company }) => {
+        if (companyFilter !== "All" && company?.id !== companyFilter) return false;
+        if (statusFilter !== "All" && production.status !== statusFilter) return false;
+        const productionTime = new Date(production.date || 0).getTime();
+        if (from && productionTime < from) return false;
+        if (to && productionTime > to) return false;
         if (!lowered) return true;
         return (
           production.transactionNo.toLowerCase().includes(lowered) ||
@@ -243,6 +255,8 @@ export function ProductionStageQueue({
       });
   }, [
     companies,
+    companyFilter,
+    fromDate,
     issuePrereqMachineName,
     orders,
     predicate,
@@ -254,6 +268,8 @@ export function ProductionStageQueue({
     machines,
     sortDir,
     sortKey,
+    statusFilter,
+    toDate,
     usageMap,
     corrugatedSheetUsageMap,
   ]);
@@ -348,11 +364,22 @@ export function ProductionStageQueue({
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs..." />
 
+      <div className="flex flex-wrap items-end gap-3 rounded border border-black bg-white p-4 shadow-sm">
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">Company<select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="min-w-56 rounded border-2 border-black px-3 py-2 text-sm font-medium text-black"><option value="All">All Companies</option>{[...companies].sort((a, b) => a.name.localeCompare(b.name)).map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">Status<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="min-w-44 rounded border-2 border-black px-3 py-2 text-sm font-medium text-black"><option value="All">All Status</option>{Array.from(new Set(productions.map((production) => production.status).filter(Boolean))).sort().map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">From Date<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">To Date<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter("All"); setStatusFilter("All"); setFromDate(""); setToDate(""); }} className="rounded border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100">Reset</button>
+      </div>
+
+      <DataSummaryTiles totalRecords={productions.length} filteredRecords={rows.length} showingRecords={paginatedRows.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
+
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">SL No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">
                   <button type="button" onClick={() => toggleSort("jobNo")} className="inline-flex items-center gap-1">
                     Job No. <SortIcon column="jobNo" />
@@ -424,7 +451,7 @@ export function ProductionStageQueue({
                 <tr>
                   <td
                     colSpan={
-                      (10 - (hideStatusColumn ? 1 : 0) - (hideProdFfgColumn ? 1 : 0)) +
+                      (11 - (hideStatusColumn ? 1 : 0) - (hideProdFfgColumn ? 1 : 0)) +
                       (issuePrereqMachineName ? 1 : 0) +
                       (enableCloseAction ? 1 : 0) +
                       (enableFfgEditing ? 1 : 0) +
@@ -436,8 +463,9 @@ export function ProductionStageQueue({
                   </td>
                 </tr>
               ) : (
-                paginatedRows.map(({ production, order, item, company, actualPaperUsed, prereqQty, requiredMachines }) => (
+                paginatedRows.map(({ production, order, item, company, actualPaperUsed, prereqQty, requiredMachines }, index) => (
                   <tr key={production.id} className="hover:bg-slate-50 divide-x divide-black">
+                    <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{(page - 1) * pageSize + index + 1}</td>
                     <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{production.transactionNo}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{formatDate(production.date)}</td>
                     <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>

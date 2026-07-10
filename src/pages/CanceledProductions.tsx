@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Production, OrderSchedule, Order, Company } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { RefreshCw } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useNpdItems } from "../hooks/useNpdItems";
@@ -15,6 +16,9 @@ export function CanceledProductions() {
   const [companies] = useData<Company>("companies", []);
   
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("All");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [activatingId, setActivatingId] = useState<string | null>(null);
 
   const handleActivate = async (id: string) => {
@@ -57,20 +61,27 @@ export function CanceledProductions() {
     }
   };
 
-  const filteredList = productions
-    .filter(p => p.status === "Cancelled")
-    .filter(p => {
-      const item = npdItems.find(i => i.id === p.itemId);
-      const schedule = schedules.find(s => s.id === p.scheduleId);
-      const order = orders.find(o => o.id === schedule?.orderId);
-      const company = companies.find(c => c.id === order?.companyId);
-      
-      return p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (order?.orderNo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (company?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
-    })
-    .sort((a, b) => b.transactionNo.localeCompare(a.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
+const canceledProductions = useMemo(() => productions.filter((production) => production.status === "Cancelled"), [productions]);
+
+  const filteredList = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase();
+    const from = fromDate ? new Date(fromDate).getTime() : null;
+    const to = toDate ? new Date(toDate).getTime() : null;
+    return canceledProductions
+      .filter((production) => {
+        const item = npdItems.find((row) => row.id === production.itemId);
+        const schedule = schedules.find((row) => row.id === production.scheduleId);
+        const order = orders.find((row) => row.id === schedule?.orderId);
+        const company = companies.find((row) => row.id === order?.companyId);
+        if (companyFilter !== "All" && company?.id !== companyFilter) return false;
+        const cancelTime = new Date(production.cancelTimestamp || 0).getTime();
+        if (from && cancelTime < from) return false;
+        if (to && cancelTime > to) return false;
+        if (!needle) return true;
+        return [production.transactionNo, item?.name, order?.orderNo, company?.name].join(" ").toLowerCase().includes(needle);
+      })
+      .sort((a, b) => b.transactionNo.localeCompare(a.transactionNo, undefined, { numeric: true, sensitivity: "base" }));
+  }, [canceledProductions, companies, companyFilter, fromDate, npdItems, orders, schedules, searchTerm, toDate]);
 
   return (
     <div className="space-y-6">
@@ -84,11 +95,21 @@ export function CanceledProductions() {
         placeholder="Search canceled jobs..." 
       />
 
+      <div className="flex flex-wrap items-end gap-3 rounded border border-black bg-white p-4 shadow-sm">
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">Company<select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="min-w-56 rounded border-2 border-black px-3 py-2 text-sm font-medium text-black"><option value="All">All Companies</option>{[...companies].sort((a, b) => a.name.localeCompare(b.name)).map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">From Cancel Date<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">To Cancel Date<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter("All"); setFromDate(""); setToDate(""); }} className="rounded border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100">Reset</button>
+      </div>
+
+      <DataSummaryTiles totalRecords={canceledProductions.length} filteredRecords={filteredList.length} showingRecords={filteredList.length} pageLabel="1 / 1" />
+
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">SL No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Order No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Item Name</th>
@@ -101,15 +122,16 @@ export function CanceledProductions() {
             <tbody className="divide-y divide-black bg-white">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No canceled jobs found.</td>
+                  <td colSpan={8} className="px-6 py-8 text-center text-black font-medium">No canceled jobs found.</td>
                 </tr>
               ) : (
-                filteredList.map((p) => {
+                filteredList.map((p, index) => {
                   const schedule = schedules.find(s => s.id === p.scheduleId);
                   const order = orders.find(o => o.id === schedule?.orderId);
                   
                   return (
                     <tr key={p.id} className="hover:bg-red-50 divide-x divide-black transition-colors">
+                      <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{index + 1}</td>
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{p.transactionNo}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{order?.orderNo || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black min-w-[150px]">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</td>

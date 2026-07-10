@@ -6,6 +6,7 @@ import { Spinner } from "../components/Spinner";
 import { Search } from "lucide-react";
 import { formatDate } from "../lib/serial";
 import { ClientPagination } from "../components/ClientPagination";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useClientPagination } from "../hooks/useClientPagination";
 
 interface LeastCostRecord {
@@ -34,6 +35,9 @@ export function ItemwiseLeastCost() {
   const npdItems = useNpdItems();
   const itemsLoading = false;
   const [searchTerm, setSearchTerm] = useState("");
+  const [gsmFilter, setGsmFilter] = useState("All");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const isLoading = prodsLoading || itemsLoading;
 
@@ -79,13 +83,21 @@ export function ItemwiseLeastCost() {
     return Array.from(erpMap.values()).sort((a, b) => a.erp.localeCompare(b.erp));
   }, [productions, npdItems]);
 
+  const gsmOptions = useMemo(() => Array.from(new Set(leastCostData.map((row) => row.gsm).filter((gsm) => Number.isFinite(gsm)))).sort((a, b) => a - b), [leastCostData]);
+
   const filteredData = useMemo(() => {
-    return leastCostData.filter(row => 
-      row.erp.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.company.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [leastCostData, searchTerm]);
+    const needle = searchTerm.trim().toLowerCase();
+    const from = fromDate ? new Date(fromDate).getTime() : null;
+    const to = toDate ? new Date(toDate).getTime() : null;
+    return leastCostData.filter((row) => {
+      if (gsmFilter !== "All" && String(row.gsm) !== gsmFilter) return false;
+      const rowTime = new Date(row.date || 0).getTime();
+      if (from && rowTime < from) return false;
+      if (to && rowTime > to) return false;
+      if (!needle) return true;
+      return row.erp.toLowerCase().includes(needle) || row.itemName.toLowerCase().includes(needle) || row.company.toLowerCase().includes(needle);
+    });
+  }, [fromDate, gsmFilter, leastCostData, searchTerm, toDate]);
 
   const {
     page,
@@ -113,8 +125,9 @@ export function ItemwiseLeastCost() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 bg-white border-2 border-black rounded p-2 max-w-md">
-        <Search size={20} className="text-slate-400" />
+      <div className="flex flex-wrap items-end gap-3 bg-white border-2 border-black rounded p-3">
+        <div className="flex min-w-72 items-center gap-2 rounded border border-black px-3 py-2">
+          <Search size={20} className="text-slate-400" />
         <input
           type="text"
           placeholder="Search by ERP, Item or Company..."
@@ -122,13 +135,21 @@ export function ItemwiseLeastCost() {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="flex-1 outline-none text-sm font-medium"
         />
+        </div>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">GSM<select value={gsmFilter} onChange={(e) => setGsmFilter(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm font-medium text-black"><option value="All">All GSM</option>{gsmOptions.map((gsm) => <option key={gsm} value={String(gsm)}>{gsm}</option>)}</select></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">From Date<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">To Date<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <button type="button" onClick={() => { setSearchTerm(""); setGsmFilter("All"); setFromDate(""); setToDate(""); }} className="rounded border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100">Reset</button>
       </div>
+
+      <DataSummaryTiles totalRecords={leastCostData.length} filteredRecords={filteredData.length} showingRecords={paginatedData.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse">
             <thead className="bg-slate-50 whitespace-nowrap">
               <tr className="divide-x divide-black">
+                <th className="px-3 py-3 text-left text-[10px] font-black text-black uppercase tracking-wider border-b border-black">SL No</th>
                 <th className="px-3 py-3 text-left text-[10px] font-black text-black uppercase tracking-wider border-b border-black">Date</th>
                 <th className="px-3 py-3 text-left text-[10px] font-black text-black uppercase tracking-wider border-b border-black">Job No</th>
                 <th className="px-3 py-3 text-left text-[10px] font-black text-black uppercase tracking-wider border-b border-black">Item Name</th>
@@ -152,13 +173,14 @@ export function ItemwiseLeastCost() {
             <tbody className="divide-y divide-black bg-white">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={18} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
+                  <td colSpan={19} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
                     No data found matching your criteria
                   </td>
                 </tr>
               ) : (
                 paginatedData.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors divide-x divide-black text-[11px] whitespace-nowrap">
+                    <td className="px-3 py-2 font-bold text-black">{(page - 1) * pageSize + idx + 1}</td>
                     <td className="px-3 py-2 text-black">{formatDate(row.date)}</td>
                     <td className="px-3 py-2 font-bold text-black">{row.jobCardNo}</td>
                     <td className="px-3 py-2 text-black max-w-[150px] truncate" title={row.itemName}>{row.itemName}</td>
@@ -184,7 +206,7 @@ export function ItemwiseLeastCost() {
             {filteredData.length > 0 && (
                 <tfoot className="bg-slate-100 border-t border-black">
                     <tr>
-                        <td colSpan={18} className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase">
+                        <td colSpan={19} className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase">
                             Total Unique ERPs: {filteredData.length}
                         </td>
                     </tr>

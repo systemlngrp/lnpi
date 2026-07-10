@@ -3,6 +3,7 @@ import { Supplier, StateMaster } from "../types";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { ClientPagination } from "../components/ClientPagination";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { Select } from "../components/Select";
 import { Edit, Trash2, Upload, Download, FileSpreadsheet } from "lucide-react";
 import { MandatoryLegend, MandatoryLabel } from "../components/Mandatory";
@@ -44,6 +45,7 @@ export function Suppliers() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeFilter, setActiveFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,8 +78,9 @@ export function Suppliers() {
             .toLowerCase();
           return haystack.includes(searchTerm.toLowerCase());
         })
+        .filter((supplier) => activeFilter === "All" || (supplier.active || "Yes") === activeFilter)
         .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })),
-    [searchTerm, suppliers]
+    [activeFilter, searchTerm, suppliers]
   );
   const {
     page,
@@ -464,20 +467,48 @@ export function Suppliers() {
           </div>
 
           <div className="bg-white p-4 border border-black rounded shadow-sm">
-            <input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search suppliers..."
-              className="w-full max-w-sm rounded-xl border-2 border-black px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-            />
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search suppliers..."
+                className="w-full max-w-sm rounded-xl border-2 border-black px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              />
+              <select
+                value={activeFilter}
+                onChange={(e) => setActiveFilter(e.target.value)}
+                className="rounded-xl border-2 border-black px-4 py-2 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              >
+                <option value="All">All Status</option>
+                <option value="Yes">Active</option>
+                <option value="No">Inactive</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setActiveFilter("All");
+                }}
+                className="rounded-xl border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100"
+              >
+                Reset
+              </button>
+            </div>
           </div>
+
+          <DataSummaryTiles
+            totalRecords={suppliers.length}
+            filteredRecords={filteredSuppliers.length}
+            showingRecords={paginatedSuppliers.length}
+            pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`}
+          />
 
           <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
             <div className="table-scroll-shell">
             <table className="min-w-max divide-y divide-black border-collapse border border-black">
               <thead className="bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
-                  {["Supplier Name", "Contact Person", "Contact Number", "Email", "GST No.", "GST Supply Type", "State", "District", "PIN Code", "Active", "Actions"].map((heading) => (
+                  {["SL No", "Supplier Name", "Contact Person", "Contact Number", "Email", "GST No.", "GST Supply Type", "State", "District", "PIN Code", "Active", "Actions"].map((heading) => (
                     <th key={heading} className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black whitespace-nowrap">
                       {heading}
                     </th>
@@ -487,13 +518,14 @@ export function Suppliers() {
               <tbody className="divide-y divide-black bg-white">
                 {filteredSuppliers.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                    <td colSpan={12} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                       {suppliersLoading || isSubmitting ? <Spinner /> : "No suppliers found."}
                     </td>
                   </tr>
                 ) : (
-                  paginatedSuppliers.map((supplier) => (
+                  paginatedSuppliers.map((supplier, index) => (
                     <tr key={supplier.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
+                      <td className="px-4 py-3 text-sm font-bold text-black border border-black whitespace-nowrap">{(page - 1) * pageSize + index + 1}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black whitespace-nowrap">{supplier.name}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black whitespace-nowrap">{supplier.contactPerson || ""}</td>
                       <td className="px-4 py-3 text-sm text-black border border-black whitespace-nowrap">{supplier.contactNumber || ""}</td>

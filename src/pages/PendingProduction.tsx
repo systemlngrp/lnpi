@@ -7,6 +7,7 @@ import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/serial";
 import { normalizeOrderItemSource } from "../lib/orderItems";
@@ -34,6 +35,9 @@ function parseLocalYmd(dateStr?: string) {
 
 export function PendingProduction() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [companyFilter, setCompanyFilter] = useState("All");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -64,6 +68,8 @@ export function PendingProduction() {
 
   const pendingRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
+    const from = fromDate ? parseLocalYmd(fromDate) : null;
+    const to = toDate ? parseLocalYmd(toDate) : null;
     return schedules
       .filter((schedule) => {
         const consumedQty = Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0);
@@ -96,6 +102,10 @@ export function PendingProduction() {
         };
       })
       .filter(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty, plannedWithoutFfgQty, consumedQty }) => {
+        if (companyFilter !== "All" && company?.id !== companyFilter) return false;
+        const scheduledDate = parseLocalYmd(schedule.scheduledDate);
+        if (from && scheduledDate && scheduledDate.getTime() < from.getTime()) return false;
+        if (to && scheduledDate && scheduledDate.getTime() > to.getTime()) return false;
         if (!normalizedSearch) return true;
         const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
         const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
@@ -122,7 +132,7 @@ export function PendingProduction() {
         const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
         return timeB - timeA;
       });
-  }, [companies, consumptionByScheduleId, cutoffDate, orders, resolveOrderItem, schedules, searchTerm]);
+  }, [companies, companyFilter, consumptionByScheduleId, cutoffDate, fromDate, orders, resolveOrderItem, schedules, searchTerm, toDate]);
   const {
     page,
     setPage,
@@ -191,10 +201,28 @@ export function PendingProduction() {
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
+      <div className="flex flex-wrap items-end gap-3 rounded border border-black bg-white p-4 shadow-sm">
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">
+          Company
+          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="min-w-56 rounded border-2 border-black px-3 py-2 text-sm font-medium text-black">
+            <option value="All">All Companies</option>
+            {[...companies].sort((a, b) => a.name.localeCompare(b.name)).map((company) => (
+              <option key={company.id} value={company.id}>{company.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">From Date<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">To Date<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter("All"); setFromDate(""); setToDate(""); }} className="rounded border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100">Reset</button>
+      </div>
+
+      <DataSummaryTiles totalRecords={schedules.length} filteredRecords={pendingRows.length} showingRecords={paginatedRows.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
+
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
           <thead className="bg-slate-100">
             <tr>
+              <th className="px-3 py-2 border border-black">SL No</th>
               <th className="px-3 py-2 border border-black">Order No</th>
               <th className="px-3 py-2 border border-black">Schedule Date</th>
               <th className="px-3 py-2 border border-black">Company</th>
@@ -212,17 +240,18 @@ export function PendingProduction() {
           <tbody>
             {pendingRows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-6 py-8 text-center text-black font-medium">
+                <td colSpan={13} className="px-6 py-8 text-center text-black font-medium">
                   No pending production schedules.
                 </td>
               </tr>
             ) : (
-              paginatedRows.map(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty }) => {
+              paginatedRows.map(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty }, index) => {
                 const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
     const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
                 const hasBoxType = Boolean(boxType);
                 return (
                 <tr key={schedule.id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 border border-black font-bold">{(page - 1) * pageSize + index + 1}</td>
                   <td className="px-3 py-2 border border-black">{order?.orderNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{formatDate(schedule.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>

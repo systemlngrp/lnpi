@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { Truck } from "../types";
@@ -6,18 +6,9 @@ import { Spinner } from "../components/Spinner";
 
 
 import { TableControls } from "../components/TableControls";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 export function Trucks() {
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Simple DOM-based table row filter bound to the search input
-  useEffect(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const rows = document.querySelectorAll('table tbody tr');
-    rows.forEach((row) => {
-      const txt = (row.textContent || '').toLowerCase();
-      (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
-    });
-  }, [searchTerm]);
 
   const [trucks, setTrucks, isLoading] = useData<Truck>("trucks", []);
   
@@ -72,6 +63,19 @@ export function Trucks() {
     setIsFormOpen(false);
   };
 
+  const filteredTrucks = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase();
+    return [...trucks]
+      .filter((truck) => {
+        if (!needle) return true;
+        return [truck.truckNo, truck.driverName, truck.mobileNo].filter(Boolean).join(" ").toLowerCase().includes(needle);
+      })
+      .sort((a, b) => {
+        const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
+        const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
+        return timeB - timeA || a.truckNo.localeCompare(b.truckNo);
+      });
+  }, [searchTerm, trucks]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = (id: string) => {
@@ -178,14 +182,17 @@ export function Trucks() {
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
+      <DataSummaryTiles
+        totalRecords={trucks.length}
+        filteredRecords={filteredTrucks.length}
+        showingRecords={filteredTrucks.length}
+        pageLabel="1 / 1"
+      />
+
       <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4">
-            {trucks.sort((a, b) => {
-                const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-                const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-                return timeB - timeA || a.truckNo.localeCompare(b.truckNo);
-            }).map((truck) => (
+            {filteredTrucks.map((truck, index) => (
                 <div key={truck.id} className="bg-white border-2 border-black p-4 space-y-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                     <div className="flex justify-between items-start">
                         <div className="space-y-1">
@@ -216,6 +223,7 @@ export function Trucks() {
         <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">SL No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Truck No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Driver Name</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Mobile No.</th>
@@ -223,19 +231,16 @@ export function Trucks() {
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
-            {trucks.length === 0 ? (
+            {filteredTrucks.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                <td colSpan={5} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                   {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No trucks found. Click "Add New Truck" to create one.'}
                 </td>
               </tr>
             ) : (
-              trucks.sort((a, b) => {
-                const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-                const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-                return timeB - timeA || a.truckNo.localeCompare(b.truckNo);
-              }).map((truck) => (
+              filteredTrucks.map((truck, index) => (
                 <tr key={truck.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{index + 1}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{truck.truckNo}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.driverName}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.mobileNo || "-"}</td>

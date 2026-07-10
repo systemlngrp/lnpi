@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import {
   Material,
@@ -14,6 +14,7 @@ import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { CheckCircle, Search } from "lucide-react";
 import { ClientPagination } from "../components/ClientPagination";
+import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { cn } from "../lib/utils";
 import {
@@ -38,6 +39,8 @@ export function ProductionPendingTally() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const usageMap = buildProductionMaterialUsageMap(
     materialIssues,
     materialIssueLines,
@@ -112,12 +115,17 @@ export function ProductionPendingTally() {
             className="pl-10 pr-4 py-2 w-full border-2 border-black rounded focus:outline-none focus:ring-1 focus:ring-indigo-600"
           />
         </div>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">From Date<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">To Date<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
+        <button type="button" onClick={() => { setSearchTerm(""); setFromDate(""); setToDate(""); }} className="rounded border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100">Reset</button>
       </div>
+
+      <DataSummaryTiles totalRecords={productions.length} filteredRecords={pendingList.length} showingRecords={paginatedPendingList.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4 p-2">
-            {paginatedPendingList.map((p) => (
+            {paginatedPendingList.map((p, index) => (
                 <div key={p.id} className="bg-white border-2 border-black p-4 space-y-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded relative">
                     <div className="flex justify-between items-center">
                         <div className="font-bold text-sm">Job: {p.transactionNo}</div>
@@ -143,6 +151,7 @@ export function ProductionPendingTally() {
         <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
           <thead className="bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">SL No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
@@ -154,11 +163,12 @@ export function ProductionPendingTally() {
           <tbody className="divide-y divide-black bg-white">
             {paginatedPendingList.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
+                <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
               </tr>
             ) : (
-              paginatedPendingList.map((p) => (
+              paginatedPendingList.map((p, index) => (
                 <tr key={p.id} className="hover:bg-slate-50 divide-x divide-black">
+                  <td className="px-6 py-4 text-sm font-bold text-black border border-black">{(page - 1) * pageSize + index + 1}</td>
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{p.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
