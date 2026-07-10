@@ -14,9 +14,9 @@ const BLACK: [number, number, number] = [0, 0, 0];
 const LIGHT: [number, number, number] = [245, 245, 245];
 const DARK: [number, number, number] = [20, 20, 20];
 const TABLE_MARGIN_X = PAGE_X + 1;
-const META_FONT = 12;
-const TABLE_FONT = 12;
-const TITLE_FONT = 12;
+const META_FONT = 9;
+const TABLE_FONT = 8.5;
+const TITLE_FONT = 10;
 const CONTENT_W = PAGE_W - ((TABLE_MARGIN_X - PAGE_X) * 2);
 const PACKING_COL_WIDTHS = {
   lineNo: 20,
@@ -82,7 +82,7 @@ function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: s
   const leftValueW = 44;
   const rightLabelW = 28;
   const rightValueW = totalW - labelW - leftValueW - rightLabelW;
-  const rowH = 11;
+  const rowH = 9;
   const x1 = leftX + labelW;
   const x2 = x1 + leftValueW;
   const x3 = x2 + rightLabelW;
@@ -92,7 +92,7 @@ function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: s
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(META_FONT);
-  doc.text(`SL No: ${meta.slipNo || "-"}`, PAGE_X + PAGE_W - 1, startY - 1.5, { align: "right" });
+  doc.text(`SL No: ${meta.slipNo || "-"}`, PAGE_X + PAGE_W - 1, startY - 1, { align: "right" });
 
   doc.setLineWidth(0.22);
   doc.roundedRect(leftX, startY, totalW, totalH, 4, 4);
@@ -105,18 +105,18 @@ function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: s
   doc.setFont("helvetica", "bold");
   doc.setFontSize(META_FONT);
 
-  drawCellText(doc, "Date", leftX, startY + 6.8, labelW, "left");
-  drawCellText(doc, meta.date, x1, startY + 6.8, leftValueW, "left");
-  drawCellText(doc, "Customer", x2, startY + 6.8, rightLabelW, "left");
-  drawCellText(doc, meta.company, x3, startY + 6.8, rightValueW, "left");
+  drawCellText(doc, "Date", leftX, startY + 5.8, labelW, "left");
+  drawCellText(doc, meta.date, x1, startY + 5.8, leftValueW, "left");
+  drawCellText(doc, "Customer", x2, startY + 5.8, rightLabelW, "left");
+  drawCellText(doc, meta.company, x3, startY + 5.8, rightValueW, "left");
 
-  drawCellText(doc, "ERP Code", leftX, y1 + 6.8, labelW, "left");
-  drawCellText(doc, meta.erpCode, x1, y1 + 6.8, leftValueW, "left");
-  drawCellText(doc, "Item Name", x2, y1 + 6.8, rightLabelW, "left");
-  drawCellText(doc, meta.itemName, x3, y1 + 6.8, rightValueW, "right");
+  drawCellText(doc, "ERP Code", leftX, y1 + 5.8, labelW, "left");
+  drawCellText(doc, meta.erpCode, x1, y1 + 5.8, leftValueW, "left");
+  drawCellText(doc, "Item Name", x2, y1 + 5.8, rightLabelW, "left");
+  drawCellText(doc, meta.itemName, x3, y1 + 5.8, rightValueW, "right");
 
-  drawCellText(doc, "Truck No", leftX, y2 + 6.8, labelW, "left");
-  drawCellText(doc, meta.truckNo, x1, y2 + 6.8, leftValueW, "left");
+  drawCellText(doc, "Truck No", leftX, y2 + 5.8, labelW, "left");
+  drawCellText(doc, meta.truckNo, x1, y2 + 5.8, leftValueW, "left");
 
   return startY + totalH + 3;
 }
@@ -144,13 +144,21 @@ function toPackingRows(details?: PackingDetail[]) {
   ]);
 }
 
-function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, rows: PackingDetail[] | undefined, requiredQty?: number) {
+function renderSamplePackingTable(
+  doc: jsPDF,
+  startY: number,
+  title: string,
+  rows: PackingDetail[] | undefined,
+  requiredQty?: number,
+  extraQty?: number
+) {
   const sectionTitle = requiredQty != null ? `${title} (Required Qty = ${Number(requiredQty || 0).toLocaleString()})` : title;
   const titleY = drawSectionTitle(doc, sectionTitle, startY + BOX_TOP_GAP);
   const body = toPackingRows(rows);
   const safeBody = body.length > 0 ? body : [["", "", "", "", ""]];
   const totalBundles = (rows || []).reduce((sum, row) => sum + Number(row.bundles || 0), 0);
   const totalQty = (rows || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  const totalExtra = Number(extraQty || 0);
   const header = ["Line No", "Total Bundles", "Pack Size", "Extra", "Total"];
   const columns = [
     PACKING_COL_WIDTHS.lineNo,
@@ -161,7 +169,7 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
   ];
   const leftX = TABLE_MARGIN_X;
   const topY = titleY + 1;
-  const rowH = 10;
+  const rowH = 8;
   const totalW = columns.reduce((sum, width) => sum + width, 0);
   const totalRows = 1 + safeBody.length + 1;
   const totalH = rowH * totalRows;
@@ -185,22 +193,28 @@ function renderSamplePackingTable(doc: jsPDF, startY: number, title: string, row
 
   let cellX = leftX;
   header.forEach((label, index) => {
-    drawCenteredText(doc, label, cellX, topY + 6.5, columns[index]);
+    drawCenteredText(doc, label, cellX, topY + 5.4, columns[index]);
     cellX += columns[index];
   });
 
   safeBody.forEach((row, rowIndex) => {
     let rowX = leftX;
     row.forEach((value, cellIndex) => {
-      drawCenteredText(doc, String(value || ""), rowX, topY + rowH * (rowIndex + 1) + 6.5, columns[cellIndex]);
+      drawCenteredText(doc, String(value || ""), rowX, topY + rowH * (rowIndex + 1) + 5.4, columns[cellIndex]);
       rowX += columns[cellIndex];
     });
   });
 
-  const totalsRow = ["Totals", totalBundles ? totalBundles.toLocaleString() : "", "", "", totalQty ? totalQty.toLocaleString() : ""];
+  const totalsRow = [
+    "Totals",
+    totalBundles ? totalBundles.toLocaleString() : "",
+    "",
+    totalExtra ? totalExtra.toLocaleString() : "",
+    totalQty || totalExtra ? (totalQty + totalExtra).toLocaleString() : "",
+  ];
   let totalX = leftX;
   totalsRow.forEach((value, cellIndex) => {
-    drawCenteredText(doc, value, totalX, topY + rowH * (safeBody.length + 1) + 6.5, columns[cellIndex]);
+    drawCenteredText(doc, value, totalX, topY + rowH * (safeBody.length + 1) + 5.4, columns[cellIndex]);
     totalX += columns[cellIndex];
   });
 
@@ -221,7 +235,7 @@ function drawTotalPhpPlate(doc: jsPDF, startY: number, totalQty: number) {
 }
 
 function drawSignatures(doc: jsPDF) {
-  const y = PAGE_Y + PAGE_H - 18;
+  const y = PAGE_Y + PAGE_H - 14;
   const points = [
     { x: PAGE_X + 22, label: "Security" },
     { x: PAGE_X + PAGE_W / 2, label: "Dispatch Executive" },
@@ -229,7 +243,7 @@ function drawSignatures(doc: jsPDF) {
   ];
   doc.setLineWidth(0.22);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.2);
+  doc.setFontSize(4.8);
   points.forEach((point) => {
     doc.line(point.x - 18, y, point.x + 18, y);
     doc.text(point.label, point.x, y + 4, { align: "center" });
@@ -268,6 +282,11 @@ export async function downloadLoadingSlipPdf({
   const itemName = summary.itemNames[0] || firstContext?.itemName || slip.lines[0]?.itemName || "-";
   const truckNo = String(trucks.find((row) => row.id === slip.truckId)?.truckNo || "-").trim() || "-";
   const totalQty = slip.lines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0);
+  const boxExtraQty = Number(slip.extraItemsQty || 0) || 0;
+  const phpRequiredQty = (slip.phpDetails || []).reduce((sum, detail) => sum + Number(detail.requiredQty || 0), 0);
+  const plateRequiredQty = (slip.plateDetails || []).reduce((sum, detail) => sum + Number(detail.requiredQty || 0), 0);
+  const phpExtraQty = (slip.phpDetails || []).reduce((sum, detail) => sum + Number(detail.extraItemsQty || 0), 0);
+  const plateExtraQty = (slip.plateDetails || []).reduce((sum, detail) => sum + Number(detail.extraItemsQty || 0), 0);
 
   currentY = drawTopMeta(doc, currentY + 2, {
     slipNo: String(slip.slipNo || "-"),
@@ -278,15 +297,19 @@ export async function downloadLoadingSlipPdf({
     itemName,
   });
 
-  currentY = renderSamplePackingTable(doc, currentY, "Box Loading Details", slip.packingDetails, totalQty);
+  currentY = renderSamplePackingTable(doc, currentY, "Box Loading Details", slip.packingDetails, totalQty, boxExtraQty);
 
   const phpPacking = slip.phpDetails?.flatMap((detail) => detail.packingDetails || []) || [];
-  currentY = renderSamplePackingTable(doc, currentY, "PHP Loading Details", phpPacking, undefined);
+  currentY = renderSamplePackingTable(doc, currentY, "PHP Loading Details", phpPacking, phpRequiredQty || undefined, phpExtraQty);
 
   const platePacking = slip.plateDetails?.flatMap((detail) => detail.packingDetails || []) || [];
-  currentY = renderSamplePackingTable(doc, currentY, "Plate Loading Details", platePacking, undefined);
+  currentY = renderSamplePackingTable(doc, currentY, "Plate Loading Details", platePacking, plateRequiredQty || undefined, plateExtraQty);
 
-  const totalPhpPlate = phpPacking.reduce((sum, row) => sum + Number(row.quantity || 0), 0) + platePacking.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  const totalPhpPlate =
+    phpPacking.reduce((sum, row) => sum + Number(row.quantity || 0), 0) +
+    platePacking.reduce((sum, row) => sum + Number(row.quantity || 0), 0) +
+    phpExtraQty +
+    plateExtraQty;
   currentY = drawTotalPhpPlate(doc, currentY, totalPhpPlate);
 
   drawSignatures(doc);

@@ -12,6 +12,7 @@ and posts them into the **currently open Tally company** on `http://localhost:90
 - `D:\lnpi\python\tally_mrr_posting.py`
 - `D:\lnpi\python\tally_manufacturing_journal_posting.py`
 - `D:\lnpi\python\tally_consumption_journal_posting.py`
+- `D:\lnpi\python\tally_php_plate_consumption_journal_posting.py`
 - `D:\lnpi\python\requirements.txt`
 
 ## What the script does
@@ -44,6 +45,17 @@ and posts them into the **currently open Tally company** on `http://localhost:90
 3. Uses `issueNo` as the Tally reference number
 4. Posts one `Consumption Journal` per non-job issue on port `9004`
 5. Updates material-issue-level Tally posting control columns after attempt/success/failure
+
+## PHP / Plate Consumption Journal script
+
+`tally_php_plate_consumption_journal_posting.py`:
+
+1. Reads linked rows from `php_loading_slips` and `plate_loading_slips`
+2. Uses `phpConsumptionTransactionNo` / `plateConsumptionTransactionNo` as voucher numbers
+3. Uses child slip no as reference number
+4. Posts `PHP Consumption Journal` and `Plate Consumption Journal` on port `9004`
+5. Uses FG loading slip no and company name in narration
+6. Updates loading-slip-level Tally posting control columns after attempt/success/failure
 
 ## MRR types from your system
 
