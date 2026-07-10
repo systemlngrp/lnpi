@@ -95,6 +95,7 @@ import { PendingLoading } from "./pages/PendingLoading";
 import { LoadingMaster } from "./pages/LoadingMaster";
 import { PhpLoadingMaster } from "./pages/PhpLoadingMaster";
 import { PlateLoadingMaster } from "./pages/PlateLoadingMaster";
+import { PendingPhpLoadingTallyPosting, PendingPlateLoadingTallyPosting } from "./pages/PendingLinkedLoadingTally";
 import { PendingInvoicing } from "./pages/PendingInvoicing";
 import { BillingPendingTally } from "./pages/BillingPendingTally";
 import { InvoicesMaster } from "./pages/InvoicesMaster";
@@ -267,7 +268,9 @@ export default function App() {
           <Route path="loading/pending" element={<PendingLoading />} />
           <Route path="loading/master" element={<LoadingMaster />} />
           <Route path="loading/php/master" element={<PhpLoadingMaster />} />
+          <Route path="loading/php/pending-tally" element={<PendingPhpLoadingTallyPosting />} />
           <Route path="loading/plate/master" element={<PlateLoadingMaster />} />
+          <Route path="loading/plate/pending-tally" element={<PendingPlateLoadingTallyPosting />} />
 
           {/* Billing */}
           <Route path="billing/pending" element={<PendingInvoicing />} />

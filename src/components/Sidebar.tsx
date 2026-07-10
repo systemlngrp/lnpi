@@ -256,6 +256,7 @@ export const NAVIGATION: NavGroup[] = [
     section: "PHP Loading",
     color: "bg-indigo-700",
     items: [
+      { name: "Pending PHP Tally", href: "/loading/php/pending-tally", icon: FileText, countKey: "/loading/php/pending-tally" },
       { name: "PHP Loading Slip Master", href: "/loading/php/master", icon: FileText },
     ],
   },
@@ -263,6 +264,7 @@ export const NAVIGATION: NavGroup[] = [
     section: "Plate Loading",
     color: "bg-violet-700",
     items: [
+      { name: "Pending Plate Tally", href: "/loading/plate/pending-tally", icon: FileText, countKey: "/loading/plate/pending-tally" },
       { name: "Plate Loading Slip Master", href: "/loading/plate/master", icon: FileText },
     ],
   },
@@ -344,6 +346,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [phpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
+  const [plateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
   const [invoices] = useData<Invoice>("invoices", []);
 
   const normalizedIndents = indents.map((indent) =>
@@ -403,6 +407,22 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       isWithoutJobIssue(issue.issueType) &&
       String(issue.consumptionTransactionNo || "").trim() !== "" &&
       String(issue.tallyTimestamp || "").trim() === ""
+  ).length;
+
+  const pendingPhpLoadingTallyCount = phpLoadingSlips.filter(
+    (slip) =>
+      String(slip.fgLoadingId || "").trim() !== "" &&
+      String(slip.phpConsumptionTransactionNo || "").trim() !== "" &&
+      String(slip.tallyTimestamp || "").trim() === "" &&
+      String(slip.status || "Active").trim().toLowerCase() !== "cancelled"
+  ).length;
+
+  const pendingPlateLoadingTallyCount = plateLoadingSlips.filter(
+    (slip) =>
+      String(slip.fgLoadingId || "").trim() !== "" &&
+      String(slip.plateConsumptionTransactionNo || "").trim() !== "" &&
+      String(slip.tallyTimestamp || "").trim() === "" &&
+      String(slip.status || "Active").trim().toLowerCase() !== "cancelled"
   ).length;
 
   const [pendingJobClosureCount, setPendingJobClosureCount] = useState<number>(0);
@@ -500,6 +520,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     "/material-receipt/pending-debit-note": 0,
     "/material-movement/pending-non-job-issue": pendingNonJobIssueCount,
     "/material-movement/pending-consumption-tally": pendingConsumptionTallyCount,
+    "/loading/php/pending-tally": pendingPhpLoadingTallyCount,
+    "/loading/plate/pending-tally": pendingPlateLoadingTallyCount,
     "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
     "/orders/pending-ph": orders.filter(o => isPendingPH(o.status)).length,
     "/orders/pending-scheduling": orders.filter(o => o.status === "Pending Scheduling").length,
