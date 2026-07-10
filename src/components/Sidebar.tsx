@@ -665,7 +665,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         className={cn(
           isActive
             ? "bg-white text-black font-bold shadow-inner"
-            : "text-white hover:bg-black/20 hover:text-white font-medium",
+            : nested
+              ? "bg-white/5 text-white hover:bg-black/20 hover:text-white font-medium"
+              : "text-white hover:bg-black/20 hover:text-white font-medium",
           "group flex items-center justify-between rounded-sm py-1.5 text-[11px] transition-all whitespace-nowrap",
           isCollapsed ? "px-2" : nested ? "pl-4 pr-2" : "px-2"
         )}
