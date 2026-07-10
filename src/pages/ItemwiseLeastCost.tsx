@@ -35,9 +35,6 @@ export function ItemwiseLeastCost() {
   const npdItems = useNpdItems();
   const itemsLoading = false;
   const [searchTerm, setSearchTerm] = useState("");
-  const [gsmFilter, setGsmFilter] = useState("All");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
 
   const isLoading = prodsLoading || itemsLoading;
 
@@ -82,22 +79,13 @@ export function ItemwiseLeastCost() {
 
     return Array.from(erpMap.values()).sort((a, b) => a.erp.localeCompare(b.erp));
   }, [productions, npdItems]);
-
-  const gsmOptions = useMemo(() => Array.from(new Set(leastCostData.map((row) => row.gsm).filter((gsm) => Number.isFinite(gsm)))).sort((a, b) => a - b), [leastCostData]);
-
   const filteredData = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
-    const from = fromDate ? new Date(fromDate).getTime() : null;
-    const to = toDate ? new Date(toDate).getTime() : null;
     return leastCostData.filter((row) => {
-      if (gsmFilter !== "All" && String(row.gsm) !== gsmFilter) return false;
-      const rowTime = new Date(row.date || 0).getTime();
-      if (from && rowTime < from) return false;
-      if (to && rowTime > to) return false;
       if (!needle) return true;
       return row.erp.toLowerCase().includes(needle) || row.itemName.toLowerCase().includes(needle) || row.company.toLowerCase().includes(needle);
     });
-  }, [fromDate, gsmFilter, leastCostData, searchTerm, toDate]);
+  }, [leastCostData, searchTerm]);
 
   const {
     page,
@@ -136,10 +124,6 @@ export function ItemwiseLeastCost() {
           className="flex-1 outline-none text-sm font-medium"
         />
         </div>
-        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">GSM<select value={gsmFilter} onChange={(e) => setGsmFilter(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm font-medium text-black"><option value="All">All GSM</option>{gsmOptions.map((gsm) => <option key={gsm} value={String(gsm)}>{gsm}</option>)}</select></label>
-        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">From Date<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
-        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">To Date<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
-        <button type="button" onClick={() => { setSearchTerm(""); setGsmFilter("All"); setFromDate(""); setToDate(""); }} className="rounded border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100">Reset</button>
       </div>
 
       <DataSummaryTiles totalRecords={leastCostData.length} filteredRecords={filteredData.length} showingRecords={paginatedData.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />

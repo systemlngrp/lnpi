@@ -35,9 +35,6 @@ function parseLocalYmd(dateStr?: string) {
 
 export function PendingProduction() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [companyFilter, setCompanyFilter] = useState("All");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
 
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -68,8 +65,6 @@ export function PendingProduction() {
 
   const pendingRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    const from = fromDate ? parseLocalYmd(fromDate) : null;
-    const to = toDate ? parseLocalYmd(toDate) : null;
     return schedules
       .filter((schedule) => {
         const consumedQty = Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0);
@@ -101,12 +96,7 @@ export function PendingProduction() {
           pendingQty: getPendingProductionQty(schedule, consumedQty),
         };
       })
-      .filter(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty, plannedWithoutFfgQty, consumedQty }) => {
-        if (companyFilter !== "All" && company?.id !== companyFilter) return false;
-        const scheduledDate = parseLocalYmd(schedule.scheduledDate);
-        if (from && scheduledDate && scheduledDate.getTime() < from.getTime()) return false;
-        if (to && scheduledDate && scheduledDate.getTime() > to.getTime()) return false;
-        if (!normalizedSearch) return true;
+      .filter(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty, plannedWithoutFfgQty, consumedQty }) => {        if (!normalizedSearch) return true;
         const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
         const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
         const haystack = [
@@ -132,7 +122,7 @@ export function PendingProduction() {
         const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
         return timeB - timeA;
       });
-  }, [companies, companyFilter, consumptionByScheduleId, cutoffDate, fromDate, orders, resolveOrderItem, schedules, searchTerm, toDate]);
+  }, [companies, consumptionByScheduleId, cutoffDate, orders, resolveOrderItem, schedules, searchTerm]);
   const {
     page,
     setPage,
@@ -200,21 +190,6 @@ export function PendingProduction() {
       </div>
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-
-      <div className="flex flex-wrap items-end gap-3 rounded border border-black bg-white p-4 shadow-sm">
-        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">
-          Company
-          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="min-w-56 rounded border-2 border-black px-3 py-2 text-sm font-medium text-black">
-            <option value="All">All Companies</option>
-            {[...companies].sort((a, b) => a.name.localeCompare(b.name)).map((company) => (
-              <option key={company.id} value={company.id}>{company.name}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">From Date<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
-        <label className="flex flex-col gap-1 text-xs font-bold uppercase text-slate-600">To Date<input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border-2 border-black px-3 py-2 text-sm" /></label>
-        <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter("All"); setFromDate(""); setToDate(""); }} className="rounded border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100">Reset</button>
-      </div>
 
       <DataSummaryTiles totalRecords={schedules.length} filteredRecords={pendingRows.length} showingRecords={paginatedRows.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
 

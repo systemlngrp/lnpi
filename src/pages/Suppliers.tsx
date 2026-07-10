@@ -45,7 +45,6 @@ export function Suppliers() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeFilter, setActiveFilter] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,9 +77,8 @@ export function Suppliers() {
             .toLowerCase();
           return haystack.includes(searchTerm.toLowerCase());
         })
-        .filter((supplier) => activeFilter === "All" || (supplier.active || "Yes") === activeFilter)
         .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })),
-    [activeFilter, searchTerm, suppliers]
+    [searchTerm, suppliers]
   );
   const {
     page,
@@ -466,34 +464,13 @@ export function Suppliers() {
             </div>
           </div>
 
-          <div className="bg-white p-4 border border-black rounded shadow-sm">
-            <div className="flex flex-wrap items-center gap-3">
-              <input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search suppliers..."
-                className="w-full max-w-sm rounded-xl border-2 border-black px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-              />
-              <select
-                value={activeFilter}
-                onChange={(e) => setActiveFilter(e.target.value)}
-                className="rounded-xl border-2 border-black px-4 py-2 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600"
-              >
-                <option value="All">All Status</option>
-                <option value="Yes">Active</option>
-                <option value="No">Inactive</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm("");
-                  setActiveFilter("All");
-                }}
-                className="rounded-xl border-2 border-black bg-white px-4 py-2 text-sm font-bold hover:bg-slate-100"
-              >
-                Reset
-              </button>
-            </div>
+<div className="bg-white p-4 border border-black rounded shadow-sm">
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search suppliers..."
+              className="w-full max-w-sm rounded-xl border-2 border-black px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+            />
           </div>
 
           <DataSummaryTiles
