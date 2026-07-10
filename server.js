@@ -1254,14 +1254,6 @@ async function ensureBestEffortForeignKeys(db, database) {
       indexName: "idx_invoice_line_items_loadingSlipId"
     },
     {
-      table: "invoice_line_items",
-      column: "itemId",
-      refTable: "npd",
-      refColumn: "id",
-      constraintName: "fk_invoice_line_items_itemId_npd",
-      indexName: "idx_invoice_line_items_itemId"
-    },
-    {
       table: "gate_passes",
       column: "invoiceId",
       refTable: "invoices",
@@ -2249,6 +2241,91 @@ function escapeLikePattern(value) {
 function buildInvoiceNumber(prefix, fy, separator, nextNumber, paddingLength) {
   return `${prefix}${separator}${fy}${separator}${String(nextNumber).padStart(paddingLength, "0")}`;
 }
+function isWithoutJobIssueType(issueType) {
+  const normalized = String(issueType || "").trim().toLowerCase();
+  return normalized === "without job" || normalized === "withoutjob" || normalized === "without_job" || normalized === "general";
+}
+async function generateSimpleTransactionNumber(db, tableName, columnName, prefix, dateStr) {
+  const fy = getShortFinancialYear(dateStr);
+  if (!fy) throw new Error(`Could not generate ${columnName} because date is invalid.`);
+  const likePattern = `${prefix}/${fy}/%`;
+  const [rows] = await db.query(
+    `SELECT \`${columnName}\` AS serialValue FROM \`${tableName}\` WHERE \`${columnName}\` LIKE ? ORDER BY CAST(SUBSTRING_INDEX(\`${columnName}\`,'/',-1) AS UNSIGNED) DESC LIMIT 1`,
+    [likePattern]
+  );
+  let lastNum = 0;
+  const latestValue = String((rows[0] || {}).serialValue || "").trim();
+  if (latestValue) {
+    const suffix = latestValue.split("/").pop() || "0";
+    lastNum = Number.parseInt(suffix, 10) || 0;
+  }
+  return `${prefix}/${fy}/${String(lastNum + 1).padStart(5, "0")}`;
+}
+async function generateLoadingSlipNo(db, tableName, dateStr) {
+  const dateValue = String(dateStr || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).trim();
+  const d = new Date(dateValue);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error("Could not generate slipNo because date is invalid.");
+  }
+  let fyStart = d.getFullYear();
+  const month = d.getMonth() + 1;
+  if (month < 4) fyStart -= 1;
+  const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
+  const prefixByTable = {
+    loading_slips: "LS",
+    php_loading_slips: "PHPLS",
+    plate_loading_slips: "PLS"
+  };
+  const prefix = prefixByTable[tableName];
+  const likePattern = `${prefix}/${fyLabel}/%`;
+  const [rows] = await db.query(
+    `SELECT \`slipNo\` AS serialValue FROM \`${tableName}\` WHERE \`slipNo\` LIKE ? ORDER BY CAST(SUBSTRING_INDEX(\`slipNo\`,'/',-1) AS UNSIGNED) DESC LIMIT 1`,
+    [likePattern]
+  );
+  let lastNum = 0;
+  const latestValue = String((rows[0] || {}).serialValue || "").trim();
+  if (latestValue) {
+    const suffix = latestValue.split("/").pop() || "0";
+    lastNum = Number.parseInt(suffix, 10) || 0;
+  }
+  return `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
+}
+async function backfillMissingConsumptionTransactionNos(db) {
+  const [rows] = await db.query(
+    `
+      SELECT \`id\`, \`date\`, \`issueNo\`, \`issueType\`, \`tallyPostingStatus\`
+      FROM \`material_issues\`
+      WHERE COALESCE(TRIM(\`consumptionTransactionNo\`), '') = ''
+        AND (
+              LOWER(TRIM(COALESCE(\`issueType\`, ''))) = 'without job'
+           OR LOWER(TRIM(COALESCE(\`issueType\`, ''))) = 'withoutjob'
+           OR LOWER(TRIM(COALESCE(\`issueType\`, ''))) = 'without_job'
+           OR LOWER(TRIM(COALESCE(\`issueType\`, ''))) = 'general'
+        )
+      ORDER BY \`date\` ASC, \`issueNo\` ASC, \`id\` ASC
+    `
+  );
+  for (const row of rows) {
+    const issueId = String(row?.id || "").trim();
+    if (!issueId) continue;
+    const issueDate = String(row?.date || "").trim() || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const conNo = await generateSimpleTransactionNumber(db, "material_issues", "consumptionTransactionNo", "CON", issueDate);
+    const hasStatus = String(row?.tallyPostingStatus || "").trim() !== "";
+    await db.query(
+      `
+        UPDATE \`material_issues\`
+        SET \`consumptionTransactionNo\` = ?,
+            \`tallyPostingStatus\` = CASE
+              WHEN ? THEN \`tallyPostingStatus\`
+              ELSE 'Pending'
+            END
+        WHERE \`id\` = ?
+      `,
+      [conNo, hasStatus ? 1 : 0, issueId]
+    );
+  }
+  return rows.length;
+}
 async function generateDynamicInvoiceNo(db, dateStr) {
   const fy = getShortFinancialYear(dateStr);
   if (!fy) throw new Error("Invoice date is invalid for invoice series generation.");
@@ -2479,6 +2556,11 @@ async function initDb(retries = 5) {
           \`requiredDate\` VARCHAR(50) NOT NULL,
           \`totalQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`totalAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`taxableAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`cgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`sgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`igst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`grandTotal\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`remarks\` TEXT,
           \`status\` VARCHAR(50) NOT NULL DEFAULT 'Pending Approval',
           \`approvedBy\` VARCHAR(255),
@@ -2513,6 +2595,11 @@ async function initDb(retries = 5) {
           \`qty\` DECIMAL(15,2) NOT NULL,
           \`rate\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`amount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`gstRate\` DECIMAL(5,2) NOT NULL DEFAULT 18.00,
+          \`cgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`sgst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`igst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`lineTotal\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`targetDeliveryDate\` VARCHAR(50),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
@@ -2567,11 +2654,23 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`material_issues\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`issueNo\` VARCHAR(100) NOT NULL,
+          \`consumptionTransactionNo\` VARCHAR(100),
           \`date\` VARCHAR(50) NOT NULL,
           \`issueType\` VARCHAR(50) NOT NULL,
           \`productionId\` VARCHAR(36),
           \`jobNo\` VARCHAR(100),
           \`remarks\` TEXT,
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyPostingStatus\` VARCHAR(50),
+          \`tallyVoucherNo\` VARCHAR(100),
+          \`tallyVoucherDate\` VARCHAR(50),
+          \`tallyVoucherType\` VARCHAR(100),
+          \`tallyVoucherId\` VARCHAR(255),
+          \`tallyPostedBy\` VARCHAR(255),
+          \`tallyPostingRemark\` TEXT,
+          \`tallyPostingError\` TEXT,
+          \`tallyLastAttemptAt\` VARCHAR(255),
+          \`tallyPostingAttemptCount\` INT DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -2830,6 +2929,9 @@ async function initDb(retries = 5) {
           \`totalInvoiceValueAfterGst\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`insurance\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`otherCharges\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`expenseCGST\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`expenseSGST\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          \`expenseIGST\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`roundOff\` DECIMAL(15, 2) NOT NULL DEFAULT 0,
           \`totalAmount\` DECIMAL(15, 2) NOT NULL,
           \`lines\` JSON NOT NULL,
@@ -2955,6 +3057,15 @@ async function initDb(retries = 5) {
 	          \`phTimestamp\` VARCHAR(255),
 	          \`phEmailId\` VARCHAR(255),
 	          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyPostingStatus\` VARCHAR(50),
+          \`tallyVoucherNo\` VARCHAR(255),
+          \`tallyVoucherDate\` VARCHAR(50),
+          \`tallyVoucherId\` VARCHAR(255),
+          \`tallyPostedBy\` VARCHAR(255),
+          \`tallyPostingRemark\` TEXT,
+          \`tallyPostingError\` TEXT,
+          \`tallyLastAttemptAt\` VARCHAR(255),
+          \`tallyPostingAttemptCount\` INT NOT NULL DEFAULT 0,
 	          \`closeBy\` VARCHAR(255),
 	          \`closeDate\` VARCHAR(50),
 	          \`cancelTimestamp\` VARCHAR(255),
@@ -3097,14 +3208,26 @@ async function initDb(retries = 5) {
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36),
           \`fgLoadingId\` VARCHAR(36),
+          \`phpConsumptionTransactionNo\` VARCHAR(100),
           \`lines\` JSON NOT NULL,
           \`packingDetails\` JSON,
           \`extraItemsQty\` DECIMAL(15,2),
           \`invoiceId\` VARCHAR(36),
+          \`invoiceNo\` VARCHAR(100),
           \`status\` VARCHAR(20) DEFAULT 'Active',
           \`cancelReason\` TEXT,
           \`cancelledAt\` VARCHAR(255),
           \`cancelledBy\` VARCHAR(255),
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyPostingStatus\` VARCHAR(50),
+          \`tallyPostingError\` TEXT,
+          \`tallyPostingAttemptCount\` INT DEFAULT 0,
+          \`tallyLastAttemptAt\` VARCHAR(255),
+          \`tallyVoucherNo\` VARCHAR(100),
+          \`tallyVoucherDate\` VARCHAR(50),
+          \`tallyVoucherType\` VARCHAR(100),
+          \`tallyPostedBy\` VARCHAR(255),
+          \`tallyPostingRemark\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -3116,14 +3239,26 @@ async function initDb(retries = 5) {
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36),
           \`fgLoadingId\` VARCHAR(36),
+          \`plateConsumptionTransactionNo\` VARCHAR(100),
           \`lines\` JSON NOT NULL,
           \`packingDetails\` JSON,
           \`extraItemsQty\` DECIMAL(15,2),
           \`invoiceId\` VARCHAR(36),
+          \`invoiceNo\` VARCHAR(100),
           \`status\` VARCHAR(20) DEFAULT 'Active',
           \`cancelReason\` TEXT,
           \`cancelledAt\` VARCHAR(255),
           \`cancelledBy\` VARCHAR(255),
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyPostingStatus\` VARCHAR(50),
+          \`tallyPostingError\` TEXT,
+          \`tallyPostingAttemptCount\` INT DEFAULT 0,
+          \`tallyLastAttemptAt\` VARCHAR(255),
+          \`tallyVoucherNo\` VARCHAR(100),
+          \`tallyVoucherDate\` VARCHAR(50),
+          \`tallyVoucherType\` VARCHAR(100),
+          \`tallyPostedBy\` VARCHAR(255),
+          \`tallyPostingRemark\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -3407,6 +3542,7 @@ async function initDb(retries = 5) {
           \`cuttingSizeAsPerCalculation\` TEXT,
           \`gsmAsPerCalculation\` TEXT,
           \`productionFormVisibleColumns\` LONGTEXT,
+          \`poMandatoryMrrTypes\` LONGTEXT,
           \`realizationPerKgTargets\` LONGTEXT,
           \`invoiceNumberSeries\` LONGTEXT,
           \`mandatoryMachinesByType\` LONGTEXT,
@@ -3508,6 +3644,12 @@ async function initDb(retries = 5) {
         { table: "purchase_orders", column: "requiredDate", type: "VARCHAR(50) NOT NULL" },
         { table: "purchase_orders", column: "totalQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_orders", column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "taxableAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_orders", column: "grandTotal", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_orders", column: "remarks", type: "TEXT" },
         { table: "purchase_orders", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending Approval'" },
         { table: "purchase_orders", column: "approvedBy", type: "VARCHAR(255)" },
@@ -3525,6 +3667,11 @@ async function initDb(retries = 5) {
         { table: "purchase_order_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "purchase_order_lines", column: "rate", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "amount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "gstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 18.00" },
+        { table: "purchase_order_lines", column: "cgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "sgst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "lineTotal", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "targetDeliveryDate", type: "VARCHAR(50)" },
         { table: "purchase_order_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "purchase_order_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
@@ -3559,11 +3706,23 @@ async function initDb(retries = 5) {
         { table: "material_in_packing_slips", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_in_packing_slips", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_issues", column: "issueNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "material_issues", column: "consumptionTransactionNo", type: "VARCHAR(100)" },
         { table: "material_issues", column: "date", type: "VARCHAR(50) NOT NULL" },
         { table: "material_issues", column: "issueType", type: "VARCHAR(50) NOT NULL" },
         { table: "material_issues", column: "productionId", type: "VARCHAR(36)" },
         { table: "material_issues", column: "jobNo", type: "VARCHAR(100)" },
         { table: "material_issues", column: "remarks", type: "TEXT" },
+        { table: "material_issues", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "tallyPostingStatus", type: "VARCHAR(50)" },
+        { table: "material_issues", column: "tallyVoucherNo", type: "VARCHAR(100)" },
+        { table: "material_issues", column: "tallyVoucherDate", type: "VARCHAR(50)" },
+        { table: "material_issues", column: "tallyVoucherType", type: "VARCHAR(100)" },
+        { table: "material_issues", column: "tallyVoucherId", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "tallyPostedBy", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "tallyPostingRemark", type: "TEXT" },
+        { table: "material_issues", column: "tallyPostingError", type: "TEXT" },
+        { table: "material_issues", column: "tallyLastAttemptAt", type: "VARCHAR(255)" },
+        { table: "material_issues", column: "tallyPostingAttemptCount", type: "INT DEFAULT 0" },
         { table: "material_issues", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_issues", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_issue_lines", column: "materialIssueId", type: "VARCHAR(36) NOT NULL" },
@@ -3651,6 +3810,9 @@ async function initDb(retries = 5) {
         { table: "material_in", column: "totalInvoiceValueAfterGst", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "insurance", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "otherCharges", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "expenseCGST", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "expenseSGST", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
+        { table: "material_in", column: "expenseIGST", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "roundOff", type: "DECIMAL(15, 2) NOT NULL DEFAULT 0" },
         { table: "material_in", column: "totalAmount", type: "DECIMAL(15, 2) NOT NULL" },
         { table: "material_in", column: "phTimestamp", type: "VARCHAR(255)" },
@@ -3669,6 +3831,15 @@ async function initDb(retries = 5) {
         { table: "productions", column: "remarks", type: "TEXT" },
         { table: "productions", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
         { table: "productions", column: "tallyTimestamp", type: "VARCHAR(255)" },
+        { table: "productions", column: "tallyPostingStatus", type: "VARCHAR(50)" },
+        { table: "productions", column: "tallyVoucherNo", type: "VARCHAR(255)" },
+        { table: "productions", column: "tallyVoucherDate", type: "VARCHAR(50)" },
+        { table: "productions", column: "tallyVoucherId", type: "VARCHAR(255)" },
+        { table: "productions", column: "tallyPostedBy", type: "VARCHAR(255)" },
+        { table: "productions", column: "tallyPostingRemark", type: "TEXT" },
+        { table: "productions", column: "tallyPostingError", type: "TEXT" },
+        { table: "productions", column: "tallyLastAttemptAt", type: "VARCHAR(255)" },
+        { table: "productions", column: "tallyPostingAttemptCount", type: "INT NOT NULL DEFAULT 0" },
         { table: "productions", column: "closeBy", type: "VARCHAR(255)" },
         { table: "productions", column: "closeDate", type: "VARCHAR(50)" },
         { table: "productions", column: "cancelTimestamp", type: "VARCHAR(255)" },
@@ -4086,6 +4257,7 @@ async function initDb(retries = 5) {
         { table: "settings", column: "invoiceNumberSeries", type: "LONGTEXT" },
         { table: "settings", column: "mandatoryMachinesByType", type: "LONGTEXT" },
         { table: "settings", column: "designations", type: "LONGTEXT" },
+        { table: "settings", column: "poMandatoryMrrTypes", type: "LONGTEXT" },
         { table: "settings", column: "organizationName", type: "VARCHAR(255)" },
         { table: "settings", column: "organizationAddress", type: "TEXT" },
         { table: "settings", column: "organizationGstDetails", type: "TEXT" },
@@ -4109,7 +4281,10 @@ async function initDb(retries = 5) {
         { table: "material_in", column: "md_approval_remark", type: "TEXT" },
         { table: "material_in", column: "tallyTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "insurance", type: "DECIMAL(15,2) DEFAULT 0" },
-        { table: "material_in", column: "otherCharges", type: "DECIMAL(15,2) DEFAULT 0" }
+        { table: "material_in", column: "otherCharges", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_in", column: "expenseCGST", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_in", column: "expenseSGST", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_in", column: "expenseIGST", type: "DECIMAL(15,2) DEFAULT 0" }
       ];
       for (const m of migrations) {
         try {
@@ -4147,6 +4322,14 @@ async function initDb(retries = 5) {
         await ensureGatePassNullableColumns(db, database);
       } catch (err) {
         console.warn("[DB] Could not normalize gate_passes nullable invoice fields:", err.message);
+      }
+      try {
+        const backfilledCount = await backfillMissingConsumptionTransactionNos(db);
+        if (backfilledCount > 0) {
+          console.log(`[DB] Backfilled consumptionTransactionNo for ${backfilledCount} non-job material issue row(s).`);
+        }
+      } catch (err) {
+        console.warn("[DB] Could not backfill material_issues.consumptionTransactionNo:", err.message);
       }
       try {
         const [oldLeastSheetWeight] = await db.query(
@@ -4192,6 +4375,17 @@ async function initDb(retries = 5) {
         }
       } catch (err) {
         console.warn("[DB] Could not drop legacy foreign key:", err.message);
+      }
+      try {
+        const [rows] = await db.query(
+          "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_NAME = 'invoice_line_items' AND CONSTRAINT_NAME = 'fk_invoice_line_items_itemId_npd' AND REFERENCED_TABLE_NAME = 'npd'"
+        );
+        if (Array.isArray(rows) && rows.length > 0) {
+          console.log("[DB] Dropping incompatible foreign key fk_invoice_line_items_itemId_npd...");
+          await db.query("ALTER TABLE `invoice_line_items` DROP FOREIGN KEY `fk_invoice_line_items_itemId_npd` ");
+        }
+      } catch (err) {
+        console.warn("[DB] Could not drop incompatible invoice_line_items itemId foreign key:", err.message);
       }
       try {
         await ensureNpdSchemaColumns(db, database);
@@ -4268,8 +4462,11 @@ const createHandlers = (tableName) => {
             SELECT
               ili.*,
               COALESCE(
-                NULLIF(TRIM(i.name), ''),
+                NULLIF(TRIM(CASE WHEN COALESCE(NULLIF(TRIM(ili.itemSource), ''), 'FG') = 'MATERIAL' THEN m.name END), ''),
+                NULLIF(TRIM(CASE WHEN COALESCE(NULLIF(TRIM(ili.itemSource), ''), 'FG') = 'PHP' THEN pm.itemName END), ''),
+                NULLIF(TRIM(CASE WHEN COALESCE(NULLIF(TRIM(ili.itemSource), ''), 'FG') = 'PLATE' THEN plm.itemName END), ''),
                 NULLIF(TRIM(n.itemName), ''),
+                NULLIF(TRIM(i.name), ''),
                 'UNKNOWN'
               ) AS resolvedItemName
             FROM \`invoice_line_items\` ili
@@ -4277,6 +4474,12 @@ const createHandlers = (tableName) => {
               ON i.id = ili.itemId
             LEFT JOIN \`npd\` n
               ON n.id = COALESCE(NULLIF(ili.npdId, ''), NULLIF(ili.itemId, ''))
+            LEFT JOIN \`php_item_master\` pm
+              ON pm.id = ili.itemId
+            LEFT JOIN \`plate_item_master\` plm
+              ON plm.id = ili.itemId
+            LEFT JOIN \`materials\` m
+              ON m.id = ili.itemId
           `);
         } else if (tableName === "npd") {
           const page = Math.max(1, Number(req.query.page || 1));
@@ -4599,24 +4802,11 @@ const createHandlers = (tableName) => {
         if (["loading_slips", "php_loading_slips", "plate_loading_slips"].includes(tableName)) {
           try {
             if (!data.slipNo) {
-              const dateStr = data.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-              const d = new Date(dateStr);
-              let fyStart = d.getFullYear();
-              const month = d.getMonth() + 1;
-              if (month < 4) fyStart = fyStart - 1;
-              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
-              const likePattern = `LS/${fyLabel}/%`;
-              const [rows] = await db.query(`SELECT slipNo FROM \`loading_slips\` WHERE slipNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(slipNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`, [likePattern]);
-              let lastNum = 0;
-              if (rows.length > 0) {
-                const lastSlipNo = rows[0].slipNo;
-                const parts = lastSlipNo.split("/");
-                const suffix = parts[parts.length - 1];
-                lastNum = parseInt(suffix || "0", 10) || 0;
-              }
-              const nextNum = lastNum + 1;
-              const padded = String(nextNum).padStart(5, "0");
-              data.slipNo = `LS/${fyLabel}/${padded}`;
+              data.slipNo = await generateLoadingSlipNo(
+                db,
+                tableName,
+                data.date
+              );
             }
           } catch (err) {
             console.warn("[DB] Could not auto-generate slipNo:", err.message);
@@ -4685,6 +4875,34 @@ const createHandlers = (tableName) => {
             console.warn("[DB] Could not auto-generate gateEntryNo:", err.message);
           }
         }
+        if (tableName === "material_issues") {
+          try {
+            const issueDate = String(data.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
+            if (!data.issueNo) {
+              data.issueNo = await generateSimpleTransactionNumber(db, "material_issues", "issueNo", "MIS", issueDate);
+            }
+            if (isWithoutJobIssueType(data.issueType)) {
+              if (!data.consumptionTransactionNo) {
+                data.consumptionTransactionNo = await generateSimpleTransactionNumber(
+                  db,
+                  "material_issues",
+                  "consumptionTransactionNo",
+                  "CON",
+                  issueDate
+                );
+              }
+              if (!data.tallyPostingStatus) {
+                data.tallyPostingStatus = "Pending";
+              }
+            } else if (!data.consumptionTransactionNo) {
+              data.consumptionTransactionNo = null;
+            }
+          } catch (err) {
+            const message = err.message || "Could not auto-generate material issue serial.";
+            console.warn("[DB] Could not auto-generate material issue serials:", message);
+            return res.status(400).json({ error: message });
+          }
+        }
         console.log(`[DB] Upserting to ${tableName}`, {
           id: data.id,
           status: data.status,
@@ -4720,6 +4938,18 @@ const createHandlers = (tableName) => {
             { column: "updatedBy", type: "VARCHAR(255)" },
             { column: "updateTimestamp", type: "VARCHAR(255)" }
           ];
+          const sharedTallyColumns = [
+            { column: "tallyTimestamp", type: "VARCHAR(255)" },
+            { column: "tallyPostingStatus", type: "VARCHAR(50)" },
+            { column: "tallyPostingError", type: "TEXT" },
+            { column: "tallyPostingAttemptCount", type: "INT DEFAULT 0" },
+            { column: "tallyLastAttemptAt", type: "VARCHAR(255)" },
+            { column: "tallyVoucherNo", type: "VARCHAR(100)" },
+            { column: "tallyVoucherDate", type: "VARCHAR(50)" },
+            { column: "tallyVoucherType", type: "VARCHAR(100)" },
+            { column: "tallyPostedBy", type: "VARCHAR(255)" },
+            { column: "tallyPostingRemark", type: "TEXT" }
+          ];
           for (const loadingSlipColumn of loadingSlipColumns) {
             try {
               await ensureColumnExists(db, schemaName, tableName, loadingSlipColumn.column, loadingSlipColumn.type);
@@ -4728,6 +4958,30 @@ const createHandlers = (tableName) => {
                 `[DB] Could not ensure ${tableName}.${loadingSlipColumn.column}:`,
                 error.message
               );
+            }
+          }
+          for (const tallyColumn of sharedTallyColumns) {
+            try {
+              await ensureColumnExists(db, schemaName, tableName, tallyColumn.column, tallyColumn.type);
+            } catch (error) {
+              console.warn(
+                `[DB] Could not ensure ${tableName}.${tallyColumn.column}:`,
+                error.message
+              );
+            }
+          }
+          if (tableName === "php_loading_slips") {
+            try {
+              await ensureColumnExists(db, schemaName, tableName, "phpConsumptionTransactionNo", "VARCHAR(100)");
+            } catch (error) {
+              console.warn("[DB] Could not ensure php_loading_slips.phpConsumptionTransactionNo:", error.message);
+            }
+          }
+          if (tableName === "plate_loading_slips") {
+            try {
+              await ensureColumnExists(db, schemaName, tableName, "plateConsumptionTransactionNo", "VARCHAR(100)");
+            } catch (error) {
+              console.warn("[DB] Could not ensure plate_loading_slips.plateConsumptionTransactionNo:", error.message);
             }
           }
           if (data.items == null && data.lines != null) {
@@ -5034,7 +5288,11 @@ async function fetchTallyInvoiceContext(db, invoiceId) {
       igst: Number(row.igst || 0)
     };
   });
-  const loadingSlipIds = Array.from(new Set(itemLines.map((line) => String(line.loadingSlipId || "").trim()).filter(Boolean))).sort();
+  const loadingSlipIds = Array.from(
+    new Set(
+      itemLines.map((line) => String(line.loadingSlipId || "").trim()).filter(Boolean)
+    )
+  ).sort();
   const slipNos = [];
   const truckNos = [];
   const orderNos = [];
@@ -5067,7 +5325,7 @@ async function fetchTallyInvoiceContext(db, invoiceId) {
         slipLines = [];
       }
       for (const slipLine of slipLines) {
-        const dispatchPlanId = String((slipLine == null ? void 0 : slipLine.dispatchPlanId) || "").trim();
+        const dispatchPlanId = String(slipLine?.dispatchPlanId || "").trim();
         if (dispatchPlanId && !dispatchPlanIds.includes(dispatchPlanId)) {
           dispatchPlanIds.push(dispatchPlanId);
         }
@@ -5175,7 +5433,7 @@ app.post("/api/tally-sync/invoices/:id/status", tallySyncSecretGuard, async (req
           WHERE \`id\` = ?
         `,
         [
-          new Date().toISOString().slice(0, 19).replace("T", " "),
+          (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace("T", " "),
           tallyBy,
           remark,
           tallyInvNo,
@@ -5302,6 +5560,43 @@ app.get("/api/purchase-orders/pending-procurement", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+const roundPoValue = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+function calculatePurchaseOrderLineTaxes(qty, rate, gstRate, gstSupplyType) {
+  const safeQty = Number(qty || 0);
+  const safeRate = Number(rate || 0);
+  const safeGstRate = Number(gstRate || 0);
+  const amount = roundPoValue(safeQty * safeRate);
+  const gstAmount = roundPoValue(amount * safeGstRate / 100);
+  if (gstSupplyType === "INTER_STATE") {
+    return {
+      gstRate: safeGstRate,
+      amount,
+      cgst: 0,
+      sgst: 0,
+      igst: gstAmount,
+      lineTotal: roundPoValue(amount + gstAmount)
+    };
+  }
+  const halfTax = roundPoValue(gstAmount / 2);
+  return {
+    gstRate: safeGstRate,
+    amount,
+    cgst: halfTax,
+    sgst: halfTax,
+    igst: 0,
+    lineTotal: roundPoValue(amount + halfTax + halfTax)
+  };
+}
+function summarizePurchaseOrderTaxTotals(lines) {
+  return {
+    totalQty: roundPoValue(lines.reduce((sum, line) => sum + Number(line.qty || 0), 0)),
+    taxableAmount: roundPoValue(lines.reduce((sum, line) => sum + Number(line.amount || 0), 0)),
+    cgst: roundPoValue(lines.reduce((sum, line) => sum + Number(line.cgst || 0), 0)),
+    sgst: roundPoValue(lines.reduce((sum, line) => sum + Number(line.sgst || 0), 0)),
+    igst: roundPoValue(lines.reduce((sum, line) => sum + Number(line.igst || 0), 0)),
+    grandTotal: roundPoValue(lines.reduce((sum, line) => sum + Number(line.lineTotal || 0), 0))
+  };
+}
 app.get("/api/purchase-orders/pending-indent-lines", async (_req, res) => {
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
@@ -5477,38 +5772,84 @@ app.post("/api/purchase-orders/create-from-indent-lines", async (req, res) => {
         lastNum = parseInt(parts[parts.length - 1], 10) || 0;
       }
       const poNo = `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
+      const [[supplierRow]] = await conn.query("SELECT gstSupplyType FROM `suppliers` WHERE id = ? LIMIT 1", [supplierId]);
+      const supplierGstSupplyType = String(supplierRow?.gstSupplyType || "INTRA_STATE");
       const purchaseOrderId = crypto.randomUUID();
-      let totalQty = 0;
-      let totalAmount = 0;
       const poLinesToInsert = [];
+      const indentIdsForOrder = /* @__PURE__ */ new Set();
       for (const l of groupLines) {
         const row = byId.get(l.indentLineId);
         const qty = Number(l.qty || 0);
         const rate = Number(l.rate || 0);
-        const amount = qty * rate;
-        totalQty += qty;
-        totalAmount += amount;
+        const gstRate = Number(l.gstRate || 18);
+        const taxBreakup = calculatePurchaseOrderLineTaxes(qty, rate, gstRate, supplierGstSupplyType);
         poLinesToInsert.push({
           id: crypto.randomUUID(),
           purchaseOrderId,
           indentLineId: l.indentLineId,
           materialId: String(row.materialId),
+          erpCode: String(row.erpCode || ""),
           uom: String(row.uom || ""),
           qty,
           rate,
-          amount,
+          amount: taxBreakup.amount,
+          gstRate: taxBreakup.gstRate,
+          cgst: taxBreakup.cgst,
+          sgst: taxBreakup.sgst,
+          igst: taxBreakup.igst,
+          lineTotal: taxBreakup.lineTotal,
           targetDeliveryDate: String(row.targetDeliveryDate || "")
         });
         indentLinesToUpdate.set(l.indentLineId, (indentLinesToUpdate.get(l.indentLineId) || 0) + qty);
+        if (row?.indentId) indentIdsForOrder.add(String(row.indentId));
       }
+      const totals = summarizePurchaseOrderTaxTotals(poLinesToInsert);
+      const indentIdForOrder = indentIdsForOrder.size === 1 ? Array.from(indentIdsForOrder)[0] : null;
       await conn.query(
-        "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [purchaseOrderId, poNo, null, supplierId, dateStr, dateStr, totalQty, totalAmount, String(remarks || "").trim(), "Pending Approval", auditActor, auditTimestamp]
+        "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, taxableAmount, cgst, sgst, igst, roundOff, grandTotal, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          purchaseOrderId,
+          poNo,
+          indentIdForOrder,
+          supplierId,
+          dateStr,
+          dateStr,
+          totals.totalQty,
+          totals.taxableAmount,
+          totals.taxableAmount,
+          totals.cgst,
+          totals.sgst,
+          totals.igst,
+          0,
+          totals.grandTotal,
+          String(remarks || "").trim(),
+          "Pending Approval",
+          auditActor,
+          auditTimestamp
+        ]
       );
       for (const line of poLinesToInsert) {
         await conn.query(
-          "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, auditActor, auditTimestamp]
+          "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, erpCode, uom, qty, rate, amount, gstRate, cgst, sgst, igst, lineTotal, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            line.id,
+            line.purchaseOrderId,
+            line.indentLineId,
+            line.materialId,
+            line.erpCode,
+            line.uom,
+            line.qty,
+            line.rate,
+            line.amount,
+            line.gstRate,
+            line.cgst,
+            line.sgst,
+            line.igst,
+            line.lineTotal,
+            line.targetDeliveryDate,
+            auditActor,
+            auditTimestamp
+          ]
         );
       }
       created.push({ supplierId, poNo, purchaseOrderId });
@@ -5570,17 +5911,19 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
       lastNum = parseInt(parts[parts.length - 1], 10) || 0;
     }
     const poNo = `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
+    const [[supplierRow]] = await conn.query("SELECT gstSupplyType FROM `suppliers` WHERE id = ? LIMIT 1", [supplierId]);
+    const supplierGstSupplyType = String(supplierRow?.gstSupplyType || "INTRA_STATE");
     const purchaseOrderId = crypto.randomUUID();
-    let totalQty = 0;
-    let totalAmount = 0;
     const poLines = [];
     const indentLinesToUpdate = /* @__PURE__ */ new Map();
+    const indentIdsForOrder = /* @__PURE__ */ new Set();
     for (const item of items) {
       const { materialId, uom, orderQty, rate } = item;
+      const gstRate = Number(item?.gstRate || 18);
       let remainingToAllocate = Number(orderQty);
       const [sourceRows] = await conn.query(`
         SELECT 
-          il.id, il.qty, il.cancelledQty, il.orderedQty, il.targetDeliveryDate, i.requisitionDate,
+          il.id, il.indentId, il.erpCode, il.qty, il.cancelledQty, il.orderedQty, il.targetDeliveryDate, i.requisitionDate,
           COALESCE(pol_sum.poQtyCreated, 0) as poQtyCreated
         FROM indent_lines il
         JOIN indents i ON i.id = il.indentId
@@ -5602,34 +5945,61 @@ app.post("/api/purchase-orders/create-consolidated", async (req, res) => {
         const pendingQty = Number(source.qty) - Number(source.cancelledQty) - Number(source.poQtyCreated || 0);
         const allocate = Math.min(remainingToAllocate, pendingQty);
         if (allocate > 0) {
+          const taxBreakup = calculatePurchaseOrderLineTaxes(allocate, Number(rate), gstRate, supplierGstSupplyType);
           poLines.push({
             id: crypto.randomUUID(),
             purchaseOrderId,
             indentLineId: source.id,
             materialId,
+            erpCode: source.erpCode,
             uom,
             qty: allocate,
             rate: Number(rate),
-            amount: allocate * Number(rate),
+            amount: taxBreakup.amount,
+            gstRate: taxBreakup.gstRate,
+            cgst: taxBreakup.cgst,
+            sgst: taxBreakup.sgst,
+            igst: taxBreakup.igst,
+            lineTotal: taxBreakup.lineTotal,
             targetDeliveryDate: source.targetDeliveryDate
           });
-          totalQty += allocate;
-          totalAmount += allocate * Number(rate);
           remainingToAllocate -= allocate;
           const existingAdd = indentLinesToUpdate.get(source.id) || 0;
           indentLinesToUpdate.set(source.id, existingAdd + allocate);
+          if (source.indentId) indentIdsForOrder.add(String(source.indentId));
         }
       }
     }
     if (poLines.length === 0) throw new Error("No quantities allocated to indent lines.");
+    const totals = summarizePurchaseOrderTaxTotals(poLines);
+    const indentIdForOrder = indentIdsForOrder.size === 1 ? Array.from(indentIdsForOrder)[0] : null;
     await conn.query(
-      "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [purchaseOrderId, poNo, null, supplierId, poDate, requiredDate || poDate, totalQty, totalAmount, remarks, "Pending Approval", auditActor, auditTimestamp]
+      "INSERT INTO `purchase_orders` (id, poNo, indentId, supplierId, poDate, requiredDate, totalQty, totalAmount, taxableAmount, cgst, sgst, igst, roundOff, grandTotal, remarks, status, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        purchaseOrderId,
+        poNo,
+        indentIdForOrder,
+        supplierId,
+        poDate,
+        requiredDate || poDate,
+        totals.totalQty,
+        totals.taxableAmount,
+        totals.taxableAmount,
+        totals.cgst,
+        totals.sgst,
+        totals.igst,
+        0,
+        totals.grandTotal,
+        remarks,
+        "Pending Approval",
+        auditActor,
+        auditTimestamp
+      ]
     );
     for (const line of poLines) {
       await conn.query(
-        "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, uom, qty, rate, amount, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.uom, line.qty, line.rate, line.amount, line.targetDeliveryDate, auditActor, auditTimestamp]
+        "INSERT INTO `purchase_order_lines` (id, purchaseOrderId, indentLineId, materialId, erpCode, uom, qty, rate, amount, gstRate, cgst, sgst, igst, lineTotal, targetDeliveryDate, updatedBy, updateTimestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [line.id, line.purchaseOrderId, line.indentLineId, line.materialId, line.erpCode, line.uom, line.qty, line.rate, line.amount, line.gstRate, line.cgst, line.sgst, line.igst, line.lineTotal, line.targetDeliveryDate, auditActor, auditTimestamp]
       );
     }
     const indentIdsToCheck = /* @__PURE__ */ new Set();
