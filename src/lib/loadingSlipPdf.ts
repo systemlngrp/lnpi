@@ -78,17 +78,11 @@ function drawCellText(doc: jsPDF, text: string, x: number, y: number, width: num
 function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: string; truckNo: string; erpCode: string; company: string; itemName: string }) {
   const leftX = TABLE_MARGIN_X;
   const totalW = CONTENT_W;
-  const labelW = 22;
-  const leftValueW = 44;
-  const rightLabelW = 28;
-  const rightValueW = totalW - labelW - leftValueW - rightLabelW;
-  const rowH = 9;
+  const labelW = 26;
+  const valueW = totalW - labelW;
+  const rowH = 7.5;
   const x1 = leftX + labelW;
-  const x2 = x1 + leftValueW;
-  const x3 = x2 + rightLabelW;
-  const y1 = startY + rowH;
-  const y2 = startY + rowH * 2;
-  const totalH = rowH * 3;
+  const totalH = rowH * 5;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(META_FONT);
@@ -97,26 +91,28 @@ function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: s
   doc.setLineWidth(0.22);
   doc.roundedRect(leftX, startY, totalW, totalH, 4, 4);
   doc.line(x1, startY, x1, startY + totalH);
-  doc.line(x2, startY, x2, startY + totalH);
-  doc.line(x3, startY, x3, startY + totalH);
-  doc.line(leftX, y1, leftX + totalW, y1);
-  doc.line(leftX, y2, leftX + totalW, y2);
+  for (let rowIndex = 1; rowIndex < 5; rowIndex += 1) {
+    const y = startY + rowH * rowIndex;
+    doc.line(leftX, y, leftX + totalW, y);
+  }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(META_FONT);
 
-  drawCellText(doc, "Date", leftX, startY + 5.8, labelW, "left");
-  drawCellText(doc, meta.date, x1, startY + 5.8, leftValueW, "left");
-  drawCellText(doc, "Customer", x2, startY + 5.8, rightLabelW, "left");
-  drawCellText(doc, meta.company, x3, startY + 5.8, rightValueW, "left");
+  drawCellText(doc, "Date", leftX, startY + 4.9, labelW, "left");
+  drawCellText(doc, meta.date, x1, startY + 4.9, valueW, "left");
 
-  drawCellText(doc, "ERP Code", leftX, y1 + 5.8, labelW, "left");
-  drawCellText(doc, meta.erpCode, x1, y1 + 5.8, leftValueW, "left");
-  drawCellText(doc, "Item Name", x2, y1 + 5.8, rightLabelW, "left");
-  drawCellText(doc, meta.itemName, x3, y1 + 5.8, rightValueW, "right");
+  drawCellText(doc, "Customer", leftX, startY + rowH + 4.9, labelW, "left");
+  drawCellText(doc, meta.company, x1, startY + rowH + 4.9, valueW, "left");
 
-  drawCellText(doc, "Truck No", leftX, y2 + 5.8, labelW, "left");
-  drawCellText(doc, meta.truckNo, x1, y2 + 5.8, leftValueW, "left");
+  drawCellText(doc, "ERP Code", leftX, startY + rowH * 2 + 4.9, labelW, "left");
+  drawCellText(doc, meta.erpCode, x1, startY + rowH * 2 + 4.9, valueW, "left");
+
+  drawCellText(doc, "Item Name", leftX, startY + rowH * 3 + 4.9, labelW, "left");
+  drawCellText(doc, meta.itemName, x1, startY + rowH * 3 + 4.9, valueW, "left");
+
+  drawCellText(doc, "Truck No", leftX, startY + rowH * 4 + 4.9, labelW, "left");
+  drawCellText(doc, meta.truckNo, x1, startY + rowH * 4 + 4.9, valueW, "left");
 
   return startY + totalH + 3;
 }
