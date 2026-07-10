@@ -296,8 +296,8 @@ export function LoadingMaster() {
         s.id === slipId ? { ...syncedDraft, updatedBy: "System User", updateTimestamp: now } : s
       )
     );
-    await setPhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: syncedDraft, details: phpDetails }));
-    await setPlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: syncedDraft, details: plateDetails }));
+    await setPhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: syncedDraft, details: phpDetails, source: "PHP" }));
+    await setPlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: syncedDraft, details: plateDetails, source: "PLATE" }));
 
     if (original.invoiceId && !direct) {
       const invoiceId = original.invoiceId;
@@ -439,8 +439,8 @@ export function LoadingMaster() {
         updateTimestamp: timestamp,
       };
       await setLoadingSlips((prev) => [newSlip, ...prev]);
-      await setPhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: phpDetails || [] }));
-      await setPlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: plateDetails || [] }));
+      await setPhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: phpDetails || [], source: "PHP" }));
+      await setPlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: plateDetails || [], source: "PLATE" }));
       setIsDirectModalOpen(false);
       alert("Direct loading slip created successfully.");
     } catch (error) {

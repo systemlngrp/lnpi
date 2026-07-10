@@ -786,6 +786,8 @@ export interface LoadingSlip {
   companyId?: string;
   companyName?: string;
   fgLoadingId?: string;
+  phpConsumptionTransactionNo?: string;
+  plateConsumptionTransactionNo?: string;
   phpDetails?: LinkedLoadingDetail[];
   plateDetails?: LinkedLoadingDetail[];
   status?: "Active" | "Cancelled";
@@ -793,8 +795,19 @@ export interface LoadingSlip {
   cancelledAt?: string;
   cancelledBy?: string;
   invoiceId?: string;
+  invoiceNo?: string;
   packingDetails?: PackingDetail[];
   extraItemsQty?: number;
+  tallyTimestamp?: string;
+  tallyPostingStatus?: string;
+  tallyPostingError?: string;
+  tallyPostingAttemptCount?: number;
+  tallyLastAttemptAt?: string;
+  tallyVoucherNo?: string;
+  tallyVoucherDate?: string;
+  tallyVoucherType?: string;
+  tallyPostedBy?: string;
+  tallyPostingRemark?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

@@ -3628,14 +3628,26 @@ await db.query(`
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36),
           \`fgLoadingId\` VARCHAR(36),
+          \`phpConsumptionTransactionNo\` VARCHAR(100),
           \`lines\` JSON NOT NULL,
           \`packingDetails\` JSON,
           \`extraItemsQty\` DECIMAL(15,2),
           \`invoiceId\` VARCHAR(36),
+          \`invoiceNo\` VARCHAR(100),
           \`status\` VARCHAR(20) DEFAULT 'Active',
           \`cancelReason\` TEXT,
           \`cancelledAt\` VARCHAR(255),
           \`cancelledBy\` VARCHAR(255),
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyPostingStatus\` VARCHAR(50),
+          \`tallyPostingError\` TEXT,
+          \`tallyPostingAttemptCount\` INT DEFAULT 0,
+          \`tallyLastAttemptAt\` VARCHAR(255),
+          \`tallyVoucherNo\` VARCHAR(100),
+          \`tallyVoucherDate\` VARCHAR(50),
+          \`tallyVoucherType\` VARCHAR(100),
+          \`tallyPostedBy\` VARCHAR(255),
+          \`tallyPostingRemark\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -3648,14 +3660,26 @@ await db.query(`
           \`date\` VARCHAR(50) NOT NULL,
           \`truckId\` VARCHAR(36),
           \`fgLoadingId\` VARCHAR(36),
+          \`plateConsumptionTransactionNo\` VARCHAR(100),
           \`lines\` JSON NOT NULL,
           \`packingDetails\` JSON,
           \`extraItemsQty\` DECIMAL(15,2),
           \`invoiceId\` VARCHAR(36),
+          \`invoiceNo\` VARCHAR(100),
           \`status\` VARCHAR(20) DEFAULT 'Active',
           \`cancelReason\` TEXT,
           \`cancelledAt\` VARCHAR(255),
           \`cancelledBy\` VARCHAR(255),
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyPostingStatus\` VARCHAR(50),
+          \`tallyPostingError\` TEXT,
+          \`tallyPostingAttemptCount\` INT DEFAULT 0,
+          \`tallyLastAttemptAt\` VARCHAR(255),
+          \`tallyVoucherNo\` VARCHAR(100),
+          \`tallyVoucherDate\` VARCHAR(50),
+          \`tallyVoucherType\` VARCHAR(100),
+          \`tallyPostedBy\` VARCHAR(255),
+          \`tallyPostingRemark\` TEXT,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -5457,6 +5481,19 @@ const createHandlers = (tableName: string) => {
             { column: "updateTimestamp", type: "VARCHAR(255)" },
           ];
 
+          const sharedTallyColumns = [
+            { column: "tallyTimestamp", type: "VARCHAR(255)" },
+            { column: "tallyPostingStatus", type: "VARCHAR(50)" },
+            { column: "tallyPostingError", type: "TEXT" },
+            { column: "tallyPostingAttemptCount", type: "INT DEFAULT 0" },
+            { column: "tallyLastAttemptAt", type: "VARCHAR(255)" },
+            { column: "tallyVoucherNo", type: "VARCHAR(100)" },
+            { column: "tallyVoucherDate", type: "VARCHAR(50)" },
+            { column: "tallyVoucherType", type: "VARCHAR(100)" },
+            { column: "tallyPostedBy", type: "VARCHAR(255)" },
+            { column: "tallyPostingRemark", type: "TEXT" },
+          ];
+
           for (const loadingSlipColumn of loadingSlipColumns) {
             try {
               await ensureColumnExists(db, schemaName, tableName, loadingSlipColumn.column, loadingSlipColumn.type);
@@ -5465,6 +5502,33 @@ const createHandlers = (tableName: string) => {
                 `[DB] Could not ensure ${tableName}.${loadingSlipColumn.column}:`,
                 (error as Error).message
               );
+            }
+          }
+
+          for (const tallyColumn of sharedTallyColumns) {
+            try {
+              await ensureColumnExists(db, schemaName, tableName, tallyColumn.column, tallyColumn.type);
+            } catch (error) {
+              console.warn(
+                `[DB] Could not ensure ${tableName}.${tallyColumn.column}:`,
+                (error as Error).message
+              );
+            }
+          }
+
+          if (tableName === "php_loading_slips") {
+            try {
+              await ensureColumnExists(db, schemaName, tableName, "phpConsumptionTransactionNo", "VARCHAR(100)");
+            } catch (error) {
+              console.warn("[DB] Could not ensure php_loading_slips.phpConsumptionTransactionNo:", (error as Error).message);
+            }
+          }
+
+          if (tableName === "plate_loading_slips") {
+            try {
+              await ensureColumnExists(db, schemaName, tableName, "plateConsumptionTransactionNo", "VARCHAR(100)");
+            } catch (error) {
+              console.warn("[DB] Could not ensure plate_loading_slips.plateConsumptionTransactionNo:", (error as Error).message);
             }
           }
 

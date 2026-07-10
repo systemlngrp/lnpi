@@ -27,6 +27,7 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
 
   const productionMap = useMemo(() => new Map(productions.map((production) => [production.id, production])), [productions]);
   const fgSlipMap = useMemo(() => new Map(fgLoadingSlips.map((slip) => [slip.id, slip])), [fgLoadingSlips]);
+  const consumptionTxnLabel = source === "PHP" ? "PHP Cons. No" : "Plate Cons. No";
 
   const processedSlips = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -59,12 +60,16 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
           truckNo: trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "-",
           totalQty: relevantLines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0),
           isFgLinked,
+          consumptionTxnNo:
+            source === "PHP"
+              ? String(slip.phpConsumptionTransactionNo || "").trim()
+              : String(slip.plateConsumptionTransactionNo || "").trim(),
         };
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row))
       .filter((row) => {
         if (!normalizedSearch) return true;
-        const haystack = [row.slip.slipNo, row.itemName, row.companyName, row.jobNo, row.truckNo, row.fgSlipNo].join(" ").toLowerCase();
+        const haystack = [row.slip.slipNo, row.itemName, row.companyName, row.jobNo, row.truckNo, row.fgSlipNo, row.consumptionTxnNo].join(" ").toLowerCase();
         return haystack.includes(normalizedSearch);
       })
       .sort((a, b) =>
@@ -92,6 +97,7 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
             <tr>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Slip No</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">FG Slip</th>
+              <th className="px-3 py-2 text-left text-xs font-black uppercase">{consumptionTxnLabel}</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Date</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Job No</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Item</th>
@@ -99,19 +105,21 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Truck</th>
               <th className="px-3 py-2 text-right text-xs font-black uppercase">Qty</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-black uppercase">Tally Status</th>
               <th className="px-3 py-2 text-center text-xs font-black uppercase">Source</th>
             </tr>
           </thead>
           <tbody>
             {paginatedItems.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">No loading slips found.</td>
+                <td colSpan={12} className="px-6 py-8 text-center text-black font-medium">No loading slips found.</td>
               </tr>
             ) : (
               paginatedItems.map((row) => (
                 <tr key={row.slip.id} className="border-t border-black">
                   <td className="px-3 py-2 text-sm font-semibold">{row.slip.slipNo || "-"}</td>
                   <td className="px-3 py-2 text-sm">{row.isFgLinked ? row.fgSlipNo : "-"}</td>
+                  <td className="px-3 py-2 text-sm font-semibold">{row.consumptionTxnNo || "-"}</td>
                   <td className="px-3 py-2 text-sm">{row.slip.date}</td>
                   <td className="px-3 py-2 text-sm">{row.jobNo}</td>
                   <td className="px-3 py-2 text-sm align-top">
@@ -123,6 +131,7 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
                   <td className="px-3 py-2 text-sm">{row.truckNo}</td>
                   <td className="px-3 py-2 text-sm text-right">{row.totalQty.toLocaleString()}</td>
                   <td className="px-3 py-2 text-sm">{row.slip.status || "Active"}</td>
+                  <td className="px-3 py-2 text-sm">{row.slip.tallyPostingStatus || (row.slip.tallyTimestamp ? "Posted" : "-")}</td>
                   <td className="px-3 py-2 text-center text-sm">
                     {row.isFgLinked ? (
                       <span className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[10px] font-bold uppercase text-indigo-700">Linked</span>
