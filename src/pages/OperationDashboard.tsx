@@ -24,7 +24,6 @@ import type {
   Production,
   ProductionProcessing,
 } from "../types";
-import { TableControls } from "../components/TableControls";
 import { ExcelExport } from "../components/ExcelExport";
 import { exportsAllowed } from "../lib/exportPolicy";
 import { buildProductionMaterialUsageMap, getProductionActualPaperUsed } from "../lib/productionMaterialUsage";
@@ -173,7 +172,6 @@ export function OperationDashboard() {
   const [invoices] = useData<Invoice>("invoices", []);
 
   const allowExports = exportsAllowed();
-  const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState(getDefaultRange);
   const [closedJobFilter, setClosedJobFilter] = useState<ClosedJobFilter>("no");
 
@@ -250,8 +248,6 @@ export function OperationDashboard() {
   }, [filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines, issueReelLines, returnReelLines]);
 
   const rows: OperationRow[] = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-
     const sorted = filteredProductions
       .map((p) => {
         const schedule = schedules.find((s) => s.id === p.scheduleId);
@@ -285,16 +281,7 @@ export function OperationDashboard() {
         if (closedJobFilter === "yes" && !isClosedJob) return false;
         if (closedJobFilter === "no" && isClosedJob) return false;
 
-        if (!q) return true;
-        const blob = [
-          row.production.transactionNo,
-          row.item?.name || "",
-          row.order?.orderNo || "",
-          row.company?.name || "",
-        ]
-          .join(" ")
-          .toLowerCase();
-        return blob.includes(q);
+        return true;
       })
       .sort((a, b) => b.production.transactionNo.localeCompare(a.production.transactionNo, undefined, { numeric: true, sensitivity: "base" }));
 
@@ -309,7 +296,6 @@ export function OperationDashboard() {
     loadedQtyByProductionId,
     erpLeastGsmMap,
     productionUsageMap,
-    searchTerm,
     closedJobFilter,
   ]);
 
@@ -558,12 +544,6 @@ export function OperationDashboard() {
         </div>
       </section>
 
-      {/* Search Input Controls */}
-      <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center">
-        <div className="flex-1 rounded-lg border-2 border-slate-900 bg-white p-1 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search jobs, items, parties..." />
-        </div>
-      </div>
     </div>
   );
 }
