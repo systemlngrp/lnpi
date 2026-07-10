@@ -75,44 +75,53 @@ function drawCellText(doc: jsPDF, text: string, x: number, y: number, width: num
   doc.text(lines, tx, y, { align });
 }
 
+function getWrappedLines(doc: jsPDF, text: string, width: number) {
+  return doc.splitTextToSize(String(text || "-"), Math.max(4, width - 3));
+}
+
 function drawTopMeta(doc: jsPDF, startY: number, meta: { slipNo: string; date: string; truckNo: string; erpCode: string; company: string; itemName: string }) {
   const leftX = TABLE_MARGIN_X;
   const totalW = CONTENT_W;
   const labelW = 26;
   const valueW = totalW - labelW;
-  const rowH = 7.5;
   const x1 = leftX + labelW;
-  const totalH = rowH * 5;
+  const rows = [
+    { label: "Date", value: meta.date, align: "left" as const },
+    { label: "Customer", value: meta.company, align: "left" as const },
+    { label: "ERP Code", value: meta.erpCode, align: "left" as const },
+    { label: "Item Name", value: meta.itemName, align: "left" as const },
+    { label: "Truck No", value: meta.truckNo, align: "left" as const },
+  ];
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(META_FONT);
   doc.text(`SL No: ${meta.slipNo || "-"}`, PAGE_X + PAGE_W - 1, startY - 1, { align: "right" });
 
+  const rowHeights = rows.map((row) => {
+    const wrapped = getWrappedLines(doc, row.value, valueW);
+    const lineCount = Math.max(1, Array.isArray(wrapped) ? wrapped.length : 1);
+    return Math.max(7.5, 4.8 + lineCount * 3.7);
+  });
+  const totalH = rowHeights.reduce((sum, height) => sum + height, 0);
+
   doc.setLineWidth(0.22);
   doc.roundedRect(leftX, startY, totalW, totalH, 4, 4);
   doc.line(x1, startY, x1, startY + totalH);
-  for (let rowIndex = 1; rowIndex < 5; rowIndex += 1) {
-    const y = startY + rowH * rowIndex;
-    doc.line(leftX, y, leftX + totalW, y);
+  let runningY = startY;
+  for (let rowIndex = 0; rowIndex < rowHeights.length - 1; rowIndex += 1) {
+    runningY += rowHeights[rowIndex];
+    doc.line(leftX, runningY, leftX + totalW, runningY);
   }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(META_FONT);
-
-  drawCellText(doc, "Date", leftX, startY + 4.9, labelW, "left");
-  drawCellText(doc, meta.date, x1, startY + 4.9, valueW, "left");
-
-  drawCellText(doc, "Customer", leftX, startY + rowH + 4.9, labelW, "left");
-  drawCellText(doc, meta.company, x1, startY + rowH + 4.9, valueW, "left");
-
-  drawCellText(doc, "ERP Code", leftX, startY + rowH * 2 + 4.9, labelW, "left");
-  drawCellText(doc, meta.erpCode, x1, startY + rowH * 2 + 4.9, valueW, "left");
-
-  drawCellText(doc, "Item Name", leftX, startY + rowH * 3 + 4.9, labelW, "left");
-  drawCellText(doc, meta.itemName, x1, startY + rowH * 3 + 4.9, valueW, "left");
-
-  drawCellText(doc, "Truck No", leftX, startY + rowH * 4 + 4.9, labelW, "left");
-  drawCellText(doc, meta.truckNo, x1, startY + rowH * 4 + 4.9, valueW, "left");
+  let textY = startY;
+  rows.forEach((row, index) => {
+    const baselineY = textY + 4.9;
+    drawCellText(doc, row.label, leftX, baselineY, labelW, "left");
+    drawCellText(doc, row.value, x1, baselineY, valueW, row.align);
+    textY += rowHeights[index];
+  });
 
   return startY + totalH + 3;
 }
