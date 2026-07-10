@@ -130,8 +130,8 @@ export function ItemwiseLeastCost() {
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-sticky-scroll">
-          <table className="min-w-full divide-y divide-black border-collapse">
-            <thead className="bg-slate-50 whitespace-nowrap">
+          <table className="min-w-[1600px] w-full divide-y divide-black border-collapse border border-black text-sm">
+            <thead className="bg-slate-100 divide-x divide-black whitespace-nowrap">
               <tr className="divide-x divide-black">
                 <th className="px-3 py-3 text-left text-[10px] font-black text-black uppercase tracking-wider border-b border-black">SL No</th>
                 <th className="px-3 py-3 text-left text-[10px] font-black text-black uppercase tracking-wider border-b border-black">Date</th>
@@ -163,13 +163,13 @@ export function ItemwiseLeastCost() {
                 </tr>
               ) : (
                 paginatedData.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors divide-x divide-black text-[11px] whitespace-nowrap">
+                  <tr key={idx} className="hover:bg-slate-50 transition-colors divide-x divide-black text-xs whitespace-nowrap">
                     <td className="px-3 py-2 font-bold text-black">{(page - 1) * pageSize + idx + 1}</td>
                     <td className="px-3 py-2 text-black">{formatDate(row.date)}</td>
                     <td className="px-3 py-2 font-bold text-black">{row.jobCardNo}</td>
-                    <td className="px-3 py-2 text-black max-w-[150px] truncate" title={row.itemName}>{row.itemName}</td>
+                    <td className="px-3 py-2 text-black min-w-[260px] max-w-[320px] truncate" title={row.itemName}>{row.itemName}</td>
                     <td className="px-3 py-2 font-bold text-black">{row.erp}</td>
-                    <td className="px-3 py-2 text-black max-w-[120px] truncate" title={row.company}>{row.company}</td>
+                    <td className="px-3 py-2 text-black min-w-[180px] max-w-[240px] truncate" title={row.company}>{row.company}</td>
                     <td className="px-3 py-2 text-right text-slate-600">{row.length}</td>
                     <td className="px-3 py-2 text-right text-slate-600">{row.breadth}</td>
                     <td className="px-3 py-2 text-right text-slate-600">{row.height}</td>
@@ -188,7 +188,7 @@ export function ItemwiseLeastCost() {
               )}
             </tbody>
             {filteredData.length > 0 && (
-                <tfoot className="bg-slate-100 border-t border-black">
+                <tfoot className="bg-slate-100 border-t border-black divide-y divide-black">
                     <tr>
                         <td colSpan={19} className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase">
                             Total Unique ERPs: {filteredData.length}
