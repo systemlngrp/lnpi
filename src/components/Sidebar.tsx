@@ -411,7 +411,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
 
   const pendingPhpLoadingTallyCount = phpLoadingSlips.filter(
     (slip) =>
-      String(slip.fgLoadingId || "").trim() !== "" &&
       String(slip.phpConsumptionTransactionNo || "").trim() !== "" &&
       String(slip.tallyTimestamp || "").trim() === "" &&
       String(slip.status || "Active").trim().toLowerCase() !== "cancelled"
@@ -419,7 +418,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
 
   const pendingPlateLoadingTallyCount = plateLoadingSlips.filter(
     (slip) =>
-      String(slip.fgLoadingId || "").trim() !== "" &&
       String(slip.plateConsumptionTransactionNo || "").trim() !== "" &&
       String(slip.tallyTimestamp || "").trim() === "" &&
       String(slip.status || "Active").trim().toLowerCase() !== "cancelled"

@@ -17,7 +17,6 @@ function PendingLinkedLoadingTallyPage({ source }: { source: "PHP" | "PLATE" }) 
   const pendingRows = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return loadingSlips
-      .filter((row) => String(row.fgLoadingId || "").trim() !== "")
       .filter((row) => String(source === "PHP" ? row.phpConsumptionTransactionNo || "" : row.plateConsumptionTransactionNo || "").trim() !== "")
       .filter((row) => String(row.tallyTimestamp || "").trim() === "")
       .filter((row) => String(row.status || "Active").trim().toLowerCase() !== "cancelled")
