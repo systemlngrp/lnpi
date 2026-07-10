@@ -2649,6 +2649,45 @@ async function generateSimpleTransactionNumber(
   return `${prefix}/${fy}/${String(lastNum + 1).padStart(5, "0")}`;
 }
 
+async function generateLoadingSlipNo(
+  db: mysql.Pool,
+  tableName: "loading_slips" | "php_loading_slips" | "plate_loading_slips",
+  dateStr?: string
+) {
+  const dateValue = String(dateStr || new Date().toISOString().slice(0, 10)).trim();
+  const d = new Date(dateValue);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error("Could not generate slipNo because date is invalid.");
+  }
+
+  let fyStart = d.getFullYear();
+  const month = d.getMonth() + 1;
+  if (month < 4) fyStart -= 1;
+  const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
+
+  const prefixByTable: Record<"loading_slips" | "php_loading_slips" | "plate_loading_slips", string> = {
+    loading_slips: "LS",
+    php_loading_slips: "PHPLS",
+    plate_loading_slips: "PLS",
+  };
+
+  const prefix = prefixByTable[tableName];
+  const likePattern = `${prefix}/${fyLabel}/%`;
+  const [rows] = await db.query(
+    `SELECT \`slipNo\` AS serialValue FROM \`${tableName}\` WHERE \`slipNo\` LIKE ? ORDER BY CAST(SUBSTRING_INDEX(\`slipNo\`,'/',-1) AS UNSIGNED) DESC LIMIT 1`,
+    [likePattern]
+  );
+
+  let lastNum = 0;
+  const latestValue = String(((rows as any[])[0] || {}).serialValue || "").trim();
+  if (latestValue) {
+    const suffix = latestValue.split("/").pop() || "0";
+    lastNum = Number.parseInt(suffix, 10) || 0;
+  }
+
+  return `${prefix}/${fyLabel}/${String(lastNum + 1).padStart(5, "0")}`;
+}
+
 async function backfillMissingConsumptionTransactionNos(db: mysql.Pool) {
   const [rows] = await db.query(
     `
@@ -5318,25 +5357,11 @@ const createHandlers = (tableName: string) => {
         if (['loading_slips', 'php_loading_slips', 'plate_loading_slips'].includes(tableName)) {
           try {
             if (!data.slipNo) {
-              const dateStr = data.date || new Date().toISOString().slice(0,10);
-              const d = new Date(dateStr);
-              let fyStart = d.getFullYear();
-              const month = d.getMonth() + 1;
-              if (month < 4) fyStart = fyStart - 1;
-              const fyLabel = `${fyStart}-${String(fyStart + 1).slice(2)}`;
-
-              const likePattern = `LS/${fyLabel}/%`;
-              const [rows] = await db.query(`SELECT slipNo FROM \`loading_slips\` WHERE slipNo LIKE ? ORDER BY CAST(SUBSTRING_INDEX(slipNo,'/',-1) AS UNSIGNED) DESC LIMIT 1`, [likePattern]);
-              let lastNum = 0;
-              if ((rows as any[]).length > 0) {
-                const lastSlipNo = (rows as any[])[0].slipNo as string;
-                const parts = lastSlipNo.split('/');
-                const suffix = parts[parts.length - 1];
-                lastNum = parseInt(suffix || '0', 10) || 0;
-              }
-              const nextNum = lastNum + 1;
-              const padded = String(nextNum).padStart(5, '0');
-              data.slipNo = `LS/${fyLabel}/${padded}`;
+              data.slipNo = await generateLoadingSlipNo(
+                db,
+                tableName as "loading_slips" | "php_loading_slips" | "plate_loading_slips",
+                data.date
+              );
             }
           } catch (err) {
             console.warn('[DB] Could not auto-generate slipNo:', (err as Error).message);
