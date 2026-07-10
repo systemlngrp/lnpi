@@ -34,7 +34,11 @@ export function Users() {
   const allMenuItems = useMemo(() => {
     return NAVIGATION.map((group) => ({
       section: group.section,
-      items: group.items.map((item) => ({ name: item.name, key: item.href })),
+      items: group.items.flatMap((item) =>
+        "items" in item
+          ? item.items.map((child) => ({ name: `${item.section} - ${child.name}`, key: child.href }))
+          : [{ name: item.name, key: item.href }]
+      ),
     }));
   }, []);
 
