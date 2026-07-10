@@ -716,7 +716,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         <button
           type="button"
           onClick={() => toggleNestedSection(sectionKey)}
-          className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-[10px] font-black uppercase tracking-wide text-white/80 hover:bg-black/10"
+          className={cn(
+            "flex w-full items-center justify-between rounded px-2 py-1 text-left text-[10px] font-black uppercase tracking-wide hover:bg-black/10",
+            collapsedSections[sectionKey] ? "text-white/80" : "bg-red-600 text-white shadow-inner"
+          )}
         >
           <span className="max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap">{entry.section}</span>
           {collapsedSections[sectionKey] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
