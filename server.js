@@ -41,6 +41,11 @@ const NPD_SYNC_SECRET = String(process.env.NPD_SYNC_SECRET || "").trim();
 const NPD_SYNC_ALLOWED_TAB = String(process.env.NPD_SYNC_ALLOWED_TAB || "NPD").trim();
 const NPD_SYNC_LOG_PREFIX = "[NPD_SYNC]";
 const TALLY_SYNC_SECRET = String(process.env.TALLY_SYNC_SECRET || "!Office1@").trim();
+function maskSecret(value) {
+  if (!value) return "(empty)";
+  if (value.length <= 2) return `${value[0] || ""}*`;
+  return `${value[0]}${"*".repeat(Math.max(1, value.length - 2))}${value[value.length - 1]}`;
+}
 const NPD_SYNC_HEADER_MAP = {
   "NPD ID": "npdId",
   Timestamp: "timestamp",
@@ -5168,15 +5173,24 @@ function tallySyncSecretGuard(req, res, next) {
     return res.status(500).json({ error: "TALLY_SYNC_SECRET is not configured on server." });
   }
   const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();
+  console.info(
+    "[TALLY_SYNC_AUTH] Guard hit",
+    JSON.stringify({
+      method: req.method,
+      path: req.originalUrl,
+      headerPresent: Boolean(req.header("x-tally-sync-secret")),
+      providedLength: providedSecret.length,
+      expectedLength: TALLY_SYNC_SECRET.length,
+      providedMasked: maskSecret(providedSecret),
+      expectedMasked: maskSecret(TALLY_SYNC_SECRET)
+    })
+  );
   if (!providedSecret || providedSecret !== TALLY_SYNC_SECRET) {
-    const maskSecret = (value) => {
-      if (!value) return "(empty)";
-      if (value.length <= 2) return `${value[0] || ""}*`;
-      return `${value[0]}${"*".repeat(Math.max(1, value.length - 2))}${value[value.length - 1]}`;
-    };
     console.warn(
       "[TALLY_SYNC_AUTH] Unauthorized request",
       JSON.stringify({
+        method: req.method,
+        path: req.originalUrl,
         providedLength: providedSecret.length,
         expectedLength: TALLY_SYNC_SECRET.length,
         providedMasked: maskSecret(providedSecret),
@@ -5382,8 +5396,23 @@ async function fetchTallyInvoiceContext(db, invoiceId) {
   };
 }
 const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings"];
+app.get("/api/tally-sync-debug", (req, res) => {
+  const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();
+  return res.json({
+    ok: true,
+    method: req.method,
+    path: req.originalUrl,
+    headerPresent: Boolean(req.header("x-tally-sync-secret")),
+    providedLength: providedSecret.length,
+    expectedLength: TALLY_SYNC_SECRET.length,
+    providedMasked: maskSecret(providedSecret),
+    expectedMasked: maskSecret(TALLY_SYNC_SECRET),
+    matches: Boolean(providedSecret) && providedSecret === TALLY_SYNC_SECRET
+  });
+});
 app.get("/api/tally-sync/pending-invoices", tallySyncSecretGuard, async (_req, res) => {
   try {
+    console.info("[TALLY_SYNC_API] pending-invoices route entered");
     const db = await getPool();
     if (!db) return res.status(500).json({ error: "DB connection not available" });
     const rows = await fetchTallyPendingInvoices(db);
