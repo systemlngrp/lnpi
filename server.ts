@@ -672,7 +672,12 @@ app.post("/api/auth/logout", requireAuth, async (_req, res) => {
 
 // Protect all /api routes except auth + db-status
 app.use("/api", (req, res, next) => {
-  if (req.path.startsWith("/auth/") || req.path === "/db-status" || req.path.startsWith("/npd-sync")) return next();
+  if (
+    req.path.startsWith("/auth/") ||
+    req.path === "/db-status" ||
+    req.path.startsWith("/npd-sync") ||
+    req.path.startsWith("/tally-sync")
+  ) return next();
   return requireAuth(req, res, next);
 });
 
