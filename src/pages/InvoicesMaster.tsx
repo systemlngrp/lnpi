@@ -66,8 +66,21 @@ export function InvoicesMaster() {
   const [savingEditId, setSavingEditId] = useState<string | null>(null);
 
   const currentSetting = settings[0];
-  const isPankajUser = String(user?.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com";
-  const canEditInvoiceFields = isPankajUser && currentSetting?.allowInvoiceTallyEdit === "Yes";
+  const currentUserEmail = String(user?.email || "").trim().toLowerCase();
+  const allowedInvoiceEditUsers = useMemo(() => {
+    if (!currentSetting?.allowInvoiceTallyEditUsers) return [] as string[];
+    try {
+      const parsed = JSON.parse(currentSetting.allowInvoiceTallyEditUsers);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }, [currentSetting?.allowInvoiceTallyEditUsers]);
+  const canEditInvoiceFields =
+    currentSetting?.allowInvoiceTallyEdit === "Yes" &&
+    Boolean(currentUserEmail) &&
+    allowedInvoiceEditUsers.includes(currentUserEmail);
 
   const toggleRow = (id: string) => {
     const next = new Set(expandedRows);

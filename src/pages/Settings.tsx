@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Machine, Setting } from "../types";
+import { Machine, Setting, User } from "../types";
 import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { Spinner } from "../components/Spinner";
 
@@ -145,6 +145,7 @@ export function SettingsPage() {
   }, [searchTerm]);
 
   const [settings, setSettings, loading] = useData<Setting>("settings", []);
+  const [users] = useData<User>("users", []);
   const [machines] = useData<Machine>("machines", []);
   const npdItems = useNpdItems();
   const [saving, setSaving] = useState(false);
@@ -163,6 +164,27 @@ export function SettingsPage() {
   const currentSetting = settings[0];
   const isPankajUser = String(user?.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com";
   const allowInvoiceTallyEdit = currentSetting?.allowInvoiceTallyEdit === "Yes";
+
+  const allowedInvoiceEditUsers = useMemo(() => {
+    if (!currentSetting?.allowInvoiceTallyEditUsers) return [] as string[];
+    try {
+      const parsed = JSON.parse(currentSetting.allowInvoiceTallyEditUsers);
+      if (!Array.isArray(parsed)) return [];
+      return Array.from(new Set(parsed.map((value) => String(value || "").trim()).filter(Boolean)));
+    } catch {
+      return [];
+    }
+  }, [currentSetting?.allowInvoiceTallyEditUsers]);
+
+  const selectableInvoiceEditUsers = useMemo(() => {
+    return users
+      .filter((row) => String(row.email || "").trim())
+      .sort((a, b) => {
+        const nameCompare = String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+        if (nameCompare !== 0) return nameCompare;
+        return String(a.email || "").localeCompare(String(b.email || ""), undefined, { sensitivity: "base" });
+      });
+  }, [users]);
 
   const typeNames = useMemo(() => {
     const fromItems = npdItems.map((item) => String(item.typeName || "").trim()).filter(Boolean);
@@ -329,6 +351,7 @@ export function SettingsPage() {
         cuttingSizeAsPerCalculation: currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value,
         gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
         allowInvoiceTallyEdit: currentSetting?.allowInvoiceTallyEdit || "No",
+        allowInvoiceTallyEditUsers: currentSetting?.allowInvoiceTallyEditUsers || JSON.stringify([]),
         productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
         poMandatoryMrrTypes: currentSetting?.poMandatoryMrrTypes || JSON.stringify(["Reel"]),
         realizationPerKgTargets: currentSetting?.realizationPerKgTargets || JSON.stringify([]),
@@ -430,8 +453,39 @@ export function SettingsPage() {
             />
             <span>Allow Edit Invoice &amp; Tally No.</span>
           </label>
+          <div className="space-y-3">
+            <div className="text-xs font-black uppercase tracking-wide text-slate-600">Users Allowed To Edit</div>
+            <div className="rounded border border-black bg-slate-50 p-3 max-h-56 overflow-y-auto space-y-2">
+              {selectableInvoiceEditUsers.length === 0 ? (
+                <div className="text-sm text-slate-500">No users with email found.</div>
+              ) : (
+                selectableInvoiceEditUsers.map((row) => {
+                  const email = String(row.email || "").trim();
+                  const checked = allowedInvoiceEditUsers.includes(email);
+                  return (
+                    <label key={row.id} className="flex items-center gap-3 text-sm text-black">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={loading || saving}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? Array.from(new Set([...allowedInvoiceEditUsers, email]))
+                            : allowedInvoiceEditUsers.filter((value) => value !== email);
+                          void handleChange({ allowInvoiceTallyEditUsers: JSON.stringify(next) });
+                        }}
+                        className="h-4 w-4 border-black"
+                      />
+                      <span className="font-semibold">{row.name}</span>
+                      <span className="text-slate-500">({email})</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </div>
           <p className="text-xs text-slate-500">
-            Status: {allowInvoiceTallyEdit ? "Enabled temporarily" : "Disabled"}
+            Status: {allowInvoiceTallyEdit ? "Enabled temporarily" : "Disabled"} | Allowed users: {allowedInvoiceEditUsers.length}
           </p>
         </div>
       )}

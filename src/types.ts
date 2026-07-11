@@ -926,6 +926,7 @@ export interface Setting {
   cuttingSizeAsPerCalculation?: string;
   gsmAsPerCalculation?: string;
   allowInvoiceTallyEdit?: string;
+  allowInvoiceTallyEditUsers?: string;
   productionFormVisibleColumns?: string;
   poMandatoryMrrTypes?: string;
   realizationPerKgTargets?: string;
