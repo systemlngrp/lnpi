@@ -69,7 +69,7 @@ TALLY_UOM_ALIASES = {
 }
 TALLY_MASTER_CACHE = {}
 TALLY_CONNECT_TIMEOUT = float(os.getenv("TALLY_CONNECT_TIMEOUT", "5"))
-TALLY_READ_TIMEOUT = float(os.getenv("TALLY_READ_TIMEOUT", "15"))
+TALLY_READ_TIMEOUT = float(os.getenv("TALLY_READ_TIMEOUT", "60"))
 LOG_FOLDER_NAME = "Log"
 LOG_WORKBOOK_NAME = "invoice_sync_logs.xlsx"
 LOG_SHEET_NAME = "SyncLogs"

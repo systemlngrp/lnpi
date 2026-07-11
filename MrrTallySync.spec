@@ -1,16 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_data_files
+
+mysql_connector_datas = collect_data_files('mysql.connector')
+
 
 a = Analysis(
-    ['pythoncode\\mrrtallysync.py'],
+    ['python\\tally_mrr_posting.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=mysql_connector_datas,
     hiddenimports=[
         'mysql.connector.plugins.mysql_native_password',
         'mysql.connector.plugins.caching_sha2_password',
         'mysql.connector.plugins.mysql_clear_password',
         'mysql.connector.plugins.sha256_password',
+        'mysql.connector.locales',
+        'mysql.connector.locales.eng',
+        'mysql.connector.locales.eng.client_error',
     ],
     hookspath=[],
     hooksconfig={},
