@@ -10,6 +10,7 @@ import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { getFinancialYear } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { PO_MANDATORY_MRR_TYPES, parsePoMandatoryMrrTypes } from "../lib/materialInPoMandatory";
+import { useAuth } from "../auth/AuthContext";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -130,6 +131,7 @@ function parseInvoiceNumberSeries(raw?: string): InvoiceSeriesRow[] {
 }
 
 export function SettingsPage() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
 
   // Simple DOM-based table row filter bound to the search input
@@ -159,6 +161,8 @@ export function SettingsPage() {
   const [poMandatoryDraft, setPoMandatoryDraft] = useState<string[]>([]);
 
   const currentSetting = settings[0];
+  const isPankajUser = String(user?.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com";
+  const allowInvoiceTallyEdit = currentSetting?.allowInvoiceTallyEdit === "Yes";
 
   const typeNames = useMemo(() => {
     const fromItems = npdItems.map((item) => String(item.typeName || "").trim()).filter(Boolean);
@@ -324,6 +328,7 @@ export function SettingsPage() {
         flapAsPerCalculation: currentSetting?.flapAsPerCalculation || FLAP_FORMULA_OPTIONS[0].value,
         cuttingSizeAsPerCalculation: currentSetting?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_OPTIONS[0].value,
         gsmAsPerCalculation: currentSetting?.gsmAsPerCalculation || GSM_FORMULA_OPTIONS[0].value,
+        allowInvoiceTallyEdit: currentSetting?.allowInvoiceTallyEdit || "No",
         productionFormVisibleColumns: currentSetting?.productionFormVisibleColumns || JSON.stringify(PRODUCTION_FORM_COLUMN_OPTIONS),
         poMandatoryMrrTypes: currentSetting?.poMandatoryMrrTypes || JSON.stringify(["Reel"]),
         realizationPerKgTargets: currentSetting?.realizationPerKgTargets || JSON.stringify([]),
@@ -406,6 +411,30 @@ export function SettingsPage() {
       </div>
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      {isPankajUser && (
+        <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-4">
+          <div>
+            <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Billing Master Edit Control</h3>
+            <p className="text-sm text-black leading-6">
+              Temporarily allow editing of the <span className="font-bold">INVOICE</span> and <span className="font-bold">TALLY NO.</span> columns in Billing Master.
+            </p>
+          </div>
+          <label className="flex items-center gap-3 text-sm font-semibold text-black">
+            <input
+              type="checkbox"
+              checked={allowInvoiceTallyEdit}
+              onChange={(e) => void handleChange({ allowInvoiceTallyEdit: e.target.checked ? "Yes" : "No" })}
+              disabled={loading || saving}
+              className="h-4 w-4 border-black"
+            />
+            <span>Allow Edit Invoice &amp; Tally No.</span>
+          </label>
+          <p className="text-xs text-slate-500">
+            Status: {allowInvoiceTallyEdit ? "Enabled temporarily" : "Disabled"}
+          </p>
+        </div>
+      )}
 
       <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-5">
           <div className="space-y-4 border-b border-dashed border-black pb-5">

@@ -925,6 +925,7 @@ export interface Setting {
   flapAsPerCalculation?: string;
   cuttingSizeAsPerCalculation?: string;
   gsmAsPerCalculation?: string;
+  allowInvoiceTallyEdit?: string;
   productionFormVisibleColumns?: string;
   poMandatoryMrrTypes?: string;
   realizationPerKgTargets?: string;

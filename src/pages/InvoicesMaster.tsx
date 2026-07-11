@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import {
   Invoice,
   InvoiceLineItem,
@@ -11,6 +12,7 @@ import {
   Truck,
   DispatchPlan,
   Order,
+  Setting,
 } from "../types";
 import {
   Search,
@@ -44,7 +46,9 @@ type InvoiceDetailRow = {
 
 export function InvoicesMaster() {
   const navigate = useNavigate();
-  const [invoices] = useData<Invoice>("invoices", []);
+  const { user } = useAuth();
+  const [invoices, setInvoices] = useData<Invoice>("invoices", []);
+  const [settings] = useData<Setting>("settings", []);
   const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [gatePasses] = useData<GatePass>("gate_passes", []);
   const [companies] = useData<Company>("companies", []);
@@ -57,6 +61,13 @@ export function InvoicesMaster() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState({ invoiceNo: "", tallyInvNo: "" });
+  const [savingEditId, setSavingEditId] = useState<string | null>(null);
+
+  const currentSetting = settings[0];
+  const isPankajUser = String(user?.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com";
+  const canEditInvoiceFields = isPankajUser && currentSetting?.allowInvoiceTallyEdit === "Yes";
 
   const toggleRow = (id: string) => {
     const next = new Set(expandedRows);
@@ -166,6 +177,60 @@ export function InvoicesMaster() {
 
   const openInvoiceEditor = (invoiceId: string) => {
     navigate(`/billing/pending?editInvoiceId=${encodeURIComponent(invoiceId)}`);
+  };
+
+  const startInlineEdit = (invoice: Invoice) => {
+    setEditingInvoiceId(invoice.id);
+    setEditDraft({
+      invoiceNo: String(invoice.invoiceNo || ""),
+      tallyInvNo: String(invoice.tallyInvNo || ""),
+    });
+  };
+
+  const cancelInlineEdit = () => {
+    setEditingInvoiceId(null);
+    setEditDraft({ invoiceNo: "", tallyInvNo: "" });
+    setSavingEditId(null);
+  };
+
+  const saveInlineEdit = async (invoice: Invoice) => {
+    const nextInvoiceNo = editDraft.invoiceNo.trim();
+    const nextTallyInvNo = editDraft.tallyInvNo.trim();
+    const baseInvoice = invoices.find((row) => row.id === invoice.id) || invoice;
+
+    if (!nextInvoiceNo) {
+      alert("Invoice number cannot be blank.");
+      return;
+    }
+
+    const duplicateInvoice = invoices.some(
+      (row) => row.id !== invoice.id && String(row.invoiceNo || "").trim().toLowerCase() === nextInvoiceNo.toLowerCase()
+    );
+    if (duplicateInvoice) {
+      alert("This invoice number already exists.");
+      return;
+    }
+
+    setSavingEditId(invoice.id);
+    try {
+      const timestamp = new Date().toISOString();
+      const updatedBy = user?.name || user?.email || "System User";
+      const updatedInvoice: Invoice = {
+        ...baseInvoice,
+        invoiceNo: nextInvoiceNo,
+        tallyInvNo: nextTallyInvNo,
+        updatedBy,
+        updateTimestamp: timestamp,
+      };
+
+      await setInvoices((prev) => prev.map((row) => (row.id === invoice.id ? updatedInvoice : row)));
+      setSelectedInvoice((prev) => (prev?.id === invoice.id ? updatedInvoice : prev));
+      cancelInlineEdit();
+    } catch (error) {
+      console.error("Failed to update invoice fields:", error);
+      alert("Failed to update invoice details.");
+      setSavingEditId(null);
+    }
   };
 
   const processedInvoices = useMemo(() => {
@@ -278,14 +343,41 @@ export function InvoicesMaster() {
                       </button>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Receipt size={14} className="text-indigo-600 mr-2" />
-                        <span className="font-bold text-sm">{invoice.invoiceNo}</span>
-                      </div>
+                      {canEditInvoiceFields && editingInvoiceId === invoice.id ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center">
+                            <Receipt size={14} className="text-indigo-600 mr-2" />
+                            <input
+                              type="text"
+                              value={editDraft.invoiceNo}
+                              onChange={(e) => setEditDraft((prev) => ({ ...prev, invoiceNo: e.target.value }))}
+                              className="w-full min-w-[170px] rounded border border-black px-2 py-1 text-sm font-bold outline-none"
+                            />
+                          </div>
+                          <div className="text-[10px] text-slate-500 uppercase">Editing invoice no.</div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <Receipt size={14} className="text-indigo-600 mr-2" />
+                          <span className="font-bold text-sm">{invoice.invoiceNo}</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-4 text-sm font-medium">{invoice.companyName}</td>
                     <td className="px-4 py-4 whitespace-nowrap text-xs text-slate-600">{formatDate(invoice.date)}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-xs">{invoice.tallyInvNo || "-"}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-xs">
+                      {canEditInvoiceFields && editingInvoiceId === invoice.id ? (
+                        <input
+                          type="text"
+                          value={editDraft.tallyInvNo}
+                          onChange={(e) => setEditDraft((prev) => ({ ...prev, tallyInvNo: e.target.value }))}
+                          className="w-full min-w-[140px] rounded border border-black px-2 py-1 text-xs outline-none"
+                          placeholder="Tally No"
+                        />
+                      ) : (
+                        invoice.tallyInvNo || "-"
+                      )}
+                    </td>
                     <td className="px-4 py-4 whitespace-nowrap text-xs">
                       {invoice.tallyInvDate ? formatDate(invoice.tallyInvDate) : "-"}
                     </td>
@@ -313,6 +405,36 @@ export function InvoicesMaster() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex justify-center gap-2">
+                        {canEditInvoiceFields && (
+                          editingInvoiceId === invoice.id ? (
+                            <>
+                              <button
+                                onClick={() => void saveInlineEdit(invoice)}
+                                disabled={savingEditId === invoice.id}
+                                className="rounded border border-emerald-700 px-2 py-1 text-[10px] font-black uppercase text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+                                title="Save Invoice / Tally No"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={cancelInlineEdit}
+                                disabled={savingEditId === invoice.id}
+                                className="rounded border border-slate-700 px-2 py-1 text-[10px] font-black uppercase text-slate-800 hover:bg-slate-50 disabled:opacity-60"
+                                title="Cancel Edit"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => startInlineEdit(invoice)}
+                              className="p-1.5 text-slate-700 hover:bg-slate-100 rounded"
+                              title="Edit Invoice No / Tally No"
+                            >
+                              <Pencil size={18} />
+                            </button>
+                          )
+                        )}
                         <button
                           onClick={() => setSelectedInvoice(invoice)}
                           className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
