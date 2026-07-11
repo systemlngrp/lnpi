@@ -44,6 +44,20 @@ type InvoiceDetailRow = {
   amount: number;
 };
 
+function getInvoiceSortValue(invoiceNo: string) {
+  const raw = String(invoiceNo || "").trim();
+  if (!raw) return { prefix: "", numeric: -1, raw: "" };
+  const match = raw.match(/^(.*?)(\d+)$/);
+  if (!match) {
+    return { prefix: raw.toLowerCase(), numeric: -1, raw: raw.toLowerCase() };
+  }
+  return {
+    prefix: String(match[1] || "").toLowerCase(),
+    numeric: Number(match[2] || 0),
+    raw: raw.toLowerCase(),
+  };
+}
+
 export function InvoicesMaster() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -282,7 +296,14 @@ export function InvoicesMaster() {
           String(invoice.tallySyncRemark || "").toLowerCase().includes(needle)
         );
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const aSort = getInvoiceSortValue(a.invoiceNo);
+        const bSort = getInvoiceSortValue(b.invoiceNo);
+        const prefixCompare = bSort.prefix.localeCompare(aSort.prefix, undefined, { sensitivity: "base" });
+        if (prefixCompare !== 0) return prefixCompare;
+        if (bSort.numeric !== aSort.numeric) return bSort.numeric - aSort.numeric;
+        return bSort.raw.localeCompare(aSort.raw, undefined, { sensitivity: "base" });
+      });
   }, [invoices, companies, searchTerm, lineItems, npdItems, slips, trucks, dispatchPlans, orders]);
 
   const {
