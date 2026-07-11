@@ -73,11 +73,138 @@ export type NavItem = {
   countKey?: string;
 };
 
+export type NavSubGroup = {
+  section: string;
+  items: NavItem[];
+};
+
+export type NavEntry = NavItem | NavSubGroup;
+
 export type NavGroup = {
   section: string;
   color: string;
-  items: NavItem[];
+  items: NavEntry[];
 };
+
+function isNavSubGroup(entry: NavEntry): entry is NavSubGroup {
+  return "items" in entry;
+}
+
+const indentItems: NavItem[] = [
+  { name: "Indent Form", href: "/indent/form", icon: ClipboardList },
+  { name: "Pending", href: "/indent/pending", icon: Activity, countKey: "/indent/pending" },
+  { name: "Approved", href: "/indent/approved", icon: Database, countKey: "/indent/approved" },
+  { name: "Completed", href: "/indent/completed", icon: CheckCircle, countKey: "/indent/completed" },
+  { name: "Rejected", href: "/indent/rejected", icon: X, countKey: "/indent/rejected" },
+];
+
+const purchaseOrderItems: NavItem[] = [
+  { name: "Pending PO Items", href: "/purchase-orders/pending-indent-lines", icon: Activity, countKey: "/purchase-orders/pending-indent-lines" },
+  { name: "All", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
+  { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
+  { name: "Approved", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
+  { name: "Rejected", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
+];
+
+const gateEntryItems: NavItem[] = [
+  { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
+  { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
+];
+
+const materialReceiptItems: NavItem[] = [
+  { name: "Material Receipt Item Master", href: "/material-in/item-master", icon: Database },
+  { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
+  { name: "Pending MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
+  { name: "Pending Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
+  { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
+];
+
+const materialIssueReturnItems: NavItem[] = [
+  { name: "Material Issue and Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
+  { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
+  { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
+  { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
+  { name: "Pending Consumption Tally Posting", href: "/material-movement/pending-consumption-tally", icon: FileText, countKey: "/material-movement/pending-consumption-tally" },
+  { name: "Non-Job Issue Master", href: "/material-movement/non-job-issue-master", icon: Database },
+  { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
+  { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
+];
+
+const orderItems: NavItem[] = [
+  { name: "Order Form", href: "/orders/form", icon: ClipboardList },
+  { name: "Pending Salesman Approval", href: "/orders/pending-ph", icon: UserCheck, countKey: "/orders/pending-ph" },
+  { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity, countKey: "/orders/pending-scheduling" },
+  { name: "Orders Master", href: "/orders/master", icon: FileText },
+  { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
+  { name: "Canceled Orders", href: "/orders/canceled", icon: X },
+];
+
+const productionItems: NavItem[] = [
+  { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
+  { name: "Pending NPD", href: "/production/pending-npd", icon: Activity, countKey: "/production/pending-npd" },
+  { name: "Upcoming Scheduled Orders", href: "/production/upcoming", icon: Activity, countKey: "/orders/upcoming" },
+  { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
+  { name: "Pending FG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
+  { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
+  { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
+  { name: "Production Master", href: "/production/master", icon: Database },
+  { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
+  { name: "Canceled Jobs", href: "/production/canceled", icon: X },
+];
+
+const phpPlateProcessItems: NavItem[] = [
+  { name: "Pending PHP Planning", href: "/production/php/pending-planning", icon: ClipboardList },
+  { name: "Pending Plate Planning", href: "/production/plate/pending-planning", icon: ClipboardList },
+  { name: "Scheduling", href: "/production/php-plate/scheduling", icon: ClipboardList },
+  { name: "Sequencing", href: "/production/php-plate/pending-sequencing", icon: Activity },
+  { name: "Production", href: "/production/php-plate/pending-production", icon: Hammer },
+];
+
+const phpMasterItems: NavItem[] = [
+  { name: "PHP Production Master", href: "/production/php/master", icon: Database },
+];
+
+const plateMasterItems: NavItem[] = [
+  { name: "Plate Production Master", href: "/production/plate/master", icon: Database },
+];
+
+const productionProcessingItems: NavItem[] = [
+  { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
+  { name: "Reporting Master", href: "/production-processing/master", icon: Database },
+];
+
+const sampleItems: NavItem[] = [
+  { name: "Sample Form", href: "/samples/form", icon: FlaskConical },
+  { name: "Pending Samples", href: "/samples/pending", icon: Activity, countKey: "/samples/pending" },
+  { name: "Samples Produced", href: "/samples/produced", icon: CheckCircle },
+  { name: "Sample Master", href: "/samples/master", icon: Database },
+];
+
+const dispatchItems: NavItem[] = [
+  { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
+  { name: "Dispatch Plans Master", href: "/dispatch/master", icon: Database },
+];
+
+const loadingItems: NavItem[] = [
+  { name: "Pending Loading", href: "/loading/pending", icon: Truck, countKey: "/loading/pending" },
+  { name: "Loading Master", href: "/loading/master", icon: FileText },
+];
+
+const phpLoadingItems: NavItem[] = [
+  { name: "Pending PHP Tally", href: "/loading/php/pending-tally", icon: FileText, countKey: "/loading/php/pending-tally" },
+  { name: "PHP Loading Slip Master", href: "/loading/php/master", icon: FileText },
+];
+
+const plateLoadingItems: NavItem[] = [
+  { name: "Pending Plate Tally", href: "/loading/plate/pending-tally", icon: FileText, countKey: "/loading/plate/pending-tally" },
+  { name: "Plate Loading Slip Master", href: "/loading/plate/master", icon: FileText },
+];
+
+const billingItems: NavItem[] = [
+  { name: "Pending Invoicing", href: "/billing/pending", icon: Receipt, countKey: "/billing/pending" },
+  { name: "Pending Tally Posting", href: "/billing/pending-tally", icon: CheckCircle, countKey: "/billing/pending-tally" },
+  { name: "Billing Master", href: "/billing/master", icon: FileText },
+];
 
 export const NAVIGATION: NavGroup[] = [
   {
@@ -89,7 +216,7 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "Masters",
+    section: "Master",
     color: "bg-indigo-700",
     items: [
       { name: "Material Master", href: "/masters/materials", icon: Boxes },
@@ -111,170 +238,38 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "Indent",
+    section: "Purchase",
     color: "bg-orange-700",
     items: [
-      { name: "Indent Form", href: "/indent/form", icon: ClipboardList },
-      { name: "Pending", href: "/indent/pending", icon: Activity, countKey: "/indent/pending" },
-      { name: "Approved", href: "/indent/approved", icon: Database, countKey: "/indent/approved" },
-      { name: "Completed", href: "/indent/completed", icon: CheckCircle, countKey: "/indent/completed" },
-      { name: "Rejected", href: "/indent/rejected", icon: X, countKey: "/indent/rejected" },
+      { section: "Indent", items: indentItems },
+      { section: "Purchase Order", items: purchaseOrderItems },
+      { section: "Gate Entry", items: gateEntryItems },
+      { section: "Material Receipt", items: materialReceiptItems },
     ],
   },
   {
-    section: "Purchase Order",
-    color: "bg-cyan-700",
-    items: [
-      { name: "Pending PO Items", href: "/purchase-orders/pending-indent-lines", icon: Activity, countKey: "/purchase-orders/pending-indent-lines" },
-      { name: "All", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
-      { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
-      { name: "Approved", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
-      { name: "Rejected", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
-    ],
-  },
-  {
-    section: "Gate Entry",
-    color: "bg-violet-700",
-    items: [
-      { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
-      { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
-    ],
-  },
-  {
-    section: "Material Receipt",
-    color: "bg-fuchsia-700",
-    items: [
-      { name: "Material Receipt Item Master", href: "/material-in/item-master", icon: Database },
-      { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
-      { name: "Pending MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
-      { name: "Pending Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
-      { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
-    ],
-  },
-  {
-    section: "Material Issue and Return",
-    color: "bg-lime-700",
-    items: [
-      { name: "Material Issue and Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
-      { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
-      { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
-      { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
-      { name: "Pending Consumption Tally Posting", href: "/material-movement/pending-consumption-tally", icon: FileText, countKey: "/material-movement/pending-consumption-tally" },
-      { name: "Non-Job Issue Master", href: "/material-movement/non-job-issue-master", icon: Database },
-      { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
-      { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
-    ],
-  },
-  {
-    section: "Orders",
-    color: "bg-rose-700",
-    items: [
-      { name: "Order Form", href: "/orders/form", icon: ClipboardList },
-      { name: "Pending Salesman Approval", href: "/orders/pending-ph", icon: UserCheck, countKey: "/orders/pending-ph" },
-      { name: "Pending Scheduling", href: "/orders/pending-scheduling", icon: Activity, countKey: "/orders/pending-scheduling" },
-      { name: "Orders Master", href: "/orders/master", icon: FileText },
-      { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
-      { name: "Canceled Orders", href: "/orders/canceled", icon: X },
-    ],
-  },
-  {
-    section: "Production",
+    section: "Jobs",
     color: "bg-emerald-700",
     items: [
-      { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
-      { name: "Pending NPD", href: "/production/pending-npd", icon: Activity, countKey: "/production/pending-npd" },
-      { name: "Upcoming Scheduled Orders", href: "/production/upcoming", icon: Activity, countKey: "/orders/upcoming" },
-      { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
-      { name: "Pending FG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
-      { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
-      { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
-      { name: "Production Master", href: "/production/master", icon: Database },
-      { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
-      { name: "Canceled Jobs", href: "/production/canceled", icon: X },
+      { section: "Material Issue and Return", items: materialIssueReturnItems },
+      { section: "Orders", items: orderItems },
+      { section: "Production", items: productionItems },
+      { section: "PHP / Plate Process", items: phpPlateProcessItems },
+      { section: "PHP Master", items: phpMasterItems },
+      { section: "Plate Master", items: plateMasterItems },
+      { section: "Production Processing", items: productionProcessingItems },
+      { section: "Samples", items: sampleItems },
     ],
   },
   {
-    section: "PHP / Plate Process",
-    color: "bg-emerald-800",
-    items: [
-      { name: "Pending PHP Planning", href: "/production/php/pending-planning", icon: ClipboardList },
-      { name: "Pending Plate Planning", href: "/production/plate/pending-planning", icon: ClipboardList },
-      { name: "Scheduling", href: "/production/php-plate/scheduling", icon: ClipboardList },
-      { name: "Sequencing", href: "/production/php-plate/pending-sequencing", icon: Activity },
-      { name: "Production", href: "/production/php-plate/pending-production", icon: Hammer },
-    ],
-  },
-  {
-    section: "PHP Master",
-    color: "bg-emerald-900",
-    items: [
-      { name: "PHP Production Master", href: "/production/php/master", icon: Database },
-    ],
-  },
-  {
-    section: "Plate Master",
-    color: "bg-green-900",
-    items: [
-      { name: "Plate Production Master", href: "/production/plate/master", icon: Database },
-    ],
-  },
-  {
-    section: "Production Processing" ,
-    color: "bg-teal-800",
-    items: [
-      { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
-      { name: "Reporting Master", href: "/production-processing/master", icon: Database },
-    ],
-  },
-  {
-    section: "Samples",
-    color: "bg-teal-700",
-    items: [
-      { name: "Sample Form", href: "/samples/form", icon: FlaskConical },
-      { name: "Pending Samples", href: "/samples/pending", icon: Activity, countKey: "/samples/pending" },
-      { name: "Samples Produced", href: "/samples/produced", icon: CheckCircle },
-      { name: "Sample Master", href: "/samples/master", icon: Database },
-    ],
-  },
-  {
-    section: "Dispatch",
+    section: "Sales",
     color: "bg-blue-700",
     items: [
-      { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
-      { name: "Dispatch Plans Master", href: "/dispatch/master", icon: Database },
-    ],
-  },
-  {
-    section: "Loading",
-    color: "bg-indigo-600",
-    items: [
-      { name: "Pending Loading", href: "/loading/pending", icon: Truck, countKey: "/loading/pending" },
-      { name: "Loading Master", href: "/loading/master", icon: FileText },
-    ],
-  },
-  {
-    section: "PHP Loading",
-    color: "bg-indigo-700",
-    items: [
-      { name: "Pending PHP Tally", href: "/loading/php/pending-tally", icon: FileText, countKey: "/loading/php/pending-tally" },
-      { name: "PHP Loading Slip Master", href: "/loading/php/master", icon: FileText },
-    ],
-  },
-  {
-    section: "Plate Loading",
-    color: "bg-violet-700",
-    items: [
-      { name: "Pending Plate Tally", href: "/loading/plate/pending-tally", icon: FileText, countKey: "/loading/plate/pending-tally" },
-      { name: "Plate Loading Slip Master", href: "/loading/plate/master", icon: FileText },
-    ],
-  },
-  {
-    section: "Billing",
-    color: "bg-emerald-600",
-    items: [
-      { name: "Pending Invoicing", href: "/billing/pending", icon: Receipt, countKey: "/billing/pending" },
-      { name: "Pending Tally Posting", href: "/billing/pending-tally", icon: CheckCircle, countKey: "/billing/pending-tally" },
-      { name: "Billing Master", href: "/billing/master", icon: FileText },
+      { section: "Dispatch", items: dispatchItems },
+      { section: "Loading", items: loadingItems },
+      { section: "PHP Loading", items: phpLoadingItems },
+      { section: "Plate Loading", items: plateLoadingItems },
+      { section: "Billing", items: billingItems },
     ],
   },
   {
@@ -287,7 +282,7 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "Reports",
+    section: "Report",
     color: "bg-sky-700",
     items: [
       { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
@@ -312,14 +307,16 @@ export const NAVIGATION: NavGroup[] = [
 ];
 
 const NAVIGATION_WITH_SORTED_MASTERS: NavGroup[] = NAVIGATION.map((group) =>
-  group.section === "Masters"
+  group.section === "Master"
     ? {
         ...group,
-        items: [...group.items].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+        items: [...group.items].sort((a, b) => {
+          if (isNavSubGroup(a) || isNavSubGroup(b)) return 0;
+          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        }),
       }
     : group
 );
-
 export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
   const { hasAccess, user } = useAuth();
@@ -585,19 +582,45 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   consumptions.filter(c => isPendingPH(c.status)).length
   };
 
-  const navigation = useMemo(() => {
+  const navigation = useMemo<NavGroup[]>(() => {
     if (user?.role !== "Operator") return NAVIGATION_WITH_SORTED_MASTERS;
-    return NAVIGATION_WITH_SORTED_MASTERS
-      .filter((group) => group.section === "Production Processing")
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => item.name === "Pending Processing"),
-      }));
+    return [
+      {
+        section: "Jobs",
+        color: "bg-emerald-700",
+        items: [
+          {
+            section: "Production Processing",
+            items: productionProcessingItems.filter((item) => item.name === "Pending Processing"),
+          },
+        ],
+      },
+    ];
   }, [user?.role]);
+
+  const getVisibleEntries = useCallback(
+    (entries: NavEntry[]): NavEntry[] =>
+      entries.reduce<NavEntry[]>((visible, entry) => {
+        if (isNavSubGroup(entry)) {
+          const visibleItems = entry.items.filter((item) => hasAccess(item.href));
+          if (visibleItems.length > 0) visible.push({ ...entry, items: visibleItems });
+          return visible;
+        }
+
+        if (hasAccess(entry.href)) visible.push(entry);
+        return visible;
+      }, []),
+    [hasAccess]
+  );
 
   useEffect(() => {
     const next: Record<string, boolean> = {};
-    for (const group of navigation) next[group.section] = true;
+    for (const group of navigation) {
+      next[group.section] = true;
+      group.items.forEach((entry) => {
+        if (isNavSubGroup(entry)) next[`${group.section}/${entry.section}`] = true;
+      });
+    }
     setCollapsedSections(next);
   }, [navigation]);
 
@@ -610,13 +633,103 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         return { ...prev, [section]: true };
       }
 
-      const next: Record<string, boolean> = {};
+      const next = { ...prev };
       for (const group of navigation) next[group.section] = true;
       next[section] = false;
       return next;
     });
   };
 
+  const toggleNestedSection = (sectionKey: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
+  const isActiveItem = (item: NavItem) => {
+    const itemUrl = new URL(item.href, window.location.origin);
+    return (item.href === "/" && location.pathname === "/") ||
+      (item.href !== "/" &&
+        location.pathname === itemUrl.pathname &&
+        (!itemUrl.search || location.search === itemUrl.search));
+  };
+
+  const renderNavLink = (item: NavItem, nested = false) => {
+    const isActive = isActiveItem(item);
+    const count = item.countKey ? counts[item.countKey] : (item as any).count || 0;
+
+    return (
+      <Link
+        key={item.name}
+        to={item.href}
+        onClick={onClose}
+        title={item.name}
+        className={cn(
+          isActive
+            ? "bg-white text-black font-bold shadow-inner"
+            : nested
+              ? "bg-white/5 text-white hover:bg-black/20 hover:text-white font-medium"
+              : "text-white hover:bg-black/20 hover:text-white font-medium",
+          "group flex items-center justify-between rounded-sm py-1.5 text-[11px] transition-all whitespace-nowrap",
+          isCollapsed ? "px-2" : nested ? "pl-4 pr-2" : "px-2"
+        )}
+      >
+        <div className="flex items-center">
+          <item.icon
+            className={cn(
+              isActive ? "text-black" : "text-white",
+              "mr-2 h-4 w-4 shrink-0"
+            )}
+            aria-hidden="true"
+          />
+          {!isCollapsed && (
+            <span className="block max-w-[180px] overflow-x-auto whitespace-nowrap scrollbar-thin">
+              {item.name}
+            </span>
+          )}
+        </div>
+        {count > 0 && !isCollapsed && (
+          <span className={cn(
+            "flex items-center justify-center min-w-[18px] h-4.5 px-1 rounded-full text-[10px] font-black tracking-tighter shrink-0 ml-3",
+            isActive ? "bg-black text-white" : "bg-white text-black"
+          )}>
+            {count}
+          </span>
+        )}
+      </Link>
+    );
+  };
+
+  const renderNavEntry = (entry: NavEntry, groupSection: string) => {
+    if (!isNavSubGroup(entry)) return renderNavLink(entry);
+
+    const sectionKey = `${groupSection}/${entry.section}`;
+
+    if (isCollapsed) {
+      return (
+        <div key={sectionKey} className="space-y-px">
+          {entry.items.map((item) => renderNavLink(item, true))}
+        </div>
+      );
+    }
+
+    return (
+      <div key={sectionKey} className="rounded bg-black/10 py-0.5">
+        <button
+          type="button"
+          onClick={() => toggleNestedSection(sectionKey)}
+          className={cn(
+            "flex w-full items-center justify-between rounded px-2 py-1 text-left text-[10px] font-black uppercase tracking-wide hover:bg-black/10",
+            collapsedSections[sectionKey] ? "text-white/80" : "bg-red-600 text-white shadow-inner"
+          )}
+        >
+          <span className="max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap">{entry.section}</span>
+          {collapsedSections[sectionKey] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+        </button>
+        <div className={cn("mt-0.5 space-y-px", collapsedSections[sectionKey] && "hidden")}>
+          {entry.items.map((item) => renderNavLink(item, true))}
+        </div>
+      </div>
+    );
+  };
 
 
   return (
@@ -636,8 +749,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       </div>
       <nav className="flex-1 space-y-3 overflow-x-auto overflow-y-auto px-2 py-4 border-r border-white/5">
         {navigation.map((group) => {
-          const visibleItems = group.items.filter((item) => hasAccess(item.href));
-          if (visibleItems.length === 0) return null;
+          const visibleEntries = getVisibleEntries(group.items);
+          if (visibleEntries.length === 0) return null;
 
           return (
             <div key={group.section} className={cn("p-1 rounded flex flex-col border border-white/10", group.color)}>
@@ -651,55 +764,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   {collapsedSections[group.section] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                 </button>
               ) : null}
-              <div className={cn("space-y-px", !isCollapsed && collapsedSections[group.section] && "hidden")}>
-                {visibleItems.map((item) => {
-                  const itemUrl = new URL(item.href, window.location.origin);
-                  const isActive = (item.href === "/" && location.pathname === "/") || 
-                                   (item.href !== "/" && (
-                                     location.pathname === itemUrl.pathname && 
-                                     (!itemUrl.search || location.search === itemUrl.search)
-                                   ));
-                  const count = item.countKey ? counts[item.countKey] : (item as any).count || 0;
-                  
-                  return (
-                    <Link
-                      key={item.name}
-                      to={item.href}
-                      onClick={onClose}
-                      title={item.name}
-                      className={cn(
-                        isActive
-                          ? "bg-white text-black font-bold shadow-inner"
-                          : "text-white hover:bg-black/20 hover:text-white font-medium",
-                        "group flex items-center justify-between rounded-sm py-1.5 text-[11px] transition-all whitespace-nowrap",
-                        isCollapsed ? "px-2" : "px-2"
-                      )}
-                    >
-                      <div className="flex items-center">
-                        <item.icon
-                          className={cn(
-                            isActive ? "text-black" : "text-white",
-                            "mr-2 h-4 w-4 shrink-0"
-                          )}
-                          aria-hidden="true"
-                        />
-                        {!isCollapsed && (
-                          <span className="block max-w-[190px] overflow-x-auto whitespace-nowrap scrollbar-thin">
-                            {item.name}
-                          </span>
-                        )}
-                      </div>
-                      {count > 0 && !isCollapsed && (
-                        <span className={cn(
-                          "flex items-center justify-center min-w-[18px] h-4.5 px-1 rounded-full text-[10px] font-black tracking-tighter shrink-0 ml-3",
-                          isActive ? "bg-black text-white" : "bg-white text-black"
-                        )}>
-                          {count}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
+              <div className={cn("space-y-1", !isCollapsed && collapsedSections[group.section] && "hidden")}>
+                {visibleEntries.map((entry) => renderNavEntry(entry, group.section))}
               </div>
             </div>
           );

@@ -344,6 +344,7 @@ export function ProductionForm() {
   );
 
   const currentQty = Number(formData.qty || 0);
+  const reelActualTrimMissing = showField("Reel Actual Trim") && Number(formData.reelActualWithTrimming || 0) <= 0;
   const allJobRows = useMemo(() => [...productions, ...phpJobMaster, ...plateJobMaster], [productions, phpJobMaster, plateJobMaster]);
   const currentGsm = Number(formData.gsm || 0);
   const leastGsm = Number(formData.leastGsm || 0);
@@ -677,6 +678,10 @@ export function ProductionForm() {
     event.preventDefault();
     if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.date) return;
     if (showField("L1") && formData.l1 === "") return;
+    if (reelActualTrimMissing) {
+      alert("Reel Actual Trim is mandatory and must be greater than 0.");
+      return;
+    }
 
     const qty = Number(formData.qty);
     if (qty <= 0 || quantityDeviationError || maximumAllowedProductionError || gsmValidationError) return;
@@ -983,7 +988,7 @@ export function ProductionForm() {
                 type="number"
                 helpText="Editable field for plate-related cutting ups. It is saved with the production entry."
               /> : null}
-              {showField("Reel Actual Trim") ? <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" /> : null}
+              {showField("Reel Actual Trim") ? <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" required helpText="Mandatory. Enter the actual reel size after trimming." /> : null}
               {showField("Cutting Trim") ? <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText={getCuttingSizeHelpText(cuttingSizeFormulaMode)} /> : null}
               {showField("Paper Required (Nos)") ? <FormInput
                 label="Paper Required (Nos)"
@@ -1057,6 +1062,7 @@ export function ProductionForm() {
                 !selectedSchedule ||
                 !formData.date ||
                 currentQty <= 0 ||
+                reelActualTrimMissing ||
                 quantityDeviationError ||
                 maximumAllowedProductionError ||
                 gsmValidationError

@@ -20,6 +20,13 @@ function formatDisplayDate(value?: string) {
   return value ? formatDate(value) : "-";
 }
 
+function getPageSize(doc: jsPDF) {
+  return {
+    width: doc.internal.pageSize.getWidth(),
+    height: doc.internal.pageSize.getHeight(),
+  };
+}
+
 export async function downloadMaterialInPdf({
   mrr,
   materials,
@@ -38,11 +45,14 @@ export async function downloadMaterialInPdf({
   setting?: Setting | null;
 }) {
   const doc = new jsPDF("l", "mm", "a4");
+  const pageSize = getPageSize(doc);
+  const margin = { left: 14, right: 14, top: 14, bottom: 14 };
+  const printableWidth = pageSize.width - margin.left - margin.right;
   let currentY = (await renderOrganizationHeader(doc, setting)).currentY;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text("MATERIAL RECEIPT", 105, currentY, { align: "center" });
+  doc.text("MATERIAL RECEIPT", pageSize.width / 2, currentY, { align: "center" });
   currentY += 8;
 
   const supplier = suppliers.find((s) => s.id === mrr.supplierId);
@@ -64,6 +74,10 @@ export async function downloadMaterialInPdf({
     ["Exchange Rate", mrr.invoiceCurrency === "USD" ? Number(mrr.exchangeRate || 0).toFixed(4) : "-"],
   ];
 
+  const metadataWidth = Math.min(190, printableWidth);
+  const metadataLabelWidth = 42;
+  const metadataLeft = (pageSize.width - metadataWidth) / 2;
+
   autoTable(doc, {
     startY: currentY,
     body: metadataRows,
@@ -75,11 +89,12 @@ export async function downloadMaterialInPdf({
       lineColor: [0, 0, 0],
       lineWidth: 0.2,
       valign: "middle",
+      overflow: "linebreak",
     },
-    margin: { left: 14, right: 14 },
+    margin: { left: metadataLeft, right: metadataLeft },
     columnStyles: {
-      0: { cellWidth: 42, fontStyle: "bold", fillColor: [247, 248, 251] },
-      1: { cellWidth: 140 },
+      0: { cellWidth: metadataLabelWidth, fontStyle: "bold", fillColor: [247, 248, 251] },
+      1: { cellWidth: metadataWidth - metadataLabelWidth },
     },
   });
 
@@ -110,8 +125,8 @@ export async function downloadMaterialInPdf({
       line.itemName ||
       line.serviceName ||
       services?.find((service) => service.id === line.itemId)?.name ||
-      materials.find(m => m.id === line.itemId)?.name ||
-      npdItems.find(i => i.id === line.itemId)?.name ||
+      materials.find((material) => material.id === line.itemId)?.name ||
+      npdItems.find((item) => item.id === line.itemId)?.name ||
       "Unknown";
 
     const row = [
@@ -140,41 +155,63 @@ export async function downloadMaterialInPdf({
     return row;
   });
 
+  const taxColumnCount = (hasCgstOrSgst ? 2 : 0) + (hasIgst ? 1 : 0);
+  const compactColumnWidths = {
+    sl: 8,
+    poNo: 22,
+    uom: 12,
+    qty: 18,
+    rate: 16,
+    gst: 12,
+    tax: 15,
+    value: 20,
+  };
+  const fixedLineTableWidth =
+    compactColumnWidths.sl +
+    compactColumnWidths.poNo +
+    compactColumnWidths.uom +
+    compactColumnWidths.qty * 2 +
+    compactColumnWidths.rate +
+    compactColumnWidths.gst +
+    compactColumnWidths.tax * taxColumnCount +
+    compactColumnWidths.value * 2;
+  const itemColumnWidth = Math.max(54, printableWidth - fixedLineTableWidth);
+
   const columnStyles: Record<number, any> = {
-    0: { halign: "center", cellWidth: 10 },
-    1: { cellWidth: 88 },
-    2: { cellWidth: 26 },
-    3: { halign: "center", cellWidth: 14 },
-    4: { halign: "right", cellWidth: 18 },
-    5: { halign: "right", cellWidth: 18 },
-    6: { halign: "right", cellWidth: 18 },
-    7: { halign: "right", cellWidth: 14 },
+    0: { halign: "center", cellWidth: compactColumnWidths.sl },
+    1: { cellWidth: itemColumnWidth },
+    2: { cellWidth: compactColumnWidths.poNo },
+    3: { halign: "center", cellWidth: compactColumnWidths.uom },
+    4: { halign: "right", cellWidth: compactColumnWidths.qty },
+    5: { halign: "right", cellWidth: compactColumnWidths.qty },
+    6: { halign: "right", cellWidth: compactColumnWidths.rate },
+    7: { halign: "right", cellWidth: compactColumnWidths.gst },
   };
 
   let columnIndex = 8;
   if (hasCgstOrSgst) {
-    columnStyles[columnIndex] = { halign: "right", cellWidth: 16 };
-    columnStyles[columnIndex + 1] = { halign: "right", cellWidth: 16 };
+    columnStyles[columnIndex] = { halign: "right", cellWidth: compactColumnWidths.tax };
+    columnStyles[columnIndex + 1] = { halign: "right", cellWidth: compactColumnWidths.tax };
     columnIndex += 2;
   }
   if (hasIgst) {
-    columnStyles[columnIndex] = { halign: "right", cellWidth: 16 };
+    columnStyles[columnIndex] = { halign: "right", cellWidth: compactColumnWidths.tax };
     columnIndex += 1;
   }
-  columnStyles[columnIndex] = { halign: "right", cellWidth: 22 };
-  columnStyles[columnIndex + 1] = { halign: "right", cellWidth: 22 };
+  columnStyles[columnIndex] = { halign: "right", cellWidth: compactColumnWidths.value };
+  columnStyles[columnIndex + 1] = { halign: "right", cellWidth: compactColumnWidths.value };
 
   autoTable(doc, {
     startY: currentY,
     head: [lineTableHead],
     body: lineTableRows,
     theme: "grid",
-    headStyles: { fillColor: [43, 63, 100], textColor: 255, fontStyle: "bold", fontSize: 7.2, cellPadding: 2.2 },
+    headStyles: { fillColor: [43, 63, 100], textColor: 255, fontStyle: "bold", fontSize: 6.7, cellPadding: 1.5 },
     bodyStyles: { lineColor: [170, 170, 170], lineWidth: 0.15 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    styles: { fontSize: 8.7, cellPadding: 2.5, textColor: 0, valign: "middle", overflow: "linebreak" },
+    styles: { fontSize: 7.6, cellPadding: 1.8, textColor: 0, valign: "middle", overflow: "linebreak" },
     columnStyles,
-    margin: { left: 14, right: 14 },
+    margin,
   });
 
   let footerY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : currentY + 40;
@@ -195,10 +232,15 @@ export async function downloadMaterialInPdf({
   if (hasIgst) {
     summaryRows.splice(hasCgstOrSgst ? 4 : 2, 0, ["IGST", formatMoney(Number(mrr.totalIgst || 0))]);
   }
-  const summaryBoxX = 118;
-  const summaryBoxY = footerY;
-  const summaryBoxWidth = 78;
+
+  const summaryBoxWidth = 90;
   const summaryBoxHeight = 16 + summaryRows.length * 6 + 10;
+  if (footerY + summaryBoxHeight + 18 > pageSize.height - margin.bottom) {
+    doc.addPage();
+    footerY = margin.top;
+  }
+  const summaryBoxX = pageSize.width - margin.right - summaryBoxWidth;
+  const summaryBoxY = footerY;
 
   doc.setDrawColor(0);
   doc.setLineWidth(0.3);
@@ -224,29 +266,54 @@ export async function downloadMaterialInPdf({
   footerY = summaryBoxY + summaryBoxHeight + 8;
 
   if (mrr.plant_head_remark || mrr.accounts_remark || mrr.md_approval_remark) {
+    const remarks: Array<[string, string]> = [];
+    if (mrr.plant_head_remark) remarks.push(["PH", mrr.plant_head_remark]);
+    if (mrr.accounts_remark) remarks.push(["Accounts", mrr.accounts_remark]);
+    if (mrr.md_approval_remark) remarks.push(["MD", mrr.md_approval_remark]);
+
+    doc.setFontSize(9);
+    const remarkLines = remarks.flatMap(([label, value]) => doc.splitTextToSize(`${label}: ${value}`, printableWidth));
+    const remarkBlockHeight = 6 + remarkLines.length * 5;
+    if (footerY + remarkBlockHeight > pageSize.height - margin.bottom) {
+      doc.addPage();
+      footerY = margin.top;
+    }
+
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text("Approval Remarks:", 14, footerY);
+    doc.text("Approval Remarks:", margin.left, footerY);
     footerY += 6;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    if (mrr.plant_head_remark) {
-      doc.text(`PH: ${mrr.plant_head_remark}`, 14, footerY);
-      footerY += 5;
-    }
-    if (mrr.accounts_remark) {
-      doc.text(`Accounts: ${mrr.accounts_remark}`, 14, footerY);
-      footerY += 5;
-    }
-    if (mrr.md_approval_remark) {
-      doc.text(`MD: ${mrr.md_approval_remark}`, 14, footerY);
-      footerY += 5;
-    }
+    remarks.forEach(([label, value]) => {
+      const lines = doc.splitTextToSize(`${label}: ${value}`, printableWidth);
+      lines.forEach((line: string) => {
+        if (footerY + 5 > pageSize.height - margin.bottom) {
+          doc.addPage();
+          footerY = margin.top;
+        }
+        doc.text(line, margin.left, footerY);
+        footerY += 5;
+      });
+    });
   }
 
-  doc.setFontSize(9);
-  doc.setTextColor(80);
-  doc.text(`Generated on ${formatDisplayDate(new Date().toISOString())}`, 14, Math.min(footerY + 6, 285));
+  if (footerY + 8 > pageSize.height - margin.bottom) {
+    doc.addPage();
+    footerY = margin.top;
+  }
+
+  const generatedText = `Generated on ${formatDisplayDate(new Date().toISOString())}`;
+  const pageCount = doc.getNumberOfPages();
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    doc.setPage(pageNumber);
+    doc.setFontSize(8);
+    doc.setTextColor(80);
+    doc.text(`Page ${pageNumber} of ${pageCount}`, pageSize.width - margin.right, pageSize.height - 7, { align: "right" });
+    if (pageNumber === pageCount) {
+      doc.text(generatedText, margin.left, footerY + 6);
+    }
+  }
 
   doc.save(`MRR_${mrr.transactionNo}.pdf`);
 }
