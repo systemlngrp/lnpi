@@ -878,7 +878,7 @@ def extract_tally_stock_item_base_unit(response_text: str) -> str | None:
         if match:
             cleaned = re.sub(r"\s+", " ", match.group(1)).strip()
             if cleaned:
-                return cleaned.upper()
+                return normalize_tally_unit_name(cleaned)
     return None
 
 
@@ -965,6 +965,51 @@ def fetch_tally_stock_item_matches(item_name: str, company_name: str | None) -> 
         ", ".join(name for name, _ in matches) if matches else "-",
     )
     return matches
+
+
+def fetch_tally_stock_item_object(item_name: str, company_name: str | None) -> tuple[str, str | None] | None:
+    safe_item_name = escape_xml(item_name)
+    xml_text = f"""
+    <ENVELOPE>
+        <HEADER>
+            <VERSION>1</VERSION>
+            <TALLYREQUEST>EXPORT</TALLYREQUEST>
+            <TYPE>OBJECT</TYPE>
+            <SUBTYPE>Stock Item</SUBTYPE>
+            <ID TYPE="Name">{safe_item_name}</ID>
+        </HEADER>
+        <BODY>
+            <DESC>
+                <STATICVARIABLES>
+                    {build_company_static_variables(company_name)}
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+            </DESC>
+        </BODY>
+    </ENVELOPE>
+    """
+    response_text = post_xml_to_tally(xml_text, debug_step=f"stock_item_object_lookup:{item_name}")
+    all_items = extract_tally_stock_items(response_text)
+    if not all_items:
+        LOGGER.info("Tally stock item object lookup returned no parsable item | target=%s", item_name)
+        return None
+
+    target_key = normalize_lookup_key(item_name)
+    for fetched_name, fetched_unit in all_items:
+        if normalize_lookup_key(fetched_name) == target_key:
+            LOGGER.info(
+                "Tally stock item object matched | requested=%s | matched_name=%s | base_unit=%s",
+                item_name,
+                fetched_name,
+                fetched_unit or "-",
+            )
+            return fetched_name, fetched_unit
+
+    LOGGER.info(
+        "Tally stock item object returned no exact normalized name match | requested=%s",
+        item_name,
+    )
+    return None
 
 
 def create_tally_unit(company_name: str | None, unit_name: str) -> tuple[bool, str]:
@@ -1059,7 +1104,42 @@ def query_tally_stock_item(item_name: str, company_name: str | None) -> tuple[bo
     except TallyUnavailableError:
         raise
     except Exception:
-        return False, None
+        matches = []
+
+    if matches:
+        matched_name, matched_unit = matches[0]
+        if matched_unit:
+            STOCK_ITEM_LOOKUP_CACHE[cache_key] = (matched_name, matched_unit)
+            LOGGER.info(
+                "Tally stock item matched by collection lookup | requested=%s | matched_name=%s | base_unit=%s",
+                item_name,
+                matched_name,
+                matched_unit or "-",
+            )
+            return True, matched_unit
+        LOGGER.info(
+            "Tally stock item collection found item but base unit was blank | requested=%s | matched_name=%s. Trying object lookup as fallback.",
+            item_name,
+            matched_name,
+        )
+
+    try:
+        object_match = fetch_tally_stock_item_object(item_name, company_name) if matches else None
+    except TallyUnavailableError:
+        raise
+    except Exception:
+        object_match = None
+
+    if object_match:
+        matched_name, matched_unit = object_match
+        STOCK_ITEM_LOOKUP_CACHE[cache_key] = (matched_name, matched_unit)
+        LOGGER.info(
+            "Tally stock item matched by object fallback | requested=%s | matched_name=%s | base_unit=%s",
+            item_name,
+            matched_name,
+            matched_unit or "-",
+        )
+        return True, matched_unit
 
     if not matches:
         return False, None
@@ -1067,7 +1147,7 @@ def query_tally_stock_item(item_name: str, company_name: str | None) -> tuple[bo
     matched_name, matched_unit = matches[0]
     STOCK_ITEM_LOOKUP_CACHE[cache_key] = (matched_name, matched_unit)
     LOGGER.info(
-        "Tally stock item matched by normalized lookup | requested=%s | matched_name=%s | base_unit=%s",
+        "Tally stock item matched by collection lookup without confirmed unit | requested=%s | matched_name=%s | base_unit=%s",
         item_name,
         matched_name,
         matched_unit or "-",
@@ -1146,13 +1226,10 @@ def ensure_tally_stock_item_exists(company_name: str | None, item_name: str, mrr
                 normalized_lnpi_unit,
             )
             return normalized_tally_unit
-        normalized_existing_unit = ensure_tally_unit_exists(company_name, unit_name)
-        LOGGER.info(
-            "Stock item '%s' already exists in Tally. Keeping LNPI unit '%s'.",
-            item_name,
-            normalized_existing_unit,
+        raise RuntimeError(
+            f"Stock item '{item_name}' already exists in Tally, but its unit could not be confirmed. "
+            f"LNPI resolved unit is '{normalized_lnpi_unit}'. Posting stopped."
         )
-        return normalized_existing_unit
     normalized_unit = ensure_tally_unit_exists(company_name, unit_name)
     stock_group = STOCK_GROUP_BY_MRR.get(mrr_type, "App Group")
     LOGGER.info(
@@ -1164,15 +1241,24 @@ def ensure_tally_stock_item_exists(company_name: str | None, item_name: str, mrr
     success, result, resolved_tally_unit = create_tally_stock_item(company_name, item_name, stock_group, normalized_unit)
     if not success:
         raise RuntimeError(f"Stock item '{item_name}' could not be auto-created in Tally: {result}")
-    final_unit = resolved_tally_unit or normalized_unit
     if result == "Exists with different unit":
-        normalized_tally_unit = normalize_tally_unit_name(final_unit)
+        if resolved_tally_unit and not is_not_applicable_unit(resolved_tally_unit):
+            normalized_tally_unit = normalize_tally_unit_name(resolved_tally_unit)
+            raise RuntimeError(
+                f"Stock item '{item_name}' exists in Tally with unit '{normalized_tally_unit}' "
+                f"but LNPI resolved unit is '{normalized_unit}'. Posting stopped."
+            )
         raise RuntimeError(
-            f"Stock item '{item_name}' exists in Tally with unit '{normalized_tally_unit}' "
-            f"but LNPI resolved unit is '{normalized_unit}'. Posting stopped."
+            f"Stock item '{item_name}' exists in Tally with a different unit, but Tally's unit could not be confirmed. "
+            f"LNPI resolved unit is '{normalized_unit}'. Posting stopped."
         )
-    else:
-        LOGGER.info("Stock item '%s' accepted by Tally stock-item create flow (%s)", item_name, result)
+    if result == "Already exists" and not resolved_tally_unit:
+        raise RuntimeError(
+            f"Stock item '{item_name}' already exists in Tally, but its unit could not be confirmed. "
+            f"LNPI resolved unit is '{normalized_unit}'. Posting stopped."
+        )
+    final_unit = resolved_tally_unit or normalized_unit
+    LOGGER.info("Stock item '%s' accepted by Tally stock-item create flow (%s)", item_name, result)
     return final_unit
 
 
@@ -1258,6 +1344,12 @@ def get_stored_round_off(mrr: dict[str, Any]) -> Decimal:
     return round_money(mrr.get("roundOff"))
 
 
+def calculate_expected_round_off_from_hostinger_total(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
+    hostinger_total_amount = round_money(mrr.get("totalAmount"))
+    component_total = calculate_purchase_component_total(mrr, lines)
+    return (hostinger_total_amount - component_total).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+
+
 def calculate_purchase_voucher_total(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
     component_total = calculate_purchase_component_total(mrr, lines)
     stored_round_off = get_stored_round_off(mrr)
@@ -1265,11 +1357,58 @@ def calculate_purchase_voucher_total(mrr: dict[str, Any], lines: list[dict[str, 
 
 
 def calculate_purchase_debit_total_for_xml(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
-    return calculate_purchase_voucher_total(mrr, lines)
+    return calculate_purchase_component_total(mrr, lines) + get_stored_round_off(mrr)
 
 
 def calculate_purchase_credit_total_for_xml(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
-    return calculate_purchase_voucher_total(mrr, lines)
+    return round_money(mrr.get("totalAmount"))
+
+
+def validate_purchase_voucher_payload(
+    voucher_no: str,
+    supplier_name: str,
+    purchase_ledger: str,
+    lines: list[dict[str, Any]],
+    inventory_entries: str,
+    mrr: dict[str, Any],
+) -> Decimal:
+    if not supplier_name.strip():
+        raise RuntimeError(f"Purchase voucher {voucher_no} has blank supplier name. Posting stopped.")
+    if not purchase_ledger.strip():
+        raise RuntimeError(f"Purchase voucher {voucher_no} has blank purchase ledger. Posting stopped.")
+    if not lines:
+        raise RuntimeError(f"Purchase voucher {voucher_no} has no lines. Posting stopped.")
+    if "<ALLINVENTORYENTRIES.LIST>" not in inventory_entries:
+        raise RuntimeError(f"Purchase voucher {voucher_no} has no valid inventory entries after line filtering. Posting stopped.")
+
+    component_total = calculate_purchase_component_total(mrr, lines)
+    stored_round_off = get_stored_round_off(mrr)
+    expected_round_off = calculate_expected_round_off_from_hostinger_total(mrr, lines)
+    hostinger_total_amount = round_money(mrr.get("totalAmount"))
+    effective_total = (component_total + stored_round_off).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+
+    if stored_round_off != expected_round_off:
+        raise RuntimeError(
+            f"Purchase voucher {voucher_no} round off mismatch. "
+            f"Hostinger total={hostinger_total_amount}, component total={component_total}, "
+            f"stored round off={stored_round_off}, expected round off={expected_round_off}. Posting stopped."
+        )
+
+    rendered_debit_total = calculate_purchase_debit_total_for_xml(mrr, lines).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+    rendered_credit_total = calculate_purchase_credit_total_for_xml(mrr, lines).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+    if rendered_debit_total != rendered_credit_total:
+        raise RuntimeError(
+            f"Purchase voucher {voucher_no} is out of balance before Tally import "
+            f"(debit={rendered_debit_total}, credit={rendered_credit_total}). Posting stopped."
+        )
+
+    if effective_total != hostinger_total_amount:
+        raise RuntimeError(
+            f"Purchase voucher {voucher_no} total mismatch. "
+            f"Rendered total={effective_total}, Hostinger total={hostinger_total_amount}. Posting stopped."
+        )
+
+    return effective_total
 
 
 def build_tax_ledger_entries(mrr: dict[str, Any], lines: list[dict[str, Any]], voucher_no: str) -> str:
@@ -1332,15 +1471,16 @@ def build_purchase_voucher_xml(conn, company_name: str | None, mrr: dict[str, An
             total_amount,
             get_stored_round_off(mrr),
         )
-    rendered_debit_total = calculate_purchase_debit_total_for_xml(mrr, lines)
-    rendered_credit_total = calculate_purchase_credit_total_for_xml(mrr, lines)
-    if rendered_debit_total != rendered_credit_total:
-        raise RuntimeError(
-            f"Purchase voucher {voucher_no} is out of balance before Tally import "
-            f"(debit={rendered_debit_total}, credit={rendered_credit_total})."
-        )
     inventory_entries = build_inventory_entries(conn, company_name, voucher_no, str(mrr_type), lines, purchase_ledger)
     tax_entries = build_tax_ledger_entries(mrr, lines, voucher_no)
+    total_amount = validate_purchase_voucher_payload(
+        voucher_no=voucher_no,
+        supplier_name=supplier_name,
+        purchase_ledger=purchase_ledger,
+        lines=lines,
+        inventory_entries=inventory_entries,
+        mrr=mrr,
+    )
 
     return f"""
 <ENVELOPE>
@@ -1567,12 +1707,31 @@ def process_one_mrr(conn, company_name: str | None, mrr: dict[str, Any]) -> None
             update_mrr_tally_remark(conn, str(mrr["id"]), validation_remark)
             return
 
-    response_text = post_xml_to_tally(xml_text, debug_step=f"{voucher_type.lower()}_voucher_import", voucher_no=voucher_no)
+    try:
+        response_text = post_xml_to_tally(xml_text, debug_step=f"{voucher_type.lower()}_voucher_import", voucher_no=voucher_no)
+    except TallyUnavailableError:
+        update_mrr_tally_remark(
+            conn,
+            str(mrr["id"]),
+            f"Tally did not respond while importing voucher {voucher_no}. Check Tally screen/debug XML before retrying.",
+        )
+        raise
+    if not str(response_text or "").strip():
+        failure_remark = (
+            f"Tally returned an empty response for voucher {voucher_no}. Posting may have hit an internal Tally error. "
+            f"Check the debug XML and Tally screen before retrying."
+        )
+        update_mrr_tally_remark(conn, str(mrr["id"]), failure_remark)
+        raise RuntimeError(failure_remark)
     if "<CREATED>1</CREATED>" in response_text or "<ALTERED>1</ALTERED>" in response_text:
         mark_mrr_completed(conn, str(mrr["id"]), "Posted successfully to Tally.")
         LOGGER.info("Posted voucher %s successfully in company %s", voucher_no, company_name or "Current Open Company")
         return
 
+    failure_remark = response_error_message(response_text)
+    if failure_remark == "Tally import failed":
+        failure_remark = f"Tally rejected voucher {voucher_no}. Check debug XML and Tally response."
+    update_mrr_tally_remark(conn, str(mrr["id"]), failure_remark)
     raise RuntimeError(f"Tally rejected voucher {voucher_no}: {response_text}")
 
 

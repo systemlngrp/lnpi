@@ -1,12 +1,12 @@
 import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier } from "../types";
-import { useState, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo, useEffect } from "react";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, ArrowLeft } from "lucide-react";
+import { CheckCircle, ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
 
@@ -32,6 +32,10 @@ export function PendingTallyEntry() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+
+  const formatMoney = (value?: number) =>
+    `₹${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const pendingList = useMemo(() => {
     return materialIn
@@ -49,6 +53,10 @@ export function PendingTallyEntry() {
     } else {
       setSelectedIds(pendingList.map(m => m.id));
     }
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => (prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]));
   };
 
   const handleComplete = async (id: string) => {
@@ -156,66 +164,108 @@ export function PendingTallyEntry() {
                   <th className="px-4 py-3 text-left">Supplier</th>
                   <th className="px-4 py-3 text-left">Items</th>
                   <th className="px-6 py-3 text-right">Amount</th>
+                  <th className="px-6 py-3 text-right">Invoice Value</th>
+                  <th className="px-6 py-3 text-right">Actual Value</th>
+                  <th className="px-6 py-3 text-right">CGST</th>
+                  <th className="px-6 py-3 text-right">SGST</th>
+                  <th className="px-6 py-3 text-right">IGST</th>
+                  <th className="px-6 py-3 text-right">After GST</th>
+                  <th className="px-6 py-3 text-right">Insurance</th>
+                  <th className="px-6 py-3 text-right">Other Charges</th>
+                  <th className="px-6 py-3 text-right">Round Off</th>
                   <th className="px-4 py-3 text-left">Tally Sync Remarks</th>
+                  <th className="px-4 py-3 text-center">Details</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black bg-white">
                 {pendingList.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-20 text-center text-black font-bold uppercase tracking-widest text-sm">
+                    <td colSpan={18} className="px-6 py-20 text-center text-black font-bold uppercase tracking-widest text-sm">
                       No pending entries.
                     </td>
                   </tr>
                 ) : (
-                  pendingList.map((m) => (
-                    <tr key={m.id} className="hover:bg-slate-50 divide-x divide-black transition-colors text-[11px] text-black font-medium uppercase">
-                      <td className="px-2 py-4 text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedIds.includes(m.id)}
-                          onChange={() => toggleSelect(m.id)}
-                          className="accent-fuchsia-600 h-4 w-4"
-                        />
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">{m.transactionNo}</td>
-                      <td className="px-4 py-4 whitespace-nowrap">{formatDate(m.date)}</td>
-                      <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
-                      <td className="px-4 py-4">
-                        {getLineItemsElement(m.lines)}
-                      </td>
-                      <td className="px-6 py-4 text-right font-mono font-bold">₹{m.totalAmount.toLocaleString()}</td>
-                      <td className="px-4 py-4 align-top min-w-[280px]">
-                        <div
-                          className="max-w-[320px] whitespace-pre-wrap break-words text-[10px] normal-case text-rose-700 font-semibold"
-                          title={m.tallySyncRemark || ""}
-                        >
-                          {m.tallySyncRemark || "-"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => handleComplete(m.id)}
-                          disabled={submittingId === m.id || isBulkSubmitting}
-                          className={cn(
-                            "inline-flex items-center justify-center min-w-[100px] px-3 py-1.5 rounded font-black transition-all border disabled:opacity-50 text-[10px] uppercase tracking-wider gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
-                            confirmId === m.id 
-                              ? "bg-amber-600 text-white border-black animate-pulse" 
-                              : "bg-emerald-100 text-emerald-800 border-emerald-800 hover:bg-emerald-200"
-                          )}
-                        >
-                          {submittingId === m.id ? (
-                            <Spinner size={12} />
-                          ) : (
-                            <>
-                              <CheckCircle size={14} />
-                              {confirmId === m.id ? "Confirm?" : "Complete"}
-                            </>
-                          )}
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  pendingList.map((m) => {
+                    const isExpanded = expandedIds.includes(m.id);
+                    return (
+                      <Fragment key={m.id}>
+                        <tr className="hover:bg-slate-50 divide-x divide-black transition-colors text-[11px] text-black font-medium uppercase">
+                          <td className="px-2 py-4 text-center">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.includes(m.id)}
+                              onChange={() => toggleSelect(m.id)}
+                              className="accent-fuchsia-600 h-4 w-4"
+                            />
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">{m.transactionNo}</td>
+                          <td className="px-4 py-4 whitespace-nowrap">{formatDate(m.date)}</td>
+                          <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
+                          <td className="px-4 py-4 whitespace-nowrap">{m.lines?.length || 0} Item(s)</td>
+                          <td className="px-6 py-4 text-right font-mono font-bold whitespace-nowrap">{formatMoney(m.totalAmount)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalInvoiceValue)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalActualValue)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalCgst)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalSgst)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalIgst)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalInvoiceValueAfterGst)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.insurance)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.otherCharges)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.roundOff)}</td>
+                          <td className="px-4 py-4 align-top min-w-[280px]">
+                            <div
+                              className="max-w-[320px] whitespace-pre-wrap break-words text-[10px] normal-case text-rose-700 font-semibold"
+                              title={m.tallySyncRemark || ""}
+                            >
+                              {m.tallySyncRemark || "-"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpanded(m.id)}
+                              className="inline-flex items-center justify-center h-8 w-8 rounded border border-black bg-white hover:bg-slate-100 transition-colors"
+                              title={isExpanded ? "Hide item details" : "Show item details"}
+                            >
+                              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              onClick={() => handleComplete(m.id)}
+                              disabled={submittingId === m.id || isBulkSubmitting}
+                              className={cn(
+                                "inline-flex items-center justify-center min-w-[100px] px-3 py-1.5 rounded font-black transition-all border disabled:opacity-50 text-[10px] uppercase tracking-wider gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
+                                confirmId === m.id 
+                                  ? "bg-amber-600 text-white border-black animate-pulse" 
+                                  : "bg-emerald-100 text-emerald-800 border-emerald-800 hover:bg-emerald-200"
+                              )}
+                            >
+                              {submittingId === m.id ? (
+                                <Spinner size={12} />
+                              ) : (
+                                <>
+                                  <CheckCircle size={14} />
+                                  {confirmId === m.id ? "Confirm?" : "Complete"}
+                                </>
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-slate-50">
+                            <td colSpan={18} className="px-6 py-4 border-t border-black">
+                              <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-2">
+                                Item Level Details
+                              </div>
+                              {getLineItemsElement(m.lines)}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
