@@ -84,6 +84,7 @@ TALLY_HTTP_SESSION.headers.update({
 })
 LOG_FOLDER_NAME = "Log"
 LOG_WORKBOOK_NAME = "invoice_sync_logs.xlsx"
+FAILURE_TEXT_LOG_NAME = "invoice sync log.txt"
 LOG_SHEET_NAME = "SyncLogs"
 TALLY_DEBUG_FOLDER_NAME = "tally_debug"
 LOG_HEADERS = [
@@ -220,6 +221,7 @@ def call_tally_sync_api(method, path, payload=None, params=None):
 
 def get_pending_invoice_rows_api():
     rows = call_tally_sync_api("GET", "/api/tally-sync/pending-invoices")
+    ensure_pending_invoice_numbers_are_parseable(rows)
     return sorted(rows or [], key=cmp_to_key(compare_pending_invoice_rows))
 
 
@@ -283,6 +285,41 @@ def get_log_dir():
     log_dir = os.path.join(get_runtime_base_dir(), LOG_FOLDER_NAME)
     os.makedirs(log_dir, exist_ok=True)
     return log_dir
+
+
+def get_failure_text_log_path():
+    return os.path.join(get_runtime_base_dir(), FAILURE_TEXT_LOG_NAME)
+
+
+def append_failure_text_log(
+    stage,
+    message,
+    invoice_row=None,
+    company_name="",
+    tally_inv_no="",
+    tally_inv_date="",
+    tally_inv_id="",
+):
+    try:
+        runtime_path = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__)
+        lines = [
+            "=" * 80,
+            f"Timestamp      : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Stage          : {str(stage or '').strip()}",
+            f"Invoice ID     : {str((invoice_row or {}).get('id') or '').strip()}",
+            f"Invoice No     : {str((invoice_row or {}).get('invoiceNo') or '').strip()}",
+            f"Company Name   : {str(company_name or '').strip()}",
+            f"Message        : {str(message or '').strip()}",
+            f"Tally Inv No   : {str(tally_inv_no or '').strip()}",
+            f"Tally Inv Date : {str(tally_inv_date or '').strip()}",
+            f"Tally Inv ID   : {str(tally_inv_id or '').strip()}",
+            f"Runtime Path   : {runtime_path}",
+            "",
+        ]
+        with open(get_failure_text_log_path(), "a", encoding="utf-8") as handle:
+            handle.write("\n".join(lines))
+    except Exception as log_error:
+        log_terminal("LOG", f"Could not write failure text log: {log_error}")
 
 
 def write_tally_debug_dump(prefix, item_name, xml_text):
@@ -971,6 +1008,33 @@ def compare_pending_invoice_rows(left_row, right_row):
     return 0
 
 
+def ensure_pending_invoice_numbers_are_parseable(rows):
+    invalid_rows = []
+    for row in rows or []:
+        invoice_no = str((row or {}).get("invoiceNo") or "").strip()
+        if parse_invoice_no_parts(invoice_no):
+            continue
+        invalid_rows.append(
+            {
+                "id": str((row or {}).get("id") or "").strip(),
+                "invoiceNo": invoice_no,
+            }
+        )
+
+    if not invalid_rows:
+        return
+
+    sample = ", ".join(
+        f"{item['invoiceNo'] or '<blank>'} (ID: {item['id'] or '-'})"
+        for item in invalid_rows[:10]
+    )
+    raise RuntimeError(
+        "Pending invoice sequence validation failed. "
+        "These invoice numbers do not match the required format and the run was stopped to avoid wrong posting order: "
+        f"{sample}"
+    )
+
+
 def get_pending_invoice_rows(conn):
     sql = """
         SELECT *
@@ -983,6 +1047,7 @@ def get_pending_invoice_rows(conn):
     cursor.execute(sql)
     rows = cursor.fetchall()
     cursor.close()
+    ensure_pending_invoice_numbers_are_parseable(rows)
     return sorted(rows, key=cmp_to_key(compare_pending_invoice_rows))
 
 
@@ -2625,6 +2690,16 @@ def update_invoice_tally_status(
             tally_inv_date=tally_inv_date,
             tally_inv_id=tally_inv_id,
         )
+        if not success:
+            append_failure_text_log(
+                stage,
+                remark,
+                invoice_row=invoice_row or {"id": invoice_id},
+                company_name=company_name,
+                tally_inv_no=tally_inv_no,
+                tally_inv_date=tally_inv_date,
+                tally_inv_id=tally_inv_id,
+            )
         return
 
     cursor = get_db_cursor(conn)
@@ -2673,6 +2748,16 @@ def update_invoice_tally_status(
         tally_inv_date=tally_inv_date,
         tally_inv_id=tally_inv_id,
     )
+    if not success:
+        append_failure_text_log(
+            stage,
+            remark,
+            invoice_row=invoice_row or {"id": invoice_id},
+            company_name=company_name,
+            tally_inv_no=tally_inv_no,
+            tally_inv_date=tally_inv_date,
+            tally_inv_id=tally_inv_id,
+        )
 
 
 def sync_invoices_to_tally():
@@ -2722,8 +2807,32 @@ def sync_invoices_to_tally():
                 dispatch_details = context["dispatch_details"]
                 narration_text = context["narration_text"]
 
-                # Duplicate/existing-voucher checks were already completed during prevalidation.
-                # Avoid repeating the expensive Voucher Register export immediately before posting.
+                # Final duplicate guard: re-check the same invoice number immediately
+                # before posting so a voucher created manually (or by another run)
+                # after prevalidation is still caught and not posted again.
+                latest_voucher_by_number = fetch_tally_voucher_reference(
+                    invoice_no,
+                    VOUCHER_TYPE_NAME,
+                    invoice_row.get("date"),
+                    company_name,
+                )
+                if latest_voucher_by_number:
+                    remark = "Invoice already exists in Tally at final pre-post check. Synced existing voucher details."
+                    update_invoice_tally_status(
+                        conn,
+                        invoice_id,
+                        True,
+                        remark,
+                        invoice_row.get("updatedBy") or DEFAULT_UPDATED_BY,
+                        latest_voucher_by_number.get("tallyInvNo") or invoice_no,
+                        format_iso_date(latest_voucher_by_number.get("tallyInvDate")),
+                        latest_voucher_by_number.get("tallyInvId"),
+                        invoice_row=invoice_row,
+                        company_name=company_name,
+                        stage="SYNC",
+                    )
+                    print(f"{invoice_no}: {remark}")
+                    continue
 
                 for line in item_lines:
                     print(
@@ -2896,6 +3005,13 @@ if __name__ == "__main__":
             )
             sys.exit(1)
     except mysql.connector.Error as exc:
+        append_failure_text_log(
+            "RUNTIME",
+            (
+                f"Database connection failed. Could not connect to MySQL at "
+                f"{DB_CONFIG['host']}:{DB_CONFIG['port']}. Connector message: {exc}"
+            ),
+        )
         print("==========================================")
         print("Database connection failed")
         print("==========================================")
@@ -2912,6 +3028,10 @@ if __name__ == "__main__":
         pause_before_exit(force=True, message="Press Enter only after noting the error...")
         sys.exit(1)
     except Exception as exc:
+        append_failure_text_log(
+            "RUNTIME",
+            f"Unexpected error: {exc}",
+        )
         print(f"Unexpected error: {exc}")
         traceback.print_exc()
         pause_before_exit(force=True, message="Press Enter only after noting the error...")

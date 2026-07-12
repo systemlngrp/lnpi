@@ -537,6 +537,7 @@ export interface MaterialIn {
   mdEmailId?: string;
   md_approval_remark?: string;
   tallyTimestamp?: string;
+  tallySyncRemark?: string;
   status: "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally" | "Completed";
   updatedBy?: string;
   updateTimestamp?: string;

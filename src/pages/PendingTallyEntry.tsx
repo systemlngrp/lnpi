@@ -155,6 +155,7 @@ export function PendingTallyEntry() {
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Supplier</th>
                   <th className="px-4 py-3 text-left">Items</th>
+                  <th className="px-4 py-3 text-left">Tally Sync Remarks</th>
                   <th className="px-6 py-3 text-right">Amount</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
@@ -162,7 +163,7 @@ export function PendingTallyEntry() {
               <tbody className="divide-y divide-black bg-white">
                 {pendingList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-20 text-center text-black font-bold uppercase tracking-widest text-sm">
+                    <td colSpan={8} className="px-6 py-20 text-center text-black font-bold uppercase tracking-widest text-sm">
                       No pending entries.
                     </td>
                   </tr>
@@ -182,6 +183,14 @@ export function PendingTallyEntry() {
                       <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
                       <td className="px-4 py-4">
                         {getLineItemsElement(m.lines)}
+                      </td>
+                      <td className="px-4 py-4 align-top min-w-[280px]">
+                        <div
+                          className="max-w-[320px] whitespace-pre-wrap break-words text-[10px] normal-case text-rose-700 font-semibold"
+                          title={m.tallySyncRemark || ""}
+                        >
+                          {m.tallySyncRemark || "-"}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-right font-mono font-bold">₹{m.totalAmount.toLocaleString()}</td>
                       <td className="px-6 py-4 text-right">
