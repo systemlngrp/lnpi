@@ -119,6 +119,13 @@ export function PendingTallyEntry() {
     );
   };
 
+  const getItemValue = (lines: MaterialIn["lines"] = []) =>
+    lines.reduce((sum, line) => {
+      const lineValue =
+        Number(line.actualValue ?? line.value ?? (Number(line.qty || 0) * Number(line.rate || 0)) ?? 0) || 0;
+      return sum + lineValue;
+    }, 0);
+
   const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
 
   return (
@@ -164,6 +171,7 @@ export function PendingTallyEntry() {
                   <th className="px-4 py-3 text-left">Supplier</th>
                   <th className="px-4 py-3 text-left">Items</th>
                   <th className="px-6 py-3 text-right">Amount</th>
+                  <th className="px-6 py-3 text-right">Item Value</th>
                   <th className="px-6 py-3 text-right">Invoice Value</th>
                   <th className="px-6 py-3 text-right">Actual Value</th>
                   <th className="px-6 py-3 text-right">CGST</th>
@@ -181,7 +189,7 @@ export function PendingTallyEntry() {
               <tbody className="divide-y divide-black bg-white">
                 {pendingList.length === 0 ? (
                   <tr>
-                    <td colSpan={18} className="px-6 py-20 text-center text-black font-bold uppercase tracking-widest text-sm">
+                    <td colSpan={19} className="px-6 py-20 text-center text-black font-bold uppercase tracking-widest text-sm">
                       No pending entries.
                     </td>
                   </tr>
@@ -204,6 +212,7 @@ export function PendingTallyEntry() {
                           <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
                           <td className="px-4 py-4 whitespace-nowrap">{m.lines?.length || 0} Item(s)</td>
                           <td className="px-6 py-4 text-right font-mono font-bold whitespace-nowrap">{formatMoney(m.totalAmount)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(getItemValue(m.lines))}</td>
                           <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalInvoiceValue)}</td>
                           <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalActualValue)}</td>
                           <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.totalCgst)}</td>
@@ -255,7 +264,7 @@ export function PendingTallyEntry() {
                         </tr>
                         {isExpanded && (
                           <tr className="bg-slate-50">
-                            <td colSpan={18} className="px-6 py-4 border-t border-black">
+                            <td colSpan={19} className="px-6 py-4 border-t border-black">
                               <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-2">
                                 Item Level Details
                               </div>
