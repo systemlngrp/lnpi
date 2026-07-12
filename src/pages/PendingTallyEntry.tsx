@@ -155,8 +155,8 @@ export function PendingTallyEntry() {
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Supplier</th>
                   <th className="px-4 py-3 text-left">Items</th>
-                  <th className="px-4 py-3 text-left">Tally Sync Remarks</th>
                   <th className="px-6 py-3 text-right">Amount</th>
+                  <th className="px-4 py-3 text-left">Tally Sync Remarks</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -184,6 +184,7 @@ export function PendingTallyEntry() {
                       <td className="px-4 py-4">
                         {getLineItemsElement(m.lines)}
                       </td>
+                      <td className="px-6 py-4 text-right font-mono font-bold">₹{m.totalAmount.toLocaleString()}</td>
                       <td className="px-4 py-4 align-top min-w-[280px]">
                         <div
                           className="max-w-[320px] whitespace-pre-wrap break-words text-[10px] normal-case text-rose-700 font-semibold"
@@ -192,7 +193,6 @@ export function PendingTallyEntry() {
                           {m.tallySyncRemark || "-"}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right font-mono font-bold">₹{m.totalAmount.toLocaleString()}</td>
                       <td className="px-6 py-4 text-right">
                         <button
                           onClick={() => handleComplete(m.id)}

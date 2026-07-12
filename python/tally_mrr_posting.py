@@ -5,7 +5,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +53,8 @@ LOGGER = setup_logger()
 ITEM_NAME_CACHE: dict[str, str | None] = {}
 STOCK_ITEM_LOOKUP_CACHE: dict[str, tuple[str, str | None]] = {}
 CONFIRMED_TALLY_UNITS: set[str] = set()
+MONEY_QUANTUM = Decimal("0.01")
+QTY_QUANTUM = Decimal("0.01")
 
 
 class TallyUnavailableError(RuntimeError):
@@ -85,6 +87,22 @@ def clean_tally_xml(xml_text: str) -> str:
     cleaned = re.sub(r"&#(?:0?[0-8]|1[12]|1[4-9]|2[0-9]|3[01]);", "", cleaned)
     cleaned = re.sub(r"&#x(?:[0-8]|[bBcCeE]|1[0-9A-Fa-f]);", "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
+
+
+def round_money(value: Any) -> Decimal:
+    return Decimal(str(to_float(value))).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def format_money(value: Any) -> str:
+    return f"{round_money(value):.2f}"
+
+
+def round_quantity(value: Any) -> Decimal:
+    return Decimal(str(to_float(value))).quantize(QTY_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def format_quantity(value: Any) -> str:
+    return f"{round_quantity(value):.2f}"
 
 
 def load_env_file() -> None:
@@ -560,6 +578,13 @@ def _safe_tally_text(element: ET.Element | None, tag_name: str) -> str:
     return str(child.text or "").strip()
 
 
+def _looks_like_duplicate_check_voucher_element(element: ET.Element) -> bool:
+    return any(
+        _safe_tally_text(element, field)
+        for field in ("VOUCHERNUMBER", "REFERENCE", "NARRATION", "PARTYLEDGERNAME", "PARTYNAME")
+    )
+
+
 def fetch_tally_vouchers_for_duplicate_check(
     company_name: str | None,
     voucher_type: str,
@@ -594,11 +619,9 @@ def fetch_tally_vouchers_for_duplicate_check(
                             <FETCH>Reference</FETCH>
                             <FETCH>Narration</FETCH>
                             <FETCH>PartyLedgerName</FETCH>
-                            <FILTERS>OnlySupplierVouchers</FILTERS>
+                            <FETCH>PartyName</FETCH>
+                            <FETCH>VoucherTypeName</FETCH>
                         </COLLECTION>
-                        <SYSTEM TYPE="Formulae" NAME="OnlySupplierVouchers">
-                            $$StringEqual:$$StringUpper:$$String:$PartyLedgerName:"{escape_xml(supplier_name.upper())}"
-                        </SYSTEM>
                     </TDLMESSAGE>
                 </TDL>
             </DESC>
@@ -622,12 +645,25 @@ def fetch_tally_vouchers_for_duplicate_check(
 
     vouchers: list[dict[str, str]] = []
     seen_keys: set[tuple[str, str, str, str, str]] = set()
-    for element in root.findall(".//VOUCHER") + root.findall(".//VOUCHERS.LIST/*"):
+    candidate_elements: list[ET.Element] = []
+    for element in root.iter():
+        if _looks_like_duplicate_check_voucher_element(element):
+            candidate_elements.append(element)
+
+    normalized_supplier = normalize_lookup_key(supplier_name)
+    normalized_voucher_type = normalize_lookup_key(voucher_type)
+
+    for element in candidate_elements:
         voucher_date = _safe_tally_text(element, "DATE")
         voucher_number = _safe_tally_text(element, "VOUCHERNUMBER")
         reference = _safe_tally_text(element, "REFERENCE")
         narration = _safe_tally_text(element, "NARRATION")
-        party = _safe_tally_text(element, "PARTYLEDGERNAME")
+        party = _safe_tally_text(element, "PARTYLEDGERNAME") or _safe_tally_text(element, "PARTYNAME")
+        fetched_voucher_type = _safe_tally_text(element, "VOUCHERTYPENAME")
+        if normalized_voucher_type and normalize_lookup_key(fetched_voucher_type) not in ("", normalized_voucher_type):
+            continue
+        if normalized_supplier and normalize_lookup_key(party) not in ("", normalized_supplier):
+            continue
         key = (voucher_date, voucher_number, reference, narration, party)
         if key in seen_keys:
             continue
@@ -639,6 +675,7 @@ def fetch_tally_vouchers_for_duplicate_check(
                 "reference": reference,
                 "narration": narration,
                 "party": party,
+                "voucher_type": fetched_voucher_type,
             }
         )
 
@@ -672,15 +709,21 @@ def find_duplicate_voucher(
     )
     target_narration = f"Imported from LNPI MRR {transaction_no} | Type: {mrr_type}".strip()
     normalized_target_narration = normalize_lookup_key(target_narration)
+    normalized_transaction_no = normalize_lookup_key(transaction_no)
     normalized_target_reference = normalize_lookup_key(invoice_no)
 
     for voucher in vouchers:
         narration = str(voucher.get("narration") or "").strip()
         reference = str(voucher.get("reference") or "").strip()
-        if normalized_target_narration and normalize_lookup_key(narration) == normalized_target_narration:
+        normalized_narration = normalize_lookup_key(narration)
+        normalized_reference = normalize_lookup_key(reference)
+        if normalized_target_narration and normalized_narration == normalized_target_narration:
             voucher["duplicate_reason"] = "transaction_no_in_narration"
             return voucher
-        if normalized_target_reference and normalize_lookup_key(reference) == normalized_target_reference:
+        if normalized_transaction_no and normalized_transaction_no in normalized_narration:
+            voucher["duplicate_reason"] = "transaction_no_in_narration"
+            return voucher
+        if normalized_target_reference and normalized_reference == normalized_target_reference:
             voucher["duplicate_reason"] = "supplier_invoice_reference_in_financial_year"
             return voucher
     return None
@@ -721,17 +764,16 @@ def get_unit_candidates(unit_name: Any) -> list[str]:
     singular_map = {
         "KGS": "KG",
         "PCS": "PC",
-        "LTRS": "LTR",
+        "LTR": "LT",
     }
     singular_candidate = singular_map.get(normalized)
 
     ordered_candidates = [normalized]
     if singular_candidate:
         ordered_candidates.append(singular_candidate)
-    ordered_candidates.extend(["PCS", "PC", "NOS"])
 
     for candidate in ordered_candidates:
-        cleaned = str(candidate or "").strip().upper()
+        cleaned = normalize_tally_unit_name(candidate)
         if cleaned and cleaned not in candidates:
             candidates.append(cleaned)
     return candidates
@@ -743,7 +785,7 @@ def extract_tally_unit_names(response_text: str) -> list[str]:
     for match in matches:
         cleaned = re.sub(r"\s+", " ", str(match or "")).strip()
         if cleaned:
-            normalized = cleaned.upper()
+            normalized = normalize_tally_unit_name(cleaned)
             if normalized not in units:
                 units.append(normalized)
     return units
@@ -807,7 +849,7 @@ def query_tally_unit(unit_name: str, company_name: str | None) -> bool:
                 unit.findtext("FORMALNAME") or "",
             ]
             for candidate in candidates:
-                cleaned_candidate = str(candidate or "").strip().upper()
+                cleaned_candidate = normalize_tally_unit_name(candidate)
                 if cleaned_candidate and cleaned_candidate not in fetched_units:
                     fetched_units.append(cleaned_candidate)
     if not fetched_units:
@@ -1087,16 +1129,23 @@ def create_tally_stock_item(company_name: str | None, item_name: str, stock_grou
 
 
 def ensure_tally_stock_item_exists(company_name: str | None, item_name: str, mrr_type: str, unit_name: Any) -> str:
+    normalized_lnpi_unit = normalize_tally_unit_name(unit_name)
     exists_in_tally, tally_base_unit = query_tally_stock_item(item_name, company_name)
     if exists_in_tally:
         if tally_base_unit and not is_not_applicable_unit(tally_base_unit):
+            normalized_tally_unit = normalize_tally_unit_name(tally_base_unit)
+            if normalized_tally_unit != normalized_lnpi_unit:
+                raise RuntimeError(
+                    f"Stock item '{item_name}' exists in Tally with unit '{normalized_tally_unit}' "
+                    f"but LNPI resolved unit is '{normalized_lnpi_unit}'. Posting stopped."
+                )
             LOGGER.info(
                 "Stock item '%s' already exists in Tally. Using Tally base unit '%s' instead of LNPI unit '%s'.",
                 item_name,
-                tally_base_unit,
-                normalize_tally_unit_name(unit_name),
+                normalized_tally_unit,
+                normalized_lnpi_unit,
             )
-            return tally_base_unit
+            return normalized_tally_unit
         normalized_existing_unit = ensure_tally_unit_exists(company_name, unit_name)
         LOGGER.info(
             "Stock item '%s' already exists in Tally. Keeping LNPI unit '%s'.",
@@ -1117,10 +1166,10 @@ def ensure_tally_stock_item_exists(company_name: str | None, item_name: str, mrr
         raise RuntimeError(f"Stock item '{item_name}' could not be auto-created in Tally: {result}")
     final_unit = resolved_tally_unit or normalized_unit
     if result == "Exists with different unit":
-        LOGGER.warning(
-            "Stock item '%s' exists in Tally with a different unit. Continuing with unit '%s'.",
-            item_name,
-            final_unit,
+        normalized_tally_unit = normalize_tally_unit_name(final_unit)
+        raise RuntimeError(
+            f"Stock item '{item_name}' exists in Tally with unit '{normalized_tally_unit}' "
+            f"but LNPI resolved unit is '{normalized_unit}'. Posting stopped."
         )
     else:
         LOGGER.info("Stock item '%s' accepted by Tally stock-item create flow (%s)", item_name, result)
@@ -1134,12 +1183,12 @@ def build_inventory_entries(conn, company_name: str | None, voucher_no: str, mrr
             continue
 
         item_name, resolved_from = resolve_stock_item_name(conn, line)
-        qty = to_float(line.get("actualQty") or line.get("qty"))
-        rate = to_float(line.get("invoiceRate") or line.get("rate") or line.get("poRate"))
-        amount = to_float(line.get("actualValue") or line.get("value") or line.get("invoiceValue") or (qty * rate))
+        qty = round_quantity(line.get("actualQty") or line.get("qty"))
+        rate = round_money(line.get("invoiceRate") or line.get("rate") or line.get("poRate"))
+        amount = _line_amount_for_tally(line)
         uom = line.get("uom") or "Nos"
 
-        if qty <= 0:
+        if qty <= Decimal("0"):
             LOGGER.info("Skipping zero-qty line %s for voucher %s", index, voucher_no)
             continue
 
@@ -1162,14 +1211,14 @@ def build_inventory_entries(conn, company_name: str | None, voucher_no: str, mrr
             <STOCKITEMNAME>{escape_xml(item_name)}</STOCKITEMNAME>
             <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
             <ISLASTDEEMEDPOSITIVE>Yes</ISLASTDEEMEDPOSITIVE>
-            <RATE>{rate}/{escape_xml(normalized_uom)}</RATE>
-            <AMOUNT>-{amount}</AMOUNT>
-            <ACTUALQTY>{qty} {escape_xml(normalized_uom)}</ACTUALQTY>
-            <BILLEDQTY>{qty} {escape_xml(normalized_uom)}</BILLEDQTY>
+            <RATE>{format_money(rate)}/{escape_xml(normalized_uom)}</RATE>
+            <AMOUNT>-{format_money(amount)}</AMOUNT>
+            <ACTUALQTY>{format_quantity(qty)} {escape_xml(normalized_uom)}</ACTUALQTY>
+            <BILLEDQTY>{format_quantity(qty)} {escape_xml(normalized_uom)}</BILLEDQTY>
             <ACCOUNTINGALLOCATIONS.LIST>
                 <LEDGERNAME>{escape_xml(purchase_ledger)}</LEDGERNAME>
                 <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                <AMOUNT>-{amount}</AMOUNT>
+                <AMOUNT>-{format_money(amount)}</AMOUNT>
             </ACCOUNTINGALLOCATIONS.LIST>
         </ALLINVENTORYENTRIES.LIST>
         """
@@ -1178,79 +1227,83 @@ def build_inventory_entries(conn, company_name: str | None, voucher_no: str, mrr
 
 
 def _line_amount_for_tally(line: dict[str, Any]) -> Decimal:
-    qty = Decimal(str(to_float(line.get("actualQty") or line.get("qty"))))
-    rate = Decimal(str(to_float(line.get("invoiceRate") or line.get("rate") or line.get("poRate"))))
+    qty = round_quantity(line.get("actualQty") or line.get("qty"))
+    rate = round_money(line.get("invoiceRate") or line.get("rate") or line.get("poRate"))
     amount_value = line.get("actualValue") or line.get("value") or line.get("invoiceValue")
     if amount_value not in (None, ""):
-        return Decimal(str(to_float(amount_value)))
-    return qty * rate
+        return round_money(amount_value)
+    return (qty * rate).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
 
 
-def derive_round_off(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> float:
-    total_amount = Decimal(str(to_float(mrr.get("totalAmount"))))
+def calculate_purchase_component_total(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
     component_total = Decimal("0")
 
     for line in lines:
         if str(line.get("lineType", "Material")) == "Service":
             continue
-        qty = to_float(line.get("actualQty") or line.get("qty"))
-        if qty <= 0:
+        qty = round_quantity(line.get("actualQty") or line.get("qty"))
+        if qty <= Decimal("0"):
             continue
         component_total += _line_amount_for_tally(line)
 
-    component_total += Decimal(str(to_float(mrr.get("totalCgst"))))
-    component_total += Decimal(str(to_float(mrr.get("totalSgst"))))
-    component_total += Decimal(str(to_float(mrr.get("totalIgst"))))
-    component_total += Decimal(str(to_float(mrr.get("insurance"))))
-    component_total += Decimal(str(to_float(mrr.get("otherCharges"))))
+    component_total += round_money(mrr.get("totalCgst"))
+    component_total += round_money(mrr.get("totalSgst"))
+    component_total += round_money(mrr.get("totalIgst"))
+    component_total += round_money(mrr.get("insurance"))
+    component_total += round_money(mrr.get("otherCharges"))
+    return component_total
 
-    derived_round_off = float(total_amount - component_total)
-    if abs(derived_round_off) < 0.005:
-        return 0.0
-    return round(derived_round_off, 2)
+
+def get_stored_round_off(mrr: dict[str, Any]) -> Decimal:
+    return round_money(mrr.get("roundOff"))
+
+
+def calculate_purchase_voucher_total(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
+    component_total = calculate_purchase_component_total(mrr, lines)
+    stored_round_off = get_stored_round_off(mrr)
+    return (component_total + stored_round_off).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def calculate_purchase_debit_total_for_xml(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
+    return calculate_purchase_voucher_total(mrr, lines)
+
+
+def calculate_purchase_credit_total_for_xml(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
+    return calculate_purchase_voucher_total(mrr, lines)
 
 
 def build_tax_ledger_entries(mrr: dict[str, Any], lines: list[dict[str, Any]], voucher_no: str) -> str:
     entries: list[str] = []
 
-    insurance_and_other = to_float(mrr.get("insurance")) + to_float(mrr.get("otherCharges"))
+    insurance_and_other = round_money(mrr.get("insurance")) + round_money(mrr.get("otherCharges"))
     mapped_ledgers = [
-        ("Input CGST", to_float(mrr.get("totalCgst"))),
-        ("Input SGST", to_float(mrr.get("totalSgst"))),
-        ("Input IGST", to_float(mrr.get("totalIgst"))),
         ("INSURANCE & OTHER EXP. ON PURCHASE", insurance_and_other),
+        ("Input CGST", round_money(mrr.get("totalCgst"))),
+        ("Input SGST", round_money(mrr.get("totalSgst"))),
+        ("Input IGST", round_money(mrr.get("totalIgst"))),
     ]
 
     for ledger_name, amount in mapped_ledgers:
-        if not amount:
+        if amount == Decimal("0.00"):
             continue
         entries.append(
             f"""
         <LEDGERENTRIES.LIST>
             <LEDGERNAME>{escape_xml(ledger_name)}</LEDGERNAME>
             <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-            <AMOUNT>-{amount}</AMOUNT>
+            <AMOUNT>-{format_money(amount)}</AMOUNT>
         </LEDGERENTRIES.LIST>
         """
         )
 
-    round_off = derive_round_off(mrr, lines)
-    stored_round_off = round(to_float(mrr.get("roundOff")), 2)
-    if round_off != stored_round_off:
-        LOGGER.info(
-            "Voucher %s round off recalculated from total amount. Stored=%s | Derived=%s",
-            voucher_no,
-            stored_round_off,
-            round_off,
-        )
-    if round_off:
-        round_off_amount = abs(round_off)
+    round_off = get_stored_round_off(mrr)
+    if round_off != Decimal("0.00"):
         entries.append(
             f"""
         <LEDGERENTRIES.LIST>
             <LEDGERNAME>Round Off</LEDGERNAME>
-            <ISDEEMEDPOSITIVE>{"No" if round_off < 0 else "Yes"}</ISDEEMEDPOSITIVE>
-            <AMOUNT>{"-" if round_off > 0 else ""}{round_off_amount}</AMOUNT>
+            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+            <AMOUNT>{format_money(-round_off)}</AMOUNT>
         </LEDGERENTRIES.LIST>
         """
         )
@@ -1268,8 +1321,24 @@ def build_purchase_voucher_xml(conn, company_name: str | None, mrr: dict[str, An
     date_str = format_tally_date(mrr)
     voucher_no = str(mrr.get("transactionNo") or "")
     invoice_no = str(mrr.get("invoiceNo") or "")
-    total_amount = to_float(mrr.get("totalAmount"))
     lines = parse_lines(mrr.get("lines"))
+    total_amount = calculate_purchase_voucher_total(mrr, lines)
+    hostinger_total_amount = round_money(mrr.get("totalAmount"))
+    if total_amount != hostinger_total_amount:
+        LOGGER.info(
+            "Voucher %s total recalculated from components. Hostinger total=%s | Effective total=%s | Stored round off=%s",
+            voucher_no,
+            hostinger_total_amount,
+            total_amount,
+            get_stored_round_off(mrr),
+        )
+    rendered_debit_total = calculate_purchase_debit_total_for_xml(mrr, lines)
+    rendered_credit_total = calculate_purchase_credit_total_for_xml(mrr, lines)
+    if rendered_debit_total != rendered_credit_total:
+        raise RuntimeError(
+            f"Purchase voucher {voucher_no} is out of balance before Tally import "
+            f"(debit={rendered_debit_total}, credit={rendered_credit_total})."
+        )
     inventory_entries = build_inventory_entries(conn, company_name, voucher_no, str(mrr_type), lines, purchase_ledger)
     tax_entries = build_tax_ledger_entries(mrr, lines, voucher_no)
 
@@ -1288,24 +1357,23 @@ def build_purchase_voucher_xml(conn, company_name: str | None, mrr: dict[str, An
             </REQUESTDESC>
             <REQUESTDATA>
                 <TALLYMESSAGE xmlns:UDF="TallyUDF">
-                    <VOUCHER VCHTYPE="Purchase" ACTION="Create">
+                    <VOUCHER VCHTYPE="Purchase" ACTION="Create" OBJVIEW="Invoice Voucher View">
                         <DATE>{date_str}</DATE>
                         <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
+                        <PARTYNAME>{escape_xml(supplier_name)}</PARTYNAME>
                         <PARTYLEDGERNAME>{escape_xml(supplier_name)}</PARTYLEDGERNAME>
+                        <BASICBUYERNAME>LAXMI NARAYAN PACKAGING INDUSTRIES</BASICBUYERNAME>
                         <REFERENCE>{escape_xml(invoice_no)}</REFERENCE>
                         <NARRATION>{escape_xml(f"Imported from LNPI MRR {voucher_no} | Type: {mrr_type}")}</NARRATION>
                         <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
+                        <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
+                        <VOUCHERTYPEORIGNAME>Purchase</VOUCHERTYPEORIGNAME>
                         <ISINVOICE>Yes</ISINVOICE>
 
                         <LEDGERENTRIES.LIST>
                             <LEDGERNAME>{escape_xml(supplier_name)}</LEDGERNAME>
                             <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                            <AMOUNT>{total_amount}</AMOUNT>
-                            <BILLALLOCATIONS.LIST>
-                                <NAME>{escape_xml(invoice_no or voucher_no)}</NAME>
-                                <BILLTYPE>New Ref</BILLTYPE>
-                                <AMOUNT>{total_amount}</AMOUNT>
-                            </BILLALLOCATIONS.LIST>
+                            <AMOUNT>{format_money(total_amount)}</AMOUNT>
                         </LEDGERENTRIES.LIST>
 
                         {inventory_entries}
@@ -1367,7 +1435,7 @@ def build_journal_xml(company_name: str | None, mrr: dict[str, Any], supplier_na
 """
 
 
-def mark_mrr_completed(conn, mrr_id: str) -> None:
+def mark_mrr_completed(conn, mrr_id: str, tally_sync_remark: str | None = None) -> None:
     conn = ensure_db_connection(conn)
     cursor = conn.cursor()
     now = datetime.now().isoformat()
@@ -1375,14 +1443,55 @@ def mark_mrr_completed(conn, mrr_id: str) -> None:
         """
         UPDATE `material_in`
         SET `tallyTimestamp` = %s,
+            `tallySyncRemark` = %s,
             `status` = 'Completed',
             `updateTimestamp` = %s
         WHERE `id` = %s
         """,
-        (now, now, mrr_id),
+        (now, tally_sync_remark, now, mrr_id),
     )
     conn.commit()
     cursor.close()
+
+
+def update_mrr_tally_remark(conn, mrr_id: str, tally_sync_remark: str) -> None:
+    conn = ensure_db_connection(conn)
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+    cursor.execute(
+        """
+        UPDATE `material_in`
+        SET `tallySyncRemark` = %s,
+            `updateTimestamp` = %s
+        WHERE `id` = %s
+        """,
+        (tally_sync_remark, now, mrr_id),
+    )
+    conn.commit()
+    cursor.close()
+
+
+def build_duplicate_mrr_remark(duplicate_voucher: dict[str, str], supplier_name: str) -> str:
+    reason = str(duplicate_voucher.get("duplicate_reason") or "").strip()
+    existing_reference = str(duplicate_voucher.get("reference") or "").strip() or "-"
+    existing_date = str(duplicate_voucher.get("date") or "").strip() or "-"
+    existing_voucher = str(duplicate_voucher.get("voucher_number") or "").strip() or "-"
+    existing_party = str(duplicate_voucher.get("party") or "").strip() or supplier_name
+
+    if reason == "transaction_no_in_narration":
+        return (
+            f"Skipped: duplicate MRR number found in Tally narration "
+            f"(supplier={existing_party}, date={existing_date}, reference={existing_reference}, voucher={existing_voucher})."
+        )
+    if reason == "supplier_invoice_reference_in_financial_year":
+        return (
+            f"Skipped: duplicate supplier invoice found in same FY "
+            f"(supplier={existing_party}, date={existing_date}, reference={existing_reference}, voucher={existing_voucher})."
+        )
+    return (
+        f"Skipped: duplicate voucher already exists in Tally "
+        f"(supplier={existing_party}, date={existing_date}, reference={existing_reference}, voucher={existing_voucher})."
+    )
 
 
 def process_one_mrr(conn, company_name: str | None, mrr: dict[str, Any]) -> None:
@@ -1402,6 +1511,21 @@ def process_one_mrr(conn, company_name: str | None, mrr: dict[str, Any]) -> None
     else:
         LOGGER.info("Voucher %s entries => Debit: Service Return Adjustment | Credit: %s", voucher_no, supplier_name)
 
+    if voucher_type == "Purchase":
+        total_cgst = round(to_float(mrr.get("totalCgst")), 2)
+        total_sgst = round(to_float(mrr.get("totalSgst")), 2)
+        if total_cgst != total_sgst:
+            validation_remark = "CGST and SGST are not equal."
+            LOGGER.warning(
+                "Skipping %s because GST validation failed | totalCgst=%s | totalSgst=%s | remark=%s",
+                voucher_no,
+                total_cgst,
+                total_sgst,
+                validation_remark,
+            )
+            update_mrr_tally_remark(conn, str(mrr["id"]), validation_remark)
+            return
+
     check_tally_health(company_name, reason=f"before_mrr:{voucher_no}")
 
     duplicate_voucher = find_duplicate_voucher(
@@ -1414,26 +1538,38 @@ def process_one_mrr(conn, company_name: str | None, mrr: dict[str, Any]) -> None
         mrr_type=mrr_type,
     )
     if duplicate_voucher:
+        duplicate_remark = build_duplicate_mrr_remark(duplicate_voucher, supplier_name)
         LOGGER.info(
-            "Skipping %s because duplicate voucher already exists in Tally | reason=%s | existing_voucher=%s | existing_reference=%s | existing_date=%s | supplier=%s",
+            "Skipping %s because duplicate voucher already exists in Tally | reason=%s | existing_voucher=%s | existing_reference=%s | existing_date=%s | supplier=%s | remark=%s",
             voucher_no,
             duplicate_voucher.get("duplicate_reason") or "-",
             duplicate_voucher.get("voucher_number") or "-",
             duplicate_voucher.get("reference") or "-",
             duplicate_voucher.get("date") or "-",
             duplicate_voucher.get("party") or supplier_name,
+            duplicate_remark,
         )
-        mark_mrr_completed(conn, str(mrr["id"]))
+        mark_mrr_completed(conn, str(mrr["id"]), duplicate_remark)
         return
 
     if mrr_type == "Service Return":
         xml_text = build_journal_xml(company_name, mrr, supplier_name)
     else:
-        xml_text = build_purchase_voucher_xml(conn, company_name, mrr, supplier_name)
+        try:
+            xml_text = build_purchase_voucher_xml(conn, company_name, mrr, supplier_name)
+        except RuntimeError as error:
+            validation_remark = str(error)
+            LOGGER.warning(
+                "Skipping %s because purchase voucher validation failed | remark=%s",
+                voucher_no,
+                validation_remark,
+            )
+            update_mrr_tally_remark(conn, str(mrr["id"]), validation_remark)
+            return
 
     response_text = post_xml_to_tally(xml_text, debug_step=f"{voucher_type.lower()}_voucher_import", voucher_no=voucher_no)
     if "<CREATED>1</CREATED>" in response_text or "<ALTERED>1</ALTERED>" in response_text:
-        mark_mrr_completed(conn, str(mrr["id"]))
+        mark_mrr_completed(conn, str(mrr["id"]), "Posted successfully to Tally.")
         LOGGER.info("Posted voucher %s successfully in company %s", voucher_no, company_name or "Current Open Company")
         return
 
