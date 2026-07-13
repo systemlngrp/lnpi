@@ -11,11 +11,11 @@ function isWithoutJobIssue(issueType?: string) {
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
 }
 
-function DetailRow({ label, value }: { label: string; value?: React.ReactNode }) {
+function DetailChip({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
-    <div className="border-b border-slate-200 py-2 last:border-b-0">
-      <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-black break-words">{value || "-"}</div>
+    <div className="min-w-[130px] border-r border-slate-300 pr-3 last:border-r-0">
+      <span className="mr-1 text-[9px] font-black uppercase text-slate-500">{label}:</span>
+      <span className="text-[11px] font-bold text-black">{value || "-"}</span>
     </div>
   );
 }
@@ -98,111 +98,112 @@ export function NonJobIssueMaster() {
     setDeletingId(null);
   };
 
-  const renderDetailsRow = (row: MaterialIssue) => {
-    const selectedLines = issueLines.filter((line) => line.materialIssueId === row.id);
+  const renderDetailsRow = (row: MaterialIssue) => {    const selectedLines = issueLines.filter((line) => line.materialIssueId === row.id);
     const selectedReelLines = issueReelLines.filter((line) => line.materialIssueId === row.id);
+    const tallyValues = [
+      ["Voucher", row.tallyVoucherNo],
+      ["Date", formatDate(row.tallyVoucherDate)],
+      ["Type", row.tallyVoucherType],
+      ["By", row.tallyPostedBy],
+      ["At", row.tallyTimestamp],
+      ["Remark", row.tallyPostingRemark],
+      ["Error", row.tallyPostingError],
+    ].filter(([, value]) => String(value || "").trim());
 
     return (
       <tr key={`${row.id}-details`} className="bg-slate-50">
-        <td colSpan={7} className="border-t border-black px-4 py-4">
-          <div className="grid gap-4 xl:grid-cols-[1fr_1.2fr]">
-            <section>
-              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Issue Details</h4>
-              <div className="rounded border border-slate-300 bg-white px-3">
-                <DetailRow label="Issue No" value={row.issueNo} />
-                <DetailRow label="Consumption No" value={row.consumptionTransactionNo} />
-                <DetailRow label="Date" value={formatDate(row.date)} />
-                <DetailRow label="Issue Type" value={row.issueType} />
-                <DetailRow label="Tally Status" value={row.tallyPostingStatus} />
-                <DetailRow label="Remarks" value={row.remarks} />
-              </div>
-            </section>
+        <td colSpan={7} className="border-t border-black px-3 py-2">
+          <div className="space-y-2 text-[11px]">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 rounded border border-slate-300 bg-white px-3 py-2">
+              <DetailChip label="Issue" value={row.issueNo} />
+              <DetailChip label="Consumption" value={row.consumptionTransactionNo} />
+              <DetailChip label="Date" value={formatDate(row.date)} />
+              <DetailChip label="Type" value={row.issueType} />
+              <DetailChip label="Tally" value={row.tallyPostingStatus} />
+              <DetailChip label="Remarks" value={row.remarks} />
+            </div>
 
-            <section>
-              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Items</h4>
-              <div className="overflow-hidden rounded border border-black bg-white">
-                <table className="min-w-full divide-y divide-black text-sm">
-                  <thead className="bg-slate-100">
-                    <tr className="divide-x divide-black">
-                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">Item</th>
-                      <th className="px-3 py-2 text-right text-[11px] font-black uppercase">Qty</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">UOM</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-black">
-                    {selectedLines.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="px-3 py-4 text-center text-slate-600">No item lines found.</td>
+            <div className="grid gap-2 xl:grid-cols-[1.1fr_1fr]">
+              <section>
+                <h4 className="mb-1 text-[10px] font-black uppercase tracking-wide text-black">Items</h4>
+                <div className="overflow-hidden rounded border border-black bg-white">
+                  <table className="min-w-full divide-y divide-black text-[11px]">
+                    <thead className="bg-slate-100">
+                      <tr className="divide-x divide-black">
+                        <th className="px-2 py-1 text-left font-black uppercase">Item</th>
+                        <th className="px-2 py-1 text-right font-black uppercase">Qty</th>
+                        <th className="px-2 py-1 text-left font-black uppercase">UOM</th>
                       </tr>
-                    ) : (
-                      selectedLines.map((line) => (
-                        <tr key={line.id} className="divide-x divide-black">
-                          <td className="px-3 py-2 font-semibold">{getItemName(line.materialId)}</td>
-                          <td className="px-3 py-2 text-right font-semibold">{Number(line.qty || 0).toLocaleString()}</td>
-                          <td className="px-3 py-2">{line.uom || "-"}</td>
+                    </thead>
+                    <tbody className="divide-y divide-black">
+                      {selectedLines.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-2 py-2 text-center text-slate-600">No item lines found.</td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </div>
+                      ) : (
+                        selectedLines.map((line) => (
+                          <tr key={line.id} className="divide-x divide-black">
+                            <td className="px-2 py-1 font-semibold">{getItemName(line.materialId)}</td>
+                            <td className="px-2 py-1 text-right font-semibold">{Number(line.qty || 0).toLocaleString()}</td>
+                            <td className="px-2 py-1">{line.uom || "-"}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-            <section>
-              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Reel Details</h4>
-              <div className="overflow-hidden rounded border border-black bg-white">
-                <table className="min-w-full divide-y divide-black text-sm">
-                  <thead className="bg-slate-100">
-                    <tr className="divide-x divide-black">
-                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">Item</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">Reel No</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">Packing Slip</th>
-                      <th className="px-3 py-2 text-right text-[11px] font-black uppercase">Weight</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-black">
-                    {selectedReelLines.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-3 py-4 text-center text-slate-600">No reel details found.</td>
+              <section>
+                <h4 className="mb-1 text-[10px] font-black uppercase tracking-wide text-black">Reel Details</h4>
+                <div className="overflow-hidden rounded border border-black bg-white">
+                  <table className="min-w-full divide-y divide-black text-[11px]">
+                    <thead className="bg-slate-100">
+                      <tr className="divide-x divide-black">
+                        <th className="px-2 py-1 text-left font-black uppercase">Item</th>
+                        <th className="px-2 py-1 text-left font-black uppercase">Reel No</th>
+                        <th className="px-2 py-1 text-left font-black uppercase">Slip</th>
+                        <th className="px-2 py-1 text-right font-black uppercase">Wt</th>
                       </tr>
-                    ) : (
-                      selectedReelLines.map((line) => (
-                        <tr key={line.id} className="divide-x divide-black">
-                          <td className="px-3 py-2 font-semibold">{getItemName(line.materialId)}</td>
-                          <td className="px-3 py-2">{line.ourReelNo || "-"}</td>
-                          <td className="px-3 py-2">{line.packingSlipId || "-"}</td>
-                          <td className="px-3 py-2 text-right font-semibold">{Number(line.weightKg || 0).toLocaleString()}</td>
+                    </thead>
+                    <tbody className="divide-y divide-black">
+                      {selectedReelLines.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-2 py-2 text-center text-slate-600">No reel details found.</td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+                      ) : (
+                        selectedReelLines.map((line) => (
+                          <tr key={line.id} className="divide-x divide-black">
+                            <td className="px-2 py-1 font-semibold">{getItemName(line.materialId)}</td>
+                            <td className="px-2 py-1">{line.ourReelNo || "-"}</td>
+                            <td className="px-2 py-1">{line.packingSlipId || "-"}</td>
+                            <td className="px-2 py-1 text-right font-semibold">{Number(line.weightKg || 0).toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
 
-            <section>
-              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Tally Details</h4>
-              <div className="rounded border border-slate-300 bg-white px-3">
-                <DetailRow label="Voucher No" value={row.tallyVoucherNo} />
-                <DetailRow label="Voucher Date" value={formatDate(row.tallyVoucherDate)} />
-                <DetailRow label="Voucher Type" value={row.tallyVoucherType} />
-                <DetailRow label="Voucher ID" value={row.tallyVoucherId} />
-                <DetailRow label="Posted By" value={row.tallyPostedBy} />
-                <DetailRow label="Posted At" value={row.tallyTimestamp} />
-                <DetailRow label="Posting Remark" value={row.tallyPostingRemark} />
-                <DetailRow label="Posting Error" value={row.tallyPostingError} />
-                <DetailRow label="Last Attempt" value={row.tallyLastAttemptAt} />
-                <DetailRow label="Attempt Count" value={row.tallyPostingAttemptCount} />
-              </div>
-            </section>
+            <div className="rounded border border-slate-300 bg-white px-3 py-1.5">
+              <span className="mr-2 text-[10px] font-black uppercase text-black">Tally Details</span>
+              {tallyValues.length === 0 ? (
+                <span className="text-slate-600">-</span>
+              ) : (
+                tallyValues.map(([label, value]) => (
+                  <span key={label} className="mr-4 inline-block whitespace-nowrap">
+                    <span className="font-black text-slate-500">{label}:</span> <span className="font-semibold text-black">{value}</span>
+                  </span>
+                ))
+              )}
+            </div>
           </div>
         </td>
       </tr>
     );
   };
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
