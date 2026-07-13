@@ -20,6 +20,7 @@ import {
   FlaskConical,
   BookOpenText,
   X,
+  Search,
   ChevronDown,
   ChevronRight
 } from "lucide-react";
@@ -248,11 +249,16 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
+    section: "Orders",
+    color: "bg-lime-700",
+    items: orderItems,
+  },
+  {
     section: "Jobs",
     color: "bg-emerald-700",
     items: [
       { section: "Material Issue and Return", items: materialIssueReturnItems },
-      { section: "Orders", items: orderItems },
+
       { section: "Production", items: productionItems },
       { section: "PHP / Plate Process", items: phpPlateProcessItems },
       { section: "PHP Master", items: phpMasterItems },
@@ -321,6 +327,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
   const { hasAccess, user } = useAuth();
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [menuSearchTerm, setMenuSearchTerm] = useState("");
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [productions] = useData<Production>("productions", []);
   const [phpJobMaster] = useData<Production>("php_job_master", []);
@@ -612,7 +619,38 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       }, []),
     [hasAccess]
   );
+  const filteredNavigation = useMemo<NavGroup[]>(() => {
+    const q = menuSearchTerm.trim().toLowerCase();
+    const matches = (value?: string) => String(value || "").toLowerCase().includes(q);
 
+    return navigation.reduce<NavGroup[]>((groups, group) => {
+      const visibleEntries = getVisibleEntries(group.items);
+      if (visibleEntries.length === 0) return groups;
+      if (!q || matches(group.section)) {
+        groups.push({ ...group, items: visibleEntries });
+        return groups;
+      }
+
+      const filteredEntries = visibleEntries.reduce<NavEntry[]>((entries, entry) => {
+        if (isNavSubGroup(entry)) {
+          if (matches(entry.section)) {
+            entries.push(entry);
+            return entries;
+          }
+
+          const matchingItems = entry.items.filter((item) => matches(item.name));
+          if (matchingItems.length > 0) entries.push({ ...entry, items: matchingItems });
+          return entries;
+        }
+
+        if (matches(entry.name)) entries.push(entry);
+        return entries;
+      }, []);
+
+      if (filteredEntries.length > 0) groups.push({ ...group, items: filteredEntries });
+      return groups;
+    }, []);
+  }, [getVisibleEntries, menuSearchTerm, navigation]);
   useEffect(() => {
     const next: Record<string, boolean> = {};
     for (const group of navigation) {
@@ -718,13 +756,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
           onClick={() => toggleNestedSection(sectionKey)}
           className={cn(
             "flex w-full items-center justify-between rounded px-2 py-1 text-left text-[10px] font-black uppercase tracking-wide hover:bg-black/10",
-            collapsedSections[sectionKey] ? "text-white/80" : "bg-red-600 text-white shadow-inner"
+            menuSearchTerm.trim() || !collapsedSections[sectionKey] ? "bg-red-600 text-white shadow-inner" : "text-white/80"
           )}
         >
           <span className="max-w-[190px] overflow-hidden text-ellipsis whitespace-nowrap">{entry.section}</span>
-          {collapsedSections[sectionKey] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+          {menuSearchTerm.trim() || !collapsedSections[sectionKey] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
-        <div className={cn("mt-0.5 space-y-px", collapsedSections[sectionKey] && "hidden")}>
+        <div className={cn("mt-0.5 space-y-px", !menuSearchTerm.trim() && collapsedSections[sectionKey] && "hidden")}>
           {entry.items.map((item) => renderNavLink(item, true))}
         </div>
       </div>
@@ -748,9 +786,25 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         </button>
       </div>
       <nav className="flex-1 space-y-3 overflow-x-auto overflow-y-auto px-2 py-4 border-r border-white/5">
-        {navigation.map((group) => {
-          const visibleEntries = getVisibleEntries(group.items);
-          if (visibleEntries.length === 0) return null;
+        {!isCollapsed && (
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-white/50" aria-hidden="true" />
+            <input
+              type="text"
+              value={menuSearchTerm}
+              onChange={(event) => setMenuSearchTerm(event.target.value)}
+              placeholder="Search menu..."
+              className="w-full rounded border border-white/20 bg-white/10 py-2 pl-9 pr-3 text-[11px] font-semibold text-white placeholder:text-white/50 outline-none focus:border-white/70 focus:bg-white/15"
+            />
+          </div>
+        )}
+        {filteredNavigation.length === 0 && !isCollapsed ? (
+          <div className="rounded border border-white/10 bg-white/5 px-3 py-3 text-[11px] font-semibold text-white/70">
+            No menu found
+          </div>
+        ) : null}
+        {filteredNavigation.map((group) => {
+          const visibleEntries = group.items;
 
           return (
             <div key={group.section} className={cn("p-1 rounded flex flex-col border border-white/10", group.color)}>
@@ -761,10 +815,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
                   className="mb-1 flex w-full items-center justify-between rounded px-1 pt-0.5 pb-1 text-left text-[10px] font-bold uppercase tracking-wider text-white/70 hover:bg-black/10"
                 >
                   <span className="whitespace-nowrap">{group.section}</span>
-                  {collapsedSections[group.section] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                  {menuSearchTerm.trim() || !collapsedSections[group.section] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </button>
               ) : null}
-              <div className={cn("space-y-1", !isCollapsed && collapsedSections[group.section] && "hidden")}>
+              <div className={cn("space-y-1", !isCollapsed && !menuSearchTerm.trim() && collapsedSections[group.section] && "hidden")}>
                 {visibleEntries.map((entry) => renderNavEntry(entry, group.section))}
               </div>
             </div>

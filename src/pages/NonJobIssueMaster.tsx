@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
-import { Material, MaterialIssue, MaterialIssueLine } from "../types";
+import { Material, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine } from "../types";
 import { TableControls } from "../components/TableControls";
-import { Trash2 } from "lucide-react";
+import { Eye, Trash2, X } from "lucide-react";
 import { formatDate } from "../lib/serial";
 
 function isWithoutJobIssue(issueType?: string) {
@@ -11,27 +11,50 @@ function isWithoutJobIssue(issueType?: string) {
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
 }
 
+function DetailRow({ label, value }: { label: string; value?: React.ReactNode }) {
+  return (
+    <div className="border-b border-slate-200 py-2">
+      <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold text-black break-words">{value || "-"}</div>
+    </div>
+  );
+}
+
 export function NonJobIssueMaster() {
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materials] = useData<Material>("materials", []);
   const [issueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const npdItems = useNpdItems();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<MaterialIssue | null>(null);
+
+  const materialNameMap = useMemo(() => {
+    const names = new Map(materials.map((row) => [String(row.id), String(row.name || "").trim()]));
+    for (const row of npdItems) {
+      const id = String((row as any).id || "").trim();
+      const name = String((row as any).name || "").trim();
+      if (id && name && !names.has(id)) names.set(id, name);
+    }
+    return names;
+  }, [issueLines, materials, npdItems]);
+
+  const getItemName = (materialId?: string) => {
+    const id = String(materialId || "").trim();
+    return materialNameMap.get(id) || id || "-";
+  };
 
   const itemNameByIssueId = useMemo(() => {
-    const materialNameMap = new Map(materials.map((row) => [String(row.id), String(row.name || "").trim()]));
-    const npdNameMap = new Map(npdItems.map((row) => [String((row as any).id || ""), String((row as any).name || "").trim()]));
     const issueMap = new Map<string, string>();
 
     for (const line of issueLines) {
       const issueId = String(line.materialIssueId || "").trim();
       if (!issueId) continue;
 
-      const materialId = String(line.materialId || "").trim();
-      const itemName = materialNameMap.get(materialId) || npdNameMap.get(materialId) || materialId;
-      if (!itemName) continue;
+      const itemName = getItemName(line.materialId);
+      if (!itemName || itemName === "-") continue;
 
       const existing = issueMap.get(issueId);
       if (!existing) {
@@ -47,7 +70,7 @@ export function NonJobIssueMaster() {
     }
 
     return issueMap;
-  }, [issueLines, materials, npdItems]);
+  }, [issueLines, materialNameMap]);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -64,6 +87,16 @@ export function NonJobIssueMaster() {
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.issueNo || "").localeCompare(a.issueNo || ""));
   }, [itemNameByIssueId, materialIssues, searchTerm]);
 
+  const selectedLines = useMemo(
+    () => issueLines.filter((line) => line.materialIssueId === selectedIssue?.id),
+    [issueLines, selectedIssue?.id]
+  );
+
+  const selectedReelLines = useMemo(
+    () => issueReelLines.filter((line) => line.materialIssueId === selectedIssue?.id),
+    [issueReelLines, selectedIssue?.id]
+  );
+
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
       setDeletingId(id);
@@ -71,6 +104,7 @@ export function NonJobIssueMaster() {
       return;
     }
     setMaterialIssues((prev) => prev.filter((row) => row.id !== id));
+    if (selectedIssue?.id === id) setSelectedIssue(null);
     setDeletingId(null);
   };
 
@@ -100,7 +134,7 @@ export function NonJobIssueMaster() {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">
-                    No “Without Job” material issues found.
+                    No Without Job material issues found.
                   </td>
                 </tr>
               ) : (
@@ -113,14 +147,24 @@ export function NonJobIssueMaster() {
                     <td className="px-4 py-3 text-sm">{itemNameByIssueId.get(row.id) || "-"}</td>
                     <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        title={deletingId === row.id ? "Confirm delete" : "Delete"}
-                        onClick={() => handleDelete(row.id)}
-                        className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-end`}
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          title="Show details"
+                          onClick={() => setSelectedIssue(row)}
+                          className="inline-flex items-center justify-center text-sky-700 hover:text-sky-950"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          title={deletingId === row.id ? "Confirm delete" : "Delete"}
+                          onClick={() => handleDelete(row.id)}
+                          className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-end`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -129,6 +173,117 @@ export function NonJobIssueMaster() {
           </table>
         </div>
       </div>
+
+      {selectedIssue && (
+        <div className="fixed inset-y-0 left-0 z-[70] flex w-full max-w-md flex-col border-r-2 border-black bg-white shadow-2xl">
+          <div className="flex items-start justify-between border-b border-black bg-slate-100 px-5 py-4">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Non-Job Issue Details</div>
+              <h3 className="mt-1 text-lg font-black text-black">{selectedIssue.issueNo || "-"}</h3>
+            </div>
+            <button
+              type="button"
+              title="Close details"
+              onClick={() => setSelectedIssue(null)}
+              className="rounded border border-black bg-white p-1.5 text-black hover:bg-slate-200"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <section className="mb-5">
+              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Issue Header</h4>
+              <div className="rounded border border-slate-300 bg-white px-3">
+                <DetailRow label="Issue No" value={selectedIssue.issueNo} />
+                <DetailRow label="Consumption No" value={selectedIssue.consumptionTransactionNo} />
+                <DetailRow label="Date" value={formatDate(selectedIssue.date)} />
+                <DetailRow label="Issue Type" value={selectedIssue.issueType} />
+                <DetailRow label="Tally Status" value={selectedIssue.tallyPostingStatus} />
+                <DetailRow label="Remarks" value={selectedIssue.remarks} />
+              </div>
+            </section>
+
+            <section className="mb-5">
+              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Items</h4>
+              <div className="overflow-hidden rounded border border-black">
+                <table className="min-w-full divide-y divide-black text-sm">
+                  <thead className="bg-slate-100">
+                    <tr className="divide-x divide-black">
+                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">Item</th>
+                      <th className="px-3 py-2 text-right text-[11px] font-black uppercase">Qty</th>
+                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">UOM</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black">
+                    {selectedLines.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-4 text-center text-slate-600">No item lines found.</td>
+                      </tr>
+                    ) : (
+                      selectedLines.map((line) => (
+                        <tr key={line.id} className="divide-x divide-black">
+                          <td className="px-3 py-2 font-semibold">{getItemName(line.materialId)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{Number(line.qty || 0).toLocaleString()}</td>
+                          <td className="px-3 py-2">{line.uom || "-"}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="mb-5">
+              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Reel Details</h4>
+              <div className="overflow-hidden rounded border border-black">
+                <table className="min-w-full divide-y divide-black text-sm">
+                  <thead className="bg-slate-100">
+                    <tr className="divide-x divide-black">
+                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">Item</th>
+                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">Reel No</th>
+                      <th className="px-3 py-2 text-left text-[11px] font-black uppercase">Packing Slip</th>
+                      <th className="px-3 py-2 text-right text-[11px] font-black uppercase">Weight</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black">
+                    {selectedReelLines.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-4 text-center text-slate-600">No reel details found.</td>
+                      </tr>
+                    ) : (
+                      selectedReelLines.map((line) => (
+                        <tr key={line.id} className="divide-x divide-black">
+                          <td className="px-3 py-2 font-semibold">{getItemName(line.materialId)}</td>
+                          <td className="px-3 py-2">{line.ourReelNo || "-"}</td>
+                          <td className="px-3 py-2">{line.packingSlipId || "-"}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{Number(line.weightKg || 0).toLocaleString()}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section>
+              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Tally Details</h4>
+              <div className="rounded border border-slate-300 bg-white px-3">
+                <DetailRow label="Voucher No" value={selectedIssue.tallyVoucherNo} />
+                <DetailRow label="Voucher Date" value={formatDate(selectedIssue.tallyVoucherDate)} />
+                <DetailRow label="Voucher Type" value={selectedIssue.tallyVoucherType} />
+                <DetailRow label="Voucher ID" value={selectedIssue.tallyVoucherId} />
+                <DetailRow label="Posted By" value={selectedIssue.tallyPostedBy} />
+                <DetailRow label="Posted At" value={selectedIssue.tallyTimestamp} />
+                <DetailRow label="Posting Remark" value={selectedIssue.tallyPostingRemark} />
+                <DetailRow label="Posting Error" value={selectedIssue.tallyPostingError} />
+                <DetailRow label="Last Attempt" value={selectedIssue.tallyLastAttemptAt} />
+                <DetailRow label="Attempt Count" value={selectedIssue.tallyPostingAttemptCount} />
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
