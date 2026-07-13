@@ -3,7 +3,7 @@ import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { Material, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine } from "../types";
 import { TableControls } from "../components/TableControls";
-import { Eye, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/serial";
 
 function isWithoutJobIssue(issueType?: string) {
@@ -13,7 +13,7 @@ function isWithoutJobIssue(issueType?: string) {
 
 function DetailRow({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
-    <div className="border-b border-slate-200 py-2">
+    <div className="border-b border-slate-200 py-2 last:border-b-0">
       <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-0.5 text-sm font-semibold text-black break-words">{value || "-"}</div>
     </div>
@@ -29,7 +29,7 @@ export function NonJobIssueMaster() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectedIssue, setSelectedIssue] = useState<MaterialIssue | null>(null);
+  const [expandedIssueId, setExpandedIssueId] = useState<string | null>(null);
 
   const materialNameMap = useMemo(() => {
     const names = new Map(materials.map((row) => [String(row.id), String(row.name || "").trim()]));
@@ -39,7 +39,7 @@ export function NonJobIssueMaster() {
       if (id && name && !names.has(id)) names.set(id, name);
     }
     return names;
-  }, [issueLines, materials, npdItems]);
+  }, [materials, npdItems]);
 
   const getItemName = (materialId?: string) => {
     const id = String(materialId || "").trim();
@@ -87,16 +87,6 @@ export function NonJobIssueMaster() {
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.issueNo || "").localeCompare(a.issueNo || ""));
   }, [itemNameByIssueId, materialIssues, searchTerm]);
 
-  const selectedLines = useMemo(
-    () => issueLines.filter((line) => line.materialIssueId === selectedIssue?.id),
-    [issueLines, selectedIssue?.id]
-  );
-
-  const selectedReelLines = useMemo(
-    () => issueReelLines.filter((line) => line.materialIssueId === selectedIssue?.id),
-    [issueReelLines, selectedIssue?.id]
-  );
-
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
       setDeletingId(id);
@@ -104,109 +94,33 @@ export function NonJobIssueMaster() {
       return;
     }
     setMaterialIssues((prev) => prev.filter((row) => row.id !== id));
-    if (selectedIssue?.id === id) setSelectedIssue(null);
+    if (expandedIssueId === id) setExpandedIssueId(null);
     setDeletingId(null);
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center pb-4 border-b border-black">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Non-Job Issue Master</h2>
-      </div>
+  const renderDetailsRow = (row: MaterialIssue) => {
+    const selectedLines = issueLines.filter((line) => line.materialIssueId === row.id);
+    const selectedReelLines = issueReelLines.filter((line) => line.materialIssueId === row.id);
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search issue no, consumption no, date, item, remarks..." />
-
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-black border-collapse">
-            <thead className="bg-slate-100">
-              <tr className="divide-x divide-black">
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Consumption No</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Tally Status</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Items</th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remarks</th>
-                <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">
-                    No Without Job material issues found.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((row) => (
-                  <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm font-bold">{row.issueNo}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-indigo-700">{row.consumptionTransactionNo || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{itemNameByIssueId.get(row.id) || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        <button
-                          type="button"
-                          title="Show details"
-                          onClick={() => setSelectedIssue(row)}
-                          className="inline-flex items-center justify-center text-sky-700 hover:text-sky-950"
-                        >
-                          <Eye size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          title={deletingId === row.id ? "Confirm delete" : "Delete"}
-                          onClick={() => handleDelete(row.id)}
-                          className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-end`}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {selectedIssue && (
-        <div className="fixed inset-y-0 left-0 z-[70] flex w-full max-w-md flex-col border-r-2 border-black bg-white shadow-2xl">
-          <div className="flex items-start justify-between border-b border-black bg-slate-100 px-5 py-4">
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Non-Job Issue Details</div>
-              <h3 className="mt-1 text-lg font-black text-black">{selectedIssue.issueNo || "-"}</h3>
-            </div>
-            <button
-              type="button"
-              title="Close details"
-              onClick={() => setSelectedIssue(null)}
-              className="rounded border border-black bg-white p-1.5 text-black hover:bg-slate-200"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-5 py-4">
-            <section className="mb-5">
-              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Issue Header</h4>
+    return (
+      <tr key={`${row.id}-details`} className="bg-slate-50">
+        <td colSpan={7} className="border-t border-black px-4 py-4">
+          <div className="grid gap-4 xl:grid-cols-[1fr_1.2fr]">
+            <section>
+              <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Issue Details</h4>
               <div className="rounded border border-slate-300 bg-white px-3">
-                <DetailRow label="Issue No" value={selectedIssue.issueNo} />
-                <DetailRow label="Consumption No" value={selectedIssue.consumptionTransactionNo} />
-                <DetailRow label="Date" value={formatDate(selectedIssue.date)} />
-                <DetailRow label="Issue Type" value={selectedIssue.issueType} />
-                <DetailRow label="Tally Status" value={selectedIssue.tallyPostingStatus} />
-                <DetailRow label="Remarks" value={selectedIssue.remarks} />
+                <DetailRow label="Issue No" value={row.issueNo} />
+                <DetailRow label="Consumption No" value={row.consumptionTransactionNo} />
+                <DetailRow label="Date" value={formatDate(row.date)} />
+                <DetailRow label="Issue Type" value={row.issueType} />
+                <DetailRow label="Tally Status" value={row.tallyPostingStatus} />
+                <DetailRow label="Remarks" value={row.remarks} />
               </div>
             </section>
 
-            <section className="mb-5">
+            <section>
               <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Items</h4>
-              <div className="overflow-hidden rounded border border-black">
+              <div className="overflow-hidden rounded border border-black bg-white">
                 <table className="min-w-full divide-y divide-black text-sm">
                   <thead className="bg-slate-100">
                     <tr className="divide-x divide-black">
@@ -233,10 +147,12 @@ export function NonJobIssueMaster() {
                 </table>
               </div>
             </section>
+          </div>
 
-            <section className="mb-5">
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+            <section>
               <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Reel Details</h4>
-              <div className="overflow-hidden rounded border border-black">
+              <div className="overflow-hidden rounded border border-black bg-white">
                 <table className="min-w-full divide-y divide-black text-sm">
                   <thead className="bg-slate-100">
                     <tr className="divide-x divide-black">
@@ -269,21 +185,97 @@ export function NonJobIssueMaster() {
             <section>
               <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-black">Tally Details</h4>
               <div className="rounded border border-slate-300 bg-white px-3">
-                <DetailRow label="Voucher No" value={selectedIssue.tallyVoucherNo} />
-                <DetailRow label="Voucher Date" value={formatDate(selectedIssue.tallyVoucherDate)} />
-                <DetailRow label="Voucher Type" value={selectedIssue.tallyVoucherType} />
-                <DetailRow label="Voucher ID" value={selectedIssue.tallyVoucherId} />
-                <DetailRow label="Posted By" value={selectedIssue.tallyPostedBy} />
-                <DetailRow label="Posted At" value={selectedIssue.tallyTimestamp} />
-                <DetailRow label="Posting Remark" value={selectedIssue.tallyPostingRemark} />
-                <DetailRow label="Posting Error" value={selectedIssue.tallyPostingError} />
-                <DetailRow label="Last Attempt" value={selectedIssue.tallyLastAttemptAt} />
-                <DetailRow label="Attempt Count" value={selectedIssue.tallyPostingAttemptCount} />
+                <DetailRow label="Voucher No" value={row.tallyVoucherNo} />
+                <DetailRow label="Voucher Date" value={formatDate(row.tallyVoucherDate)} />
+                <DetailRow label="Voucher Type" value={row.tallyVoucherType} />
+                <DetailRow label="Voucher ID" value={row.tallyVoucherId} />
+                <DetailRow label="Posted By" value={row.tallyPostedBy} />
+                <DetailRow label="Posted At" value={row.tallyTimestamp} />
+                <DetailRow label="Posting Remark" value={row.tallyPostingRemark} />
+                <DetailRow label="Posting Error" value={row.tallyPostingError} />
+                <DetailRow label="Last Attempt" value={row.tallyLastAttemptAt} />
+                <DetailRow label="Attempt Count" value={row.tallyPostingAttemptCount} />
               </div>
             </section>
           </div>
+        </td>
+      </tr>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center pb-4 border-b border-black">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Non-Job Issue Master</h2>
+      </div>
+
+      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search issue no, consumption no, date, item, remarks..." />
+
+      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-black border-collapse">
+            <thead className="bg-slate-100">
+              <tr className="divide-x divide-black">
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Consumption No</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Tally Status</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Items</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remarks</th>
+                <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">
+                    No Without Job material issues found.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((row) => {
+                  const isExpanded = expandedIssueId === row.id;
+                  return (
+                    <React.Fragment key={row.id}>
+                      <tr className="divide-x divide-black hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm font-bold">
+                          <button
+                            type="button"
+                            title={isExpanded ? "Hide details" : "Show details"}
+                            onClick={() => setExpandedIssueId(isExpanded ? null : row.id)}
+                            className="flex items-start gap-2 text-left font-bold text-black hover:text-sky-800"
+                          >
+                            <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-black bg-white">
+                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            </span>
+                            <span>{row.issueNo}</span>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-indigo-700">{row.consumptionTransactionNo || "-"}</td>
+                        <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
+                        <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
+                        <td className="px-4 py-3 text-sm">{itemNameByIssueId.get(row.id) || "-"}</td>
+                        <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            title={deletingId === row.id ? "Confirm delete" : "Delete"}
+                            onClick={() => handleDelete(row.id)}
+                            className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-end`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded ? renderDetailsRow(row) : null}
+                    </React.Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 }
