@@ -17,6 +17,7 @@ type ReelStockRow = {
   gsm: number;
   bf: number;
   openingStock: number;
+  receipts: number;
   issued: number;
   returned: number;
   availableWeight: number;
@@ -73,6 +74,7 @@ export function ErpWiseReelStockReport() {
           gsm: Number(material.gsm || 0),
           bf: Number(material.bf || 0),
           openingStock,
+          receipts: Number(received.toFixed(2)),
           issued: Number(issued.toFixed(2)),
           returned: Number(returned.toFixed(2)),
           availableWeight,
@@ -99,13 +101,14 @@ export function ErpWiseReelStockReport() {
       rows.reduce(
         (acc, row) => ({
           openingStock: acc.openingStock + row.openingStock,
+          receipts: acc.receipts + row.receipts,
           issued: acc.issued + row.issued,
           returned: acc.returned + row.returned,
           availableWeight: acc.availableWeight + row.availableWeight,
           valuation: acc.valuation + row.valuation,
           noOfReels: acc.noOfReels + row.noOfReels,
         }),
-        { openingStock: 0, issued: 0, returned: 0, availableWeight: 0, valuation: 0, noOfReels: 0 }
+        { openingStock: 0, receipts: 0, issued: 0, returned: 0, availableWeight: 0, valuation: 0, noOfReels: 0 }
       ),
     [rows]
   );
@@ -117,7 +120,7 @@ export function ErpWiseReelStockReport() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">ERP Wise Reel Stock</h2>
-          <p className="text-sm text-slate-600 font-medium">Opening + receipts + returns - issues, with valuation by latest purchase rate or opening rate.</p>
+          <p className="text-sm text-slate-600 font-medium">Available Weight = Opening Stock + Receipts + Returned - Issued</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative w-full md:w-72">
@@ -137,10 +140,10 @@ export function ErpWiseReelStockReport() {
       <div className="bg-white rounded shadow-sm border border-black overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {["ERP", "SIZE", "GSM", "BF", "Opening Stock", "ISSUED", "RETURNED", "Available Weight", "Rate Valuation", "VALUATION", "NO OF REELS"].map((heading) => (
-                  <th key={heading} className="px-4 py-4 text-left text-sm font-bold border-2 border-black whitespace-nowrap">
+                {["ERP", "SIZE", "GSM", "BF", "Opening Stock", "RECEIPTS", "ISSUED", "RETURNED", "Available Weight", "Rate Valuation", "VALUATION", "NO OF REELS"].map((heading) => (
+                  <th key={heading} className="bg-indigo-700 px-4 py-4 text-left text-sm font-bold border-2 border-black whitespace-nowrap">
                     {heading}
                   </th>
                 ))}
@@ -149,7 +152,7 @@ export function ErpWiseReelStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                  <td colSpan={12} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No reel stock rows found.
                   </td>
                 </tr>
@@ -161,6 +164,7 @@ export function ErpWiseReelStockReport() {
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.gsm || ""}</td>
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.bf || ""}</td>
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.openingStock || 0).toFixed(2)}</td>
+                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.receipts || 0).toFixed(2)}</td>
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.issued || 0).toFixed(2)}</td>
                     <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.returned || 0).toFixed(2)}</td>
                     <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(row.availableWeight || 0).toFixed(2)}</td>
@@ -176,6 +180,7 @@ export function ErpWiseReelStockReport() {
                 <tr className="bg-slate-100">
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black" colSpan={4}>TOTAL</td>
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.openingStock || 0).toFixed(2)}</td>
+                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.receipts || 0).toFixed(2)}</td>
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.issued || 0).toFixed(2)}</td>
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.returned || 0).toFixed(2)}</td>
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.availableWeight || 0).toFixed(2)}</td>
