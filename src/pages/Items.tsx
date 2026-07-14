@@ -1272,8 +1272,8 @@ export function Items() {
                               <div className="text-sm">{item.openLength ?? ""}{item.openLength ? "/" : ""}{item.openWidth ?? ""}</div>
                             </div>
                             <div>
-                              <div className="text-xs font-black text-slate-500 uppercase">L×B×H</div>
-                              <div className="text-sm">{(item.length ?? "")}{item.length ? " × " : ""}{(item.breadth ?? "")}{item.breadth ? " × " : ""}{(item.height ?? "")}</div>
+                              <div className="text-xs font-black text-slate-500 uppercase">LÃ—BÃ—H</div>
+                              <div className="text-sm">{(item.length ?? "")}{item.length ? " Ã— " : ""}{(item.breadth ?? "")}{item.breadth ? " Ã— " : ""}{(item.height ?? "")}</div>
                             </div>
                             <div>
                               <div className="text-xs font-black text-slate-500 uppercase">UPS</div>
@@ -1421,7 +1421,7 @@ export function Items() {
 
             <div className="overflow-x-auto">
               <table className="hidden md:table min-w-max divide-y divide-black border-collapse border border-black">
-              <thead className="bg-slate-100 divide-x divide-black">
+              <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">ERP</th>
                       <th className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>

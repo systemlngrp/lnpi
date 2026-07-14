@@ -81,7 +81,7 @@ export function GateEntryMaster() {
 
       <div className="overflow-hidden rounded-lg border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse border border-black">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
               {["Gate Entry No", "Date", "Supplier Name", "Invoice No", "Invoice Value", "Truck No", "MRR No", "MRR Date", "Photos", "Action"].map((heading) => (
                 <th key={heading} className="whitespace-nowrap border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">

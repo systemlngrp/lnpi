@@ -877,7 +877,7 @@ export function PendingInvoicing() {
             {expandedCompanies.has(group.companyId) && (
               <div className="p-4">
                 <table className="min-w-full border-collapse border border-black">
-                  <thead className="bg-slate-50">
+                  <thead className="sticky top-0 z-30 bg-slate-50">
                     <tr className="divide-x divide-black border-b border-black">
                       {billingMode === group.companyId && <th className="w-10 px-2 py-2"></th>}
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Slip No</th>
@@ -962,7 +962,7 @@ export function PendingInvoicing() {
 
               <div className="overflow-x-auto border border-black">
                 <table className="min-w-full divide-y divide-black border-collapse">
-                  <thead className="bg-slate-100">
+                  <thead className="sticky top-0 z-30 bg-slate-100">
                     <tr className="divide-x divide-black">
                       <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
                       <th className="px-3 py-2 text-left text-[10px] font-black uppercase min-w-[200px]">Order No / PO No</th>

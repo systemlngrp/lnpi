@@ -285,7 +285,7 @@ export function PlantHeadUnified() {
                         </div>
                         <div className="text-sm font-bold">{suppliers.find(s => s.id === m.supplierId)?.name || m.supplierId}</div>
                         <div className="text-xs text-slate-600">{m.lines.map((l) => `${materials.find(it => it.id === l.itemId)?.name || npdItems.find(it => it.id === l.itemId)?.name || "Unknown"} [${l.qty}]`).join(', ')}</div>
-                        <div className="font-bold text-right text-lg">₹{m.totalAmount.toLocaleString()}</div>
+                        <div className="font-bold text-right text-lg">â‚¹{m.totalAmount.toLocaleString()}</div>
                         <ApproveButton 
                             confirming={confirmId === m.id} 
                             submitting={submittingId === m.id} 
@@ -296,7 +296,7 @@ export function PlantHeadUnified() {
             </div>
 
             <table className="hidden md:table min-w-full divide-y divide-black">
-              <thead className="bg-slate-50 border-b border-black">
+              <thead className="sticky top-0 z-30 bg-slate-50 border-b border-black">
                 <tr className="divide-x divide-black">
                   {showSelection ? (
                     <th className="px-4 py-2 w-10">
@@ -343,7 +343,7 @@ export function PlantHeadUnified() {
                         ))}
                       </ul>
                     </td>
-                    <td className="px-4 py-2 text-sm font-mono text-right font-bold">₹{m.totalAmount.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-sm font-mono text-right font-bold">â‚¹{m.totalAmount.toLocaleString()}</td>
                     <td className="px-4 py-2 text-right">
                       <ApproveButton 
                         confirming={confirmId === m.id} 
@@ -394,7 +394,7 @@ export function PlantHeadUnified() {
             </div>
 
             <table className="hidden md:table min-w-full divide-y divide-black">
-              <thead className="bg-slate-50 border-b border-black">
+              <thead className="sticky top-0 z-30 bg-slate-50 border-b border-black">
                 <tr className="divide-x divide-black">
                   {showSelection ? (
                     <th className="px-4 py-2 w-10">
@@ -482,7 +482,7 @@ export function PlantHeadUnified() {
             </div>
 
             <table className="hidden md:table min-w-full divide-y divide-black">
-              <thead className="bg-slate-50 border-b border-black">
+              <thead className="sticky top-0 z-30 bg-slate-50 border-b border-black">
                 <tr className="divide-x divide-black">
                   {showSelection ? (
                     <th className="px-4 py-2 w-10">

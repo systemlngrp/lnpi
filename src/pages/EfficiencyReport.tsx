@@ -445,7 +445,7 @@ export function EfficiencyReport() {
 
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
-            <thead>
+            <thead className="sticky top-0 z-30">
               <tr className="bg-[linear-gradient(90deg,#042f2e,#0f766e,#134e4a)] text-white">
                 <th className="min-w-[110px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Date</th>
                 <th className="min-w-[130px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Job No.</th>

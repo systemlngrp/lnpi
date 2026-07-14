@@ -131,7 +131,7 @@ export function ItemwiseLeastCost() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-sticky-scroll">
           <table className="min-w-[1600px] w-full divide-y divide-black border-collapse border border-black text-sm">
-            <thead className="bg-slate-100 divide-x divide-black whitespace-nowrap">
+            <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black whitespace-nowrap">
               <tr className="divide-x divide-black">
                 <th className="px-3 py-3 text-left text-[10px] font-black text-black uppercase tracking-wider border-b border-black">SL No</th>
                 <th className="px-3 py-3 text-left text-[10px] font-black text-black uppercase tracking-wider border-b border-black">Date</th>

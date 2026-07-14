@@ -211,7 +211,7 @@ export function SheetMasterPage({
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse border border-black text-sm">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr>
                 {columns.map((column) => (
                   <th key={column.key} className="whitespace-nowrap border border-black px-3 py-2 text-left text-xs font-bold uppercase text-black">

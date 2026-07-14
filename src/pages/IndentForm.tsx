@@ -265,7 +265,7 @@ export function IndentForm() {
 
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-30">
                 <tr className="bg-indigo-700 text-white">
                   <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black">ERP</th>
                   <th className="px-4 py-3 text-left text-sm font-bold border-2 border-black min-w-[420px]">Select Item <span className="text-red-200">*</span></th>

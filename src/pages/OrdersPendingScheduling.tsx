@@ -215,7 +215,7 @@ export function OrdersPendingScheduling() {
         <div className="mb-4">
           <h3 className="font-bold mb-2">Pending Orders</h3>
           <table className="min-w-full divide-y divide-black border-collapse border border-black mb-3 text-sm">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr>
                 <th className="px-3 py-2 border border-black">S.No</th>
                 <th 
@@ -266,7 +266,7 @@ export function OrdersPendingScheduling() {
                 </div>
               </div>
 
-              <div className="text-sm mb-3"><strong>Company:</strong> {(companies as any[]).find(c=>c.id===orders.find(o=>o.id===modalOrderId)?.companyId)?.name} • <strong>Item:</strong> {resolveOrderItem(orders.find(o => o.id === modalOrderId))?.name || "-"}</div>
+              <div className="text-sm mb-3"><strong>Company:</strong> {(companies as any[]).find(c=>c.id===orders.find(o=>o.id===modalOrderId)?.companyId)?.name} â€¢ <strong>Item:</strong> {resolveOrderItem(orders.find(o => o.id === modalOrderId))?.name || "-"}</div>
 
               <div className="grid grid-cols-3 gap-4 mb-3">
                 <div className="bg-slate-50 p-2 border border-black rounded">
@@ -284,7 +284,7 @@ export function OrdersPendingScheduling() {
               </div>
 
               <table className="min-w-full divide-y divide-black border-collapse border border-black mb-3">
-                <thead className="bg-slate-100">
+                <thead className="sticky top-0 z-30 bg-slate-100">
                   <tr>
                     <th className="px-3 py-2 border border-black">S.No</th>
                     <th className="px-3 py-2 border border-black">Scheduled Date</th>

@@ -571,7 +571,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black border-b border-black">
               <th className="w-10 px-4 py-3"></th>
               <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">PO Info</th>
@@ -804,7 +804,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                               </div>
                             </div>
                             <table className="min-w-full divide-y divide-black">
-                              <thead className="bg-slate-100">
+                              <thead className="sticky top-0 z-30 bg-slate-100">
                                 <tr className="divide-x divide-black text-[9px] font-black uppercase text-slate-500">
                                   <th className="px-3 py-2 text-left">ERP</th>
                                   <th className="px-3 py-2 text-left">Item Name</th>

@@ -470,7 +470,7 @@ export function ProductionMaster() {
                         Type: {getProductionEffectiveType(p, item) || "-"} | Print: {displayRow.printingColor || "-"}
                       </div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">
-                        OD: {getItemValue(item, "lOd") || "-"}×{getItemValue(item, "wOd") || "-"}×{getItemValue(item, "hOd") || "-"}
+                        OD: {getItemValue(item, "lOd") || "-"}Ã—{getItemValue(item, "wOd") || "-"}Ã—{getItemValue(item, "hOd") || "-"}
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <div className="flex flex-col">
@@ -539,7 +539,7 @@ export function ProductionMaster() {
         </div>
         <div className="table-sticky-scroll hidden md:block pb-2">
           <table className="min-w-max w-full divide-y divide-black border-collapse border border-black">
-            <thead className="bg-slate-100 divide-x divide-black">
+            <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Sr. No.</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job No.</th>

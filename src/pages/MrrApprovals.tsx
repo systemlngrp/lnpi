@@ -309,7 +309,7 @@ export function MrrApprovals() {
           
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-black border-collapse">
-              <thead className="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest">
+              <thead className="sticky top-0 z-30 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest">
                 <tr className="divide-x divide-white/20">
                   <th className="px-2 py-3 text-center"></th>
                   <th className="px-2 py-3 text-center">

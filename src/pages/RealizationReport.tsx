@@ -483,7 +483,7 @@ export function RealizationReport() {
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <table className="min-w-full border-collapse">
-            <thead>
+            <thead className="sticky top-0 z-30">
               <tr className="bg-slate-800 text-white">
                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-[0.16em]">Metric</th>
                 {salesRows.map((row) => (
@@ -518,7 +518,7 @@ export function RealizationReport() {
         <div className="mb-3 text-xl font-bold text-slate-900">Company Average Realization</div>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full border-collapse">
-            <thead className="bg-slate-50">
+            <thead className="sticky top-0 z-30 bg-slate-50">
               <tr>
                 <th className="border-b border-slate-200 px-4 py-3 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-600">SL No</th>
                 <th className="border-b border-slate-200 px-4 py-3 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-600">Company</th>

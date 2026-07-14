@@ -144,7 +144,7 @@ export function ProductionPendingTally() {
             ))}
         </div>
         <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
-          <thead className="bg-slate-100 divide-x divide-black">
+          <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">SL No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>

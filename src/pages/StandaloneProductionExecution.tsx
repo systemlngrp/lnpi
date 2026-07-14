@@ -143,7 +143,7 @@ export function StandaloneProductionExecution({ source }: Props) {
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search job no, sequence, item..." />
       <div className="bg-white border border-black rounded shadow-sm overflow-auto">
         <table className="min-w-[1560px] w-full divide-y divide-black border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Source</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Job No</th>

@@ -209,7 +209,7 @@ export function States() {
             <div className="px-4 py-3 text-slate-600">Showing {filteredStates.length} entries</div>
             <div className="table-sticky-scroll">
               <table className="min-w-full border-collapse">
-                <thead>
+                <thead className="sticky top-0 z-30">
                   <tr className="bg-indigo-700 text-white">
                     <th className="px-4 py-4 text-left text-sm font-bold border-2 border-black">State</th>
                     <th className="px-4 py-4 text-left text-sm font-bold border-2 border-black">Active</th>

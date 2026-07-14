@@ -318,7 +318,7 @@ export function DirectLoadingSlipModal({
               </button>
             </div>
             <table className="min-w-full border-collapse border border-black">
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-30 bg-slate-100">
                 <tr className="divide-x divide-black">
                   <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Bundles</th>
                   <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Pack Size</th>

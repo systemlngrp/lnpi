@@ -356,7 +356,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <table className="min-w-full border-collapse">
-          <thead>
+          <thead className="sticky top-0 z-30">
             <tr className="bg-slate-100">
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black whitespace-nowrap">Requisition No</th>
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Requested By</th>

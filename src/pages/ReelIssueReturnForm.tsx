@@ -45,14 +45,14 @@ function normalizeText(value?: string | null) {
 }
 
 function formatCurrency(value: number) {
-  return `₹${Number(value || 0).toLocaleString(undefined, {
+  return `â‚¹${Number(value || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 }
 
 function formatCurrencyDisplay(value: number) {
-  return `₹${Number(value || 0).toLocaleString(undefined, {
+  return `â‚¹${Number(value || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -702,7 +702,7 @@ export function ReelIssueReturnForm() {
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <table className="min-w-full border-collapse">
-                            <thead className="bg-slate-800 text-white">
+                            <thead className="sticky top-0 z-30 bg-slate-800 text-white">
                               <tr>
                                 {["Select", "Our Reel No.", "Supplier Reel No.", "Invoice Rate", "Available Weight KG"].map((heading) => (
                                   <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.16em]">
@@ -793,7 +793,7 @@ export function ReelIssueReturnForm() {
                         <div className="mt-4 overflow-hidden rounded-[20px] border border-slate-200">
                           <div className="overflow-x-auto">
                             <table className="min-w-full border-collapse">
-                              <thead className="bg-slate-800 text-white">
+                              <thead className="sticky top-0 z-30 bg-slate-800 text-white">
                                 <tr>
                                   {["Our Reel No.", "Invoice Rate", "Available Weight KG", "Return Qty KG"].map((heading) => (
                                     <th key={heading} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.16em]">

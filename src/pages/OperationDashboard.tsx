@@ -673,7 +673,7 @@ export function OperationDashboard() {
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr className="divide-x divide-slate-900 border-b-2 border-slate-900">
                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">
                   Pending Task Name

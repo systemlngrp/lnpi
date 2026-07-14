@@ -156,7 +156,7 @@ export function PlansLoading() {
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
-            <thead className="bg-slate-50">
+            <thead className="sticky top-0 z-30 bg-slate-50">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-black border border-black">Rule</th>
                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-black border border-black">Logic</th>

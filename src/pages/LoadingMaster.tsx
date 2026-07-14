@@ -550,7 +550,7 @@ export function LoadingMaster() {
 
       <div className="bg-white border-2 border-black rounded shadow-sm overflow-x-auto overflow-y-hidden">
         <table className="min-w-full border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Slip No</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Source</th>
@@ -718,7 +718,7 @@ export function LoadingMaster() {
 
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-black border-collapse">
-                          <thead className="bg-slate-100 divide-x divide-black">
+                          <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
                             <tr className="divide-x divide-black">
                               <th className="px-4 py-2 text-left text-xs font-bold uppercase border border-black">Company</th>
                               <th className="px-4 py-2 text-left text-xs font-bold uppercase border border-black">Order No</th>

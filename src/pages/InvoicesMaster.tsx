@@ -340,7 +340,7 @@ export function InvoicesMaster() {
 
       <div className="bg-white border border-black rounded shadow-sm overflow-x-auto overflow-y-hidden">
         <table className="min-w-[1600px] divide-y divide-black border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">
               <th className="w-10 px-4 py-3"></th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Invoice</th>
@@ -500,7 +500,7 @@ export function InvoicesMaster() {
                       <td colSpan={13} className="px-12 py-4">
                         <div className="border-2 border-black rounded overflow-x-auto overflow-y-hidden shadow-sm">
                           <table className="min-w-[1100px] divide-y divide-black">
-                            <thead className="bg-slate-200">
+                            <thead className="sticky top-0 z-30 bg-slate-200">
                               <tr className="divide-x divide-black">
                                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
                                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Slip No</th>
@@ -655,7 +655,7 @@ export function InvoicesMaster() {
 
               <div className="overflow-x-auto border border-black">
                 <table className="min-w-full divide-y divide-black border-collapse">
-                  <thead className="bg-slate-100">
+                  <thead className="sticky top-0 z-30 bg-slate-100">
                     <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-xs font-bold uppercase">Item / Slip</th>
                       <th className="px-4 py-3 text-right text-xs font-bold uppercase">Qty</th>

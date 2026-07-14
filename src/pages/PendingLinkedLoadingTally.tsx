@@ -83,7 +83,7 @@ function PendingLinkedLoadingTallyPage({ source }: { source: "PHP" | "PLATE" }) 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Slip No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">FG Slip</th>

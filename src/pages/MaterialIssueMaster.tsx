@@ -249,7 +249,7 @@ export function MaterialIssueMaster() {
         <div className="overflow-x-auto">
           {activeTab === "general" && (
             <table className="min-w-full divide-y divide-black border-collapse">
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-30 bg-slate-100">
                 <tr className="divide-x divide-black">
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
@@ -284,7 +284,7 @@ export function MaterialIssueMaster() {
 
           {activeTab === "reel-summary" && (
             <table className="min-w-full divide-y divide-black border-collapse">
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-30 bg-slate-100">
                 <tr className="divide-x divide-black">
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
@@ -317,7 +317,7 @@ export function MaterialIssueMaster() {
 
           {activeTab === "reel-details" && (
             <table className="min-w-full divide-y divide-black border-collapse">
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-30 bg-slate-100">
                 <tr className="divide-x divide-black">
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>

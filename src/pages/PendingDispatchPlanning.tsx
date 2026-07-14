@@ -549,12 +549,12 @@ export function PendingDispatchPlanning() {
           <div className="px-4 py-3 border-b border-black bg-slate-50">
             <div className="text-sm font-black uppercase text-black">Dispatch Planning Calculation</div>
             <div className="text-[11px] font-bold text-slate-600">
-              Available = (Opening + Receipt + Production − Loaded) + Pending Production (FG not filled) − Pending Loading (not loaded)
+              Available = (Opening + Receipt + Production âˆ’ Loaded) + Pending Production (FG not filled) âˆ’ Pending Loading (not loaded)
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-black border-collapse border border-black">
-              <thead className="bg-slate-100 divide-x divide-black">
+              <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
                   <th className="px-3 py-2 text-left text-[11px] font-black uppercase border border-black">Item</th>
                   <th className="px-3 py-2 text-right text-[11px] font-black uppercase border border-black">Opening</th>
@@ -597,7 +597,7 @@ export function PendingDispatchPlanning() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
-            <thead className="bg-slate-100 divide-x divide-black">
+            <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-center border border-black w-10">
                   <input 

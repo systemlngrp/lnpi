@@ -1732,7 +1732,7 @@ export function MaterialInForm() {
             <div className="space-y-4">
               <div className="overflow-x-auto shadow-sm rounded border border-black">
                 <table className="min-w-full divide-y divide-black border-collapse border border-black">
-                  <thead className="bg-slate-100 divide-x divide-black">
+                  <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
                     <tr className="divide-x divide-black">
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Service" : isFgType ? "Item" : "Material"}</th>
                       {isServiceReturn ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Returned Item</th> : null}
@@ -1899,7 +1899,7 @@ export function MaterialInForm() {
 
                         <div className="overflow-x-auto">
                           <table className="min-w-full border-collapse border border-black">
-                            <thead className="bg-slate-100">
+                            <thead className="sticky top-0 z-30 bg-slate-100">
                               <tr>
                                 {["Supplier Reel No.", "Our Reel No.", "Weight (KG)", "Supplier PO No.", isPoMandatoryForCurrentMrrType ? "Our PO No. *" : "Our PO No.", "Action"].map((heading) => (
                                   <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase text-black">

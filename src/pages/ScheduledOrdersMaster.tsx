@@ -203,7 +203,7 @@ export function ScheduledOrdersMaster() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse border border-black text-xs">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr className="divide-x divide-black">
                 <th className="px-2 py-2 border border-black text-left leading-tight">S.No</th>
                 <th className="px-2 py-2 border border-black text-left leading-tight">

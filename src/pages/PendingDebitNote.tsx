@@ -61,7 +61,7 @@ export function PendingDebitNote() {
       <div className="bg-white border border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">MRR Details</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Supplier/Customer</th>
@@ -88,7 +88,7 @@ export function PendingDebitNote() {
                     <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
                     <td className="px-4 py-4 font-black text-red-600">{m.debitNote}</td>
                     <td className="px-4 py-4">{m.debitNoteDate ? formatDate(m.debitNoteDate) : "-"}</td>
-                    <td className="px-4 py-4 text-right font-black text-indigo-700">₹{Number(m.debitNoteAmount || 0).toLocaleString()}</td>
+                    <td className="px-4 py-4 text-right font-black text-indigo-700">â‚¹{Number(m.debitNoteAmount || 0).toLocaleString()}</td>
                     <td className="px-4 py-4 text-center">
                       <button 
                         disabled={!!processingId}

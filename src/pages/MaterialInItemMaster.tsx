@@ -217,7 +217,7 @@ export function MaterialInItemMaster() {
     if (activeTab === "reel-details") {
       return (
         <table className="min-w-full divide-y divide-black border-collapse border border-black">
-          <thead className="bg-slate-100 divide-x divide-black">
+          <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
             <tr className="divide-x divide-black">
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GE No</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">MRR No</th>
@@ -251,7 +251,7 @@ export function MaterialInItemMaster() {
 
     return (
       <table className="min-w-full divide-y divide-black border-collapse border border-black">
-        <thead className="bg-slate-100 divide-x divide-black">
+        <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
           <tr className="divide-x divide-black">
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GE No</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">MRR No</th>
@@ -306,7 +306,7 @@ export function MaterialInItemMaster() {
                 </td>
                 <td className="px-4 py-3 text-black border border-black text-center uppercase">{line.uom}</td>
                 <td className="px-4 py-3 text-black border border-black text-right">{line.rate?.toLocaleString()}</td>
-                <td className="px-4 py-3 font-medium text-black border border-black text-right whitespace-nowrap">₹{line.value?.toLocaleString()}</td>
+                <td className="px-4 py-3 font-medium text-black border border-black text-right whitespace-nowrap">â‚¹{line.value?.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right border border-black whitespace-nowrap">
                   {isEditing ? (
                     <div className="flex items-center justify-end gap-2">
@@ -378,11 +378,11 @@ export function MaterialInItemMaster() {
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Others Value</div>
-          <div className="text-3xl font-black">₹{processedData.metrics.othersValue.toLocaleString()}</div>
+          <div className="text-3xl font-black">â‚¹{processedData.metrics.othersValue.toLocaleString()}</div>
         </div>
         <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Reel Value</div>
-          <div className="text-3xl font-black">₹{processedData.metrics.reelValue.toLocaleString()}</div>
+          <div className="text-3xl font-black">â‚¹{processedData.metrics.reelValue.toLocaleString()}</div>
         </div>
       </div>
 

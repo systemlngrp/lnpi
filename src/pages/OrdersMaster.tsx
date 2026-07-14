@@ -422,7 +422,7 @@ export function OrdersMaster() {
 
       <div className="overflow-x-auto rounded border border-black bg-white">
         <table className="min-w-full border-collapse border border-black text-sm">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
               <th className="border border-black px-3 py-2">
                 <button

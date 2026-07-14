@@ -501,7 +501,7 @@ export function SettingsPage() {
 
           <div className="table-sticky-scroll border border-black rounded">
             <table className="min-w-full divide-y divide-black border-collapse">
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-30 bg-slate-100">
                 <tr className="divide-x divide-black">
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">FY</th>
                   <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Month</th>
@@ -677,7 +677,7 @@ export function SettingsPage() {
 
             <div className="table-sticky-scroll border border-black rounded">
               <table className="min-w-full divide-y divide-black border-collapse">
-                <thead className="bg-slate-100">
+                <thead className="sticky top-0 z-30 bg-slate-100">
                   <tr className="divide-x divide-black">
                     <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">FY</th>
                     <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Prefix</th>
@@ -869,7 +869,7 @@ export function SettingsPage() {
 
           <div className="table-sticky-scroll rounded border border-black">
             <table className="min-w-full border-collapse border border-black">
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-30 bg-slate-100">
                 <tr className="divide-x divide-black">
                   <th className="border border-black px-4 py-2 text-left text-xs font-bold uppercase text-black">Designation</th>
                   <th className="border border-black px-4 py-2 text-right text-xs font-bold uppercase text-black">Action</th>
@@ -948,7 +948,7 @@ export function SettingsPage() {
             </div>
           ) : machineNames.length === 0 ? (
             <div className="rounded border border-black bg-slate-50 p-4 text-sm font-semibold text-slate-700">
-              No Machines found. Add machines first in Masters → Machines.
+              No Machines found. Add machines first in Masters â†’ Machines.
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

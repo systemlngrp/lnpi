@@ -192,7 +192,7 @@ export function BillingPendingTally() {
 
       <div className="bg-white border border-black rounded shadow-sm overflow-hidden">
         <table className="min-w-full divide-y divide-black border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">
               <th className="w-10 px-4 py-3 text-center"></th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Invoice Details</th>
@@ -243,7 +243,7 @@ export function BillingPendingTally() {
                       )}
                     </td>
                     <td className="px-4 py-4 text-right font-black text-indigo-700">
-                      ₹{inv.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      â‚¹{inv.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -270,7 +270,7 @@ export function BillingPendingTally() {
                       <td colSpan={6} className="px-12 py-4">
                         <div className="border border-black rounded overflow-hidden">
                           <table className="min-w-full divide-y divide-black">
-                            <thead className="bg-slate-200">
+                            <thead className="sticky top-0 z-30 bg-slate-200">
                               <tr className="divide-x divide-black text-[10px] font-black uppercase">
                                 <th className="px-3 py-2 text-left">Item Name</th>
                                 <th className="px-3 py-2 text-left">ERP</th>
@@ -299,7 +299,7 @@ export function BillingPendingTally() {
                                       <td className="px-3 py-2">{line.slipNo}</td>
                                       <td className="px-3 py-2 text-right">{Number(line.qty || 0).toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right">{Number(line.rate || 0).toFixed(2)}</td>
-                                      <td className="px-3 py-2 text-right font-bold">₹{(Number(line.amount || 0) + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                      <td className="px-3 py-2 text-right font-bold">â‚¹{(Number(line.amount || 0) + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                     </tr>
                                   );
                                 })

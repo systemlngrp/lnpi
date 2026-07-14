@@ -682,7 +682,7 @@ export function PendingLoading() {
 
                       <div className="overflow-x-auto border border-black">
                         <table className="min-w-full divide-y divide-black border-collapse">
-                          <thead className="bg-slate-50">
+                          <thead className="sticky top-0 z-30 bg-slate-50">
                             <tr className="divide-x divide-black">
                               <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-600">Order No</th>
                               <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-wider text-slate-600">Plan No</th>
@@ -857,7 +857,7 @@ export function PendingLoading() {
 
                         <div className="overflow-x-auto">
                           <table className="min-w-full divide-y divide-black border-collapse">
-                            <thead className="bg-slate-50">
+                            <thead className="sticky top-0 z-30 bg-slate-50">
                               <tr className="divide-x divide-black">
                                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider">Job Allocation</th>
                                 <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-wider">Prod (FG)</th>
@@ -933,7 +933,7 @@ export function PendingLoading() {
                           <div key={section.title} className="border-2 border-black rounded overflow-hidden bg-white">
                             <div className="bg-slate-900 px-4 py-3 text-sm font-black uppercase tracking-wider text-white">{section.title}</div>
                             <table className="min-w-full divide-y divide-black border-collapse">
-                              <thead className="bg-slate-100">
+                              <thead className="sticky top-0 z-30 bg-slate-100">
                                 <tr className="divide-x divide-black">
                                   <th className="px-4 py-2 text-left text-[10px] font-black uppercase">SL</th>
                                   <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Item ERP</th>
@@ -972,7 +972,7 @@ export function PendingLoading() {
                                   </div>
                                 </div>
                                 <table className="min-w-full divide-y divide-black border-collapse">
-                                  <thead className="bg-slate-100">
+                                  <thead className="sticky top-0 z-30 bg-slate-100">
                                     <tr className="divide-x divide-black">
                                       <th className="px-4 py-2 text-left text-[10px] font-black uppercase">No. of Bundles</th>
                                       <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Pack Size</th>
@@ -1060,7 +1060,7 @@ export function PendingLoading() {
 
                         <div className="border-2 border-black rounded overflow-hidden">
                             <table className="min-w-full divide-y divide-black border-collapse">
-                                <thead className="bg-slate-100">
+                                <thead className="sticky top-0 z-30 bg-slate-100">
                                     <tr className="divide-x divide-black">
                                         <th className="px-4 py-2 text-left text-[10px] font-black uppercase">No. of Bundles</th>
                                         <th className="px-4 py-2 text-left text-[10px] font-black uppercase">Pack Size</th>

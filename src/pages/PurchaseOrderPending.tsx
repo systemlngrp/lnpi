@@ -247,7 +247,7 @@ export function PurchaseOrderPending() {
 
       <div className="overflow-x-auto rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
-          <thead>
+          <thead className="sticky top-0 z-30">
             <tr className="bg-slate-100">
               <th className="w-10 border border-black px-4 py-3 text-center">
                 <button onClick={toggleSelectAll} className="text-black hover:text-indigo-600">
@@ -348,7 +348,7 @@ export function PurchaseOrderPending() {
                         <td colSpan={11} className="border border-black p-0">
                           <div className="p-4 overflow-x-auto">
                             <table className="min-w-full border-collapse bg-white text-xs">
-                              <thead>
+                              <thead className="sticky top-0 z-30">
                                 <tr className="bg-slate-200">
                                   <th className="border border-slate-300 px-2 py-1 text-left uppercase">Indent ID</th>
                                   <th className="border border-slate-300 px-2 py-1 text-left uppercase">Requisition Date</th>

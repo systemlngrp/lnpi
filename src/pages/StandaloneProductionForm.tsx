@@ -302,7 +302,7 @@ export function StandaloneProductionForm({ source }: StandaloneProductionFormPro
           <h3 className="text-sm font-black uppercase tracking-wide text-black">Recent {sourceLabel} Production</h3>
         </div>
         <table className="min-w-full divide-y divide-black border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Job No</th>
               <th className="px-3 py-2 text-left text-xs font-black uppercase">Date</th>

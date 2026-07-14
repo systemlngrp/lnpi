@@ -607,7 +607,7 @@ export function HitVsMissReport() {
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr>
                 {[
                   "FY",
@@ -675,7 +675,7 @@ export function HitVsMissReport() {
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr>
                 {[
                   "S.No",

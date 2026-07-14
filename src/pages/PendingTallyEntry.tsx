@@ -35,7 +35,7 @@ export function PendingTallyEntry() {
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
 
   const formatMoney = (value?: number) =>
-    `₹${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `â‚¹${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const pendingList = useMemo(() => {
     return materialIn
@@ -111,7 +111,7 @@ export function PendingTallyEntry() {
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0 text-[10px]">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>
-              <span className="ml-2 text-black">[{l.qty} {l.uom} @ ₹{l.rate}]</span>
+              <span className="ml-2 text-black">[{l.qty} {l.uom} @ â‚¹{l.rate}]</span>
             </li>
           );
         })}
@@ -156,7 +156,7 @@ export function PendingTallyEntry() {
           
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-black border-collapse">
-              <thead className="bg-fuchsia-700 text-white text-[10px] font-black uppercase tracking-widest">
+              <thead className="sticky top-0 z-30 bg-fuchsia-700 text-white text-[10px] font-black uppercase tracking-widest">
                 <tr className="divide-x divide-white/20">
                   <th className="px-2 py-3 text-center w-10">
                     <input 

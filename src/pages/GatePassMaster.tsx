@@ -99,7 +99,7 @@ export function GatePassMaster() {
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">
               {["Gate Pass No", "Type", "Date", "Invoice / Recipient", "Truck", "Total Qty", "Total Amount", "Derived State", "Actions"].map((heading) => (
                 <th key={heading} className="border-b border-black px-4 py-3 text-left text-xs font-black uppercase text-black">{heading}</th>
@@ -175,7 +175,7 @@ export function GatePassMaster() {
 
               <div className="overflow-hidden rounded border border-black">
                 <table className="min-w-full border-collapse">
-                  <thead className="bg-slate-100">
+                  <thead className="sticky top-0 z-30 bg-slate-100">
                     <tr className="divide-x divide-black">
                       {(isReturnableGatePass(selectedGatePass)
                         ? ["Item", "Qty", "Returned Qty", "Pending Qty", "UOM"]

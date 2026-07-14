@@ -483,7 +483,7 @@ export function Suppliers() {
           <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-black">
             <div className="table-sticky-scroll">
             <table className="min-w-max divide-y divide-black border-collapse border border-black">
-              <thead className="bg-slate-100 divide-x divide-black">
+              <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
                   {["SL No", "Supplier Name", "Contact Person", "Contact Number", "Email", "GST No.", "GST Supply Type", "State", "District", "PIN Code", "Active", "Actions"].map((heading) => (
                     <th key={heading} className="px-4 py-3 text-left text-sm font-bold text-black uppercase border border-black whitespace-nowrap">

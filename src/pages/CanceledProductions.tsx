@@ -89,7 +89,7 @@ const canceledProductions = useMemo(() => productions.filter((production) => pro
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-sticky-scroll">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
-            <thead className="bg-slate-100 divide-x divide-black">
+            <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">SL No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job No.</th>

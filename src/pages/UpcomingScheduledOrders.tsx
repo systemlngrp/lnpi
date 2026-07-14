@@ -163,7 +163,7 @@ export function UpcomingScheduledOrders() {
 
       <div className="bg-white rounded shadow-sm border border-black table-sticky-scroll">
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
               <th className="px-3 py-2 border border-black">SL No</th>
               <th className="px-3 py-2 border border-black">Order No</th>

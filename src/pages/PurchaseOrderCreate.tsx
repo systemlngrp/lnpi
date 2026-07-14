@@ -382,7 +382,7 @@ export function PurchaseOrderCreate() {
         <div className="overflow-hidden rounded-xl border border-black bg-white">
           <div className="overflow-x-auto pb-2">
           <table className="min-w-[1680px] border-collapse">
-            <thead>
+            <thead className="sticky top-0 z-30">
               <tr className="bg-indigo-700 text-white">
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold">ERP</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold min-w-[280px]">Material</th>

@@ -582,7 +582,7 @@ export function MaterialIssueForm() {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse border border-black">
-                <thead className="bg-slate-100">
+                <thead className="sticky top-0 z-30 bg-slate-100">
                   <tr className="divide-x divide-black border-b border-black">
                     <th className="px-4 py-3 text-left text-xs font-black uppercase w-16">Sl No</th>
                     <th className="px-4 py-3 text-left text-xs font-black uppercase min-w-[200px]">Material Details</th>
@@ -608,7 +608,7 @@ export function MaterialIssueForm() {
                           {line.isReel && (
                             <div className="mt-2 rounded border border-black overflow-hidden bg-white">
                               <table className="min-w-full border-collapse">
-                                <thead className="bg-slate-50 border-b border-black">
+                                <thead className="sticky top-0 z-30 bg-slate-50 border-b border-black">
                                   <tr>
                                      { ["", "Our Reel", "Weight"].map((h) => (
                                       <th key={h} className="px-2 py-1.5 text-left text-[10px] font-black uppercase text-slate-600">{h}</th>

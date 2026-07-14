@@ -345,7 +345,7 @@ export function Dashboard() {
           todaysSale={formatNumber(todaysSale, false)}
         />
         {false ? <div className="rounded-none border-2 border-black bg-white shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-          <div className="bg-cyan-400 px-4 py-2 text-center text-xl font-black tracking-tight text-red-700">|| श्री गणेशाय नमः ||</div>
+          <div className="bg-cyan-400 px-4 py-2 text-center text-xl font-black tracking-tight text-red-700">|| à¤¶à¥à¤°à¥€ à¤—à¤£à¥‡à¤¶à¤¾à¤¯ à¤¨à¤®à¤ƒ ||</div>
           <div className="grid grid-cols-1 md:grid-cols-4">
             <DashboardStatCell label="Today's Production" value={formatNumber(todaysProduction)} tone="bg-[#ffe8a3]" />
             <DashboardStatCell label="Total Production" value={formatNumber(totalProduction)} tone="bg-[#d4a5c5]" />
@@ -391,7 +391,7 @@ export function Dashboard() {
             <div className="text-xs font-black text-slate-600">Total: {formatNumber(pendingTasks, false)}</div>
           </div>
           <table className="min-w-full divide-y divide-black">
-            <thead className="bg-white border-b-2 border-black">
+            <thead className="sticky top-0 z-30 bg-white border-b-2 border-black">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-2 text-left text-xs font-black uppercase tracking-widest">Task</th>
                 <th className="px-4 py-2 text-right text-xs font-black uppercase tracking-widest w-28">Count</th>

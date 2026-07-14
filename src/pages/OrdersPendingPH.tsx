@@ -171,11 +171,11 @@ export function OrdersPendingPH() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         {showDebug && (
           <div className="p-3 bg-yellow-50 border-b border-black text-sm">
-            <strong>Debug:</strong> Unmapped Order By values: {unmappedOrderBys.length} {unmappedOrderBys.length > 0 && ` — ${unmappedOrderBys.slice(0,10).join(", ")}`}
+            <strong>Debug:</strong> Unmapped Order By values: {unmappedOrderBys.length} {unmappedOrderBys.length > 0 && ` â€” ${unmappedOrderBys.slice(0,10).join(", ")}`}
           </div>
         )}
         <table className="min-w-full divide-y divide-black border-collapse border border-black text-sm">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
               <th 
                 className="px-4 py-2 border border-black cursor-pointer hover:bg-slate-200 select-none"

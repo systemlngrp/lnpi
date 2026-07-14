@@ -357,7 +357,7 @@ export function MaterialReturnForm() {
                     {line.isReel ? (
                       <div className="overflow-x-auto">
                         <table className="min-w-full border-collapse border border-black">
-                          <thead className="bg-slate-100">
+                          <thead className="sticky top-0 z-30 bg-slate-100">
                             <tr>
                               {["Our Reel No.", "Issued Weight KG", "Return Qty KG"].map((heading) => (
                                 <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-bold uppercase">{heading}</th>

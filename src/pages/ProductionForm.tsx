@@ -1078,7 +1078,7 @@ export function ProductionForm() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <h3 className="bg-slate-100 p-4 font-bold text-black border-b border-black uppercase tracking-wider">Recent Productions</h3>
         <table className="min-w-full divide-y divide-black border-collapse border border-black">
-          <thead className="bg-slate-50 divide-x divide-black">
+          <thead className="sticky top-0 z-30 bg-slate-50 divide-x divide-black">
             <tr className="divide-x divide-black">
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>

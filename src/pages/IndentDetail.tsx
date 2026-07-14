@@ -174,7 +174,7 @@ export function IndentDetail() {
 
         <div className="overflow-hidden rounded-xl border border-black">
           <table className="min-w-full border-collapse">
-            <thead>
+            <thead className="sticky top-0 z-30">
               <tr className="bg-indigo-700 text-white">
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold">ERP</th>
                 <th className="border-2 border-black px-4 py-3 text-left text-sm font-bold">Material</th>

@@ -121,7 +121,7 @@ export function DailyConsumptionMaster() {
         </div>
 
         <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-black text-black uppercase tracking-wider border border-black">Issue No</th>
               <th className="px-4 py-3 text-left text-xs font-black text-black uppercase tracking-wider border border-black">Remarks</th>
@@ -175,7 +175,7 @@ export function DailyConsumptionMaster() {
 
             <div className="bg-slate-50 rounded border border-black overflow-hidden">
               <table className="min-w-full divide-y divide-black border-collapse border border-black">
-                <thead className="bg-slate-100">
+                <thead className="sticky top-0 z-30 bg-slate-100">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-black text-black uppercase tracking-wider border border-black">Material</th>
                     <th className="px-4 py-3 text-right text-xs font-black text-black uppercase tracking-wider border border-black">Qty</th>

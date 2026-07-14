@@ -91,7 +91,7 @@ export function DeliveryBook() {
 
       <div className="bg-white rounded border border-black shadow-sm overflow-hidden">
         <table className="min-w-full divide-y divide-black border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">
               <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider">Date</th>
               <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider">Slip Info</th>

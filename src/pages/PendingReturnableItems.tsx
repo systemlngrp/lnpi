@@ -83,7 +83,7 @@ export function PendingReturnableItems() {
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">
               {["Gate Pass No", "Date", "Recipient", "Item Name", "Truck", "Total Qty", "Pending Qty", "Derived State", "Actions"].map((heading) => (
                 <th key={heading} className="border-b border-black px-4 py-3 text-left text-xs font-black uppercase text-black">{heading}</th>
@@ -142,7 +142,7 @@ export function PendingReturnableItems() {
 
             <div className="overflow-hidden rounded border border-black">
               <table className="min-w-full border-collapse">
-                <thead className="bg-slate-100">
+                <thead className="sticky top-0 z-30 bg-slate-100">
                   <tr className="divide-x divide-black">
                     {["Item", "Sent Qty", "Returned Qty", "Pending Qty", "UOM"].map((heading) => (
                       <th key={heading} className="border-b border-black px-3 py-2 text-left text-[10px] font-black uppercase">{heading}</th>

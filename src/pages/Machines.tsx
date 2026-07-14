@@ -229,7 +229,7 @@ export function Machines() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-sticky-scroll">
           <table className="min-w-max divide-y divide-black border-collapse border border-black">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr className="divide-x divide-black">
                 <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">SL No</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine Name</th>

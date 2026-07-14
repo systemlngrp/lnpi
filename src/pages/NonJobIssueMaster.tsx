@@ -128,7 +128,7 @@ export function NonJobIssueMaster() {
                 <h4 className="mb-1 text-[10px] font-black uppercase tracking-wide text-black">Items</h4>
                 <div className="overflow-hidden rounded border border-black bg-white">
                   <table className="min-w-full divide-y divide-black text-[11px]">
-                    <thead className="bg-slate-100">
+                    <thead className="sticky top-0 z-30 bg-slate-100">
                       <tr className="divide-x divide-black">
                         <th className="px-2 py-1 text-left font-black uppercase">Item</th>
                         <th className="px-2 py-1 text-right font-black uppercase">Qty</th>
@@ -158,7 +158,7 @@ export function NonJobIssueMaster() {
                 <h4 className="mb-1 text-[10px] font-black uppercase tracking-wide text-black">Reel Details</h4>
                 <div className="overflow-hidden rounded border border-black bg-white">
                   <table className="min-w-full divide-y divide-black text-[11px]">
-                    <thead className="bg-slate-100">
+                    <thead className="sticky top-0 z-30 bg-slate-100">
                       <tr className="divide-x divide-black">
                         <th className="px-2 py-1 text-left font-black uppercase">Item</th>
                         <th className="px-2 py-1 text-left font-black uppercase">Reel No</th>
@@ -215,7 +215,7 @@ export function NonJobIssueMaster() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Consumption No</th>

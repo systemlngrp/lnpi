@@ -570,7 +570,7 @@ export function PaperRequirementReport() {
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
       <table className="min-w-full">
-                <thead className="bg-blue-700 text-white">
+                <thead className="sticky top-0 z-30 bg-blue-700 text-white">
                   <tr>
                     {["RAPC RANGE", "GSM", "Total Paper Requirement", "Total Closing Stock", "Total Pending PO", "MIL", "Net Paper to Order"].map((heading) => (
                       <th key={heading} className="border-r border-black px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] whitespace-nowrap last:border-r-0">

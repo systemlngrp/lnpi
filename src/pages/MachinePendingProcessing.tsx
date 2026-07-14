@@ -206,7 +206,7 @@ export function MachinePendingProcessing() {
                 <div className="p-4">
                   <div className="overflow-x-auto border border-black">
                     <table className="min-w-full divide-y divide-black border-collapse">
-                      <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      <thead className="sticky top-0 z-30 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500">
                         <tr className="divide-x divide-black">
                           <th className="px-3 py-2 text-left">Job No</th>
                           <th className="px-3 py-2 text-left">Date</th>

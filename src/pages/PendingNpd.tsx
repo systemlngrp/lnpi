@@ -84,7 +84,7 @@ export function PendingNpd() {
 
       <div className="table-sticky-scroll border border-black">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-100">
+          <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
               <th className="px-3 py-2 border border-black">SL No</th>
               <th className="px-3 py-2 border border-black">Order No</th>

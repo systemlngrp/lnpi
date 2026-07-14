@@ -78,7 +78,7 @@ export function PendingNonJobMaterialIssue() {
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Non-Job Material Issue</h2>
           <div className="text-xs text-slate-600">
-            Shows dates missing a “Without Job” material issue entry (from first Job Date to today).
+            Shows dates missing a â€œWithout Jobâ€ material issue entry (from first Job Date to today).
           </div>
         </div>
       </div>
@@ -88,7 +88,7 @@ export function PendingNonJobMaterialIssue() {
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-black border-collapse">
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-30 bg-slate-100">
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
                 <th className="px-4 py-3 text-right text-xs font-bold uppercase">Action</th>
