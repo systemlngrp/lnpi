@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
@@ -163,6 +164,7 @@ function getSummaryCard(summary: OperationDashboardSummary, cardId: string) {
 }
 
 export function OperationDashboard() {
+  const navigate = useNavigate();
   const [productions] = useData<Production>("productions", []);
   const [phpJobMaster] = useData<Production>("php_job_master", []);
   const [plateJobMaster] = useData<Production>("plate_job_master", []);
@@ -428,7 +430,7 @@ export function OperationDashboard() {
       findItemAcrossSources,
       itemsBySource,
     });
-    return getPendingTaskRows(counts);
+    return getPendingTaskRows(counts).filter((row) => row.count > 0);
   }, [
     materialIn,
     productions,
@@ -648,6 +650,25 @@ export function OperationDashboard() {
 
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
+          Production Processing
+        </div>
+        <div className="flex overflow-x-auto divide-x divide-slate-900 scrollbar-thin">
+          {processingMachineCards.map((card, index) => (
+            <SummaryMetricCard
+              key={card.id}
+              card={card}
+              config={{
+                id: card.id,
+                tone: index % 2 === 0 ? "bg-cyan-50" : "bg-emerald-50",
+                valueTone: index % 2 === 0 ? "text-cyan-800" : "text-emerald-800",
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
           Pending Tasks
         </div>
         <div className="overflow-x-auto">
@@ -663,36 +684,33 @@ export function OperationDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-900 bg-white">
-              {pendingTaskRows.map((row, index) => (
-                <tr key={row.countKey} className={cn("divide-x divide-slate-900", index % 2 === 0 ? "bg-white" : "bg-slate-50")}>
-                  <td className="px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-900">
-                    {row.name}
-                  </td>
-                  <td className="px-3 py-2 text-right text-sm font-black text-indigo-700">
-                    {row.count.toLocaleString("en-IN")}
+              {pendingTaskRows.length === 0 ? (
+                <tr>
+                  <td colSpan={2} className="px-3 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    No pending tasks found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                pendingTaskRows.map((row, index) => (
+                  <tr
+                    key={row.countKey}
+                    onClick={() => navigate(row.countKey)}
+                    className={cn(
+                      "cursor-pointer divide-x divide-slate-900 transition hover:bg-indigo-50",
+                      index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                    )}
+                  >
+                    <td className="px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-900 underline-offset-2 hover:underline">
+                      {row.name}
+                    </td>
+                    <td className="px-3 py-2 text-right text-sm font-black text-indigo-700">
+                      {row.count.toLocaleString("en-IN")}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-        </div>
-      </section>
-      <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
-          Production Processing
-        </div>
-        <div className="flex overflow-x-auto divide-x divide-slate-900 scrollbar-thin">
-          {processingMachineCards.map((card, index) => (
-            <SummaryMetricCard
-              key={card.id}
-              card={card}
-              config={{
-                id: card.id,
-                tone: index % 2 === 0 ? "bg-cyan-50" : "bg-emerald-50",
-                valueTone: index % 2 === 0 ? "text-cyan-800" : "text-emerald-800",
-              }}
-            />
-          ))}
         </div>
       </section>
 
