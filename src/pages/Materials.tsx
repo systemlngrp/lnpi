@@ -57,8 +57,8 @@ function getMaterialRapcFromSize(size: string | number | undefined | null) {
   return String(numericSize * 10);
 }
 
-function getReelDisplayName(erpCode: string | number, size: number, uom: string, gsm: number, bf: number, color: string) {
-  return `${erpCode} - Size: ${size} ${uom} X GSM: ${gsm} X BF: ${bf}   Color - ${color}`;
+function getReelDisplayName(erpCode: string | number, size: number, gsm: number, bf: number, color: string) {
+  return `${erpCode} - Size: ${size} CM X GSM: ${gsm} X BF: ${bf}   Color - ${color}`;
 }
 
 function getNextNumericErpCode(materials: Material[]) {
@@ -86,7 +86,7 @@ function createInitialFormState(materials: Material[], reelGroupId = "") {
     type: "Reel" as MaterialType,
     erpCode: getNextNumericErpCode(materials),
     name: "",
-    uom: "CM",
+    uom: "KGS",
     materialGroupId: reelGroupId,
     color: "",
     size: "",
@@ -417,17 +417,16 @@ export function Materials() {
       if (material.type !== "Reel") return material;
 
       const erpCode = String(material.erpCode || "").trim();
-      const uom = String(material.uom || "").trim();
       const color = String(material.color || "").trim();
       const size = Number(material.size);
       const gsm = Number(material.gsm);
       const bf = Number(material.bf);
 
-      if (!erpCode || !uom || !color || !Number.isFinite(size) || !Number.isFinite(gsm) || !Number.isFinite(bf)) {
+      if (!erpCode || !color || !Number.isFinite(size) || !Number.isFinite(gsm) || !Number.isFinite(bf)) {
         return material;
       }
 
-      const expectedName = getReelDisplayName(erpCode, size, uom, gsm, bf, color);
+      const expectedName = getReelDisplayName(erpCode, size, gsm, bf, color);
       if (material.name === expectedName) return material;
 
       hasChanges = true;
@@ -467,7 +466,7 @@ export function Materials() {
       return {
         ...current,
         type: "Reel" as MaterialType,
-        uom: "CM",
+        uom: "KGS",
         materialGroupId: reelGroup?.id || current.materialGroupId,
         color: current.color || "",
         erpCode: editingId ? current.erpCode : getNextNumericErpCode(materials),
@@ -543,7 +542,7 @@ export function Materials() {
       type: material.type,
       erpCode: String(material.erpCode ?? ""),
       name: material.type === "Other" ? material.name : "",
-      uom: material.uom || "CM",
+      uom: material.type === "Reel" ? "KGS" : material.uom || "CM",
       materialGroupId: material.materialGroupId || (material.type === "Reel" ? reelGroup?.id || "" : ""),
       color: material.color || "",
       size: formatOptionalNumber(material.size),
@@ -635,7 +634,7 @@ export function Materials() {
     event.preventDefault();
     const normalizedType = formData.type;
     const erpCode = String(formData.erpCode || "").trim() || (normalizedType === "Reel" ? getNextNumericErpCode(materials) : getNextOtherErpCode(materials));
-    const uom = String(formData.uom || "").trim() || "CM";
+    const uom = normalizedType === "Reel" ? "KGS" : String(formData.uom || "").trim() || "CM";
     const timestamp = new Date().toISOString();
     const size = parseNumericInput(formData.size);
     const gsm = parseNumericInput(formData.gsm);
@@ -671,7 +670,7 @@ export function Materials() {
         id: editingId || crypto.randomUUID(),
         type: normalizedType,
         erpCode: erpCode || undefined,
-        name: normalizedType === "Reel" ? getReelDisplayName(erpCode, Number(size), uom, Number(gsm), Number(bf), color) : formData.name.trim(),
+        name: normalizedType === "Reel" ? getReelDisplayName(erpCode, Number(size), Number(gsm), Number(bf), color) : formData.name.trim(),
         uom,
         materialGroupId: normalizedType === "Reel" ? reelGroupId || undefined : formData.materialGroupId || undefined,
         color: normalizedType === "Reel" ? color : null,
@@ -725,7 +724,7 @@ export function Materials() {
 
   function downloadTemplate() {
     const templateData = [
-      { "Type": "Reel", "ERP Code": "1001", "Item Name": "", "Item Group": "Reel", "MRR No.": "MI/26-27/00001", "MRR Date": "2026-06-02", "Supplier Name": "Bizskill", "Our Reel No.": "10001", "Reel Qty": 250.5, "Unit": "CM", "Size": 120, "GSM": 150, "BF": 18, "Color": "LG", "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" },
+      { "Type": "Reel", "ERP Code": "1001", "Item Name": "", "Item Group": "Reel", "MRR No.": "MI/26-27/00001", "MRR Date": "2026-06-02", "Supplier Name": "Bizskill", "Our Reel No.": "10001", "Reel Qty": 250.5, "Unit": "KGS", "Size": 120, "GSM": 150, "BF": 18, "Color": "LG", "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" },
       { "Type": "Other", "ERP Code": "2001", "Item Name": "Service", "Item Group": "Consumable", "MRR No.": "", "MRR Date": "", "Supplier Name": "", "Our Reel No.": "", "Reel Qty": "", "Unit": "CM", "Size": "", "GSM": "", "BF": "", "Color": "", "Opening Qty": 0, "Opening Rate": 0, "Opening Value": 0, "Remarks": "", "Active": "Yes" }
     ];
     const ws = XLSX.utils.json_to_sheet(templateData);
@@ -785,7 +784,7 @@ export function Materials() {
           const erpCode = String(row["ERP Code"] || "").trim() || (type === "Reel" ? getNextNumericErpCode(nextMaterials) : getNextOtherErpCode(nextMaterials));
           const itemName = String(row["Item Name"] || "").trim();
           const groupName = String(row["Item Group"] || "").trim();
-          const unit = String(row["Unit"] || "CM").trim() || "CM";
+          const unit = type === "Reel" ? "KGS" : String(row["Unit"] || "CM").trim() || "CM";
           const mrrNo = String(row["MRR No."] || "").trim();
           const mrrDate = String(row["MRR Date"] || "").trim();
           const supplierName = String(row["Supplier Name"] || "").trim();
@@ -813,7 +812,7 @@ export function Materials() {
             materialGroupId = matchedGroup.id;
           }
           const openingValue = openingValueInput !== "" ? Number(openingValueInput) : openingQtyValue !== "" && openingRateValue !== "" ? Number(openingQtyValue) * Number(openingRateValue) : undefined;
-          const generatedName = type === "Reel" ? getReelDisplayName(erpCode, Number(sizeValue), unit, Number(gsmValue), Number(bfValue), colorValue) : itemName;
+          const generatedName = type === "Reel" ? getReelDisplayName(erpCode, Number(sizeValue), Number(gsmValue), Number(bfValue), colorValue) : itemName;
           const existing = nextMaterials.find((material) => type === "Reel" ? normalizeText(material.erpCode) === normalizeText(erpCode) : normalizeText(material.name) === normalizeText(generatedName));
           const nextMaterial: Material = {
             id: existing?.id || crypto.randomUUID(), type, erpCode: erpCode || undefined, name: generatedName, uom: unit, materialGroupId, color: type === "Reel" ? colorValue : null, size: type === "Reel" && sizeValue !== "" ? Number(sizeValue) : undefined, gsm: type === "Reel" && gsmValue !== "" ? Number(gsmValue) : undefined, bf: type === "Reel" && bfValue !== "" ? Number(bfValue) : undefined,
@@ -850,7 +849,7 @@ export function Materials() {
           Array.from(mergedSlipMap.values()).forEach((slip) => { aggregatedWeightByMaterial.set(slip.materialId, Number((aggregatedWeightByMaterial.get(slip.materialId) || 0) + Number(slip.weightKg || 0))); });
           const nextLines = Array.from(aggregatedWeightByMaterial.entries()).map(([materialId, totalQty]) => {
             const existingLine = existingLineByMaterial.get(materialId);
-            return { id: existingLine?.id || crypto.randomUUID(), itemId: materialId, qty: totalQty, uom: "KG", invoiceQty: totalQty, invoiceRate: Number(existingLine?.invoiceRate ?? existingLine?.rate ?? 0), invoiceValue: 0, actualQty: totalQty, actualValue: 0, rate: Number(existingLine?.rate || 0), value: 0 };
+            return { id: existingLine?.id || crypto.randomUUID(), itemId: materialId, qty: totalQty, uom: "KGS", invoiceQty: totalQty, invoiceRate: Number(existingLine?.invoiceRate ?? existingLine?.rate ?? 0), invoiceValue: 0, actualQty: totalQty, actualValue: 0, rate: Number(existingLine?.rate || 0), value: 0 };
           });
           const nextReceiptId = existingReceipt?.id || crypto.randomUUID();
           const nextReceipt: MaterialIn = { id: nextReceiptId, transactionNo: sample.mrrNo, mrrType: "Reel", timestamp: existingReceipt?.timestamp || timestamp, entryEmailId: existingReceipt?.entryEmailId || "system@lngrp.in", date: sample.mrrDate, invoiceNo: existingReceipt?.invoiceNo || sample.mrrNo, invDate: sample.mrrDate, supplierId: sample.supplierId, totalAmount: 0, totalInvoiceValue: 0, totalActualValue: 0, lines: nextLines, status: existingReceipt?.status || "Completed", updatedBy: "System User", updateTimestamp: timestamp };
@@ -1025,7 +1024,7 @@ export function Materials() {
                 <div className="space-y-2">
                   <label className="text-blue-700 font-bold">Unit</label>
                   <input
-                    value="CM"
+                    value="KGS"
                     readOnly
                     className="w-full rounded border-2 border-black bg-slate-100 px-4 py-3 text-black focus:outline-none"
                   />

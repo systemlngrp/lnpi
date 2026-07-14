@@ -9,7 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { downloadMaterialInPdf } from "../lib/materialInPdf";
 
-type Stage = "All MRR" | "Pending PH" | "Pending Accounts" | "Pending MD" | "Pending Tally";
+type Stage = "All MRR" | "Pending PH" | "Pending Accounts" | "Pending MD";
 type SortField = "timestamp" | "gateEntryNo" | "transactionNo";
 type SortDirection = "asc" | "desc";
 
@@ -67,10 +67,9 @@ export function MrrApprovals() {
     { label: "Plant Head", value: "Pending PH" },
     { label: "Accounts", value: "Pending Accounts" },
     { label: "MD Approval", value: "Pending MD" },
-    { label: "Pending Tally", value: "Pending Tally" },
   ];
 
-  const approvalStatuses: Stage[] = ["Pending PH", "Pending Accounts", "Pending MD", "Pending Tally"];
+  const approvalStatuses: Stage[] = ["Pending PH", "Pending Accounts", "Pending MD"];
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};

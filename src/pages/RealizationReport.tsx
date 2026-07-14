@@ -6,7 +6,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { Building2, Calendar, Download, FileText, RotateCcw, TrendingUp, User2 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Company, Order, OrderSchedule, Production, Setting, User } from "../types";
+import { Company, Order, OrderSchedule, Production, Setting } from "../types";
 import { formatDate, getFinancialYear } from "../lib/serial";
 import { parseRealizationTargets } from "../lib/realizationTargets";
 
@@ -128,7 +128,6 @@ export function RealizationReport() {
   const [productions] = useData<Production>("productions", []);
   const [orders] = useData<Order>("orders", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
-  const [users] = useData<User>("users", []);
   const [companies] = useData<Company>("companies", []);
   const [settings] = useData<Setting>("settings", []);
 
@@ -142,7 +141,6 @@ export function RealizationReport() {
   const sourceRows = useMemo<RealizationSourceRow[]>(() => {
     const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
     const orderMap = new Map(orders.map((order) => [order.id, order]));
-    const userMap = new Map(users.map((user) => [user.id, user]));
     const companyMap = new Map(companies.map((company) => [company.id, company]));
     const from = parseAppDate(fromDate);
     const to = parseAppDate(toDate);
@@ -155,8 +153,8 @@ export function RealizationReport() {
         const productionDate = parseAppDate(production.date);
         const schedule = production.scheduleId ? scheduleMap.get(production.scheduleId) : null;
         const order = schedule ? orderMap.get(schedule.orderId) : null;
-        const user = order?.orderBy ? userMap.get(order.orderBy) : null;
         const company = order?.companyId ? companyMap.get(order.companyId) : null;
+        const contactPerson = String(company?.contactPerson || "").trim() || "Unknown Sales Person";
         const qty = Number(production.qty || 0);
         const realizationPerKg = Number(production.realizationPerKg || 0);
 
@@ -168,8 +166,8 @@ export function RealizationReport() {
           weightedValue: Number((qty * realizationPerKg).toFixed(2)),
           companyId: company?.id || "",
           companyName: company?.name || "Unknown Company",
-          salesPersonId: user?.id || order?.orderBy || "",
-          salesPersonName: user?.name || "Unknown Sales Person",
+          salesPersonId: contactPerson,
+          salesPersonName: contactPerson,
           jobNo: String(production.transactionNo || production.jobCardNo || "-"),
           dateValue: productionDate ? normalizeDate(productionDate).getTime() : null,
         };
@@ -183,7 +181,15 @@ export function RealizationReport() {
         return true;
       })
       .map(({ dateValue: _dateValue, ...row }) => row);
-  }, [companies, companyId, fromDate, orders, productions, salesPersonId, schedules, toDate, users]);
+  }, [companies, companyId, fromDate, orders, productions, salesPersonId, schedules, toDate]);
+
+  const salesPersonOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(companies.map((company) => String(company.contactPerson || "").trim()).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b)),
+    [companies]
+  );
 
   const overall = useMemo(() => {
     const totalQty = sourceRows.reduce((sum, row) => sum + row.qty, 0);
@@ -299,7 +305,7 @@ export function RealizationReport() {
     doc.text("Realization Report", 14, 16);
     doc.setFontSize(10);
     doc.text(`From: ${fromDate ? formatDate(fromDate) : "All"} | To: ${toDate ? formatDate(toDate) : "All"}`, 14, 23);
-    doc.text(`Company: ${companies.find((company) => company.id === companyId)?.name || "All"} | Sales Person: ${users.find((user) => user.id === salesPersonId)?.name || "All"}`, 14, 29);
+    doc.text(`Company: ${companies.find((company) => company.id === companyId)?.name || "All"} | Sales Person: ${salesPersonId || "All"}`, 14, 29);
 
     autoTable(doc, {
       head: [["Metric", "Value"]],
@@ -431,14 +437,11 @@ export function RealizationReport() {
                   className="h-[42px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold outline-none"
                 >
                   <option value="">All Sales Persons</option>
-                  {users
-                    .slice()
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name}
-                      </option>
-                    ))}
+                  {salesPersonOptions.map((salesPerson) => (
+                    <option key={salesPerson} value={salesPerson}>
+                      {salesPerson}
+                    </option>
+                  ))}
                 </select>
               </label>
 

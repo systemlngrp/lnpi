@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
-import { Material, MaterialIssue, MaterialIssueLine } from "../types";
+import { Material, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine } from "../types";
 import { TableControls } from "../components/TableControls";
-import { Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/serial";
 
 function isWithoutJobIssue(issueType?: string) {
@@ -11,27 +11,50 @@ function isWithoutJobIssue(issueType?: string) {
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
 }
 
+function DetailChip({ label, value }: { label: string; value?: React.ReactNode }) {
+  return (
+    <div className="min-w-[130px] border-r border-slate-300 pr-3 last:border-r-0">
+      <span className="mr-1 text-[9px] font-black uppercase text-slate-500">{label}:</span>
+      <span className="text-[11px] font-bold text-black">{value || "-"}</span>
+    </div>
+  );
+}
+
 export function NonJobIssueMaster() {
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materials] = useData<Material>("materials", []);
   const [issueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
+  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const npdItems = useNpdItems();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedIssueId, setExpandedIssueId] = useState<string | null>(null);
+
+  const materialNameMap = useMemo(() => {
+    const names = new Map(materials.map((row) => [String(row.id), String(row.name || "").trim()]));
+    for (const row of npdItems) {
+      const id = String((row as any).id || "").trim();
+      const name = String((row as any).name || "").trim();
+      if (id && name && !names.has(id)) names.set(id, name);
+    }
+    return names;
+  }, [materials, npdItems]);
+
+  const getItemName = (materialId?: string) => {
+    const id = String(materialId || "").trim();
+    return materialNameMap.get(id) || id || "-";
+  };
 
   const itemNameByIssueId = useMemo(() => {
-    const materialNameMap = new Map(materials.map((row) => [String(row.id), String(row.name || "").trim()]));
-    const npdNameMap = new Map(npdItems.map((row) => [String((row as any).id || ""), String((row as any).name || "").trim()]));
     const issueMap = new Map<string, string>();
 
     for (const line of issueLines) {
       const issueId = String(line.materialIssueId || "").trim();
       if (!issueId) continue;
 
-      const materialId = String(line.materialId || "").trim();
-      const itemName = materialNameMap.get(materialId) || npdNameMap.get(materialId) || materialId;
-      if (!itemName) continue;
+      const itemName = getItemName(line.materialId);
+      if (!itemName || itemName === "-") continue;
 
       const existing = issueMap.get(issueId);
       if (!existing) {
@@ -47,7 +70,7 @@ export function NonJobIssueMaster() {
     }
 
     return issueMap;
-  }, [issueLines, materials, npdItems]);
+  }, [issueLines, materialNameMap]);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -71,9 +94,116 @@ export function NonJobIssueMaster() {
       return;
     }
     setMaterialIssues((prev) => prev.filter((row) => row.id !== id));
+    if (expandedIssueId === id) setExpandedIssueId(null);
     setDeletingId(null);
   };
 
+  const renderDetailsRow = (row: MaterialIssue) => {    const selectedLines = issueLines.filter((line) => line.materialIssueId === row.id);
+    const selectedReelLines = issueReelLines.filter((line) => line.materialIssueId === row.id);
+    const tallyValues = [
+      ["Voucher", row.tallyVoucherNo],
+      ["Date", formatDate(row.tallyVoucherDate)],
+      ["Type", row.tallyVoucherType],
+      ["By", row.tallyPostedBy],
+      ["At", row.tallyTimestamp],
+      ["Remark", row.tallyPostingRemark],
+      ["Error", row.tallyPostingError],
+    ].filter(([, value]) => String(value || "").trim());
+
+    return (
+      <tr key={`${row.id}-details`} className="bg-slate-50">
+        <td colSpan={7} className="border-t border-black px-3 py-2">
+          <div className="space-y-2 text-[11px]">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 rounded border border-slate-300 bg-white px-3 py-2">
+              <DetailChip label="Issue" value={row.issueNo} />
+              <DetailChip label="Consumption" value={row.consumptionTransactionNo} />
+              <DetailChip label="Date" value={formatDate(row.date)} />
+              <DetailChip label="Type" value={row.issueType} />
+              <DetailChip label="Tally" value={row.tallyPostingStatus} />
+              <DetailChip label="Remarks" value={row.remarks} />
+            </div>
+
+            <div className="grid gap-2 xl:grid-cols-[1.1fr_1fr]">
+              <section>
+                <h4 className="mb-1 text-[10px] font-black uppercase tracking-wide text-black">Items</h4>
+                <div className="overflow-hidden rounded border border-black bg-white">
+                  <table className="min-w-full divide-y divide-black text-[11px]">
+                    <thead className="bg-slate-100">
+                      <tr className="divide-x divide-black">
+                        <th className="px-2 py-1 text-left font-black uppercase">Item</th>
+                        <th className="px-2 py-1 text-right font-black uppercase">Qty</th>
+                        <th className="px-2 py-1 text-left font-black uppercase">UOM</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-black">
+                      {selectedLines.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-2 py-2 text-center text-slate-600">No item lines found.</td>
+                        </tr>
+                      ) : (
+                        selectedLines.map((line) => (
+                          <tr key={line.id} className="divide-x divide-black">
+                            <td className="px-2 py-1 font-semibold">{getItemName(line.materialId)}</td>
+                            <td className="px-2 py-1 text-right font-semibold">{Number(line.qty || 0).toLocaleString()}</td>
+                            <td className="px-2 py-1">{line.uom || "-"}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section>
+                <h4 className="mb-1 text-[10px] font-black uppercase tracking-wide text-black">Reel Details</h4>
+                <div className="overflow-hidden rounded border border-black bg-white">
+                  <table className="min-w-full divide-y divide-black text-[11px]">
+                    <thead className="bg-slate-100">
+                      <tr className="divide-x divide-black">
+                        <th className="px-2 py-1 text-left font-black uppercase">Item</th>
+                        <th className="px-2 py-1 text-left font-black uppercase">Reel No</th>
+                        <th className="px-2 py-1 text-left font-black uppercase">Slip</th>
+                        <th className="px-2 py-1 text-right font-black uppercase">Wt</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-black">
+                      {selectedReelLines.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-2 py-2 text-center text-slate-600">No reel details found.</td>
+                        </tr>
+                      ) : (
+                        selectedReelLines.map((line) => (
+                          <tr key={line.id} className="divide-x divide-black">
+                            <td className="px-2 py-1 font-semibold">{getItemName(line.materialId)}</td>
+                            <td className="px-2 py-1">{line.ourReelNo || "-"}</td>
+                            <td className="px-2 py-1">{line.packingSlipId || "-"}</td>
+                            <td className="px-2 py-1 text-right font-semibold">{Number(line.weightKg || 0).toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div className="rounded border border-slate-300 bg-white px-3 py-1.5">
+              <span className="mr-2 text-[10px] font-black uppercase text-black">Tally Details</span>
+              {tallyValues.length === 0 ? (
+                <span className="text-slate-600">-</span>
+              ) : (
+                tallyValues.map(([label, value]) => (
+                  <span key={label} className="mr-4 inline-block whitespace-nowrap">
+                    <span className="font-black text-slate-500">{label}:</span> <span className="font-semibold text-black">{value}</span>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        </td>
+      </tr>
+    );
+  };
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -100,30 +230,48 @@ export function NonJobIssueMaster() {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">
-                    No “Without Job” material issues found.
+                    No Without Job material issues found.
                   </td>
                 </tr>
               ) : (
-                filtered.map((row) => (
-                  <tr key={row.id} className="divide-x divide-black hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm font-bold">{row.issueNo}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-indigo-700">{row.consumptionTransactionNo || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{itemNameByIssueId.get(row.id) || "-"}</td>
-                    <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        title={deletingId === row.id ? "Confirm delete" : "Delete"}
-                        onClick={() => handleDelete(row.id)}
-                        className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-end`}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                filtered.map((row) => {
+                  const isExpanded = expandedIssueId === row.id;
+                  return (
+                    <React.Fragment key={row.id}>
+                      <tr className="divide-x divide-black hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm font-bold">
+                          <button
+                            type="button"
+                            title={isExpanded ? "Hide details" : "Show details"}
+                            onClick={() => setExpandedIssueId(isExpanded ? null : row.id)}
+                            className="flex items-start gap-2 text-left font-bold text-black hover:text-sky-800"
+                          >
+                            <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-black bg-white">
+                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            </span>
+                            <span>{row.issueNo}</span>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-indigo-700">{row.consumptionTransactionNo || "-"}</td>
+                        <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
+                        <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
+                        <td className="px-4 py-3 text-sm">{itemNameByIssueId.get(row.id) || "-"}</td>
+                        <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            title={deletingId === row.id ? "Confirm delete" : "Delete"}
+                            onClick={() => handleDelete(row.id)}
+                            className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-end`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded ? renderDetailsRow(row) : null}
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
