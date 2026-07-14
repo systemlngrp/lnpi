@@ -3,7 +3,8 @@
 @layer utilities {
   .table-scroll-shell {
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
+    position: relative;
     width: 100%;
     scrollbar-gutter: stable both-edges;
   }
@@ -28,12 +29,24 @@
     z-index: 30;
   }
 
+  table thead:not([class*="bg-"]) {
+    background-color: #f8fafc;
+  }
+
   table thead th {
     position: sticky;
     top: 0;
     z-index: 31;
     background-color: inherit;
     box-shadow: inset 0 -1px 0 currentColor;
+  }
+
+  table thead:not([class*="bg-"]) th:not([class*="bg-"]) {
+    background-color: #f8fafc;
+  }
+
+  table thead tr[class*="bg-"] th:not([class*="bg-"]) {
+    background-color: inherit;
   }
 
   .bg-transparency {
