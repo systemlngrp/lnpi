@@ -154,7 +154,7 @@ export function RealizationReport() {
         const schedule = production.scheduleId ? scheduleMap.get(production.scheduleId) : null;
         const order = schedule ? orderMap.get(schedule.orderId) : null;
         const company = order?.companyId ? companyMap.get(order.companyId) : null;
-        const contactPerson = String(company?.contactPerson || "").trim() || "Unknown Sales Person";
+        const companySalesPerson = String(company?.salesPerson || "").trim() || "Unknown Sales Person";
         const qty = Number(production.qty || 0);
         const realizationPerKg = Number(production.realizationPerKg || 0);
 
@@ -166,8 +166,8 @@ export function RealizationReport() {
           weightedValue: Number((qty * realizationPerKg).toFixed(2)),
           companyId: company?.id || "",
           companyName: company?.name || "Unknown Company",
-          salesPersonId: contactPerson,
-          salesPersonName: contactPerson,
+          salesPersonId: companySalesPerson,
+          salesPersonName: companySalesPerson,
           jobNo: String(production.transactionNo || production.jobCardNo || "-"),
           dateValue: productionDate ? normalizeDate(productionDate).getTime() : null,
         };
@@ -186,7 +186,7 @@ export function RealizationReport() {
   const salesPersonOptions = useMemo(
     () =>
       Array.from(
-        new Set(companies.map((company) => String(company.contactPerson || "").trim()).filter(Boolean))
+        new Set(companies.map((company) => String(company.salesPerson || "").trim()).filter(Boolean))
       ).sort((a, b) => a.localeCompare(b)),
     [companies]
   );
