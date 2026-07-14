@@ -10,7 +10,6 @@ export type SheetMasterFilter = {
 
 export const PHP_ITEM_MASTER_COLUMNS: SheetMasterColumn[] = [
   { key: "timestamp", label: "Timestamp" },
-  { key: "npdId", label: "NPD_ID" },
   { key: "erpItemCode", label: "ERP Item Code" },
   { key: "masterItemNameErpCode", label: "Master Item Name ERP Code" },
   { key: "itemName", label: "Item Name" },
@@ -44,7 +43,6 @@ export const PHP_ITEM_MASTER_COLUMNS: SheetMasterColumn[] = [
   { key: "brustingStrengthReq", label: "Brusting Strength (Req) KG/cm2" },
   { key: "weightPerPcReq", label: "Weight Per Pc/ Set (req)" },
   { key: "calculatedWeightPerPcReq", label: "Calculated Weight Per PC/Set(req)" },
-  { key: "itemId", label: "Item Id" },
   { key: "category", label: "CATEGORY" },
   { key: "holesOrientationL", label: "Holes Oreintation (L )" },
   { key: "holesOrientationW", label: "Holes Oreintation (W)" },
@@ -74,7 +72,6 @@ export const PHP_ITEM_MASTER_COLUMNS: SheetMasterColumn[] = [
 
 export const PLATE_ITEM_MASTER_COLUMNS: SheetMasterColumn[] = [
   { key: "timestamp", label: "Timestamp" },
-  { key: "npdId", label: "NPD_ID" },
   { key: "erpItemCode", label: "ERP Item Code" },
   { key: "masterItemNameErpCode", label: "Master Item Name ERP Code" },
   { key: "itemName", label: "Item Name" },
@@ -108,7 +105,6 @@ export const PLATE_ITEM_MASTER_COLUMNS: SheetMasterColumn[] = [
   { key: "brustingStrengthReq", label: "Brusting Strength (Req) KG/cm2" },
   { key: "weightPerPcReq", label: "Weight Per Pc/ Set (req)" },
   { key: "calculatedWeightPerPcReq", label: "Calculated Weight Per PC/Set(req)" },
-  { key: "itemId", label: "Item Id" },
   { key: "category", label: "CATEGORY" },
   { key: "noOfUpsForRapc", label: "No. of Ups for RAPC" },
   { key: "rapc", label: "RAPC" },
