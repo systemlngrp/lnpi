@@ -1,11 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import type {
   Company,
+  Consumption,
   DispatchPlan,
+  GateEntry,
+  GatePass,
   Invoice,
+  Indent,
+  IndentLine,
   Item,
+  Machine,
   LoadingSlip,
   LoadingSlipLine,
   Material,
@@ -21,8 +29,11 @@ import type {
   OperationDashboardSummary,
   Order,
   OrderSchedule,
+  PurchaseOrder,
   Production,
   ProductionProcessing,
+  SampleRequest,
+  Setting,
 } from "../types";
 import { ExcelExport } from "../components/ExcelExport";
 import { exportsAllowed } from "../lib/exportPolicy";
@@ -37,6 +48,7 @@ import {
   getSafeRange,
   isDateWithinRange,
 } from "../lib/operationDashboard";
+import { buildPendingTaskCounts, getPendingTaskRows } from "../lib/pendingTaskCounts";
 
 type ProcessingTotals = {
   paper: number;
@@ -152,14 +164,19 @@ function getSummaryCard(summary: OperationDashboardSummary, cardId: string) {
 }
 
 export function OperationDashboard() {
+  const navigate = useNavigate();
   const [productions] = useData<Production>("productions", []);
+  const [phpJobMaster] = useData<Production>("php_job_master", []);
+  const [plateJobMaster] = useData<Production>("plate_job_master", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem, findItemAcrossSources, itemsBySource } = useOrderItemCatalog();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
+  const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -170,10 +187,44 @@ export function OperationDashboard() {
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [invoices] = useData<Invoice>("invoices", []);
+  const [consumptions] = useData<Consumption>("consumptions", []);
+  const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
+  const [indents] = useData<Indent>("indents", []);
+  const [indentLines] = useData<IndentLine>("indent-lines", []);
+  const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
+  const [phpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
+  const [plateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
+  const [gatePasses] = useData<GatePass>("gate_passes", []);
+  const [machines] = useData<Machine>("machines", []);
+  const [settings] = useData<Setting>("settings", []);
 
   const allowExports = exportsAllowed();
   const [dateRange, setDateRange] = useState(getDefaultRange);
   const [closedJobFilter, setClosedJobFilter] = useState<ClosedJobFilter>("no");
+  const [pendingJobClosureCount, setPendingJobClosureCount] = useState<number>(0);
+
+  useEffect(() => {
+    const refreshPendingJobClosureCount = async () => {
+      try {
+        const token = window.localStorage.getItem("authToken") || "";
+        const response = await fetch("/api/get-pending-job-closure", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const rows = await response.json();
+        setPendingJobClosureCount(Array.isArray(rows) ? rows.length : 0);
+      } catch {
+        setPendingJobClosureCount(0);
+      }
+    };
+
+    void refreshPendingJobClosureCount();
+  }, []);
 
   const safeRange = useMemo(() => getSafeRange(dateRange), [dateRange]);
 
@@ -343,6 +394,78 @@ export function OperationDashboard() {
     ]
   );
 
+  const pendingTaskRows = useMemo(() => {
+    const counts = buildPendingTaskCounts({
+      materialIn,
+      productions,
+      phpJobMaster,
+      plateJobMaster,
+      materials,
+      orders,
+      npdItems,
+      consumptions,
+      materialIssues,
+      materialIssueLines,
+      materialIssueReelLines: issueReelLines,
+      materialReturns,
+      materialReturnLines,
+      materialReturnReelLines: returnReelLines,
+      sampleRequests,
+      indents,
+      indentLines,
+      purchaseOrders,
+      gateEntries,
+      schedules,
+      dispatchPlans,
+      loadingSlips,
+      phpLoadingSlips,
+      plateLoadingSlips,
+      invoices,
+      gatePasses,
+      machines,
+      processing,
+      settings,
+      pendingJobClosureCount,
+      resolveOrderItem,
+      findItemAcrossSources,
+      itemsBySource,
+    });
+    return getPendingTaskRows(counts).filter((row) => row.count > 0);
+  }, [
+    materialIn,
+    productions,
+    phpJobMaster,
+    plateJobMaster,
+    materials,
+    orders,
+    npdItems,
+    consumptions,
+    materialIssues,
+    materialIssueLines,
+    issueReelLines,
+    materialReturns,
+    materialReturnLines,
+    returnReelLines,
+    sampleRequests,
+    indents,
+    indentLines,
+    purchaseOrders,
+    gateEntries,
+    schedules,
+    dispatchPlans,
+    loadingSlips,
+    phpLoadingSlips,
+    plateLoadingSlips,
+    invoices,
+    gatePasses,
+    machines,
+    processing,
+    settings,
+    pendingJobClosureCount,
+    resolveOrderItem,
+    findItemAcrossSources,
+    itemsBySource,
+  ]);
   const processingMachineCards = useMemo(() => {
     const machineMap = new Map<string, { qty: number; entries: number }>();
 
@@ -357,7 +480,7 @@ export function OperationDashboard() {
         machineMap.set(machineName, current);
       });
 
-    const cards = PROCESSING_MACHINE_CARD_ORDER.map((machineName) => {
+    const cards: OperationDashboardMetricCard[] = PROCESSING_MACHINE_CARD_ORDER.map((machineName) => {
       const totals = machineMap.get(machineName) || { qty: 0, entries: 0 };
       return {
         id: `processing-${machineName.toLowerCase().replace(/\s+/g, "-")}`,
@@ -541,6 +664,53 @@ export function OperationDashboard() {
               }}
             />
           ))}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
+          Pending Tasks
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-collapse text-xs">
+            <thead className="bg-slate-100">
+              <tr className="divide-x divide-slate-900 border-b-2 border-slate-900">
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">
+                  Pending Task Name
+                </th>
+                <th className="w-32 px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">
+                  Count
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-900 bg-white">
+              {pendingTaskRows.length === 0 ? (
+                <tr>
+                  <td colSpan={2} className="px-3 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    No pending tasks found.
+                  </td>
+                </tr>
+              ) : (
+                pendingTaskRows.map((row, index) => (
+                  <tr
+                    key={row.countKey}
+                    onClick={() => navigate(row.countKey)}
+                    className={cn(
+                      "cursor-pointer divide-x divide-slate-900 transition hover:bg-indigo-50",
+                      index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                    )}
+                  >
+                    <td className="px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-900 underline-offset-2 hover:underline">
+                      {row.name}
+                    </td>
+                    <td className="px-3 py-2 text-right text-sm font-black text-indigo-700">
+                      {row.count.toLocaleString("en-IN")}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 

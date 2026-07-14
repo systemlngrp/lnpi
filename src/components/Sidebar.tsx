@@ -26,11 +26,14 @@ import {
 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { useAuth } from "../auth/AuthContext";
 import {
   MaterialIn,
   Material,
+  Machine,
   Production,
+  ProductionProcessing,
   Order,
   Consumption,
   OrderSchedule,
@@ -48,18 +51,12 @@ import {
   MaterialReturnLine,
   MaterialReturnReelLine,
   Invoice,
+  GatePass,
+  Setting,
 } from "../types";
 import { cn } from "../lib/utils";
-import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "../lib/productionStageFilters";
-import { withIndentTotals } from "../lib/indentTotals";
-import {
-  buildProductionCorrugatedSheetUsageMap,
-  buildProductionMaterialUsageMap,
-  getProductionActualPaperUsed,
-  hasProductionCorrugatedSheetUsage,
-} from "../lib/productionMaterialUsage";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
-import { buildScheduleConsumptionByScheduleId } from "../lib/productionScheduleQty";
+import { buildPendingTaskCounts } from "../lib/pendingTaskCounts";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -154,11 +151,11 @@ const productionItems: NavItem[] = [
 ];
 
 const phpPlateProcessItems: NavItem[] = [
-  { name: "Pending PHP Planning", href: "/production/php/pending-planning", icon: ClipboardList },
-  { name: "Pending Plate Planning", href: "/production/plate/pending-planning", icon: ClipboardList },
+  { name: "Pending PHP Planning", href: "/production/php/pending-planning", icon: ClipboardList, countKey: "/production/php/pending-planning" },
+  { name: "Pending Plate Planning", href: "/production/plate/pending-planning", icon: ClipboardList, countKey: "/production/plate/pending-planning" },
   { name: "Scheduling", href: "/production/php-plate/scheduling", icon: ClipboardList },
-  { name: "Sequencing", href: "/production/php-plate/pending-sequencing", icon: Activity },
-  { name: "Production", href: "/production/php-plate/pending-production", icon: Hammer },
+  { name: "Sequencing", href: "/production/php-plate/pending-sequencing", icon: Activity, countKey: "/production/php-plate/pending-sequencing" },
+  { name: "Production", href: "/production/php-plate/pending-production", icon: Hammer, countKey: "/production/php-plate/pending-production" },
 ];
 
 const phpMasterItems: NavItem[] = [
@@ -170,7 +167,7 @@ const plateMasterItems: NavItem[] = [
 ];
 
 const productionProcessingItems: NavItem[] = [
-  { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer },
+  { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer, countKey: "/production/pending-machine-processing" },
   { name: "Reporting Master", href: "/production-processing/master", icon: Database },
 ];
 
@@ -284,7 +281,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { name: "Gate Pass Form", href: "/gate-pass/form", icon: ClipboardList },
       { name: "Gate Pass Master", href: "/gate-pass/master", icon: Database },
-      { name: "Pending Returnable Items", href: "/gate-pass/pending-returnable", icon: Activity },
+      { name: "Pending Returnable Items", href: "/gate-pass/pending-returnable", icon: Activity, countKey: "/gate-pass/pending-returnable" },
     ],
   },
   {
@@ -335,6 +332,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [materials] = useData<Material>("materials", []);
   const [orders] = useData<Order>("orders", []);
   const npdItems = useNpdItems();
+  const { resolveOrderItem, findItemAcrossSources, itemsBySource } = useOrderItemCatalog();
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
@@ -353,79 +351,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [phpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
   const [plateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
   const [invoices] = useData<Invoice>("invoices", []);
-
-  const normalizedIndents = indents.map((indent) =>
-    withIndentTotals(indent, indentLines.filter((line) => line.indentId === indent.id))
-  );
-  const productionUsageMap = buildProductionMaterialUsageMap(
-    materialIssues,
-    materialIssueLines,
-    materialReturns,
-    materialReturnLines,
-    materialIssueReelLines,
-    materialReturnReelLines
-  );
-  const productionCorrugatedSheetUsageMap = buildProductionCorrugatedSheetUsageMap(
-    materials,
-    materialIssues,
-    materialIssueLines,
-    materialReturns,
-    materialReturnLines
-  );
-
-  const isPendingPH = (status?: string | null) => !status || status === "Pending PH";
-  const normalizeDate = (value?: string | null) => String(value || "").slice(0, 10);
-  const isWithoutJobIssue = (issueType?: string | null) => {
-    const t = String(issueType || "").trim().toLowerCase();
-    return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
-  };
-
-  const pendingNonJobIssueCount = (() => {
-    const firstJobDate = productions
-      .map((p) => normalizeDate(p.date))
-      .filter(Boolean)
-      .sort()[0];
-    if (!firstJobDate) return 0;
-
-    const today = new Date().toISOString().slice(0, 10);
-    const issuesByDate = new Set(
-      materialIssues
-        .filter((i) => isWithoutJobIssue(i.issueType))
-        .map((i) => normalizeDate(i.date))
-        .filter(Boolean)
-    );
-
-    let count = 0;
-    const cursor = new Date(`${firstJobDate}T00:00:00Z`);
-    const end = new Date(`${today}T00:00:00Z`);
-    while (cursor <= end) {
-      const d = cursor.toISOString().slice(0, 10);
-      if (!issuesByDate.has(d)) count += 1;
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
-    }
-    return count;
-  })();
-
-  const pendingConsumptionTallyCount = materialIssues.filter(
-    (issue) =>
-      isWithoutJobIssue(issue.issueType) &&
-      String(issue.consumptionTransactionNo || "").trim() !== "" &&
-      String(issue.tallyTimestamp || "").trim() === ""
-  ).length;
-
-  const pendingPhpLoadingTallyCount = phpLoadingSlips.filter(
-    (slip) =>
-      String(slip.phpConsumptionTransactionNo || "").trim() !== "" &&
-      String(slip.tallyTimestamp || "").trim() === "" &&
-      String(slip.status || "Active").trim().toLowerCase() !== "cancelled"
-  ).length;
-
-  const pendingPlateLoadingTallyCount = plateLoadingSlips.filter(
-    (slip) =>
-      String(slip.plateConsumptionTransactionNo || "").trim() !== "" &&
-      String(slip.tallyTimestamp || "").trim() === "" &&
-      String(slip.status || "Active").trim().toLowerCase() !== "cancelled"
-  ).length;
+  const [gatePasses] = useData<GatePass>("gate_passes", []);
+  const [machines] = useData<Machine>("machines", []);
+  const [processing] = useData<ProductionProcessing>("production_processing", []);
+  const [settings] = useData<Setting>("settings", []);
 
   const [pendingJobClosureCount, setPendingJobClosureCount] = useState<number>(0);
 
@@ -456,138 +385,81 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
     void refreshPendingJobClosureCount();
   });
 
-  const counts: Record<string, number> = {
-    "/material-receipt/approvals": materialIn.filter(m => ["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status)).length,
-    "/material-receipt/pending-tally": materialIn.filter(m => m.status === "Pending Tally").length,
-    "/production/pending": (() => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const cutoffDate = new Date(today);
-      cutoffDate.setDate(cutoffDate.getDate() + 2);
-      cutoffDate.setHours(23, 59, 59, 999);
-
-      const consumptionByScheduleId = buildScheduleConsumptionByScheduleId(productions, phpJobMaster, plateJobMaster);
-      const getPendingProductionQty = (schedule: OrderSchedule) =>
-        Math.max(
-          Number(schedule.qty || 0) - Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0) - Number(schedule.canceledQty || 0),
-          0
-        );
-
-      const parseLocalYmd = (dateStr?: string) => {
-        if (!dateStr) return null;
-        const match = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (!match) return null;
-        const year = Number(match[1]);
-        const monthIndex = Number(match[2]) - 1;
-        const day = Number(match[3]);
-        const date = new Date(year, monthIndex, day);
-        if (Number.isNaN(date.getTime())) return null;
-        date.setHours(0, 0, 0, 0);
-        return date;
-      };
-
-      return schedules.filter((schedule) => {
-        if (getPendingProductionQty(schedule) <= 0) return false;
-        const scheduledDate = parseLocalYmd(schedule.scheduledDate);
-        if (!scheduledDate) return false;
-        return scheduledDate.getTime() <= cutoffDate.getTime();
-      }).length;
-    })(),
-    "/production/pending-npd": schedules.filter((schedule) => {
-      const order = orders.find((row) => row.id === schedule.orderId);
-      if (!order || order.status === "Cancelled") return false;
-      const item = npdItems.find((row) => row.id === String(order.itemId || "").trim());
-      if (!item) return false;
-      const boxType = String((item as any)?.boxType || "").trim();
-      const rapcValue = String((item as any)?.rapc ?? "").trim();
-      return !boxType && !rapcValue;
-    }).length,
-    "/production/pending-consumption": productions.filter((p) => isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
-    "/production/pending-ffg": productions.filter((p) => isProductionPendingFFG(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
-    "/production/pending-tally": productions.filter((p) => isProductionReadyForTally(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))).length,
-    "/production/pending-job-closure": pendingJobClosureCount,
-    "/indent/pending": normalizedIndents.filter(i => i.status === "Pending").length,
-    "/indent/approved": normalizedIndents.filter(i => i.status === "Approved").length,
-    "/indent/completed": normalizedIndents.filter(i => i.status === "Completed").length,
-    "/indent/rejected": normalizedIndents.filter(i => i.status === "Rejected").length,
-    "/purchase-orders/pending-indent-lines": indentLines.filter((l) =>
-      normalizedIndents.some((indent) => indent.id === l.indentId && indent.status === "Approved") &&
-      Number(l.qty || 0) - Number(l.cancelledQty || 0) - Number(l.orderedQty || 0) > 0
-    ).length,
-    "/purchase-orders/all": purchaseOrders.length,
-    "/purchase-orders/pending-approval": purchaseOrders.filter(po => po.status === "Pending Approval").length,
-    "/purchase-orders/approved": purchaseOrders.filter(po => po.status === "Approved").length,
-    "/purchase-orders/rejected": purchaseOrders.filter(po => po.status === "Rejected").length,
-    "/material-receipt/pending-mrr": gateEntries.filter(entry => !(entry.mrrId || "").trim() && !(entry.mrrNo || "").trim() && !(entry.mrrDate || "").trim()).length,
-    "/material-receipt/pending-debit-note": 0,
-    "/material-movement/pending-non-job-issue": pendingNonJobIssueCount,
-    "/material-movement/pending-consumption-tally": pendingConsumptionTallyCount,
-    "/loading/php/pending-tally": pendingPhpLoadingTallyCount,
-    "/loading/plate/pending-tally": pendingPlateLoadingTallyCount,
-    "/samples/pending": sampleRequests.filter(s => !s.jobCardNo && !s.cancelTimestamp).length,
-    "/orders/pending-ph": orders.filter(o => isPendingPH(o.status)).length,
-    "/orders/pending-scheduling": orders.filter(o => o.status === "Pending Scheduling").length,
-    "/dispatch/pending-planning": schedules.filter(s => {
-      if (!s?.scheduledDate) return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(23, 59, 59, 999);
-      const schedDate = new Date(s.scheduledDate);
-      
-      const alreadyPlanned = dispatchPlans
-        .filter(plan => plan.scheduleId === s.id)
-        .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
-      
-      const balance = Number(s.qty || 0) - alreadyPlanned;
-
-      return !isNaN(schedDate.getTime()) && schedDate <= tomorrow && balance > 0;
-    }).length,
-    "/loading/pending": dispatchPlans.filter(p => {
-      const pending = Number(p.plannedQty || 0) - Number(p.loadedQty || 0) - Number(p.canceledQty || 0);
-      return pending > 0;
-    }).length,
-    "/billing/pending": loadingSlips.filter(s => !s.invoiceId).length,
-    "/billing/pending-tally": invoices.filter(inv => !inv.tallyTimestamp).length,
-    "/orders/upcoming": schedules.filter(s => {
-      if (!s?.scheduledDate) return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const cutoffDate = new Date(today);
-      cutoffDate.setDate(cutoffDate.getDate() + 2);
-      cutoffDate.setHours(23, 59, 59, 999);
-
-      const parseLocalYmd = (dateStr?: string) => {
-        if (!dateStr) return null;
-        const match = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (!match) return null;
-        const year = Number(match[1]);
-        const monthIndex = Number(match[2]) - 1;
-        const day = Number(match[3]);
-        const date = new Date(year, monthIndex, day);
-        if (Number.isNaN(date.getTime())) return null;
-        date.setHours(0, 0, 0, 0);
-        return date;
-      };
-
-      const consumptionByScheduleId = buildScheduleConsumptionByScheduleId(productions, phpJobMaster, plateJobMaster);
-      const getPendingProductionQty = (schedule: OrderSchedule) =>
-        Math.max(
-          Number(schedule.qty || 0) - Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0) - Number(schedule.canceledQty || 0),
-          0
-        );
-
-      const scheduledDate = parseLocalYmd(s.scheduledDate);
-      if (!scheduledDate) return false;
-
-      return scheduledDate.getTime() > cutoffDate.getTime() && getPendingProductionQty(s) > 0;
-    }).length,
-    "/plant-head": materialIn.filter(m => isPendingPH(m.status)).length + 
-                  productions.filter(isProductionPendingPH).length +
-                  orders.filter(o => isPendingPH(o.status)).length +
-                  consumptions.filter(c => isPendingPH(c.status)).length
-  };
+  const counts = useMemo(
+    () =>
+      buildPendingTaskCounts({
+        materialIn,
+        productions,
+        phpJobMaster,
+        plateJobMaster,
+        materials,
+        orders,
+        npdItems,
+        consumptions,
+        materialIssues,
+        materialIssueLines,
+        materialIssueReelLines,
+        materialReturns,
+        materialReturnLines,
+        materialReturnReelLines,
+        sampleRequests,
+        indents,
+        indentLines,
+        purchaseOrders,
+        gateEntries,
+        schedules,
+        dispatchPlans,
+        loadingSlips,
+        phpLoadingSlips,
+        plateLoadingSlips,
+        invoices,
+        gatePasses,
+        machines,
+        processing,
+        settings,
+        pendingJobClosureCount,
+        user,
+        resolveOrderItem,
+        findItemAcrossSources,
+        itemsBySource,
+      }),
+    [
+      materialIn,
+      productions,
+      phpJobMaster,
+      plateJobMaster,
+      materials,
+      orders,
+      npdItems,
+      consumptions,
+      materialIssues,
+      materialIssueLines,
+      materialIssueReelLines,
+      materialReturns,
+      materialReturnLines,
+      materialReturnReelLines,
+      sampleRequests,
+      indents,
+      indentLines,
+      purchaseOrders,
+      gateEntries,
+      schedules,
+      dispatchPlans,
+      loadingSlips,
+      phpLoadingSlips,
+      plateLoadingSlips,
+      invoices,
+      gatePasses,
+      machines,
+      processing,
+      settings,
+      pendingJobClosureCount,
+      user,
+      resolveOrderItem,
+      findItemAcrossSources,
+      itemsBySource,
+    ]
+  );
 
   const navigation = useMemo<NavGroup[]>(() => {
     if (user?.role !== "Operator") return NAVIGATION_WITH_SORTED_MASTERS;
