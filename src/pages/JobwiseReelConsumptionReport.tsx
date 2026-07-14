@@ -106,7 +106,7 @@ export function JobwiseReelConsumptionReport() {
         const reelConsumed = Number((reelIssued - reelReturned).toFixed(2));
         const consumedValue = Number(Number(issued.value - returned.value || 0).toFixed(2));
         const gp = Number(Number(jobValue - consumedValue || 0).toFixed(2));
-        const gpPercent = consumedValue > 0 ? Number(((gp / consumedValue) * 100).toFixed(2)) : 0;
+        const gpPercent = jobValue > 0 ? Number(((gp / jobValue) * 100).toFixed(2)) : 0;
 
         return {
           productionId: production.id,
@@ -165,7 +165,7 @@ export function JobwiseReelConsumptionReport() {
   }, [rows]);
 
   const averageGpPercent =
-    summary.consumedValue > 0 ? Number(((summary.gp / summary.consumedValue) * 100).toFixed(2)) : 0;
+    summary.jobValue > 0 ? Number(((summary.gp / summary.jobValue) * 100).toFixed(2)) : 0;
 
   const handleClear = () => {
     setSearchTerm("");
@@ -199,7 +199,7 @@ export function JobwiseReelConsumptionReport() {
               <div className="mt-2 text-2xl font-black text-amber-950">{summary.reelConsumed.toFixed(2)}</div>
             </div>
             <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">Consumed Value</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">Actual Consumed Value</div>
               <div className="mt-2 text-2xl font-black text-violet-950">{summary.consumedValue.toFixed(2)}</div>
             </div>
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -289,11 +289,11 @@ export function JobwiseReelConsumptionReport() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-md">
         <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
-            <thead>
-              <tr className="bg-blue-700 text-white">
+          <table className="min-w-[1180px] w-full border-collapse text-[12px]">
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-blue-700 text-white shadow-sm">
                 {[
                   "Job No.",
                   "Corrugation Date",
@@ -303,13 +303,13 @@ export function JobwiseReelConsumptionReport() {
                   "Reel Issued",
                   "Reel Returned",
                   "Reel Consumed",
-                  "Consumed Value",
+                  "Actual Consumed Value",
                   "GP",
                   "GP%",
                 ].map((heading) => (
                   <th
                     key={heading}
-                    className="whitespace-nowrap border-r border-black border-b border-black px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em] last:border-r-0"
+                    className="sticky top-0 z-20 whitespace-nowrap border-r border-blue-950 border-b border-blue-950 bg-blue-700 px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-[0.14em] text-white last:border-r-0"
                   >
                     {heading}
                   </th>
@@ -319,24 +319,24 @@ export function JobwiseReelConsumptionReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="border-t border-black px-6 py-12 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={11} className="border-t border-slate-300 px-6 py-12 text-center text-sm font-semibold text-slate-500">
                     No jobs match the current filters.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.productionId} className="border-t border-black text-sm text-slate-700 transition hover:bg-emerald-50/40">
-                    <td className="border-r border-black px-4 py-3 font-bold text-slate-900">{row.jobNo}</td>
-                    <td className="border-r border-black px-4 py-3">{formatDate(row.corrugationDate)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.jobFfg || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.jobRate || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-slate-900">{Number(row.jobValue || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.reelIssued || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.reelReturned || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-bold text-amber-700">{Number(row.reelConsumed || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-bold text-violet-700">{Number(row.consumedValue || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-bold text-emerald-700">{Number(row.gp || 0).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-black text-emerald-800">{Number(row.gpPercent || 0).toFixed(2)}</td>
+                  <tr key={row.productionId} className="border-t border-slate-300 text-[12px] text-slate-700 transition odd:bg-white even:bg-slate-50/70 hover:bg-emerald-50/70">
+                    <td className="border-r border-slate-300 px-3 py-2.5 font-bold text-slate-900">{row.jobNo}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5">{formatDate(row.corrugationDate)}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5 text-right">{Number(row.jobFfg || 0).toFixed(2)}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5 text-right">{Number(row.jobRate || 0).toFixed(2)}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5 text-right font-semibold text-slate-900">{Number(row.jobValue || 0).toFixed(2)}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5 text-right">{Number(row.reelIssued || 0).toFixed(2)}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5 text-right">{Number(row.reelReturned || 0).toFixed(2)}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5 text-right font-bold text-amber-700">{Number(row.reelConsumed || 0).toFixed(2)}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5 text-right font-bold text-violet-700">{Number(row.consumedValue || 0).toFixed(2)}</td>
+                    <td className="border-r border-slate-300 px-3 py-2.5 text-right font-bold text-emerald-700">{Number(row.gp || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2.5 text-right font-black text-emerald-800">{Number(row.gpPercent || 0).toFixed(2)}</td>
                   </tr>
                 ))
               )}
