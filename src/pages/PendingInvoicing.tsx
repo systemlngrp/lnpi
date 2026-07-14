@@ -875,7 +875,7 @@ export function PendingInvoicing() {
             </div>
 
             {expandedCompanies.has(group.companyId) && (
-              <div className="p-4">
+              <div className="p-4 table-frozen-scroll">
                 <table className="min-w-full border-collapse border border-black">
                   <thead className="sticky top-0 z-30 bg-slate-50">
                     <tr className="divide-x divide-black border-b border-black">
@@ -960,7 +960,7 @@ export function PendingInvoicing() {
                 ) : null}
               </div>
 
-              <div className="overflow-x-auto border border-black">
+              <div className="table-frozen-scroll border border-black">
                 <table className="min-w-full divide-y divide-black border-collapse">
                   <thead className="sticky top-0 z-30 bg-slate-100">
                     <tr className="divide-x divide-black">

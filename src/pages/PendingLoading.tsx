@@ -680,7 +680,7 @@ export function PendingLoading() {
                         </button>
                       </div>
 
-                      <div className="overflow-x-auto border border-black">
+                      <div className="table-frozen-scroll border border-black">
                         <table className="min-w-full divide-y divide-black border-collapse">
                           <thead className="sticky top-0 z-30 bg-slate-50">
                             <tr className="divide-x divide-black">
@@ -855,7 +855,7 @@ export function PendingLoading() {
                           </div>
                         </div>
 
-                        <div className="overflow-x-auto">
+                        <div className="table-frozen-scroll">
                           <table className="min-w-full divide-y divide-black border-collapse">
                             <thead className="sticky top-0 z-30 bg-slate-50">
                               <tr className="divide-x divide-black">

@@ -443,7 +443,7 @@ export function EfficiencyReport() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="table-frozen-scroll">
           <table className="min-w-full border-collapse">
             <thead className="sticky top-0 z-30">
               <tr className="bg-[linear-gradient(90deg,#042f2e,#0f766e,#134e4a)] text-white">

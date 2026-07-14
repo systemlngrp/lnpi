@@ -565,7 +565,7 @@ export function PaperRequirementReport() {
           </div>
 
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="table-frozen-scroll">
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 

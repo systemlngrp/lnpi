@@ -290,7 +290,7 @@ export function JobwiseReelConsumptionReport() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-md">
-        <div className="overflow-x-auto">
+        <div className="table-frozen-scroll">
           <table className="min-w-[1180px] w-full border-collapse text-[12px]">
             <thead className="sticky top-0 z-20">
               <tr className="bg-blue-700 text-white shadow-sm">

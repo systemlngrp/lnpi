@@ -552,7 +552,7 @@ export function PendingDispatchPlanning() {
               Available = (Opening + Receipt + Production âˆ’ Loaded) + Pending Production (FG not filled) âˆ’ Pending Loading (not loaded)
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="table-frozen-scroll">
             <table className="min-w-full divide-y divide-black border-collapse border border-black">
               <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
                 <tr className="divide-x divide-black">
@@ -595,7 +595,7 @@ export function PendingDispatchPlanning() {
       ) : null}
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-         <div className="overflow-x-auto">
+         <div className="table-frozen-scroll">
           <table className="min-w-full divide-y divide-black border-collapse border border-black">
             <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
               <tr className="divide-x divide-black">

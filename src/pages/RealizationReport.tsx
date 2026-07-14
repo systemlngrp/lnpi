@@ -516,7 +516,7 @@ export function RealizationReport() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 text-xl font-bold text-slate-900">Company Average Realization</div>
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="table-frozen-scroll rounded-xl border border-slate-200">
           <table className="min-w-full border-collapse">
             <thead className="sticky top-0 z-30 bg-slate-50">
               <tr>

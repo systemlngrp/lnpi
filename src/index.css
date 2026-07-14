@@ -14,6 +14,19 @@
     min-width: max-content;
   }
 
+
+  .table-frozen-scroll {
+    max-height: calc(100vh - 220px);
+    overflow: auto;
+    position: relative;
+    width: 100%;
+    scrollbar-gutter: stable both-edges;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-frozen-scroll > table {
+    min-width: max-content;
+  }
   .table-sticky-scroll {
     max-height: calc(100vh - 260px);
     overflow: auto;
