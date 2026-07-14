@@ -35,9 +35,27 @@ type ReelwiseStockRow = {
   returnedWeight: number;
   availableWeight: number;
   mrrQty: number;
-  availabilityFormula: string;
   ageDays: number;
 };
+
+const tableColumns = [
+  { label: "SL No", width: "w-[4%]" },
+  { label: "MRR Date", width: "w-[6.5%]" },
+  { label: "MRR No.", width: "w-[7%]" },
+  { label: "Our Reel No.", width: "w-[7%]" },
+  { label: "ERP", width: "w-[6%]" },
+  { label: "Suppliers Name", width: "w-[14%]" },
+  { label: "GSM", width: "w-[4.5%]" },
+  { label: "Size", width: "w-[4.5%]" },
+  { label: "BF", width: "w-[3.5%]" },
+  { label: "Issued Date", width: "w-[6.5%]" },
+  { label: "Issued Weight", width: "w-[7%]" },
+  { label: "Returned Date", width: "w-[6.5%]" },
+  { label: "Returned Weight", width: "w-[7.5%]" },
+  { label: "Available Weight", width: "w-[7.5%]" },
+  { label: "MRR Qty", width: "w-[5%]" },
+  { label: "Age(D days)", width: "w-[4%]" },
+];
 
 function formatReportDate(dateStr?: string) {
   if (!dateStr) return "";
@@ -60,9 +78,6 @@ function getAgeDays(dateStr?: string) {
   return Math.max(0, Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
-function formatWeightFormula(mrrQty: number, issuedQty: number, returnQty: number, availableQty: number) {
-  return `MRR ${mrrQty.toFixed(2)} - Issued ${issuedQty.toFixed(2)} + Return ${returnQty.toFixed(2)} = Available ${availableQty.toFixed(2)}`;
-}
 
 export function ReelwiseStockReport() {
   const [materials] = useData<Material>("materials", []);
@@ -134,7 +149,6 @@ export function ReelwiseStockReport() {
           returnedWeight: Number(returnedWeight.toFixed(2)),
           availableWeight,
           mrrQty,
-          availabilityFormula: formatWeightFormula(mrrQty, issuedWeight, returnedWeight, availableWeight),
           ageDays: getAgeDays(receipt?.date),
         };
       })
@@ -399,33 +413,17 @@ export function ReelwiseStockReport() {
             Available: {summary.reelNotIssuedWeight.toFixed(2)} | Issued: {summary.reelIssuedWeight.toFixed(2)}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
-            <thead>
+        <div className="max-h-[calc(100vh-260px)] overflow-auto">
+          <table className="w-full table-fixed border-collapse">
+            <thead className="sticky top-0 z-10">
               <tr className="bg-[linear-gradient(90deg,#020617,#0f172a,#111827)] text-white">
-                {[
-                  "SL No",
-                  "MRR DATE",
-                  "MRR No.",
-                  "Our Reel No.",
-                  "ERP",
-                  "Suppliers Name",
-                  "GSM",
-                  "SIZE",
-                  "BF",
-                  "ISSUED DATE",
-                  "ISSUED WEIGHT",
-                  "RETURNED DATE",
-                  "RETURNED WEIGHT",
-                  "Available Weight",
-                  "MRR QTY",
-                  "AGE(D days)",
-                ].map((heading) => (
+                {tableColumns.map((column) => (
                   <th
-                    key={heading}
-                    className="whitespace-nowrap border-r border-black border-b border-black px-4 py-3 text-left text-[11px] font-black uppercase tracking-[0.18em] last:border-r-0"
+                    key={column.label}
+                    className={`${column.width} truncate border-r border-black border-b border-black bg-slate-950 px-1.5 py-2 text-left text-[9px] font-black uppercase tracking-wide last:border-r-0`}
+                    title={column.label}
                   >
-                    {heading}
+                    {column.label}
                   </th>
                 ))}
               </tr>
@@ -439,28 +437,23 @@ export function ReelwiseStockReport() {
                 </tr>
               ) : (
                 rows.map((row, index) => (
-                  <tr key={row.slipId} className="border-t border-black text-sm text-slate-700 transition hover:bg-sky-50/50">
-                    <td className="border-r border-black px-4 py-3 font-bold text-slate-900">{index + 1}</td>
-                    <td className="border-r border-black px-4 py-3">{formatReportDate(row.mrrDate)}</td>
-                    <td className="border-r border-black px-4 py-3 font-semibold text-slate-900">{row.mrrNo}</td>
-                    <td className="border-r border-black px-4 py-3 font-bold text-slate-900">{row.ourReelNo}</td>
-                    <td className="border-r border-black px-4 py-3">{row.erp}</td>
-                    <td className="border-r border-black px-4 py-3 min-w-[220px]">{row.supplierName}</td>
-                    <td className="border-r border-black px-4 py-3">{row.gsm || ""}</td>
-                    <td className="border-r border-black px-4 py-3">{row.size || ""}</td>
-                    <td className="border-r border-black px-4 py-3">{row.bf || ""}</td>
-                    <td className="border-r border-black px-4 py-3">{formatReportDate(row.issuedDate)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-amber-700">{Number(row.issuedWeight || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3">{formatReportDate(row.returnedDate)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-semibold text-violet-700">{Number(row.returnedWeight || 0).toFixed(2)}</td>
-                    <td className="border-r border-black px-4 py-3 text-right font-black text-emerald-700">
-                      <div>{Number(row.availableWeight || 0).toFixed(2)}</div>
-                      <div className="mt-1 whitespace-normal text-[11px] font-medium text-slate-500">
-                        {row.availabilityFormula}
-                      </div>
-                    </td>
-                    <td className="border-r border-black px-4 py-3 text-right">{Number(row.mrrQty || 0).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">{row.ageDays}</td>
+                  <tr key={row.slipId} className="border-t border-black text-[11px] text-slate-700 transition hover:bg-sky-50/50">
+                    <td className="truncate border-r border-black px-1.5 py-2 font-bold text-slate-900" title={String(index + 1)}>{index + 1}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2" title={formatReportDate(row.mrrDate)}>{formatReportDate(row.mrrDate)}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2 font-semibold text-slate-900" title={row.mrrNo}>{row.mrrNo}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2 font-bold text-slate-900" title={row.ourReelNo}>{row.ourReelNo}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2" title={row.erp}>{row.erp}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2" title={row.supplierName}>{row.supplierName}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2" title={String(row.gsm || "")}>{row.gsm || ""}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2" title={String(row.size || "")}>{row.size || ""}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2" title={String(row.bf || "")}>{row.bf || ""}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2" title={formatReportDate(row.issuedDate)}>{formatReportDate(row.issuedDate)}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2 text-right font-semibold text-amber-700" title={Number(row.issuedWeight || 0).toFixed(2)}>{Number(row.issuedWeight || 0).toFixed(2)}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2" title={formatReportDate(row.returnedDate)}>{formatReportDate(row.returnedDate)}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2 text-right font-semibold text-violet-700" title={Number(row.returnedWeight || 0).toFixed(2)}>{Number(row.returnedWeight || 0).toFixed(2)}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2 text-right font-black text-emerald-700" title={Number(row.availableWeight || 0).toFixed(2)}>{Number(row.availableWeight || 0).toFixed(2)}</td>
+                    <td className="truncate border-r border-black px-1.5 py-2 text-right" title={Number(row.mrrQty || 0).toFixed(2)}>{Number(row.mrrQty || 0).toFixed(2)}</td>
+                    <td className="truncate px-1.5 py-2 text-right" title={String(row.ageDays)}>{row.ageDays}</td>
                   </tr>
                 ))
               )}
