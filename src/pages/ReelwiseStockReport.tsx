@@ -10,9 +10,7 @@ import {
   Material,
   MaterialIn,
   MaterialInPackingSlip,
-  MaterialIssue,
   MaterialIssueReelLine,
-  MaterialReturn,
   MaterialReturnReelLine,
   Supplier,
 } from "../types";
@@ -29,9 +27,7 @@ type ReelwiseStockRow = {
   gsm: number;
   size: number;
   bf: number;
-  issuedDate: string;
   issuedWeight: number;
-  returnedDate: string;
   returnedWeight: number;
   availableWeight: number;
   mrrQty: number;
@@ -40,21 +36,19 @@ type ReelwiseStockRow = {
 
 const tableColumns = [
   { label: "SL No", width: "w-[4%]" },
-  { label: "MRR Date", width: "w-[6.5%]" },
-  { label: "MRR No.", width: "w-[7%]" },
-  { label: "Our Reel No.", width: "w-[7%]" },
-  { label: "ERP", width: "w-[6%]" },
-  { label: "Suppliers Name", width: "w-[14%]" },
-  { label: "GSM", width: "w-[4.5%]" },
-  { label: "Size", width: "w-[4.5%]" },
-  { label: "BF", width: "w-[3.5%]" },
-  { label: "Issued Date", width: "w-[6.5%]" },
-  { label: "Issued Weight", width: "w-[7%]" },
-  { label: "Returned Date", width: "w-[6.5%]" },
-  { label: "Returned Weight", width: "w-[7.5%]" },
-  { label: "Available Weight", width: "w-[7.5%]" },
-  { label: "MRR Qty", width: "w-[5%]" },
-  { label: "Age(D days)", width: "w-[4%]" },
+  { label: "MRR Date", width: "w-[7%]" },
+  { label: "MRR No.", width: "w-[8%]" },
+  { label: "Our Reel No.", width: "w-[8%]" },
+  { label: "ERP", width: "w-[7%]" },
+  { label: "Suppliers Name", width: "w-[18%]" },
+  { label: "GSM", width: "w-[5%]" },
+  { label: "Size", width: "w-[5%]" },
+  { label: "BF", width: "w-[4%]" },
+  { label: "Issued Weight", width: "w-[8%]" },
+  { label: "Returned Weight", width: "w-[9%]" },
+  { label: "Available Weight", width: "w-[9%]" },
+  { label: "MRR Qty", width: "w-[6%]" },
+  { label: "Age(D days)", width: "w-[5%]" },
 ];
 
 function formatReportDate(dateStr?: string) {
@@ -83,9 +77,7 @@ export function ReelwiseStockReport() {
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
-  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
-  const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
 
@@ -102,8 +94,6 @@ export function ReelwiseStockReport() {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
     const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
     const supplierMap = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
-    const issueMap = new Map(materialIssues.map((entry) => [entry.id, entry]));
-    const returnMap = new Map(materialReturns.map((entry) => [entry.id, entry]));
     const receivedByMaterial = packingSlips.reduce<Map<string, number>>((acc, slip) => {
       acc.set(slip.materialId, (acc.get(slip.materialId) || 0) + Number(slip.weightKg || 0));
       return acc;
@@ -123,16 +113,6 @@ export function ReelwiseStockReport() {
         const reelQty = Number(slip.weightKg || 0);
         const mrrQty = Number((openingBalance + reelQty).toFixed(2));
         const availableWeight = Number(Math.max(0, mrrQty - issuedWeight + returnedWeight).toFixed(2));
-
-        const issueDates = relatedIssueLines
-          .map((line) => issueMap.get(line.materialIssueId)?.date || "")
-          .filter(Boolean)
-          .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-        const returnDates = relatedReturnLines
-          .map((line) => returnMap.get(line.materialReturnId)?.date || "")
-          .filter(Boolean)
-          .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-
         return {
           slipId: slip.id,
           mrrDate: receipt?.date || "",
@@ -143,9 +123,7 @@ export function ReelwiseStockReport() {
           gsm: Number(material?.gsm || 0),
           size: Number(material?.size || 0),
           bf: Number(material?.bf || 0),
-          issuedDate: issueDates[0] || "",
           issuedWeight: Number(issuedWeight.toFixed(2)),
-          returnedDate: returnDates[0] || "",
           returnedWeight: Number(returnedWeight.toFixed(2)),
           availableWeight,
           mrrQty,
@@ -192,8 +170,6 @@ export function ReelwiseStockReport() {
     availabilityFilter,
     issueReelLines,
     materialIn,
-    materialIssues,
-    materialReturns,
     materials,
     bfFilter,
     gsmFilter,
@@ -431,7 +407,7 @@ export function ReelwiseStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="border-t border-black px-6 py-12 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={14} className="border-t border-black px-6 py-12 text-center text-sm font-semibold text-slate-500">
                     No reel rows match the current filters.
                   </td>
                 </tr>
@@ -447,9 +423,7 @@ export function ReelwiseStockReport() {
                     <td className="truncate border-r border-black px-1.5 py-2" title={String(row.gsm || "")}>{row.gsm || ""}</td>
                     <td className="truncate border-r border-black px-1.5 py-2" title={String(row.size || "")}>{row.size || ""}</td>
                     <td className="truncate border-r border-black px-1.5 py-2" title={String(row.bf || "")}>{row.bf || ""}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2" title={formatReportDate(row.issuedDate)}>{formatReportDate(row.issuedDate)}</td>
                     <td className="truncate border-r border-black px-1.5 py-2 text-right font-semibold text-amber-700" title={Number(row.issuedWeight || 0).toFixed(2)}>{Number(row.issuedWeight || 0).toFixed(2)}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2" title={formatReportDate(row.returnedDate)}>{formatReportDate(row.returnedDate)}</td>
                     <td className="truncate border-r border-black px-1.5 py-2 text-right font-semibold text-violet-700" title={Number(row.returnedWeight || 0).toFixed(2)}>{Number(row.returnedWeight || 0).toFixed(2)}</td>
                     <td className="truncate border-r border-black px-1.5 py-2 text-right font-black text-emerald-700" title={Number(row.availableWeight || 0).toFixed(2)}>{Number(row.availableWeight || 0).toFixed(2)}</td>
                     <td className="truncate border-r border-black px-1.5 py-2 text-right" title={Number(row.mrrQty || 0).toFixed(2)}>{Number(row.mrrQty || 0).toFixed(2)}</td>
