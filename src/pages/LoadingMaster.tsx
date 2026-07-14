@@ -26,6 +26,7 @@ import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { buildLinkedLoadingDetailsFromSlip } from "../lib/linkedLoading";
 import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
 import { downloadLoadingSlipPdf } from "../lib/loadingSlipPdf";
+import { buildPhpPlateStockAlertMessage, getPhpPlateStockShortages } from "../lib/phpPlateStockValidation";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { DirectLoadingSlipModal } from "../components/DirectLoadingSlipModal";
@@ -47,8 +48,12 @@ export function LoadingMaster() {
   const [companies] = useData<Company>("companies", []);
   const [invoices, setInvoices] = useData<Invoice>("invoices", []);
   const [invoiceLineItems, setInvoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
-  const [, setPhpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
-  const [, setPlateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
+  const [phpJobs] = useData<any>("php_job_master", []);
+  const [plateJobs] = useData<any>("plate_job_master", []);
+  const [phpItemMaster] = useData<any>("php_item_master", []);
+  const [plateItemMaster] = useData<any>("plate_item_master", []);
+  const [phpLoadingSlips, setPhpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
+  const [plateLoadingSlips, setPlateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -279,6 +284,22 @@ export function LoadingMaster() {
       phpDetails,
       plateDetails,
     };
+    const shortages = getPhpPlateStockShortages({
+      phpDetails,
+      plateDetails,
+      phpMasterRows: phpItemMaster,
+      plateMasterRows: plateItemMaster,
+      phpJobs,
+      plateJobs,
+      fgLoadingSlips: loadingSlips,
+      phpLoadingSlips,
+      plateLoadingSlips,
+      parentFgLoadingId: original.id,
+    });
+    if (shortages.length > 0) {
+      alert(buildPhpPlateStockAlertMessage(shortages));
+      return;
+    }
 
     if (!direct) {
       await setPlans((prev) =>
@@ -438,6 +459,22 @@ export function LoadingMaster() {
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
+      const shortages = getPhpPlateStockShortages({
+        phpDetails: phpDetails || [],
+        plateDetails: plateDetails || [],
+        phpMasterRows: phpItemMaster,
+        plateMasterRows: plateItemMaster,
+        phpJobs,
+        plateJobs,
+        fgLoadingSlips: loadingSlips,
+        phpLoadingSlips,
+        plateLoadingSlips,
+        parentFgLoadingId: newSlip.id,
+      });
+      if (shortages.length > 0) {
+        alert(buildPhpPlateStockAlertMessage(shortages));
+        return;
+      }
       await setLoadingSlips((prev) => [newSlip, ...prev]);
       await setPhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: phpDetails || [], source: "PHP" }));
       await setPlateLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: plateDetails || [], source: "PLATE" }));

@@ -33,6 +33,7 @@ import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { normalizeOrderItemSource } from "../lib/orderItems";
 import { buildLinkedLoadingDetailsFromSlip, findLinkedItemByMasterErp, getLinkedSetsPerBox } from "../lib/linkedLoading";
 import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
+import { buildPhpPlateStockAlertMessage, getPhpPlateStockShortages } from "../lib/phpPlateStockValidation";
 
 interface PendingPlan extends DispatchPlan {
   companyName: string;
@@ -94,9 +95,11 @@ export function PendingLoading() {
   const [productions] = useData<Production>("productions", []);
   const [phpJobs] = useData<Production>("php_job_master", []);
   const [plateJobs] = useData<Production>("plate_job_master", []);
+  const [phpItemMaster] = useData<any>("php_item_master", []);
+  const [plateItemMaster] = useData<any>("plate_item_master", []);
   const [loadingSlips, updateLoadingSlips] = useData<LoadingSlip>("loading_slips", []);
-  const [, updatePhpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
-  const [, updatePlateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
+  const [phpLoadingSlips, updatePhpLoadingSlips] = useData<LoadingSlip>("php_loading_slips", []);
+  const [plateLoadingSlips, updatePlateLoadingSlips] = useData<LoadingSlip>("plate_loading_slips", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -538,6 +541,22 @@ export function PendingLoading() {
         phpDetails,
         plateDetails,
       };
+      const shortages = getPhpPlateStockShortages({
+        phpDetails,
+        plateDetails,
+        phpMasterRows: phpItemMaster,
+        plateMasterRows: plateItemMaster,
+        phpJobs,
+        plateJobs,
+        fgLoadingSlips: loadingSlips,
+        phpLoadingSlips,
+        plateLoadingSlips,
+        parentFgLoadingId: newSlip.id,
+      });
+      if (shortages.length > 0) {
+        alert(buildPhpPlateStockAlertMessage(shortages));
+        return;
+      }
 
       await updateLoadingSlips((prev) => [...prev, newSlip]);
       await updatePhpLoadingSlips((prev) => upsertFgLinkedChildSlip({ prevSlips: prev, parentSlip: newSlip, details: phpDetails, source: "PHP" }));
