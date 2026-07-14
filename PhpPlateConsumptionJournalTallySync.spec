@@ -1,34 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files
-from PyInstaller.utils.hooks import collect_submodules
-
-datas = []
-hiddenimports = [
-    'mysql.connector.locales.eng.client_error',
-    'mysql.connector.plugins.mysql_native_password',
-    'mysql.connector.plugins.caching_sha2_password',
-    'mysql.connector.plugins.mysql_clear_password',
-    'mysql.connector.plugins.sha256_password',
-]
-datas += collect_data_files('mysql.connector')
-hiddenimports += collect_submodules('mysql.connector.locales')
 
 
 a = Analysis(
     ['python\\tally_php_plate_consumption_journal_posting.py'],
     pathex=[],
     binaries=[],
-    datas=datas,
-    hiddenimports=hiddenimports,
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        '_mysql_connector',
-        'mysql.connector.connection_cext',
-        'mysql.connector.cursor_cext',
-        'mysql.connector.aio.connection_cext',
-    ],
+    excludes=[],
     noarchive=False,
     optimize=0,
 )

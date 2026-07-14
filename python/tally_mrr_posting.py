@@ -517,6 +517,33 @@ def resolve_stock_item_name(conn, line: dict[str, Any]) -> tuple[str, str]:
     )
 
 
+def resolve_material_master_uom(conn, line: dict[str, Any]) -> tuple[str | None, str]:
+    line_item_id = str(line.get("itemId") or "").strip()
+    material_id = str(line.get("materialId") or "").strip()
+
+    lookup_keys = [
+        ("materials", material_id),
+        ("materials", line_item_id),
+    ]
+
+    conn = ensure_db_connection(conn)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        for table, lookup_id in lookup_keys:
+            if not lookup_id:
+                continue
+            if table == "materials":
+                cursor.execute("SELECT `uom` FROM `materials` WHERE `id` = %s LIMIT 1", (lookup_id,))
+                row = cursor.fetchone()
+                resolved = str((row or {}).get("uom") or "").strip() or None
+                if resolved:
+                    return resolved, f"{table}:{lookup_id}"
+    finally:
+        cursor.close()
+
+    return None, "line.uom"
+
+
 def parse_lines(lines_raw: Any) -> list[dict[str, Any]]:
     if not lines_raw:
         return []
@@ -1272,7 +1299,9 @@ def build_inventory_entries(conn, company_name: str | None, voucher_no: str, mrr
         qty = round_quantity(line.get("actualQty") or line.get("qty"))
         rate = round_money(line.get("invoiceRate") or line.get("rate") or line.get("poRate"))
         amount = _line_amount_for_tally(line)
-        uom = line.get("uom") or "Nos"
+        saved_line_uom = str(line.get("uom") or "").strip()
+        material_master_uom, material_uom_source = resolve_material_master_uom(conn, line)
+        uom = material_master_uom or saved_line_uom or "Nos"
 
         if qty <= Decimal("0"):
             LOGGER.info("Skipping zero-qty line %s for voucher %s", index, voucher_no)
@@ -1281,7 +1310,7 @@ def build_inventory_entries(conn, company_name: str | None, voucher_no: str, mrr
         normalized_uom = ensure_tally_stock_item_exists(company_name, item_name, mrr_type, uom)
 
         LOGGER.info(
-            "Voucher %s line %s => Stock Item: %s | resolved_from=%s | qty=%s | rate=%s | amount=%s",
+            "Voucher %s line %s => Stock Item: %s | resolved_from=%s | qty=%s | rate=%s | amount=%s | saved_line_uom=%s | material_master_uom=%s | selected_uom=%s | uom_source=%s",
             voucher_no,
             index,
             item_name,
@@ -1289,6 +1318,10 @@ def build_inventory_entries(conn, company_name: str | None, voucher_no: str, mrr
             qty,
             rate,
             amount,
+            saved_line_uom or "-",
+            material_master_uom or "-",
+            normalized_uom,
+            material_uom_source,
         )
 
         entries.append(
