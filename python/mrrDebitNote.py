@@ -82,6 +82,13 @@ DEFAULT_CGST_LEDGER = os.getenv("LNPI_CGST_LEDGER", "Input CGST")
 DEFAULT_SGST_LEDGER = os.getenv("LNPI_SGST_LEDGER", "Input SGST")
 DEFAULT_IGST_LEDGER = os.getenv("LNPI_IGST_LEDGER", "Input IGST")
 
+PURCHASE_LEDGER_BY_MRR = {
+    "Reel": "PURCHASE PAPER",
+    "Others": "Purchase Other RM",
+    "FG Purchase": "Purchase - FG",
+    "Rejection In": "Purchase - Rejection In",
+}
+
 
 def build_tally_url_candidates() -> list[str]:
     candidates: list[str] = []
@@ -305,7 +312,7 @@ def build_note_from_db_row(conn, row: dict[str, Any]) -> DebitNote:
         voucher_no=str(row.get("debitNote") or ""),
         date=normalize_date_for_tally(row.get("debitNoteDate") or row.get("date") or row.get("timestamp")),
         supplier_ledger=supplier_name,
-        purchase_return_ledger=DEFAULT_PURCHASE_RETURN_LEDGER,
+        purchase_return_ledger=PURCHASE_LEDGER_BY_MRR.get(str(row.get("mrrType") or "").strip(), DEFAULT_PURCHASE_RETURN_LEDGER),
         cgst_ledger=DEFAULT_CGST_LEDGER,
         sgst_ledger=DEFAULT_SGST_LEDGER,
         igst_ledger=DEFAULT_IGST_LEDGER,
@@ -313,7 +320,7 @@ def build_note_from_db_row(conn, row: dict[str, Any]) -> DebitNote:
         sgst_amount=sgst_amount,
         igst_amount=igst_amount,
         line=DebitNoteLine(item_name=material_name, qty=qty, rate=rate, unit=unit),
-        narration=f"Debit Note {row.get('debitNote')} against MRR {row.get('transactionNo')} Invoice {row.get('invoiceNo') or ''}".strip(),
+        narration=f"Debit Note against MRR {row.get('transactionNo')} Invoice {row.get('invoiceNo') or ''}".strip(),
     )
 
 
@@ -327,52 +334,77 @@ def build_company_xml() -> str:
 
 
 def build_debit_note_xml(note: DebitNote) -> str:
-    qty_with_unit = f"{note.line.qty:.2f} {note.line.unit}"
+    qty_with_unit = f" {note.line.qty:.2f} {note.line.unit}"
     rate_with_unit = f"{note.line.rate:.2f}/{note.line.unit}"
     tax_ledgers = ""
     for ledger, amount in ((note.cgst_ledger, note.cgst_amount), (note.sgst_ledger, note.sgst_amount), (note.igst_ledger, note.igst_amount)):
         if amount:
             tax_ledgers += f"""
-            <LEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
               <LEDGERNAME>{esc(ledger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
               <AMOUNT>{money(amount)}</AMOUNT>
-            </LEDGERENTRIES.LIST>"""
+            </ALLLEDGERENTRIES.LIST>"""
 
     return f"""<ENVELOPE>
-  <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
   <BODY>
     <IMPORTDATA>
-      <REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME>{build_company_xml()}</REQUESTDESC>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>{build_company_xml()}
+      </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <VOUCHER VCHTYPE="Debit Note" ACTION="{esc(TALLY_ACTION)}" OBJVIEW="Invoice Voucher View">
+          <VOUCHER VCHTYPE="Debit Note" ACTION="{esc(TALLY_ACTION)}" OBJVIEW="Accounting Voucher View">
+            <OLDAUDITENTRYIDS.LIST TYPE="Number">
+              <OLDAUDITENTRYIDS>-1</OLDAUDITENTRYIDS>
+            </OLDAUDITENTRYIDS.LIST>
             <DATE>{esc(note.date)}</DATE>
+            <REFERENCEDATE>{esc(note.date)}</REFERENCEDATE>
+            <VCHSTATUSDATE>{esc(note.date)}</VCHSTATUSDATE>
             <VOUCHERTYPENAME>Debit Note</VOUCHERTYPENAME>
-            <VOUCHERNUMBER>{esc(note.voucher_no)}</VOUCHERNUMBER>
-            <REFERENCE>{esc(note.mrr_no)}</REFERENCE>
+            <PARTYNAME>{esc(note.supplier_ledger)}</PARTYNAME>
             <PARTYLEDGERNAME>{esc(note.supplier_ledger)}</PARTYLEDGERNAME>
-            <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
-            <ISINVOICE>Yes</ISINVOICE>
+            <REFERENCE>{esc(note.mrr_no)}</REFERENCE>
+            <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
+            <VCHENTRYMODE>As Voucher</VCHENTRYMODE>
+            <ISINVOICE>No</ISINVOICE>
+            <EFFECTIVEDATE>{esc(note.date)}</EFFECTIVEDATE>
             <NARRATION>{esc(note.narration)}</NARRATION>
             <ALLLEDGERENTRIES.LIST>
               <LEDGERNAME>{esc(note.supplier_ledger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
               <AMOUNT>-{money(note.total_amount)}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>
-            <ALLINVENTORYENTRIES.LIST>
-              <STOCKITEMNAME>{esc(note.line.item_name)}</STOCKITEMNAME>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>{esc(note.purchase_return_ledger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <RATE>{esc(rate_with_unit)}</RATE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
               <AMOUNT>{money(note.line.amount)}</AMOUNT>
-              <ACTUALQTY>{esc(qty_with_unit)}</ACTUALQTY>
-              <BILLEDQTY>{esc(qty_with_unit)}</BILLEDQTY>
-              <ACCOUNTINGALLOCATIONS.LIST>
-                <LEDGERNAME>{esc(note.purchase_return_ledger)}</LEDGERNAME>
+              <INVENTORYALLOCATIONS.LIST>
+                <STOCKITEMNAME>{esc(note.line.item_name)}</STOCKITEMNAME>
                 <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+                <RATE>{esc(rate_with_unit)}</RATE>
                 <AMOUNT>{money(note.line.amount)}</AMOUNT>
-              </ACCOUNTINGALLOCATIONS.LIST>
-            </ALLINVENTORYENTRIES.LIST>{tax_ledgers}
+                <ACTUALQTY>{esc(qty_with_unit)}</ACTUALQTY>
+                <BILLEDQTY>{esc(qty_with_unit)}</BILLEDQTY>
+                <BATCHALLOCATIONS.LIST>
+                  <GODOWNNAME>Main Location</GODOWNNAME>
+                  <BATCHNAME>Primary Batch</BATCHNAME>
+                  <AMOUNT>{money(note.line.amount)}</AMOUNT>
+                  <ACTUALQTY>{esc(qty_with_unit)}</ACTUALQTY>
+                  <BILLEDQTY>{esc(qty_with_unit)}</BILLEDQTY>
+                </BATCHALLOCATIONS.LIST>
+              </INVENTORYALLOCATIONS.LIST>
+            </ALLLEDGERENTRIES.LIST>{tax_ledgers}
+            <GST.LIST></GST.LIST>
           </VOUCHER>
         </TALLYMESSAGE>
       </REQUESTDATA>
