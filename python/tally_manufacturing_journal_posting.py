@@ -1304,6 +1304,168 @@ def voucher_exists_in_tally(company_name: str | None, voucher_number: str, vouch
     return safe_number in response_text
 
 
+def build_voucher_lookup_xml(voucher_number: str, company_name: str | None, voucher_type: str) -> str:
+    safe_number = escape_xml(voucher_number)
+    safe_type = escape_xml(voucher_type)
+    return f"""
+    <ENVELOPE>
+        <HEADER>
+            <VERSION>1</VERSION>
+            <TALLYREQUEST>EXPORT</TALLYREQUEST>
+            <TYPE>COLLECTION</TYPE>
+            <ID>VoucherLookup</ID>
+        </HEADER>
+        <BODY>
+            <DESC>
+                <STATICVARIABLES>
+                    {build_company_static_variables(company_name)}
+                    <SVFROMDATE>20240101</SVFROMDATE>
+                    <SVTODATE>20991231</SVTODATE>
+                    <VOUCHERTYPENAME>{safe_type}</VOUCHERTYPENAME>
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+                <TDL>
+                    <TDLMESSAGE>
+                        <COLLECTION NAME="VoucherLookup" ISMODIFY="No">
+                            <TYPE>Voucher</TYPE>
+                            <FETCH>VoucherNumber</FETCH>
+                            <FETCH>MasterID</FETCH>
+                            <FETCH>GUID</FETCH>
+                            <FETCH>VoucherKey</FETCH>
+                            <FETCH>RemoteID</FETCH>
+                            <FILTERS>OnlyTargetVoucher</FILTERS>
+                        </COLLECTION>
+                        <SYSTEM TYPE="Formulae" NAME="OnlyTargetVoucher">$$StringEqual:$VoucherNumber:"{safe_number}"</SYSTEM>
+                    </TDLMESSAGE>
+                </TDL>
+            </DESC>
+        </BODY>
+    </ENVELOPE>
+    """
+
+
+def build_voucher_object_export_xml(id_type: str, id_value: str, company_name: str | None) -> str:
+    return f"""
+    <ENVELOPE>
+        <HEADER>
+            <VERSION>1</VERSION>
+            <TALLYREQUEST>EXPORT</TALLYREQUEST>
+            <TYPE>OBJECT</TYPE>
+            <SUBTYPE>Voucher</SUBTYPE>
+            <ID TYPE="{escape_xml(id_type)}">{escape_xml(id_value)}</ID>
+        </HEADER>
+        <BODY>
+            <DESC>
+                <STATICVARIABLES>
+                    {build_company_static_variables(company_name)}
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+            </DESC>
+        </BODY>
+    </ENVELOPE>
+    """
+
+
+def parse_voucher_lookup_ids(xml_text: str) -> dict[str, str]:
+    cleaned = clean_tally_xml(xml_text)
+    if not cleaned:
+        return {}
+    try:
+        root = ET.fromstring(cleaned)
+    except ET.ParseError:
+        return {}
+
+    for element in root.iter():
+        voucher_number = extract_first_tag_value(ET.tostring(element, encoding="unicode"), "VOUCHERNUMBER")
+        master_id = extract_first_tag_value(ET.tostring(element, encoding="unicode"), "MASTERID")
+        guid = extract_first_tag_value(ET.tostring(element, encoding="unicode"), "GUID")
+        voucher_key = extract_first_tag_value(ET.tostring(element, encoding="unicode"), "VOUCHERKEY")
+        remote_id = extract_first_tag_value(ET.tostring(element, encoding="unicode"), "REMOTEID")
+        if voucher_number and any((master_id, guid, voucher_key, remote_id)):
+            return {
+                "VoucherNumber": voucher_number,
+                "MasterID": master_id,
+                "GUID": guid,
+                "VoucherKey": voucher_key,
+                "RemoteID": remote_id,
+            }
+    return {}
+
+
+def fetch_voucher_xml_from_tally(company_name: str | None, voucher_number: str, voucher_type: str) -> str:
+    lookup_response = post_xml_to_tally(build_voucher_lookup_xml(voucher_number, company_name, voucher_type))
+    lookup_ids = parse_voucher_lookup_ids(lookup_response)
+
+    for id_type, key in (("MasterID", "MasterID"), ("GUID", "GUID"), ("VoucherKey", "VoucherKey"), ("RemoteID", "RemoteID")):
+        id_value = str(lookup_ids.get(key) or "").strip()
+        if not id_value:
+            continue
+        object_response = post_xml_to_tally(build_voucher_object_export_xml(id_type, id_value, company_name))
+        if "<VOUCHER" in str(object_response or "").upper():
+            return object_response
+
+    return ""
+
+
+def fetch_voucher_lookup_ids_from_tally(company_name: str | None, voucher_number: str, voucher_type: str) -> dict[str, str]:
+    lookup_response = post_xml_to_tally(build_voucher_lookup_xml(voucher_number, company_name, voucher_type))
+    return parse_voucher_lookup_ids(lookup_response)
+
+
+def voucher_contains_fg_inward_item(voucher_xml: str, fg_item_name: str) -> bool:
+    cleaned = clean_tally_xml(voucher_xml)
+    if not cleaned or not fg_item_name:
+        return False
+
+    target = normalize_lookup_token(fg_item_name)
+    for match in re.findall(r"<INVENTORYENTRIESIN\.LIST\b[^>]*>.*?</INVENTORYENTRIESIN\.LIST>", cleaned, flags=re.IGNORECASE | re.DOTALL):
+        stock_item_name = extract_first_tag_value(match, "STOCKITEMNAME")
+        if normalize_lookup_token(stock_item_name) == target:
+            return True
+    return False
+
+
+def build_voucher_delete_xml(master_id: str, company_name: str | None, voucher_type: str) -> str:
+    return f"""
+    <ENVELOPE>
+        <HEADER>
+            <TALLYREQUEST>Import Data</TALLYREQUEST>
+        </HEADER>
+        <BODY>
+            <IMPORTDATA>
+                <REQUESTDESC>
+                    <REPORTNAME>Vouchers</REPORTNAME>
+                    <STATICVARIABLES>
+                        {build_company_static_variables(company_name)}
+                    </STATICVARIABLES>
+                </REQUESTDESC>
+                <REQUESTDATA>
+                    <TALLYMESSAGE>
+                        <VOUCHER VCHTYPE="{escape_xml(voucher_type)}" ACTION="Delete" MASTERID="{escape_xml(master_id)}">
+                            <MASTERID>{escape_xml(master_id)}</MASTERID>
+                        </VOUCHER>
+                    </TALLYMESSAGE>
+                </REQUESTDATA>
+            </IMPORTDATA>
+        </BODY>
+    </ENVELOPE>
+    """
+
+
+def delete_voucher_from_tally(company_name: str | None, voucher_number: str, voucher_type: str) -> tuple[bool, str]:
+    lookup_ids = fetch_voucher_lookup_ids_from_tally(company_name, voucher_number, voucher_type)
+    master_id = str(lookup_ids.get("MasterID") or "").strip()
+    if not master_id:
+        return False, f"MasterID not found for {voucher_type} {voucher_number}."
+
+    delete_xml = build_voucher_delete_xml(master_id, company_name, voucher_type)
+    response_text = post_xml_to_tally(delete_xml)
+    if "<DELETED>1</DELETED>" in response_text or "<ALTERED>1</ALTERED>" in response_text:
+        return True, "Deleted from Tally"
+
+    return False, response_error_message(response_text)
+
+
 def get_latest_non_reel_rate(conn, material_id: str, opening_rate: float) -> float:
     cursor = conn.cursor(dictionary=True)
     try:
@@ -1989,6 +2151,8 @@ def build_manufacturing_journal_xml(company_name: str | None, job: dict[str, Any
 
       <INVENTORYENTRIESIN.LIST>
        <STOCKITEMNAME>{escape_xml(fg_name)}</STOCKITEMNAME>
+       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+       <ISPRIMARYITEM>Yes</ISPRIMARYITEM>
        <ACTUALQTY>{escape_xml(fg_qty_text)}</ACTUALQTY>
        <BILLEDQTY>{escape_xml(fg_qty_text)}</BILLEDQTY>
       </INVENTORYENTRIESIN.LIST>
@@ -2092,6 +2256,25 @@ def process_one_job(conn, company_name: str | None, tally_groups: set[str], job:
     xml_text = build_manufacturing_journal_xml(company_name, job)
     response_text = post_xml_to_tally(xml_text)
     if "<CREATED>1</CREATED>" in response_text or "<ALTERED>1</ALTERED>" in response_text:
+        saved_voucher_xml = fetch_voucher_xml_from_tally(company_name, job["voucherNo"], "Manufacturing Journal")
+        if not voucher_contains_fg_inward_item(saved_voucher_xml, str(job.get("fgTallyName") or job["fgName"])):
+            delete_success = False
+            delete_result = "Delete not attempted"
+            try:
+                delete_success, delete_result = delete_voucher_from_tally(company_name, job["voucherNo"], "Manufacturing Journal")
+            except Exception as delete_error:
+                delete_result = f"Delete failed: {delete_error}"
+            LOGGER.error(
+                "Manufacturing Journal %s was created in Tally but saved voucher does not contain FG inward item '%s'. Delete status=%s (%s). Saved XML: %s",
+                job["voucherNo"],
+                str(job.get("fgTallyName") or job["fgName"]),
+                "success" if delete_success else "failed",
+                delete_result,
+                compact_xml_for_log(saved_voucher_xml, 2500),
+            )
+            raise RuntimeError(
+                f"Manufacturing Journal {job['voucherNo']} saved in Tally without FG item '{job.get('fgTallyName') or job['fgName']}'. Delete status: {delete_result}. Posting rejected."
+            )
         mark_posted(
             conn,
             production_id=production_id,

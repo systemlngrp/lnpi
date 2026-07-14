@@ -152,13 +152,16 @@ export function ProductionPendingTally() {
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">FFG Qty</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Tally Posting Status</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Tally Posting Remark</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Tally Posting Error</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
             {paginatedPendingList.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
+                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
               </tr>
             ) : (
               paginatedPendingList.map((p, index) => (
@@ -169,6 +172,9 @@ export function ProductionPendingTally() {
                   <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-emerald-700 border border-black">{Number(p.prodFromFFG || 0).toLocaleString()}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{p.uom}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{p.tallyPostingStatus || "-"}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black whitespace-pre-wrap break-words max-w-[320px] align-top">{p.tallyPostingRemark || "-"}</td>
+                  <td className="px-6 py-4 text-sm text-rose-700 border border-black whitespace-pre-wrap break-words max-w-[320px] align-top">{p.tallyPostingError || "-"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black">
                     <button
                       onClick={() => handleComplete(p.id)}
