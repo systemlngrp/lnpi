@@ -605,7 +605,7 @@ export function HitVsMissReport() {
         <div className="border-b border-black px-4 py-3">
           <h3 className="text-sm font-bold uppercase tracking-wider text-black">Monthly Summary</h3>
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-frozen-scroll">
           <table className="min-w-full border-collapse text-xs">
             <thead className="sticky top-0 z-30 bg-slate-100">
               <tr>
@@ -673,7 +673,7 @@ export function HitVsMissReport() {
         <div className="border-b border-black px-4 py-3">
           <h3 className="text-sm font-bold uppercase tracking-wider text-black">Schedule Details</h3>
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-frozen-scroll">
           <table className="min-w-full border-collapse text-xs">
             <thead className="sticky top-0 z-30 bg-slate-100">
               <tr>

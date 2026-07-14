@@ -548,7 +548,7 @@ export function LoadingMaster() {
         </div>
       </div>
 
-      <div className="bg-white border-2 border-black rounded shadow-sm overflow-x-auto overflow-y-hidden">
+      <div className="bg-white border-2 border-black rounded shadow-sm table-frozen-scroll">
         <table className="min-w-full border-collapse">
           <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">

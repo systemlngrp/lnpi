@@ -11,20 +11,16 @@ from typing import Any
 
 import mysql.connector
 import requests
+from requests import exceptions as requests_exceptions
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-TALLY_URL = os.getenv("LNPI_TALLY_URL", "http://localhost:9004")
-COMPANY_NAME = os.getenv("LNPI_TALLY_COMPANY", "")
-TALLY_ACTION = os.getenv("LNPI_TALLY_ACTION", "Create")
 REQUEST_TIMEOUT = 30
-
-DEFAULT_PURCHASE_RETURN_LEDGER = os.getenv("LNPI_DEBIT_PURCHASE_LEDGER", "Purchase Return")
-DEFAULT_CGST_LEDGER = os.getenv("LNPI_CGST_LEDGER", "Input CGST")
-DEFAULT_SGST_LEDGER = os.getenv("LNPI_SGST_LEDGER", "Input SGST")
-DEFAULT_IGST_LEDGER = os.getenv("LNPI_IGST_LEDGER", "Input IGST")
-
 MONEY_Q = Decimal("0.01")
+
+
+class TallyUnavailableError(RuntimeError):
+    pass
 
 
 @dataclass
@@ -77,8 +73,36 @@ def load_env_file() -> None:
             os.environ[key] = value
 
 
+load_env_file()
+
+COMPANY_NAME = os.getenv("LNPI_TALLY_COMPANY", "")
+TALLY_ACTION = os.getenv("LNPI_TALLY_ACTION", "Create")
+DEFAULT_PURCHASE_RETURN_LEDGER = os.getenv("LNPI_DEBIT_PURCHASE_LEDGER", "Purchase Return")
+DEFAULT_CGST_LEDGER = os.getenv("LNPI_CGST_LEDGER", "Input CGST")
+DEFAULT_SGST_LEDGER = os.getenv("LNPI_SGST_LEDGER", "Input SGST")
+DEFAULT_IGST_LEDGER = os.getenv("LNPI_IGST_LEDGER", "Input IGST")
+
+
+def build_tally_url_candidates() -> list[str]:
+    candidates: list[str] = []
+    preferred = (
+        os.getenv("LNPI_TALLY_URL"),
+        os.getenv("TALLY_URL"),
+        "http://localhost:9004",
+        "http://127.0.0.1:9004",
+    )
+    for url in preferred:
+        cleaned = str(url or "").strip()
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+    return candidates
+
+
+TALLY_URL_CANDIDATES = build_tally_url_candidates()
+ACTIVE_TALLY_URL: str | None = None
+
+
 def get_db_config() -> dict[str, Any]:
-    load_env_file()
     config = {
         "host": os.getenv("LNPI_DB_HOST") or os.getenv("DB_HOST"),
         "user": os.getenv("LNPI_DB_USER") or os.getenv("DB_USER"),
@@ -358,9 +382,36 @@ def build_debit_note_xml(note: DebitNote) -> str:
 
 
 def post_to_tally(xml: str) -> str:
-    response = requests.post(TALLY_URL, data=xml.encode("utf-8"), headers={"Content-Type": "text/xml"}, timeout=REQUEST_TIMEOUT)
-    response.raise_for_status()
-    return response.text
+    global ACTIVE_TALLY_URL
+
+    urls_to_try = [ACTIVE_TALLY_URL] if ACTIVE_TALLY_URL else []
+    urls_to_try.extend(url for url in TALLY_URL_CANDIDATES if url not in urls_to_try)
+    last_error: Exception | None = None
+
+    for url in urls_to_try:
+        try:
+            response = requests.post(
+                url,
+                data=xml.encode("utf-8"),
+                headers={"Content-Type": "text/xml"},
+                timeout=REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+            ACTIVE_TALLY_URL = url
+            return response.text
+        except requests_exceptions.Timeout as error:
+            last_error = error
+        except requests_exceptions.ConnectionError as error:
+            last_error = error
+        except requests_exceptions.RequestException as error:
+            last_error = error
+
+    raise TallyUnavailableError(
+        "Cannot connect to Tally on: "
+        + ", ".join(urls_to_try)
+        + ". Start Tally, open the correct company, and enable XML/HTTP on port 9004. "
+        + "If Tally is running on another port, set LNPI_TALLY_URL in D:\\lnpi\\.env or PowerShell."
+    ) from last_error
 
 
 def mark_posted(conn, note: DebitNote, response_text: str) -> None:
@@ -407,7 +458,11 @@ def main() -> None:
         print(xml)
         if args.dry_run:
             return
-        response_text = post_to_tally(xml)
+        try:
+            response_text = post_to_tally(xml)
+        except TallyUnavailableError as error:
+            print(f"ERROR: {error}")
+            raise SystemExit(1) from error
         print("Tally Response:")
         print(response_text)
         if args.mark_posted:

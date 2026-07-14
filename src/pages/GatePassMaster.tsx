@@ -97,7 +97,7 @@ export function GatePassMaster() {
         <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search gate pass no, invoice no, recipient/company, truck..." className="w-full max-w-xl rounded border border-black px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black" />
       </div>
 
-      <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
+      <div className="table-frozen-scroll rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
           <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">

@@ -138,7 +138,7 @@ export function ErpWiseReelStockReport() {
       </div>
 
       <div className="bg-white rounded shadow-sm border border-black overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-frozen-scroll">
           <table className="min-w-full border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
