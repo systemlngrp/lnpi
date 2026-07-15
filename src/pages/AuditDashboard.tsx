@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Mail, MessageCircle, Save } from "lucide-react";
+import { Mail, MessageCircle, RefreshCw } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useData } from "../hooks/useData";
 import type {
@@ -19,6 +19,7 @@ import { getLocalDateInputValue, getSafeRange, isDateWithinRange, type Operation
 import { cn } from "../lib/utils";
 
 const ALERT_EMAILS = ["cfo@lngrp.in", "vivekagarwal@lngrp.in", "pankaj@bizskilledu.com"];
+const TALLY_HELPER_URL = "http://127.0.0.1:8765/audit-dashboard/tally-values";
 
 type AuditMetricKey = "invoiceValue" | "consumptionValue" | "saleValue" | "debitNote";
 
@@ -32,6 +33,19 @@ type AuditMetric = {
   appValue: number;
   tallyValue: number;
   difference: number;
+};
+
+type TallyValues = Pick<
+  AuditDashboardSnapshot,
+  "invoiceValueTally" | "consumptionValueTally" | "saleValueTally" | "debitNoteTally"
+>;
+
+type TallyFetchResponse = TallyValues & {
+  ok?: boolean;
+  sourceUrl?: string;
+  fetchedAt?: string;
+  counts?: Record<string, number>;
+  error?: string;
 };
 
 function roundMoney(value: number) {
@@ -67,6 +81,24 @@ function getReelRateForSlip({
   return Number(line?.invoiceRate ?? line?.poRate ?? line?.rate ?? material?.openingRate ?? 0);
 }
 
+function getVoucherCountKey(metricKey: AuditMetricKey) {
+  const map: Record<AuditMetricKey, string> = {
+    invoiceValue: "Purchase",
+    consumptionValue: "Consumption Journal",
+    saleValue: "Sales",
+    debitNote: "Debit Note",
+  };
+  return map[metricKey];
+}
+function getSnapshotValues(snapshot?: AuditDashboardSnapshot): TallyValues {
+  return {
+    invoiceValueTally: roundMoney(Number(snapshot?.invoiceValueTally || 0)),
+    consumptionValueTally: roundMoney(Number(snapshot?.consumptionValueTally || 0)),
+    saleValueTally: roundMoney(Number(snapshot?.saleValueTally || 0)),
+    debitNoteTally: roundMoney(Number(snapshot?.debitNoteTally || 0)),
+  };
+}
+
 export function AuditDashboard() {
   const { user } = useAuth();
   const [dateRange, setDateRange] = useState<OperationDashboardDateRange>(getDefaultRange);
@@ -81,13 +113,12 @@ export function AuditDashboard() {
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [invoices] = useData<Invoice>("invoices", []);
   const [snapshots, , snapshotsLoading, snapshotActions] = useData<AuditDashboardSnapshot>("audit_dashboard_snapshots", []);
-  const [draft, setDraft] = useState({
-    invoiceValueTally: "0",
-    consumptionValueTally: "0",
-    saleValueTally: "0",
-    debitNoteTally: "0",
-  });
-  const [isSaving, setIsSaving] = useState(false);
+  const [tallyValues, setTallyValues] = useState<TallyValues>(getSnapshotValues());
+  const [isFetchingTally, setIsFetchingTally] = useState(false);
+  const [fetchError, setFetchError] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [fetchedAt, setFetchedAt] = useState("");
+  const [voucherCounts, setVoucherCounts] = useState<Record<string, number>>({});
 
   const snapshotId = getSnapshotId(dateRange);
   const currentSnapshot = useMemo(
@@ -96,12 +127,11 @@ export function AuditDashboard() {
   );
 
   useEffect(() => {
-    setDraft({
-      invoiceValueTally: String(Number(currentSnapshot?.invoiceValueTally || 0)),
-      consumptionValueTally: String(Number(currentSnapshot?.consumptionValueTally || 0)),
-      saleValueTally: String(Number(currentSnapshot?.saleValueTally || 0)),
-      debitNoteTally: String(Number(currentSnapshot?.debitNoteTally || 0)),
-    });
+    setTallyValues(getSnapshotValues(currentSnapshot));
+    setFetchError("");
+    setSourceUrl("");
+    setFetchedAt(currentSnapshot?.updateTimestamp || "");
+    setVoucherCounts({});
   }, [currentSnapshot]);
 
   const safeRange = useMemo(() => getSafeRange(dateRange), [dateRange]);
@@ -162,22 +192,15 @@ export function AuditDashboard() {
   }, [invoices, issueReelLines, materialIn, materialIssueLines, materialIssues, materialReturnLines, materialReturns, materials, packingSlips, returnReelLines, safeRange]);
 
   const metrics = useMemo<AuditMetric[]>(() => {
-    const values = {
-      invoiceValueTally: roundMoney(Number(draft.invoiceValueTally || 0)),
-      consumptionValueTally: roundMoney(Number(draft.consumptionValueTally || 0)),
-      saleValueTally: roundMoney(Number(draft.saleValueTally || 0)),
-      debitNoteTally: roundMoney(Number(draft.debitNoteTally || 0)),
-    };
-
     const baseMetrics: Array<Omit<AuditMetric, "difference">> = [
-      { key: "invoiceValue", label: "Invoice Value", tallyField: "invoiceValueTally", appValue: appValues.invoiceValue, tallyValue: values.invoiceValueTally },
-      { key: "consumptionValue", label: "Consumption Value", tallyField: "consumptionValueTally", appValue: appValues.consumptionValue, tallyValue: values.consumptionValueTally },
-      { key: "saleValue", label: "Sale Value", tallyField: "saleValueTally", appValue: appValues.saleValue, tallyValue: values.saleValueTally },
-      { key: "debitNote", label: "Debit Note", tallyField: "debitNoteTally", appValue: appValues.debitNote, tallyValue: values.debitNoteTally },
+      { key: "invoiceValue", label: "Invoice Value", tallyField: "invoiceValueTally", appValue: appValues.invoiceValue, tallyValue: tallyValues.invoiceValueTally },
+      { key: "consumptionValue", label: "Consumption Value", tallyField: "consumptionValueTally", appValue: appValues.consumptionValue, tallyValue: tallyValues.consumptionValueTally },
+      { key: "saleValue", label: "Sale Value", tallyField: "saleValueTally", appValue: appValues.saleValue, tallyValue: tallyValues.saleValueTally },
+      { key: "debitNote", label: "Debit Note", tallyField: "debitNoteTally", appValue: appValues.debitNote, tallyValue: tallyValues.debitNoteTally },
     ];
 
     return baseMetrics.map((metric) => ({ ...metric, difference: roundMoney(metric.tallyValue - metric.appValue) }));
-  }, [appValues, draft]);
+  }, [appValues, tallyValues]);
 
   const differenceMetrics = metrics.filter((metric) => roundMoney(metric.difference) !== 0);
   const hasDifference = differenceMetrics.length > 0;
@@ -186,6 +209,7 @@ export function AuditDashboard() {
     const lines = [
       `Audit Dashboard Difference Found`,
       `Date Range: ${dateRange.from || "All"} to ${dateRange.to || "All"}`,
+      sourceUrl ? `Tally Source: ${sourceUrl}` : "Tally Source: Last saved values / not fetched in this session",
       "",
       ...differenceMetrics.map(
         (metric) =>
@@ -193,32 +217,58 @@ export function AuditDashboard() {
       ),
     ];
     return lines.join("\n");
-  }, [dateRange.from, dateRange.to, differenceMetrics]);
+  }, [dateRange.from, dateRange.to, differenceMetrics, sourceUrl]);
 
   const emailHref = `mailto:${ALERT_EMAILS.join(",")}?subject=${encodeURIComponent("Audit Dashboard Difference Found")}&body=${encodeURIComponent(alertMessage)}`;
   const whatsappHref = `https://wa.me/?text=${encodeURIComponent(alertMessage)}`;
 
-  const saveSnapshot = async () => {
-    setIsSaving(true);
+  const persistFetchedValues = async (values: TallyValues, timestamp: string) => {
+    await snapshotActions.saveItem({
+      id: snapshotId,
+      dateFrom: dateRange.from,
+      dateTo: dateRange.to,
+      ...values,
+      updatedBy: user?.name || user?.email || "System User",
+      updateTimestamp: timestamp,
+    });
+    await snapshotActions.refresh({ force: true });
+  };
+
+  const fetchTallyValues = async () => {
+    setIsFetchingTally(true);
+    setFetchError("");
     try {
-      const timestamp = new Date().toISOString();
-      await snapshotActions.saveItem({
-        id: snapshotId,
-        dateFrom: dateRange.from,
-        dateTo: dateRange.to,
-        invoiceValueTally: roundMoney(Number(draft.invoiceValueTally || 0)),
-        consumptionValueTally: roundMoney(Number(draft.consumptionValueTally || 0)),
-        saleValueTally: roundMoney(Number(draft.saleValueTally || 0)),
-        debitNoteTally: roundMoney(Number(draft.debitNoteTally || 0)),
-        updatedBy: user?.name || user?.email || "System User",
-        updateTimestamp: timestamp,
+      const response = await fetch(TALLY_HELPER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dateFrom: dateRange.from, dateTo: dateRange.to }),
       });
-      await snapshotActions.refresh({ force: true });
+      const payload = (await response.json().catch(() => ({}))) as TallyFetchResponse;
+      if (!response.ok || payload.ok === false) {
+        throw new Error(payload.error || "Failed to fetch Tally values from local helper.");
+      }
+
+      const nextValues: TallyValues = {
+        invoiceValueTally: roundMoney(Number(payload.invoiceValueTally || 0)),
+        consumptionValueTally: roundMoney(Number(payload.consumptionValueTally || 0)),
+        saleValueTally: roundMoney(Number(payload.saleValueTally || 0)),
+        debitNoteTally: roundMoney(Number(payload.debitNoteTally || 0)),
+      };
+      const timestamp = payload.fetchedAt || new Date().toISOString();
+      setTallyValues(nextValues);
+      setSourceUrl(payload.sourceUrl || "");
+      setFetchedAt(timestamp);
+      setVoucherCounts(payload.counts || {});
+      await persistFetchedValues(nextValues, timestamp);
     } catch (error) {
-      console.error("Failed to save audit dashboard snapshot:", error);
-      alert("Failed to save Audit Dashboard values.");
+      const message = error instanceof Error ? error.message : "Unable to fetch Tally values.";
+      setFetchError(
+        message.includes("Failed to fetch")
+          ? "Local Tally helper is not reachable. Start python\\tally_audit_dashboard_helper.py on this PC, then retry."
+          : message
+      );
     } finally {
-      setIsSaving(false);
+      setIsFetchingTally(false);
     }
   };
 
@@ -235,16 +285,26 @@ export function AuditDashboard() {
             <DateInput value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
             <button
               type="button"
-              onClick={saveSnapshot}
-              disabled={isSaving || snapshotsLoading}
+              onClick={fetchTallyValues}
+              disabled={isFetchingTally || snapshotsLoading}
               className="inline-flex min-h-[38px] items-center gap-2 rounded-md border-2 border-slate-900 bg-emerald-50 px-4 py-1 text-xs font-black uppercase text-emerald-700 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none disabled:opacity-50"
             >
-              <Save size={15} />
-              {isSaving ? "Saving" : "Save Tally Values"}
+              <RefreshCw size={15} className={cn(isFetchingTally && "animate-spin")} />
+              {isFetchingTally ? "Fetching" : "Fetch From Tally"}
             </button>
           </div>
         </div>
+        <div className="border-t border-slate-200 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-600">
+          {sourceUrl ? `Connected Tally: ${sourceUrl}` : "Tally source: last saved values until Fetch From Tally is clicked"}
+          {fetchedAt ? ` | Fetched: ${fetchedAt}` : ""}
+        </div>
       </section>
+
+      {fetchError ? (
+        <section className="rounded-xl border-2 border-amber-800 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900 shadow-[4px_4px_0px_0px_rgba(146,64,14,1)]">
+          {fetchError}
+        </section>
+      ) : null}
 
       {hasDifference ? (
         <section className="overflow-hidden rounded-xl border-2 border-red-900 bg-red-50 shadow-[4px_4px_0px_0px_rgba(127,29,29,1)]">
@@ -300,21 +360,20 @@ export function AuditDashboard() {
               {metrics.map((metric, index) => {
                 const mismatched = roundMoney(metric.difference) !== 0;
                 return (
-                  <tr key={metric.key} className={cn("divide-x divide-slate-900", index % 2 === 0 ? "bg-white" : "bg-slate-50")}> 
+                  <tr key={metric.key} className={cn("divide-x divide-slate-900", index % 2 === 0 ? "bg-white" : "bg-slate-50")}>
                     <td className="px-3 py-3 text-sm font-black uppercase tracking-wide text-slate-900">{metric.label}</td>
-                    <td className="px-3 py-3 text-right">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={draft[metric.tallyField]}
-                        onChange={(event) => setDraft((prev) => ({ ...prev, [metric.tallyField]: event.target.value }))}
-                        className="h-9 w-44 rounded border-2 border-slate-900 bg-white px-2 text-right text-sm font-bold text-slate-900 outline-none focus:border-indigo-600"
-                      />
+                    <td className="px-3 py-3 text-right text-sm font-black text-slate-900">
+                      {formatMoney(metric.tallyValue)}
+                      {voucherCounts[getVoucherCountKey(metric.key)] !== undefined ? (
+                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                          {voucherCounts[getVoucherCountKey(metric.key)]} voucher(s)
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-3 py-3 text-right text-sm font-black text-indigo-800">{formatMoney(metric.appValue)}</td>
                     <td className={cn("px-3 py-3 text-right text-sm font-black", mismatched ? "text-red-700" : "text-emerald-700")}>{formatMoney(metric.difference)}</td>
                     <td className="px-3 py-3">
-                      <span className={cn("inline-flex rounded-full border px-2 py-1 text-[10px] font-black uppercase", mismatched ? "border-red-800 bg-red-50 text-red-700" : "border-emerald-800 bg-emerald-50 text-emerald-700")}> 
+                      <span className={cn("inline-flex rounded-full border px-2 py-1 text-[10px] font-black uppercase", mismatched ? "border-red-800 bg-red-50 text-red-700" : "border-emerald-800 bg-emerald-50 text-emerald-700")}>
                         {mismatched ? "Difference" : "Matched"}
                       </span>
                     </td>

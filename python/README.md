@@ -115,3 +115,24 @@ python tally_mrr_posting.py
 - Create a separate voucher strategy for `Rejection In` if needed
 - Validate missing supplier and stock item names before posting
 - Move DB config into a `.env` loader if you prefer
+
+## Audit Dashboard Tally Helper
+
+`tally_audit_dashboard_helper.py` runs on the Windows PC where Tally is open and lets the hosted Audit Dashboard fetch values from the currently active Tally company.
+
+It listens on `http://127.0.0.1:8765` and checks Tally XML/HTTP on localhost ports `9000` through `9004`.
+
+Run it before clicking **Fetch From Tally** in the Audit Dashboard:
+
+```powershell
+cd D:\lnpi\python
+python tally_audit_dashboard_helper.py
+```
+
+Health check:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8765/health
+```
+
+Tally must be open with the correct company, and XML/HTTP must be enabled on one of ports `9000`, `9001`, `9002`, `9003`, or `9004`.
