@@ -28,6 +28,12 @@ import { TableControls } from "../components/TableControls";
 import { useNavigate } from "react-router-dom";
 import { normalizeOrderItemSource } from "../lib/orderItems";
 
+const formatInr = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 2,
+});
+
 export function BillingPendingTally() {
   const navigate = useNavigate();
   const [invoices, setInvoices, isLoading] = useData<Invoice>("invoices", []);
@@ -243,7 +249,7 @@ export function BillingPendingTally() {
                       )}
                     </td>
                     <td className="px-4 py-4 text-right font-black text-indigo-700">
-                      â‚¹{inv.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {formatInr.format(inv.grandTotal)}
                     </td>
                     <td className="px-4 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -299,7 +305,7 @@ export function BillingPendingTally() {
                                       <td className="px-3 py-2">{line.slipNo}</td>
                                       <td className="px-3 py-2 text-right">{Number(line.qty || 0).toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right">{Number(line.rate || 0).toFixed(2)}</td>
-                                      <td className="px-3 py-2 text-right font-bold">â‚¹{(Number(line.amount || 0) + tax).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                      <td className="px-3 py-2 text-right font-bold">{formatInr.format(Number(line.amount || 0) + tax)}</td>
                                     </tr>
                                   );
                                 })
