@@ -151,7 +151,7 @@ export function ErpWiseReelStockReport() {
             </thead>
             <tbody>
               {rows.length > 0 ? (
-                <tr className="bg-slate-100">
+                <tr className="erp-wise-total-row bg-slate-100">
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black" colSpan={4}>TOTAL</td>
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.openingStock || 0).toFixed(2)}</td>
                   <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.receipts || 0).toFixed(2)}</td>
