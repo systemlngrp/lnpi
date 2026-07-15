@@ -291,6 +291,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
       { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
       { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
+      { name: "Conversion Cost Report", href: "/reports/conversion-cost", icon: BarChart3 },
       { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
       { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
       { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },

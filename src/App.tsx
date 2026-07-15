@@ -115,6 +115,7 @@ import { EfficiencyReport } from "./pages/EfficiencyReport";
 import { HitVsMissReport } from "./pages/HitVsMissReport";
 import { RealizationReport } from "./pages/RealizationReport";
 import { PaperRequirementReport } from "./pages/PaperRequirementReport";
+import { ConversionCostReport } from "./pages/ConversionCostReport";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -290,6 +291,7 @@ export default function App() {
           <Route path="reports/hit-vs-miss" element={<HitVsMissReport />} />
           <Route path="reports/realization" element={<RealizationReport />} />
           <Route path="reports/paper-requirement" element={<PaperRequirementReport />} />
+          <Route path="reports/conversion-cost" element={<ConversionCostReport />} />
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />
