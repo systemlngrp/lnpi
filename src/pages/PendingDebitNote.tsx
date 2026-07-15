@@ -1,22 +1,21 @@
 import { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialIn, Supplier, Material } from "../types";
+import { MaterialIn, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
-import { CheckCircle, Search, FileText } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 
 export function PendingDebitNote() {
   const [materialIn, setMaterialIn, isLoading] = useData<MaterialIn>("material-in", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
-  const [materials] = useData<Material>("materials", []);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const debitNoteList = useMemo(() => {
     return materialIn
-      .filter(m => m.debitNote && !m.tallyTimestamp)
+      .filter(m => m.debitNote && !m.debitTallySync)
       .filter(m => {
         const supplierName = suppliers.find(s => s.id === m.supplierId)?.name || "";
         const searchStr = `${m.transactionNo} ${m.debitNote} ${supplierName} ${m.invoiceNo}`.toLowerCase();
@@ -33,7 +32,8 @@ export function PendingDebitNote() {
       const timestamp = new Date().toISOString();
       await setMaterialIn(prev => prev.map(m => m.id === mrrId ? { 
         ...m, 
-        tallyTimestamp: timestamp,
+        debitTallySync: timestamp,
+        debitRemarkTally: `Debit Note manually marked posted at ${timestamp}`,
         updatedBy: "System User",
         updateTimestamp: timestamp
       } : m));

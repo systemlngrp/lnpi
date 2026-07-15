@@ -23,6 +23,10 @@ class TallyUnavailableError(RuntimeError):
     pass
 
 
+class TallyImportError(RuntimeError):
+    pass
+
+
 @dataclass
 class DebitNoteLine:
     item_name: str
@@ -231,7 +235,7 @@ def resolve_material_name(conn, material_id: str) -> str:
 
 def get_pending_debit_note_row(conn, debit_note_no: str | None = None, mrr_no: str | None = None) -> dict[str, Any] | None:
     cursor = conn.cursor(dictionary=True)
-    where = ["`debitNote` IS NOT NULL", "`debitNote` <> ''"]
+    where = ["`debitNote` IS NOT NULL", "`debitNote` <> ''", "COALESCE(NULLIF(TRIM(`debitTallySync`), ''), '') = ''"]
     params: list[Any] = []
     if debit_note_no:
         where.append("`debitNote` = %s")
@@ -243,7 +247,7 @@ def get_pending_debit_note_row(conn, debit_note_no: str | None = None, mrr_no: s
     query = f"""
         SELECT `id`, `transactionNo`, `mrrType`, `date`, `timestamp`, `invoiceNo`, `invDate`,
                `supplierId`, `lines`, `debitNote`, `debitNoteDate`, `debitNoteAmount`,
-               `totalCgst`, `totalSgst`, `totalIgst`, `tallyTimestamp`
+               `totalCgst`, `totalSgst`, `totalIgst`, `debitTallySync`, `debitRemarkTally`
         FROM `material_in`
         WHERE {' AND '.join(where)}
         ORDER BY `debitNoteDate` ASC, `timestamp` ASC, `transactionNo` ASC
@@ -413,6 +417,41 @@ def build_debit_note_xml(note: DebitNote) -> str:
 </ENVELOPE>"""
 
 
+def parse_import_summary(response_text: str) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    for tag in ("CREATED", "ALTERED", "COMBINED", "IGNORED", "DELETED", "CANCELLED", "ERRORS", "EXCEPTIONS"):
+        match = re.search(rf"<{tag}>\s*([^<]+?)\s*</{tag}>", response_text or "", flags=re.IGNORECASE)
+        if match:
+            try:
+                summary[tag] = int(str(match.group(1)).strip())
+            except ValueError:
+                summary[tag] = 0
+    return summary
+
+
+def response_error_message(response_text: str) -> str:
+    line_errors = re.findall(r"<LINEERROR>(.*?)</LINEERROR>", response_text or "", flags=re.IGNORECASE | re.DOTALL)
+    if line_errors:
+        cleaned_errors = [re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", error))).strip() for error in line_errors]
+        return "; ".join(error for error in cleaned_errors if error) or "Tally import failed."
+
+    summary = parse_import_summary(response_text)
+    failing_counts = {key: value for key, value in summary.items() if key in ("ERRORS", "EXCEPTIONS", "IGNORED") and value > 0}
+    if failing_counts:
+        return "Tally import failed: " + ", ".join(f"{key}={value}" for key, value in failing_counts.items())
+
+    compact = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", response_text or ""))).strip()
+    return compact[:500] or "Tally returned an empty response."
+
+
+def assert_tally_import_success(response_text: str) -> None:
+    summary = parse_import_summary(response_text)
+    if summary.get("CREATED", 0) > 0 or summary.get("ALTERED", 0) > 0:
+        return
+    if any(summary.get(key, 0) > 0 for key in ("ERRORS", "EXCEPTIONS", "IGNORED")) or "<LINEERROR" in (response_text or "").upper():
+        raise TallyImportError(response_error_message(response_text))
+    raise TallyImportError("Tally did not confirm debit note creation. " + response_error_message(response_text))
+
 def post_to_tally(xml: str) -> str:
     global ACTIVE_TALLY_URL
 
@@ -452,10 +491,26 @@ def mark_posted(conn, note: DebitNote, response_text: str) -> None:
         cursor.execute(
             """
             UPDATE `material_in`
-            SET `tallyTimestamp` = %s, `tallySyncRemark` = %s
+            SET `debitTallySync` = %s, `debitRemarkTally` = %s
             WHERE `id` = %s
             """,
-            (datetime.now().isoformat(timespec="seconds"), f"Debit Note {note.voucher_no} posted to Tally. Response: {response_text[:500]}", note.mrr_id),
+            (datetime.now().isoformat(timespec="seconds"), f"Debit Note posted to Tally. Response: {response_text[:500]}", note.mrr_id),
+        )
+        conn.commit()
+    finally:
+        cursor.close()
+
+
+def mark_failed(conn, note: DebitNote, error_message: str) -> None:
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE `material_in`
+            SET `debitRemarkTally` = %s
+            WHERE `id` = %s
+            """,
+            (f"Debit Note Tally post failed at {datetime.now().isoformat(timespec='seconds')}: {error_message[:700]}", note.mrr_id),
         )
         conn.commit()
     finally:
@@ -467,7 +522,7 @@ def main() -> None:
     parser.add_argument("--debit-note", help="Debit note number, example DN-00038")
     parser.add_argument("--mrr", help="MRR transaction number")
     parser.add_argument("--dry-run", action="store_true", help="Print XML only; do not post to Tally or update DB")
-    parser.add_argument("--mark-posted", action="store_true", help="After successful post, update material_in.tallyTimestamp")
+    parser.add_argument("--mark-posted", action="store_true", help="Deprecated; successful posts always update material_in.debitTallySync")
     args = parser.parse_args()
 
     conn = get_db_connection()
@@ -492,14 +547,15 @@ def main() -> None:
             return
         try:
             response_text = post_to_tally(xml)
-        except TallyUnavailableError as error:
+            assert_tally_import_success(response_text)
+        except (TallyUnavailableError, TallyImportError) as error:
+            mark_failed(conn, note, str(error))
             print(f"ERROR: {error}")
             raise SystemExit(1) from error
         print("Tally Response:")
         print(response_text)
-        if args.mark_posted:
-            mark_posted(conn, note, response_text)
-            print("Hostinger DB updated: material_in.tallyTimestamp set.")
+        mark_posted(conn, note, response_text)
+        print("Hostinger DB updated: material_in.debitTallySync set.")
     finally:
         conn.close()
 

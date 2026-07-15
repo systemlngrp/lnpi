@@ -3410,6 +3410,8 @@ async function initDb(retries = 5) {
           \`debitNote\` VARCHAR(255),
           \`debitNoteDate\` VARCHAR(50),
           \`debitNoteAmount\` DECIMAL(15,2),
+          \`debitTallySync\` VARCHAR(255),
+          \`debitRemarkTally\` TEXT,
           \`mdTimestamp\` VARCHAR(255),
           \`mdEmailId\` VARCHAR(255),
           \`md_approval_remark\` TEXT,
@@ -4310,6 +4312,8 @@ await db.query(`
         { table: "material_in", column: "mdEmailId", type: "VARCHAR(255)" },
         { table: "material_in", column: "tallyTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "tallySyncRemark", type: "TEXT" },
+        { table: "material_in", column: "debitTallySync", type: "VARCHAR(255)" },
+        { table: "material_in", column: "debitRemarkTally", type: "TEXT" },
         { table: "material_in", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
         { table: "productions", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "productions", column: "date", type: "VARCHAR(50) NOT NULL" },
@@ -4766,6 +4770,8 @@ await db.query(`
         { table: "material_in", column: "debitNote", type: "VARCHAR(255)" },
         { table: "material_in", column: "debitNoteDate", type: "VARCHAR(50)" },
         { table: "material_in", column: "debitNoteAmount", type: "DECIMAL(15,2)" },
+        { table: "material_in", column: "debitTallySync", type: "VARCHAR(255)" },
+        { table: "material_in", column: "debitRemarkTally", type: "TEXT" },
         { table: "material_in", column: "mdTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "mdEmailId", type: "VARCHAR(255)" },
         { table: "material_in", column: "md_approval_remark", type: "TEXT" },
@@ -4801,6 +4807,20 @@ await db.query(`
         console.warn("[DB] Could not normalize material_in.status column:", (err as Error).message);
       }
 
+      try {
+        await db.query(`
+          UPDATE \`material_in\`
+          SET
+            \`debitTallySync\` = COALESCE(NULLIF(TRIM(\`debitTallySync\`), ''), \`tallyTimestamp\`),
+            \`debitRemarkTally\` = COALESCE(NULLIF(TRIM(\`debitRemarkTally\`), ''), \`tallySyncRemark\`)
+          WHERE COALESCE(NULLIF(TRIM(\`debitTallySync\`), ''), '') = ''
+            AND COALESCE(NULLIF(TRIM(\`tallyTimestamp\`), ''), '') <> ''
+            AND COALESCE(NULLIF(TRIM(\`tallySyncRemark\`), ''), '') <> ''
+            AND LOWER(\`tallySyncRemark\`) LIKE '%debit note%posted to tally%'
+        `);
+      } catch (err) {
+        console.warn("[DB] Could not backfill material_in debit Tally sync fields:", (err as Error).message);
+      }
       try {
         await db.query(`
           UPDATE \`orders\`
