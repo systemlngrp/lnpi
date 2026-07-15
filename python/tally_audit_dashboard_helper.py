@@ -1,13 +1,41 @@
 import json
+import logging
 import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import requests
+
+BASE_DIR = Path(__file__).resolve().parent
+LOG_FILE = BASE_DIR / "tally_audit_dashboard_helper.log"
+
+
+def setup_logger() -> logging.Logger:
+    logger = logging.getLogger("tally_audit_dashboard_helper")
+    if logger.handlers:
+        return logger
+
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+
+    file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    logger.propagate = False
+    return logger
+
+
+LOGGER = setup_logger()
 
 HELPER_HOST = "127.0.0.1"
 HELPER_PORT = 8765
@@ -171,17 +199,21 @@ def fetch_tally_values(date_from: str, date_to: str) -> dict[str, Any]:
     tally_from = normalize_date_for_tally(date_from)
     tally_to = normalize_date_for_tally(date_to)
     last_errors: list[str] = []
+    LOGGER.info("Fetch requested for app date range %s to %s / Tally range %s to %s", date_from, date_to, tally_from, tally_to)
 
     for url in TALLY_URL_CANDIDATES:
         try:
+            LOGGER.info("Trying Tally XML URL %s", url)
             values: dict[str, float] = {}
             counts: dict[str, int] = {}
             for field, voucher_type in VOUCHER_TYPES.items():
                 xml_text = build_voucher_collection_xml(voucher_type, tally_from, tally_to)
                 response_text = post_xml_to_url(url, xml_text)
                 total, count = parse_voucher_total(response_text)
+                LOGGER.info("%s total from %s: %.2f across %s voucher(s)", voucher_type, url, total, count)
                 values[field] = total
                 counts[voucher_type] = count
+            LOGGER.info("Tally fetch succeeded from %s", url)
             return {
                 **values,
                 "sourceUrl": url,
@@ -189,8 +221,10 @@ def fetch_tally_values(date_from: str, date_to: str) -> dict[str, Any]:
                 "counts": counts,
             }
         except Exception as error:
+            LOGGER.warning("Tally XML URL %s failed: %s", url, error)
             last_errors.append(f"{url}: {error}")
 
+    LOGGER.error("No Tally XML/HTTP port responded from 9000 to 9004. Last errors: %s", " | ".join(last_errors[-4:]))
     raise RuntimeError("No Tally XML/HTTP port responded from 9000 to 9004. " + " | ".join(last_errors[-4:]))
 
 
@@ -222,7 +256,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/health":
-            self._send_json(200, {"ok": True, "helper": self.server_version, "ports": list(range(9000, 9005))})
+            LOGGER.info("Health check from %s", self.client_address[0])
+            self._send_json(200, {"ok": True, "helper": self.server_version, "ports": list(range(9000, 9005)), "logFile": str(LOG_FILE)})
             return
         self._send_json(404, {"ok": False, "error": "Not found"})
 
@@ -239,19 +274,22 @@ class Handler(BaseHTTPRequestHandler):
             date_to = str(data.get("dateTo") or "").strip()
             if not date_from or not date_to:
                 raise ValueError("dateFrom and dateTo are required.")
+            LOGGER.info("Audit dashboard fetch request from %s for %s to %s", self.client_address[0], date_from, date_to)
             result = fetch_tally_values(date_from, date_to)
             self._send_json(200, {"ok": True, **result})
         except Exception as error:
+            LOGGER.exception("Audit dashboard fetch failed: %s", error)
             self._send_json(500, {"ok": False, "error": str(error)})
 
     def log_message(self, format: str, *args: Any) -> None:
-        print(f"{datetime.now().isoformat(timespec='seconds')} | {self.address_string()} | {format % args}")
+        LOGGER.info("%s | %s", self.address_string(), format % args)
 
 
 def main() -> None:
     server = ThreadingHTTPServer((HELPER_HOST, HELPER_PORT), Handler)
-    print(f"LNPI Audit Tally Helper running at http://{HELPER_HOST}:{HELPER_PORT}")
-    print("Checking Tally XML/HTTP on localhost ports 9000 to 9004 when requested.")
+    LOGGER.info("LNPI Audit Tally Helper running at http://%s:%s", HELPER_HOST, HELPER_PORT)
+    LOGGER.info("Log file: %s", LOG_FILE)
+    LOGGER.info("Checking Tally XML/HTTP on localhost ports 9000 to 9004 when requested.")
     server.serve_forever()
 
 
@@ -259,5 +297,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nStopped.")
+        LOGGER.info("Stopped by keyboard interrupt.")
         sys.exit(0)
