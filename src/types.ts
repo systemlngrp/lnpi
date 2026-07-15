@@ -535,6 +535,8 @@ export interface MaterialIn {
   debitNoteAmount?: number;
   debitTallySync?: string;
   debitRemarkTally?: string;
+  creditTallySync?: string;
+  creditRemarkTally?: string;
   mdTimestamp?: string;
   mdEmailId?: string;
   md_approval_remark?: string;
