@@ -69,6 +69,7 @@ import { ProductionPendingConsumption, ProductionPendingFFG } from "./pages/Prod
 import { ProductionPlan } from "./pages/ProductionPlan";
 import { PendingNpd } from "./pages/PendingNpd";
 import { OperationDashboard } from "./pages/OperationDashboard";
+import { AuditDashboard } from "./pages/AuditDashboard";
 import { PendingJobClosure } from "./pages/PendingJobClosure";
 import { MachinePendingProcessing } from "./pages/MachinePendingProcessing";
 import { ProductionProcessingForm } from "./pages/ProductionProcessingForm";
@@ -250,6 +251,7 @@ export default function App() {
           <Route path="production/plate/pending-production" element={<PlateProductionExecution />} />
           <Route path="production/plan" element={<ProductionPlan />} />
           <Route path="operations-dashboard" element={<OperationDashboard />} />
+          <Route path="audit-dashboard" element={<AuditDashboard />} />
           <Route path="production-processing/form" element={<ProductionProcessingForm />} />
           <Route path="production-processing/master" element={<ProductionProcessingMaster />} />
           <Route path="production/least-cost" element={<ItemwiseLeastCost />} />

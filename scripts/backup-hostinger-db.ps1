@@ -115,6 +115,7 @@ try {
     "--routines",
     "--triggers",
     "--events",
+    "--column-statistics=0",
     "--default-character-set=utf8mb4",
     "--databases",
     $dbName,

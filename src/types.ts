@@ -946,6 +946,17 @@ export interface Setting {
   updateTimestamp?: string;
 }
 
+export interface AuditDashboardSnapshot {
+  id: string;
+  dateFrom: string;
+  dateTo: string;
+  invoiceValueTally: number;
+  consumptionValueTally: number;
+  saleValueTally: number;
+  debitNoteTally: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
 export interface OperationDashboardMetricCard {
   id: string;
   label: string;
