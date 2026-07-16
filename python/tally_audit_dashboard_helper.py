@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -7,7 +8,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -37,14 +38,11 @@ def setup_logger() -> logging.Logger:
 
 LOGGER = setup_logger()
 
-HELPER_HOST = "127.0.0.1"
-HELPER_PORT = 8765
-REQUEST_TIMEOUT = 8
-TALLY_URL_CANDIDATES = [
-    f"http://{host}:{port}"
-    for port in range(9000, 9005)
-    for host in ("localhost", "127.0.0.1")
-]
+HELPER_HOST = os.getenv("LNPI_AUDIT_HELPER_HOST", "127.0.0.1")
+HELPER_PORT = int(os.getenv("LNPI_AUDIT_HELPER_PORT", "8765"))
+CONNECT_TIMEOUT = float(os.getenv("LNPI_AUDIT_CONNECT_TIMEOUT", "1.5"))
+REQUEST_TIMEOUT = float(os.getenv("LNPI_AUDIT_TALLY_TIMEOUT", "6"))
+MAX_REQUEST_BYTES = int(os.getenv("LNPI_AUDIT_MAX_REQUEST_BYTES", "4096"))
 VOUCHER_TYPES = {
     "invoiceValueTally": "Purchase",
     "consumptionValueTally": "Consumption Journal",
@@ -56,6 +54,32 @@ ALLOWED_ORIGIN_PATTERNS = (
     re.compile(r"^http://localhost:\d+$", re.IGNORECASE),
     re.compile(r"^http://127\.0\.0\.1:\d+$", re.IGNORECASE),
 )
+
+
+def parse_csv_values(value: str, fallback: list[str]) -> list[str]:
+    values = [entry.strip() for entry in str(value or "").split(",") if entry.strip()]
+    return values or fallback
+
+
+def parse_tally_ports() -> list[int]:
+    raw_ports = parse_csv_values(os.getenv("LNPI_AUDIT_TALLY_PORTS", ""), ["9000"])
+    ports: list[int] = []
+    for raw_port in raw_ports:
+        try:
+            port = int(raw_port)
+        except ValueError:
+            LOGGER.warning("Ignoring invalid Tally port value: %s", raw_port)
+            continue
+        if 1 <= port <= 65535:
+            ports.append(port)
+        else:
+            LOGGER.warning("Ignoring out-of-range Tally port value: %s", raw_port)
+    return ports or [9000]
+
+
+def build_tally_url_candidates() -> list[str]:
+    hosts = parse_csv_values(os.getenv("LNPI_AUDIT_TALLY_HOSTS", ""), ["localhost"])
+    return [f"http://{host}:{port}" for port in parse_tally_ports() for host in hosts]
 
 
 def escape_xml(value: Any) -> str:
@@ -87,6 +111,14 @@ def normalize_date_for_tally(value: str) -> str:
     raise ValueError(f"Invalid date '{value}'. Expected YYYY-MM-DD.")
 
 
+def validate_date_range(date_from: str, date_to: str) -> tuple[str, str]:
+    tally_from = normalize_date_for_tally(date_from)
+    tally_to = normalize_date_for_tally(date_to)
+    if tally_from > tally_to:
+        raise ValueError("dateFrom cannot be after dateTo.")
+    return tally_from, tally_to
+
+
 def parse_amount(value: Any) -> float:
     text = str(value or "").strip()
     if not text:
@@ -105,8 +137,7 @@ def round_money(value: float) -> float:
     return round(float(value or 0), 2)
 
 
-def build_voucher_collection_xml(voucher_type: str, date_from: str, date_to: str) -> str:
-    safe_type = escape_xml(voucher_type)
+def build_voucher_collection_xml(date_from: str, date_to: str) -> str:
     return f"""
 <ENVELOPE>
   <HEADER>
@@ -120,7 +151,7 @@ def build_voucher_collection_xml(voucher_type: str, date_from: str, date_to: str
       <STATICVARIABLES>
         <SVFROMDATE>{date_from}</SVFROMDATE>
         <SVTODATE>{date_to}</SVTODATE>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -133,9 +164,7 @@ def build_voucher_collection_xml(voucher_type: str, date_from: str, date_to: str
             <FETCH>IsOptional</FETCH>
             <FETCH>Amount</FETCH>
             <COMPUTE>LnpiVoucherAmount:$Amount</COMPUTE>
-            <FILTERS>LnpiAuditVoucherType</FILTERS>
           </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="LnpiAuditVoucherType">$$StringEqual:$VoucherTypeName:"{safe_type}"</SYSTEM>
         </TDLMESSAGE>
       </TDL>
     </DESC>
@@ -144,12 +173,12 @@ def build_voucher_collection_xml(voucher_type: str, date_from: str, date_to: str
 """
 
 
-def post_xml_to_url(url: str, payload: str) -> str:
-    response = requests.post(
+def post_xml_to_url(session: requests.Session, url: str, payload: str) -> str:
+    response = session.post(
         url,
         data=payload.encode("utf-8"),
-        headers={"Content-Type": "application/xml"},
-        timeout=REQUEST_TIMEOUT,
+        headers={"Content-Type": "application/xml", "User-Agent": "LNPIAuditTallyHelper/1.1"},
+        timeout=(CONNECT_TIMEOUT, REQUEST_TIMEOUT),
     )
     response.raise_for_status()
     return response.text
@@ -168,64 +197,134 @@ def child_text(element: ET.Element, names: tuple[str, ...]) -> str:
     return ""
 
 
-def parse_voucher_total(xml_text: str) -> tuple[float, int]:
+def tally_response_error(xml_text: str) -> str:
     cleaned = clean_tally_xml(xml_text)
     if not cleaned:
-        return 0.0, 0
-    root = ET.fromstring(cleaned)
-    total = 0.0
-    count = 0
+        return ""
+    try:
+        root = ET.fromstring(cleaned)
+    except ET.ParseError:
+        return ""
+    for node in root.iter():
+        tag = node.tag.split("}", 1)[-1].upper()
+        if tag in {"LINEERROR", "ERROR", "ERRORMSG"} and str(node.text or "").strip():
+            return str(node.text or "").strip()
+    return ""
+
+
+def get_voucher_amount(voucher: ET.Element) -> float:
+    raw_amount = child_text(voucher, ("LNPIVOUCHERAMOUNT", "AMOUNT"))
+    if not raw_amount:
+        for amount_node in voucher.iter():
+            amount_tag = amount_node.tag.split("}", 1)[-1].upper()
+            if amount_tag == "AMOUNT" and amount_node.text:
+                raw_amount = amount_node.text
+                break
+    return abs(parse_amount(raw_amount))
+
+
+def parse_voucher_totals(xml_text: str) -> tuple[dict[str, float], dict[str, int]]:
+    cleaned = clean_tally_xml(xml_text)
+    totals = {voucher_type: 0.0 for voucher_type in VOUCHER_TYPES.values()}
+    counts = {voucher_type: 0 for voucher_type in VOUCHER_TYPES.values()}
+    if not cleaned:
+        return totals, counts
+    tally_error = tally_response_error(cleaned)
+    if tally_error:
+        raise ValueError(f"Tally returned an error: {tally_error}")
+    try:
+        root = ET.fromstring(cleaned)
+    except ET.ParseError as error:
+        preview = re.sub(r"\s+", " ", cleaned[:300]).strip()
+        raise ValueError(f"Unable to parse Tally XML response: {error}. Response preview: {preview}") from error
+
+    wanted_types = set(VOUCHER_TYPES.values())
     for voucher in root.iter():
         tag = voucher.tag.split("}", 1)[-1].upper()
         if tag != "VOUCHER":
+            continue
+        voucher_type = child_text(voucher, ("VOUCHERTYPENAME", "VCHTYPE"))
+        if voucher_type not in wanted_types:
             continue
         if is_truthy_tally_flag(child_text(voucher, ("ISCANCELLED", "CANCELLED"))):
             continue
         if is_truthy_tally_flag(child_text(voucher, ("ISOPTIONAL", "OPTIONAL"))):
             continue
-        raw_amount = child_text(voucher, ("LNPIVOUCHERAMOUNT", "AMOUNT"))
-        if not raw_amount:
-            for amount_node in voucher.iter():
-                amount_tag = amount_node.tag.split("}", 1)[-1].upper()
-                if amount_tag == "AMOUNT" and amount_node.text:
-                    raw_amount = amount_node.text
-                    break
-        total += abs(parse_amount(raw_amount))
-        count += 1
-    return round_money(total), count
+        totals[voucher_type] += get_voucher_amount(voucher)
+        counts[voucher_type] += 1
+
+    return {key: round_money(value) for key, value in totals.items()}, counts
 
 
 def fetch_tally_values(date_from: str, date_to: str) -> dict[str, Any]:
-    tally_from = normalize_date_for_tally(date_from)
-    tally_to = normalize_date_for_tally(date_to)
+    tally_from, tally_to = validate_date_range(date_from, date_to)
     last_errors: list[str] = []
+    tally_url_candidates = build_tally_url_candidates()
     LOGGER.info("Fetch requested for app date range %s to %s / Tally range %s to %s", date_from, date_to, tally_from, tally_to)
 
-    for url in TALLY_URL_CANDIDATES:
-        try:
-            LOGGER.info("Trying Tally XML URL %s", url)
-            values: dict[str, float] = {}
-            counts: dict[str, int] = {}
-            for field, voucher_type in VOUCHER_TYPES.items():
-                xml_text = build_voucher_collection_xml(voucher_type, tally_from, tally_to)
-                response_text = post_xml_to_url(url, xml_text)
-                total, count = parse_voucher_total(response_text)
-                LOGGER.info("%s total from %s: %.2f across %s voucher(s)", voucher_type, url, total, count)
-                values[field] = total
-                counts[voucher_type] = count
-            LOGGER.info("Tally fetch succeeded from %s", url)
-            return {
-                **values,
-                "sourceUrl": url,
-                "fetchedAt": datetime.now().isoformat(timespec="seconds"),
-                "counts": counts,
-            }
-        except Exception as error:
-            LOGGER.warning("Tally XML URL %s failed: %s", url, error)
-            last_errors.append(f"{url}: {error}")
+    xml_text = build_voucher_collection_xml(tally_from, tally_to)
+    with requests.Session() as session:
+        for url in tally_url_candidates:
+            try:
+                LOGGER.info("Trying Tally XML URL %s", url)
+                response_text = post_xml_to_url(session, url, xml_text)
+                totals_by_type, counts = parse_voucher_totals(response_text)
+                values = {field: totals_by_type.get(voucher_type, 0.0) for field, voucher_type in VOUCHER_TYPES.items()}
+                for voucher_type in VOUCHER_TYPES.values():
+                    LOGGER.info("%s total from %s: %.2f across %s voucher(s)", voucher_type, url, totals_by_type.get(voucher_type, 0.0), counts.get(voucher_type, 0))
+                LOGGER.info("Tally fetch succeeded from %s", url)
+                return {
+                    **values,
+                    "sourceUrl": url,
+                    "fetchedAt": datetime.now().isoformat(timespec="seconds"),
+                    "counts": counts,
+                }
+            except Exception as error:
+                LOGGER.warning("Tally XML URL %s failed: %s", url, error)
+                last_errors.append(f"{url}: {error}")
 
-    LOGGER.error("No Tally XML/HTTP port responded from 9000 to 9004. Last errors: %s", " | ".join(last_errors[-4:]))
-    raise RuntimeError("No Tally XML/HTTP port responded from 9000 to 9004. " + " | ".join(last_errors[-4:]))
+    ports = ", ".join(str(port) for port in parse_tally_ports())
+    LOGGER.error("No Tally XML/HTTP endpoint responded. Last errors: %s", " | ".join(last_errors[-4:]))
+    raise RuntimeError(f"No Tally XML/HTTP endpoint responded on configured ports ({ports}). " + " | ".join(last_errors[-4:]))
+
+
+def read_json_request(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+    raw_length = handler.headers.get("Content-Length", "0") or "0"
+    try:
+        length = int(raw_length)
+    except ValueError as error:
+        raise ValueError("Invalid Content-Length header.") from error
+    if length > MAX_REQUEST_BYTES:
+        raise ValueError(f"Request body too large. Limit is {MAX_REQUEST_BYTES} bytes.")
+    body = handler.rfile.read(length).decode("utf-8") if length else "{}"
+    try:
+        data = json.loads(body or "{}")
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Invalid JSON body: {error.msg}") from error
+    if not isinstance(data, dict):
+        raise ValueError("JSON body must be an object.")
+    return data
+
+
+def get_request_date_range(data: dict[str, Any]) -> tuple[str, str]:
+    date_from = str(data.get("dateFrom") or "").strip()
+    date_to = str(data.get("dateTo") or "").strip()
+    if not date_from or not date_to:
+        raise ValueError("dateFrom and dateTo are required.")
+    validate_date_range(date_from, date_to)
+    return date_from, date_to
+
+
+def status_for_error(error: Exception) -> int:
+    if isinstance(error, ValueError):
+        return 400
+    return 500
+
+
+def public_error_message(error: Exception) -> str:
+    if isinstance(error, requests.RequestException):
+        return f"Tally request failed: {error}"
+    return str(error)
 
 
 def allowed_origin(origin: str) -> str:
@@ -235,7 +334,7 @@ def allowed_origin(origin: str) -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LNPIAuditTallyHelper/1.0"
+    server_version = "LNPIAuditTallyHelper/1.1"
 
     def _send_json(self, status_code: int, payload: dict[str, Any]) -> None:
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -246,6 +345,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", allowed_origin(origin))
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.send_header("Access-Control-Max-Age", "86400")
         self.end_headers()
         self.wfile.write(raw)
@@ -254,32 +354,53 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True})
 
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
         if path == "/health":
             LOGGER.info("Health check from %s", self.client_address[0])
-            self._send_json(200, {"ok": True, "helper": self.server_version, "ports": list(range(9000, 9005)), "logFile": str(LOG_FILE)})
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "helper": self.server_version,
+                    "tallyUrls": build_tally_url_candidates(),
+                    "connectTimeoutSeconds": CONNECT_TIMEOUT,
+                    "readTimeoutSeconds": REQUEST_TIMEOUT,
+                    "logFile": str(LOG_FILE),
+                },
+            )
+            return
+        if path == "/audit-dashboard/tally-values":
+            try:
+                query = parse_qs(parsed_url.query)
+                date_from = str((query.get("dateFrom") or [""])[0]).strip()
+                date_to = str((query.get("dateTo") or [""])[0]).strip()
+                if not date_from or not date_to:
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    date_from = date_from or today
+                    date_to = date_to or today
+                LOGGER.info("Audit dashboard GET fetch request from %s for %s to %s", self.client_address[0], date_from, date_to)
+                result = fetch_tally_values(date_from, date_to)
+                self._send_json(200, {"ok": True, **result})
+            except Exception as error:
+                LOGGER.exception("Audit dashboard GET fetch failed: %s", error)
+                self._send_json(status_for_error(error), {"ok": False, "error": public_error_message(error)})
             return
         self._send_json(404, {"ok": False, "error": "Not found"})
-
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         if path != "/audit-dashboard/tally-values":
             self._send_json(404, {"ok": False, "error": "Not found"})
             return
         try:
-            length = int(self.headers.get("Content-Length", "0") or 0)
-            body = self.rfile.read(length).decode("utf-8") if length else "{}"
-            data = json.loads(body or "{}")
-            date_from = str(data.get("dateFrom") or "").strip()
-            date_to = str(data.get("dateTo") or "").strip()
-            if not date_from or not date_to:
-                raise ValueError("dateFrom and dateTo are required.")
+            data = read_json_request(self)
+            date_from, date_to = get_request_date_range(data)
             LOGGER.info("Audit dashboard fetch request from %s for %s to %s", self.client_address[0], date_from, date_to)
             result = fetch_tally_values(date_from, date_to)
             self._send_json(200, {"ok": True, **result})
         except Exception as error:
             LOGGER.exception("Audit dashboard fetch failed: %s", error)
-            self._send_json(500, {"ok": False, "error": str(error)})
+            self._send_json(status_for_error(error), {"ok": False, "error": public_error_message(error)})
 
     def log_message(self, format: str, *args: Any) -> None:
         LOGGER.info("%s | %s", self.address_string(), format % args)
@@ -289,7 +410,7 @@ def main() -> None:
     server = ThreadingHTTPServer((HELPER_HOST, HELPER_PORT), Handler)
     LOGGER.info("LNPI Audit Tally Helper running at http://%s:%s", HELPER_HOST, HELPER_PORT)
     LOGGER.info("Log file: %s", LOG_FILE)
-    LOGGER.info("Checking Tally XML/HTTP on localhost ports 9000 to 9004 when requested.")
+    LOGGER.info("Checking Tally XML/HTTP candidates when requested: %s", ", ".join(build_tally_url_candidates()))
     server.serve_forever()
 
 
