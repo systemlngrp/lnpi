@@ -1,9 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { StateMaster } from "../types";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
-
+const INDIAN_STATES_AND_UTS = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
+  "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+  "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+];
 export function States() {
   const navigate = useNavigate();
   const [states, setStates] = useData<StateMaster>("states", []);
@@ -13,7 +20,21 @@ export function States() {
   const [name, setName] = useState("");
   const [active, setActive] = useState<"Yes" | "No">("Yes");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  useEffect(() => {
+    const existingNames = new Set(states.map((state) => state.name.toLowerCase()));
+    const missingStates: StateMaster[] = INDIAN_STATES_AND_UTS
+      .filter((stateName) => !existingNames.has(stateName.toLowerCase()))
+      .map((stateName) => ({
+        id: crypto.randomUUID(),
+        name: stateName,
+        active: "Yes",
+        updatedBy: "System Seed",
+        updateTimestamp: new Date().toISOString(),
+      }));
 
+    if (missingStates.length === 0) return;
+    setStates((prev) => [...prev, ...missingStates]);
+  }, [states, setStates]);
   const filteredStates = useMemo(
     () =>
       [...states]
@@ -78,17 +99,8 @@ export function States() {
   };
 
   const handleAutoPopulate = async () => {
-    const indianStates = [
-      "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
-      "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
-      "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-      "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
-      "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
-      "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
-    ];
-
     const existingNames = new Set(states.map(s => s.name.toLowerCase()));
-    const newStates: StateMaster[] = indianStates
+    const newStates: StateMaster[] = INDIAN_STATES_AND_UTS
       .filter(name => !existingNames.has(name.toLowerCase()))
       .map(name => ({
         id: crypto.randomUUID(),

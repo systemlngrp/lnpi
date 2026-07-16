@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Edit, Plus, Trash2 } from "lucide-react";
+import { Edit, Plus, Search, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { RapcRange } from "../types";
 import { Spinner } from "../components/Spinner";
-import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
 import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useClientPagination } from "../hooks/useClientPagination";
@@ -160,22 +159,31 @@ export function RapcRangeMaster() {
         </div>
       )}
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search ranges..." />
-      {/* Range filter inputs */}
-      <div className="flex items-center gap-2 mt-2">
+      <div className="flex flex-wrap gap-4 items-center justify-between bg-white p-4 border border-black rounded shadow-sm mb-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search ranges..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 pr-4 py-2 w-full border-2 border-black rounded focus:outline-none focus:ring-1 focus:ring-indigo-600 font-medium"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
         <input
           type="number"
           placeholder="From"
           value={filterFrom}
           onChange={(e) => setFilterFrom(e.target.value === "" ? "" : Number(e.target.value))}
-          className="border-2 border-black rounded p-1 text-sm w-24"
+          className="border-2 border-black rounded px-3 py-2 text-sm w-24"
         />
         <input
           type="number"
           placeholder="To"
           value={filterTo}
           onChange={(e) => setFilterTo(e.target.value === "" ? "" : Number(e.target.value))}
-          className="border-2 border-black rounded p-1 text-sm w-24"
+          className="border-2 border-black rounded px-3 py-2 text-sm w-24"
         />
         {(filterFrom !== "" || filterTo !== "") && (
           <button
@@ -184,11 +192,12 @@ export function RapcRangeMaster() {
               setFilterFrom("");
               setFilterTo("");
             }}
-            className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded hover:bg-gray-300"
+            className="text-xs bg-gray-200 text-gray-800 px-3 py-2 rounded hover:bg-gray-300"
           >
             Clear Filter
           </button>
         )}
+        </div>
       </div>
 
       <DataSummaryTiles
@@ -207,15 +216,13 @@ export function RapcRangeMaster() {
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">From</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">To</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">RAPC Range</th>
-                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated By</th>
-                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated Timestamp</th>
                 <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-black">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="border border-black px-6 py-8 text-center text-black">
+                  <td colSpan={5} className="border border-black px-6 py-8 text-center text-black">
                     <div className="flex justify-center">
                       <Spinner />
                     </div>
@@ -223,7 +230,7 @@ export function RapcRangeMaster() {
                 </tr>
               ) : paginatedRanges.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="border border-black px-6 py-8 text-center text-black font-medium">
+                  <td colSpan={5} className="border border-black px-6 py-8 text-center text-black font-medium">
                     No RAPC ranges found.
                   </td>
                 </tr>
@@ -234,8 +241,6 @@ export function RapcRangeMaster() {
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{row.from}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.to}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.rapcRange}</td>
-                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.updatedBy || "-"}</td>
-                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{row.updateTimestamp ? new Date(row.updateTimestamp).toLocaleString() : "-"}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
                         onClick={() => {

@@ -39,7 +39,7 @@ export function Trucks() {
       const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
       const truckData = { 
         truckNo: truckNo.trim().toUpperCase(), 
-        driverName: driverName.trim(), 
+        driverName: driverName.trim().toUpperCase(), 
         mobileNo: mobileNo.trim(), 
         ...audit 
       };
@@ -197,7 +197,7 @@ export function Trucks() {
                     <div className="flex justify-between items-start">
                         <div className="space-y-1">
                             <div className="text-sm font-bold text-indigo-600">{truck.truckNo}</div>
-                            <div className="text-sm font-bold">{truck.driverName}</div>
+                            <div className="text-sm font-bold">{truck.driverName.toUpperCase()}</div>
                             <div className="text-xs text-slate-600">{truck.mobileNo || "-"}</div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -242,7 +242,7 @@ export function Trucks() {
                 <tr key={truck.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{index + 1}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{truck.truckNo}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.driverName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.driverName.toUpperCase()}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.mobileNo || "-"}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium border border-black">
                     <button

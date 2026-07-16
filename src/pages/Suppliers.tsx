@@ -5,7 +5,7 @@ import { Spinner } from "../components/Spinner";
 import { ClientPagination } from "../components/ClientPagination";
 import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { Select } from "../components/Select";
-import { Edit, Trash2, Upload, Download, FileSpreadsheet } from "lucide-react";
+import { Edit, Trash2, Upload, Download } from "lucide-react";
 import { MandatoryLegend, MandatoryLabel } from "../components/Mandatory";
 import { isMandatoryField } from "../lib/mandatoryFields";
 import * as XLSX from "xlsx";
@@ -446,14 +446,6 @@ export function Suppliers() {
                 accept=".xlsx, .xls"
                 className="hidden"
               />
-
-              <button
-                onClick={exportToExcel}
-                className="bg-emerald-50 text-emerald-700 border-2 border-emerald-700 px-3 py-2 rounded font-bold hover:bg-emerald-100 transition flex items-center text-sm"
-                title="Export to Excel"
-              >
-                <FileSpreadsheet size={18} className="mr-2" /> Export
-              </button>
 
               <button
                 onClick={openCreate}

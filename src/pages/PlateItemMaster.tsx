@@ -4,6 +4,8 @@ import { useData } from "../hooks/useData";
 import { buildPhpPlateInventoryRows } from "../lib/phpPlateInventory";
 import type { LoadingSlip, Production } from "../types";
 
+const HIDDEN_PLATE_ITEM_MASTER_COLUMNS = new Set(["syncInItemMaster", "hostingerSync"]);
+
 export function PlateItemMaster() {
   const [rows] = useData<any>("plate_item_master", []);
   const [jobs] = useData<Production>("plate_job_master", []);
@@ -14,13 +16,11 @@ export function PlateItemMaster() {
     <SheetMasterPage
       title="Plate Item Master"
       entity="plate_item_master"
-      columns={PLATE_ITEM_MASTER_COLUMNS}
+      columns={PLATE_ITEM_MASTER_COLUMNS.filter((column) => !HIDDEN_PLATE_ITEM_MASTER_COLUMNS.has(column.key))}
       editableColumns={["openingQty"]}
       rowsOverride={buildPhpPlateInventoryRows(rows, jobs, [...standaloneLoadingSlips, ...commonLoadingSlips], "PLATE")}
       filters={[
         { key: "company", label: "Company" },
-        { key: "typeOfPlate", label: "Type of Plate" },
-        { key: "hostingerSync", label: "Hostinger Sync" },
       ]}
       searchPlaceholder="Search plate item master..."
     />
