@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useMemo, useState } from "react";
 import { Eye } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, GateEntry, GateEntryPhoto, Supplier } from "../types";
@@ -76,7 +75,7 @@ export function PendingMrr() {
         <table className="min-w-full border-collapse border border-black">
           <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
-              {["Gate Entry No", "Date", "Supplier/Customer", "Invoice No", "Invoice Value", "Truck No", "Photos", "MRR Status", "Action"].map((heading) => (
+              {["Gate Entry No", "Date", "Supplier/Customer", "Invoice No", "Invoice Value", "Truck No", "Photos", "Action"].map((heading) => (
                 <th key={heading} className="whitespace-nowrap border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">
                   {heading}
                 </th>
@@ -86,7 +85,7 @@ export function PendingMrr() {
           <tbody>
             {pendingEntries.length === 0 ? (
               <tr>
-                <td colSpan={9} className="border border-black px-6 py-10 text-center font-medium text-black">
+                <td colSpan={8} className="border border-black px-6 py-10 text-center font-medium text-black">
                   No pending MRR gate entries found.
                 </td>
               </tr>
@@ -100,7 +99,6 @@ export function PendingMrr() {
                   <td className="border border-black px-4 py-3 text-sm text-black">{Number(entry.invoiceValue || 0).toFixed(2)}</td>
                   <td className="border border-black px-4 py-3 text-sm text-black">{entry.truckNo}</td>
                   <td className="border border-black px-4 py-3 text-sm text-black">{getPhotoCount(entry.id)} Photos</td>
-                  <td className="border border-black px-4 py-3 text-sm text-amber-700">Pending</td>
                   <td className="border border-black px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">
                       <button

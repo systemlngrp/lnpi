@@ -3,11 +3,11 @@ import { useData } from "../hooks/useData";
 import { Company, Material, MaterialIn, Service, Supplier, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { CheckCircle, XCircle, Search, FileText, ChevronRight, ChevronDown, ArrowLeft, Edit2, Download, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, ChevronRight, ChevronDown, ArrowLeft, Download, ArrowUp, ArrowDown, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Spinner } from "../components/Spinner";
-import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { downloadMaterialInPdf } from "../lib/materialInPdf";
+import { useNavigate } from "react-router-dom";
 
 type Stage = "All MRR" | "Pending PH" | "Pending Accounts" | "Pending MD";
 type SortField = "timestamp" | "gateEntryNo" | "transactionNo";
@@ -405,47 +405,44 @@ export function MrrApprovals() {
                           <td className="px-4 py-4 text-right font-black">{Number(basicValue || 0).toFixed(2)}</td>
                           <td className="px-4 py-4">
                             <div className="flex flex-col gap-1">
-                              <div className="grid grid-cols-2 gap-1">
-                                <button 
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
                                   onClick={() => downloadPdf(m)}
-                                  className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100 flex items-center justify-center gap-1"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded border border-black text-black hover:bg-slate-100"
+                                  title="Download PDF"
+                                  aria-label="Download PDF"
                                 >
-                                  <Download size={10} /> PDF
+                                  <Download size={14} />
                                 </button>
-                                {m.status === "Pending Accounts" && (
-                                  <button 
-                                    onClick={() => navigate(`/material-in/form?edit=${m.id}`)}
-                                    className="border border-indigo-600 text-indigo-600 py-1 rounded text-[9px] font-black hover:bg-indigo-50 flex items-center justify-center gap-1"
-                                  >
-                                    <Edit2 size={10} /> EDIT
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  disabled={!!isSubmitting || !["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "")}
+                                  onClick={() => handleAction(m.id, "Approve")}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded border border-emerald-700 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                                  title="Approve"
+                                  aria-label="Approve"
+                                >
+                                  {isSubmitting === m.id ? <Spinner size={12} /> : <ThumbsUp size={14} />}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={!!isSubmitting || !["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "")}
+                                  onClick={() => handleAction(m.id, "Reject")}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded border border-red-700 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                  title="Reject"
+                                  aria-label="Reject"
+                                >
+                                  <ThumbsDown size={14} />
+                                </button>
                               </div>
                               {["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "") ? (
-                                <>
-                                  <div className="grid grid-cols-2 gap-1">
-                                    <button 
-                                      disabled={!!isSubmitting}
-                                      onClick={() => handleAction(m.id, "Approve")}
-                                      className="border border-black text-black py-1 rounded text-[9px] font-black hover:bg-slate-100"
-                                    >
-                                      {isSubmitting === m.id ? <Spinner size={10} /> : "APPROVE"}
-                                    </button>
-                                    <button 
-                                      disabled={!!isSubmitting}
-                                      onClick={() => handleAction(m.id, "Reject")}
-                                      className="bg-red-600 text-white py-1 rounded text-[9px] font-black hover:bg-red-700"
-                                    >
-                                      REJECT
-                                    </button>
-                                  </div>
-                                  <textarea
-                                    value={remarks[m.id] || ""}
-                                    onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
-                                    placeholder="Remark *"
-                                    className="w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
-                                  />
-                                </>
+                                <textarea
+                                  value={remarks[m.id] || ""}
+                                  onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
+                                  placeholder="Remark *"
+                                  className="w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
+                                />
                               ) : (
                                 <div className="rounded border border-black bg-slate-50 px-2 py-2 text-center text-[9px] font-black uppercase text-slate-500">
                                   No approval action

@@ -20,6 +20,13 @@ function getPendingProductionQty(schedule: OrderSchedule, consumedQty: number) {
   );
 }
 
+
+function getPendingProductionErp(item: unknown, order?: Order) {
+  const itemErp = String((item as { erp?: string | number } | null | undefined)?.erp || "").trim();
+  if (itemErp) return itemErp;
+  const orderErp = String((order as Order & { erpCode?: string | number })?.erpCode || "").trim();
+  return orderErp || "-";
+}
 function parseLocalYmd(dateStr?: string) {
   if (!dateStr) return null;
   const match = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -99,10 +106,12 @@ export function PendingProduction() {
       .filter(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty, plannedWithoutFfgQty, consumedQty }) => {        if (!normalizedSearch) return true;
         const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
         const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
+        const erpCode = getPendingProductionErp(item, order);
         const haystack = [
           order?.orderNo,
           formatDate(schedule.scheduledDate),
           company?.name,
+          erpCode,
           item?.name,
           boxType,
           String(schedule.qty || 0),
@@ -201,6 +210,7 @@ export function PendingProduction() {
               <th className="px-3 py-2 border border-black">Order No</th>
               <th className="px-3 py-2 border border-black">Schedule Date</th>
               <th className="px-3 py-2 border border-black">Company</th>
+              <th className="px-3 py-2 border border-black">ERP</th>
               <th className="px-3 py-2 border border-black">Item</th>
               <th className="px-3 py-2 border border-black">Box Type</th>
               <th className="px-3 py-2 border border-black">Scheduled Qty</th>
@@ -215,7 +225,7 @@ export function PendingProduction() {
           <tbody>
             {pendingRows.length === 0 ? (
               <tr>
-                <td colSpan={13} className="px-6 py-8 text-center text-black font-medium">
+                <td colSpan={14} className="px-6 py-8 text-center text-black font-medium">
                   No pending production schedules.
                 </td>
               </tr>
@@ -224,12 +234,14 @@ export function PendingProduction() {
                 const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
     const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
                 const hasBoxType = Boolean(boxType);
+                const erpCode = getPendingProductionErp(item, order);
                 return (
                 <tr key={schedule.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 border border-black font-bold">{(page - 1) * pageSize + index + 1}</td>
                   <td className="px-3 py-2 border border-black">{order?.orderNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{formatDate(schedule.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>
+                  <td className="px-3 py-2 border border-black whitespace-nowrap">{erpCode}</td>
                   <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
                   <td className={`px-3 py-2 border border-black font-bold ${hasBoxType ? "text-black" : "bg-red-100 text-red-700"}`}>{boxType || "Missing"}</td>
                   <td className="px-3 py-2 border border-black">{schedule.qty || 0}</td>
