@@ -6,6 +6,7 @@ export type SheetMasterColumn = {
 export type SheetMasterFilter = {
   key: string;
   label: string;
+  searchable?: boolean;
 };
 
 export const PHP_ITEM_MASTER_COLUMNS: SheetMasterColumn[] = [

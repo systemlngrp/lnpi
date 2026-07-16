@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Plus, Edit, Trash2, Upload, Download, FileSpreadsheet } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, Download } from "lucide-react";
 import { Company } from "../types";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
@@ -304,15 +304,6 @@ export function Companies() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-black pb-4 gap-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Companies Master</h2>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={exportToExcel}
-            className="bg-emerald-50 text-emerald-700 border-2 border-emerald-700 px-3 py-2 rounded font-bold hover:bg-emerald-100 transition flex items-center text-sm"
-            title="Export to Excel"
-          >
-            <FileSpreadsheet size={18} className="mr-2" /> Export
-          </button>
-        </div>
       </div>
 
       {isFormOpen && (

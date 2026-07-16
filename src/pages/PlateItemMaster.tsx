@@ -19,7 +19,6 @@ export function PlateItemMaster() {
       rowsOverride={buildPhpPlateInventoryRows(rows, jobs, [...standaloneLoadingSlips, ...commonLoadingSlips], "PLATE")}
       filters={[
         { key: "company", label: "Company" },
-        { key: "category", label: "Category" },
         { key: "typeOfPlate", label: "Type of Plate" },
         { key: "hostingerSync", label: "Hostinger Sync" },
       ]}

@@ -2,6 +2,7 @@ import { KeyboardEvent, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { ClientPagination } from "../components/ClientPagination";
 import { DataSummaryTiles } from "../components/DataSummaryTiles";
+import { Select } from "../components/Select";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useData } from "../hooks/useData";
 import type { SheetMasterColumn, SheetMasterFilter } from "../lib/sheetMasterConfigs";
@@ -183,21 +184,31 @@ export function SheetMasterPage({
               className="w-full rounded border border-black py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-black"
             />
           </div>
-          {filterOptions.map((filter) => (
-            <select
-              key={filter.key}
-              value={filterValues[filter.key] || ""}
-              onChange={(e) => setFilterValues((prev) => ({ ...prev, [filter.key]: e.target.value }))}
-              className="w-full rounded border border-black bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-            >
-              <option value="">All {filter.label}</option>
-              {filter.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          ))}
+          {filterOptions.map((filter) =>
+            filter.searchable ? (
+              <Select
+                key={filter.key}
+                value={filterValues[filter.key] || ""}
+                onChange={(value) => setFilterValues((prev) => ({ ...prev, [filter.key]: value }))}
+                options={filter.options.map((option) => ({ value: option, label: option }))}
+                placeholder={`All ${filter.label}`}
+              />
+            ) : (
+              <select
+                key={filter.key}
+                value={filterValues[filter.key] || ""}
+                onChange={(e) => setFilterValues((prev) => ({ ...prev, [filter.key]: e.target.value }))}
+                className="w-full rounded border border-black bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              >
+                <option value="">All {filter.label}</option>
+                {filter.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            )
+          )}
         </div>
       </div>
 
