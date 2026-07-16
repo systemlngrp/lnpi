@@ -25,8 +25,10 @@ import {
 } from "../lib/productionMaterialUsage";
 import { isProductionReadyForTally } from "../lib/productionStageFilters";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useAuth } from "../auth/AuthContext";
 
 export function ProductionPendingTally() {
+  const { user } = useAuth();
   const [productions, setProductions] = useData<Production>("productions", []);
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
@@ -39,6 +41,9 @@ export function ProductionPendingTally() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const currentUserEmail = String(user?.email || "").trim().toLowerCase();
+  const canPostTally = currentUserEmail === "pankaj@bizskill.edu.com";
+  const tableColumnCount = canPostTally ? 10 : 9;
   const usageMap = buildProductionMaterialUsageMap(
     materialIssues,
     materialIssueLines,
@@ -128,18 +133,20 @@ export function ProductionPendingTally() {
                     </div>
                     <div className="text-sm font-bold">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
                     <div className="text-sm">{Number(p.prodFromFFG || 0).toLocaleString()} {p.uom}</div>
-                     <button
-                      onClick={() => handleComplete(p.id)}
-                      disabled={submittingId === p.id}
-                      className={cn(
-                        "w-full flex items-center justify-center py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
-                        confirmId === p.id 
-                          ? "bg-amber-600 text-white border-black animate-pulse" 
-                          : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-700"
-                      )}
-                    >
-                      {submittingId === p.id ? <Spinner size={12} /> : (confirmId === p.id ? "Confirm?" : "Mark Completed")}
-                    </button>
+                     {canPostTally ? (
+                       <button
+                        onClick={() => handleComplete(p.id)}
+                        disabled={submittingId === p.id}
+                        className={cn(
+                          "w-full flex items-center justify-center py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
+                          confirmId === p.id 
+                            ? "bg-amber-600 text-white border-black animate-pulse" 
+                            : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-700"
+                        )}
+                      >
+                        {submittingId === p.id ? <Spinner size={12} /> : (confirmId === p.id ? "Confirm?" : "Post")}
+                      </button>
+                     ) : null}
                 </div>
             ))}
         </div>
@@ -155,13 +162,15 @@ export function ProductionPendingTally() {
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Tally Posting Status</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Tally Posting Remark</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Tally Posting Error</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
+              {canPostTally ? (
+                <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
             {paginatedPendingList.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
+                <td colSpan={tableColumnCount} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
               </tr>
             ) : (
               paginatedPendingList.map((p, index) => (
@@ -175,21 +184,23 @@ export function ProductionPendingTally() {
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{p.tallyPostingStatus || "-"}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-pre-wrap break-words max-w-[320px] align-top">{p.tallyPostingRemark || "-"}</td>
                   <td className="px-6 py-4 text-sm text-rose-700 border border-black whitespace-pre-wrap break-words max-w-[320px] align-top">{p.tallyPostingError || "-"}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium border border-black">
-                    <button
-                      onClick={() => handleComplete(p.id)}
-                      disabled={submittingId === p.id}
-                      className={cn(
-                        "px-3 py-1 rounded font-bold text-xs uppercase flex items-center gap-1 ml-auto transition-all border disabled:opacity-50",
-                        confirmId === p.id 
-                          ? "bg-amber-600 text-white border-black animate-pulse" 
-                          : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-700"
-                      )}
-                    >
-                      {submittingId === p.id ? <Spinner size={12} /> : (confirmId === p.id ? <CheckCircle size={14} /> : <CheckCircle size={14} />)}
-                      {confirmId === p.id ? "Confirm?" : "Mark Completed"}
-                    </button>
-                  </td>
+                  {canPostTally ? (
+                    <td className="px-6 py-4 text-right text-sm font-medium border border-black">
+                      <button
+                        onClick={() => handleComplete(p.id)}
+                        disabled={submittingId === p.id}
+                        className={cn(
+                          "px-3 py-1 rounded font-bold text-xs uppercase flex items-center gap-1 ml-auto transition-all border disabled:opacity-50",
+                          confirmId === p.id 
+                            ? "bg-amber-600 text-white border-black animate-pulse" 
+                            : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-700"
+                        )}
+                      >
+                        {submittingId === p.id ? <Spinner size={12} /> : (confirmId === p.id ? <CheckCircle size={14} /> : <CheckCircle size={14} />)}
+                        {confirmId === p.id ? "Confirm?" : "Post"}
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))
             )}

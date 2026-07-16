@@ -9,8 +9,10 @@ import { cn } from "../lib/utils";
 import { CheckCircle, ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useAuth } from "../auth/AuthContext";
 
 export function PendingTallyEntry() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
 
   // Simple DOM-based table row filter bound to the search input
@@ -33,7 +35,9 @@ export function PendingTallyEntry() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
-
+  const currentUserEmail = String(user?.email || "").trim().toLowerCase();
+  const canPostTally = currentUserEmail === "pankaj@bizskill.edu.com";
+  const tableColumnCount = canPostTally ? 19 : 17;
   const formatMoney = (value?: number) =>
     `${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -141,31 +145,35 @@ export function PendingTallyEntry() {
       <div className="bg-white border border-black rounded shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
           <div className="bg-fuchsia-700 px-4 py-2 text-white font-black uppercase text-sm border-b border-black flex justify-between items-center">
             <span>Pending Records ({pendingList.length})</span>
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 cursor-pointer text-[10px]">
-                <input 
-                  type="checkbox" 
-                  checked={selectedIds.length === pendingList.length && pendingList.length > 0}
-                  onChange={toggleSelectAll}
-                  className="accent-white h-3 w-3"
-                />
-                Select All
-              </label>
-            </div>
+            {canPostTally ? (
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer text-[10px]">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.length === pendingList.length && pendingList.length > 0}
+                    onChange={toggleSelectAll}
+                    className="accent-white h-3 w-3"
+                  />
+                  Select All
+                </label>
+              </div>
+            ) : null}
           </div>
           
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-black border-collapse">
               <thead className="sticky top-0 z-30 bg-fuchsia-700 text-white text-[10px] font-black uppercase tracking-widest">
                 <tr className="divide-x divide-white/20">
-                  <th className="px-2 py-3 text-center w-10">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedIds.length === pendingList.length && pendingList.length > 0}
-                      onChange={toggleSelectAll}
-                      className="accent-white h-4 w-4"
-                    />
-                  </th>
+                  {canPostTally ? (
+                    <th className="px-2 py-3 text-center w-10">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.length === pendingList.length && pendingList.length > 0}
+                        onChange={toggleSelectAll}
+                        className="accent-white h-4 w-4"
+                      />
+                    </th>
+                  ) : null}
                   <th className="px-4 py-3 text-left">Trn No</th>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Supplier</th>
@@ -183,13 +191,13 @@ export function PendingTallyEntry() {
                   <th className="px-6 py-3 text-right">Round Off</th>
                   <th className="px-4 py-3 text-left">Tally Sync Remarks</th>
                   <th className="px-4 py-3 text-center">Details</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
+                  {canPostTally ? <th className="px-6 py-3 text-right">Actions</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-black bg-white">
                 {pendingList.length === 0 ? (
                   <tr>
-                    <td colSpan={19} className="px-6 py-20 text-center text-black font-bold uppercase tracking-widest text-sm">
+                    <td colSpan={tableColumnCount} className="px-6 py-20 text-center text-black font-bold uppercase tracking-widest text-sm">
                       No pending entries.
                     </td>
                   </tr>
@@ -199,14 +207,16 @@ export function PendingTallyEntry() {
                     return (
                       <Fragment key={m.id}>
                         <tr className="hover:bg-slate-50 divide-x divide-black transition-colors text-[11px] text-black font-medium uppercase">
-                          <td className="px-2 py-4 text-center">
-                            <input 
-                              type="checkbox" 
-                              checked={selectedIds.includes(m.id)}
-                              onChange={() => toggleSelect(m.id)}
-                              className="accent-fuchsia-600 h-4 w-4"
-                            />
-                          </td>
+                          {canPostTally ? (
+                            <td className="px-2 py-4 text-center">
+                              <input 
+                                type="checkbox" 
+                                checked={selectedIds.includes(m.id)}
+                                onChange={() => toggleSelect(m.id)}
+                                className="accent-fuchsia-600 h-4 w-4"
+                              />
+                            </td>
+                          ) : null}
                           <td className="px-4 py-4 whitespace-nowrap">{m.transactionNo}</td>
                           <td className="px-4 py-4 whitespace-nowrap">{formatDate(m.date)}</td>
                           <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
@@ -240,31 +250,33 @@ export function PendingTallyEntry() {
                               {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                             </button>
                           </td>
-                          <td className="px-6 py-4 text-right">
-                            <button
-                              onClick={() => handleComplete(m.id)}
-                              disabled={submittingId === m.id || isBulkSubmitting}
-                              className={cn(
-                                "inline-flex items-center justify-center min-w-[100px] px-3 py-1.5 rounded font-black transition-all border disabled:opacity-50 text-[10px] uppercase tracking-wider gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
-                                confirmId === m.id 
-                                  ? "bg-amber-600 text-white border-black animate-pulse" 
-                                  : "bg-emerald-100 text-emerald-800 border-emerald-800 hover:bg-emerald-200"
-                              )}
-                            >
-                              {submittingId === m.id ? (
-                                <Spinner size={12} />
-                              ) : (
-                                <>
-                                  <CheckCircle size={14} />
-                                  {confirmId === m.id ? "Confirm?" : "Complete"}
-                                </>
-                              )}
-                            </button>
-                          </td>
+                          {canPostTally ? (
+                            <td className="px-6 py-4 text-right">
+                              <button
+                                onClick={() => handleComplete(m.id)}
+                                disabled={submittingId === m.id || isBulkSubmitting}
+                                className={cn(
+                                  "inline-flex items-center justify-center min-w-[100px] px-3 py-1.5 rounded font-black transition-all border disabled:opacity-50 text-[10px] uppercase tracking-wider gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
+                                  confirmId === m.id 
+                                    ? "bg-amber-600 text-white border-black animate-pulse" 
+                                    : "bg-emerald-100 text-emerald-800 border-emerald-800 hover:bg-emerald-200"
+                                )}
+                              >
+                                {submittingId === m.id ? (
+                                  <Spinner size={12} />
+                                ) : (
+                                  <>
+                                    <CheckCircle size={14} />
+                                    {confirmId === m.id ? "Confirm?" : "Post"}
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                          ) : null}
                         </tr>
                         {isExpanded && (
                           <tr className="bg-slate-50">
-                            <td colSpan={19} className="px-6 py-4 border-t border-black">
+                            <td colSpan={tableColumnCount} className="px-6 py-4 border-t border-black">
                               <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-2">
                                 Item Level Details
                               </div>
@@ -291,28 +303,30 @@ export function PendingTallyEntry() {
           <ArrowLeft size={16} /> Back
         </button>
 
-        <div className="flex items-center gap-8">
-          <label className="flex items-center gap-2 font-bold text-xs uppercase cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={selectedIds.length === pendingList.length && pendingList.length > 0}
-              onChange={toggleSelectAll}
-              className="accent-fuchsia-600 h-4 w-4"
-            />
-            Select All Visible
-          </label>
+        {canPostTally ? (
+          <div className="flex items-center gap-8">
+            <label className="flex items-center gap-2 font-bold text-xs uppercase cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={selectedIds.length === pendingList.length && pendingList.length > 0}
+                onChange={toggleSelectAll}
+                className="accent-fuchsia-600 h-4 w-4"
+              />
+              Select All Visible
+            </label>
 
-          <button
-            disabled={selectedIds.length === 0 || isBulkSubmitting}
-            onClick={handleBulkComplete}
-            className={cn(
-              "px-8 py-2 bg-fuchsia-700 text-white rounded font-black text-xs uppercase tracking-widest transition-all border border-black",
-              selectedIds.length > 0 ? "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5" : "opacity-50"
-            )}
-          >
-            {isBulkSubmitting ? <Spinner size={16} className="text-white" /> : `Complete Selected (${selectedIds.length})`}
-          </button>
-        </div>
+            <button
+              disabled={selectedIds.length === 0 || isBulkSubmitting}
+              onClick={handleBulkComplete}
+              className={cn(
+                "px-8 py-2 bg-fuchsia-700 text-white rounded font-black text-xs uppercase tracking-widest transition-all border border-black",
+                selectedIds.length > 0 ? "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5" : "opacity-50"
+              )}
+            >
+              {isBulkSubmitting ? <Spinner size={16} className="text-white" /> : `Post Selected (${selectedIds.length})`}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

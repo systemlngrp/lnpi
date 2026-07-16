@@ -6,13 +6,18 @@ import { formatDate } from "../lib/serial";
 import { CheckCircle, Search } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { useAuth } from "../auth/AuthContext";
 
 export function ConsumptionPendingTally() {
+  const { user } = useAuth();
   const [consumptions, setConsumptions] = useData<Consumption>("consumptions", []);
   const npdItems = useNpdItems();
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const currentUserEmail = String(user?.email || "").trim().toLowerCase();
+  const canPostTally = currentUserEmail === "pankaj@bizskill.edu.com";
+  const tableColumnCount = canPostTally ? 6 : 5;
 
   const handleComplete = (id: string) => {
     if (confirmId !== id) {
@@ -74,18 +79,20 @@ export function ConsumptionPendingTally() {
                     </div>
                     <div className="text-sm font-bold">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</div>
                     <div className="text-sm">{c.qty} {c.uom}</div>
-                     <button
-                      onClick={() => handleComplete(c.id)}
-                      disabled={submittingId === c.id}
-                      className={cn(
-                        "w-full flex items-center justify-center py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
-                        confirmId === c.id 
-                          ? "bg-amber-600 text-white border-black animate-pulse" 
-                          : "bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-700"
-                      )}
-                    >
-                      {submittingId === c.id ? <Spinner size={12} /> : (confirmId === c.id ? "Confirm?" : "Mark Completed")}
-                    </button>
+                     {canPostTally ? (
+                       <button
+                        onClick={() => handleComplete(c.id)}
+                        disabled={submittingId === c.id}
+                        className={cn(
+                          "w-full flex items-center justify-center py-2 rounded font-bold transition-all border disabled:opacity-50 text-xs uppercase tracking-wider gap-2",
+                          confirmId === c.id 
+                            ? "bg-amber-600 text-white border-black animate-pulse" 
+                            : "bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-700"
+                        )}
+                      >
+                        {submittingId === c.id ? <Spinner size={12} /> : (confirmId === c.id ? "Confirm?" : "Post")}
+                      </button>
+                     ) : null}
                 </div>
             ))}
         </div>
@@ -97,13 +104,15 @@ export function ConsumptionPendingTally() {
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item Name</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Consumed Qty</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
+              {canPostTally ? (
+                <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
             {pendingList.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
+                <td colSpan={tableColumnCount} className="px-6 py-8 text-center text-black font-medium">No pending Tally entries.</td>
               </tr>
             ) : (
               pendingList
@@ -115,21 +124,23 @@ export function ConsumptionPendingTally() {
                   <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === c.itemId)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-amber-700 border border-black">{c.qty}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{c.uom}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium border border-black">
-                    <button
-                      onClick={() => handleComplete(c.id)}
-                      disabled={submittingId === c.id}
-                      className={cn(
-                        "px-3 py-1 rounded font-bold text-xs uppercase flex items-center gap-1 ml-auto transition-all border disabled:opacity-50",
-                        confirmId === c.id 
-                          ? "bg-amber-600 text-white border-black animate-pulse" 
-                          : "bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-700"
-                      )}
-                    >
-                      {submittingId === c.id ? <Spinner size={12} /> : <CheckCircle size={14} />}
-                      {confirmId === c.id ? "Confirm?" : "Mark Completed"}
-                    </button>
-                  </td>
+                  {canPostTally ? (
+                    <td className="px-6 py-4 text-right text-sm font-medium border border-black">
+                      <button
+                        onClick={() => handleComplete(c.id)}
+                        disabled={submittingId === c.id}
+                        className={cn(
+                          "px-3 py-1 rounded font-bold text-xs uppercase flex items-center gap-1 ml-auto transition-all border disabled:opacity-50",
+                          confirmId === c.id 
+                            ? "bg-amber-600 text-white border-black animate-pulse" 
+                            : "bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-700"
+                        )}
+                      >
+                        {submittingId === c.id ? <Spinner size={12} /> : <CheckCircle size={14} />}
+                        {confirmId === c.id ? "Confirm?" : "Post"}
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))
             )}

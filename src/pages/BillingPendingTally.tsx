@@ -25,7 +25,7 @@ import {
 import { Spinner } from "../components/Spinner";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { normalizeOrderItemSource } from "../lib/orderItems";
 
 const formatInr = new Intl.NumberFormat("en-IN", {
@@ -34,7 +34,7 @@ const formatInr = new Intl.NumberFormat("en-IN", {
 });
 
 export function BillingPendingTally() {
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [invoices, setInvoices, isLoading] = useData<Invoice>("invoices", []);
   const [lineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [companies] = useData<Company>("companies", []);
@@ -46,7 +46,9 @@ export function BillingPendingTally() {
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-
+  const currentUserEmail = String(user?.email || "").trim().toLowerCase();
+  const canPostTally = currentUserEmail === "pankaj@bizskill.edu.com";
+  const tableColumnCount = canPostTally ? 6 : 5;
   const toggleRow = (id: string) => {
     const next = new Set(expandedRows);
     if (next.has(id)) next.delete(id);
@@ -172,9 +174,6 @@ export function BillingPendingTally() {
     }
   };
 
-  const handleEditInvoice = (id: string) => {
-    navigate(`/billing/pending?editInvoiceId=${encodeURIComponent(id)}`);
-  };
 
   return (
     <div className="space-y-6">
@@ -204,13 +203,15 @@ export function BillingPendingTally() {
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Company</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">PO Numbers</th>
               <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase">Total Amount</th>
-              <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase">Action</th>
+              {canPostTally ? (
+                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase">Action</th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-black">
             {processedInvoices.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">
+                <td colSpan={tableColumnCount} className="px-6 py-12 text-center text-slate-500 italic">
                   {isLoading ? <Spinner /> : "No pending invoices for Tally posting."}
                 </td>
               </tr>
@@ -250,29 +251,23 @@ export function BillingPendingTally() {
                     <td className="px-4 py-4 text-right font-black text-indigo-700">
                       {formatInr.format(inv.grandTotal)}
                     </td>
-                    <td className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditInvoice(inv.id)}
-                          className="bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-black uppercase hover:bg-amber-700 flex items-center gap-2"
-                        >
-                          <Pencil size={14} />
-                          Edit
-                        </button>
-                        <button 
-                          disabled={!!processingId}
-                          onClick={() => handleMarkPosted(inv.id)}
-                          className="bg-emerald-600 text-white px-4 py-1.5 rounded text-xs font-black uppercase hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-50"
-                        >
-                          {processingId === inv.id ? <Spinner size={12} /> : <><CheckCircle size={14} /> Mark Posted</>}
-                        </button>
-                      </div>
-                    </td>
+                    {canPostTally ? (
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button 
+                            disabled={!!processingId}
+                            onClick={() => handleMarkPosted(inv.id)}
+                            className="bg-emerald-600 text-white px-4 py-1.5 rounded text-xs font-black uppercase hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-50"
+                          >
+                            {processingId === inv.id ? <Spinner size={12} /> : <><CheckCircle size={14} /> Post</>}
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                   {expandedRows.has(inv.id) && (
                     <tr className="bg-slate-50">
-                      <td colSpan={6} className="px-12 py-4">
+                      <td colSpan={tableColumnCount} className="px-12 py-4">
                         <div className="border border-black rounded overflow-hidden">
                           <table className="min-w-full divide-y divide-black">
                             <thead className="sticky top-0 z-30 bg-slate-200">
