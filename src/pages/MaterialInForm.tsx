@@ -1865,9 +1865,9 @@ export function MaterialInForm() {
                                 {isUsdInvoice ? (
                                   <span className="text-indigo-600 uppercase">Invoice Rate: USD {Number(line.invoiceRateUsd || 0).toFixed(4)} | INR {Number(line.invoiceRate || 0).toFixed(2)}</span>
                                 ) : (
-                                  <span className="text-indigo-600 uppercase">Invoice Rate: Rs {Number(line.invoiceRate || 0).toFixed(2)}</span>
+                                  <span className="text-indigo-600 uppercase">Invoice Rate: {Number(line.invoiceRate || 0).toFixed(2)}</span>
                                 )}
-                                <span className="text-amber-700 uppercase">PO Rate: Rs {Number(line.poRate || 0).toFixed(2)}</span>
+                                <span className="text-amber-700 uppercase">PO Rate: {Number(line.poRate || 0).toFixed(2)}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1988,24 +1988,24 @@ export function MaterialInForm() {
             {isUsdInvoice ? (
               <>
                 <div>Invoice Currency: <span className="text-slate-700">USD</span></div>
-                <div>Exchange Rate: <span className="text-slate-700">Rs {numericExchangeRate.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></div>
+                <div>Exchange Rate: <span className="text-slate-700">{numericExchangeRate.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></div>
                 <div>Total Invoice Value (USD): <span className="text-amber-700">USD {totalInvoiceValueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
                 <div>Total Actual Value (USD): <span className="text-indigo-700">USD {totalActualValueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
               </>
             ) : null}
-            <div>Total Invoice Value: <span className="text-amber-700">Rs {totalInvoiceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Total CGST: <span className="text-slate-700">Rs {totalCgst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Total SGST: <span className="text-slate-700">Rs {totalSgst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Total IGST: <span className="text-slate-700">Rs {totalIgst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Invoice Value After GST: <span className="text-amber-700">Rs {totalInvoiceValueAfterGst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Total Actual Value: <span className="text-indigo-700">Rs {totalActualValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Insurance: <span className="text-slate-700">Rs {insuranceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Other Charges: <span className="text-slate-700">Rs {otherChargesValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Expense CGST: <span className="text-slate-700">Rs {expenseCGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Expense SGST: <span className="text-slate-700">Rs {expenseSGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Expense IGST: <span className="text-slate-700">Rs {expenseIGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Round Off: <span className="text-slate-700">Rs {roundOffValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-            <div>Total Amount: <span className="text-emerald-700">Rs {totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total Invoice Value: <span className="text-amber-700">{totalInvoiceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total CGST: <span className="text-slate-700">{totalCgst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total SGST: <span className="text-slate-700">{totalSgst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total IGST: <span className="text-slate-700">{totalIgst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Invoice Value After GST: <span className="text-amber-700">{totalInvoiceValueAfterGst.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total Actual Value: <span className="text-indigo-700">{totalActualValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Insurance: <span className="text-slate-700">{insuranceValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Other Charges: <span className="text-slate-700">{otherChargesValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Expense CGST: <span className="text-slate-700">{expenseCGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Expense SGST: <span className="text-slate-700">{expenseSGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Expense IGST: <span className="text-slate-700">{expenseIGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Round Off: <span className="text-slate-700">{roundOffValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            <div>Total Amount: <span className="text-emerald-700">{totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
           </div>
         </div>
 

@@ -45,14 +45,14 @@ function normalizeText(value?: string | null) {
 }
 
 function formatCurrency(value: number) {
-  return `â‚¹${Number(value || 0).toLocaleString(undefined, {
+  return `${Number(value || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 }
 
 function formatCurrencyDisplay(value: number) {
-  return `â‚¹${Number(value || 0).toLocaleString(undefined, {
+  return `${Number(value || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

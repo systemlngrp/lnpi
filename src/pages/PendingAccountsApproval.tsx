@@ -147,7 +147,7 @@ export function PendingAccountsApproval() {
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>
-              <span className="ml-2 text-black">[{l.qty} {l.uom} @ â‚¹{l.rate}]</span>
+              <span className="ml-2 text-black">[{l.qty} {l.uom} @ {l.rate}]</span>
               {l.gstRate !== undefined && <span className="ml-1 text-[10px] text-slate-500">GST {l.gstRate}% | CGST {Number(l.cgst || 0).toFixed(2)} | SGST {Number(l.sgst || 0).toFixed(2)} | IGST {Number(l.igst || 0).toFixed(2)}</span>}
             </li>
           );
@@ -299,7 +299,7 @@ export function PendingAccountsApproval() {
                       ) : getLineItemsElement(m.lines)}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black whitespace-nowrap font-mono">
-                      â‚¹{(isEditing && editForm ? editForm.totalAmount : m.totalAmount).toLocaleString()}
+                      {(isEditing && editForm ? editForm.totalAmount : m.totalAmount).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-medium border border-black">
                       <div className="flex items-center justify-end gap-2">

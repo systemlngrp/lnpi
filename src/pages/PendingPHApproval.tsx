@@ -108,7 +108,7 @@ export function PendingPHApproval() {
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>
-              <span className="ml-2 text-black">[{l.qty} {l.uom} @ â‚¹{l.rate}]</span>
+              <span className="ml-2 text-black">[{l.qty} {l.uom} @ {l.rate}]</span>
             </li>
           );
         })}
@@ -177,7 +177,7 @@ export function PendingPHApproval() {
                     <div className="text-xs font-black text-slate-500 uppercase">Items</div>
                     <div className="text-sm font-bold">{getLineItemsElement(m.lines)}</div>
                   </div>
-                  <div className="text-right font-mono font-bold text-lg">â‚¹{m.totalAmount.toLocaleString()}</div>
+                  <div className="text-right font-mono font-bold text-lg">{m.totalAmount.toLocaleString()}</div>
                   <button
                     onClick={() => handleApprove(m.id)}
                     disabled={submittingId === m.id}
@@ -252,7 +252,7 @@ export function PendingPHApproval() {
                   <td className="px-6 py-4 text-sm text-black border border-black">
                     {getLineItemsElement(m.lines)}
                   </td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black whitespace-nowrap font-mono">â‚¹{m.totalAmount.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black whitespace-nowrap font-mono">{m.totalAmount.toLocaleString()}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium border border-black">
                     <button
                       onClick={() => handleApprove(m.id)}

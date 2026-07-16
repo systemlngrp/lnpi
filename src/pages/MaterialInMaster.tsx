@@ -47,7 +47,7 @@ export function MaterialInMaster() {
             <li key={idx} className="border-b border-black pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
               <div className="font-medium text-black">{itemName || "Unknown"}</div>
               <div className="text-xs text-black">
-                PO: {line.poNo || "-"} | PO Rate: Rs {Number(line.poRate || 0).toFixed(2)} | Invoice: {Number(line.invoiceQty || 0).toFixed(2)} {line.uom} @ Rs {Number(line.invoiceRate || line.rate || 0).toFixed(2)} = Rs {Number(line.invoiceValue || 0).toFixed(2)} | Tax: CGST Rs {Number(line.cgst || 0).toFixed(2)} / SGST Rs {Number(line.sgst || 0).toFixed(2)} / IGST Rs {Number(line.igst || 0).toFixed(2)} | Actual: {Number(line.actualQty || line.qty || 0).toFixed(2)} {line.uom} = Rs {Number(line.actualValue || line.value || 0).toFixed(2)}
+                PO: {line.poNo || "-"} | PO Rate: {Number(line.poRate || 0).toFixed(2)} | Invoice: {Number(line.invoiceQty || 0).toFixed(2)} {line.uom} @ {Number(line.invoiceRate || line.rate || 0).toFixed(2)} = {Number(line.invoiceValue || 0).toFixed(2)} | Tax: CGST {Number(line.cgst || 0).toFixed(2)} / SGST {Number(line.sgst || 0).toFixed(2)} / IGST {Number(line.igst || 0).toFixed(2)} | Actual: {Number(line.actualQty || line.qty || 0).toFixed(2)} {line.uom} = {Number(line.actualValue || line.value || 0).toFixed(2)}
               </div>
             </li>
           );
@@ -113,17 +113,17 @@ export function MaterialInMaster() {
         </div>
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Actual Value</div>
-          <div className="text-2xl font-black">Rs {metrics.totalActual.toLocaleString()}</div>
+          <div className="text-2xl font-black">{metrics.totalActual.toLocaleString()}</div>
           <div className="text-[10px] font-bold mt-1 opacity-90">Net Purchase Value</div>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Invoice Value</div>
-          <div className="text-2xl font-black">Rs {metrics.totalInvoice.toLocaleString()}</div>
+          <div className="text-2xl font-black">{metrics.totalInvoice.toLocaleString()}</div>
           <div className="text-[10px] font-bold mt-1 opacity-90">Reported on Invoices</div>
         </div>
         <div className="bg-gradient-to-br from-rose-500 to-rose-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest">Invoice After GST</div>
-          <div className="text-2xl font-black">Rs {metrics.totalInvoiceAfterGst.toLocaleString()}</div>
+          <div className="text-2xl font-black">{metrics.totalInvoiceAfterGst.toLocaleString()}</div>
           <div className="text-[10px] font-bold mt-1 opacity-90">Pre-tax plus GST</div>
         </div>
       </div>
@@ -183,16 +183,16 @@ export function MaterialInMaster() {
               <div className="text-sm">{getLineItemsElement(entry.lines)}</div>
               <div className="flex justify-between items-center mt-2 border-t border-slate-100 pt-2">
                 <div className="text-right">
-                  <div className="font-bold text-sm text-slate-500">Invoice: Rs {Number(entry.totalInvoiceValue || 0).toLocaleString()}</div>
-                  <div className="font-bold text-sm text-slate-500">Invoice After GST: Rs {Number(entry.totalInvoiceValueAfterGst || 0).toLocaleString()}</div>
+                  <div className="font-bold text-sm text-slate-500">Invoice: {Number(entry.totalInvoiceValue || 0).toLocaleString()}</div>
+                  <div className="font-bold text-sm text-slate-500">Invoice After GST: {Number(entry.totalInvoiceValueAfterGst || 0).toLocaleString()}</div>
                   <div className="font-bold text-sm text-slate-500">
-                    Insurance / Other: Rs {Number(entry.insurance || 0).toLocaleString()} / Rs {Number(entry.otherCharges || 0).toLocaleString()}
+                    Insurance / Other: {Number(entry.insurance || 0).toLocaleString()} / {Number(entry.otherCharges || 0).toLocaleString()}
                   </div>
                   <div className="font-bold text-sm text-slate-500">
-                    Expense GST: CGST Rs {Number(entry.expenseCGST || 0).toLocaleString()} | SGST Rs {Number(entry.expenseSGST || 0).toLocaleString()} | IGST Rs {Number(entry.expenseIGST || 0).toLocaleString()}
+                    Expense GST: CGST {Number(entry.expenseCGST || 0).toLocaleString()} | SGST {Number(entry.expenseSGST || 0).toLocaleString()} | IGST {Number(entry.expenseIGST || 0).toLocaleString()}
                   </div>
-                  <div className="font-bold text-sm text-slate-500">Actual: Rs {Number(entry.totalActualValue || 0).toLocaleString()}</div>
-                  <div className="font-bold text-lg text-indigo-700">Final Total: Rs {Number(entry.totalAmount || 0).toLocaleString()}</div>
+                  <div className="font-bold text-sm text-slate-500">Actual: {Number(entry.totalActualValue || 0).toLocaleString()}</div>
+                  <div className="font-bold text-lg text-indigo-700">Final Total: {Number(entry.totalAmount || 0).toLocaleString()}</div>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleDelete(entry.id)} className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}>
@@ -232,14 +232,14 @@ export function MaterialInMaster() {
                   <td className="px-6 py-4 text-sm text-black border border-black">{entry.gateEntryNo || ""}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{getSupplierName(entry.supplierId)}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{getLineItemsElement(entry.lines)}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">Rs {Number(entry.totalInvoiceValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">Rs {Number(entry.totalInvoiceValueAfterGst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">{Number(entry.totalInvoiceValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">{Number(entry.totalInvoiceValueAfterGst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">
-                    <div>Actual: Rs {Number(entry.totalActualValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <div>Actual: {Number(entry.totalActualValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                     <div className="text-[11px] text-slate-500">
-                      Exp GST: Rs {Number((entry.expenseCGST || 0) + (entry.expenseSGST || 0) + (entry.expenseIGST || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Exp GST: {Number((entry.expenseCGST || 0) + (entry.expenseSGST || 0) + (entry.expenseIGST || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <div className="font-bold">Final: Rs {Number(entry.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <div className="font-bold">Final: {Number(entry.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   </td>
                   <td className="px-6 py-4 text-sm border border-black whitespace-nowrap">
                     <span className={`px-2 py-1 rounded text-[11px] font-bold border uppercase tracking-wider ${entry.status === "Completed" ? "bg-emerald-100 text-emerald-900 border-emerald-900" : "bg-amber-100 text-amber-900 border-amber-900"}`}>

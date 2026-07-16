@@ -285,7 +285,7 @@ export function PlantHeadUnified() {
                         </div>
                         <div className="text-sm font-bold">{suppliers.find(s => s.id === m.supplierId)?.name || m.supplierId}</div>
                         <div className="text-xs text-slate-600">{m.lines.map((l) => `${materials.find(it => it.id === l.itemId)?.name || npdItems.find(it => it.id === l.itemId)?.name || "Unknown"} [${l.qty}]`).join(', ')}</div>
-                        <div className="font-bold text-right text-lg">â‚¹{m.totalAmount.toLocaleString()}</div>
+                        <div className="font-bold text-right text-lg">{m.totalAmount.toLocaleString()}</div>
                         <ApproveButton 
                             confirming={confirmId === m.id} 
                             submitting={submittingId === m.id} 
@@ -343,7 +343,7 @@ export function PlantHeadUnified() {
                         ))}
                       </ul>
                     </td>
-                    <td className="px-4 py-2 text-sm font-mono text-right font-bold">â‚¹{m.totalAmount.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-sm font-mono text-right font-bold">{m.totalAmount.toLocaleString()}</td>
                     <td className="px-4 py-2 text-right">
                       <ApproveButton 
                         confirming={confirmId === m.id} 

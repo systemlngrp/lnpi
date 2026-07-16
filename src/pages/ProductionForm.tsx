@@ -711,7 +711,7 @@ export function ProductionForm() {
       return;
     }
     if (reelActualTrimMissing) {
-      alert("Reel Actual Width is mandatory and must be greater than 0.");
+      alert("Reel Actual Width Trimming (RAWT) is mandatory and must be greater than 0.");
       return;
     }
 
@@ -1012,7 +1012,7 @@ export function ProductionForm() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
-              {showField("Reel Per Calc") ? <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} readOnly helpText={getReelAsPerCalculationHelpText(reelFormulaMode)} /> : null}
+              {showField("Reel Per Calc") ? <FormInput label="Reel as per the calculation (RAPC)" value={formData.reelAsPerCalc} readOnly helpText={getReelAsPerCalculationHelpText(reelFormulaMode)} /> : null}
               {showField("No. of ups in Cutting (For Plates)") && !isSelectedPlateItem ? <FormInput
                 label="No. of ups in Cutting (For Plates)"
                 value={formData.noOfUpsInCuttingForPlates}
@@ -1020,7 +1020,7 @@ export function ProductionForm() {
                 type="number"
                 helpText="Editable field for plate-related cutting ups. It is saved with the production entry."
               /> : null}
-              {showField("Reel Actual Trim") ? <FormInput label="Reel Actual Width" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" required helpText="Mandatory. Enter the actual reel width." /> : null}
+              {showField("Reel Actual Trim") ? <FormInput label="Reel Actual Width Trimming (RAWT)" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" required helpText="Mandatory. Enter the actual reel width trimming." /> : null}
               {showField("Cutting Trim") ? <FormInput label="Cutting with Trimming" value={formData.cuttingWithTrimming} readOnly helpText={getCuttingSizeHelpText(cuttingSizeFormulaMode)} /> : null}
               {showField("Paper Required (Nos)") ? <FormInput
                 label="Paper Required (Nos)"

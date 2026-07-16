@@ -94,7 +94,7 @@ export function PendingDebitNote() {
                     </td>
                     <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
                     <td className="px-4 py-4">{m.debitNoteDate ? formatDate(m.debitNoteDate) : "-"}</td>
-                    <td className="px-4 py-4 text-right font-black text-indigo-700">₹{Number(m.debitNoteAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-4 text-right font-black text-indigo-700">{Number(m.debitNoteAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="px-4 py-4">{m.debitRemarkTally || "-"}</td>
                     {canPostDebitNote ? (
                       <td className="px-4 py-4 text-center">

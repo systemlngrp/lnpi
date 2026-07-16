@@ -53,7 +53,7 @@ function roundMoney(value: number) {
 }
 
 function formatMoney(value: number) {
-  return `INR ${roundMoney(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return roundMoney(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function getDefaultRange(): OperationDashboardDateRange {
