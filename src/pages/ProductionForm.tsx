@@ -85,6 +85,27 @@ function round2(value: number) {
 function roundUpWhole(value: number) {
   return Math.ceil(value);
 }
+
+function getMandatoryLayerFields(ply: number) {
+  const fieldsByPly: Record<number, Array<"L1" | "F1" | "L2" | "F2" | "L3">> = {
+    1: ["L1"],
+    2: ["L1", "F1"],
+    3: ["L1", "F1", "L2"],
+    4: ["L1", "F1", "L2", "F2"],
+    5: ["L1", "F1", "L2", "F2", "L3"],
+  };
+  return fieldsByPly[ply] || [];
+}
+
+function isBlankRequiredValue(value: string | number) {
+  return value === "" || value === null || value === undefined;
+}
+
+function isPlateItemForProductionForm(order?: Order, item?: Item) {
+  const source = String(order?.itemSource || "").trim().toUpperCase();
+  const itemLabel = String((item as any)?.boxType || item?.typeName || item?.name || "").trim().toUpperCase();
+  return source === "PLATE" || itemLabel.includes("PLATE");
+}
 function getPendingProductionQty(schedule: OrderSchedule, consumedQty: number) {
   return Math.max(
     Number(schedule.qty || 0) - Number(consumedQty || 0) - Number(schedule.canceledQty || 0),
@@ -344,6 +365,14 @@ export function ProductionForm() {
   );
 
   const currentQty = Number(formData.qty || 0);
+  const isSelectedPlateItem = isPlateItemForProductionForm(selectedOrder, selectedItem);
+  const mandatoryLayerFields = getMandatoryLayerFields(Number(formData.ply)).filter((label) => showField(label));
+  const missingMandatoryLayerFields = mandatoryLayerFields.filter((label) => {
+    const fieldName = label.toLowerCase() as "l1" | "f1" | "l2" | "f2" | "l3";
+    return isBlankRequiredValue(formData[fieldName]);
+  });
+  const hasMissingMandatoryLayerFields = missingMandatoryLayerFields.length > 0;
+  const isLayerRequired = (label: "L1" | "F1" | "L2" | "F2" | "L3") => mandatoryLayerFields.includes(label);
   const reelActualTrimMissing = showField("Reel Actual Trim") && Number(formData.reelActualWithTrimming || 0) <= 0;
   const allJobRows = useMemo(() => [...productions, ...phpJobMaster, ...plateJobMaster], [productions, phpJobMaster, plateJobMaster]);
   const currentGsm = Number(formData.gsm || 0);
@@ -677,9 +706,12 @@ export function ProductionForm() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedSchedule || !selectedOrder || !selectedItem || !formData.date) return;
-    if (showField("L1") && formData.l1 === "") return;
+    if (hasMissingMandatoryLayerFields) {
+      alert(`Please fill mandatory layer fields: ${missingMandatoryLayerFields.join(", ")}.`);
+      return;
+    }
     if (reelActualTrimMissing) {
-      alert("Reel Actual Trim is mandatory and must be greater than 0.");
+      alert("Reel Actual Width is mandatory and must be greater than 0.");
       return;
     }
 
@@ -972,24 +1004,24 @@ export function ProductionForm() {
             )}
 
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mt-4">
-              {showField("L1") ? <FormInput label="L1" value={formData.l1} onChange={(v) => setFormData({ ...formData, l1: v })} type="number" required helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
-              {showField("F1") ? <FormInput label="F1" value={formData.f1} onChange={(v) => setFormData({ ...formData, f1: v })} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
-              {showField("L2") ? <FormInput label="L2" value={formData.l2} onChange={(v) => setFormData({ ...formData, l2: v })} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
-              {showField("F2") ? <FormInput label="F2" value={formData.f2} onChange={(v) => setFormData({ ...formData, f2: v })} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
-              {showField("L3") ? <FormInput label="L3" value={formData.l3} onChange={(v) => setFormData({ ...formData, l3: v })} type="number" helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
+              {showField("L1") ? <FormInput label="L1" value={formData.l1} onChange={(v) => setFormData({ ...formData, l1: v })} type="number" required={isLayerRequired("L1")} helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
+              {showField("F1") ? <FormInput label="F1" value={formData.f1} onChange={(v) => setFormData({ ...formData, f1: v })} type="number" required={isLayerRequired("F1")} helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
+              {showField("L2") ? <FormInput label="L2" value={formData.l2} onChange={(v) => setFormData({ ...formData, l2: v })} type="number" required={isLayerRequired("L2")} helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
+              {showField("F2") ? <FormInput label="F2" value={formData.f2} onChange={(v) => setFormData({ ...formData, f2: v })} type="number" required={isLayerRequired("F2")} helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
+              {showField("L3") ? <FormInput label="L3" value={formData.l3} onChange={(v) => setFormData({ ...formData, l3: v })} type="number" required={isLayerRequired("L3")} helpText="Default value comes from Item Master for the selected item. It is used in the GSM calculation." /> : null}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
               {showField("Reel Per Calc") ? <FormInput label="Reel Per Calc" value={formData.reelAsPerCalc} readOnly helpText={getReelAsPerCalculationHelpText(reelFormulaMode)} /> : null}
-              {showField("No. of ups in Cutting (For Plates)") ? <FormInput
+              {showField("No. of ups in Cutting (For Plates)") && !isSelectedPlateItem ? <FormInput
                 label="No. of ups in Cutting (For Plates)"
                 value={formData.noOfUpsInCuttingForPlates}
                 onChange={(v) => setFormData({ ...formData, noOfUpsInCuttingForPlates: v })}
                 type="number"
                 helpText="Editable field for plate-related cutting ups. It is saved with the production entry."
               /> : null}
-              {showField("Reel Actual Trim") ? <FormInput label="Reel Actual Trim" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" required helpText="Mandatory. Enter the actual reel size after trimming." /> : null}
-              {showField("Cutting Trim") ? <FormInput label="Cutting Trim" value={formData.cuttingWithTrimming} readOnly helpText={getCuttingSizeHelpText(cuttingSizeFormulaMode)} /> : null}
+              {showField("Reel Actual Trim") ? <FormInput label="Reel Actual Width" value={formData.reelActualWithTrimming} onChange={(v) => setFormData({ ...formData, reelActualWithTrimming: v })} type="number" required helpText="Mandatory. Enter the actual reel width." /> : null}
+              {showField("Cutting Trim") ? <FormInput label="Cutting with Trimming" value={formData.cuttingWithTrimming} readOnly helpText={getCuttingSizeHelpText(cuttingSizeFormulaMode)} /> : null}
               {showField("Paper Required (Nos)") ? <FormInput
                 label="Paper Required (Nos)"
                 value={formData.paperRequiredNos}
@@ -1051,7 +1083,6 @@ export function ProductionForm() {
 
               {showField("Least GSM") ? <FormInput label="Least GSM" value={formData.leastGsm} readOnly type="number" step="0.00001" helpText="Read-only least GSM reference from production history for the current ERP code." /> : null}
               {showField("Flute Batches") ? <FormInput label="Flute Batches" value={formData.fluteBatches} readOnly helpText="Derived from Flute using this mapping: A=1, B=2, B+C=3, C=4, E=5. Any other value stays blank." /> : null}
-              {showField("Company Name") ? <FormInput label="Company Name" value={formData.companyName} readOnly helpText="Auto-fetched from the selected order's company." /> : null}
             </div>
           </div>
           <div className="pt-2">
@@ -1063,6 +1094,7 @@ export function ProductionForm() {
                 !formData.date ||
                 currentQty <= 0 ||
                 reelActualTrimMissing ||
+                hasMissingMandatoryLayerFields ||
                 quantityDeviationError ||
                 maximumAllowedProductionError ||
                 gsmValidationError

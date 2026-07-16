@@ -5,13 +5,18 @@ import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { CheckCircle } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { useAuth } from "../auth/AuthContext";
 
 export function PendingDebitNote() {
+  const { user } = useAuth();
   const [materialIn, setMaterialIn, isLoading] = useData<MaterialIn>("material-in", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const currentUserEmail = String(user?.email || "").trim().toLowerCase();
+  const canPostDebitNote = currentUserEmail === "pankaj@bizskilledu.com";
+  const columnCount = canPostDebitNote ? 6 : 5;
 
   const debitNoteList = useMemo(() => {
     return materialIn
@@ -65,16 +70,18 @@ export function PendingDebitNote() {
               <tr className="divide-x divide-black">
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">MRR Details</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Supplier/Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Debit Note No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Date</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase">Amount</th>
-                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase">Action</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Debit Note Tally Sync Remarks</th>
+                {canPostDebitNote ? (
+                  <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase">Action</th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {debitNoteList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
+                  <td colSpan={columnCount} className="px-4 py-20 text-center font-bold text-slate-400 uppercase tracking-widest text-sm">
                     {isLoading ? <Spinner /> : "No pending debit notes found"}
                   </td>
                 </tr>
@@ -86,18 +93,20 @@ export function PendingDebitNote() {
                       <div className="text-[10px] text-slate-500">INV: {m.invoiceNo}</div>
                     </td>
                     <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
-                    <td className="px-4 py-4 font-black text-red-600">{m.debitNote}</td>
                     <td className="px-4 py-4">{m.debitNoteDate ? formatDate(m.debitNoteDate) : "-"}</td>
-                    <td className="px-4 py-4 text-right font-black text-indigo-700">â‚¹{Number(m.debitNoteAmount || 0).toLocaleString()}</td>
-                    <td className="px-4 py-4 text-center">
-                      <button 
-                        disabled={!!processingId}
-                        onClick={() => handleMarkPosted(m.id)}
-                        className="bg-emerald-600 text-white px-4 py-1.5 rounded text-xs font-black uppercase hover:bg-emerald-700 flex items-center gap-2 mx-auto"
-                      >
-                        {processingId === m.id ? <Spinner size={12} /> : <><CheckCircle size={14} /> Mark Posted</>}
-                      </button>
-                    </td>
+                    <td className="px-4 py-4 text-right font-black text-indigo-700">₹{Number(m.debitNoteAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-4">{m.debitRemarkTally || "-"}</td>
+                    {canPostDebitNote ? (
+                      <td className="px-4 py-4 text-center">
+                        <button 
+                          disabled={!!processingId}
+                          onClick={() => handleMarkPosted(m.id)}
+                          className="bg-emerald-600 text-white px-4 py-1.5 rounded text-xs font-black uppercase hover:bg-emerald-700 flex items-center gap-2 mx-auto"
+                        >
+                          {processingId === m.id ? <Spinner size={12} /> : <><CheckCircle size={14} /> Post</>}
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}
