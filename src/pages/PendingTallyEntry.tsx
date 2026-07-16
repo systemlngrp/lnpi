@@ -36,7 +36,7 @@ export function PendingTallyEntry() {
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
-  const canPostTally = currentUserEmail === "pankaj@bizskill.edu.com";
+  const canPostTally = currentUserEmail === "pankaj@bizskilledu.com";
   const tableColumnCount = canPostTally ? 19 : 17;
   const formatMoney = (value?: number) =>
     `${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

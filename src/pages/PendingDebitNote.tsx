@@ -15,7 +15,7 @@ export function PendingDebitNote() {
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
-  const canPostDebitNote = currentUserEmail === "pankaj@bizskill.edu.com";
+  const canPostDebitNote = currentUserEmail === "pankaj@bizskilledu.com";
   const columnCount = canPostDebitNote ? 6 : 5;
 
   const debitNoteList = useMemo(() => {

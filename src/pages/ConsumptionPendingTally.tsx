@@ -16,7 +16,7 @@ export function ConsumptionPendingTally() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
-  const canPostTally = currentUserEmail === "pankaj@bizskill.edu.com";
+  const canPostTally = currentUserEmail === "pankaj@bizskilledu.com";
   const tableColumnCount = canPostTally ? 6 : 5;
 
   const handleComplete = (id: string) => {

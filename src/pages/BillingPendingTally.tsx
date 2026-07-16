@@ -47,7 +47,7 @@ export function BillingPendingTally() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
-  const canPostTally = currentUserEmail === "pankaj@bizskill.edu.com";
+  const canPostTally = currentUserEmail === "pankaj@bizskilledu.com";
   const tableColumnCount = canPostTally ? 6 : 5;
   const toggleRow = (id: string) => {
     const next = new Set(expandedRows);
