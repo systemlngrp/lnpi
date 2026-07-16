@@ -220,7 +220,7 @@ export function SheetMasterPage({
       />
 
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="table-sticky-scroll">
           <table className="min-w-full border-collapse border border-black text-sm">
             <thead className="sticky top-0 z-30 bg-slate-100">
               <tr>
