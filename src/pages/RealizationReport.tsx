@@ -1,10 +1,9 @@
 import React, { useMemo, useState, useEffect } from "react";
 
-import { TableControls } from "../components/TableControls";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { Building2, Calendar, Download, FileText, RotateCcw, TrendingUp, User2 } from "lucide-react";
+import { Download, FileText, RotateCcw, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, Order, OrderSchedule, Production, Setting } from "../types";
 import { formatDate, getFinancialYear } from "../lib/serial";
@@ -249,6 +248,7 @@ export function RealizationReport() {
   const currentTarget = useMemo(() => resolveTargetForRange(targets, fromDate, toDate), [fromDate, targets, toDate]);
 
   const handleClear = () => {
+    setSearchTerm("");
     setFromDate("");
     setToDate("");
     setCompanyId("");
@@ -338,172 +338,130 @@ export function RealizationReport() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.34)]">
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 px-5 py-3 text-white">
-          <div className="flex items-center gap-2 text-lg font-black tracking-tight">
-            <TrendingUp size={18} />
-            Realization Dashboard
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 border-b border-black pb-3">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Realization Report</h2>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded border border-blue-300 bg-blue-50 p-4">
+          <div className="text-xs font-black uppercase text-blue-700">Overall Realization Per Kg</div>
+          <div className="mt-1 text-2xl font-black text-blue-900">{Number(overall.average || 0).toFixed(2)}</div>
         </div>
-
-        <div className="space-y-4 p-5">
-          <div className="rounded-2xl bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500 px-5 py-4 text-white shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="text-sm font-bold uppercase tracking-[0.16em] text-white/85">Overall Realization Per Kg</div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="text-4xl font-black tracking-tight">{Number(overall.average || 0).toFixed(2)} <span className="text-base font-bold text-white/85">per kg</span></div>
-                <div className={`rounded-full border px-4 py-2 text-sm font-black ${getTargetBadgeClass(currentTarget?.value || 0, overall.average)}`}>
-                  Current Rate: {currentTarget?.value ?? "-"}
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3">
-                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/75">Filtered Qty</div>
-                <div className="mt-1 text-2xl font-black tracking-tight">{Number(overall.totalQty || 0).toFixed(2)}</div>
-              </div>
-              <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3">
-                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/75">Production Rows</div>
-                <div className="mt-1 text-2xl font-black tracking-tight">{overall.rowCount}</div>
-              </div>
-              <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3">
-                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/75">Target Period</div>
-                <div className="mt-1 text-lg font-black tracking-tight">
-                  {currentTarget ? `${currentTarget.month} ${currentTarget.fy}` : "Not set"}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[150px_150px_minmax(180px,1fr)_minmax(180px,1fr)_auto_auto_auto]">
-              <label className="space-y-1">
-                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                  <Calendar size={13} />
-                  From
-                </span>
-                <input
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  className="h-[42px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold outline-none"
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                  <Calendar size={13} />
-                  To
-                </span>
-                <input
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  className="h-[42px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold outline-none"
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                  <Building2 size={13} />
-                  Company
-                </span>
-                <select
-                  value={companyId}
-                  onChange={(e) => setCompanyId(e.target.value)}
-                  className="h-[42px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold outline-none"
-                >
-                  <option value="">All Companies</option>
-                  {companies
-                    .slice()
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((company) => (
-                      <option key={company.id} value={company.id}>
-                        {company.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-
-              <label className="space-y-1">
-                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                  <User2 size={13} />
-                  Sales Person
-                </span>
-                <select
-                  value={salesPersonId}
-                  onChange={(e) => setSalesPersonId(e.target.value)}
-                  className="h-[42px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold outline-none"
-                >
-                  <option value="">All Sales Persons</option>
-                  {salesPersonOptions.map((salesPerson) => (
-                    <option key={salesPerson} value={salesPerson}>
-                      {salesPerson}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                type="button"
-                onClick={handleClear}
-                className="mt-5 inline-flex h-[42px] items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-600 px-4 text-sm font-bold text-white hover:bg-slate-700"
-              >
-                <RotateCcw size={14} />
-                Clear
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportExcel}
-                className="mt-5 inline-flex h-[42px] items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-500 px-4 text-sm font-bold text-white hover:bg-emerald-600"
-              >
-                <Download size={14} />
-                Excel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportPdf}
-                className="mt-5 inline-flex h-[42px] items-center justify-center gap-2 rounded-xl border border-rose-600 bg-rose-500 px-4 text-sm font-bold text-white hover:bg-rose-600"
-              >
-                <FileText size={14} />
-                PDF
-              </button>
-            </div>
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
+          <div className="text-xs font-black uppercase text-emerald-700">Filtered Qty</div>
+          <div className="mt-1 text-2xl font-black text-emerald-900">{Number(overall.totalQty || 0).toFixed(2)}</div>
+        </div>
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <div className="text-xs font-black uppercase text-amber-700">Production Rows</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{overall.rowCount}</div>
+        </div>
+        <div className="rounded border border-purple-300 bg-purple-50 p-4">
+          <div className="text-xs font-black uppercase text-purple-700">Target Period</div>
+          <div className="mt-1 text-2xl font-black text-purple-900">{currentTarget ? `${currentTarget.month} ${currentTarget.fy}` : "Not set"}</div>
+          <div className={`mt-1 inline-flex rounded border px-2 py-1 text-xs font-black ${getTargetBadgeClass(currentTarget?.value || 0, overall.average)}`}>
+            Current Rate: {currentTarget?.value ?? "-"}
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 text-xl font-bold text-slate-900">Sales Person vs Realization</div>
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <div className="rounded border border-black bg-white p-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.2fr)_repeat(2,minmax(130px,0.7fr))_minmax(180px,1fr)_minmax(180px,1fr)_repeat(3,auto)] xl:items-center">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search realization..."
+              className="w-full rounded border-2 border-black py-2.5 pl-9 pr-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            title="From"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            title="To"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
+          <select
+            value={companyId}
+            onChange={(e) => setCompanyId(e.target.value)}
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          >
+            <option value="">All Companies</option>
+            {companies
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((company) => (
+                <option key={company.id} value={company.id}>{company.name}</option>
+              ))}
+          </select>
+          <select
+            value={salesPersonId}
+            onChange={(e) => setSalesPersonId(e.target.value)}
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          >
+            <option value="">All Sales Persons</option>
+            {salesPersonOptions.map((salesPerson) => (
+              <option key={salesPerson} value={salesPerson}>{salesPerson}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleClear}
+            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+          >
+            <RotateCcw size={14} />
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+          >
+            <Download size={14} />
+            Excel
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded border border-rose-700 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-800 hover:bg-rose-100"
+          >
+            <FileText size={14} />
+            PDF
+          </button>
+        </div>
+      </div>
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-
-      <table className="min-w-full border-collapse">
-            <thead className="sticky top-0 z-30">
-              <tr className="bg-slate-800 text-white">
-                <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-[0.16em]">Metric</th>
+      <div className="space-y-3 rounded border-2 border-black bg-white p-3 shadow-sm">
+        <div className="text-sm font-black uppercase text-black">Sales Person vs Realization</div>
+        <div className="max-h-[calc(100vh-300px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse text-[12px]">
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-indigo-700 text-white">
+                <th className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">Metric</th>
                 {salesRows.map((row) => (
-                  <th key={row.id} className="min-w-[140px] px-4 py-3 text-center text-xs font-black uppercase tracking-[0.16em]">
+                  <th key={row.id} className="sticky top-0 z-20 min-w-[150px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-center text-xs font-black uppercase text-white">
                     {row.name}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td className="border-t border-slate-200 px-4 py-3 text-sm font-bold text-slate-700">Realization (Rs/Kg)</td>
+              <tr className="text-black hover:bg-slate-50">
+                <td className="border-2 border-black px-3 py-3 font-bold">Realization (Rs/Kg)</td>
                 {salesRows.map((row) => (
                   <td
                     key={row.id}
-                    className={`border-t border-slate-200 px-4 py-3 text-center text-sm font-black ${
-                      row.average >= (currentTarget?.value || overall.average || 0)
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-rose-50 text-rose-700"
-                    }`}
+                    className={`border-2 border-black px-3 py-3 text-center font-black ${row.average >= (currentTarget?.value || overall.average || 0) ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-800"}`}
                   >
                     {Number(row.average || 0).toFixed(2)}
                   </td>
@@ -514,35 +472,31 @@ export function RealizationReport() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 text-xl font-bold text-slate-900">Company Average Realization</div>
-        <div className="table-frozen-scroll rounded-xl border border-slate-200">
-          <table className="min-w-full border-collapse">
-            <thead className="sticky top-0 z-30 bg-slate-50">
-              <tr>
-                <th className="border-b border-slate-200 px-4 py-3 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-600">SL No</th>
-                <th className="border-b border-slate-200 px-4 py-3 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-600">Company</th>
-                <th className="border-b border-slate-200 px-4 py-3 text-right text-xs font-black uppercase tracking-[0.16em] text-slate-600">Average Realization/Kg</th>
+      <div className="space-y-3 rounded border-2 border-black bg-white p-3 shadow-sm">
+        <div className="text-sm font-black uppercase text-black">Company Average Realization</div>
+        <div className="max-h-[calc(100vh-300px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse text-[12px]">
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-indigo-700 text-white">
+                <th className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">SL No</th>
+                <th className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">Company</th>
+                <th className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-right text-xs font-black uppercase text-white">Average Realization/Kg</th>
               </tr>
             </thead>
             <tbody>
               {companyRows.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={3} className="border-2 border-black px-6 py-10 text-center text-sm font-medium text-black">
                     No realization rows found for the selected filters.
                   </td>
                 </tr>
               ) : (
                 companyRows.map((row, index) => (
-                  <tr key={row.id} className="border-t border-slate-200">
-                    <td className="px-4 py-3 text-sm font-semibold text-slate-700">{index + 1}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.name}</td>
+                  <tr key={row.id} className="text-black hover:bg-slate-50">
+                    <td className="border-2 border-black px-3 py-3 font-bold">{index + 1}</td>
+                    <td className="border-2 border-black px-3 py-3 font-semibold">{row.name}</td>
                     <td
-                      className={`px-4 py-3 text-right text-sm font-black ${
-                        row.average >= (currentTarget?.value || overall.average || 0)
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-rose-50 text-rose-700"
-                      }`}
+                      className={`border-2 border-black px-3 py-3 text-right font-black ${row.average >= (currentTarget?.value || overall.average || 0) ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-800"}`}
                     >
                       {Number(row.average || 0).toFixed(2)}
                     </td>
@@ -555,5 +509,6 @@ export function RealizationReport() {
       </div>
     </div>
   );
+
 }
 

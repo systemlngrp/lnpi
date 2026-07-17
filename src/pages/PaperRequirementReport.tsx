@@ -1,10 +1,9 @@
 import React, { useMemo, useState, useEffect } from "react";
 
-import { TableControls } from "../components/TableControls";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { Calendar, Download, FileText, Filter, RotateCcw } from "lucide-react";
+import { Download, FileText, RotateCcw, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   Indent,
@@ -364,6 +363,7 @@ export function PaperRequirementReport() {
   );
 
   const handleClear = () => {
+    setSearchTerm("");
     setSelectedRangeGsm("All");
     setUptoDate(toDateInput(new Date()));
     setNetFilter("All");
@@ -440,187 +440,160 @@ export function PaperRequirementReport() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.34)]">
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-sky-900 px-5 py-3 text-white">
-          <div className="flex items-center gap-2 text-lg font-black tracking-tight">
-            <Filter size={18} />
-            Paper Requirement Analysis
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 border-b border-black pb-3">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Paper Requirement Report</h2>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-5">
+        <div className="rounded border border-blue-300 bg-blue-50 p-4">
+          <div className="text-xs font-black uppercase text-blue-700">Total Paper Requirement</div>
+          <div className="mt-1 text-2xl font-black text-blue-900">{round2(summary.totalPaperRequirement).toLocaleString()}</div>
         </div>
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
+          <div className="text-xs font-black uppercase text-emerald-700">Closing Stock</div>
+          <div className="mt-1 text-2xl font-black text-emerald-900">{round2(summary.totalClosingStock).toLocaleString()}</div>
+        </div>
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <div className="text-xs font-black uppercase text-amber-700">Pending PO</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{round2(summary.totalPendingPo).toLocaleString()}</div>
+        </div>
+        <div className="rounded border border-purple-300 bg-purple-50 p-4">
+          <div className="text-xs font-black uppercase text-purple-700">MIL</div>
+          <div className="mt-1 text-2xl font-black text-purple-900">{round2(summary.mil).toLocaleString()}</div>
+        </div>
+        <div className={`rounded border p-4 ${summary.netPaperToOrder >= 0 ? "border-rose-300 bg-rose-50" : "border-emerald-300 bg-emerald-50"}`}>
+          <div className={`text-xs font-black uppercase ${summary.netPaperToOrder >= 0 ? "text-rose-700" : "text-emerald-700"}`}>Net Paper To Order</div>
+          <div className={`mt-1 text-2xl font-black ${summary.netPaperToOrder >= 0 ? "text-rose-900" : "text-emerald-900"}`}>{round2(summary.netPaperToOrder).toLocaleString()}</div>
+        </div>
+      </div>
 
-        <div className="space-y-4 p-5">
-          <div className="grid gap-3 md:grid-cols-5">
-            <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700">Total Paper Requirement</div>
-              <div className="mt-1.5 text-[2rem] font-black leading-none text-sky-950">{round2(summary.totalPaperRequirement).toLocaleString()}</div>
-            </div>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Closing Stock</div>
-              <div className="mt-1.5 text-[2rem] font-black leading-none text-emerald-950">{round2(summary.totalClosingStock).toLocaleString()}</div>
-            </div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">Pending PO</div>
-              <div className="mt-1.5 text-[2rem] font-black leading-none text-amber-950">{round2(summary.totalPendingPo).toLocaleString()}</div>
-            </div>
-            <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5">
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-violet-700">MIL</div>
-              <div className="mt-1.5 text-[2rem] font-black leading-none text-violet-950">{round2(summary.mil).toLocaleString()}</div>
-            </div>
-            <div className={`rounded-xl border px-4 py-2.5 ${summary.netPaperToOrder >= 0 ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
-              <div className={`text-[11px] font-bold uppercase tracking-[0.16em] ${summary.netPaperToOrder >= 0 ? "text-rose-700" : "text-emerald-700"}`}>Net Paper to Order</div>
-              <div className={`mt-1.5 text-[2rem] font-black leading-none ${summary.netPaperToOrder >= 0 ? "text-rose-950" : "text-emerald-950"}`}>{round2(summary.netPaperToOrder).toLocaleString()}</div>
-            </div>
+      <div className="rounded border border-black bg-white p-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.1fr)_minmax(220px,1fr)_minmax(140px,0.7fr)_repeat(2,minmax(150px,0.8fr))_repeat(3,auto)] xl:items-center">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search..."
+              className="w-full rounded border-2 border-black py-2.5 pl-9 pr-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+            />
           </div>
+          <select
+            value={selectedRangeGsm}
+            onChange={(e) => setSelectedRangeGsm(e.target.value)}
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          >
+            {rangeOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={uptoDate}
+            onChange={(e) => setUptoDate(e.target.value)}
+            title="Upto Date"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
+          <select
+            value={netFilter}
+            onChange={(e) => setNetFilter(e.target.value as NetFilter)}
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          >
+            {NET_FILTER_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <select
+            value={groupType}
+            onChange={(e) => setGroupType(e.target.value as GroupTypeFilter)}
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          >
+            {GROUP_TYPE_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleClear}
+            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+          >
+            <RotateCcw size={14} />
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+          >
+            <Download size={14} />
+            Excel
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded border border-rose-700 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-800 hover:bg-rose-100"
+          >
+            <FileText size={14} />
+            PDF
+          </button>
+        </div>
+      </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5">
-            <div className="mb-3 flex flex-col gap-3 border-b border-slate-200 pb-3 xl:flex-row xl:items-center xl:justify-end">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
-                >
-                  <RotateCcw size={16} />
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 text-sm font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
-                >
-                  <Download size={16} />
-                  Excel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportPdf}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 px-5 text-sm font-bold text-rose-700 shadow-sm transition hover:bg-rose-100"
-                >
-                  <FileText size={16} />
-                  PDF
-                </button>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.4fr)_minmax(180px,0.85fr)_minmax(170px,0.8fr)_minmax(170px,0.8fr)]">
-              <label className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">RAPC Range + GSM</span>
-                <select
-                  value={selectedRangeGsm}
-                  onChange={(e) => setSelectedRangeGsm(e.target.value)}
-                  className="h-[46px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                >
-                  {rangeOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                  <Calendar size={14} />
-                  Upto Date
-                </span>
-                <input
-                  type="date"
-                  value={uptoDate}
-                  onChange={(e) => setUptoDate(e.target.value)}
-                  className="h-[46px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Net Filter</span>
-                <select
-                  value={netFilter}
-                  onChange={(e) => setNetFilter(e.target.value as NetFilter)}
-                  className="h-[46px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                >
-                  {NET_FILTER_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Group Type</span>
-                <select
-                  value={groupType}
-                  onChange={(e) => setGroupType(e.target.value as GroupTypeFilter)}
-                  className="h-[46px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                >
-                  {GROUP_TYPE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div className="table-frozen-scroll">
-
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-
-      <table className="min-w-full">
-                <thead className="sticky top-0 z-30 bg-blue-700 text-white">
-                  <tr>
-                    {["RAPC RANGE", "GSM", "Total Paper Requirement", "Total Closing Stock", "Total Pending PO", "MIL", "Net Paper to Order"].map((heading) => (
-                      <th key={heading} className="border-r border-black px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] whitespace-nowrap last:border-r-0">
-                        {heading}
-                      </th>
-                    ))}
+      <div className="overflow-hidden rounded border-2 border-black bg-white shadow-sm">
+        <div className="max-h-[calc(100vh-250px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse text-[12px]">
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-indigo-700 text-white">
+                {["RAPC Range", "GSM", "Total Paper Requirement", "Total Closing Stock", "Total Pending PO", "MIL", "Net Paper To Order"].map((heading) => (
+                  <th key={heading} className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="border-2 border-black px-6 py-10 text-center text-sm font-medium text-black">
+                    No rows found for the selected filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredRows.map((row) => (
+                  <tr key={`${row.rapcRange}-${row.gsm}`} className="text-black hover:bg-slate-50">
+                    <td className="border-2 border-black px-3 py-3 font-bold">{row.rapcRange}</td>
+                    <td className="border-2 border-black px-3 py-3">{row.gsm}</td>
+                    <td className="border-2 border-black bg-blue-50/50 px-3 py-3 text-right">{row.totalPaperRequirement.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-emerald-50 px-3 py-3 text-right font-semibold text-emerald-900">{row.totalClosingStock.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-amber-50 px-3 py-3 text-right text-amber-900">{row.totalPendingPo.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-purple-50 px-3 py-3 text-right text-purple-900">{row.mil.toLocaleString()}</td>
+                    <td className={`border-2 border-black px-3 py-3 text-right font-black ${row.netPaperToOrder >= 0 ? "bg-rose-50 text-rose-800" : "bg-emerald-50 text-emerald-900"}`}>
+                      {row.netPaperToOrder.toLocaleString()}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-10 text-center text-sm font-medium text-slate-500">
-                        No rows found for the selected filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredRows.map((row) => (
-                      <tr key={`${row.rapcRange}-${row.gsm}`} className="border-t border-black text-sm text-slate-700 transition hover:bg-sky-50/40">
-                        <td className="border-r border-black px-4 py-3 font-semibold text-slate-900">{row.rapcRange}</td>
-                        <td className="border-r border-black px-4 py-3">{row.gsm}</td>
-                        <td className="border-r border-black px-4 py-3">{row.totalPaperRequirement.toLocaleString()}</td>
-                        <td className="border-r border-black px-4 py-3">{row.totalClosingStock.toLocaleString()}</td>
-                        <td className="border-r border-black px-4 py-3">{row.totalPendingPo.toLocaleString()}</td>
-                        <td className="border-r border-black px-4 py-3">{row.mil.toLocaleString()}</td>
-                        <td className={`px-4 py-3 font-bold ${row.netPaperToOrder >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                          {row.netPaperToOrder.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                {filteredRows.length > 0 ? (
-                  <tfoot className="border-t border-black bg-slate-100">
-                    <tr>
-                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900" colSpan={2}>Grand Total</td>
-                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalPaperRequirement).toLocaleString()}</td>
-                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalClosingStock).toLocaleString()}</td>
-                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900">{round2(summary.totalPendingPo).toLocaleString()}</td>
-                      <td className="border-r border-black px-4 py-3 text-sm font-black text-slate-900">{round2(summary.mil).toLocaleString()}</td>
-                      <td className={`px-4 py-3 text-sm font-black ${summary.netPaperToOrder >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                        {round2(summary.netPaperToOrder).toLocaleString()}
-                      </td>
-                    </tr>
-                  </tfoot>
-                ) : null}
-              </table>
-            </div>
-          </div>
+                ))
+              )}
+            </tbody>
+            {filteredRows.length > 0 ? (
+              <tfoot className="sticky bottom-0 z-10 bg-slate-100">
+                <tr>
+                  <td className="border-2 border-black px-3 py-3 text-sm font-black text-black" colSpan={2}>Grand Total</td>
+                  <td className="border-2 border-black bg-blue-50 px-3 py-3 text-right text-sm font-black text-black">{round2(summary.totalPaperRequirement).toLocaleString()}</td>
+                  <td className="border-2 border-black bg-emerald-50 px-3 py-3 text-right text-sm font-black text-emerald-900">{round2(summary.totalClosingStock).toLocaleString()}</td>
+                  <td className="border-2 border-black bg-amber-50 px-3 py-3 text-right text-sm font-black text-amber-900">{round2(summary.totalPendingPo).toLocaleString()}</td>
+                  <td className="border-2 border-black bg-purple-50 px-3 py-3 text-right text-sm font-black text-purple-900">{round2(summary.mil).toLocaleString()}</td>
+                  <td className={`border-2 border-black px-3 py-3 text-right text-sm font-black ${summary.netPaperToOrder >= 0 ? "bg-rose-50 text-rose-800" : "bg-emerald-50 text-emerald-900"}`}>
+                    {round2(summary.netPaperToOrder).toLocaleString()}
+                  </td>
+                </tr>
+              </tfoot>
+            ) : null}
+          </table>
         </div>
       </div>
     </div>
   );
+
 }
