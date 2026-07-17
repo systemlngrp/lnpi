@@ -22,6 +22,7 @@ type ReelStockRow = {
   receipts: number;
   issued: number;
   returned: number;
+  netIssued: number;
   availableWeight: number;
   rate: number;
   valuation: number;
@@ -72,7 +73,8 @@ export function ErpWiseReelStockReport() {
           if (!line) return sum;
           return sum + Number(line.actualQty ?? line.qty ?? 0);
         }, 0);
-        const availableWeight = Math.max(0, Number((openingStock + received + returned - issued).toFixed(2)));
+        const netIssued = Number((issued - returned).toFixed(2));
+        const availableWeight = Math.max(0, Number((openingStock + received - netIssued).toFixed(2)));
         const latestRate =
           latestMaterialIn
             .map((entry) => entry.lines.find((row) => row.itemId === material.id))
@@ -96,6 +98,7 @@ export function ErpWiseReelStockReport() {
           receipts: Number(received.toFixed(2)),
           issued: Number(issued.toFixed(2)),
           returned: Number(returned.toFixed(2)),
+          netIssued,
           availableWeight,
           rate: correctedRate,
           valuation: correctedValuation,
@@ -122,7 +125,11 @@ export function ErpWiseReelStockReport() {
         return [row.erp, row.itemName, row.size, row.gsm, row.bf]
           .some((value) => String(value || "").toLowerCase().includes(query));
       })
-      .sort((a, b) => a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf);
+      .sort((a, b) => {
+        const availabilityDiff = Number(a.availableWeight <= 0) - Number(b.availableWeight <= 0);
+        if (availabilityDiff !== 0) return availabilityDiff;
+        return a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf;
+      });
   }, [allRows, bfFilter, erpFilter, gsmFilter, searchTerm, sizeFilter]);
 
   const totals = useMemo(
@@ -133,12 +140,13 @@ export function ErpWiseReelStockReport() {
           receipts: acc.receipts + row.receipts,
           issued: acc.issued + row.issued,
           returned: acc.returned + row.returned,
+          netIssued: acc.netIssued + row.netIssued,
           availableWeight: acc.availableWeight + row.availableWeight,
           valuation: acc.valuation + row.valuation,
           noOfReels: acc.noOfReels + row.noOfReels,
           totalStock: acc.totalStock + row.openingStock + row.receipts + row.returned,
         }),
-        { openingStock: 0, receipts: 0, issued: 0, returned: 0, availableWeight: 0, valuation: 0, noOfReels: 0, totalStock: 0 }
+        { openingStock: 0, receipts: 0, issued: 0, returned: 0, netIssued: 0, availableWeight: 0, valuation: 0, noOfReels: 0, totalStock: 0 }
       ),
     [rows]
   );
@@ -158,7 +166,6 @@ export function ErpWiseReelStockReport() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">ERP Wise Reel Stock</h2>
-          <p className="text-sm text-slate-600 font-medium">Available Weight = Opening Stock + Receipts + Returned - Issued</p>
         </div>
       </div>
 
@@ -214,7 +221,7 @@ export function ErpWiseReelStockReport() {
           <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {["ERP", "Item Name", "SIZE", "GSM", "BF", "Opening Stock", "RECEIPTS", "ISSUED", "RETURNED", "Available Weight", "Rate", "VALUATION", "NO OF REELS"].map((heading) => (
+                {["ERP", "Item Name", "SIZE", "GSM", "BF", "Opening Stock", "Receipt", "Issued", "Return", "Net Issued", "Available Weight", "Rate", "VALUATION", "NO OF REELS"].map((heading) => (
                   <th key={heading} className="bg-indigo-700 px-3 py-3 text-left text-xs font-black border-2 border-black whitespace-nowrap uppercase">
                     {heading}
                   </th>
@@ -227,6 +234,7 @@ export function ErpWiseReelStockReport() {
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.receipts)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.issued)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.returned)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.netIssued)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-emerald-100 text-emerald-900">{formatQty(totals.availableWeight)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">-</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(totals.valuation)}</th>
@@ -237,7 +245,7 @@ export function ErpWiseReelStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                  <td colSpan={14} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No reel stock rows found.
                   </td>
                 </tr>
@@ -253,6 +261,7 @@ export function ErpWiseReelStockReport() {
                     <td className="px-3 py-3 text-blue-900 text-sm border-2 border-black bg-blue-50/50">{formatQty(row.receipts)}</td>
                     <td className="px-3 py-3 text-red-800 text-sm border-2 border-black bg-red-50/40">{formatQty(row.issued)}</td>
                     <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50">{formatQty(row.returned)}</td>
+                    <td className="px-3 py-3 text-slate-900 text-sm font-bold border-2 border-black bg-slate-50">{formatQty(row.netIssued)}</td>
                     <td className="px-3 py-3 text-emerald-900 text-sm font-bold border-2 border-black bg-emerald-50">{formatQty(row.availableWeight)}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{formatQty(row.rate)}</td>
                     <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50">{formatQty(row.valuation)}</td>

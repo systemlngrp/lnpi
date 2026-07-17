@@ -25,8 +25,11 @@ type ReelwiseStockRow = {
   bf: number;
   issuedWeight: number;
   returnedWeight: number;
+  netIssuedWeight: number;
   availableWeight: number;
   mrrQty: number;
+  rate: number;
+  valuation: number;
   ageDays: number;
 };
 
@@ -40,10 +43,13 @@ const tableColumns = [
   "GSM",
   "Size",
   "BF",
-  "Issued Weight",
-  "Returned Weight",
+  "Issued",
+  "Return",
+  "Net Issued",
   "Available Weight",
   "MRR Qty",
+  "Rate",
+  "Valuation",
   "Age(D days)",
 ];
 
@@ -100,6 +106,19 @@ export function ReelwiseStockReport() {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
     const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
     const supplierMap = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
+    const latestMaterialIn = [...materialIn].sort((a, b) => {
+      const timeA = new Date(a.updateTimestamp || a.timestamp || a.date || 0).getTime();
+      const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
+      return timeB - timeA;
+    });
+    const latestRateByMaterial = new Map<string, number>();
+    latestMaterialIn.forEach((entry) => {
+      entry.lines.forEach((line) => {
+        if (!latestRateByMaterial.has(line.itemId)) {
+          latestRateByMaterial.set(line.itemId, Number(line.invoiceRate ?? line.rate ?? 0));
+        }
+      });
+    });
     const receivedByMaterial = packingSlips.reduce<Map<string, number>>((acc, slip) => {
       acc.set(slip.materialId, (acc.get(slip.materialId) || 0) + Number(slip.weightKg || 0));
       return acc;
@@ -118,7 +137,11 @@ export function ReelwiseStockReport() {
         const openingBalance = Math.max(0, Number(material?.openingQty || 0) - Number(receivedByMaterial.get(slip.materialId) || 0));
         const reelQty = Number(slip.weightKg || 0);
         const mrrQty = Number((openingBalance + reelQty).toFixed(2));
-        const availableWeight = Number(Math.max(0, mrrQty - issuedWeight + returnedWeight).toFixed(2));
+        const netIssuedWeight = Number((issuedWeight - returnedWeight).toFixed(2));
+        const availableWeight = Number(Math.max(0, mrrQty - netIssuedWeight).toFixed(2));
+        const latestRate = Number(latestRateByMaterial.get(slip.materialId) ?? material?.openingRate ?? 0);
+        const rate = availableWeight > 0 ? Number(latestRate.toFixed(2)) : 0;
+        const valuation = availableWeight > 0 ? Number((availableWeight * latestRate).toFixed(2)) : 0;
 
         return {
           slipId: slip.id,
@@ -132,8 +155,11 @@ export function ReelwiseStockReport() {
           bf: Number(material?.bf || 0),
           issuedWeight: Number(issuedWeight.toFixed(2)),
           returnedWeight: Number(returnedWeight.toFixed(2)),
+          netIssuedWeight,
           availableWeight,
           mrrQty,
+          rate,
+          valuation,
           ageDays: getAgeDays(receipt?.date),
         };
       })
@@ -181,16 +207,21 @@ export function ReelwiseStockReport() {
       if (bfFilter && String(row.bf) !== bfFilter) return false;
 
       return true;
+    }).sort((a, b) => {
+      const availabilityDiff = Number(a.availableWeight <= 0) - Number(b.availableWeight <= 0);
+      if (availabilityDiff !== 0) return availabilityDiff;
+      const dateDiff = new Date(b.mrrDate || 0).getTime() - new Date(a.mrrDate || 0).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.ourReelNo.localeCompare(b.ourReelNo);
     });
   }, [allRows, availabilityFilter, bfFilter, erpFilter, gsmFilter, maxAge, minAge, searchTerm, sizeFilter, stockYetToIssueOnly]);
 
   const summary = useMemo(() => {
-    const notIssuedRows = rows.filter((row) => row.issuedWeight === 0 && row.availableWeight > 0);
     return {
-      reelNotIssuedWeight: notIssuedRows.reduce((sum, row) => sum + row.availableWeight, 0),
-      reelIssuedWeight: rows.reduce((sum, row) => sum + row.issuedWeight, 0),
-      erpNotIssuedCount: new Set(notIssuedRows.map((row) => row.erp).filter(Boolean)).size,
-      totalRows: rows.length,
+      totalStock: rows.reduce((sum, row) => sum + row.mrrQty, 0),
+      totalAvailableStock: rows.reduce((sum, row) => sum + row.availableWeight, 0),
+      totalReels: rows.filter((row) => row.availableWeight > 0).length,
+      totalValuation: rows.reduce((sum, row) => sum + row.valuation, 0),
     };
   }, [rows]);
 
@@ -223,26 +254,25 @@ export function ReelwiseStockReport() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Reelwise Stock Report</h2>
-          <p className="text-sm text-slate-600 font-medium">Available Weight = MRR Qty - Issued + Returned</p>
         </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded border border-blue-300 bg-blue-50 p-4">
+          <div className="text-xs font-black uppercase text-blue-700">Total Stock</div>
+          <div className="mt-1 text-2xl font-black text-blue-900">{formatQty(summary.totalStock)}</div>
+        </div>
         <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
-          <div className="text-xs font-black uppercase text-emerald-700">Reels Not Issued</div>
-          <div className="mt-1 text-2xl font-black text-emerald-900">{formatQty(summary.reelNotIssuedWeight)}</div>
+          <div className="text-xs font-black uppercase text-emerald-700">Total Available Stock</div>
+          <div className="mt-1 text-2xl font-black text-emerald-900">{formatQty(summary.totalAvailableStock)}</div>
         </div>
         <div className="rounded border border-amber-300 bg-amber-50 p-4">
-          <div className="text-xs font-black uppercase text-amber-700">Reels Issued</div>
-          <div className="mt-1 text-2xl font-black text-amber-900">{formatQty(summary.reelIssuedWeight)}</div>
+          <div className="text-xs font-black uppercase text-amber-700">Total Reels</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{summary.totalReels}</div>
         </div>
         <div className="rounded border border-purple-300 bg-purple-50 p-4">
-          <div className="text-xs font-black uppercase text-purple-700">ERP Not Issued</div>
-          <div className="mt-1 text-2xl font-black text-purple-900">{summary.erpNotIssuedCount}</div>
-        </div>
-        <div className="rounded border border-blue-300 bg-blue-50 p-4">
-          <div className="text-xs font-black uppercase text-blue-700">Total Rows</div>
-          <div className="mt-1 text-2xl font-black text-blue-900">{summary.totalRows}</div>
+          <div className="text-xs font-black uppercase text-purple-700">Total Valuation</div>
+          <div className="mt-1 text-2xl font-black text-purple-900">{formatQty(summary.totalValuation)}</div>
         </div>
       </div>
 
@@ -328,7 +358,7 @@ export function ReelwiseStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                  <td colSpan={17} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No reel rows match the current filters.
                   </td>
                 </tr>
@@ -346,8 +376,11 @@ export function ReelwiseStockReport() {
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.bf || ""}</td>
                     <td className="px-3 py-3 text-red-800 text-sm border-2 border-black bg-red-50/40 text-right">{formatQty(row.issuedWeight)}</td>
                     <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50 text-right">{formatQty(row.returnedWeight)}</td>
+                    <td className="px-3 py-3 text-slate-900 text-sm font-bold border-2 border-black bg-slate-50 text-right">{formatQty(row.netIssuedWeight)}</td>
                     <td className="px-3 py-3 text-emerald-900 text-sm font-bold border-2 border-black bg-emerald-50 text-right">{formatQty(row.availableWeight)}</td>
                     <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.mrrQty)}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black text-right">{formatQty(row.rate)}</td>
+                    <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.valuation)}</td>
                     <td className="px-3 py-3 text-amber-900 text-sm border-2 border-black bg-amber-50 text-right">{row.ageDays}</td>
                   </tr>
                 ))
