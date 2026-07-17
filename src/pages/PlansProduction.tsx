@@ -1,3 +1,8 @@
+import { useEffect, useState } from "react";
+import { FileText } from "lucide-react";
+import jsPDF from "jspdf";
+import { TableControls } from "../components/TableControls";
+
 const overviewRules = [
   "Scheduled Order selection drives the default order, company, item, ERP code, dimensions, paper specs, and rate.",
   "Only schedules with pending production appear in the list.",
@@ -509,13 +514,123 @@ export function PlansProduction() {
     });
   }, [searchTerm]);
 
+  const handleDownloadPdf = () => {
+    const doc = new jsPDF("p", "mm", "a4");
+    let y = 16;
+    const pageBottom = 285;
+
+    const ensureSpace = (height: number) => {
+      if (y + height > pageBottom) {
+        doc.addPage();
+        y = 16;
+      }
+    };
+
+    const addSectionTitle = (title: string) => {
+      ensureSpace(10);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(title, 14, y);
+      y += 7;
+    };
+
+    const addText = (text: string, options: { indent?: number; width?: number; lineHeight?: number } = {}) => {
+      const indent = options.indent ?? 14;
+      const width = options.width ?? 180;
+      const lineHeight = options.lineHeight ?? 5;
+      const lines = doc.splitTextToSize(text, width) as string[];
+      ensureSpace(lines.length * lineHeight + 2);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(lines, indent, y);
+      y += lines.length * lineHeight + 2;
+    };
+
+    const addLabelValue = (label: string, value: string) => {
+      ensureSpace(8);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(`${label}:`, 16, y);
+      y += 5;
+      addText(value || "-", { indent: 18, width: 176 });
+    };
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Documentation - Production", 14, y);
+    y += 9;
+    addText("Production Form formulas, auto-filled values, field validations, and Production Master virtual columns.");
+
+    addSectionTitle("Production Rules Summary");
+    overviewRules.forEach((rule, index) => addText(`${index + 1}. ${rule}`));
+
+    addSectionTitle("Calculation Logic");
+    formulaCards.forEach((card) => {
+      ensureSpace(14);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(card.title, 14, y);
+      y += 5;
+      addLabelValue("Formula", card.formula);
+      addText(card.description, { indent: 16, width: 176 });
+      y += 1;
+    });
+
+    addSectionTitle("Settings Driven Reel Formula");
+    settingsDrivenRules.forEach((row) => {
+      addLabelValue(row.setting, row.logic);
+      y += 1;
+    });
+
+    addSectionTitle("Settings Driven GSM Formula");
+    gsmSettingsDrivenRules.forEach((row) => {
+      addLabelValue(row.setting, row.logic);
+      y += 1;
+    });
+
+    addSectionTitle("Field Wise Formula And Validation");
+    fieldRules.forEach((row) => {
+      ensureSpace(12);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(row.field, 14, y);
+      y += 5;
+      addLabelValue("Source", row.source);
+      addLabelValue("Formula / Logic", row.formula);
+      addLabelValue("Validation / Behavior", row.validation);
+      y += 1;
+    });
+
+    addSectionTitle("Virtual Columns In Production Master");
+    virtualColumns.forEach((row) => {
+      ensureSpace(12);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(row.column, 14, y);
+      y += 5;
+      addLabelValue("Source", row.source);
+      addLabelValue("How It Is Shown", row.logic);
+      y += 1;
+    });
+
+    doc.save("Production_Documentation.pdf");
+  };
   return (
     <div className="space-y-6">
-      <div className="border-b border-black pb-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Documentation - Production</h2>
-        <p className="mt-2 text-sm text-slate-700 font-medium">
-          This page explains the current Production Form formulas, auto-filled values, and field validations in simple app language for user reference.
-        </p>
+      <div className="flex flex-col gap-3 border-b border-black pb-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Documentation - Production</h2>
+          <p className="mt-2 text-sm text-slate-700 font-medium">
+            This page explains the current Production Form formulas, auto-filled values, and field validations in simple app language for user reference.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownloadPdf}
+          className="inline-flex items-center gap-2 rounded border border-black bg-red-600 px-4 py-2 text-sm font-bold text-white shadow hover:bg-red-700"
+        >
+          <FileText size={16} /> PDF
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

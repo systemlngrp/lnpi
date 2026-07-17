@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import os
 import re
@@ -142,35 +143,20 @@ def build_voucher_collection_xml(voucher_type: str, date_from: str, date_to: str
     return f"""
 <ENVELOPE>
   <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>EXPORT</TALLYREQUEST>
-    <TYPE>COLLECTION</TYPE>
-    <ID>LnpiAuditVouchers</ID>
+    <TALLYREQUEST>Export Data</TALLYREQUEST>
   </HEADER>
   <BODY>
-    <DESC>
-      <STATICVARIABLES>
-        <SVFROMDATE>{date_from}</SVFROMDATE>
-        <SVTODATE>{date_to}</SVTODATE>
-        <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>
-      </STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="LnpiAuditVouchers" ISMODIFY="No">
-            <TYPE>Voucher</TYPE>
-            <FETCH>Date</FETCH>
-            <FETCH>VoucherNumber</FETCH>
-            <FETCH>VoucherTypeName</FETCH>
-            <FETCH>IsCancelled</FETCH>
-            <FETCH>IsOptional</FETCH>
-            <FETCH>Amount</FETCH>
-            <COMPUTE>LnpiVoucherAmount:$Amount</COMPUTE>
-            <FILTERS>LnpiAuditVoucherType</FILTERS>
-          </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="LnpiAuditVoucherType">$StringEqual:$VoucherTypeName:"{safe_type}"</SYSTEM>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
+    <EXPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Voucher Register</REPORTNAME>
+        <STATICVARIABLES>
+          <SVFROMDATE>{date_from}</SVFROMDATE>
+          <SVTODATE>{date_to}</SVTODATE>
+          <VOUCHERTYPENAME>{safe_type}</VOUCHERTYPENAME>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        </STATICVARIABLES>
+      </REQUESTDESC>
+    </EXPORTDATA>
   </BODY>
 </ENVELOPE>
 """
