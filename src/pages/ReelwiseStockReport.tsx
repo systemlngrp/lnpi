@@ -131,7 +131,33 @@ export function ReelwiseStockReport() {
         }
       });
     });
-    return packingSlips
+    const openingRows: ReelwiseStockRow[] = materials
+      .filter((material) => material.type === "Reel" && Number(material.openingQty || 0) > 0)
+      .map((material) => {
+        const openingQty = Number(Number(material.openingQty || 0).toFixed(2));
+        const openingRate = Number(Number(material.openingRate || 0).toFixed(2));
+        return {
+          slipId: `opening-${material.id}`,
+          mrrDate: "",
+          mrrNo: "OPENING",
+          ourReelNo: "OPENING",
+          erp: String(material.erpCode || ""),
+          supplierName: "-",
+          gsm: Number(material.gsm || 0),
+          size: Number(material.size || 0),
+          bf: Number(material.bf || 0),
+          issuedWeight: 0,
+          returnedWeight: 0,
+          netIssuedWeight: 0,
+          availableWeight: openingQty,
+          mrrQty: openingQty,
+          rate: openingRate,
+          valuation: Number((openingQty * openingRate).toFixed(2)),
+          ageDays: 0,
+        };
+      });
+
+    const mrrRows = packingSlips
       .map((slip) => {
         const material = materialMap.get(slip.materialId);
         const receipt = materialInMap.get(slip.materialInId);
@@ -174,6 +200,8 @@ export function ReelwiseStockReport() {
         if (dateDiff !== 0) return dateDiff;
         return a.ourReelNo.localeCompare(b.ourReelNo);
       });
+
+    return [...openingRows, ...mrrRows];
   }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines, suppliers]);
 
   const erpOptions = useMemo(() => makeOptions(allRows.map((row) => row.erp)), [allRows]);
@@ -295,101 +323,109 @@ export function ReelwiseStockReport() {
       </div>
 
       <div className="rounded border border-black bg-white p-3">
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(130px,1fr))_repeat(4,minmax(110px,0.8fr))_repeat(3,minmax(150px,1fr))_auto] xl:items-center">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search reel / ERP / supplier / MRR / size / GSM / BF"
-              className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-            />
+        <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(130px,1fr))]">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search reel / ERP / supplier / MRR / size / GSM / BF"
+                className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+              />
+            </div>
+            <Select value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" />
+            <Select value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" />
+            <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
+            <Select value={bfFilter} onChange={setBfFilter} options={bfOptions} placeholder="All BF" />
           </div>
-          <Select value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" />
-          <Select value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" />
-          <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
-          <Select value={bfFilter} onChange={setBfFilter} options={bfOptions} placeholder="All BF" />
-          <input
-            type="date"
-            value={mrrDateFrom}
-            onChange={(e) => setMrrDateFrom(e.target.value)}
-            title="MRR Date From"
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-          />
-          <input
-            type="date"
-            value={mrrDateTo}
-            onChange={(e) => setMrrDateTo(e.target.value)}
-            title="MRR Date To"
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-          />
-          <input
-            type="number"
-            value={minAge}
-            onChange={(e) => setMinAge(e.target.value)}
-            placeholder="Min age"
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-          />
-          <input
-            type="number"
-            value={maxAge}
-            onChange={(e) => setMaxAge(e.target.value)}
-            placeholder="Max age"
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-          />
-          <div className="grid grid-cols-3 gap-1 rounded border-2 border-black bg-white p-1">
-            {[
-              { label: "All", value: "all" as const },
-              { label: "> 500", value: "gt500" as const },
-              { label: "< 500", value: "lt500" as const },
-            ].map((option) => (
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(120px,1fr))_minmax(180px,0.9fr)]">
+            <input
+              type="date"
+              value={mrrDateFrom}
+              onChange={(e) => setMrrDateFrom(e.target.value)}
+              title="MRR Date From"
+              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+            <input
+              type="date"
+              value={mrrDateTo}
+              onChange={(e) => setMrrDateTo(e.target.value)}
+              title="MRR Date To"
+              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+            <input
+              type="number"
+              value={minAge}
+              onChange={(e) => setMinAge(e.target.value)}
+              placeholder="Min age"
+              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+            <input
+              type="number"
+              value={maxAge}
+              onChange={(e) => setMaxAge(e.target.value)}
+              placeholder="Max age"
+              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+            <div className="grid grid-cols-3 gap-1 rounded border-2 border-black bg-white p-1">
+              {[
+                { label: "All", value: "all" as const },
+                { label: "> 500", value: "gt500" as const },
+                { label: "< 500", value: "lt500" as const },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setAvailabilityFilter(option.value)}
+                  className={`rounded px-2 py-2 text-xs font-black ${availabilityFilter === option.value ? "bg-indigo-600 text-white" : "bg-slate-50 text-black hover:bg-slate-100"}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+              <input
+                type="checkbox"
+                checked={stockYetToIssueOnly}
+                onChange={(e) => setStockYetToIssueOnly(e.target.checked)}
+                className="h-4 w-4 accent-indigo-600"
+              />
+              Stock yet to issue
+            </label>
+            <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+              <input
+                type="checkbox"
+                checked={excludeZeroAvailable}
+                onChange={(e) => setExcludeZeroAvailable(e.target.checked)}
+                className="h-4 w-4 accent-indigo-600"
+              />
+              Exclude 0 Available
+            </label>
+            <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+              <input
+                type="checkbox"
+                checked={showMrrDate}
+                onChange={(e) => setShowMrrDate(e.target.checked)}
+                className="h-4 w-4 accent-indigo-600"
+              />
+              Show MRR Date
+            </label>
+            {hasActiveFilters ? (
               <button
-                key={option.value}
                 type="button"
-                onClick={() => setAvailabilityFilter(option.value)}
-                className={`rounded px-2 py-2 text-xs font-black ${availabilityFilter === option.value ? "bg-indigo-600 text-white" : "bg-slate-50 text-black hover:bg-slate-100"}`}
+                onClick={handleClearFilters}
+                className="min-h-[42px] rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
               >
-                {option.label}
+                Clear Filters
               </button>
-            ))}
+            ) : null}
           </div>
-          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
-            <input
-              type="checkbox"
-              checked={stockYetToIssueOnly}
-              onChange={(e) => setStockYetToIssueOnly(e.target.checked)}
-              className="h-4 w-4 accent-indigo-600"
-            />
-            Stock yet to issue
-          </label>
-          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
-            <input
-              type="checkbox"
-              checked={excludeZeroAvailable}
-              onChange={(e) => setExcludeZeroAvailable(e.target.checked)}
-              className="h-4 w-4 accent-indigo-600"
-            />
-            Exclude 0 Available
-          </label>
-          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
-            <input
-              type="checkbox"
-              checked={showMrrDate}
-              onChange={(e) => setShowMrrDate(e.target.checked)}
-              className="h-4 w-4 accent-indigo-600"
-            />
-            Show MRR Date
-          </label>
-          {hasActiveFilters ? (
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
-            >
-              Clear Filters
-            </button>
-          ) : null}
         </div>
       </div>
 
