@@ -48,7 +48,7 @@ export function BillingPendingTally() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
   const canPostTally = currentUserEmail === "pankaj@bizskilledu.com";
-  const tableColumnCount = canPostTally ? 6 : 5;
+  const tableColumnCount = canPostTally ? 7 : 6;
   const toggleRow = (id: string) => {
     const next = new Set(expandedRows);
     if (next.has(id)) next.delete(id);
@@ -203,6 +203,7 @@ export function BillingPendingTally() {
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Company</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">PO Numbers</th>
               <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase">Total Amount</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Tally Sync Remark</th>
               {canPostTally ? (
                 <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase">Action</th>
               ) : null}
@@ -250,6 +251,11 @@ export function BillingPendingTally() {
                     </td>
                     <td className="px-4 py-4 text-right font-black text-indigo-700">
                       {formatInr.format(inv.grandTotal)}
+                    </td>
+                    <td className="px-4 py-4 text-xs text-slate-700 max-w-[260px]">
+                      <div className="truncate" title={inv.tallySyncRemark || ""}>
+                        {inv.tallySyncRemark || "-"}
+                      </div>
                     </td>
                     {canPostTally ? (
                       <td className="px-4 py-4 text-center">
