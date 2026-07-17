@@ -220,21 +220,20 @@ export function ErpWiseReelStockReport() {
                   </th>
                 ))}
               </tr>
-            </thead>
-            <tbody>
               {rows.length > 0 ? (
-                <tr className="erp-wise-total-row bg-slate-100">
-                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black" colSpan={5}>TOTAL</td>
-                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black">{formatQty(totals.openingStock)}</td>
-                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black">{formatQty(totals.receipts)}</td>
-                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black">{formatQty(totals.issued)}</td>
-                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black">{formatQty(totals.returned)}</td>
-                  <td className="px-3 py-3 text-emerald-900 text-sm font-black border-2 border-black bg-emerald-50">{formatQty(totals.availableWeight)}</td>
-                  <td className="px-3 py-3 text-black text-sm border-2 border-black">-</td>
-                  <td className="px-3 py-3 text-purple-900 text-sm font-black border-2 border-black bg-purple-50">{formatQty(totals.valuation)}</td>
-                  <td className="px-3 py-3 text-amber-900 text-sm font-black border-2 border-black bg-amber-50">{totals.noOfReels}</td>
+                <tr className="bg-slate-100 text-black">
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100" colSpan={5}>TOTAL</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.openingStock)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.receipts)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.issued)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.returned)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-emerald-100 text-emerald-900">{formatQty(totals.availableWeight)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">-</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(totals.valuation)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-amber-100 text-amber-900">{totals.noOfReels}</th>
                 </tr>
-              ) : null}
+              ) : null}`r`n            </thead>
+            <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={13} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
