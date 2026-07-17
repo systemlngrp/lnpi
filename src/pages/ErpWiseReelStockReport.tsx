@@ -210,8 +210,8 @@ export function ErpWiseReelStockReport() {
       </div>
 
       <div className="bg-white rounded shadow-sm border-2 border-black overflow-hidden">
-        <div className="table-frozen-scroll">
-          <table className="min-w-full border-collapse">
+        <div className="max-h-[calc(100vh-220px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
                 {["ERP", "Item Name", "SIZE", "GSM", "BF", "Opening Stock", "RECEIPTS", "ISSUED", "RETURNED", "Available Weight", "Rate", "VALUATION", "NO OF REELS"].map((heading) => (
@@ -232,7 +232,8 @@ export function ErpWiseReelStockReport() {
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(totals.valuation)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-amber-100 text-amber-900">{totals.noOfReels}</th>
                 </tr>
-              ) : null}`r`n            </thead>
+              ) : null}
+            </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
