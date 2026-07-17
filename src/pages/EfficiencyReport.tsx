@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Filter, Search } from "lucide-react";
+import { Search } from "lucide-react";
+import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import { Machine, ProductionProcessing, User } from "../types";
 import { normalizeMachineName } from "../lib/productionMachineNames";
@@ -27,6 +28,10 @@ type EfficiencyRow = {
 function safePercent(numerator: number, denominator: number) {
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null;
   return Number(((numerator / denominator) * 100).toFixed(2));
+}
+
+function formatQty(value: number) {
+  return Number(value || 0).toFixed(2);
 }
 
 export function EfficiencyReport() {
@@ -217,275 +222,153 @@ export function EfficiencyReport() {
     return [...users].sort((a, b) => a.name.localeCompare(b.name)).map((user) => ({ value: user.id, label: user.name }));
   }, [users]);
 
+  const viewModeOptions = [
+    { value: "machineDaily", label: "Daily by machine+shift" },
+    { value: "operatorMachineDaily", label: "Daily by operator+machine+shift" },
+    { value: "detailed", label: "Detailed" },
+  ];
+
+  const shiftOptions = [
+    { value: "Day", label: "Day" },
+    { value: "Night", label: "Night" },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="overflow-hidden rounded-[28px] border border-slate-200/90 bg-white shadow-[0_18px_45px_-28px_rgba(15,23,42,0.24)]">
-        <div className="relative px-4 py-4 md:px-5 md:py-5">
-          <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.12),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.08),_transparent_38%),linear-gradient(180deg,_rgba(248,250,252,0.9),_rgba(255,255,255,0))]" />
-          <div className="relative flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-2xl space-y-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">
-                <Filter size={14} />
-                Reports
-              </div>
-              <div>
-                <h2 className="text-2xl font-black tracking-tight text-slate-950 md:text-[1.75rem]">Efficiency Report</h2>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                  Shift based
-                </div>
-                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                  Machine view
-                </div>
-                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600">
-                  Operator view
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[390px]">
-              <div className="rounded-[18px] border border-teal-200 bg-[linear-gradient(135deg,rgba(240,253,250,1),rgba(236,254,255,0.86))] px-3 py-2.5 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">Overall Efficiency</div>
-                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-teal-950">
-                  {overallEfficiency == null ? "-" : `${Number(overallEfficiency || 0).toFixed(2)}%`}
-                </div>
-                <div className="mt-1 text-[11px] font-semibold text-teal-700">Current filtered output</div>
-              </div>
-              <div className="rounded-[18px] border border-sky-200 bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(240,249,255,0.9))] px-3 py-2.5 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Total Qty</div>
-                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-sky-950">{Number(summary.qty || 0).toFixed(2)}</div>
-                <div className="mt-1 text-[11px] font-semibold text-sky-700">Reported quantity</div>
-              </div>
-              <div className="rounded-[18px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-3 py-2.5 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">Expected Qty</div>
-                <div className="mt-1.5 text-[2rem] font-black tracking-tight leading-none text-violet-950">{Number(summary.expected || 0).toFixed(2)}</div>
-                <div className="mt-1 text-[11px] font-semibold text-violet-700">Shift based target</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative mt-4 rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-3 md:p-4">
-            <div className="mb-3 flex flex-col gap-2 border-b border-slate-200 pb-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">Filter Console</div>
-                <div className="mt-1 text-xs font-semibold text-slate-700">Date, view, shift, machine, and operator filters.</div>
-              </div>
-              <button
-                type="button"
-                onClick={handleClear}
-                className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
-              >
-                Clear Filters
-              </button>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
-              <label className="space-y-2 xl:col-span-4">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                  <Search size={14} />
-                  Search
-                </span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
-                  <Search size={16} className="text-teal-500" />
-                  <input
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search job, machine, operator..."
-                    className="ml-3 w-full bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                  />
-                </div>
-              </label>
-
-              <label className="space-y-2 xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">From</span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
-                  />
-                </div>
-              </label>
-
-              <label className="space-y-2 xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">To</span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
-                  />
-                </div>
-              </label>
-
-              <label className="space-y-2 xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Day hrs</span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
-                  <input
-                    type="number"
-                    value={dayShiftHoursInput}
-                    onChange={(e) => setDayShiftHoursInput(e.target.value)}
-                    className="w-full bg-transparent text-right text-sm font-semibold text-slate-800 outline-none"
-                    min={0}
-                    step={0.5}
-                  />
-                </div>
-              </label>
-
-              <label className="space-y-2 xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 whitespace-nowrap">Night hrs</span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-teal-400 focus-within:ring-4 focus-within:ring-teal-100">
-                  <input
-                    type="number"
-                    value={nightShiftHoursInput}
-                    onChange={(e) => setNightShiftHoursInput(e.target.value)}
-                    className="w-full bg-transparent text-right text-sm font-semibold text-slate-800 outline-none"
-                    min={0}
-                    step={0.5}
-                  />
-                </div>
-              </label>
-
-              <label className="space-y-2 xl:col-span-3">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">View</span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                  <select
-                    value={viewMode}
-                    onChange={(e) => setViewMode(e.target.value as ViewMode)}
-                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
-                  >
-                    <option value="machineDaily">Daily by machine+shift</option>
-                    <option value="operatorMachineDaily">Daily by operator+machine+shift</option>
-                    <option value="detailed">Detailed</option>
-                  </select>
-                </div>
-              </label>
-
-              <label className="space-y-2 xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Shift</span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                  <select
-                    value={shift}
-                    onChange={(e) => setShift(e.target.value as "" | Shift)}
-                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
-                  >
-                    <option value="">All</option>
-                    <option value="Day">Day</option>
-                    <option value="Night">Night</option>
-                  </select>
-                </div>
-              </label>
-
-              <label className="space-y-2 xl:col-span-3">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Machine</span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                  <select
-                    value={machineId}
-                    onChange={(e) => setMachineId(e.target.value)}
-                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
-                  >
-                    <option value="">All</option>
-                    {machineOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </label>
-
-              <label className="space-y-2 xl:col-span-3">
-                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Operator</span>
-                <div className="flex h-[48px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                  <select
-                    value={operatorId}
-                    onChange={(e) => setOperatorId(e.target.value)}
-                    className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none"
-                  >
-                    <option value="">All</option>
-                    {operatorOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </label>
-            </div>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
+        <div>
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Efficiency Report</h2>
+          <p className="text-sm text-slate-600 font-medium">Shift based output against machine hourly target</p>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_14px_34px_-26px_rgba(15,23,42,0.28)]">
-        <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-sm font-bold text-slate-900">{rows.length} rows</div>
-            <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-              Efficiency view: {viewMode === "machineDaily" ? "Machine + shift daily" : viewMode === "operatorMachineDaily" ? "Operator + machine + shift daily" : "Detailed"}
-            </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
+          <div className="text-xs font-black uppercase text-emerald-700">Overall Efficiency</div>
+          <div className="mt-1 text-2xl font-black text-emerald-900">
+            {overallEfficiency == null ? "-" : `${formatQty(overallEfficiency)}%`}
           </div>
-          <div className="grid grid-cols-3 gap-3 text-right text-sm font-semibold text-slate-700 md:min-w-[320px]">
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Overall Eff%</div>
-              <div className="text-slate-900">{overallEfficiency == null ? "-" : Number(overallEfficiency || 0).toFixed(2)}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Total Qty</div>
-              <div className="text-slate-900">{Number(summary.qty || 0).toFixed(2)}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Expected Qty</div>
-              <div className="text-slate-900">{Number(summary.expected || 0).toFixed(2)}</div>
-            </div>
+        </div>
+        <div className="rounded border border-blue-300 bg-blue-50 p-4">
+          <div className="text-xs font-black uppercase text-blue-700">Total Qty</div>
+          <div className="mt-1 text-2xl font-black text-blue-900">{formatQty(summary.qty)}</div>
+        </div>
+        <div className="rounded border border-purple-300 bg-purple-50 p-4">
+          <div className="text-xs font-black uppercase text-purple-700">Expected Qty</div>
+          <div className="mt-1 text-2xl font-black text-purple-900">{formatQty(summary.expected)}</div>
+        </div>
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <div className="text-xs font-black uppercase text-amber-700">Rows</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{rows.length}</div>
+        </div>
+      </div>
+
+      <div className="rounded border border-black bg-white p-3">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(2,minmax(140px,0.8fr))_repeat(4,minmax(155px,1fr))_repeat(2,minmax(110px,0.7fr))_auto] xl:items-center">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search job, machine, operator..."
+              className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
+          <Select value={viewMode} onChange={(value) => setViewMode(value as ViewMode)} options={viewModeOptions} placeholder="View" />
+          <Select value={shift} onChange={(value) => setShift(value as "" | Shift)} options={shiftOptions} placeholder="All Shift" />
+          <Select value={machineId} onChange={setMachineId} options={machineOptions} placeholder="All Machine" />
+          <Select value={operatorId} onChange={setOperatorId} options={operatorOptions} placeholder="All Operator" />
+          <input
+            type="number"
+            value={dayShiftHoursInput}
+            onChange={(e) => setDayShiftHoursInput(e.target.value)}
+            placeholder="Day hrs"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-right text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            min={0}
+            step={0.5}
+          />
+          <input
+            type="number"
+            value={nightShiftHoursInput}
+            onChange={(e) => setNightShiftHoursInput(e.target.value)}
+            placeholder="Night hrs"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-right text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            min={0}
+            step={0.5}
+          />
+          <button
+            type="button"
+            onClick={handleClear}
+            className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+          >
+            Clear Filters
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded shadow-sm border-2 border-black overflow-hidden">
+        <div className="flex flex-col gap-1 border-b-2 border-black px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="text-sm font-bold text-black">{rows.length} rows</div>
+          <div className="text-xs font-black uppercase tracking-wide text-indigo-700">
+            {viewMode === "machineDaily" ? "Machine + shift daily" : viewMode === "operatorMachineDaily" ? "Operator + machine + shift daily" : "Detailed"}
           </div>
         </div>
 
-        <div className="table-frozen-scroll">
-          <table className="min-w-full border-collapse">
-            <thead className="sticky top-0 z-30">
-              <tr className="bg-[linear-gradient(90deg,#042f2e,#0f766e,#134e4a)] text-white">
-                <th className="min-w-[110px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Date</th>
-                <th className="min-w-[130px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Job No.</th>
-                <th className="min-w-[150px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Machine</th>
-                <th className="min-w-[80px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Shift</th>
-                <th className="min-w-[140px] whitespace-nowrap border-r border-black px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Operator</th>
-                <th className="min-w-[95px] whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Qty</th>
-                <th className="min-w-[95px] whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Max/Hr</th>
-                <th className="min-w-[105px] whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Expected</th>
-                <th className="min-w-[90px] whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Eff%</th>
+        <div className="max-h-[calc(100vh-260px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-indigo-700 text-white">
+                <th className="min-w-[110px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase">Date</th>
+                <th className="min-w-[130px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase">Job No.</th>
+                <th className="min-w-[150px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase">Machine</th>
+                <th className="min-w-[80px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase">Shift</th>
+                <th className="min-w-[140px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase">Operator</th>
+                <th className="min-w-[95px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-right text-xs font-black uppercase">Qty</th>
+                <th className="min-w-[95px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-right text-xs font-black uppercase">Max/Hr</th>
+                <th className="min-w-[105px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-right text-xs font-black uppercase">Expected</th>
+                <th className="min-w-[90px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-right text-xs font-black uppercase">Eff%</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="border-t border-black px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={9} className="border-2 border-black px-6 py-10 text-center text-sm font-semibold text-black">
                     No matching records.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.id} className="border-t border-black transition hover:bg-teal-50/45">
-                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-semibold text-slate-900">
+                  <tr key={row.id} className="hover:bg-slate-50">
+                    <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-sm font-semibold text-black">
                       {formatDate(row.date)}
                     </td>
-                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-bold text-slate-900">{row.jobNo || "-"}</td>
-                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-semibold text-slate-900">{row.machineName}</td>
-                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-bold text-slate-900">{row.shift}</td>
-                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-sm font-semibold text-slate-900">{row.operatorName}</td>
-                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-bold text-teal-700">
-                      {Number(row.qty || 0).toFixed(2)}
+                    <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-sm font-bold text-black">{row.jobNo || "-"}</td>
+                    <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-sm font-semibold text-black">{row.machineName}</td>
+                    <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-sm font-bold text-black">{row.shift}</td>
+                    <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-sm font-semibold text-black">{row.operatorName}</td>
+                    <td className="whitespace-nowrap border-2 border-black bg-emerald-50 px-3 py-3 text-right text-sm font-bold text-emerald-900">
+                      {formatQty(row.qty)}
                     </td>
-                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
-                      {Number(row.maxOutputPerHour || 0).toFixed(2)}
+                    <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-right text-sm font-semibold text-black">
+                      {formatQty(row.maxOutputPerHour)}
                     </td>
-                    <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
-                      {Number(row.expectedQty || 0).toFixed(2)}
+                    <td className="whitespace-nowrap border-2 border-black bg-purple-50 px-3 py-3 text-right text-sm font-bold text-purple-900">
+                      {formatQty(row.expectedQty)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold text-slate-900">
-                      {row.efficiencyPercent == null ? "-" : `${Number(row.efficiencyPercent || 0).toFixed(2)}%`}
+                    <td className="whitespace-nowrap border-2 border-black bg-amber-50 px-3 py-3 text-right text-sm font-bold text-amber-900">
+                      {row.efficiencyPercent == null ? "-" : `${formatQty(row.efficiencyPercent)}%`}
                     </td>
                   </tr>
                 ))
@@ -493,21 +376,21 @@ export function EfficiencyReport() {
             </tbody>
             {rows.length > 0 ? (
               <tfoot>
-                <tr className="border-t-2 border-black bg-slate-50">
-                  <td colSpan={5} className="border-r border-black px-3 py-2.5 text-right text-xs font-black uppercase tracking-[0.16em] text-slate-600">
+                <tr className="bg-slate-100">
+                  <td colSpan={5} className="border-2 border-black px-3 py-3 text-right text-xs font-black uppercase tracking-wide text-black">
                     Totals
                   </td>
-                  <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-black text-teal-700">
-                    {Number(summary.qty || 0).toFixed(2)}
+                  <td className="whitespace-nowrap border-2 border-black bg-emerald-100 px-3 py-3 text-right text-sm font-black text-emerald-900">
+                    {formatQty(summary.qty)}
                   </td>
-                  <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-semibold text-slate-900">
+                  <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-right text-sm font-black text-black">
                     -
                   </td>
-                  <td className="whitespace-nowrap border-r border-black px-3 py-2.5 text-right text-sm font-black text-slate-900">
-                    {Number(summary.expected || 0).toFixed(2)}
+                  <td className="whitespace-nowrap border-2 border-black bg-purple-100 px-3 py-3 text-right text-sm font-black text-purple-900">
+                    {formatQty(summary.expected)}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-black text-slate-900">
-                    {overallEfficiency == null ? "-" : `${Number(overallEfficiency || 0).toFixed(2)}%`}
+                  <td className="whitespace-nowrap border-2 border-black bg-amber-100 px-3 py-3 text-right text-sm font-black text-amber-900">
+                    {overallEfficiency == null ? "-" : `${formatQty(overallEfficiency)}%`}
                   </td>
                 </tr>
               </tfoot>
