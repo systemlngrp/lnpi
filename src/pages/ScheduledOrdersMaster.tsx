@@ -9,10 +9,23 @@ import {
   Company,
 } from "../types";
 import { formatDate } from "../lib/serial";
-import { Search, Calendar, Building2, Package, X, Filter } from "lucide-react";
+import { Search, Calendar, Building2, Package, X } from "lucide-react";
+import Select from "react-select";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
+
+type SelectOption = {
+  value: string;
+  label: string;
+};
+
+const formatItemOptionLabel = (item: { name?: string; erp?: string | number }) => {
+  const name = String(item.name || "").trim();
+  const erp = String(item.erp || "").trim();
+  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name || erp;
+  return `${name} - ${erp}`;
+};
 
 export function ScheduledOrdersMaster() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -29,6 +42,28 @@ export function ScheduledOrdersMaster() {
   const [itemFilter, setItemFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+
+  const companyOptions = useMemo<SelectOption[]>(
+    () =>
+      companies
+        .map((company) => ({ value: company.id, label: company.name || "" }))
+        .filter((option) => option.value && option.label)
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" })),
+    [companies]
+  );
+
+  const itemOptions = useMemo<SelectOption[]>(
+    () =>
+      Object.values(itemsBySource)
+        .flat()
+        .map((item) => ({
+          value: item.id,
+          label: formatItemOptionLabel(item),
+        }))
+        .filter((option) => option.value && option.label)
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" })),
+    [itemsBySource]
+  );
 
   const detailedSchedules = useMemo(() => {
     return schedules.map(s => {
@@ -79,6 +114,7 @@ export function ScheduledOrdersMaster() {
         itemId: item?.id || "",
         itemName: item?.name || "-",
         itemErp: item?.erp || "-",
+        orderErp: order?.erpCode || "",
         plannedQty,
         producedFgQty,
         pendingPlanning: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0) - effectiveProducedForPlanning, 0),
@@ -89,8 +125,14 @@ export function ScheduledOrdersMaster() {
       };
     })
     .filter(s => {
-      const matchSearch = s.orderNo.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.companyName.toLowerCase().includes(searchTerm.toLowerCase());
+      const normalizedSearch = searchTerm.trim().toLowerCase();
+      const matchSearch = !normalizedSearch || [
+        s.orderNo,
+        s.orderErp,
+        s.companyName,
+        s.itemName,
+        s.itemErp,
+      ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
       const matchCompany = !companyFilter || s.companyId === companyFilter;
       const matchItem = !itemFilter || s.itemId === itemFilter;
       const matchFromDate = !fromDate || s.scheduledDate >= fromDate;
@@ -140,7 +182,7 @@ export function ScheduledOrdersMaster() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input 
             type="text"
-            placeholder="Search Order No..."
+            placeholder="Search order, ERP, company, item..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none"
@@ -149,32 +191,36 @@ export function ScheduledOrdersMaster() {
 
         {/* Company Filter */}
         <div className="relative">
-          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <select 
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none appearance-none bg-white"
-          >
-            <option value="">All Companies</option>
-            {companies.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <Building2 className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-400" size={16} />
+          <Select
+            options={companyOptions}
+            value={companyOptions.find((option) => option.value === companyFilter) || null}
+            onChange={(option) => setCompanyFilter(option ? (option as SelectOption).value : "")}
+            isClearable
+            placeholder="All Companies"
+            menuPlacement="bottom"
+            styles={{
+              control: (provided) => ({ ...provided, minHeight: 40, borderColor: "black", borderRadius: 4, paddingLeft: 28 }),
+              menu: (provided) => ({ ...provided, zIndex: 50 }),
+            }}
+          />
         </div>
 
         {/* Item Filter */}
         <div className="relative">
-          <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <select 
-            value={itemFilter}
-            onChange={(e) => setItemFilter(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-black rounded text-sm focus:ring-1 focus:ring-black outline-none appearance-none bg-white"
-          >
-            <option value="">All Items</option>
-            {Object.values(itemsBySource).flat().map((item) => (
-              <option key={`${item.source}::${item.id}`} value={item.id}>{item.name}</option>
-            ))}
-          </select>
+          <Package className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-400" size={16} />
+          <Select
+            options={itemOptions}
+            value={itemOptions.find((option) => option.value === itemFilter) || null}
+            onChange={(option) => setItemFilter(option ? (option as SelectOption).value : "")}
+            isClearable
+            placeholder="All Items"
+            menuPlacement="bottom"
+            styles={{
+              control: (provided) => ({ ...provided, minHeight: 40, borderColor: "black", borderRadius: 4, paddingLeft: 28 }),
+              menu: (provided) => ({ ...provided, zIndex: 50 }),
+            }}
+          />
         </div>
 
         {/* From Date */}
