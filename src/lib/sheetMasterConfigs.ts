@@ -7,6 +7,8 @@ export type SheetMasterFilter = {
   key: string;
   label: string;
   searchable?: boolean;
+  optionLabelKeys?: string[];
+  optionSearchKeys?: string[];
 };
 
 export const PHP_ITEM_MASTER_COLUMNS: SheetMasterColumn[] = [

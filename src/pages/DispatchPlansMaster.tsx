@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 
 import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import { DispatchPlan, Truck, Order, Company, OrderSchedule, LoadingSlip } from "../types";
 import { formatDate } from "../lib/serial";
@@ -12,6 +13,8 @@ import { useClientPagination } from "../hooks/useClientPagination";
 
 export function DispatchPlansMaster() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
+  const [itemFilter, setItemFilter] = useState('');
 
 
   const [plans, setPlans] = useData<DispatchPlan>("dispatch_plans", []);
@@ -139,32 +142,67 @@ export function DispatchPlansMaster() {
     }
   };
 
-  const filteredPlans = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    return [...plans]
-      .filter((plan) => {
-        if (!normalizedSearch) return true;
-        const order = orders.find((o) => o.id === plan.orderId);
-        const company = companies.find((c) => c.id === order?.companyId);
-        const item = resolveOrderItem(order);
-        const pending = Number(plan.plannedQty || 0) - Number(plan.loadedQty || 0) - Number(plan.canceledQty || 0);
-        const haystack = [
+  const dispatchFilterRows = useMemo(() => {
+    return plans.map((plan) => {
+      const order = orders.find((o) => o.id === plan.orderId);
+      const company = companies.find((c) => c.id === order?.companyId);
+      const item = resolveOrderItem(order);
+      const companyName = String(company?.name || "").trim();
+      const itemName = String(item?.name || "").trim();
+      const itemErp = String(order?.erpCode || item?.erp || "").trim();
+      const itemKey = itemName || itemErp ? `${itemName}::${itemErp}` : "";
+      const pending = Number(plan.plannedQty || 0) - Number(plan.loadedQty || 0) - Number(plan.canceledQty || 0);
+      return {
+        plan,
+        companyName,
+        itemName,
+        itemErp,
+        itemKey,
+        pending,
+        searchText: [
           plan.planNo,
           formatDate(plan.date),
-          company?.name,
+          companyName,
           order?.orderNo,
-          item?.name,
+          order?.erpCode,
+          itemName,
+          itemErp,
           String(plan.plannedQty || ""),
           String(plan.loadedQty || ""),
           String(plan.canceledQty || ""),
           String(pending),
           plan.status,
-        ].join(" ").toLowerCase();
-        return haystack.includes(normalizedSearch);
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [plans, searchTerm, orders, companies, resolveOrderItem]);
+        ].join(" ").toLowerCase(),
+      };
+    });
+  }, [plans, orders, companies, resolveOrderItem]);
 
+  const companyOptions = useMemo(() => {
+    const names = Array.from(new Set(dispatchFilterRows.map((row) => row.companyName).filter(Boolean)));
+    return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })).map((name) => ({ value: name, label: name }));
+  }, [dispatchFilterRows]);
+
+  const itemOptions = useMemo(() => {
+    const map = new Map<string, { value: string; label: string; searchText: string }>();
+    dispatchFilterRows.forEach((row) => {
+      if (!row.itemKey || map.has(row.itemKey)) return;
+      const label = !row.itemErp || row.itemName.toLowerCase().includes(row.itemErp.toLowerCase()) ? row.itemName || row.itemErp : `${row.itemName} - ${row.itemErp}`;
+      map.set(row.itemKey, { value: row.itemKey, label, searchText: `${row.itemName} ${row.itemErp}` });
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [dispatchFilterRows]);
+
+  const filteredPlans = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return dispatchFilterRows
+      .filter((row) => {
+        if (companyFilter && row.companyName !== companyFilter) return false;
+        if (itemFilter && row.itemKey !== itemFilter) return false;
+        return !normalizedSearch || row.searchText.includes(normalizedSearch);
+      })
+      .map((row) => row.plan)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [companyFilter, dispatchFilterRows, itemFilter, searchTerm]);
   const {
     page,
     setPage,
@@ -180,7 +218,14 @@ export function DispatchPlansMaster() {
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Dispatch Plans Master</h2>
       </div>
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+      <div className="grid gap-3 md:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(260px,1.1fr)_auto] md:items-center">
+        <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search plan, order, ERP, company, item..." />
+        <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
+        <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+        {(searchTerm || companyFilter || itemFilter) ? (
+          <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+        ) : null}
+      </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-frozen-scroll">

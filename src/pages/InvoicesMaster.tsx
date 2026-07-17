@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "../lib/serial";
 import { ClientPagination } from "../components/ClientPagination";
+import { Select } from "../components/Select";
 import { useClientPagination } from "../hooks/useClientPagination";
 
 type InvoiceDetailRow = {
@@ -73,6 +74,8 @@ export function InvoicesMaster() {
   const [orders] = useData<Order>("orders", []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
@@ -273,6 +276,8 @@ export function InvoicesMaster() {
                 .filter(Boolean)
             )
           ).join(", ") || "-";
+        const erpSummary = Array.from(new Set(details.map((line) => String(line.erp || "").trim()).filter(Boolean))).join(", ");
+        const itemKeys = details.map((line) => `${String(line.itemName || "").trim()}::${String(line.erp || "").trim()}`);
 
         return {
           ...invoice,
@@ -280,17 +285,23 @@ export function InvoicesMaster() {
           address: company?.address || "",
           gstNo: company?.gstNo || "N/A",
           itemSummary,
+          erpSummary,
+          itemKeys,
           roundOff: getRoundOff(invoice),
           grandTotal: getGrandTotal(invoice),
           details,
         };
       })
       .filter((invoice) => {
-        const needle = searchTerm.toLowerCase();
+        const needle = searchTerm.trim().toLowerCase();
+        if (companyFilter && invoice.companyName !== companyFilter) return false;
+        if (itemFilter && !invoice.itemKeys.includes(itemFilter)) return false;
+        if (!needle) return true;
         return (
           invoice.invoiceNo.toLowerCase().includes(needle) ||
           invoice.companyName.toLowerCase().includes(needle) ||
           invoice.itemSummary.toLowerCase().includes(needle) ||
+          String(invoice.erpSummary || "").toLowerCase().includes(needle) ||
           String(invoice.tallyInvNo || "").toLowerCase().includes(needle) ||
           String(invoice.tallyInvId || "").toLowerCase().includes(needle) ||
           String(invoice.tallySyncRemark || "").toLowerCase().includes(needle)
@@ -304,7 +315,27 @@ export function InvoicesMaster() {
         if (bSort.numeric !== aSort.numeric) return bSort.numeric - aSort.numeric;
         return bSort.raw.localeCompare(aSort.raw, undefined, { sensitivity: "base" });
       });
-  }, [invoices, companies, searchTerm, lineItems, npdItems, slips, trucks, dispatchPlans, orders]);
+  }, [invoices, companies, searchTerm, companyFilter, itemFilter, lineItems, npdItems, slips, trucks, dispatchPlans, orders]);
+
+  const companyOptions = useMemo(() => {
+    const names = Array.from(new Set(invoices.map((invoice) => companies.find((company) => company.id === invoice.companyId)?.name || "").filter(Boolean)));
+    return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })).map((name) => ({ value: name, label: name }));
+  }, [companies, invoices]);
+
+  const itemOptions = useMemo(() => {
+    const map = new Map<string, { value: string; label: string; searchText: string }>();
+    invoices.forEach((invoice) => {
+      buildInvoiceDetails(invoice).forEach((line) => {
+        const itemName = String(line.itemName || "").trim();
+        const erp = String(line.erp || "").trim();
+        const key = itemName || erp ? `${itemName}::${erp}` : "";
+        if (!key || map.has(key)) return;
+        const label = !erp || itemName.toLowerCase().includes(erp.toLowerCase()) ? itemName || erp : `${itemName} - ${erp}`;
+        map.set(key, { value: key, label, searchText: `${itemName} ${erp}` });
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [invoices, lineItems, npdItems, slips, trucks, dispatchPlans, orders]);
 
   const {
     page,
@@ -326,15 +357,22 @@ export function InvoicesMaster() {
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Billing Master</h2>
         </div>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search invoice, company..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-          />
+        <div className="grid w-full gap-3 md:max-w-4xl md:grid-cols-[minmax(220px,1.4fr)_minmax(190px,1fr)_minmax(240px,1.1fr)_auto] md:items-center">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search invoice, ERP, company, item..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            />
+          </div>
+          <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
+          <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+          {(searchTerm || companyFilter || itemFilter) ? (
+            <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+          ) : null}
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { useData } from "../hooks/useData";
 import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, Machine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
 import { ClientPagination } from "../components/ClientPagination";
 import { ClipboardList, CheckCircle, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +17,11 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getProductionEffectiveType, getRequiredMachinesForProduction } from "../lib/productionType";
 import { getProductionMatchingFields, hasProductionMatchingFieldChanges } from "../lib/productionMatching";
+
+const formatItemFilterLabel = (name: string, erp: string) => {
+  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name || erp;
+  return `${name} - ${erp}`;
+};
 
 export function ProductionMaster() {
   const navigate = useNavigate();
@@ -31,6 +37,8 @@ export function ProductionMaster() {
   const { findItemAcrossSources } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
   const [closingId, setClosingId] = useState<string | null>(null);
   const [cancelModalJobId, setCancelModalJobId] = useState<string | null>(null);
   const [cancelRemarks, setCancelRemarks] = useState("");
@@ -358,19 +366,70 @@ export function ProductionMaster() {
     }
   };
 
-  const filteredList = productions
-    .filter(p => {
-      const item = resolveProductionItem(p);
-      const schedule = schedules.find(s => s.id === p.scheduleId);
-      const order = orders.find(o => o.id === schedule?.orderId);
-      const company = companies.find(c => c.id === order?.companyId);
-      
-      return p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (order?.orderNo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (company?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
-    })
-    .sort((a, b) => b.transactionNo.localeCompare(a.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
+  const productionFilterRows = useMemo(() => {
+    return productions.map((production) => {
+      const item = resolveProductionItem(production);
+      const schedule = schedules.find((s) => s.id === production.scheduleId);
+      const order = orders.find((o) => o.id === schedule?.orderId);
+      const company = companies.find((c) => c.id === order?.companyId);
+      const itemName = String(item?.name || "").trim();
+      const itemErp = String(production.erpCode || item?.erp || "").trim();
+      const companyName = String(company?.name || production.companyName || "").trim();
+      const itemKey = itemName || itemErp ? `${itemName}::${itemErp}` : "";
+
+      return {
+        production,
+        itemName,
+        itemErp,
+        itemKey,
+        companyName,
+        searchText: [
+          production.transactionNo,
+          production.date,
+          production.masterErp,
+          production.erpCode,
+          production.companyName,
+          companyName,
+          itemName,
+          itemErp,
+          order?.orderNo,
+          order?.erpCode,
+          production.status,
+          production.remarks,
+        ].join(" ").toLowerCase(),
+      };
+    });
+  }, [productions, schedules, orders, companies]);
+
+  const companyOptions = useMemo(() => {
+    const names = Array.from(new Set(productionFilterRows.map((row) => row.companyName).filter(Boolean)));
+    return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })).map((name) => ({ value: name, label: name }));
+  }, [productionFilterRows]);
+
+  const itemOptions = useMemo(() => {
+    const map = new Map<string, { value: string; label: string; searchText: string }>();
+    productionFilterRows.forEach((row) => {
+      if (!row.itemKey || map.has(row.itemKey)) return;
+      map.set(row.itemKey, {
+        value: row.itemKey,
+        label: formatItemFilterLabel(row.itemName, row.itemErp),
+        searchText: `${row.itemName} ${row.itemErp}`,
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [productionFilterRows]);
+
+  const filteredList = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return productionFilterRows
+      .filter((row) => {
+        if (companyFilter && row.companyName !== companyFilter) return false;
+        if (itemFilter && row.itemKey !== itemFilter) return false;
+        return !normalizedSearch || row.searchText.includes(normalizedSearch);
+      })
+      .map((row) => row.production)
+      .sort((a, b) => b.transactionNo.localeCompare(a.transactionNo, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [companyFilter, itemFilter, productionFilterRows, searchTerm]);
   const {
     page,
     setPage,
@@ -424,12 +483,38 @@ export function ProductionMaster() {
         </div>
       </div>
 
-      <TableControls 
-        searchTerm={searchTerm} 
-        onSearchChange={setSearchTerm} 
-        placeholder="Search productions..." 
-      />
-
+      <div className="grid gap-3 md:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(260px,1.1fr)_auto] md:items-center">
+        <TableControls 
+          searchTerm={searchTerm} 
+          onSearchChange={setSearchTerm} 
+          placeholder="Search job, order, ERP, company, item..." 
+        />
+        <Select
+          value={companyFilter}
+          onChange={setCompanyFilter}
+          options={companyOptions}
+          placeholder="All Companies"
+        />
+        <Select
+          value={itemFilter}
+          onChange={setItemFilter}
+          options={itemOptions}
+          placeholder="All Items"
+        />
+        {(searchTerm || companyFilter || itemFilter) ? (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setCompanyFilter("");
+              setItemFilter("");
+            }}
+            className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+          >
+            Clear Filters
+          </button>
+        ) : null}
+      </div>
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4 p-2">

@@ -3,6 +3,7 @@ import { useData } from "../hooks/useData";
 import { OrderItemSource, Production } from "../types";
 import { ClientPagination } from "../components/ClientPagination";
 import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getOrderItemSourceLabel } from "../lib/orderItems";
@@ -13,6 +14,11 @@ const getJobMasterEntityName = (source: Extract<OrderItemSource, "PHP" | "PLATE"
 
 type StandaloneProductionMasterProps = {
   source: Extract<OrderItemSource, "PHP" | "PLATE">;
+};
+
+const formatItemFilterLabel = (name: string, erp: string) => {
+  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name || erp;
+  return `${name} - ${erp}`;
 };
 
 function formatCell(value: unknown) {
@@ -42,21 +48,31 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
   const { itemsBySource } = useOrderItemCatalog();
   const items = itemsBySource[source] || [];
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
 
-  const filteredList = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    return productions
-      .filter((production) => {
-        const item = items.find((entry) => entry.id === String(production.itemId || "").trim());
-        if (!normalizedSearch) return true;
-        const haystack = [
+  const productionFilterRows = useMemo(() => {
+    return productions.map((production) => {
+      const item = items.find((entry) => entry.id === String(production.itemId || "").trim());
+      const itemName = String(item?.name || "").trim();
+      const itemErp = String(production.erpCode || item?.erp || "").trim();
+      const companyName = String(production.companyName || "").trim();
+      const itemKey = itemName || itemErp ? `${itemName}::${itemErp}` : "";
+
+      return {
+        production,
+        itemName,
+        itemErp,
+        itemKey,
+        companyName,
+        searchText: [
           production.transactionNo,
           production.date,
           production.shift,
           production.category,
           production.masterErp,
           production.erpCode,
-          production.companyName,
+          companyName,
           production.status,
           production.remarks,
           production.planningId,
@@ -66,14 +82,38 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
           production.sequence,
           production.jobCompletionTimeOutput,
           production.printingColor,
-          item?.name,
-          item?.erp,
-        ].join(" ").toLowerCase();
-        return haystack.includes(normalizedSearch);
-      })
-      .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime());
-  }, [items, productions, searchTerm]);
+          itemName,
+          itemErp,
+        ].join(" ").toLowerCase(),
+      };
+    });
+  }, [items, productions]);
 
+  const companyOptions = useMemo(() => {
+    const names = Array.from(new Set(productionFilterRows.map((row) => row.companyName).filter(Boolean)));
+    return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })).map((name) => ({ value: name, label: name }));
+  }, [productionFilterRows]);
+
+  const itemOptions = useMemo(() => {
+    const map = new Map<string, { value: string; label: string; searchText: string }>();
+    productionFilterRows.forEach((row) => {
+      if (!row.itemKey || map.has(row.itemKey)) return;
+      map.set(row.itemKey, { value: row.itemKey, label: formatItemFilterLabel(row.itemName, row.itemErp), searchText: `${row.itemName} ${row.itemErp}` });
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [productionFilterRows]);
+
+  const filteredList = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return productionFilterRows
+      .filter((row) => {
+        if (companyFilter && row.companyName !== companyFilter) return false;
+        if (itemFilter && row.itemKey !== itemFilter) return false;
+        return !normalizedSearch || row.searchText.includes(normalizedSearch);
+      })
+      .map((row) => row.production)
+      .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime());
+  }, [companyFilter, itemFilter, productionFilterRows, searchTerm]);
   const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems } = useClientPagination(filteredList, 25);
 
   const handleCancel = async (id: string) => {
@@ -104,7 +144,14 @@ export function StandaloneProductionMaster({ source }: StandaloneProductionMaste
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">{sourceLabel} Production Master</h2>
       </div>
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+      <div className="grid gap-3 md:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(260px,1.1fr)_auto] md:items-center">
+        <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search job, ERP, company, item..." />
+        <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
+        <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+        {(searchTerm || companyFilter || itemFilter) ? (
+          <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+        ) : null}
+      </div>
       <div className="bg-white border border-black rounded shadow-sm overflow-auto">
         <table className="min-w-[3320px] w-full divide-y divide-black border-collapse">
           <thead className="sticky top-0 z-30 bg-slate-100">

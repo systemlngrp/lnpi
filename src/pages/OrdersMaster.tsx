@@ -15,6 +15,8 @@ type OrderMasterRow = {
   order: Order;
   companyName: string;
   itemName: string;
+  itemErp: string;
+  itemKey: string;
   orderByName: string;
   canceledQty: number;
   invoicedQty: number;
@@ -77,7 +79,7 @@ export function OrdersMaster() {
     [companies, suppliers]
   );
   const itemMap = useMemo(
-    () => new Map(orders.map((order) => [order.id, resolveOrderItem(order)?.name || ""])),
+    () => new Map(orders.map((order) => [order.id, resolveOrderItem(order)])),
     [orders, resolveOrderItem]
   );
   const userMap = useMemo(
@@ -128,10 +130,17 @@ export function OrdersMaster() {
       const orderAmount = toNumber(order.orderAmount) || toNumber(order.qty) * toNumber(order.rate);
       const pendingQty = Math.max(0, toNumber(order.qty) - canceledQty - invoicedQty);
 
+      const item = itemMap.get(order.id);
+      const itemName = String(item?.name || "").trim();
+      const itemErp = String(order.erpCode || item?.erp || "").trim();
+      const itemKey = itemName || itemErp ? `${itemName}::${itemErp}` : "";
+
       return {
         order,
         companyName: companyMap.get(order.companyId) || "",
-        itemName: itemMap.get(order.id) || "",
+        itemName,
+        itemErp,
+        itemKey,
         orderByName: userMap.get(order.orderBy || "") || "",
         canceledQty,
         invoicedQty,
@@ -147,7 +156,7 @@ export function OrdersMaster() {
     return rows
       .filter((row) => {
         if (companyFilter && row.companyName !== companyFilter) return false;
-        if (itemFilter && row.itemName !== itemFilter) return false;
+        if (itemFilter && row.itemKey !== itemFilter) return false;
         if (orderByFilter && row.orderByName !== orderByFilter) return false;
         if ((dateFrom || dateTo) && !isWithinDateRange(row.order.orderDate, dateFrom, dateTo)) return false;
         if (valueGreaterThan !== "" && toNumber(row.orderAmount) <= toNumber(valueGreaterThan)) return false;
@@ -159,6 +168,7 @@ export function OrdersMaster() {
           row.order.orderNo,
           row.companyName,
           row.itemName,
+          row.itemErp,
           row.order.erpCode,
           row.order.poNumber,
           row.orderByName,
@@ -180,13 +190,13 @@ export function OrdersMaster() {
     const ns = searchTerm.trim().toLowerCase();
     const set = new Set<string>();
     rows.forEach((row) => {
-      if (itemFilter && row.itemName !== itemFilter) return;
+      if (itemFilter && row.itemKey !== itemFilter) return;
       if (orderByFilter && row.orderByName !== orderByFilter) return;
       if ((dateFrom || dateTo) && !isWithinDateRange(row.order.orderDate, dateFrom, dateTo)) return;
       if (valueGreaterThan !== "" && toNumber(row.orderAmount) <= toNumber(valueGreaterThan)) return;
       if (quantityGreaterThan !== "" && toNumber(row.order.qty) <= toNumber(quantityGreaterThan)) return;
       if (ns) {
-        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.order.erpCode, row.order.poNumber, row.orderByName]
+        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.itemErp, row.order.erpCode, row.order.poNumber, row.orderByName]
           .some((v) => String(v || "").toLowerCase().includes(ns));
         if (!anyMatch) return;
       }
@@ -205,13 +215,19 @@ export function OrdersMaster() {
       if (valueGreaterThan !== "" && toNumber(row.orderAmount) <= toNumber(valueGreaterThan)) return;
       if (quantityGreaterThan !== "" && toNumber(row.order.qty) <= toNumber(quantityGreaterThan)) return;
       if (ns) {
-        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.order.erpCode, row.order.poNumber, row.orderByName]
+        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.itemErp, row.order.erpCode, row.order.poNumber, row.orderByName]
           .some((v) => String(v || "").toLowerCase().includes(ns));
         if (!anyMatch) return;
       }
-      if (row.itemName) set.add(row.itemName);
+      if (row.itemKey) set.add(row.itemKey);
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return Array.from(set)
+      .map((key) => {
+        const [name = "", erp = ""] = key.split("::");
+        const label = !erp || name.toLowerCase().includes(erp.toLowerCase()) ? name || erp : `${name} - ${erp}`;
+        return { value: key, label, searchText: `${name} ${erp}` };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   }, [rows, companyFilter, orderByFilter, dateFrom, dateTo, valueGreaterThan, quantityGreaterThan, searchTerm]);
 
   const availableUsers = useMemo(() => {
@@ -219,12 +235,12 @@ export function OrdersMaster() {
     const set = new Set<string>();
     rows.forEach((row) => {
       if (companyFilter && row.companyName !== companyFilter) return;
-      if (itemFilter && row.itemName !== itemFilter) return;
+      if (itemFilter && row.itemKey !== itemFilter) return;
       if ((dateFrom || dateTo) && !isWithinDateRange(row.order.orderDate, dateFrom, dateTo)) return;
       if (valueGreaterThan !== "" && toNumber(row.orderAmount) <= toNumber(valueGreaterThan)) return;
       if (quantityGreaterThan !== "" && toNumber(row.order.qty) <= toNumber(quantityGreaterThan)) return;
       if (ns) {
-        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.order.erpCode, row.order.poNumber, row.orderByName]
+        const anyMatch = [row.order.orderNo, row.companyName, row.itemName, row.itemErp, row.order.erpCode, row.order.poNumber, row.orderByName]
           .some((v) => String(v || "").toLowerCase().includes(ns));
         if (!anyMatch) return;
       }
@@ -304,7 +320,7 @@ export function OrdersMaster() {
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search order, ERP, item, PO..."
+                placeholder="Search order, ERP, company, item, PO..."
                 className="w-full rounded border border-black py-2 pl-10 pr-3 font-normal"
               />
             </div>
@@ -326,8 +342,8 @@ export function OrdersMaster() {
           <label className="flex flex-col gap-1 text-sm font-bold text-black">
             <span>Item</span>
             <Select
-              options={availableItems.map((it) => ({ value: it, label: it }))}
-              value={itemFilter ? { value: itemFilter, label: itemFilter } : null}
+              options={availableItems}
+              value={availableItems.find((option) => option.value === itemFilter) || null}
               onChange={(opt) => setItemFilter(opt ? (opt as any).value : "")}
               isClearable
               placeholder="All Items"

@@ -20,7 +20,8 @@ export function PlateItemMaster() {
       editableColumns={["openingQty"]}
       rowsOverride={buildPhpPlateInventoryRows(rows, jobs, [...standaloneLoadingSlips, ...commonLoadingSlips], "PLATE")}
       filters={[
-        { key: "company", label: "Company" },
+        { key: "company", label: "Company", searchable: true },
+        { key: "itemName", label: "Item", searchable: true, optionLabelKeys: ["itemName", "erpItemCode"], optionSearchKeys: ["masterItemNameErpCode"] },
       ]}
       searchPlaceholder="Search plate item master..."
     />

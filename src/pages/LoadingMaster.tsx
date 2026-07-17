@@ -20,6 +20,7 @@ import {
   Download
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { Select } from "../components/Select";
 import { formatDate } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
@@ -57,9 +58,9 @@ export function LoadingMaster() {
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [companyFilter, setCompanyFilter] = useState("All");
-  const [erpFilter, setErpFilter] = useState("All");
-  const [itemFilter, setItemFilter] = useState("All");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [erpFilter, setErpFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
   const [expandedSlipIds, setExpandedSlipIds] = useState<Set<string>>(new Set());
   const [editingSlipIds, setEditingSlipIds] = useState<Set<string>>(new Set());
   const [draftBySlipId, setDraftBySlipId] = useState<Record<string, LoadingSlip>>({});
@@ -74,7 +75,7 @@ export function LoadingMaster() {
         if (name) names.add(name);
       });
     });
-    return ["All", ...Array.from(names).sort()];
+    return Array.from(names).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })).map((name) => ({ value: name, label: name }));
   }, [loadingSlips, plans, orders, companies, resolveOrderItem]);
 
   const erpOptions = useMemo(() => {
@@ -84,19 +85,23 @@ export function LoadingMaster() {
         if (code) codes.add(code);
       });
     });
-    return ["All", ...Array.from(codes).sort()];
+    return Array.from(codes).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })).map((code) => ({ value: code, label: code }));
   }, [loadingSlips, plans, orders, companies, resolveOrderItem]);
 
   const itemOptions = useMemo(() => {
-    const names = new Set<string>();
+    const map = new Map<string, { value: string; label: string; searchText: string }>();
     loadingSlips.forEach((slip) => {
-      summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem }).itemNames.forEach((name) => {
-        if (name) names.add(name);
+      summarizeLoadingSlip({ slip, plans, orders, companies, resolveOrderItem }).lineContexts.forEach((ctx) => {
+        const itemName = String(ctx.itemName || "").trim();
+        const erp = String(ctx.erpCode || "").trim();
+        const key = itemName || erp ? `${itemName}::${erp}` : "";
+        if (!key || map.has(key)) return;
+        const label = !erp || itemName.toLowerCase().includes(erp.toLowerCase()) ? itemName || erp : `${itemName} - ${erp}`;
+        map.set(key, { value: key, label, searchText: `${itemName} ${erp}` });
       });
     });
-    return ["All", ...Array.from(names).sort()];
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   }, [loadingSlips, plans, orders, companies, resolveOrderItem]);
-
   const processedSlips = useMemo(() => {
     return loadingSlips.map((slip) => {
       const totalQty = slip.lines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0);
@@ -107,14 +112,15 @@ export function LoadingMaster() {
         itemNames: summary.itemNames.join(", "),
         companyNames: summary.companyNames.join(", "),
         erpCodes: summary.erpCodes.join(", "),
+        itemKeys: summary.lineContexts.map((ctx) => `${ctx.itemName || ""}::${ctx.erpCode || ""}`),
         loadingSourceLabel: isDirectLoadingSlip(slip) ? "Direct" : "Dispatch Plan",
       };
     }).filter(slip => {
       const q = searchTerm.toLowerCase().trim();
       const matchesSearch = !q || slip.slipNo.toLowerCase().includes(q) || slip.itemNames.toLowerCase().includes(q) || slip.companyNames.toLowerCase().includes(q) || slip.erpCodes.toLowerCase().includes(q);
-      const matchesCompany = companyFilter === "All" || slip.companyNames.includes(companyFilter);
-      const matchesErp = erpFilter === "All" || slip.erpCodes.includes(erpFilter);
-      const matchesItem = itemFilter === "All" || slip.itemNames.includes(itemFilter);
+      const matchesCompany = !companyFilter || slip.companyNames.includes(companyFilter);
+      const matchesErp = !erpFilter || slip.erpCodes.includes(erpFilter);
+      const matchesItem = !itemFilter || slip.itemKeys.includes(itemFilter);
       
       return matchesSearch && matchesCompany && matchesErp && matchesItem;
     }).sort((a, b) => {
@@ -517,33 +523,15 @@ export function LoadingMaster() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-slate-500">Company Filter</label>
-            <select
-              value={companyFilter}
-              onChange={(e) => setCompanyFilter(e.target.value)}
-              className="w-full rounded border border-black bg-white px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-black"
-            >
-              {companyOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
+            <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-slate-500">Item Filter</label>
-            <select
-              value={itemFilter}
-              onChange={(e) => setItemFilter(e.target.value)}
-              className="w-full rounded border border-black bg-white px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-black"
-            >
-              {itemOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
+            <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-slate-500">ERP Filter</label>
-            <select
-              value={erpFilter}
-              onChange={(e) => setErpFilter(e.target.value)}
-              className="w-full rounded border border-black bg-white px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-black"
-            >
-              {erpOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
+            <Select value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" />
           </div>
         </div>
       </div>

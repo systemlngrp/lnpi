@@ -45,16 +45,35 @@ export function SheetMasterPage({
   const editableColumnSet = useMemo(() => new Set(editableColumns), [editableColumns]);
 
   const filterOptions = useMemo(() => {
-    return filters.map((filter) => ({
-      ...filter,
-      options: Array.from(
-        new Set(
-          effectiveRows
-            .map((row) => String(row[filter.key] ?? "").trim())
-            .filter(Boolean)
-        )
-      ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true })),
-    }));
+    return filters.map((filter) => {
+      const optionMap = new Map<string, { value: string; label: string; searchText?: string }>();
+
+      effectiveRows.forEach((row) => {
+        const value = String(row[filter.key] ?? "").trim();
+        if (!value || optionMap.has(value)) return;
+
+        const labelParts = (filter.optionLabelKeys || [filter.key])
+          .map((key) => String(row[key] ?? "").trim())
+          .filter(Boolean);
+        const searchParts = [
+          ...labelParts,
+          ...(filter.optionSearchKeys || []).map((key) => String(row[key] ?? "").trim()),
+        ].filter(Boolean);
+
+        optionMap.set(value, {
+          value,
+          label: labelParts.length ? Array.from(new Set(labelParts)).join(" - ") : value,
+          searchText: Array.from(new Set(searchParts)).join(" "),
+        });
+      });
+
+      return {
+        ...filter,
+        options: Array.from(optionMap.values()).sort((a, b) =>
+          a.label.localeCompare(b.label, undefined, { sensitivity: "base", numeric: true })
+        ),
+      };
+    });
   }, [effectiveRows, filters]);
 
   const filteredRows = useMemo(() => {
@@ -190,7 +209,7 @@ export function SheetMasterPage({
                 key={filter.key}
                 value={filterValues[filter.key] || ""}
                 onChange={(value) => setFilterValues((prev) => ({ ...prev, [filter.key]: value }))}
-                options={filter.options.map((option) => ({ value: option, label: option }))}
+                options={filter.options}
                 placeholder={`All ${filter.label}`}
               />
             ) : (
@@ -202,8 +221,8 @@ export function SheetMasterPage({
               >
                 <option value="">All {filter.label}</option>
                 {filter.options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>

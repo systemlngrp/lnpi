@@ -21,6 +21,7 @@ export function PhpItemMaster() {
       rowsOverride={buildPhpPlateInventoryRows(rows, jobs, [...standaloneLoadingSlips, ...commonLoadingSlips], "PHP")}
       filters={[
         { key: "company", label: "Company", searchable: true },
+        { key: "itemName", label: "Item", searchable: true, optionLabelKeys: ["itemName", "erpItemCode"], optionSearchKeys: ["masterItemNameErpCode"] },
       ]}
       searchPlaceholder="Search PHP item master..."
     />
