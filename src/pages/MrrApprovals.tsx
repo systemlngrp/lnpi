@@ -405,40 +405,38 @@ export function MrrApprovals() {
                           <td className="px-4 py-4 text-right">{Number(firstLine.gstRate || 0)}%</td>
                           <td className="px-4 py-4 text-right font-black">{Number(basicValue || 0).toFixed(2)}</td>
                           <td className="px-4 py-4">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => downloadPdf(m)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded border border-black text-black hover:bg-slate-100"
-                                  title="Download PDF"
-                                  aria-label="Download PDF"
-                                >
-                                  <Download size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={!!isSubmitting || !["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "")}
-                                  onClick={() => handleAction(m.id, "Approve")}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded border border-emerald-700 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-                                  title="Approve"
-                                  aria-label="Approve"
-                                >
-                                  {isSubmitting === m.id ? <Spinner size={12} /> : <ThumbsUp size={14} />}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={!!isSubmitting || !["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "")}
-                                  onClick={() => handleAction(m.id, "Reject")}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded border border-red-700 text-red-700 hover:bg-red-50 disabled:opacity-50"
-                                  title="Reject"
-                                  aria-label="Reject"
-                                >
-                                  <ThumbsDown size={14} />
-                                </button>
-                              </div>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => downloadPdf(m)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded border border-black text-black hover:bg-slate-100"
+                                title="Download PDF"
+                                aria-label="Download PDF"
+                              >
+                                <Download size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!!isSubmitting || !["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "")}
+                                onClick={() => handleAction(m.id, "Approve")}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded border border-emerald-700 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                                title="Approve"
+                                aria-label="Approve"
+                              >
+                                {isSubmitting === m.id ? <Spinner size={12} /> : <ThumbsUp size={14} />}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!!isSubmitting || !["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "")}
+                                onClick={() => handleAction(m.id, "Reject")}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded border border-red-700 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                title="Reject"
+                                aria-label="Reject"
+                              >
+                                <ThumbsDown size={14} />
+                              </button>
                               {["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "") ? (
-                                <div className="relative flex justify-center">
+                                <div className="relative inline-flex">
                                   <button
                                     type="button"
                                     onClick={() => setOpenRemarkId((current) => current === m.id ? null : m.id)}
