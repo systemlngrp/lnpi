@@ -2,7 +2,8 @@ import React, { useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { Calendar, Search, Download, FileText } from "lucide-react";
+import { Search, Download, FileText } from "lucide-react";
+import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import { Company, DispatchPlan, Invoice, LoadingSlip, Order, OrderSchedule } from "../types";
 import { formatDate, getFinancialYear } from "../lib/serial";
@@ -301,6 +302,7 @@ export function HitVsMissReport() {
   }, [summaryRows]);
 
   const fyOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.fy))).sort(), [rows]);
+  const fySelectOptions = useMemo(() => fyOptions.map((fy) => ({ value: fy, label: fy })), [fyOptions]);
   const companyOptions = useMemo(
     () =>
       Array.from(
@@ -310,9 +312,17 @@ export function HitVsMissReport() {
             .map((row) => [row.companyId, row.companyName])
         ).entries()
       )
-        .map(([id, name]) => ({ id, name }))
+        .map(([id, name]) => ({ id, name, value: id, label: name }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     [rows]
+  );
+  const itemOptions = useMemo(
+    () =>
+      npdItems
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((item) => ({ value: item.id, label: item.name })),
+    [npdItems]
   );
   const monthOptions = useMemo(
     () =>
@@ -321,6 +331,7 @@ export function HitVsMissReport() {
         .sort((a, b) => MONTH_LABELS.indexOf(a) - MONTH_LABELS.indexOf(b)),
     [rows]
   );
+  const monthSelectOptions = useMemo(() => monthOptions.map((month) => ({ value: month, label: month })), [monthOptions]);
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -468,123 +479,75 @@ export function HitVsMissReport() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-black pb-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Hit Vs Miss Report</h2>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 border-b border-black pb-3">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Hit Vs Miss Report</h2>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded border border-blue-300 bg-blue-50 p-4">
+          <div className="text-xs font-black uppercase text-blue-700">Total Schedules</div>
+          <div className="mt-1 text-2xl font-black text-blue-900">{overall.total.toLocaleString()}</div>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <div className="rounded border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">
-            Hit: {overall.onTime.toLocaleString()}
-          </div>
-          <div className="rounded border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700">
-            Miss: {overall.delayed.toLocaleString()}
-          </div>
-          <div className="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">
-            Open: {overall.open.toLocaleString()}
-          </div>
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
+          <div className="text-xs font-black uppercase text-emerald-700">Hit</div>
+          <div className="mt-1 text-2xl font-black text-emerald-900">{overall.onTime.toLocaleString()}</div>
+        </div>
+        <div className="rounded border border-rose-300 bg-rose-50 p-4">
+          <div className="text-xs font-black uppercase text-rose-700">Miss</div>
+          <div className="mt-1 text-2xl font-black text-rose-900">{overall.delayed.toLocaleString()}</div>
+        </div>
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <div className="text-xs font-black uppercase text-amber-700">Open</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{overall.open.toLocaleString()}</div>
         </div>
       </div>
 
-      <div className="space-y-4 rounded border border-black bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.5fr)_repeat(4,minmax(160px,1fr))_auto]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search order, company, item"
-              className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-            />
+      <div className="rounded border border-black bg-white p-3">
+        <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(140px,1fr))]">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search order, company, item"
+                className="w-full rounded border-2 border-black py-2.5 pl-9 pr-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              />
+            </div>
+            <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
+            <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+            <Select value={fyFilter} onChange={setFyFilter} options={fySelectOptions} placeholder="All FY" />
+            <Select value={monthFilter} onChange={setMonthFilter} options={monthSelectOptions} placeholder="All Months" />
           </div>
 
-          <select
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-          >
-            <option value="">All Companies</option>
-            {companyOptions.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={itemFilter}
-            onChange={(e) => setItemFilter(e.target.value)}
-            className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-          >
-            <option value="">All Items</option>
-            {npdItems.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={fyFilter}
-            onChange={(e) => setFyFilter(e.target.value)}
-            className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-          >
-            <option value="">All FY</option>
-            {fyOptions.map((fy) => (
-              <option key={fy} value={fy}>
-                {fy}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
-            className="rounded border border-black px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black"
-          >
-            <option value="">All Months</option>
-            {monthOptions.map((month) => (
-              <option key={month} value={month}>
-                {month}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={clearFilters}
-            className="rounded border border-black px-3 py-2 text-sm font-bold uppercase hover:bg-slate-50"
-          >
-            Clear Filters
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(170px,220px)_minmax(170px,220px)_1fr]">
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <div className="flex flex-wrap items-center gap-3">
             <input
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              title="From Date"
+              className="min-h-[42px] rounded border-2 border-black px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
             />
-          </div>
-
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="w-full rounded border border-black py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+              title="To Date"
+              className="min-h-[42px] rounded border-2 border-black px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
             />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="min-h-[42px] rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+            >
+              Clear Filters
+            </button>
             <button
               type="button"
               onClick={handleExportExcel}
-              className="inline-flex items-center gap-2 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
+              className="inline-flex min-h-[42px] items-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
             >
               <Download size={14} />
               Excel
@@ -592,7 +555,7 @@ export function HitVsMissReport() {
             <button
               type="button"
               onClick={handleExportPdf}
-              className="inline-flex items-center gap-2 rounded border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+              className="inline-flex min-h-[42px] items-center gap-2 rounded border border-rose-700 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-800 hover:bg-rose-100"
             >
               <FileText size={14} />
               PDF
@@ -601,14 +564,14 @@ export function HitVsMissReport() {
         </div>
       </div>
 
-      <div className="rounded border border-black bg-white shadow-sm">
-        <div className="border-b border-black px-4 py-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-black">Monthly Summary</h3>
+      <div className="rounded border-2 border-black bg-white shadow-sm">
+        <div className="border-b-2 border-black px-3 py-3">
+          <h3 className="text-sm font-black uppercase text-black">Monthly Summary</h3>
         </div>
-        <div className="table-frozen-scroll">
-          <table className="min-w-full border-collapse text-xs">
-            <thead className="sticky top-0 z-30 bg-slate-100">
-              <tr>
+        <div className="max-h-[calc(100vh-310px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse text-[12px]">
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-indigo-700 text-white">
                 {[
                   "FY",
                   "Month",
@@ -628,7 +591,7 @@ export function HitVsMissReport() {
                   "Delay (>15)",
                   "Delay (>15)%",
                 ].map((heading) => (
-                  <th key={heading} className="border border-black px-3 py-2 text-left font-bold uppercase whitespace-nowrap">
+                  <th key={heading} className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">
                     {heading}
                   </th>
                 ))}
@@ -637,30 +600,30 @@ export function HitVsMissReport() {
             <tbody>
               {summaryRows.length === 0 ? (
                 <tr>
-                  <td colSpan={17} className="border border-black px-6 py-10 text-center font-medium text-slate-500">
+                  <td colSpan={17} className="border-2 border-black px-6 py-10 text-center font-medium text-black">
                     No summary rows found for the selected filters.
                   </td>
                 </tr>
               ) : (
                 summaryRows.map((row) => (
-                  <tr key={`${row.fy}-${row.month}`} className="hover:bg-slate-50">
-                    <td className="border border-black px-3 py-2">{row.fy}</td>
-                    <td className="border border-black px-3 py-2 font-bold">{row.month}</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.total.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right text-rose-700">{row.delayed.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.delayedPercent.toFixed(2)}%</td>
-                    <td className="border border-black px-3 py-2 text-right text-emerald-700">{row.onTime.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.onTimePercent.toFixed(2)}%</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.bucket0to3.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right">{percent(row.bucket0to3, row.delayed).toFixed(2)}%</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.bucket4to7.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right">{percent(row.bucket4to7, row.delayed).toFixed(2)}%</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.bucket8to10.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right">{percent(row.bucket8to10, row.delayed).toFixed(2)}%</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.bucket11to15.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right">{percent(row.bucket11to15, row.delayed).toFixed(2)}%</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.bucketAbove15.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right">{percent(row.bucketAbove15, row.delayed).toFixed(2)}%</td>
+                  <tr key={`${row.fy}-${row.month}`} className="text-black hover:bg-slate-50">
+                    <td className="border-2 border-black px-3 py-3">{row.fy}</td>
+                    <td className="border-2 border-black px-3 py-3 font-bold">{row.month}</td>
+                    <td className="border-2 border-black bg-blue-50/50 px-3 py-3 text-right font-semibold">{row.total.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-rose-50 px-3 py-3 text-right font-bold text-rose-800">{row.delayed.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-rose-50/60 px-3 py-3 text-right text-rose-800">{row.delayedPercent.toFixed(2)}%</td>
+                    <td className="border-2 border-black bg-emerald-50 px-3 py-3 text-right font-bold text-emerald-900">{row.onTime.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-emerald-50/60 px-3 py-3 text-right text-emerald-900">{row.onTimePercent.toFixed(2)}%</td>
+                    <td className="border-2 border-black bg-amber-50 px-3 py-3 text-right">{row.bucket0to3.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-amber-50 px-3 py-3 text-right">{percent(row.bucket0to3, row.delayed).toFixed(2)}%</td>
+                    <td className="border-2 border-black bg-orange-50 px-3 py-3 text-right">{row.bucket4to7.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-orange-50 px-3 py-3 text-right">{percent(row.bucket4to7, row.delayed).toFixed(2)}%</td>
+                    <td className="border-2 border-black bg-red-50 px-3 py-3 text-right">{row.bucket8to10.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-red-50 px-3 py-3 text-right">{percent(row.bucket8to10, row.delayed).toFixed(2)}%</td>
+                    <td className="border-2 border-black bg-purple-50 px-3 py-3 text-right">{row.bucket11to15.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-purple-50 px-3 py-3 text-right">{percent(row.bucket11to15, row.delayed).toFixed(2)}%</td>
+                    <td className="border-2 border-black bg-slate-100 px-3 py-3 text-right">{row.bucketAbove15.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-slate-100 px-3 py-3 text-right">{percent(row.bucketAbove15, row.delayed).toFixed(2)}%</td>
                   </tr>
                 ))
               )}
@@ -669,14 +632,14 @@ export function HitVsMissReport() {
         </div>
       </div>
 
-      <div className="rounded border border-black bg-white shadow-sm">
-        <div className="border-b border-black px-4 py-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-black">Schedule Details</h3>
+      <div className="rounded border-2 border-black bg-white shadow-sm">
+        <div className="border-b-2 border-black px-3 py-3">
+          <h3 className="text-sm font-black uppercase text-black">Schedule Details</h3>
         </div>
-        <div className="table-frozen-scroll">
-          <table className="min-w-full border-collapse text-xs">
-            <thead className="sticky top-0 z-30 bg-slate-100">
-              <tr>
+        <div className="max-h-[calc(100vh-310px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse text-[12px]">
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-indigo-700 text-white">
                 {[
                   "S.No",
                   "FY",
@@ -695,7 +658,7 @@ export function HitVsMissReport() {
                   "Delay Days",
                   "Bucket",
                 ].map((heading) => (
-                  <th key={heading} className="border border-black px-3 py-2 text-left font-bold uppercase whitespace-nowrap">
+                  <th key={heading} className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">
                     {heading}
                   </th>
                 ))}
@@ -704,41 +667,33 @@ export function HitVsMissReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="border border-black px-6 py-10 text-center font-medium text-slate-500">
+                  <td colSpan={16} className="border-2 border-black px-6 py-10 text-center font-medium text-black">
                     No schedules found for the selected filters.
                   </td>
                 </tr>
               ) : (
                 rows.map((row, index) => (
-                  <tr key={row.id} className="hover:bg-slate-50">
-                    <td className="border border-black px-3 py-2">{index + 1}</td>
-                    <td className="border border-black px-3 py-2">{row.fy}</td>
-                    <td className="border border-black px-3 py-2 font-bold">{row.month}</td>
-                    <td className="border border-black px-3 py-2 whitespace-nowrap">{formatDate(row.scheduledDate)}</td>
-                    <td className="border border-black px-3 py-2 font-bold">{row.orderNo}</td>
-                    <td className="border border-black px-3 py-2">{row.companyName}</td>
-                    <td className="border border-black px-3 py-2">{row.itemName}</td>
-                    <td className="border border-black px-3 py-2 text-right">{row.scheduledQty.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right text-rose-700">{row.canceledQty.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right font-bold">{row.targetQty.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right text-indigo-700">{row.invoicedQty.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 text-right text-amber-700">{row.pendingQty.toLocaleString()}</td>
-                    <td className="border border-black px-3 py-2 whitespace-nowrap">
-                      {row.fullInvoiceDate ? formatDate(row.fullInvoiceDate) : "-"}
-                    </td>
+                  <tr key={row.id} className="text-black hover:bg-slate-50">
+                    <td className="border-2 border-black px-3 py-3">{index + 1}</td>
+                    <td className="border-2 border-black px-3 py-3">{row.fy}</td>
+                    <td className="border-2 border-black px-3 py-3 font-bold">{row.month}</td>
+                    <td className="border-2 border-black px-3 py-3 whitespace-nowrap">{formatDate(row.scheduledDate)}</td>
+                    <td className="border-2 border-black px-3 py-3 font-bold">{row.orderNo}</td>
+                    <td className="border-2 border-black px-3 py-3">{row.companyName}</td>
+                    <td className="border-2 border-black px-3 py-3 min-w-[260px]">{row.itemName}</td>
+                    <td className="border-2 border-black bg-blue-50/50 px-3 py-3 text-right">{row.scheduledQty.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-rose-50 px-3 py-3 text-right text-rose-800">{row.canceledQty.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-slate-50 px-3 py-3 text-right font-bold">{row.targetQty.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-indigo-50 px-3 py-3 text-right text-indigo-800">{row.invoicedQty.toLocaleString()}</td>
+                    <td className="border-2 border-black bg-amber-50 px-3 py-3 text-right text-amber-900">{row.pendingQty.toLocaleString()}</td>
+                    <td className="border-2 border-black px-3 py-3 whitespace-nowrap">{row.fullInvoiceDate ? formatDate(row.fullInvoiceDate) : "-"}</td>
                     <td
-                      className={`border border-black px-3 py-2 font-bold uppercase ${
-                        row.status === "Hit"
-                          ? "text-emerald-700"
-                          : row.status === "Miss"
-                            ? "text-rose-700"
-                            : "text-amber-700"
-                      }`}
+                      className={`border-2 border-black px-3 py-3 font-black uppercase ${row.status === "Hit" ? "bg-emerald-50 text-emerald-900" : row.status === "Miss" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-900"}`}
                     >
                       {row.hitMissLabel}
                     </td>
-                    <td className="border border-black px-3 py-2 text-right">{row.delayDays != null ? row.delayDays : "-"}</td>
-                    <td className="border border-black px-3 py-2">{row.delayBucket || "-"}</td>
+                    <td className="border-2 border-black px-3 py-3 text-right">{row.delayDays != null ? row.delayDays : "-"}</td>
+                    <td className="border-2 border-black px-3 py-3">{row.delayBucket || "-"}</td>
                   </tr>
                 ))
               )}
@@ -748,4 +703,5 @@ export function HitVsMissReport() {
       </div>
     </div>
   );
+
 }
