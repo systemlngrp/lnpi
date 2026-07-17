@@ -224,7 +224,7 @@ export function OrdersMaster() {
     return Array.from(set)
       .map((key) => {
         const [name = "", erp = ""] = key.split("::");
-        const label = !erp || name.toLowerCase().includes(erp.toLowerCase()) ? name || erp : `${name} - ${erp}`;
+        const label = !name ? erp : !erp || name.toLowerCase().includes(erp.toLowerCase()) ? name : `${name} - ${erp}`;
         return { value: key, label, searchText: `${name} ${erp}` };
       })
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));

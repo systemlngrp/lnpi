@@ -23,7 +23,8 @@ type SelectOption = {
 const formatItemOptionLabel = (item: { name?: string; erp?: string | number }) => {
   const name = String(item.name || "").trim();
   const erp = String(item.erp || "").trim();
-  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name || erp;
+  if (!name) return erp;
+  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name;
   return `${name} - ${erp}`;
 };
 

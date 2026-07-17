@@ -19,7 +19,8 @@ import { getProductionEffectiveType, getRequiredMachinesForProduction } from "..
 import { getProductionMatchingFields, hasProductionMatchingFieldChanges } from "../lib/productionMatching";
 
 const formatItemFilterLabel = (name: string, erp: string) => {
-  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name || erp;
+  if (!name) return erp;
+  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name;
   return `${name} - ${erp}`;
 };
 
@@ -34,7 +35,7 @@ export function ProductionMaster() {
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [machines] = useData<Machine>("machines", []);
-  const { findItemAcrossSources } = useOrderItemCatalog();
+  const { findItemAcrossSources, resolveOrderItem } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
@@ -368,9 +369,9 @@ export function ProductionMaster() {
 
   const productionFilterRows = useMemo(() => {
     return productions.map((production) => {
-      const item = resolveProductionItem(production);
       const schedule = schedules.find((s) => s.id === production.scheduleId);
       const order = orders.find((o) => o.id === schedule?.orderId);
+      const item = resolveProductionItem(production) || resolveOrderItem(order);
       const company = companies.find((c) => c.id === order?.companyId);
       const itemName = String(item?.name || "").trim();
       const itemErp = String(production.erpCode || item?.erp || "").trim();
@@ -399,7 +400,7 @@ export function ProductionMaster() {
         ].join(" ").toLowerCase(),
       };
     });
-  }, [productions, schedules, orders, companies]);
+  }, [productions, schedules, orders, companies, resolveOrderItem]);
 
   const companyOptions = useMemo(() => {
     const names = Array.from(new Set(productionFilterRows.map((row) => row.companyName).filter(Boolean)));

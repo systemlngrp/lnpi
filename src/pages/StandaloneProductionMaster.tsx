@@ -17,7 +17,8 @@ type StandaloneProductionMasterProps = {
 };
 
 const formatItemFilterLabel = (name: string, erp: string) => {
-  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name || erp;
+  if (!name) return erp;
+  if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name;
   return `${name} - ${erp}`;
 };
 

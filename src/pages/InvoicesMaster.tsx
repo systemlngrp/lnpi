@@ -330,7 +330,7 @@ export function InvoicesMaster() {
         const erp = String(line.erp || "").trim();
         const key = itemName || erp ? `${itemName}::${erp}` : "";
         if (!key || map.has(key)) return;
-        const label = !erp || itemName.toLowerCase().includes(erp.toLowerCase()) ? itemName || erp : `${itemName} - ${erp}`;
+        const label = !itemName ? erp : !erp || itemName.toLowerCase().includes(erp.toLowerCase()) ? itemName : `${itemName} - ${erp}`;
         map.set(key, { value: key, label, searchText: `${itemName} ${erp}` });
       });
     });

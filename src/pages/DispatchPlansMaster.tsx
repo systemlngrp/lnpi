@@ -186,7 +186,7 @@ export function DispatchPlansMaster() {
     const map = new Map<string, { value: string; label: string; searchText: string }>();
     dispatchFilterRows.forEach((row) => {
       if (!row.itemKey || map.has(row.itemKey)) return;
-      const label = !row.itemErp || row.itemName.toLowerCase().includes(row.itemErp.toLowerCase()) ? row.itemName || row.itemErp : `${row.itemName} - ${row.itemErp}`;
+      const label = !row.itemName ? row.itemErp : !row.itemErp || row.itemName.toLowerCase().includes(row.itemErp.toLowerCase()) ? row.itemName : `${row.itemName} - ${row.itemErp}`;
       map.set(row.itemKey, { value: row.itemKey, label, searchText: `${row.itemName} ${row.itemErp}` });
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
