@@ -316,7 +316,7 @@ export function ScheduledOrdersMaster() {
                   <td className="px-3 py-2 border border-black text-slate-500">{(page - 1) * pageSize + idx + 1}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap font-medium">{formatDate(s.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black font-bold text-black">{s.orderNo}</td>
-                  <td className="px-3 py-2 border border-black truncate max-w-[150px]" title={s.companyName}>{s.companyName}</td>
+                  <td className="px-3 py-2 border border-black min-w-[170px] max-w-[240px] whitespace-normal break-words leading-snug" title={s.companyName}>{s.companyName}</td>
                   <td className="px-3 py-2 border border-black min-w-[150px]">{s.itemName}</td>
                   <td className="px-3 py-2 border border-black">{s.itemErp}</td>
                   <td className="px-3 py-2 border border-black text-right font-medium bg-indigo-50/30">{(Number(s.qty) || 0).toLocaleString()}</td>
