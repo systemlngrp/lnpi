@@ -41,7 +41,7 @@ LOGGER = setup_logger()
 HELPER_HOST = os.getenv("LNPI_AUDIT_HELPER_HOST", "127.0.0.1")
 HELPER_PORT = int(os.getenv("LNPI_AUDIT_HELPER_PORT", "8765"))
 CONNECT_TIMEOUT = float(os.getenv("LNPI_AUDIT_CONNECT_TIMEOUT", "1.5"))
-REQUEST_TIMEOUT = float(os.getenv("LNPI_AUDIT_TALLY_TIMEOUT", "6"))
+REQUEST_TIMEOUT = float(os.getenv("LNPI_AUDIT_TALLY_TIMEOUT", "12"))
 MAX_REQUEST_BYTES = int(os.getenv("LNPI_AUDIT_MAX_REQUEST_BYTES", "4096"))
 VOUCHER_TYPES = {
     "invoiceValueTally": "Purchase",
@@ -137,7 +137,8 @@ def round_money(value: float) -> float:
     return round(float(value or 0), 2)
 
 
-def build_voucher_collection_xml(date_from: str, date_to: str) -> str:
+def build_voucher_collection_xml(voucher_type: str, date_from: str, date_to: str) -> str:
+    safe_type = escape_xml(voucher_type)
     return f"""
 <ENVELOPE>
   <HEADER>
@@ -164,7 +165,9 @@ def build_voucher_collection_xml(date_from: str, date_to: str) -> str:
             <FETCH>IsOptional</FETCH>
             <FETCH>Amount</FETCH>
             <COMPUTE>LnpiVoucherAmount:$Amount</COMPUTE>
+            <FILTERS>LnpiAuditVoucherType</FILTERS>
           </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="LnpiAuditVoucherType">$StringEqual:$VoucherTypeName:"{safe_type}"</SYSTEM>
         </TDLMESSAGE>
       </TDL>
     </DESC>
@@ -223,12 +226,10 @@ def get_voucher_amount(voucher: ET.Element) -> float:
     return abs(parse_amount(raw_amount))
 
 
-def parse_voucher_totals(xml_text: str) -> tuple[dict[str, float], dict[str, int]]:
+def parse_voucher_total(xml_text: str) -> tuple[float, int]:
     cleaned = clean_tally_xml(xml_text)
-    totals = {voucher_type: 0.0 for voucher_type in VOUCHER_TYPES.values()}
-    counts = {voucher_type: 0 for voucher_type in VOUCHER_TYPES.values()}
     if not cleaned:
-        return totals, counts
+        return 0.0, 0
     tally_error = tally_response_error(cleaned)
     if tally_error:
         raise ValueError(f"Tally returned an error: {tally_error}")
@@ -238,22 +239,27 @@ def parse_voucher_totals(xml_text: str) -> tuple[dict[str, float], dict[str, int
         preview = re.sub(r"\s+", " ", cleaned[:300]).strip()
         raise ValueError(f"Unable to parse Tally XML response: {error}. Response preview: {preview}") from error
 
-    wanted_types = set(VOUCHER_TYPES.values())
+    total = 0.0
+    count = 0
     for voucher in root.iter():
         tag = voucher.tag.split("}", 1)[-1].upper()
         if tag != "VOUCHER":
-            continue
-        voucher_type = child_text(voucher, ("VOUCHERTYPENAME", "VCHTYPE"))
-        if voucher_type not in wanted_types:
             continue
         if is_truthy_tally_flag(child_text(voucher, ("ISCANCELLED", "CANCELLED"))):
             continue
         if is_truthy_tally_flag(child_text(voucher, ("ISOPTIONAL", "OPTIONAL"))):
             continue
-        totals[voucher_type] += get_voucher_amount(voucher)
-        counts[voucher_type] += 1
+        total += get_voucher_amount(voucher)
+        count += 1
+    return round_money(total), count
 
-    return {key: round_money(value) for key, value in totals.items()}, counts
+
+def fetch_one_voucher_type(url: str, field: str, voucher_type: str, date_from: str, date_to: str) -> tuple[str, str, float, int]:
+    xml_text = build_voucher_collection_xml(voucher_type, date_from, date_to)
+    with requests.Session() as session:
+        response_text = post_xml_to_url(session, url, xml_text)
+    total, count = parse_voucher_total(response_text)
+    return field, voucher_type, total, count
 
 
 def fetch_tally_values(date_from: str, date_to: str) -> dict[str, Any]:
@@ -262,26 +268,31 @@ def fetch_tally_values(date_from: str, date_to: str) -> dict[str, Any]:
     tally_url_candidates = build_tally_url_candidates()
     LOGGER.info("Fetch requested for app date range %s to %s / Tally range %s to %s", date_from, date_to, tally_from, tally_to)
 
-    xml_text = build_voucher_collection_xml(tally_from, tally_to)
-    with requests.Session() as session:
-        for url in tally_url_candidates:
-            try:
-                LOGGER.info("Trying Tally XML URL %s", url)
-                response_text = post_xml_to_url(session, url, xml_text)
-                totals_by_type, counts = parse_voucher_totals(response_text)
-                values = {field: totals_by_type.get(voucher_type, 0.0) for field, voucher_type in VOUCHER_TYPES.items()}
-                for voucher_type in VOUCHER_TYPES.values():
-                    LOGGER.info("%s total from %s: %.2f across %s voucher(s)", voucher_type, url, totals_by_type.get(voucher_type, 0.0), counts.get(voucher_type, 0))
-                LOGGER.info("Tally fetch succeeded from %s", url)
-                return {
-                    **values,
-                    "sourceUrl": url,
-                    "fetchedAt": datetime.now().isoformat(timespec="seconds"),
-                    "counts": counts,
-                }
-            except Exception as error:
-                LOGGER.warning("Tally XML URL %s failed: %s", url, error)
-                last_errors.append(f"{url}: {error}")
+    for url in tally_url_candidates:
+        try:
+            LOGGER.info("Trying Tally XML URL %s", url)
+            values: dict[str, float] = {}
+            counts: dict[str, int] = {}
+            with ThreadPoolExecutor(max_workers=len(VOUCHER_TYPES)) as executor:
+                futures = [
+                    executor.submit(fetch_one_voucher_type, url, field, voucher_type, tally_from, tally_to)
+                    for field, voucher_type in VOUCHER_TYPES.items()
+                ]
+                for future in as_completed(futures):
+                    field, voucher_type, total, count = future.result()
+                    LOGGER.info("%s total from %s: %.2f across %s voucher(s)", voucher_type, url, total, count)
+                    values[field] = total
+                    counts[voucher_type] = count
+            LOGGER.info("Tally fetch succeeded from %s", url)
+            return {
+                **values,
+                "sourceUrl": url,
+                "fetchedAt": datetime.now().isoformat(timespec="seconds"),
+                "counts": counts,
+            }
+        except Exception as error:
+            LOGGER.warning("Tally XML URL %s failed: %s", url, error)
+            last_errors.append(f"{url}: {error}")
 
     ports = ", ".join(str(port) for port in parse_tally_ports())
     LOGGER.error("No Tally XML/HTTP endpoint responded. Last errors: %s", " | ".join(last_errors[-4:]))

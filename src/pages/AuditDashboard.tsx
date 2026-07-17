@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Mail, MessageCircle } from "lucide-react";
+import { Mail, MessageCircle, RefreshCw } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useData } from "../hooks/useData";
 import type {
@@ -283,6 +283,15 @@ export function AuditDashboard() {
           <div className="flex flex-wrap items-center gap-2">
             <DateInput value={dateRange.from} onChange={(value) => setDateRange((prev) => ({ ...prev, from: value }))} />
             <DateInput value={dateRange.to} onChange={(value) => setDateRange((prev) => ({ ...prev, to: value }))} />
+            <button
+              type="button"
+              onClick={fetchTallyValues}
+              disabled={isFetchingTally || snapshotsLoading}
+              className="inline-flex min-h-[38px] items-center gap-2 rounded-md border-2 border-slate-900 bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-white shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none disabled:cursor-not-allowed disabled:bg-slate-400 disabled:text-slate-100"
+            >
+              <RefreshCw size={15} className={isFetchingTally ? "animate-spin" : ""} />
+              {isFetchingTally ? "Fetching" : "Fetch Tally"}
+            </button>
           </div>
         </div>
         <div className="border-t border-slate-200 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-600">
