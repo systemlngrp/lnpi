@@ -131,16 +131,21 @@ export function ReelwiseStockReport() {
         }
       });
     });
+    const lastExistingReelNo = packingSlips.reduce((max, slip) => {
+      const reelNo = Number(String(slip.ourReelNo || "").trim());
+      return Number.isFinite(reelNo) && reelNo > max ? reelNo : max;
+    }, 0);
+
     const openingRows: ReelwiseStockRow[] = materials
       .filter((material) => material.type === "Reel" && Number(material.openingQty || 0) > 0)
-      .map((material) => {
+      .map((material, index) => {
         const openingQty = Number(Number(material.openingQty || 0).toFixed(2));
         const openingRate = Number(Number(material.openingRate || 0).toFixed(2));
         return {
           slipId: `opening-${material.id}`,
-          mrrDate: "",
-          mrrNo: "OPENING",
-          ourReelNo: "OPENING",
+          mrrDate: "2026-06-06",
+          mrrNo: "1",
+          ourReelNo: String(lastExistingReelNo + index + 1),
           erp: String(material.erpCode || ""),
           supplierName: "-",
           gsm: Number(material.gsm || 0),
