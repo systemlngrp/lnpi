@@ -15,6 +15,7 @@ type ActiveValue = NonNullable<Material["active"]>;
 type MaterialSortKey = "updated" | "size" | "gsm";
 type SortDirection = "asc" | "desc";
 type MaterialDisplayRow = Material & { isVirtualReceiptItem?: boolean; receiptQty?: number; receiptValue?: number };
+type MaterialMovementSummary = { receipts: number; receiptValue: number; issues: number; returns: number };
 
 const TYPE_OPTIONS = [
   { value: "Reel", label: "Reel" },
@@ -155,9 +156,24 @@ export function Materials() {
   const [isApplyingBulkColor, setIsApplyingBulkColor] = useState(false);
 
   const movementSummaryMap = useMemo(() => {
-    const map = new Map<string, { receipts: number; issues: number; returns: number }>();
+    const createEmptyMovement = (): MaterialMovementSummary => ({ receipts: 0, receiptValue: 0, issues: 0, returns: 0 });
+    const map = new Map<string, MaterialMovementSummary>();
     const materialTypeMap = new Map(materials.map(m => [m.id, m.type]));
-    materials.forEach(m => map.set(m.id, { receipts: 0, issues: 0, returns: 0 }));
+    materials.forEach(m => map.set(m.id, createEmptyMovement()));
+
+    const getMovement = (materialId: string) => {
+      const current = map.get(materialId) || createEmptyMovement();
+      map.set(materialId, current);
+      return current;
+    };
+
+    const getLineQty = (line: any) => Number(line.actualQty ?? line.qty ?? line.invoiceQty ?? 0);
+    const getLineValue = (line: any, qty: number) => {
+      const explicitValue = Number(line.actualValue ?? line.value ?? line.invoiceValue ?? 0);
+      if (explicitValue > 0) return explicitValue;
+      const rate = Number(line.invoiceRate ?? line.poRate ?? line.rate ?? 0);
+      return qty * rate;
+    };
 
     // 1. Receipts Filtering
     const filteredReceiptIds = new Set(
@@ -196,20 +212,30 @@ export function Materials() {
     );
 
     // Aggregate Receipts
+    const receiptMap = new Map(materialIn.map((receipt) => [receipt.id, receipt]));
     packingSlips.forEach(slip => {
       if (!filteredReceiptIds.has(slip.materialInId)) return;
-      const current = map.get(slip.materialId) || { receipts: 0, issues: 0, returns: 0 };
-      current.receipts += Number(slip.weightKg || 0);
-      map.set(slip.materialId, current);
+      const receipt = receiptMap.get(slip.materialInId);
+      const line = receipt?.lines.find((entry) => entry.id === slip.materialLineId || entry.itemId === slip.materialId);
+      const qty = Number(slip.weightKg || 0);
+      const lineQty = getLineQty(line || {});
+      const lineValue = getLineValue(line || {}, lineQty || qty);
+      const rate = lineQty > 0 ? lineValue / lineQty : Number((line as any)?.invoiceRate ?? (line as any)?.poRate ?? (line as any)?.rate ?? 0);
+      const current = getMovement(slip.materialId);
+      current.receipts += qty;
+      current.receiptValue += qty * rate;
     });
 
     materialIn.forEach(receipt => {
       if (!filteredReceiptIds.has(receipt.id)) return;
       if (receipt.mrrType !== "Reel") {
         receipt.lines.forEach(line => {
-          const current = map.get(line.itemId) || { receipts: 0, issues: 0, returns: 0 };
-          current.receipts += Number(line.qty || 0);
-          map.set(line.itemId, current);
+          const materialId = String(line.itemId || (line as any).npdId || "").trim();
+          if (!materialId) return;
+          const qty = getLineQty(line);
+          const current = getMovement(materialId);
+          current.receipts += qty;
+          current.receiptValue += getLineValue(line, qty);
         });
       }
     });
@@ -217,42 +243,35 @@ export function Materials() {
     // Aggregate Issues
     reelIssueLines.forEach(l => {
       if (!filteredIssueIds.has(l.materialIssueId)) return;
-      const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      const current = getMovement(l.materialId);
       current.issues += Number(l.weightKg || 0);
-      map.set(l.materialId, current);
     });
 
     issueLines.forEach(l => {
       if (!filteredIssueIds.has(l.materialIssueId)) return;
       // SKIP REELS to avoid double counting from reelIssueLines
       if (materialTypeMap.get(l.materialId) === "Reel") return;
-      
-      const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      const current = getMovement(l.materialId);
       current.issues += Number(l.qty || 0);
-      map.set(l.materialId, current);
     });
 
     // Aggregate Returns
     reelReturnLines.forEach(l => {
       if (!filteredReturnIds.has(l.materialReturnId)) return;
-      const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      const current = getMovement(l.materialId);
       current.returns += Number(l.weightKg || 0);
-      map.set(l.materialId, current);
     });
 
     returnLines.forEach(l => {
       if (!filteredReturnIds.has(l.materialReturnId)) return;
       // SKIP REELS to avoid double counting from reelReturnLines
       if (materialTypeMap.get(l.materialId) === "Reel") return;
-
-      const current = map.get(l.materialId) || { receipts: 0, issues: 0, returns: 0 };
+      const current = getMovement(l.materialId);
       current.returns += Number(l.qty || 0);
-      map.set(l.materialId, current);
     });
 
     return map;
   }, [materials, packingSlips, materialIn, materialIssues, issueLines, reelIssueLines, materialReturnsHeader, returnLines, reelReturnLines, fromDate, toDate]);
-
   const materialDisplayRows = useMemo<MaterialDisplayRow[]>(() => {
     const existingMaterialIds = new Set(materials.map((material) => String(material.id)));
     const virtualRows = new Map<string, MaterialDisplayRow>();
@@ -334,6 +353,33 @@ export function Materials() {
       });
   }, [colorFilter, gsmFilter, materialDisplayRows, searchTerm, sizeFilter, sortDirection, sortKey, typeFilter]);
 
+  const getMaterialStockValues = (material: MaterialDisplayRow) => {
+    const movement = movementSummaryMap.get(material.id) || { receipts: 0, receiptValue: 0, issues: 0, returns: 0 };
+    const openingQty = Number(material.openingQty || 0);
+    const openingRate = Number(material.openingRate || 0);
+    const openingValue = Number(material.openingValue ?? (openingQty * openingRate));
+    const receiptQty = Number(movement.receipts || 0);
+    const receiptValue = Number(movement.receiptValue || (receiptQty * openingRate));
+    const issueQty = Number(movement.issues || 0);
+    const returnQty = Number(movement.returns || 0);
+    const effectiveRate = openingRate || (receiptQty > 0 ? receiptValue / receiptQty : 0);
+    const issueValue = issueQty * effectiveRate;
+    const balance = openingQty + receiptQty + returnQty - issueQty;
+    const closingValue = balance * effectiveRate;
+
+    return {
+      openingQty,
+      openingValue,
+      receiptQty,
+      receiptValue,
+      issueQty,
+      issueValue,
+      returnQty,
+      balance,
+      closingValue,
+    };
+  };
+
   const metrics = useMemo(() => {
     let openingQtyTotal = 0;
     let openingValueTotal = 0;
@@ -346,27 +392,17 @@ export function Materials() {
     let closingValueTotal = 0;
 
     filteredMaterials.forEach((material) => {
-      const movement = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
-      const openingQty = Number(material.openingQty || 0);
-      const openingRate = Number(material.openingRate || 0);
-      const openingValue = Number(material.openingValue ?? (openingQty * openingRate));
-      const receiptQty = Number(movement.receipts || 0);
-      const issueQty = Number(movement.issues || 0);
-      const returnQty = Number(movement.returns || 0);
-      const closingQty = openingQty + receiptQty + returnQty - issueQty;
-      const receiptValue = receiptQty * openingRate;
-      const issueValue = issueQty * openingRate;
-      const closingValue = closingQty * openingRate;
+      const values = getMaterialStockValues(material);
 
-      openingQtyTotal += openingQty;
-      openingValueTotal += openingValue;
-      receiptQtyTotal += receiptQty;
-      receiptValueTotal += receiptValue;
-      issueQtyTotal += issueQty;
-      issueValueTotal += issueValue;
-      returnQtyTotal += returnQty;
-      closingQtyTotal += closingQty;
-      closingValueTotal += closingValue;
+      openingQtyTotal += values.openingQty;
+      openingValueTotal += values.openingValue;
+      receiptQtyTotal += values.receiptQty;
+      receiptValueTotal += values.receiptValue;
+      issueQtyTotal += values.issueQty;
+      issueValueTotal += values.issueValue;
+      returnQtyTotal += values.returnQty;
+      closingQtyTotal += values.balance;
+      closingValueTotal += values.closingValue;
     });
 
     return {
@@ -383,7 +419,6 @@ export function Materials() {
       closingValueTotal,
     };
   }, [filteredMaterials, movementSummaryMap]);
-
   const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems: paginatedMaterials } = useClientPagination(filteredMaterials, 25);
 
   const [formData, setFormData] = useState(() => createInitialFormState(materials, reelGroup?.id || ""));
@@ -1393,14 +1428,7 @@ export function Materials() {
                   ) : (
                     paginatedMaterials.map((material, index) => {
                       const isVirtualReceiptItem = Boolean((material as MaterialDisplayRow).isVirtualReceiptItem);
-                      const mvt = movementSummaryMap.get(material.id) || { receipts: 0, issues: 0, returns: 0 };
-                      const openingQty = Number(material.openingQty || 0);
-                      const openingRate = Number(material.openingRate || 0);
-                      const openingValue = Number(material.openingValue ?? (openingQty * openingRate));
-                      const balance = openingQty + mvt.receipts + mvt.returns - mvt.issues;
-                      const receiptValue = mvt.receipts * openingRate;
-                      const issueValue = mvt.issues * openingRate;
-                      const closingValue = balance * openingRate;
+                      const values = getMaterialStockValues(material);
                       return (
                         <tr key={material.id} className={`hover:bg-indigo-50/30 transition-colors divide-x divide-black ${material.active === "No" ? "opacity-50 grayscale" : ""}`}>
                           <td className="px-4 py-3 text-center">
@@ -1421,18 +1449,18 @@ export function Materials() {
                           <td className="px-4 py-3 text-black text-xs">{material.gsm ?? "-"}</td>
                           <td className="px-4 py-3 text-black text-xs">{material.bf ?? "-"}</td>
                           <td className="px-4 py-3 text-black text-xs font-bold">{material.type === "Reel" ? material.color || "-" : "-"}</td>
-                          <td className="px-4 py-3 text-black text-xs font-medium bg-slate-50">{material.openingQty?.toLocaleString() ?? "0"}</td>
-                          <td className="px-4 py-3 text-indigo-700 text-xs font-bold bg-indigo-50/30">{openingValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/30">{mvt.receipts.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/20">{receiptValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/30">{mvt.issues.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/20">{issueValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-indigo-700 text-xs font-bold bg-indigo-50/30">{mvt.returns.toLocaleString()}</td>
-                          <td className={`px-4 py-3 text-xs font-black ${balance < 0 ? "text-red-600 bg-red-50" : "text-slate-900 bg-amber-50/50"}`}>
-                            {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <td className="px-4 py-3 text-black text-xs font-medium bg-slate-50">{values.openingQty.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-indigo-700 text-xs font-bold bg-indigo-50/30">{values.openingValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/30">{values.receiptQty.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-emerald-700 text-xs font-bold bg-emerald-50/20">{values.receiptValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/30">{values.issueQty.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-rose-700 text-xs font-bold bg-rose-50/20">{values.issueValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-indigo-700 text-xs font-bold bg-indigo-50/30">{values.returnQty.toLocaleString()}</td>
+                          <td className={`px-4 py-3 text-xs font-black ${values.balance < 0 ? "text-red-600 bg-red-50" : "text-slate-900 bg-amber-50/50"}`}>
+                            {values.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
-                          <td className={`px-4 py-3 text-xs font-black border-r-2 border-black ${closingValue < 0 ? "text-red-600 bg-red-50" : "text-violet-700 bg-violet-50/30"}`}>
-                            {closingValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <td className={`px-4 py-3 text-xs font-black border-r-2 border-black ${values.closingValue < 0 ? "text-red-600 bg-red-50" : "text-violet-700 bg-violet-50/30"}`}>
+                            {values.closingValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-black text-[10px] font-black uppercase">{material.uom || "-"}</td>
                           <td className="px-4 py-3 text-black text-[10px] font-bold">
