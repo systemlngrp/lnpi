@@ -199,9 +199,12 @@ export function ScheduledOrdersMaster() {
             isClearable
             placeholder="All Companies"
             menuPlacement="bottom"
+            menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+            menuPosition="fixed"
             styles={{
               control: (provided) => ({ ...provided, minHeight: 40, borderColor: "black", borderRadius: 4, paddingLeft: 28 }),
-              menu: (provided) => ({ ...provided, zIndex: 50 }),
+              menu: (provided) => ({ ...provided, zIndex: 9999 }),
+              menuPortal: (provided) => ({ ...provided, zIndex: 9999 }),
             }}
           />
         </div>
@@ -216,9 +219,12 @@ export function ScheduledOrdersMaster() {
             isClearable
             placeholder="All Items"
             menuPlacement="bottom"
+            menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+            menuPosition="fixed"
             styles={{
               control: (provided) => ({ ...provided, minHeight: 40, borderColor: "black", borderRadius: 4, paddingLeft: 28 }),
-              menu: (provided) => ({ ...provided, zIndex: 50 }),
+              menu: (provided) => ({ ...provided, zIndex: 9999 }),
+              menuPortal: (provided) => ({ ...provided, zIndex: 9999 }),
             }}
           />
         </div>

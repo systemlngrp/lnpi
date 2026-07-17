@@ -335,7 +335,13 @@ export function OrdersMaster() {
               isClearable
               placeholder="All Companies"
               menuPlacement="bottom"
-              styles={{ control: (provided) => ({ ...provided, minHeight: 40 }) }}
+              menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+              menuPosition="fixed"
+              styles={{
+                control: (provided) => ({ ...provided, minHeight: 40 }),
+                menu: (provided) => ({ ...provided, zIndex: 9999 }),
+                menuPortal: (provided) => ({ ...provided, zIndex: 9999 }),
+              }}
             />
           </label>
 
@@ -348,7 +354,13 @@ export function OrdersMaster() {
               isClearable
               placeholder="All Items"
               menuPlacement="bottom"
-              styles={{ control: (provided) => ({ ...provided, minHeight: 40 }) }}
+              menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+              menuPosition="fixed"
+              styles={{
+                control: (provided) => ({ ...provided, minHeight: 40 }),
+                menu: (provided) => ({ ...provided, zIndex: 9999 }),
+                menuPortal: (provided) => ({ ...provided, zIndex: 9999 }),
+              }}
             />
           </label>
 
@@ -361,7 +373,13 @@ export function OrdersMaster() {
               isClearable
               placeholder="All Users"
               menuPlacement="bottom"
-              styles={{ control: (provided) => ({ ...provided, minHeight: 40 }) }}
+              menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+              menuPosition="fixed"
+              styles={{
+                control: (provided) => ({ ...provided, minHeight: 40 }),
+                menu: (provided) => ({ ...provided, zIndex: 9999 }),
+                menuPortal: (provided) => ({ ...provided, zIndex: 9999 }),
+              }}
             />
           </label>
         </div>
