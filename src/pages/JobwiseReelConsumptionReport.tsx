@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Filter, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   Material,
@@ -176,124 +176,92 @@ export function JobwiseReelConsumptionReport() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">
-              <Filter size={14} />
-              Reports
-            </div>
-            <div>
-              <h2 className="text-2xl font-black tracking-tight text-slate-950">Jobwise Reel Consumption Report</h2>
-            </div>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 border-b border-black pb-3">
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Jobwise Reel Consumption Report</h2>
+      </div>
 
-          <div className="grid gap-3 sm:grid-cols-4 xl:min-w-[720px]">
-            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">Total Job Value</div>
-              <div className="mt-2 text-2xl font-black text-sky-950">{summary.jobValue.toFixed(2)}</div>
-            </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Reel Consumed</div>
-              <div className="mt-2 text-2xl font-black text-amber-950">{summary.reelConsumed.toFixed(2)}</div>
-            </div>
-            <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">Actual Consumed Value</div>
-              <div className="mt-2 text-2xl font-black text-violet-950">{summary.consumedValue.toFixed(2)}</div>
-            </div>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Average GP%</div>
-              <div className="mt-2 text-2xl font-black text-emerald-950">{averageGpPercent.toFixed(2)}</div>
-            </div>
-          </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded border border-blue-300 bg-blue-50 p-4">
+          <div className="text-xs font-black uppercase text-blue-700">Total Job Value</div>
+          <div className="mt-1 text-2xl font-black text-blue-900">{summary.jobValue.toFixed(2)}</div>
         </div>
-
-        <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
-          <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
-            <div className="grid flex-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.4fr)_repeat(4,minmax(140px,0.8fr))]">
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                  <Search size={14} />
-                  Search
-                </span>
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <Search size={16} className="text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Job No."
-                    className="w-full border-0 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
-                  />
-                </div>
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Date From</span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Date To</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Min GP%</span>
-                <input
-                  type="number"
-                  value={minGpPercent}
-                  onChange={(e) => setMinGpPercent(e.target.value)}
-                  placeholder="0"
-                  className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                />
-              </label>
-
-              <div className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Consumption Mode</span>
-                <div className="flex h-[52px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                  <label className="inline-flex cursor-pointer items-center gap-3 text-sm font-semibold text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={positiveConsumptionOnly}
-                      onChange={(e) => setPositiveConsumptionOnly(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    Positive consumption only
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={handleClear}
-                className="inline-flex h-[52px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <div className="text-xs font-black uppercase text-amber-700">Reel Consumed</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{summary.reelConsumed.toFixed(2)}</div>
+        </div>
+        <div className="rounded border border-purple-300 bg-purple-50 p-4">
+          <div className="text-xs font-black uppercase text-purple-700">Actual Consumed Value</div>
+          <div className="mt-1 text-2xl font-black text-purple-900">{summary.consumedValue.toFixed(2)}</div>
+        </div>
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
+          <div className="text-xs font-black uppercase text-emerald-700">Average GP%</div>
+          <div className="mt-1 text-2xl font-black text-emerald-900">{averageGpPercent.toFixed(2)}</div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-md">
-        <div className="table-frozen-scroll">
-          <table className="min-w-[1180px] w-full border-collapse text-[12px]">
+      <div className="rounded border border-black bg-white p-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(3,minmax(130px,0.8fr))_minmax(190px,0.9fr)_auto] xl:items-center">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search job no."
+              className="w-full rounded border-2 border-black py-2.5 pl-9 pr-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            title="Date From"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
+
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            title="Date To"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
+
+          <input
+            type="number"
+            value={minGpPercent}
+            onChange={(e) => setMinGpPercent(e.target.value)}
+            placeholder="Min GP%"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+          />
+
+          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+            <input
+              type="checkbox"
+              checked={positiveConsumptionOnly}
+              onChange={(e) => setPositiveConsumptionOnly(e.target.checked)}
+              className="h-4 w-4 accent-indigo-600"
+            />
+            Positive consumption only
+          </label>
+
+          <button
+            type="button"
+            onClick={handleClear}
+            className="min-h-[42px] rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+          >
+            Clear Filters
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded border-2 border-black bg-white shadow-sm">
+        <div className="max-h-[calc(100vh-250px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse text-[12px]">
             <thead className="sticky top-0 z-20">
-              <tr className="bg-blue-700 text-white shadow-sm">
+              <tr className="bg-indigo-700 text-white">
                 {[
                   "Job No.",
                   "Corrugation Date",
@@ -309,7 +277,7 @@ export function JobwiseReelConsumptionReport() {
                 ].map((heading) => (
                   <th
                     key={heading}
-                    className="sticky top-0 z-20 whitespace-nowrap border-r border-blue-950 border-b border-blue-950 bg-blue-700 px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-[0.14em] text-white last:border-r-0"
+                    className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white"
                   >
                     {heading}
                   </th>
@@ -319,24 +287,24 @@ export function JobwiseReelConsumptionReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="border-t border-slate-300 px-6 py-12 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={11} className="border-2 border-black px-6 py-10 text-center text-sm font-medium text-black">
                     No jobs match the current filters.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.productionId} className="border-t border-slate-300 text-[12px] text-slate-700 transition odd:bg-white even:bg-slate-50/70 hover:bg-emerald-50/70">
-                    <td className="border-r border-slate-300 px-3 py-2.5 font-bold text-slate-900">{row.jobNo}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5">{formatDate(row.corrugationDate)}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5 text-right">{Number(row.jobFfg || 0).toFixed(2)}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5 text-right">{Number(row.jobRate || 0).toFixed(2)}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5 text-right font-semibold text-slate-900">{Number(row.jobValue || 0).toFixed(2)}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5 text-right">{Number(row.reelIssued || 0).toFixed(2)}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5 text-right">{Number(row.reelReturned || 0).toFixed(2)}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5 text-right font-bold text-amber-700">{Number(row.reelConsumed || 0).toFixed(2)}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5 text-right font-bold text-violet-700">{Number(row.consumedValue || 0).toFixed(2)}</td>
-                    <td className="border-r border-slate-300 px-3 py-2.5 text-right font-bold text-emerald-700">{Number(row.gp || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2.5 text-right font-black text-emerald-800">{Number(row.gpPercent || 0).toFixed(2)}</td>
+                  <tr key={row.productionId} className="text-black hover:bg-slate-50">
+                    <td className="border-2 border-black px-3 py-3 font-bold">{row.jobNo}</td>
+                    <td className="border-2 border-black px-3 py-3 whitespace-nowrap">{formatDate(row.corrugationDate)}</td>
+                    <td className="border-2 border-black px-3 py-3 text-right">{Number(row.jobFfg || 0).toFixed(2)}</td>
+                    <td className="border-2 border-black px-3 py-3 text-right">{Number(row.jobRate || 0).toFixed(2)}</td>
+                    <td className="border-2 border-black px-3 py-3 text-right font-semibold">{Number(row.jobValue || 0).toFixed(2)}</td>
+                    <td className="border-2 border-black px-3 py-3 text-right">{Number(row.reelIssued || 0).toFixed(2)}</td>
+                    <td className="border-2 border-black px-3 py-3 text-right">{Number(row.reelReturned || 0).toFixed(2)}</td>
+                    <td className="border-2 border-black bg-amber-50 px-3 py-3 text-right font-bold text-amber-800">{Number(row.reelConsumed || 0).toFixed(2)}</td>
+                    <td className="border-2 border-black bg-purple-50 px-3 py-3 text-right font-bold text-purple-900">{Number(row.consumedValue || 0).toFixed(2)}</td>
+                    <td className="border-2 border-black bg-emerald-50 px-3 py-3 text-right font-bold text-emerald-900">{Number(row.gp || 0).toFixed(2)}</td>
+                    <td className="border-2 border-black bg-emerald-50 px-3 py-3 text-right font-black text-emerald-900">{Number(row.gpPercent || 0).toFixed(2)}</td>
                   </tr>
                 ))
               )}
@@ -346,4 +314,5 @@ export function JobwiseReelConsumptionReport() {
       </div>
     </div>
   );
+
 }
