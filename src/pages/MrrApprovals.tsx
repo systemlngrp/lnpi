@@ -3,7 +3,7 @@ import { useData } from "../hooks/useData";
 import { Company, Material, MaterialIn, Service, Supplier, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { Search, ChevronRight, ChevronDown, ArrowLeft, Download, ArrowUp, ArrowDown, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Search, ChevronRight, ChevronDown, ArrowLeft, Download, ArrowUp, ArrowDown, ThumbsUp, ThumbsDown, MessageSquareText, X } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { downloadMaterialInPdf } from "../lib/materialInPdf";
@@ -29,6 +29,7 @@ export function MrrApprovals() {
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const [openRemarkId, setOpenRemarkId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("transactionNo");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -437,12 +438,45 @@ export function MrrApprovals() {
                                 </button>
                               </div>
                               {["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "") ? (
-                                <textarea
-                                  value={remarks[m.id] || ""}
-                                  onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
-                                  placeholder="Remark *"
-                                  className="w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
-                                />
+                                <div className="relative flex justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenRemarkId((current) => current === m.id ? null : m.id)}
+                                    className={cn(
+                                      "relative inline-flex h-8 w-8 items-center justify-center rounded border border-black text-black hover:bg-indigo-50",
+                                      remarks[m.id]?.trim() ? "bg-indigo-100 text-indigo-700" : "bg-white"
+                                    )}
+                                    title="Remark"
+                                    aria-label="Open remark box"
+                                  >
+                                    <MessageSquareText size={14} />
+                                    {remarks[m.id]?.trim() ? (
+                                      <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-white bg-indigo-600" />
+                                    ) : null}
+                                  </button>
+                                  {openRemarkId === m.id ? (
+                                    <div className="absolute right-0 top-9 z-40 w-56 rounded border border-black bg-white p-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                                      <div className="mb-1 flex items-center justify-between gap-2">
+                                        <span className="text-[9px] font-black uppercase text-slate-600">Remark required for reject</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setOpenRemarkId(null)}
+                                          className="inline-flex h-5 w-5 items-center justify-center rounded border border-black text-black hover:bg-slate-100"
+                                          title="Close"
+                                          aria-label="Close remark box"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      </div>
+                                      <textarea
+                                        value={remarks[m.id] || ""}
+                                        onChange={e => setRemarks(prev => ({ ...prev, [m.id]: e.target.value }))}
+                                        placeholder="Remark *"
+                                        className="h-20 w-full border border-black rounded p-1 text-[9px] uppercase outline-none focus:ring-1 focus:ring-indigo-600"
+                                      />
+                                    </div>
+                                  ) : null}
+                                </div>
                               ) : (
                                 <div className="rounded border border-black bg-slate-50 px-2 py-2 text-center text-[9px] font-black uppercase text-slate-500">
                                   No approval action
