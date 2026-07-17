@@ -540,6 +540,7 @@ export function InvoicesMaster() {
                           <table className="min-w-[1100px] divide-y divide-black">
                             <thead className="sticky top-0 z-30 bg-slate-200">
                               <tr className="divide-x divide-black">
+                                <th className="px-3 py-2 text-left text-[10px] font-black uppercase">ERP</th>
                                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Item Name</th>
                                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Slip No</th>
                                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase">Truck No</th>
@@ -552,7 +553,7 @@ export function InvoicesMaster() {
                             <tbody className="bg-white divide-y divide-black">
                               {invoice.details.length === 0 ? (
                                 <tr>
-                                  <td colSpan={7} className="px-3 py-4 text-center text-xs text-slate-500 italic">
+                                  <td colSpan={8} className="px-3 py-4 text-center text-xs text-slate-500 italic">
                                     No item breakup found for this invoice.
                                   </td>
                                 </tr>
@@ -566,6 +567,7 @@ export function InvoicesMaster() {
                                   const total = amount + tax;
                                   return (
                                     <tr key={line.id || index} className="divide-x divide-black">
+                                      <td className="px-3 py-2 text-xs font-bold text-slate-700">{line.erp || "-"}</td>
                                       <td className="px-3 py-2 text-xs font-bold uppercase">{line.itemName}</td>
                                       <td className="px-3 py-2 text-xs">{line.slipNo}</td>
                                       <td className="px-3 py-2 text-xs font-bold text-indigo-700">{line.truckNo}</td>
