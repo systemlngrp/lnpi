@@ -15,6 +15,7 @@ export function Trucks() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   
   const [truckNo, setTruckNo] = useState("");
   const [driverName, setDriverName] = useState("");
@@ -78,14 +79,20 @@ export function Trucks() {
   }, [searchTerm, trucks]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    setDeleteError("");
     if (deletingId !== id) {
       setDeletingId(id);
       setTimeout(() => setDeletingId(null), 3000);
       return;
     }
-    setTrucks(trucks.filter(t => t.id !== id));
-    setDeletingId(null);
+    try {
+      await setTrucks(trucks.filter(t => t.id !== id));
+    } catch (error) {
+      setDeleteError((error as Error).message || "Unable to delete truck.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleEdit = (truck: Truck) => {
@@ -153,8 +160,10 @@ export function Trucks() {
               <input
                 id="mobileNo"
                 type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={mobileNo}
-                onChange={(e) => setMobileNo(e.target.value)}
+                onChange={(e) => setMobileNo(e.target.value.replace(/\D/g, ""))}
                 placeholder="e.g. 9876543210"
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
               />
@@ -181,6 +190,12 @@ export function Trucks() {
       )}
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+
+      {deleteError ? (
+        <div className="rounded border border-red-600 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          {deleteError}
+        </div>
+      ) : null}
 
       <DataSummaryTiles
         totalRecords={trucks.length}
