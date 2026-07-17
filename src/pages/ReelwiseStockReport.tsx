@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
@@ -97,10 +97,22 @@ export function ReelwiseStockReport() {
   const [stockYetToIssueOnly, setStockYetToIssueOnly] = useState(false);
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
+  const [mrrDateFrom, setMrrDateFrom] = useState("");
+  const [mrrDateTo, setMrrDateTo] = useState("");
+  const [excludeZeroAvailable, setExcludeZeroAvailable] = useState(false);
+  const [showMrrDate, setShowMrrDate] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("reelwiseStock.showMrrDate") !== "false";
+  });
   const [erpFilter, setErpFilter] = useState("");
   const [gsmFilter, setGsmFilter] = useState("");
   const [sizeFilter, setSizeFilter] = useState("");
   const [bfFilter, setBfFilter] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("reelwiseStock.showMrrDate", String(showMrrDate));
+  }, [showMrrDate]);
 
   const allRows = useMemo<ReelwiseStockRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -174,11 +186,14 @@ export function ReelwiseStockReport() {
   const gsmOptions = useMemo(() => makeOptions(allRows.map((row) => row.gsm || "")), [allRows]);
   const sizeOptions = useMemo(() => makeOptions(allRows.map((row) => row.size || "")), [allRows]);
   const bfOptions = useMemo(() => makeOptions(allRows.map((row) => row.bf || "")), [allRows]);
+  const visibleTableColumns = useMemo(() => tableColumns.filter((heading) => showMrrDate || heading !== "MRR Date"), [showMrrDate]);
 
   const rows = useMemo<ReelwiseStockRow[]>(() => {
     const loweredSearch = searchTerm.trim().toLowerCase();
     const minAgeNumber = Number(minAge || 0);
     const maxAgeNumber = Number(maxAge || 0);
+    const fromMs = mrrDateFrom ? new Date(mrrDateFrom).getTime() : null;
+    const toMs = mrrDateTo ? new Date(mrrDateTo).getTime() + 24 * 60 * 60 * 1000 - 1 : null;
 
     return allRows.filter((row) => {
       if (
@@ -199,6 +214,9 @@ export function ReelwiseStockReport() {
       if (availabilityFilter === "gt500" && row.availableWeight <= 500) return false;
       if (availabilityFilter === "lt500" && row.availableWeight >= 500) return false;
       if (stockYetToIssueOnly && !(row.issuedWeight === 0 && row.availableWeight > 0)) return false;
+      if (excludeZeroAvailable && row.availableWeight <= 0) return false;
+      if (fromMs != null && new Date(row.mrrDate || 0).getTime() < fromMs) return false;
+      if (toMs != null && new Date(row.mrrDate || 0).getTime() > toMs) return false;
       if (minAge && row.ageDays < minAgeNumber) return false;
       if (maxAge && row.ageDays > maxAgeNumber) return false;
       if (erpFilter && row.erp !== erpFilter) return false;
@@ -214,7 +232,7 @@ export function ReelwiseStockReport() {
       if (dateDiff !== 0) return dateDiff;
       return a.ourReelNo.localeCompare(b.ourReelNo);
     });
-  }, [allRows, availabilityFilter, bfFilter, erpFilter, gsmFilter, maxAge, minAge, searchTerm, sizeFilter, stockYetToIssueOnly]);
+  }, [allRows, availabilityFilter, bfFilter, erpFilter, excludeZeroAvailable, gsmFilter, maxAge, minAge, mrrDateFrom, mrrDateTo, searchTerm, sizeFilter, stockYetToIssueOnly]);
 
   const summary = useMemo(() => {
     return {
@@ -231,6 +249,9 @@ export function ReelwiseStockReport() {
     stockYetToIssueOnly ||
     minAge ||
     maxAge ||
+    mrrDateFrom ||
+    mrrDateTo ||
+    excludeZeroAvailable ||
     erpFilter ||
     gsmFilter ||
     sizeFilter ||
@@ -243,6 +264,9 @@ export function ReelwiseStockReport() {
     setStockYetToIssueOnly(false);
     setMinAge("");
     setMaxAge("");
+    setMrrDateFrom("");
+    setMrrDateTo("");
+    setExcludeZeroAvailable(false);
     setErpFilter("");
     setGsmFilter("");
     setSizeFilter("");
@@ -277,7 +301,7 @@ export function ReelwiseStockReport() {
       </div>
 
       <div className="rounded border border-black bg-white p-3">
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(140px,1fr))_repeat(2,minmax(110px,0.8fr))_minmax(180px,1fr)_auto] xl:items-center">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(130px,1fr))_repeat(4,minmax(110px,0.8fr))_repeat(3,minmax(150px,1fr))_auto] xl:items-center">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
@@ -292,6 +316,20 @@ export function ReelwiseStockReport() {
           <Select value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" />
           <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
           <Select value={bfFilter} onChange={setBfFilter} options={bfOptions} placeholder="All BF" />
+          <input
+            type="date"
+            value={mrrDateFrom}
+            onChange={(e) => setMrrDateFrom(e.target.value)}
+            title="MRR Date From"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
+          <input
+            type="date"
+            value={mrrDateTo}
+            onChange={(e) => setMrrDateTo(e.target.value)}
+            title="MRR Date To"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
           <input
             type="number"
             value={minAge}
@@ -331,6 +369,24 @@ export function ReelwiseStockReport() {
             />
             Stock yet to issue
           </label>
+          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+            <input
+              type="checkbox"
+              checked={excludeZeroAvailable}
+              onChange={(e) => setExcludeZeroAvailable(e.target.checked)}
+              className="h-4 w-4 accent-indigo-600"
+            />
+            Exclude 0 Available
+          </label>
+          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+            <input
+              type="checkbox"
+              checked={showMrrDate}
+              onChange={(e) => setShowMrrDate(e.target.checked)}
+              className="h-4 w-4 accent-indigo-600"
+            />
+            Show MRR Date
+          </label>
           {hasActiveFilters ? (
             <button
               type="button"
@@ -348,7 +404,7 @@ export function ReelwiseStockReport() {
           <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {tableColumns.map((heading) => (
+                {visibleTableColumns.map((heading) => (
                   <th key={heading} className="bg-indigo-700 px-3 py-3 text-left text-xs font-black border-2 border-black whitespace-nowrap uppercase">
                     {heading}
                   </th>
@@ -358,7 +414,7 @@ export function ReelwiseStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={17} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                  <td colSpan={visibleTableColumns.length} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No reel rows match the current filters.
                   </td>
                 </tr>
@@ -366,7 +422,9 @@ export function ReelwiseStockReport() {
                 rows.map((row, index) => (
                   <tr key={row.slipId} className="hover:bg-slate-50">
                     <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{index + 1}</td>
-                    <td className="px-3 py-3 text-black text-sm border-2 border-black whitespace-nowrap">{formatReportDate(row.mrrDate)}</td>
+                    {showMrrDate ? (
+                      <td className="px-3 py-3 text-black text-sm border-2 border-black whitespace-nowrap">{formatReportDate(row.mrrDate)}</td>
+                    ) : null}
                     <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{row.mrrNo}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{row.ourReelNo}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.erp}</td>
