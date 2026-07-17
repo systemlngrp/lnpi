@@ -1,10 +1,6 @@
 import React, { useMemo, useState } from "react";
-import {
-  ArrowUpDown,
-  Circle,
-  Filter,
-  Search,
-} from "lucide-react";
+import { Search } from "lucide-react";
+import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import {
   Material,
@@ -35,20 +31,20 @@ type ReelwiseStockRow = {
 };
 
 const tableColumns = [
-  { label: "SL No", width: "w-[4%]" },
-  { label: "MRR Date", width: "w-[7%]" },
-  { label: "MRR No.", width: "w-[8%]" },
-  { label: "Our Reel No.", width: "w-[8%]" },
-  { label: "ERP", width: "w-[7%]" },
-  { label: "Suppliers Name", width: "w-[18%]" },
-  { label: "GSM", width: "w-[5%]" },
-  { label: "Size", width: "w-[5%]" },
-  { label: "BF", width: "w-[4%]" },
-  { label: "Issued Weight", width: "w-[8%]" },
-  { label: "Returned Weight", width: "w-[9%]" },
-  { label: "Available Weight", width: "w-[9%]" },
-  { label: "MRR Qty", width: "w-[6%]" },
-  { label: "Age(D days)", width: "w-[5%]" },
+  "SL No",
+  "MRR Date",
+  "MRR No.",
+  "Our Reel No.",
+  "ERP",
+  "Suppliers Name",
+  "GSM",
+  "Size",
+  "BF",
+  "Issued Weight",
+  "Returned Weight",
+  "Available Weight",
+  "MRR Qty",
+  "Age(D days)",
 ];
 
 function formatReportDate(dateStr?: string) {
@@ -72,6 +68,15 @@ function getAgeDays(dateStr?: string) {
   return Math.max(0, Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
+function makeOptions(values: Array<string | number>) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+    .map((value) => ({ value, label: value }));
+}
+
+function formatQty(value: number) {
+  return Number(value || 0).toFixed(2);
+}
 
 export function ReelwiseStockReport() {
   const [materials] = useData<Material>("materials", []);
@@ -86,11 +91,12 @@ export function ReelwiseStockReport() {
   const [stockYetToIssueOnly, setStockYetToIssueOnly] = useState(false);
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
+  const [erpFilter, setErpFilter] = useState("");
   const [gsmFilter, setGsmFilter] = useState("");
   const [sizeFilter, setSizeFilter] = useState("");
   const [bfFilter, setBfFilter] = useState("");
 
-  const rows = useMemo<ReelwiseStockRow[]>(() => {
+  const allRows = useMemo<ReelwiseStockRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
     const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
     const supplierMap = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
@@ -113,6 +119,7 @@ export function ReelwiseStockReport() {
         const reelQty = Number(slip.weightKg || 0);
         const mrrQty = Number((openingBalance + reelQty).toFixed(2));
         const availableWeight = Number(Math.max(0, mrrQty - issuedWeight + returnedWeight).toFixed(2));
+
         return {
           slipId: slip.id,
           mrrDate: receipt?.date || "",
@@ -130,58 +137,52 @@ export function ReelwiseStockReport() {
           ageDays: getAgeDays(receipt?.date),
         };
       })
-      .filter((row) => {
-        const loweredSearch = searchTerm.trim().toLowerCase();
-        if (
-          loweredSearch &&
-          ![
-            row.ourReelNo,
-            row.erp,
-            row.supplierName,
-          ].some((value) => value.toLowerCase().includes(loweredSearch))
-        ) {
-          return false;
-        }
-
-        if (availabilityFilter === "gt500" && row.availableWeight <= 500) return false;
-        if (availabilityFilter === "lt500" && row.availableWeight >= 500) return false;
-        if (stockYetToIssueOnly && !(row.issuedWeight === 0 && row.availableWeight > 0)) return false;
-
-        const minAgeNumber = Number(minAge || 0);
-        const maxAgeNumber = Number(maxAge || 0);
-        if (minAge && row.ageDays < minAgeNumber) return false;
-        if (maxAge && row.ageDays > maxAgeNumber) return false;
-
-        const gsmFilterNumber = Number(gsmFilter || 0);
-        const sizeFilterNumber = Number(sizeFilter || 0);
-        const bfFilterNumber = Number(bfFilter || 0);
-        if (gsmFilter && row.gsm !== gsmFilterNumber) return false;
-        if (sizeFilter && row.size !== sizeFilterNumber) return false;
-        if (bfFilter && row.bf !== bfFilterNumber) return false;
-
-        return true;
-      })
       .sort((a, b) => {
         const dateDiff = new Date(b.mrrDate || 0).getTime() - new Date(a.mrrDate || 0).getTime();
         if (dateDiff !== 0) return dateDiff;
         return a.ourReelNo.localeCompare(b.ourReelNo);
       });
-  }, [
-    availabilityFilter,
-    issueReelLines,
-    materialIn,
-    materials,
-    bfFilter,
-    gsmFilter,
-    maxAge,
-    minAge,
-    packingSlips,
-    returnReelLines,
-    searchTerm,
-    sizeFilter,
-    stockYetToIssueOnly,
-    suppliers,
-  ]);
+  }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines, suppliers]);
+
+  const erpOptions = useMemo(() => makeOptions(allRows.map((row) => row.erp)), [allRows]);
+  const gsmOptions = useMemo(() => makeOptions(allRows.map((row) => row.gsm || "")), [allRows]);
+  const sizeOptions = useMemo(() => makeOptions(allRows.map((row) => row.size || "")), [allRows]);
+  const bfOptions = useMemo(() => makeOptions(allRows.map((row) => row.bf || "")), [allRows]);
+
+  const rows = useMemo<ReelwiseStockRow[]>(() => {
+    const loweredSearch = searchTerm.trim().toLowerCase();
+    const minAgeNumber = Number(minAge || 0);
+    const maxAgeNumber = Number(maxAge || 0);
+
+    return allRows.filter((row) => {
+      if (
+        loweredSearch &&
+        ![
+          row.ourReelNo,
+          row.erp,
+          row.supplierName,
+          row.mrrNo,
+          row.gsm,
+          row.size,
+          row.bf,
+        ].some((value) => String(value || "").toLowerCase().includes(loweredSearch))
+      ) {
+        return false;
+      }
+
+      if (availabilityFilter === "gt500" && row.availableWeight <= 500) return false;
+      if (availabilityFilter === "lt500" && row.availableWeight >= 500) return false;
+      if (stockYetToIssueOnly && !(row.issuedWeight === 0 && row.availableWeight > 0)) return false;
+      if (minAge && row.ageDays < minAgeNumber) return false;
+      if (maxAge && row.ageDays > maxAgeNumber) return false;
+      if (erpFilter && row.erp !== erpFilter) return false;
+      if (gsmFilter && String(row.gsm) !== gsmFilter) return false;
+      if (sizeFilter && String(row.size) !== sizeFilter) return false;
+      if (bfFilter && String(row.bf) !== bfFilter) return false;
+
+      return true;
+    });
+  }, [allRows, availabilityFilter, bfFilter, erpFilter, gsmFilter, maxAge, minAge, searchTerm, sizeFilter, stockYetToIssueOnly]);
 
   const summary = useMemo(() => {
     const notIssuedRows = rows.filter((row) => row.issuedWeight === 0 && row.availableWeight > 0);
@@ -189,8 +190,21 @@ export function ReelwiseStockReport() {
       reelNotIssuedWeight: notIssuedRows.reduce((sum, row) => sum + row.availableWeight, 0),
       reelIssuedWeight: rows.reduce((sum, row) => sum + row.issuedWeight, 0),
       erpNotIssuedCount: new Set(notIssuedRows.map((row) => row.erp).filter(Boolean)).size,
+      totalRows: rows.length,
     };
   }, [rows]);
+
+  const hasActiveFilters = Boolean(
+    searchTerm ||
+    availabilityFilter !== "all" ||
+    stockYetToIssueOnly ||
+    minAge ||
+    maxAge ||
+    erpFilter ||
+    gsmFilter ||
+    sizeFilter ||
+    bfFilter
+  );
 
   const handleClearFilters = () => {
     setSearchTerm("");
@@ -198,208 +212,115 @@ export function ReelwiseStockReport() {
     setStockYetToIssueOnly(false);
     setMinAge("");
     setMaxAge("");
+    setErpFilter("");
     setGsmFilter("");
     setSizeFilter("");
     setBfFilter("");
   };
 
   return (
-    <div className="space-y-6">
-      <div className="overflow-hidden rounded-[32px] border border-slate-200/90 bg-white shadow-[0_24px_60px_-28px_rgba(15,23,42,0.28)]">
-        <div className="relative px-5 py-5 md:px-7 md:py-6">
-          <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.12),_transparent_38%),linear-gradient(180deg,_rgba(248,250,252,0.95),_rgba(255,255,255,0))]" />
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-2xl space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700">
-              <ArrowUpDown size={14} />
-              Reports
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-3xl font-black tracking-tight text-slate-950 md:text-[2rem]">Reelwise Stock Report</h2>
-              </div>
-            </div>
-
-            <div className="grid gap-2.5 sm:grid-cols-3 xl:min-w-[520px]">
-              <div className="rounded-[20px] border border-emerald-200 bg-[linear-gradient(135deg,rgba(236,253,245,1),rgba(240,253,250,0.86))] px-3.5 py-3 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Reels Not Issued</div>
-                <div className="mt-2 text-[2rem] font-black tracking-tight text-emerald-950">{summary.reelNotIssuedWeight.toFixed(2)}</div>
-                <div className="mt-1 text-xs font-semibold text-emerald-700">Available weight</div>
-              </div>
-              <div className="rounded-[20px] border border-amber-200 bg-[linear-gradient(135deg,rgba(255,251,235,1),rgba(255,247,237,0.9))] px-3.5 py-3 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Reels Issued</div>
-                <div className="mt-2 text-[2rem] font-black tracking-tight text-amber-950">{summary.reelIssuedWeight.toFixed(2)}</div>
-                <div className="mt-1 text-xs font-semibold text-amber-700">Issued weight</div>
-              </div>
-              <div className="rounded-[20px] border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,1),rgba(250,245,255,0.92))] px-3.5 py-3 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700">ERP Not Issued</div>
-                <div className="mt-2 text-[2rem] font-black tracking-tight text-violet-950">{summary.erpNotIssuedCount}</div>
-                <div className="mt-1 text-xs font-semibold text-violet-700">Unique ERPs</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative mt-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,1))] p-4 md:p-5">
-            <div className="grid flex-1 items-end gap-4 border-t-0 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.2fr)_minmax(180px,0.9fr)_minmax(120px,0.62fr)_minmax(120px,0.62fr)_minmax(120px,0.62fr)_minmax(120px,0.62fr)_minmax(120px,0.62fr)_minmax(180px,0.9fr)_140px]">
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                  <Search size={14} />
-                  Search
-                </span>
-                <div className="flex h-[56px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm transition focus-within:border-sky-400 focus-within:ring-4 focus-within:ring-sky-100">
-                  <Search size={16} className="text-sky-500" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Reel / ERP / Supplier"
-                    className="w-full border-0 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
-                  />
-                </div>
-              </label>
-
-              <div className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                  <Filter size={14} />
-                  Available Wt
-                </span>
-                <div className="grid min-h-[56px] grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-                  {[
-                    { label: "All", value: "all" as const },
-                    { label: "> 500", value: "gt500" as const },
-                    { label: "< 500", value: "lt500" as const },
-                  ].map((option) => (
-                    <label
-                      key={option.value}
-                      className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition ${
-                        availabilityFilter === option.value
-                          ? "bg-sky-600 text-white shadow-sm"
-                          : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="availabilityFilter"
-                        value={option.value}
-                        checked={availabilityFilter === option.value}
-                        onChange={() => setAvailabilityFilter(option.value)}
-                        className="hidden"
-                      />
-                      <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full border ${availabilityFilter === option.value ? "border-white/70 bg-white/15" : "border-slate-300 bg-white"}`}>
-                        {availabilityFilter === option.value ? <Circle size={8} className="fill-white text-white" /> : null}
-                      </span>
-                      {option.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">GSM</span>
-                <input
-                  type="number"
-                  value={gsmFilter}
-                  onChange={(e) => setGsmFilter(e.target.value)}
-                  placeholder="Filter GSM"
-                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Size</span>
-                <input
-                  type="number"
-                  value={sizeFilter}
-                  onChange={(e) => setSizeFilter(e.target.value)}
-                  placeholder="Filter size"
-                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">BF</span>
-                <input
-                  type="number"
-                  value={bfFilter}
-                  onChange={(e) => setBfFilter(e.target.value)}
-                  placeholder="Filter BF"
-                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Age &gt;=</span>
-                <input
-                  type="number"
-                  value={minAge}
-                  onChange={(e) => setMinAge(e.target.value)}
-                  placeholder="Min days"
-                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Age &lt;=</span>
-                <input
-                  type="number"
-                  value={maxAge}
-                  onChange={(e) => setMaxAge(e.target.value)}
-                  placeholder="Max days"
-                  className="h-[56px] w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Stock Mode</span>
-                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                  <label className="inline-flex cursor-pointer items-center gap-3 text-sm font-semibold text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={stockYetToIssueOnly}
-                      onChange={(e) => setStockYetToIssueOnly(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                    />
-                    Stock yet to issue
-                  </label>
-                </div>
-              </label>
-
-              <div className="space-y-2">
-                <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-transparent select-none">
-                  Action
-                </span>
-                <button
-                  type="button"
-                  onClick={handleClearFilters}
-                  className="inline-flex h-[56px] w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
-                >
-                  Clear Filters
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
+        <div>
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Reelwise Stock Report</h2>
+          <p className="text-sm text-slate-600 font-medium">Available Weight = MRR Qty - Issued + Returned</p>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.34)]">
-        <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-sm font-bold text-slate-900">{rows.length} reel rows</div>
-          </div>
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Available: {summary.reelNotIssuedWeight.toFixed(2)} | Issued: {summary.reelIssuedWeight.toFixed(2)}
-          </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
+          <div className="text-xs font-black uppercase text-emerald-700">Reels Not Issued</div>
+          <div className="mt-1 text-2xl font-black text-emerald-900">{formatQty(summary.reelNotIssuedWeight)}</div>
         </div>
-        <div className="max-h-[calc(100vh-260px)] overflow-auto">
-          <table className="w-full table-fixed border-collapse">
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <div className="text-xs font-black uppercase text-amber-700">Reels Issued</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{formatQty(summary.reelIssuedWeight)}</div>
+        </div>
+        <div className="rounded border border-purple-300 bg-purple-50 p-4">
+          <div className="text-xs font-black uppercase text-purple-700">ERP Not Issued</div>
+          <div className="mt-1 text-2xl font-black text-purple-900">{summary.erpNotIssuedCount}</div>
+        </div>
+        <div className="rounded border border-blue-300 bg-blue-50 p-4">
+          <div className="text-xs font-black uppercase text-blue-700">Total Rows</div>
+          <div className="mt-1 text-2xl font-black text-blue-900">{summary.totalRows}</div>
+        </div>
+      </div>
+
+      <div className="rounded border border-black bg-white p-3">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(140px,1fr))_repeat(2,minmax(110px,0.8fr))_minmax(180px,1fr)_auto] xl:items-center">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search reel / ERP / supplier / MRR / size / GSM / BF"
+              className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+          <Select value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" />
+          <Select value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" />
+          <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
+          <Select value={bfFilter} onChange={setBfFilter} options={bfOptions} placeholder="All BF" />
+          <input
+            type="number"
+            value={minAge}
+            onChange={(e) => setMinAge(e.target.value)}
+            placeholder="Min age"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
+          <input
+            type="number"
+            value={maxAge}
+            onChange={(e) => setMaxAge(e.target.value)}
+            placeholder="Max age"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
+          <div className="grid grid-cols-3 gap-1 rounded border-2 border-black bg-white p-1">
+            {[
+              { label: "All", value: "all" as const },
+              { label: "> 500", value: "gt500" as const },
+              { label: "< 500", value: "lt500" as const },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setAvailabilityFilter(option.value)}
+                className={`rounded px-2 py-2 text-xs font-black ${availabilityFilter === option.value ? "bg-indigo-600 text-white" : "bg-slate-50 text-black hover:bg-slate-100"}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+            <input
+              type="checkbox"
+              checked={stockYetToIssueOnly}
+              onChange={(e) => setStockYetToIssueOnly(e.target.checked)}
+              className="h-4 w-4 accent-indigo-600"
+            />
+            Stock yet to issue
+          </label>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+            >
+              Clear Filters
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="bg-white rounded shadow-sm border-2 border-black overflow-hidden">
+        <div className="max-h-[calc(100vh-250px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
-              <tr className="bg-[linear-gradient(90deg,#020617,#0f172a,#111827)] text-white">
-                {tableColumns.map((column) => (
-                  <th
-                    key={column.label}
-                    className={`${column.width} truncate border-r border-black border-b border-black bg-slate-950 px-1.5 py-2 text-left text-[9px] font-black uppercase tracking-wide last:border-r-0`}
-                    title={column.label}
-                  >
-                    {column.label}
+              <tr className="bg-indigo-700 text-white">
+                {tableColumns.map((heading) => (
+                  <th key={heading} className="bg-indigo-700 px-3 py-3 text-left text-xs font-black border-2 border-black whitespace-nowrap uppercase">
+                    {heading}
                   </th>
                 ))}
               </tr>
@@ -407,27 +328,27 @@ export function ReelwiseStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="border-t border-black px-6 py-12 text-center text-sm font-semibold text-slate-500">
+                  <td colSpan={14} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No reel rows match the current filters.
                   </td>
                 </tr>
               ) : (
                 rows.map((row, index) => (
-                  <tr key={row.slipId} className="border-t border-black text-[11px] text-slate-700 transition hover:bg-sky-50/50">
-                    <td className="truncate border-r border-black px-1.5 py-2 font-bold text-slate-900" title={String(index + 1)}>{index + 1}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2" title={formatReportDate(row.mrrDate)}>{formatReportDate(row.mrrDate)}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2 font-semibold text-slate-900" title={row.mrrNo}>{row.mrrNo}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2 font-bold text-slate-900" title={row.ourReelNo}>{row.ourReelNo}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2" title={row.erp}>{row.erp}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2" title={row.supplierName}>{row.supplierName}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2" title={String(row.gsm || "")}>{row.gsm || ""}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2" title={String(row.size || "")}>{row.size || ""}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2" title={String(row.bf || "")}>{row.bf || ""}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2 text-right font-semibold text-amber-700" title={Number(row.issuedWeight || 0).toFixed(2)}>{Number(row.issuedWeight || 0).toFixed(2)}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2 text-right font-semibold text-violet-700" title={Number(row.returnedWeight || 0).toFixed(2)}>{Number(row.returnedWeight || 0).toFixed(2)}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2 text-right font-black text-emerald-700" title={Number(row.availableWeight || 0).toFixed(2)}>{Number(row.availableWeight || 0).toFixed(2)}</td>
-                    <td className="truncate border-r border-black px-1.5 py-2 text-right" title={Number(row.mrrQty || 0).toFixed(2)}>{Number(row.mrrQty || 0).toFixed(2)}</td>
-                    <td className="truncate px-1.5 py-2 text-right" title={String(row.ageDays)}>{row.ageDays}</td>
+                  <tr key={row.slipId} className="hover:bg-slate-50">
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{index + 1}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black whitespace-nowrap">{formatReportDate(row.mrrDate)}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{row.mrrNo}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{row.ourReelNo}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.erp}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black min-w-[220px]">{row.supplierName || "-"}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.gsm || ""}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.size || ""}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.bf || ""}</td>
+                    <td className="px-3 py-3 text-red-800 text-sm border-2 border-black bg-red-50/40 text-right">{formatQty(row.issuedWeight)}</td>
+                    <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50 text-right">{formatQty(row.returnedWeight)}</td>
+                    <td className="px-3 py-3 text-emerald-900 text-sm font-bold border-2 border-black bg-emerald-50 text-right">{formatQty(row.availableWeight)}</td>
+                    <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.mrrQty)}</td>
+                    <td className="px-3 py-3 text-amber-900 text-sm border-2 border-black bg-amber-50 text-right">{row.ageDays}</td>
                   </tr>
                 ))
               )}
