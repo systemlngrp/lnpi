@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import {
   Material,
@@ -13,6 +14,7 @@ import { getAvailableReelPackingSlips } from "../lib/materialMovement";
 type ReelStockRow = {
   materialId: string;
   erp: string;
+  itemName: string;
   size: number;
   gsm: number;
   bf: number;
@@ -26,6 +28,16 @@ type ReelStockRow = {
   noOfReels: number;
 };
 
+function makeOptions(values: Array<string | number>) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+    .map((value) => ({ value, label: value }));
+}
+
+function formatQty(value: number) {
+  return Number(value || 0).toFixed(2);
+}
+
 export function ErpWiseReelStockReport() {
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
@@ -33,8 +45,12 @@ export function ErpWiseReelStockReport() {
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [searchTerm, setSearchTerm] = useState("");
+  const [erpFilter, setErpFilter] = useState("");
+  const [sizeFilter, setSizeFilter] = useState("");
+  const [gsmFilter, setGsmFilter] = useState("");
+  const [bfFilter, setBfFilter] = useState("");
 
-  const rows = useMemo<ReelStockRow[]>(() => {
+  const allRows = useMemo<ReelStockRow[]>(() => {
     const latestMaterialIn = [...materialIn].sort((a, b) => {
       const timeA = new Date(a.updateTimestamp || a.timestamp || a.date || 0).getTime();
       const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
@@ -66,10 +82,13 @@ export function ErpWiseReelStockReport() {
             .find(Boolean)?.rate ??
           Number(material.openingRate || 0);
         const availableReelCount = getAvailableReelPackingSlips(material.id, packingSlips, issueReelLines, returnReelLines).length;
+        const correctedRate = availableReelCount > 0 ? Number(Number(latestRate || 0).toFixed(2)) : 0;
+        const correctedValuation = availableReelCount > 0 ? Number((availableWeight * Number(latestRate || 0)).toFixed(2)) : 0;
 
         return {
           materialId: material.id,
           erp: String(material.erpCode || ""),
+          itemName: String(material.name || ""),
           size: Number(material.size || 0),
           gsm: Number(material.gsm || 0),
           bf: Number(material.bf || 0),
@@ -78,23 +97,33 @@ export function ErpWiseReelStockReport() {
           issued: Number(issued.toFixed(2)),
           returned: Number(returned.toFixed(2)),
           availableWeight,
-          rate: Number(Number(latestRate || 0).toFixed(2)),
-          valuation: Number((availableWeight * Number(latestRate || 0)).toFixed(2)),
+          rate: correctedRate,
+          valuation: correctedValuation,
           noOfReels: availableReelCount,
         };
       })
+      .sort((a, b) => a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf);
+  }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines]);
+
+  const erpOptions = useMemo(() => makeOptions(allRows.map((row) => row.erp)), [allRows]);
+  const sizeOptions = useMemo(() => makeOptions(allRows.map((row) => row.size || "")), [allRows]);
+  const gsmOptions = useMemo(() => makeOptions(allRows.map((row) => row.gsm || "")), [allRows]);
+  const bfOptions = useMemo(() => makeOptions(allRows.map((row) => row.bf || "")), [allRows]);
+
+  const rows = useMemo<ReelStockRow[]>(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return allRows
       .filter((row) => {
-        const lowered = searchTerm.trim().toLowerCase();
-        if (!lowered) return true;
-        return (
-          row.erp.toLowerCase().includes(lowered) ||
-          String(row.size).includes(lowered) ||
-          String(row.gsm).includes(lowered) ||
-          String(row.bf).includes(lowered)
-        );
+        if (erpFilter && row.erp !== erpFilter) return false;
+        if (sizeFilter && String(row.size) !== sizeFilter) return false;
+        if (gsmFilter && String(row.gsm) !== gsmFilter) return false;
+        if (bfFilter && String(row.bf) !== bfFilter) return false;
+        if (!query) return true;
+        return [row.erp, row.itemName, row.size, row.gsm, row.bf]
+          .some((value) => String(value || "").toLowerCase().includes(query));
       })
       .sort((a, b) => a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf);
-  }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines, searchTerm]);
+  }, [allRows, bfFilter, erpFilter, gsmFilter, searchTerm, sizeFilter]);
 
   const totals = useMemo(
     () =>
@@ -107,43 +136,86 @@ export function ErpWiseReelStockReport() {
           availableWeight: acc.availableWeight + row.availableWeight,
           valuation: acc.valuation + row.valuation,
           noOfReels: acc.noOfReels + row.noOfReels,
+          totalStock: acc.totalStock + row.openingStock + row.receipts + row.returned,
         }),
-        { openingStock: 0, receipts: 0, issued: 0, returned: 0, availableWeight: 0, valuation: 0, noOfReels: 0 }
+        { openingStock: 0, receipts: 0, issued: 0, returned: 0, availableWeight: 0, valuation: 0, noOfReels: 0, totalStock: 0 }
       ),
     [rows]
   );
 
-  // Downloads removed (only shown in Delivery Book)
+  const hasActiveFilters = Boolean(searchTerm || erpFilter || sizeFilter || gsmFilter || bfFilter);
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setErpFilter("");
+    setSizeFilter("");
+    setGsmFilter("");
+    setBfFilter("");
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
+    <div className="space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">ERP Wise Reel Stock</h2>
           <p className="text-sm text-slate-600 font-medium">Available Weight = Opening Stock + Receipts + Returned - Issued</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full md:w-72">
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded border border-blue-300 bg-blue-50 p-4">
+          <div className="text-xs font-black uppercase text-blue-700">Total Stock</div>
+          <div className="mt-1 text-2xl font-black text-blue-900">{formatQty(totals.totalStock)}</div>
+        </div>
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
+          <div className="text-xs font-black uppercase text-emerald-700">Total Available Stock</div>
+          <div className="mt-1 text-2xl font-black text-emerald-900">{formatQty(totals.availableWeight)}</div>
+        </div>
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <div className="text-xs font-black uppercase text-amber-700">Total Reels</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{totals.noOfReels}</div>
+        </div>
+        <div className="rounded border border-purple-300 bg-purple-50 p-4">
+          <div className="text-xs font-black uppercase text-purple-700">Total Valuation</div>
+          <div className="mt-1 text-2xl font-black text-purple-900">{formatQty(totals.valuation)}</div>
+        </div>
+      </div>
+
+      <div className="rounded border border-black bg-white p-3">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(150px,1fr))_auto] xl:items-center">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search ERP / size / GSM / BF"
+              placeholder="Search ERP / item / size / GSM / BF"
               className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
           </div>
-          {/* Downloads removed (only shown in Delivery Book) */}
+          <Select value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" />
+          <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
+          <Select value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" />
+          <Select value={bfFilter} onChange={setBfFilter} options={bfOptions} placeholder="All BF" />
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+            >
+              Clear Filters
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div className="bg-white rounded shadow-sm border border-black overflow-hidden">
+      <div className="bg-white rounded shadow-sm border-2 border-black overflow-hidden">
         <div className="table-frozen-scroll">
           <table className="min-w-full border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {["ERP", "SIZE", "GSM", "BF", "Opening Stock", "RECEIPTS", "ISSUED", "RETURNED", "Available Weight", "Rate Valuation", "VALUATION", "NO OF REELS"].map((heading) => (
-                  <th key={heading} className="bg-indigo-700 px-4 py-4 text-left text-sm font-bold border-2 border-black whitespace-nowrap">
+                {["ERP", "Item Name", "SIZE", "GSM", "BF", "Opening Stock", "RECEIPTS", "ISSUED", "RETURNED", "Available Weight", "Rate", "VALUATION", "NO OF REELS"].map((heading) => (
+                  <th key={heading} className="bg-indigo-700 px-3 py-3 text-left text-xs font-black border-2 border-black whitespace-nowrap uppercase">
                     {heading}
                   </th>
                 ))}
@@ -152,38 +224,39 @@ export function ErpWiseReelStockReport() {
             <tbody>
               {rows.length > 0 ? (
                 <tr className="erp-wise-total-row bg-slate-100">
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black" colSpan={4}>TOTAL</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.openingStock || 0).toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.receipts || 0).toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.issued || 0).toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.returned || 0).toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.availableWeight || 0).toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm border-2 border-black">-</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(totals.valuation || 0).toFixed(2)}</td>
-                  <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{totals.noOfReels}</td>
+                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black" colSpan={5}>TOTAL</td>
+                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black">{formatQty(totals.openingStock)}</td>
+                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black">{formatQty(totals.receipts)}</td>
+                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black">{formatQty(totals.issued)}</td>
+                  <td className="px-3 py-3 text-black text-sm font-black border-2 border-black">{formatQty(totals.returned)}</td>
+                  <td className="px-3 py-3 text-emerald-900 text-sm font-black border-2 border-black bg-emerald-50">{formatQty(totals.availableWeight)}</td>
+                  <td className="px-3 py-3 text-black text-sm border-2 border-black">-</td>
+                  <td className="px-3 py-3 text-purple-900 text-sm font-black border-2 border-black bg-purple-50">{formatQty(totals.valuation)}</td>
+                  <td className="px-3 py-3 text-amber-900 text-sm font-black border-2 border-black bg-amber-50">{totals.noOfReels}</td>
                 </tr>
               ) : null}
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                  <td colSpan={13} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No reel stock rows found.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.materialId} className="hover:bg-slate-50">
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.erp}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.size || ""}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.gsm || ""}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.bf || ""}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.openingStock || 0).toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.receipts || 0).toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.issued || 0).toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.returned || 0).toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(row.availableWeight || 0).toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{Number(row.rate || 0).toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm font-bold border-2 border-black">{Number(row.valuation || 0).toFixed(2)}</td>
-                    <td className="px-4 py-4 text-black text-sm border-2 border-black">{row.noOfReels}</td>
+                  <tr key={row.materialId} className={row.noOfReels === 0 ? "bg-red-50/60 hover:bg-red-50" : "hover:bg-slate-50"}>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.erp}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black min-w-[220px]">{row.itemName || "-"}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.size || ""}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.gsm || ""}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.bf || ""}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{formatQty(row.openingStock)}</td>
+                    <td className="px-3 py-3 text-blue-900 text-sm border-2 border-black bg-blue-50/50">{formatQty(row.receipts)}</td>
+                    <td className="px-3 py-3 text-red-800 text-sm border-2 border-black bg-red-50/40">{formatQty(row.issued)}</td>
+                    <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50">{formatQty(row.returned)}</td>
+                    <td className="px-3 py-3 text-emerald-900 text-sm font-bold border-2 border-black bg-emerald-50">{formatQty(row.availableWeight)}</td>
+                    <td className="px-3 py-3 text-black text-sm border-2 border-black">{formatQty(row.rate)}</td>
+                    <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50">{formatQty(row.valuation)}</td>
+                    <td className="px-3 py-3 text-amber-900 text-sm font-bold border-2 border-black bg-amber-50">{row.noOfReels}</td>
                   </tr>
                 ))
               )}
