@@ -131,11 +131,6 @@ export function ReelwiseStockReport() {
         }
       });
     });
-    const receivedByMaterial = packingSlips.reduce<Map<string, number>>((acc, slip) => {
-      acc.set(slip.materialId, (acc.get(slip.materialId) || 0) + Number(slip.weightKg || 0));
-      return acc;
-    }, new Map());
-
     return packingSlips
       .map((slip) => {
         const material = materialMap.get(slip.materialId);
@@ -146,11 +141,10 @@ export function ReelwiseStockReport() {
 
         const issuedWeight = relatedIssueLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
         const returnedWeight = relatedReturnLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-        const openingBalance = Math.max(0, Number(material?.openingQty || 0) - Number(receivedByMaterial.get(slip.materialId) || 0));
         const reelQty = Number(slip.weightKg || 0);
-        const mrrQty = Number((openingBalance + reelQty).toFixed(2));
+        const mrrQty = Number(reelQty.toFixed(2));
         const netIssuedWeight = Number((issuedWeight - returnedWeight).toFixed(2));
-        const availableWeight = Number(Math.max(0, mrrQty - netIssuedWeight).toFixed(2));
+        const availableWeight = Number(Math.max(0, mrrQty + returnedWeight - issuedWeight).toFixed(2));
         const latestRate = Number(latestRateByMaterial.get(slip.materialId) ?? material?.openingRate ?? 0);
         const rate = availableWeight > 0 ? Number(latestRate.toFixed(2)) : 0;
         const valuation = availableWeight > 0 ? Number((availableWeight * latestRate).toFixed(2)) : 0;
@@ -236,7 +230,7 @@ export function ReelwiseStockReport() {
 
   const summary = useMemo(() => {
     return {
-      totalStock: rows.reduce((sum, row) => sum + row.mrrQty, 0),
+      totalStock: rows.reduce((sum, row) => sum + row.mrrQty + row.returnedWeight, 0),
       totalAvailableStock: rows.reduce((sum, row) => sum + row.availableWeight, 0),
       totalReels: rows.filter((row) => row.availableWeight > 0).length,
       totalValuation: rows.reduce((sum, row) => sum + row.valuation, 0),
