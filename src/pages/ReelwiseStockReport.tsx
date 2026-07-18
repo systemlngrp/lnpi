@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
@@ -35,7 +35,6 @@ type ReelwiseStockRow = {
 
 const tableColumns = [
   "SL No",
-  "MRR Date",
   "MRR No.",
   "Our Reel No.",
   "ERP",
@@ -43,11 +42,11 @@ const tableColumns = [
   "GSM",
   "Size",
   "BF",
+  "MRR Qty",
   "Issued",
   "Return",
   "Net Issued",
   "Available Weight",
-  "MRR Qty",
   "Rate",
   "Valuation",
   "Age(D days)",
@@ -100,19 +99,10 @@ export function ReelwiseStockReport() {
   const [mrrDateFrom, setMrrDateFrom] = useState("");
   const [mrrDateTo, setMrrDateTo] = useState("");
   const [excludeZeroAvailable, setExcludeZeroAvailable] = useState(false);
-  const [showMrrDate, setShowMrrDate] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem("reelwiseStock.showMrrDate") !== "false";
-  });
   const [erpFilter, setErpFilter] = useState("");
   const [gsmFilter, setGsmFilter] = useState("");
   const [sizeFilter, setSizeFilter] = useState("");
   const [bfFilter, setBfFilter] = useState("");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("reelwiseStock.showMrrDate", String(showMrrDate));
-  }, [showMrrDate]);
 
   const allRows = useMemo<ReelwiseStockRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -213,7 +203,6 @@ export function ReelwiseStockReport() {
   const gsmOptions = useMemo(() => makeOptions(allRows.map((row) => row.gsm || "")), [allRows]);
   const sizeOptions = useMemo(() => makeOptions(allRows.map((row) => row.size || "")), [allRows]);
   const bfOptions = useMemo(() => makeOptions(allRows.map((row) => row.bf || "")), [allRows]);
-  const visibleTableColumns = useMemo(() => tableColumns.filter((heading) => showMrrDate || heading !== "MRR Date"), [showMrrDate]);
 
   const rows = useMemo<ReelwiseStockRow[]>(() => {
     const loweredSearch = searchTerm.trim().toLowerCase();
@@ -263,7 +252,6 @@ export function ReelwiseStockReport() {
 
   const summary = useMemo(() => {
     return {
-      totalStock: rows.reduce((sum, row) => sum + row.mrrQty + row.returnedWeight, 0),
       totalAvailableStock: rows.reduce((sum, row) => sum + row.availableWeight, 0),
       totalReels: rows.filter((row) => row.availableWeight > 0).length,
       totalValuation: rows.reduce((sum, row) => sum + row.valuation, 0),
@@ -308,11 +296,7 @@ export function ReelwiseStockReport() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded border border-blue-300 bg-blue-50 p-4">
-          <div className="text-xs font-black uppercase text-blue-700">Total Stock</div>
-          <div className="mt-1 text-2xl font-black text-blue-900">{formatQty(summary.totalStock)}</div>
-        </div>
+      <div className="grid gap-3 md:grid-cols-3">
         <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
           <div className="text-xs font-black uppercase text-emerald-700">Total Available Stock</div>
           <div className="mt-1 text-2xl font-black text-emerald-900">{formatQty(summary.totalAvailableStock)}</div>
@@ -412,15 +396,6 @@ export function ReelwiseStockReport() {
               />
               Exclude 0 Available
             </label>
-            <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
-              <input
-                type="checkbox"
-                checked={showMrrDate}
-                onChange={(e) => setShowMrrDate(e.target.checked)}
-                className="h-4 w-4 accent-indigo-600"
-              />
-              Show MRR Date
-            </label>
             {hasActiveFilters ? (
               <button
                 type="button"
@@ -439,7 +414,7 @@ export function ReelwiseStockReport() {
           <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {visibleTableColumns.map((heading) => (
+                {tableColumns.map((heading) => (
                   <th key={heading} className="bg-indigo-700 px-3 py-3 text-left text-xs font-black border-2 border-black whitespace-nowrap uppercase">
                     {heading}
                   </th>
@@ -449,7 +424,7 @@ export function ReelwiseStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleTableColumns.length} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                  <td colSpan={tableColumns.length} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No reel rows match the current filters.
                   </td>
                 </tr>
@@ -457,9 +432,6 @@ export function ReelwiseStockReport() {
                 rows.map((row, index) => (
                   <tr key={row.slipId} className="hover:bg-slate-50">
                     <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{index + 1}</td>
-                    {showMrrDate ? (
-                      <td className="px-3 py-3 text-black text-sm border-2 border-black whitespace-nowrap">{formatReportDate(row.mrrDate)}</td>
-                    ) : null}
                     <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{row.mrrNo}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black font-bold">{row.ourReelNo}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.erp}</td>
@@ -467,11 +439,11 @@ export function ReelwiseStockReport() {
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.gsm || ""}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.size || ""}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.bf || ""}</td>
+                    <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.mrrQty)}</td>
                     <td className="px-3 py-3 text-red-800 text-sm border-2 border-black bg-red-50/40 text-right">{formatQty(row.issuedWeight)}</td>
                     <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50 text-right">{formatQty(row.returnedWeight)}</td>
                     <td className="px-3 py-3 text-slate-900 text-sm font-bold border-2 border-black bg-slate-50 text-right">{formatQty(row.netIssuedWeight)}</td>
                     <td className="px-3 py-3 text-emerald-900 text-sm font-bold border-2 border-black bg-emerald-50 text-right">{formatQty(row.availableWeight)}</td>
-                    <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.mrrQty)}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black text-right">{formatQty(row.rate)}</td>
                     <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.valuation)}</td>
                     <td className="px-3 py-3 text-amber-900 text-sm border-2 border-black bg-amber-50 text-right">{row.ageDays}</td>

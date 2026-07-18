@@ -46,20 +46,7 @@ export function EfficiencyReport() {
   const [machineId, setMachineId] = useState("");
   const [operatorId, setOperatorId] = useState("");
   const [shift, setShift] = useState<"" | Shift>("");
-  const [dayShiftHoursInput, setDayShiftHoursInput] = useState("12");
-  const [nightShiftHoursInput, setNightShiftHoursInput] = useState("12");
-
-  const dayShiftHours = useMemo(() => {
-    const value = Number(dayShiftHoursInput);
-    return Number.isFinite(value) && value > 0 ? value : 12;
-  }, [dayShiftHoursInput]);
-
-  const nightShiftHours = useMemo(() => {
-    const value = Number(nightShiftHoursInput);
-    return Number.isFinite(value) && value > 0 ? value : 12;
-  }, [nightShiftHoursInput]);
-
-  const shiftHoursFor = (value: Shift) => (value === "Night" ? nightShiftHours : dayShiftHours);
+  const shiftHoursFor = (_value: Shift) => 12;
 
   const rows = useMemo<EfficiencyRow[]>(() => {
     const machineMap = new Map(machines.map((machine) => [machine.id, machine]));
@@ -175,10 +162,8 @@ export function EfficiencyReport() {
   }, [
     dateFrom,
     dateTo,
-    dayShiftHours,
     machineId,
     machines,
-    nightShiftHours,
     operatorId,
     processing,
     searchTerm,
@@ -207,8 +192,6 @@ export function EfficiencyReport() {
     setMachineId("");
     setOperatorId("");
     setShift("");
-    setDayShiftHoursInput("12");
-    setNightShiftHoursInput("12");
     setViewMode("machineDaily");
   };
 
@@ -264,8 +247,8 @@ export function EfficiencyReport() {
       </div>
 
       <div className="rounded border border-black bg-white p-3">
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(2,minmax(140px,0.8fr))_repeat(4,minmax(155px,1fr))_repeat(2,minmax(110px,0.7fr))_auto] xl:items-center">
-          <div className="relative w-full">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[260px] flex-[1_1_300px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               value={searchTerm}
@@ -278,40 +261,22 @@ export function EfficiencyReport() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            className="min-w-[140px] flex-[0_1_160px] rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
           />
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            className="min-w-[140px] flex-[0_1_160px] rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
           />
-          <Select value={viewMode} onChange={(value) => setViewMode(value as ViewMode)} options={viewModeOptions} placeholder="View" />
-          <Select value={shift} onChange={(value) => setShift(value as "" | Shift)} options={shiftOptions} placeholder="All Shift" />
-          <Select value={machineId} onChange={setMachineId} options={machineOptions} placeholder="All Machine" />
-          <Select value={operatorId} onChange={setOperatorId} options={operatorOptions} placeholder="All Operator" />
-          <input
-            type="number"
-            value={dayShiftHoursInput}
-            onChange={(e) => setDayShiftHoursInput(e.target.value)}
-            placeholder="Day hrs"
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-right text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-            min={0}
-            step={0.5}
-          />
-          <input
-            type="number"
-            value={nightShiftHoursInput}
-            onChange={(e) => setNightShiftHoursInput(e.target.value)}
-            placeholder="Night hrs"
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-right text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-            min={0}
-            step={0.5}
-          />
+          <div className="min-w-[210px] flex-[1_1_220px]"><Select value={viewMode} onChange={(value) => setViewMode(value as ViewMode)} options={viewModeOptions} placeholder="View" /></div>
+          <div className="min-w-[150px] flex-[1_1_160px]"><Select value={shift} onChange={(value) => setShift(value as "" | Shift)} options={shiftOptions} placeholder="All Shift" /></div>
+          <div className="min-w-[180px] flex-[1_1_200px]"><Select value={machineId} onChange={setMachineId} options={machineOptions} placeholder="All Machine" /></div>
+          <div className="min-w-[180px] flex-[1_1_200px]"><Select value={operatorId} onChange={setOperatorId} options={operatorOptions} placeholder="All Operator" /></div>
           <button
             type="button"
             onClick={handleClear}
-            className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+            className="min-w-[120px] rounded border border-black bg-white px-3 py-2.5 text-sm font-bold text-black hover:bg-slate-50"
           >
             Clear Filters
           </button>

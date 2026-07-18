@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib/utils";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useData } from "../hooks/useData";
 import {
   Company,
@@ -197,7 +197,6 @@ export function ProductionForm() {
     });
   }, [searchTerm]);
 
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [productions, setProductions] = useData<Production>("productions", []);
@@ -271,12 +270,6 @@ export function ProductionForm() {
   const selectedItem = npdItems.find((item) => item.id === String(selectedOrder?.itemId || "").trim());
   const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
   const selectedErp = String(selectedOrder?.erpCode || "").trim();
-  const selectedScheduleActualProducedQty = selectedSchedule
-    ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.actualProducedQty || 0)
-    : 0;
-  const selectedSchedulePlannedQty = selectedSchedule
-    ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.plannedQty || 0)
-    : 0;
   const selectedScheduleConsumedQty = selectedSchedule
     ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.effectiveConsumedQty || 0)
     : 0;
@@ -829,12 +822,6 @@ export function ProductionForm() {
               <InfoTile label="Item" value={selectedItem?.name || "-"} />
               <InfoTile label="Type" value={String((selectedItem as any)?.boxType || "-")} />
               <InfoTile label="ERP Code" value={selectedOrder.erpCode || "-"} />
-              <InfoTile label="Schedule Date" value={formatDate(selectedSchedule.scheduledDate)} />
-              <InfoTile label="Scheduled Qty" value={`${selectedSchedule.qty || 0} ${selectedItem?.uom || ""}`} />
-              <InfoTile label="Planned Qty" value={`${selectedSchedulePlannedQty} ${selectedItem?.uom || ""}`} />
-              <InfoTile label="Actual FFG" value={`${selectedScheduleActualProducedQty} ${selectedItem?.uom || ""}`} />
-              <InfoTile label="Cancelled Qty" value={`${selectedSchedule.canceledQty || 0} ${selectedItem?.uom || ""}`} />
-              <InfoTile label="Pending Qty" value={`${pendingQty} ${selectedItem?.uom || ""}`} />
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -1107,68 +1094,11 @@ export function ProductionForm() {
         </form>
       </div>
 
-      <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
-        <h3 className="bg-slate-100 p-4 font-bold text-black border-b border-black uppercase tracking-wider">Recent Productions</h3>
-        <table className="min-w-full divide-y divide-black border-collapse border border-black">
-          <thead className="sticky top-0 z-30 bg-slate-50 divide-x divide-black">
-            <tr className="divide-x divide-black">
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Job No.</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Order No</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Item</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Qty</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">UOM</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-black bg-white">
-            {productions.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-black font-medium">No recent production entries.</td>
-              </tr>
-            ) : (
-              productions
-                .filter((production) => (production.itemSource || "FG") === "FG")
-                .sort((a, b) => {
-                  const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
-                  const timeB = b.updateTimestamp ? new Date(b.updateTimestamp).getTime() : 0;
-                  return timeB - timeA;
-                })
-                .slice(0, 10)
-                .map((production) => {
-                  const schedule = schedules.find((row) => row.id === production.scheduleId);
-                  const order = orders.find((row) => row.id === schedule?.orderId);
-                  const item = npdItems.find((row) => row.id === String(production.itemId || "").trim());
-
-                  return (
-                    <tr key={production.id} className="hover:bg-slate-50 divide-x divide-black">
-                      <td className="px-6 py-4 text-sm font-medium text-black border border-black">{production.transactionNo}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(production.date)}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{order?.orderNo || "-"}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{item?.name || "Unknown"}</td>
-                      <td className="px-6 py-4 text-right text-sm font-medium text-indigo-700 border border-black">{production.qty}</td>
-                      <td className="px-6 py-4 text-sm text-black border border-black">{production.uom}</td>
-                    </tr>
-                  );
-                })
-            )}
-          </tbody>
-        </table>
-      </div>
-
       {pendingSchedules.length === 0 && (
         <div className="bg-amber-50 border border-black p-4 font-bold text-amber-900">
           No scheduled orders are pending production right now.
         </div>
       )}
-      <div className="pt-2">
-        <button
-          type="button"
-          onClick={() => navigate("/production/pending")}
-          className="bg-white text-black border-2 border-black px-4 py-2 rounded font-bold hover:bg-slate-50 transition"
-        >
-          Open Pending Production View
-        </button>
-      </div>
     </div>
   );
 }

@@ -112,6 +112,7 @@ import { SettingsPage } from "./pages/Settings";
 import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
 import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
 import { JobwiseReelConsumptionReport } from "./pages/JobwiseReelConsumptionReport";
+import { JobsInProgressReport } from "./pages/JobsInProgressReport";
 import { EfficiencyReport } from "./pages/EfficiencyReport";
 import { HitVsMissReport } from "./pages/HitVsMissReport";
 import { RealizationReport } from "./pages/RealizationReport";
@@ -289,6 +290,7 @@ export default function App() {
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
           <Route path="reports/reelwise-stock" element={<ReelwiseStockReport />} />
           <Route path="reports/jobwise-reel-consumption" element={<JobwiseReelConsumptionReport />} />
+          <Route path="reports/jobs-in-progress" element={<JobsInProgressReport />} />
           <Route path="reports/efficiency" element={<EfficiencyReport />} />
           <Route path="reports/hit-vs-miss" element={<HitVsMissReport />} />
           <Route path="reports/realization" element={<RealizationReport />} />

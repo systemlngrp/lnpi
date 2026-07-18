@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
-import { Truck } from "../types";
+import { LoadingSlip, Truck } from "../types";
 import { Spinner } from "../components/Spinner";
 
 
@@ -11,6 +11,7 @@ export function Trucks() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [trucks, setTrucks, isLoading] = useData<Truck>("trucks", []);
+  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -77,10 +78,25 @@ export function Trucks() {
         return timeB - timeA || a.truckNo.localeCompare(b.truckNo);
       });
   }, [searchTerm, trucks]);
+
+  const loadingCountByTruckId = useMemo(() => {
+    const counts = new Map<string, number>();
+    loadingSlips.forEach((slip) => {
+      const truckId = String(slip.truckId || "").trim();
+      if (!truckId) return;
+      counts.set(truckId, (counts.get(truckId) || 0) + 1);
+    });
+    return counts;
+  }, [loadingSlips]);
+
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     setDeleteError("");
+    if ((loadingCountByTruckId.get(id) || 0) > 0) {
+      setDeleteError("Truck cannot be deleted because loading has been done against it.");
+      return;
+    }
     if (deletingId !== id) {
       setDeletingId(id);
       setTimeout(() => setDeletingId(null), 3000);
@@ -207,13 +223,16 @@ export function Trucks() {
       <div className="bg-white rounded-lg shadow-sm border border-black table-sticky-scroll">
         {/* Mobile View - Cards */}
         <div className="block md:hidden space-y-4">
-            {filteredTrucks.map((truck, index) => (
+            {filteredTrucks.map((truck) => {
+              const loadingCount = loadingCountByTruckId.get(truck.id) || 0;
+              return (
                 <div key={truck.id} className="bg-white border-2 border-black p-4 space-y-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                     <div className="flex justify-between items-start">
                         <div className="space-y-1">
                             <div className="text-sm font-bold text-indigo-600">{truck.truckNo}</div>
                             <div className="text-sm font-bold">{truck.driverName.toUpperCase()}</div>
                             <div className="text-xs text-slate-600">{truck.mobileNo || "-"}</div>
+                            <div className="text-xs font-bold text-black">Loadings: {loadingCount}</div>
                         </div>
                         <div className="flex items-center gap-2">
                              <button
@@ -223,16 +242,19 @@ export function Trucks() {
                             >
                                 <Edit size={16} />
                             </button>
-                            <button
-                                onClick={() => handleDelete(truck.id)}
-                                className={`${deletingId === truck.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold flex items-center`}
-                            >
-                                <Trash2 size={16} />
-                            </button>
+                            {loadingCount === 0 ? (
+                                <button
+                                    onClick={() => handleDelete(truck.id)}
+                                    className={`${deletingId === truck.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold flex items-center`}
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            ) : null}
                         </div>
                     </div>
                 </div>
-            ))}
+              );
+            })}
         </div>
 
         <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
@@ -242,23 +264,27 @@ export function Trucks() {
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Truck No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Driver Name</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Mobile No.</th>
+              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Loadings</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-black bg-white">
             {filteredTrucks.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                <td colSpan={6} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                   {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No trucks found. Click "Add New Truck" to create one.'}
                 </td>
               </tr>
             ) : (
-              filteredTrucks.map((truck, index) => (
+              filteredTrucks.map((truck, index) => {
+                const loadingCount = loadingCountByTruckId.get(truck.id) || 0;
+                return (
                 <tr key={truck.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{index + 1}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{truck.truckNo}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.driverName.toUpperCase()}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.mobileNo || "-"}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-black border border-black">{loadingCount}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium border border-black">
                     <button
                       title="Edit"
@@ -269,17 +295,20 @@ export function Trucks() {
                     >
                       <Edit size={16} />
                     </button>
-                    <button
-                      title={deletingId === truck.id ? "Confirm delete" : "Delete"}
-                      aria-label={deletingId === truck.id ? "Confirm delete" : "Delete"}
-                      onClick={() => handleDelete(truck.id)}
-                      className={`${deletingId === truck.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 inline-flex items-center justify-end`}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {loadingCount === 0 ? (
+                      <button
+                        title={deletingId === truck.id ? "Confirm delete" : "Delete"}
+                        aria-label={deletingId === truck.id ? "Confirm delete" : "Delete"}
+                        onClick={() => handleDelete(truck.id)}
+                        className={`${deletingId === truck.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 inline-flex items-center justify-end`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

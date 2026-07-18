@@ -144,10 +144,14 @@ export function ErpWiseReelStockReport() {
           availableWeight: acc.availableWeight + row.availableWeight,
           valuation: acc.valuation + row.valuation,
           noOfReels: acc.noOfReels + row.noOfReels,
-          totalStock: acc.totalStock + row.openingStock + row.receipts + row.returned,
         }),
-        { openingStock: 0, receipts: 0, issued: 0, returned: 0, netIssued: 0, availableWeight: 0, valuation: 0, noOfReels: 0, totalStock: 0 }
+        { openingStock: 0, receipts: 0, issued: 0, returned: 0, netIssued: 0, availableWeight: 0, valuation: 0, noOfReels: 0 }
       ),
+    [rows]
+  );
+
+  const totalErps = useMemo(
+    () => new Set(rows.map((row) => row.erp).filter(Boolean)).size,
     [rows]
   );
 
@@ -169,18 +173,14 @@ export function ErpWiseReelStockReport() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded border border-blue-300 bg-blue-50 p-4">
-          <div className="text-xs font-black uppercase text-blue-700">Total Stock</div>
-          <div className="mt-1 text-2xl font-black text-blue-900">{formatQty(totals.totalStock)}</div>
-        </div>
+      <div className="grid gap-3 md:grid-cols-3">
         <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
           <div className="text-xs font-black uppercase text-emerald-700">Total Available Stock</div>
           <div className="mt-1 text-2xl font-black text-emerald-900">{formatQty(totals.availableWeight)}</div>
         </div>
         <div className="rounded border border-amber-300 bg-amber-50 p-4">
-          <div className="text-xs font-black uppercase text-amber-700">Total Reels</div>
-          <div className="mt-1 text-2xl font-black text-amber-900">{totals.noOfReels}</div>
+          <div className="text-xs font-black uppercase text-amber-700">Total ERPs</div>
+          <div className="mt-1 text-2xl font-black text-amber-900">{totalErps}</div>
         </div>
         <div className="rounded border border-purple-300 bg-purple-50 p-4">
           <div className="text-xs font-black uppercase text-purple-700">Total Valuation</div>
