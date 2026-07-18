@@ -21,6 +21,8 @@ export function Trucks() {
   const [truckNo, setTruckNo] = useState("");
   const [driverName, setDriverName] = useState("");
   const [mobileNo, setMobileNo] = useState("");
+  const [driverLoginId, setDriverLoginId] = useState("");
+  const [driverPassword, setDriverPassword] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +45,8 @@ export function Trucks() {
         truckNo: truckNo.trim().toUpperCase(), 
         driverName: driverName.trim().toUpperCase(), 
         mobileNo: mobileNo.trim(), 
+        driverLoginId: driverLoginId.trim(),
+        driverPassword: driverPassword.trim(),
         ...audit 
       };
 
@@ -61,6 +65,8 @@ export function Trucks() {
     setTruckNo("");
     setDriverName("");
     setMobileNo("");
+    setDriverLoginId("");
+    setDriverPassword("");
     setEditingId(null);
     setIsFormOpen(false);
   };
@@ -70,7 +76,7 @@ export function Trucks() {
     return [...trucks]
       .filter((truck) => {
         if (!needle) return true;
-        return [truck.truckNo, truck.driverName, truck.mobileNo].filter(Boolean).join(" ").toLowerCase().includes(needle);
+        return [truck.truckNo, truck.driverName, truck.mobileNo, truck.driverLoginId].filter(Boolean).join(" ").toLowerCase().includes(needle);
       })
       .sort((a, b) => {
         const timeA = a.updateTimestamp ? new Date(a.updateTimestamp).getTime() : 0;
@@ -115,6 +121,8 @@ export function Trucks() {
     setTruckNo(truck.truckNo);
     setDriverName(truck.driverName);
     setMobileNo(truck.mobileNo);
+    setDriverLoginId(truck.driverLoginId || "");
+    setDriverPassword(truck.driverPassword || "");
     setEditingId(truck.id);
     setIsFormOpen(true);
   };
@@ -169,7 +177,7 @@ export function Trucks() {
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
               />
             </div>
-            <div className="flex flex-col space-y-1 md:col-span-2">
+            <div className="flex flex-col space-y-1">
               <label htmlFor="mobileNo" className="font-bold text-black text-sm uppercase">
                 Mobile No.
               </label>
@@ -181,6 +189,32 @@ export function Trucks() {
                 value={mobileNo}
                 onChange={(e) => setMobileNo(e.target.value.replace(/\D/g, ""))}
                 placeholder="e.g. 9876543210"
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
+              />
+            </div>
+            <div className="flex flex-col space-y-1">
+              <label htmlFor="driverLoginId" className="font-bold text-black text-sm uppercase">
+                Driver Login ID
+              </label>
+              <input
+                id="driverLoginId"
+                type="text"
+                value={driverLoginId}
+                onChange={(e) => setDriverLoginId(e.target.value)}
+                placeholder="e.g. AS01QC0663"
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
+              />
+            </div>
+            <div className="flex flex-col space-y-1 md:col-span-2">
+              <label htmlFor="driverPassword" className="font-bold text-black text-sm uppercase">
+                Driver Password
+              </label>
+              <input
+                id="driverPassword"
+                type="password"
+                value={driverPassword}
+                onChange={(e) => setDriverPassword(e.target.value)}
+                placeholder="Set truck driver password"
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors"
               />
             </div>
@@ -232,6 +266,8 @@ export function Trucks() {
                             <div className="text-sm font-bold text-indigo-600">{truck.truckNo}</div>
                             <div className="text-sm font-bold">{truck.driverName.toUpperCase()}</div>
                             <div className="text-xs text-slate-600">{truck.mobileNo || "-"}</div>
+                            <div className="text-xs text-slate-600">Login: {truck.driverLoginId || "-"}</div>
+                            <div className="text-xs font-bold text-black">Credentials: {truck.driverLoginId && truck.driverPassword ? "SET" : "NOT SET"}</div>
                             <div className="text-xs font-bold text-black">Loadings: {loadingCount}</div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -264,6 +300,8 @@ export function Trucks() {
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Truck No</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Driver Name</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Mobile No.</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Driver Login</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Credentials</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Loadings</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
             </tr>
@@ -271,7 +309,7 @@ export function Trucks() {
           <tbody className="divide-y divide-black bg-white">
             {filteredTrucks.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                <td colSpan={8} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                   {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No trucks found. Click "Add New Truck" to create one.'}
                 </td>
               </tr>
@@ -284,6 +322,10 @@ export function Trucks() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-black border border-black">{truck.truckNo}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.driverName.toUpperCase()}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.mobileNo || "-"}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black border border-black">{truck.driverLoginId || "-"}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-xs font-bold border border-black">
+                    {truck.driverLoginId && truck.driverPassword ? <span className="text-emerald-700">SET</span> : <span className="text-slate-500">NOT SET</span>}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-black border border-black">{loadingCount}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium border border-black">
                     <button

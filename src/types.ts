@@ -708,11 +708,18 @@ export interface SampleRequest {
   updateTimestamp?: string;
 }
 
+export type TruckLiveStatus = "EMPTY" | "LOADING" | "IN-TRANSIT" | "REPORTED TO PARTY" | "UNLOADING" | "RETURNING" | "BILL PENDING" | "NOT UNLOADED" | "REJECTED";
+
 export interface Truck {
   id: string;
   truckNo: string;
   driverName: string;
   mobileNo: string;
+  driverLoginId?: string;
+  driverPassword?: string;
+  liveStatus?: TruckLiveStatus | string;
+  statusUpdatedAt?: string;
+  statusUpdatedBy?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

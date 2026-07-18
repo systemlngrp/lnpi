@@ -52,9 +52,10 @@ type AuthUser = {
   userId: string;
   name: string;
   email?: string | null;
-  role: "Admin" | "Employee" | "Operator";
+  role: "Admin" | "Employee" | "Operator" | "TruckDriver";
   status: "Active" | "Inactive";
   menuAccess: string[];
+  truckId?: string | null;
 };
 
 const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";
@@ -480,6 +481,23 @@ const AUDIT_COLUMN_DEFINITIONS: Array<{ column: string; type: string }> = [
 
 const DEFAULT_SYSTEM_AUDIT_USER = "System User";
 
+const TRUCK_LIVE_STATUSES = [
+  "EMPTY",
+  "LOADING",
+  "IN-TRANSIT",
+  "REPORTED TO PARTY",
+  "UNLOADING",
+  "RETURNING",
+  "BILL PENDING",
+  "NOT UNLOADED",
+  "REJECTED",
+] as const;
+
+function normalizeTruckLiveStatus(raw: unknown) {
+  const status = String(raw || "").trim().toUpperCase();
+  return TRUCK_LIVE_STATUSES.includes(status as any) ? status : "";
+}
+
 function base64UrlEncode(input: Buffer | string) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
   return buf
@@ -563,12 +581,14 @@ function normalizeUserRole(raw: unknown): AuthUser["role"] {
   const role = String(raw || "Employee").trim();
   if (role === "Admin") return "Admin";
   if (role === "Operator") return "Operator";
+  if (role === "TruckDriver") return "TruckDriver";
   return "Employee";
 }
 
 function hasPermission(user: AuthUser, required: string) {
   if (user.role === "Admin") return true;
   if (user.status !== "Active") return false;
+  if (user.role === "TruckDriver") return required === "/truck/status-update";
   if (user.role === "Operator") return true;
   const list = user.menuAccess || [];
   if (list.includes("*")) return true;
@@ -612,7 +632,43 @@ app.post("/api/auth/login", async (req, res) => {
       [identifier, identifier]
     );
     const row = (rows as any[])[0];
-    if (!row) return res.status(401).json({ error: "Invalid credentials" });
+    if (!row) {
+      const [truckRows] = await db.query(
+        "SELECT * FROM `trucks` WHERE driverLoginId = ? LIMIT 1",
+        [identifier]
+      );
+      const truck = (truckRows as any[])[0];
+      const storedTruckPassword = String(truck?.driverPassword || "");
+      if (!truck || !storedTruckPassword || storedTruckPassword !== password) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      const driverUser: AuthUser = {
+        id: `truck:${String(truck.id)}`,
+        userId: String(truck.driverLoginId || truck.truckNo || ""),
+        name: String(truck.driverName || truck.truckNo || "Truck Driver"),
+        email: null,
+        role: "TruckDriver",
+        status: "Active",
+        menuAccess: ["/truck/status-update"],
+        truckId: String(truck.id),
+      };
+
+      const token = signToken({ uid: driverUser.id });
+      return res.json({
+        token,
+        user: {
+          id: driverUser.id,
+          userId: driverUser.userId,
+          name: driverUser.name,
+          email: driverUser.email,
+          role: driverUser.role,
+          status: driverUser.status,
+          menuAccess: driverUser.menuAccess,
+          truckId: driverUser.truckId,
+        },
+      });
+    }
 
     const status = String(row.status || "Active") === "Inactive" ? "Inactive" : "Active";
     if (status !== "Active") return res.status(403).json({ error: "User is inactive" });
@@ -643,6 +699,7 @@ app.post("/api/auth/login", async (req, res) => {
         role: user.role,
         status: user.status,
         menuAccess: user.menuAccess,
+        truckId: user.truckId,
       },
     });
   } catch (error) {
@@ -662,6 +719,7 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
     role: user.role,
     status: user.status,
     menuAccess: user.menuAccess,
+    truckId: user.truckId,
   });
 });
 
@@ -2446,6 +2504,22 @@ async function getPool() {
 async function loadAuthUserById(userId: string): Promise<AuthUser | null> {
   const db = await getPool();
   if (!db) return null;
+  if (userId.startsWith("truck:")) {
+    const truckId = userId.slice("truck:".length);
+    const [truckRows] = await db.query("SELECT * FROM `trucks` WHERE id = ? LIMIT 1", [truckId]);
+    const truck = (truckRows as any[])[0];
+    if (!truck) return null;
+    return {
+      id: `truck:${String(truck.id)}`,
+      userId: String(truck.driverLoginId || truck.truckNo || ""),
+      name: String(truck.driverName || truck.truckNo || "Truck Driver"),
+      email: null,
+      role: "TruckDriver",
+      status: "Active",
+      menuAccess: ["/truck/status-update"],
+      truckId: String(truck.id),
+    };
+  }
   const [rows] = await db.query("SELECT * FROM `users` WHERE id = ? LIMIT 1", [userId]);
   const rawRow = (rows as any[])[0];
   if (!rawRow) return null;
@@ -2459,6 +2533,7 @@ async function loadAuthUserById(userId: string): Promise<AuthUser | null> {
     role: normalizeUserRole(row.role),
     status: String(row.status || "Active") === "Inactive" ? "Inactive" : "Active",
     menuAccess: normalizeMenuAccess(row.menuAccess),
+    truckId: null,
   };
 }
 
@@ -4596,6 +4671,11 @@ await db.query(`
         { table: "trucks", column: "truckNo", type: "VARCHAR(50) NOT NULL" },
         { table: "trucks", column: "driverName", type: "VARCHAR(255)" },
         { table: "trucks", column: "mobileNo", type: "VARCHAR(20)" },
+        { table: "trucks", column: "driverLoginId", type: "VARCHAR(100)" },
+        { table: "trucks", column: "driverPassword", type: "VARCHAR(255)" },
+        { table: "trucks", column: "liveStatus", type: "VARCHAR(50)" },
+        { table: "trucks", column: "statusUpdatedAt", type: "VARCHAR(255)" },
+        { table: "trucks", column: "statusUpdatedBy", type: "VARCHAR(255)" },
         { table: "trucks", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "trucks", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "php_job_master", column: "itemSource", type: "VARCHAR(20) NOT NULL DEFAULT 'FG'" },
@@ -6112,6 +6192,53 @@ async function fetchTallyInvoiceContext(db: mysql.Pool, invoiceId: string) {
   };
 }
 
+app.get("/api/truck-driver/status", async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user || user.role !== "TruckDriver" || !user.truckId) return res.status(403).json({ error: "Forbidden" });
+
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const [rows] = await db.query(
+      "SELECT id, truckNo, driverName, mobileNo, liveStatus, statusUpdatedAt, statusUpdatedBy FROM `trucks` WHERE id = ? LIMIT 1",
+      [user.truckId]
+    );
+    const truck = (rows as any[])[0];
+    if (!truck) return res.status(404).json({ error: "Truck not found" });
+    return res.json({ truck });
+  } catch (error) {
+    console.error("[TRUCK_DRIVER] status fetch failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/truck-driver/status", async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user || user.role !== "TruckDriver" || !user.truckId) return res.status(403).json({ error: "Forbidden" });
+
+  const liveStatus = normalizeTruckLiveStatus(req.body?.liveStatus);
+  if (!liveStatus) return res.status(400).json({ error: "Invalid truck status" });
+
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const now = new Date().toISOString();
+    await db.query(
+      "UPDATE `trucks` SET `liveStatus` = ?, `statusUpdatedAt` = ?, `statusUpdatedBy` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+      [liveStatus, now, user.userId || user.name || "Truck Driver", user.userId || user.name || "Truck Driver", now, user.truckId]
+    );
+    const [rows] = await db.query(
+      "SELECT id, truckNo, driverName, mobileNo, liveStatus, statusUpdatedAt, statusUpdatedBy FROM `trucks` WHERE id = ? LIMIT 1",
+      [user.truckId]
+    );
+    return res.json({ truck: (rows as any[])[0] });
+  } catch (error) {
+    console.error("[TRUCK_DRIVER] status update failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
 // Routes
 const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "audit_dashboard_snapshots"];
 
@@ -7100,6 +7227,7 @@ entities.forEach(entity => {
     try {
       const user = await getRequestUser(req);
       if (!user) return res.status(401).json({ error: "Unauthorized" });
+      if (user.role === "TruckDriver") return res.status(403).json({ error: "Forbidden" });
 
       if (entity === "users") {
         if (req.method === "GET") return next();

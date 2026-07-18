@@ -118,6 +118,8 @@ import { HitVsMissReport } from "./pages/HitVsMissReport";
 import { RealizationReport } from "./pages/RealizationReport";
 import { PaperRequirementReport } from "./pages/PaperRequirementReport";
 import { ConversionCostReport } from "./pages/ConversionCostReport";
+import { TruckStatusReport } from "./pages/TruckStatusReport";
+import { TruckStatusUpdate } from "./pages/TruckStatusUpdate";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -130,6 +132,9 @@ function BlankPage({ title }: { title: string }) {
 
 function HomeRedirect() {
   const { user } = useAuth();
+  if (user?.role === "TruckDriver") {
+    return <Navigate to="/truck/status-update" replace />;
+  }
   if (user?.role === "Operator") {
     return <Navigate to="/production/pending-machine-processing" replace />;
   }
@@ -152,6 +157,7 @@ export default function App() {
         >
           <Route index element={<HomeRedirect />} />
           <Route path="plant-head" element={<PlantHeadUnified />} />
+          <Route path="truck/status-update" element={<TruckStatusUpdate />} />
           
           {/* Masters */}
           <Route path="masters/item-groups" element={<ItemGroups />} />
@@ -296,6 +302,7 @@ export default function App() {
           <Route path="reports/realization" element={<RealizationReport />} />
           <Route path="reports/paper-requirement" element={<PaperRequirementReport />} />
           <Route path="reports/conversion-cost" element={<ConversionCostReport />} />
+          <Route path="reports/truck-status" element={<TruckStatusReport />} />
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />

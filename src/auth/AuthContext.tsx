@@ -5,9 +5,10 @@ export type AuthUser = {
   userId: string;
   name: string;
   email?: string | null;
-  role: "Admin" | "Employee" | "Operator";
+  role: "Admin" | "Employee" | "Operator" | "TruckDriver";
   status: "Active" | "Inactive";
   menuAccess: string[];
+  truckId?: string | null;
 };
 
 type AuthContextValue = {
@@ -19,6 +20,7 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const TRUCK_DRIVER_ALLOWED_PATHS = ["/truck/status-update"];
 const OPERATOR_ALLOWED_PATHS = [
   "/production-processing/master",
   "/production-processing/form",
@@ -57,11 +59,13 @@ function normalizeRole(raw: unknown): AuthUser["role"] {
   const role = String(raw || "Employee").trim();
   if (role === "Admin") return "Admin";
   if (role === "Operator") return "Operator";
+  if (role === "TruckDriver") return "TruckDriver";
   return "Employee";
 }
 
 function getEffectiveMenuAccess(user: AuthUser | null) {
   if (!user) return [];
+  if (user.role === "TruckDriver") return TRUCK_DRIVER_ALLOWED_PATHS;
   if (user.role === "Operator") return OPERATOR_ALLOWED_PATHS;
   return normalizeMenuAccess(user.menuAccess);
 }
@@ -71,6 +75,7 @@ function isAllowed(user: AuthUser | null, href: string) {
   if (href === "/") return true;
   if (user.role === "Admin") return true;
   if (user.status !== "Active") return false;
+  if (user.role === "TruckDriver") return href === "/" || TRUCK_DRIVER_ALLOWED_PATHS.includes(href);
   const list = getEffectiveMenuAccess(user);
   if (list.includes("*")) return true;
   if (!href) return false;

@@ -298,6 +298,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
       { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
       { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
+      { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
     ],
   },
   {
@@ -465,6 +466,15 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   );
 
   const navigation = useMemo<NavGroup[]>(() => {
+    if (user?.role === "TruckDriver") {
+      return [
+        {
+          section: "Truck",
+          color: "bg-blue-700",
+          items: [{ name: "Truck Status Update", href: "/truck/status-update", icon: Truck }],
+        },
+      ];
+    }
     if (user?.role !== "Operator") return NAVIGATION_WITH_SORTED_MASTERS;
     return [
       {
