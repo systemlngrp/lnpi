@@ -9,7 +9,6 @@ import {
   MaterialIssueReelLine,
   MaterialReturnReelLine,
 } from "../types";
-import { getAvailableReelPackingSlips } from "../lib/materialMovement";
 
 type ReelStockRow = {
   materialId: string;
@@ -57,11 +56,20 @@ export function ErpWiseReelStockReport() {
       const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
       return timeB - timeA;
     });
+    const latestRateByMaterial = new Map<string, number>();
+    latestMaterialIn.forEach((entry) => {
+      entry.lines.forEach((line) => {
+        if (!latestRateByMaterial.has(line.itemId)) {
+          latestRateByMaterial.set(line.itemId, Number(line.invoiceRate ?? line.rate ?? 0));
+        }
+      });
+    });
 
     return materials
       .filter((material) => material.type === "Reel")
       .map((material) => {
         const openingStock = Number(material.openingQty || 0);
+        const openingRate = Number(material.openingRate || 0);
         const issued = issueReelLines
           .filter((line) => line.materialId === material.id)
           .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
@@ -74,20 +82,29 @@ export function ErpWiseReelStockReport() {
           return sum + Number(line.actualQty ?? line.qty ?? 0);
         }, 0);
         const netIssued = Number((issued - returned).toFixed(2));
-        const availableReels = getAvailableReelPackingSlips(material.id, packingSlips, issueReelLines, returnReelLines);
-        const availableReelWeight = availableReels.reduce((sum, slip) => sum + Number(slip.weightKg || 0), 0);
+        const reelRows = packingSlips
+          .filter((slip) => slip.materialId === material.id)
+          .map((slip) => {
+            const relatedIssueLines = issueReelLines.filter((line) => line.packingSlipId === slip.id);
+            const relatedReturnLines = returnReelLines.filter((line) => line.packingSlipId === slip.id);
+            const issuedWeight = relatedIssueLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
+            const returnedWeight = relatedReturnLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
+            const mrrQty = Number(Number(slip.weightKg || 0).toFixed(2));
+            const availableWeight = Number(Math.max(0, mrrQty + returnedWeight - issuedWeight).toFixed(2));
+            const rate = Number(latestRateByMaterial.get(slip.materialId) ?? material.openingRate ?? 0);
+            return {
+              availableWeight,
+              valuation: availableWeight > 0 ? Number((availableWeight * rate).toFixed(2)) : 0,
+            };
+          });
+        const availableReelWeight = reelRows.reduce((sum, row) => sum + row.availableWeight, 0);
         const availableWeight = Number((openingStock + availableReelWeight).toFixed(2));
-        const latestRate =
-          latestMaterialIn
-            .map((entry) => entry.lines.find((row) => row.itemId === material.id))
-            .find(Boolean)?.invoiceRate ??
-          latestMaterialIn
-            .map((entry) => entry.lines.find((row) => row.itemId === material.id))
-            .find(Boolean)?.rate ??
-          Number(material.openingRate || 0);
-        const availableReelCount = availableReels.length;
-        const correctedRate = availableReelCount > 0 ? Number(Number(latestRate || 0).toFixed(2)) : 0;
-        const correctedValuation = availableReelCount > 0 ? Number((availableWeight * Number(latestRate || 0)).toFixed(2)) : 0;
+        const correctedValuation = Number((
+          Number((openingStock * openingRate).toFixed(2)) +
+          reelRows.reduce((sum, row) => sum + row.valuation, 0)
+        ).toFixed(2));
+        const availableReelCount = reelRows.filter((row) => row.availableWeight > 0).length + (openingStock > 0 ? 1 : 0);
+        const correctedRate = availableWeight > 0 ? Number((correctedValuation / availableWeight).toFixed(2)) : 0;
 
         return {
           materialId: material.id,
