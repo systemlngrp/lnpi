@@ -9,6 +9,7 @@ import {
   MaterialIssueReelLine,
   MaterialReturnReelLine,
 } from "../types";
+import { buildReelStockRows } from "../lib/reelStock";
 
 type ReelStockRow = {
   materialId: string;
@@ -51,60 +52,35 @@ export function ErpWiseReelStockReport() {
   const [bfFilter, setBfFilter] = useState("");
 
   const allRows = useMemo<ReelStockRow[]>(() => {
-    const latestMaterialIn = [...materialIn].sort((a, b) => {
-      const timeA = new Date(a.updateTimestamp || a.timestamp || a.date || 0).getTime();
-      const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
-      return timeB - timeA;
-    });
-    const latestRateByMaterial = new Map<string, number>();
-    latestMaterialIn.forEach((entry) => {
-      entry.lines.forEach((line) => {
-        if (!latestRateByMaterial.has(line.itemId)) {
-          latestRateByMaterial.set(line.itemId, Number(line.invoiceRate ?? line.rate ?? 0));
-        }
-      });
+    const reelRows = buildReelStockRows({
+      materials,
+      materialIn,
+      packingSlips,
+      issueReelLines,
+      returnReelLines,
     });
 
     return materials
       .filter((material) => material.type === "Reel")
       .map((material) => {
         const openingStock = Number(material.openingQty || 0);
-        const openingRate = Number(material.openingRate || 0);
         const issued = issueReelLines
           .filter((line) => line.materialId === material.id)
           .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
         const returned = returnReelLines
           .filter((line) => line.materialId === material.id)
           .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-        const received = latestMaterialIn.reduce((sum, entry) => {
+        const received = materialIn.reduce((sum, entry) => {
           const line = entry.lines.find((row) => row.itemId === material.id);
           if (!line) return sum;
           return sum + Number(line.actualQty ?? line.qty ?? 0);
         }, 0);
         const netIssued = Number((issued - returned).toFixed(2));
-        const reelRows = packingSlips
-          .filter((slip) => slip.materialId === material.id)
-          .map((slip) => {
-            const relatedIssueLines = issueReelLines.filter((line) => line.packingSlipId === slip.id);
-            const relatedReturnLines = returnReelLines.filter((line) => line.packingSlipId === slip.id);
-            const issuedWeight = relatedIssueLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-            const returnedWeight = relatedReturnLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-            const mrrQty = Number(Number(slip.weightKg || 0).toFixed(2));
-            const availableWeight = Number(Math.max(0, mrrQty + returnedWeight - issuedWeight).toFixed(2));
-            const rate = Number(latestRateByMaterial.get(slip.materialId) ?? material.openingRate ?? 0);
-            return {
-              availableWeight,
-              valuation: availableWeight > 0 ? Number((availableWeight * rate).toFixed(2)) : 0,
-            };
-          });
-        const availableReelWeight = reelRows.reduce((sum, row) => sum + row.availableWeight, 0);
-        const availableWeight = Number((openingStock + availableReelWeight).toFixed(2));
-        const correctedValuation = Number((
-          Number((openingStock * openingRate).toFixed(2)) +
-          reelRows.reduce((sum, row) => sum + row.valuation, 0)
-        ).toFixed(2));
-        const availableReelCount = reelRows.filter((row) => row.availableWeight > 0).length + (openingStock > 0 ? 1 : 0);
-        const correctedRate = availableWeight > 0 ? Number((correctedValuation / availableWeight).toFixed(2)) : 0;
+        const materialReelRows = reelRows.filter((row) => row.materialId === material.id);
+        const availableWeight = Number(materialReelRows.reduce((sum, row) => sum + row.availableWeight, 0).toFixed(2));
+        const valuation = Number(materialReelRows.reduce((sum, row) => sum + row.valuation, 0).toFixed(2));
+        const noOfReels = materialReelRows.filter((row) => row.availableWeight > 0).length;
+        const rate = availableWeight > 0 ? Number((valuation / availableWeight).toFixed(2)) : 0;
 
         return {
           materialId: material.id,
@@ -119,9 +95,9 @@ export function ErpWiseReelStockReport() {
           returned: Number(returned.toFixed(2)),
           netIssued,
           availableWeight,
-          rate: correctedRate,
-          valuation: correctedValuation,
-          noOfReels: availableReelCount,
+          rate,
+          valuation,
+          noOfReels,
         };
       })
       .sort((a, b) => a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf);

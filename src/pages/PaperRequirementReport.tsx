@@ -10,6 +10,7 @@ import {
   IndentLine,
   Material,
   MaterialIn,
+  MaterialInPackingSlip,
   MaterialIssue,
   MaterialIssueReelLine,
   MaterialReturn,
@@ -22,6 +23,7 @@ import {
 import { formatDate } from "../lib/serial";
 import { getEffectiveRapcRanges } from "../lib/rapcRanges";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { buildReelStockRows } from "../lib/reelStock";
 
 type GroupTypeFilter = "All" | "Top" | "A-Flute" | "A-Backing" | "B-Flute" | "B-Backing";
 type NetFilter = "All" | "Need To Order" | "Surplus";
@@ -104,6 +106,7 @@ export function PaperRequirementReport() {
   const npdItems = useNpdItems();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [issueEntries] = useData<MaterialIssue>("material-issues", []);
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [returnEntries] = useData<MaterialReturn>("material-returns", []);
@@ -191,40 +194,33 @@ export function PaperRequirementReport() {
       });
 
     const stockByKey = new Map<string, number>();
-    materials
-      .filter((material) => material.type === "Reel")
-      .forEach((material) => {
+    buildReelStockRows({
+      materials,
+      materialIn,
+      packingSlips,
+      issueReelLines,
+      returnReelLines,
+      includeMaterialIn: (entry) => {
+        const entryDate = parseAppDate(entry.date || entry.timestamp);
+        return Boolean(entryDate && normalizeDate(entryDate).getTime() <= filteredTimestamp);
+      },
+      includeIssueLine: (line) => {
+        const issueDate = parseAppDate(issueMap.get(line.materialIssueId)?.date);
+        return Boolean(issueDate && normalizeDate(issueDate).getTime() <= filteredTimestamp);
+      },
+      includeReturnLine: (line) => {
+        const returnDate = parseAppDate(returnMap.get(line.materialReturnId)?.date);
+        return Boolean(returnDate && normalizeDate(returnDate).getTime() <= filteredTimestamp);
+      },
+    })
+      .filter((row) => row.availableWeight > 0)
+      .forEach((row) => {
+        const material = materialMap.get(row.materialId);
         const rapcRange = resolveRapcValue(getMaterialRapcInput(material), effectiveRanges);
-        const gsm = Number(material.gsm || 0);
+        const gsm = Number(material?.gsm || 0);
         if (!rapcRange || !gsm) return;
-
-        const receipts = materialIn
-          .filter((entry) => {
-            const entryDate = parseAppDate(entry.date || entry.timestamp);
-            return entryDate && normalizeDate(entryDate).getTime() <= filteredTimestamp;
-          })
-          .reduce((sum, entry) => {
-            const line = entry.lines.find((row) => row.itemId === material.id);
-            return sum + Number(line?.actualQty ?? line?.qty ?? 0);
-          }, 0);
-
-        const issued = issueReelLines.reduce((sum, line) => {
-          if (line.materialId !== material.id) return sum;
-          const issueDate = parseAppDate(issueMap.get(line.materialIssueId)?.date);
-          if (!issueDate || normalizeDate(issueDate).getTime() > filteredTimestamp) return sum;
-          return sum + Number(line.weightKg || 0);
-        }, 0);
-
-        const returned = returnReelLines.reduce((sum, line) => {
-          if (line.materialId !== material.id) return sum;
-          const returnDate = parseAppDate(returnMap.get(line.materialReturnId)?.date);
-          if (!returnDate || normalizeDate(returnDate).getTime() > filteredTimestamp) return sum;
-          return sum + Number(line.weightKg || 0);
-        }, 0);
-
-        const available = Number(material.openingQty || 0) + receipts + returned - issued;
         const key = makeKey(rapcRange, gsm);
-        stockByKey.set(key, (stockByKey.get(key) || 0) + Math.max(0, available));
+        stockByKey.set(key, (stockByKey.get(key) || 0) + row.availableWeight);
       });
 
     const receivedByPoLine = new Map<string, number>();
@@ -313,6 +309,7 @@ export function PaperRequirementReport() {
     npdItems,
     materialIn,
     materials,
+    packingSlips,
     productions,
     purchaseOrderLines,
     purchaseOrders,

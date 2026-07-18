@@ -10,28 +10,11 @@ import {
   MaterialReturnReelLine,
   Supplier,
 } from "../types";
+import { buildReelStockRows, type ReelStockCalculationRow } from "../lib/reelStock";
 
 type AvailabilityFilter = "all" | "gt500" | "lt500";
 
-type ReelwiseStockRow = {
-  slipId: string;
-  mrrDate: string;
-  mrrNo: string;
-  ourReelNo: string;
-  erp: string;
-  supplierName: string;
-  gsm: number;
-  size: number;
-  bf: number;
-  issuedWeight: number;
-  returnedWeight: number;
-  netIssuedWeight: number;
-  availableWeight: number;
-  mrrQty: number;
-  rate: number;
-  valuation: number;
-  ageDays: number;
-};
+type ReelwiseStockRow = ReelStockCalculationRow;
 
 const tableColumns = [
   "SL No",
@@ -61,16 +44,6 @@ function formatReportDate(dateStr?: string) {
     month: "short",
     year: "2-digit",
   });
-}
-
-function getAgeDays(dateStr?: string) {
-  if (!dateStr) return 0;
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
 function makeOptions(values: Array<string | number>) {
@@ -105,98 +78,14 @@ export function ReelwiseStockReport() {
   const [bfFilter, setBfFilter] = useState("");
 
   const allRows = useMemo<ReelwiseStockRow[]>(() => {
-    const materialMap = new Map(materials.map((material) => [material.id, material]));
-    const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
-    const supplierMap = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
-    const latestMaterialIn = [...materialIn].sort((a, b) => {
-      const timeA = new Date(a.updateTimestamp || a.timestamp || a.date || 0).getTime();
-      const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
-      return timeB - timeA;
+    return buildReelStockRows({
+      materials,
+      materialIn,
+      packingSlips,
+      issueReelLines,
+      returnReelLines,
+      suppliers,
     });
-    const latestRateByMaterial = new Map<string, number>();
-    latestMaterialIn.forEach((entry) => {
-      entry.lines.forEach((line) => {
-        if (!latestRateByMaterial.has(line.itemId)) {
-          latestRateByMaterial.set(line.itemId, Number(line.invoiceRate ?? line.rate ?? 0));
-        }
-      });
-    });
-    const lastExistingReelNo = packingSlips.reduce((max, slip) => {
-      const reelNo = Number(String(slip.ourReelNo || "").trim());
-      return Number.isFinite(reelNo) && reelNo > max ? reelNo : max;
-    }, 0);
-
-    const openingRows: ReelwiseStockRow[] = materials
-      .filter((material) => material.type === "Reel" && Number(material.openingQty || 0) > 0)
-      .map((material, index) => {
-        const openingQty = Number(Number(material.openingQty || 0).toFixed(2));
-        const openingRate = Number(Number(material.openingRate || 0).toFixed(2));
-        return {
-          slipId: `opening-${material.id}`,
-          mrrDate: "2026-06-06",
-          mrrNo: "1",
-          ourReelNo: String(lastExistingReelNo + index + 1),
-          erp: String(material.erpCode || ""),
-          supplierName: "-",
-          gsm: Number(material.gsm || 0),
-          size: Number(material.size || 0),
-          bf: Number(material.bf || 0),
-          issuedWeight: 0,
-          returnedWeight: 0,
-          netIssuedWeight: 0,
-          availableWeight: openingQty,
-          mrrQty: openingQty,
-          rate: openingRate,
-          valuation: Number((openingQty * openingRate).toFixed(2)),
-          ageDays: 0,
-        };
-      });
-
-    const mrrRows = packingSlips
-      .map((slip) => {
-        const material = materialMap.get(slip.materialId);
-        const receipt = materialInMap.get(slip.materialInId);
-        const supplier = receipt ? supplierMap.get(receipt.supplierId) : undefined;
-        const relatedIssueLines = issueReelLines.filter((line) => line.packingSlipId === slip.id);
-        const relatedReturnLines = returnReelLines.filter((line) => line.packingSlipId === slip.id);
-
-        const issuedWeight = relatedIssueLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-        const returnedWeight = relatedReturnLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-        const reelQty = Number(slip.weightKg || 0);
-        const mrrQty = Number(reelQty.toFixed(2));
-        const netIssuedWeight = Number((issuedWeight - returnedWeight).toFixed(2));
-        const availableWeight = Number(Math.max(0, mrrQty + returnedWeight - issuedWeight).toFixed(2));
-        const latestRate = Number(latestRateByMaterial.get(slip.materialId) ?? material?.openingRate ?? 0);
-        const rate = availableWeight > 0 ? Number(latestRate.toFixed(2)) : 0;
-        const valuation = availableWeight > 0 ? Number((availableWeight * latestRate).toFixed(2)) : 0;
-
-        return {
-          slipId: slip.id,
-          mrrDate: receipt?.date || "",
-          mrrNo: receipt?.transactionNo || "",
-          ourReelNo: slip.ourReelNo || "",
-          erp: String(material?.erpCode || ""),
-          supplierName: supplier?.name || "",
-          gsm: Number(material?.gsm || 0),
-          size: Number(material?.size || 0),
-          bf: Number(material?.bf || 0),
-          issuedWeight: Number(issuedWeight.toFixed(2)),
-          returnedWeight: Number(returnedWeight.toFixed(2)),
-          netIssuedWeight,
-          availableWeight,
-          mrrQty,
-          rate,
-          valuation,
-          ageDays: getAgeDays(receipt?.date),
-        };
-      })
-      .sort((a, b) => {
-        const dateDiff = new Date(b.mrrDate || 0).getTime() - new Date(a.mrrDate || 0).getTime();
-        if (dateDiff !== 0) return dateDiff;
-        return a.ourReelNo.localeCompare(b.ourReelNo);
-      });
-
-    return [...openingRows, ...mrrRows];
   }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines, suppliers]);
 
   const erpOptions = useMemo(() => makeOptions(allRows.map((row) => row.erp)), [allRows]);

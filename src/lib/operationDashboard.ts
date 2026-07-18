@@ -28,7 +28,7 @@ import {
 } from "./productionMaterialUsage";
 import { PROCESSING_MACHINE_COLUMNS } from "./productionProcessingSummary";
 import { isProductionReadyForTally } from "./productionStageFilters";
-import { getAvailableReelPackingSlips } from "./materialMovement";
+import { buildReelStockRows } from "./reelStock";
 
 export type OperationDashboardDateRange = {
   from: string;
@@ -317,38 +317,22 @@ function getReelStockTotals(
   issueReelLines: MaterialIssueReelLine[],
   returnReelLines: MaterialReturnReelLine[]
 ) {
-  const latestMaterialIn = [...materialIn].sort((a, b) => {
-    const timeA = new Date(a.updateTimestamp || a.timestamp || a.date || 0).getTime();
-    const timeB = new Date(b.updateTimestamp || b.timestamp || b.date || 0).getTime();
-    return timeB - timeA;
+  const rows = buildReelStockRows({
+    materials,
+    materialIn,
+    packingSlips,
+    issueReelLines,
+    returnReelLines,
   });
 
-  return materials
-    .filter((material) => material.type === "Reel")
-    .reduce(
-      (acc, material) => {
-        const openingStock = Number(material.openingQty || 0);
-        const issued = issueReelLines
-          .filter((line) => line.materialId === material.id)
-          .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-        const returned = returnReelLines
-          .filter((line) => line.materialId === material.id)
-          .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-        const received = latestMaterialIn.reduce((sum, entry) => {
-          const line = entry.lines.find((row) => row.itemId === material.id);
-          if (!line) return sum;
-          return sum + Number(line.actualQty ?? line.qty ?? 0);
-        }, 0);
-
-        const availableWeight = Math.max(0, Number((openingStock + received + returned - issued).toFixed(2)));
-        const availableReelCount = getAvailableReelPackingSlips(material.id, packingSlips, issueReelLines, returnReelLines).length;
-
-        acc.availableWeight += availableWeight;
-        acc.noOfReels += availableReelCount;
-        return acc;
-      },
-      { availableWeight: 0, noOfReels: 0 }
-    );
+  return rows.reduce(
+    (acc, row) => {
+      acc.availableWeight += row.availableWeight;
+      if (row.availableWeight > 0) acc.noOfReels += 1;
+      return acc;
+    },
+    { availableWeight: 0, noOfReels: 0 }
+  );
 }
 
 export function buildOperationDashboardSummary(args: BuildOperationDashboardSummaryArgs): OperationDashboardSummary {
