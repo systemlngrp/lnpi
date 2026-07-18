@@ -57,12 +57,12 @@ function formatQty(value: number) {
 }
 
 export function ReelwiseStockReport() {
-  const [materials] = useData<Material>("materials", []);
-  const [materialIn] = useData<MaterialIn>("material-in", []);
-  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
-  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
-  const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
-  const [suppliers] = useData<Supplier>("suppliers", []);
+  const [materials] = useData<Material>("materials", [], { cacheToLocalStorage: false });
+  const [materialIn] = useData<MaterialIn>("material-in", [], { cacheToLocalStorage: false });
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", [], { cacheToLocalStorage: false });
+  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", [], { cacheToLocalStorage: false });
+  const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", [], { cacheToLocalStorage: false });
+  const [suppliers] = useData<Supplier>("suppliers", [], { cacheToLocalStorage: false });
 
   const [searchTerm, setSearchTerm] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>("all");
