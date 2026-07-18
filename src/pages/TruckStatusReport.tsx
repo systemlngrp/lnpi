@@ -9,9 +9,6 @@ function getSortTime(value?: string) {
   return Number.isFinite(time) ? time : 0;
 }
 
-function formatLogReference(log: TruckStatusLog) {
-  return [log.sourceRefType, log.sourceRefId].filter(Boolean).join(": ") || "-";
-}
 
 export function TruckStatusReport() {
   const [trucks] = useData<Truck>("trucks", []);
@@ -247,14 +244,12 @@ export function TruckStatusReport() {
                 <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Status</th>
                 <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Date & Time</th>
                 <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Updated By</th>
-                <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Source</th>
-                <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Reference</th>
               </tr>
             </thead>
             <tbody>
               {logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-sm font-bold text-slate-500">
+                  <td colSpan={4} className="px-6 py-8 text-center text-sm font-bold text-slate-500">
                     {logTruckNo.trim() ? "No status logs found for this truck." : "Search a truck number to view status history."}
                   </td>
                 </tr>
@@ -271,8 +266,6 @@ export function TruckStatusReport() {
                     </td>
                     <td className="border border-black px-4 py-2 text-xs font-bold text-black">{formatTruckDateTime(log.statusUpdatedAt)}</td>
                     <td className="border border-black px-4 py-2 text-xs font-black uppercase text-black">{log.statusUpdatedBy || "-"}</td>
-                    <td className="border border-black px-4 py-2 text-xs font-black uppercase text-black">{log.updateSource || "-"}</td>
-                    <td className="border border-black px-4 py-2 text-xs font-bold text-black">{formatLogReference(log)}</td>
                   </tr>
                 );
               })}

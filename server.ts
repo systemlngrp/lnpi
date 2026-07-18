@@ -2237,6 +2237,62 @@ async function getLoadingSlipTruckStatusEvent(db: mysql.Pool, tableName: string,
 
   return null;
 }
+
+function parseLoadingSlipLinesForTruckParty(raw: unknown) {
+  try {
+    const lines = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(lines) ? lines as Array<Record<string, any>> : [];
+  } catch {
+    return [];
+  }
+}
+
+async function getTruckActivePartyName(db: mysql.Pool, truckId: string) {
+  const id = String(truckId || "").trim();
+  if (!id) return "";
+
+  const [rows] = await db.query(
+    [
+      "SELECT id, companyId, companyName, `lines`, updateTimestamp, `date`",
+      "FROM `loading_slips`",
+      "WHERE truckId = ? AND COALESCE(`status`, 'Active') <> 'Cancelled'",
+      "ORDER BY COALESCE(updateTimestamp, `date`) DESC",
+      "LIMIT 1",
+    ].join(" "),
+    [id]
+  );
+  const slip = (rows as any[])[0];
+  if (!slip) return "";
+
+  const companyIds = new Set<string>();
+  const partyNames = new Set<string>();
+  const addName = (value: unknown) => {
+    const name = String(value || "").trim();
+    if (name) partyNames.add(name);
+  };
+  const addCompanyId = (value: unknown) => {
+    const companyId = String(value || "").trim();
+    if (companyId) companyIds.add(companyId);
+  };
+
+  addName(slip.companyName);
+  addCompanyId(slip.companyId);
+  parseLoadingSlipLinesForTruckParty(slip.lines).forEach((line) => {
+    addName(line.companyName);
+    addCompanyId(line.companyId);
+  });
+
+  if (companyIds.size) {
+    const ids = Array.from(companyIds);
+    const [companyRows] = await db.query(
+      `SELECT id, name FROM \`companies\` WHERE id IN (${ids.map(() => "?").join(",")})`,
+      ids
+    );
+    (companyRows as any[]).forEach((company) => addName(company.name));
+  }
+
+  return Array.from(partyNames).join(", ");
+}
 async function ensureGatePassNullableColumns(db: mysql.Pool, database: string) {
   const nullableColumns = [
     { column: "invoiceId", type: "VARCHAR(36) NULL" },
@@ -6328,7 +6384,8 @@ app.get("/api/truck-driver/status", async (req, res) => {
     );
     const truck = (rows as any[])[0];
     if (!truck) return res.status(404).json({ error: "Truck not found" });
-    return res.json({ truck });
+    const partyName = await getTruckActivePartyName(db, user.truckId);
+    return res.json({ truck: { ...truck, partyName } });
   } catch (error) {
     console.error("[TRUCK_DRIVER] status fetch failed:", error);
     return res.status(500).json({ error: (error as Error).message });
@@ -6360,7 +6417,9 @@ app.post("/api/truck-driver/status", async (req, res) => {
       "SELECT id, truckNo, driverName, mobileNo, liveStatus, statusUpdatedAt, statusUpdatedBy FROM `trucks` WHERE id = ? LIMIT 1",
       [user.truckId]
     );
-    return res.json({ truck: (rows as any[])[0] });
+    const truck = (rows as any[])[0];
+    const partyName = await getTruckActivePartyName(db, user.truckId);
+    return res.json({ truck: { ...truck, partyName } });
   } catch (error) {
     console.error("[TRUCK_DRIVER] status update failed:", error);
     return res.status(500).json({ error: (error as Error).message });
@@ -6381,7 +6440,7 @@ app.get("/api/truck-status-logs", async (req, res) => {
   try {
     const [rows] = await db.query(
       [
-        "SELECT *",
+        "SELECT id, truckId, truckNo, liveStatus, statusUpdatedAt, statusUpdatedBy",
         "FROM `truck_status_logs`",
         "WHERE LOWER(TRIM(`truckNo`)) = LOWER(TRIM(?))",
         "ORDER BY `statusUpdatedAt` DESC, `updateTimestamp` DESC",

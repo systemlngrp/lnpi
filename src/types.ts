@@ -720,6 +720,7 @@ export interface Truck {
   liveStatus?: TruckLiveStatus | string;
   statusUpdatedAt?: string;
   statusUpdatedBy?: string;
+  partyName?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
