@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, Truck as TruckIcon } from "lucide-react";
 import { useData } from "../hooks/useData";
-import type { Company, DispatchPlan, LoadingSlip, Order, Truck } from "../types";
+import type { Company, DispatchPlan, LoadingSlip, Order, Truck, TruckStatusLog } from "../types";
 import { formatTruckDateTime, formatTruckDuration, normalizeTruckStatus, TRUCK_LIVE_STATUSES, TRUCK_STATUS_STYLES } from "../lib/truckStatus";
 
 function getSortTime(value?: string) {
   const time = value ? new Date(value).getTime() : 0;
   return Number.isFinite(time) ? time : 0;
+}
+
+function formatLogReference(log: TruckStatusLog) {
+  return [log.sourceRefType, log.sourceRefId].filter(Boolean).join(": ") || "-";
 }
 
 export function TruckStatusReport() {
@@ -16,12 +20,44 @@ export function TruckStatusReport() {
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [searchTerm, setSearchTerm] = useState("");
+  const [logTruckNo, setLogTruckNo] = useState("");
+  const [logs, setLogs] = useState<TruckStatusLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState("");
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  const authHeaders = useMemo(() => {
+    const token = window.localStorage.getItem("authToken") || "";
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }, []);
+
+  const fetchTruckLogs = async () => {
+    const truckNo = logTruckNo.trim();
+    if (!truckNo) {
+      setLogs([]);
+      setLogsError("Enter a truck number to search logs.");
+      return;
+    }
+
+    setLogsLoading(true);
+    setLogsError("");
+    try {
+      const response = await fetch(`/api/truck-status-logs?truckNo=${encodeURIComponent(truckNo)}`, { headers: authHeaders });
+      const data = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(data.error || "Unable to load truck logs.");
+      setLogs(Array.isArray(data) ? data as TruckStatusLog[] : []);
+    } catch (err) {
+      setLogs([]);
+      setLogsError((err as Error).message || "Unable to load truck logs.");
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   const activeSlipsByTruck = useMemo(() => {
     const map = new Map<string, LoadingSlip>();
@@ -162,6 +198,81 @@ export function TruckStatusReport() {
                     <td className={`${longDuration ? "bg-red-600 text-white" : "text-black"} border border-black px-4 py-2 text-right text-xs font-black`}>{duration}</td>
                     <td className="border border-black px-4 py-2 text-xs font-black uppercase text-black">{truck.driverName || "-"}</td>
                     <td className="border border-black px-4 py-2 text-xs font-black text-black">{truck.mobileNo || "-"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded border-2 border-black bg-white shadow-sm">
+        <div className="border-b-2 border-black bg-slate-900 px-4 py-3 text-center text-lg font-black uppercase text-white">
+          Truck Status Logs
+        </div>
+        <div className="border-b-2 border-black bg-slate-50 p-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+            <label className="space-y-1">
+              <span className="text-xs font-black uppercase text-slate-600">Truck Number</span>
+              <input
+                list="truck-status-log-trucks"
+                value={logTruckNo}
+                onChange={(e) => setLogTruckNo(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void fetchTruckLogs();
+                }}
+                placeholder="Enter truck number"
+                className="w-full rounded border-2 border-black bg-white px-3 py-2 text-sm font-bold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+              <datalist id="truck-status-log-trucks">
+                {trucks.map((truck) => <option key={truck.id} value={truck.truckNo} />)}
+              </datalist>
+            </label>
+            <button
+              type="button"
+              onClick={() => void fetchTruckLogs()}
+              disabled={logsLoading}
+              className="inline-flex items-center justify-center gap-2 rounded border-2 border-black bg-blue-700 px-5 py-2 text-sm font-black uppercase text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Search size={16} />
+              {logsLoading ? "Searching" : "Search Logs"}
+            </button>
+          </div>
+          {logsError ? <div className="mt-3 rounded border border-red-700 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">{logsError}</div> : null}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-collapse">
+            <thead className="bg-teal-950 text-white">
+              <tr className="divide-x divide-black">
+                <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Vehicle No.</th>
+                <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Status</th>
+                <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Date & Time</th>
+                <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Updated By</th>
+                <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Source</th>
+                <th className="border border-black px-4 py-3 text-left text-xs font-black uppercase">Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-sm font-bold text-slate-500">
+                    {logTruckNo.trim() ? "No status logs found for this truck." : "Search a truck number to view status history."}
+                  </td>
+                </tr>
+              ) : logs.map((log, index) => {
+                const liveStatus = normalizeTruckStatus(log.liveStatus) || "EMPTY";
+                const style = TRUCK_STATUS_STYLES[liveStatus];
+                return (
+                  <tr key={log.id} className={`${index % 2 === 0 ? "bg-pink-50" : "bg-white"} divide-x divide-black`}>
+                    <td className="border border-black px-4 py-2 text-sm font-black uppercase text-blue-800">{log.truckNo}</td>
+                    <td className="border border-black px-4 py-2">
+                      <span className={`${style.badge} inline-flex min-w-[120px] justify-center border px-2 py-1 text-[11px] font-black uppercase`}>
+                        {liveStatus}
+                      </span>
+                    </td>
+                    <td className="border border-black px-4 py-2 text-xs font-bold text-black">{formatTruckDateTime(log.statusUpdatedAt)}</td>
+                    <td className="border border-black px-4 py-2 text-xs font-black uppercase text-black">{log.statusUpdatedBy || "-"}</td>
+                    <td className="border border-black px-4 py-2 text-xs font-black uppercase text-black">{log.updateSource || "-"}</td>
+                    <td className="border border-black px-4 py-2 text-xs font-bold text-black">{formatLogReference(log)}</td>
                   </tr>
                 );
               })}

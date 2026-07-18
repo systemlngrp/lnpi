@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle, Clock, Phone, Truck as TruckIcon, User } from "lucide-react";
 import type { Truck, TruckLiveStatus } from "../types";
-import { formatTruckDateTime, formatTruckDuration, normalizeTruckStatus, TRUCK_LIVE_STATUSES, TRUCK_STATUS_STYLES } from "../lib/truckStatus";
+import { formatTruckDateTime, formatTruckDuration, normalizeTruckStatus, TRUCK_DRIVER_UPDATE_STATUSES, TRUCK_STATUS_STYLES } from "../lib/truckStatus";
 import { Spinner } from "../components/Spinner";
+
+function getDriverSelectableStatus(value?: string | null): TruckLiveStatus | "" {
+  const status = normalizeTruckStatus(value);
+  return status && TRUCK_DRIVER_UPDATE_STATUSES.includes(status) ? status : "";
+}
 
 export function TruckStatusUpdate() {
   const [truck, setTruck] = useState<Truck | null>(null);
@@ -29,7 +34,7 @@ export function TruckStatusUpdate() {
       const data = await response.json();
       const nextTruck = data.truck as Truck;
       setTruck(nextTruck);
-      setSelectedStatus(normalizeTruckStatus(nextTruck.liveStatus));
+      setSelectedStatus(getDriverSelectableStatus(nextTruck.liveStatus));
       setError("");
     } catch (err) {
       setError((err as Error).message || "Unable to load truck status.");
@@ -62,7 +67,7 @@ export function TruckStatusUpdate() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Unable to update truck status.");
       setTruck(data.truck as Truck);
-      setSelectedStatus(normalizeTruckStatus(data.truck?.liveStatus));
+      setSelectedStatus(getDriverSelectableStatus(data.truck?.liveStatus));
       setMessage("Status updated live.");
     } catch (err) {
       setError((err as Error).message || "Unable to update truck status.");
@@ -113,7 +118,7 @@ export function TruckStatusUpdate() {
                 className="w-full rounded border-2 border-black bg-white px-4 py-3 text-sm font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
               >
                 <option value="">Select status</option>
-                {TRUCK_LIVE_STATUSES.map((option) => (
+                {TRUCK_DRIVER_UPDATE_STATUSES.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>

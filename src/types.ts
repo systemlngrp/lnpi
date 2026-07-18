@@ -724,6 +724,20 @@ export interface Truck {
   updateTimestamp?: string;
 }
 
+export interface TruckStatusLog {
+  id: string;
+  truckId: string;
+  truckNo: string;
+  liveStatus: TruckLiveStatus | string;
+  statusUpdatedAt: string;
+  statusUpdatedBy: string;
+  updateSource: "System" | "TruckDriver" | string;
+  sourceRefType?: string;
+  sourceRefId?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface DispatchPlan {
   id: string;
   planNo?: string;

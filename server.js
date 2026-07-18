@@ -451,6 +451,9 @@ const TRUCK_LIVE_STATUSES = [
   "NOT UNLOADED",
   "REJECTED"
 ];
+const DRIVER_TRUCK_LIVE_STATUSES = TRUCK_LIVE_STATUSES.filter(
+  (status) => status !== "LOADING" && status !== "IN-TRANSIT"
+);
 function normalizeTruckLiveStatus(raw) {
   const status = String(raw || "").trim().toUpperCase();
   return TRUCK_LIVE_STATUSES.includes(status) ? status : "";
@@ -1778,6 +1781,41 @@ async function ensureColumnExists(db, database, table, column, type) {
   if (rows.length > 0) return;
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
 }
+async function ensureTruckStatusLogSchema(db, database) {
+  await db.query([
+    "CREATE TABLE IF NOT EXISTS `truck_status_logs` (",
+    "`id` VARCHAR(36) PRIMARY KEY,",
+    "`truckId` VARCHAR(36) NOT NULL,",
+    "`truckNo` VARCHAR(100),",
+    "`liveStatus` VARCHAR(50) NOT NULL,",
+    "`statusUpdatedAt` VARCHAR(255) NOT NULL,",
+    "`statusUpdatedBy` VARCHAR(255),",
+    "`updateSource` VARCHAR(50),",
+    "`sourceRefType` VARCHAR(50),",
+    "`sourceRefId` VARCHAR(100),",
+    "`updatedBy` VARCHAR(255),",
+    "`updateTimestamp` VARCHAR(255),",
+    "INDEX `idx_truck_status_logs_truckId` (`truckId`),",
+    "INDEX `idx_truck_status_logs_truckNo` (`truckNo`),",
+    "INDEX `idx_truck_status_logs_statusUpdatedAt` (`statusUpdatedAt`)",
+    ")"
+  ].join(" "));
+  const columns = [
+    { column: "truckId", type: "VARCHAR(36) NOT NULL" },
+    { column: "truckNo", type: "VARCHAR(100)" },
+    { column: "liveStatus", type: "VARCHAR(50) NOT NULL" },
+    { column: "statusUpdatedAt", type: "VARCHAR(255) NOT NULL" },
+    { column: "statusUpdatedBy", type: "VARCHAR(255)" },
+    { column: "updateSource", type: "VARCHAR(50)" },
+    { column: "sourceRefType", type: "VARCHAR(50)" },
+    { column: "sourceRefId", type: "VARCHAR(100)" },
+    { column: "updatedBy", type: "VARCHAR(255)" },
+    { column: "updateTimestamp", type: "VARCHAR(255)" }
+  ];
+  for (const { column, type } of columns) {
+    await ensureColumnExists(db, database, "truck_status_logs", column, type);
+  }
+}
 async function ensureCompaniesSchemaColumns(db, database) {
   for (const { column, type } of COMPANY_SCHEMA_COLUMNS) {
     await ensureColumnExists(db, database, "companies", column, type);
@@ -1817,6 +1855,61 @@ function applyAuditFields(record, user, fallback = DEFAULT_SYSTEM_AUDIT_USER) {
     updatedBy: resolveAuditActorName(user, fallback),
     updateTimestamp: (/* @__PURE__ */ new Date()).toISOString()
   };
+}
+async function applyTruckStatusUpdate(db, input) {
+  const truckId = String(input.truckId || "").trim();
+  const liveStatus = normalizeTruckLiveStatus(input.liveStatus);
+  if (!truckId || !liveStatus) return null;
+  const [truckRows] = await db.query("SELECT id, truckNo FROM `trucks` WHERE id = ? LIMIT 1", [truckId]);
+  const truck = truckRows[0];
+  if (!truck?.id) return null;
+  const now = input.statusUpdatedAt || (/* @__PURE__ */ new Date()).toISOString();
+  const actor = String(input.statusUpdatedBy || input.updateSource || DEFAULT_SYSTEM_AUDIT_USER).trim() || DEFAULT_SYSTEM_AUDIT_USER;
+  const truckNo = String(truck.truckNo || "").trim();
+  const sourceRefType = String(input.sourceRefType || "").trim() || null;
+  const sourceRefId = String(input.sourceRefId || "").trim() || null;
+  await db.query(
+    "UPDATE `trucks` SET `liveStatus` = ?, `statusUpdatedAt` = ?, `statusUpdatedBy` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+    [liveStatus, now, actor, actor, now, truckId]
+  );
+  const logId = crypto.randomUUID();
+  await db.query(
+    "INSERT INTO `truck_status_logs` (`id`, `truckId`, `truckNo`, `liveStatus`, `statusUpdatedAt`, `statusUpdatedBy`, `updateSource`, `sourceRefType`, `sourceRefId`, `updatedBy`, `updateTimestamp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [logId, truckId, truckNo, liveStatus, now, actor, input.updateSource, sourceRefType, sourceRefId, actor, now]
+  );
+  return { id: logId, truckId, truckNo, liveStatus, statusUpdatedAt: now };
+}
+async function getLoadingSlipTruckStatusEvent(db, tableName, data) {
+  if (tableName !== "loading_slips") return null;
+  const slipId = String(data.id || "").trim();
+  if (!slipId) return null;
+  const nextTruckId = String(data.truckId || "").trim();
+  const nextInvoiceId = String(data.invoiceId || "").trim();
+  const [rows] = await db.query("SELECT id, truckId, invoiceId FROM `loading_slips` WHERE id = ? LIMIT 1", [slipId]);
+  const existing = rows[0];
+  if (!existing && nextTruckId) {
+    return {
+      truckId: nextTruckId,
+      liveStatus: "LOADING",
+      statusUpdatedBy: "System",
+      updateSource: "System",
+      sourceRefType: "Loading Slip",
+      sourceRefId: slipId
+    };
+  }
+  const previousInvoiceId = String(existing?.invoiceId || "").trim();
+  const truckId = String(data.truckId || existing?.truckId || "").trim();
+  if (existing && !previousInvoiceId && nextInvoiceId && truckId) {
+    return {
+      truckId,
+      liveStatus: "IN-TRANSIT",
+      statusUpdatedBy: "System",
+      updateSource: "System",
+      sourceRefType: "Invoice",
+      sourceRefId: nextInvoiceId
+    };
+  }
+  return null;
 }
 async function ensureGatePassNullableColumns(db, database) {
   const nullableColumns = [
@@ -4532,6 +4625,7 @@ async function initDb(retries = 5) {
       try {
         await ensureCompaniesSchemaColumns(db, database);
         await ensureMaterialInCurrencySchemaColumns(db, database);
+        await ensureTruckStatusLogSchema(db, database);
         await ensureAuditColumnsForAllTables(db, database);
       } catch (err) {
         console.warn("[DB] Could not ensure companies schema columns:", err.message);
@@ -5219,6 +5313,7 @@ const createHandlers = (tableName) => {
         const columnNames = keys.map((k) => `\`${k}\``).join(",");
         const updates = keys.map((k) => `\`${k}\`=VALUES(\`${k}\`)`).join(",");
         const query = `INSERT INTO \`${tableName}\` (${columnNames}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`;
+        const loadingSlipTruckStatusEvent = await getLoadingSlipTruckStatusEvent(db, tableName, data);
         if (tableName === "orders") {
           const approvalStatuses = /* @__PURE__ */ new Set(["Pending Scheduling", "Scheduled"]);
           const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -5284,6 +5379,9 @@ const createHandlers = (tableName) => {
         }
         console.log(`[DB] Upserting to ${tableName}`, { id: data.id });
         await db.query(query, values);
+        if (loadingSlipTruckStatusEvent) {
+          await applyTruckStatusUpdate(db, loadingSlipTruckStatusEvent);
+        }
         res.json({ success: true });
       } catch (error) {
         console.error(`[DB] Error upserting to ${tableName}:`, error);
@@ -5559,15 +5657,20 @@ app.post("/api/truck-driver/status", async (req, res) => {
   const user = await getRequestUser(req);
   if (!user || user.role !== "TruckDriver" || !user.truckId) return res.status(403).json({ error: "Forbidden" });
   const liveStatus = normalizeTruckLiveStatus(req.body?.liveStatus);
-  if (!liveStatus) return res.status(400).json({ error: "Invalid truck status" });
+  if (!liveStatus || !DRIVER_TRUCK_LIVE_STATUSES.includes(liveStatus)) {
+    return res.status(400).json({ error: "Invalid truck status" });
+  }
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
   try {
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    await db.query(
-      "UPDATE `trucks` SET `liveStatus` = ?, `statusUpdatedAt` = ?, `statusUpdatedBy` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
-      [liveStatus, now, user.userId || user.name || "Truck Driver", user.userId || user.name || "Truck Driver", now, user.truckId]
-    );
+    await applyTruckStatusUpdate(db, {
+      truckId: user.truckId,
+      liveStatus,
+      statusUpdatedBy: user.userId || user.name || "Truck Driver",
+      updateSource: "TruckDriver",
+      sourceRefType: "Truck Driver Update",
+      sourceRefId: user.truckId
+    });
     const [rows] = await db.query(
       "SELECT id, truckNo, driverName, mobileNo, liveStatus, statusUpdatedAt, statusUpdatedBy FROM `trucks` WHERE id = ? LIMIT 1",
       [user.truckId]
@@ -5575,6 +5678,32 @@ app.post("/api/truck-driver/status", async (req, res) => {
     return res.json({ truck: rows[0] });
   } catch (error) {
     console.error("[TRUCK_DRIVER] status update failed:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+app.get("/api/truck-status-logs", async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.role === "TruckDriver") return res.status(403).json({ error: "Forbidden" });
+  if (!hasPermission(user, "/reports/truck-status")) return res.status(403).json({ error: "Forbidden" });
+  const truckNo = String(req.query.truckNo || "").trim();
+  if (!truckNo) return res.json([]);
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  try {
+    const [rows] = await db.query(
+      [
+        "SELECT *",
+        "FROM `truck_status_logs`",
+        "WHERE LOWER(TRIM(`truckNo`)) = LOWER(TRIM(?))",
+        "ORDER BY `statusUpdatedAt` DESC, `updateTimestamp` DESC",
+        "LIMIT 500"
+      ].join(" "),
+      [truckNo]
+    );
+    return res.json(rows);
+  } catch (error) {
+    console.error("[TRUCK_STATUS_LOGS] fetch failed:", error);
     return res.status(500).json({ error: error.message });
   }
 });
