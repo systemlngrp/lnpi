@@ -26,7 +26,6 @@ type JobsInProgressRow = {
   reelReturned: number;
   reelConsumed: number;
   consumedValue: number;
-  status: string;
 };
 
 function formatQty(value: number) {
@@ -147,12 +146,11 @@ export function JobsInProgressReport() {
           reelReturned,
           reelConsumed,
           consumedValue,
-          status: production.status || "",
         };
       })
       .filter((row) => {
         if (row.reelConsumed <= 0) return false;
-        if (query && ![row.jobNo, row.erpCode, row.status].some((value) => String(value || "").toLowerCase().includes(query))) return false;
+        if (query && ![row.jobNo, row.erpCode].some((value) => String(value || "").toLowerCase().includes(query))) return false;
         const dateValue = row.corrugationDate || row.productionDate;
         if (fromMs != null && (!dateValue || new Date(dateValue).getTime() < fromMs)) return false;
         if (toMs != null && (!dateValue || new Date(dateValue).getTime() > toMs)) return false;
@@ -220,7 +218,7 @@ export function JobsInProgressReport() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search job no. / ERP / status"
+              placeholder="Search job no. / ERP"
               className="w-full rounded border-2 border-black py-2.5 pl-9 pr-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
             />
           </div>
@@ -270,7 +268,6 @@ export function JobsInProgressReport() {
                   "Reel Returned",
                   "Reel Consumed",
                   "Consumed Value",
-                  "Status",
                 ].map((heading) => (
                   <th key={heading} className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">
                     {heading}
@@ -281,7 +278,7 @@ export function JobsInProgressReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="border-2 border-black px-6 py-10 text-center text-sm font-medium text-black">
+                  <td colSpan={9} className="border-2 border-black px-6 py-10 text-center text-sm font-medium text-black">
                     No jobs in progress match the current filters.
                   </td>
                 </tr>
@@ -297,7 +294,6 @@ export function JobsInProgressReport() {
                     <td className="border-2 border-black px-3 py-3 text-right">{formatQty(row.reelReturned)}</td>
                     <td className="border-2 border-black bg-amber-50 px-3 py-3 text-right font-bold text-amber-800">{formatQty(row.reelConsumed)}</td>
                     <td className="border-2 border-black bg-purple-50 px-3 py-3 text-right font-bold text-purple-900">{formatQty(row.consumedValue)}</td>
-                    <td className="border-2 border-black px-3 py-3 font-bold">{row.status}</td>
                   </tr>
                 ))
               )}
