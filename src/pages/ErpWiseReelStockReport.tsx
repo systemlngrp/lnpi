@@ -74,7 +74,9 @@ export function ErpWiseReelStockReport() {
           return sum + Number(line.actualQty ?? line.qty ?? 0);
         }, 0);
         const netIssued = Number((issued - returned).toFixed(2));
-        const availableWeight = Math.max(0, Number((openingStock + received - netIssued).toFixed(2)));
+        const availableReels = getAvailableReelPackingSlips(material.id, packingSlips, issueReelLines, returnReelLines);
+        const availableReelWeight = availableReels.reduce((sum, slip) => sum + Number(slip.weightKg || 0), 0);
+        const availableWeight = Number((openingStock + availableReelWeight).toFixed(2));
         const latestRate =
           latestMaterialIn
             .map((entry) => entry.lines.find((row) => row.itemId === material.id))
@@ -83,7 +85,7 @@ export function ErpWiseReelStockReport() {
             .map((entry) => entry.lines.find((row) => row.itemId === material.id))
             .find(Boolean)?.rate ??
           Number(material.openingRate || 0);
-        const availableReelCount = getAvailableReelPackingSlips(material.id, packingSlips, issueReelLines, returnReelLines).length;
+        const availableReelCount = availableReels.length;
         const correctedRate = availableReelCount > 0 ? Number(Number(latestRate || 0).toFixed(2)) : 0;
         const correctedValuation = availableReelCount > 0 ? Number((availableWeight * Number(latestRate || 0)).toFixed(2)) : 0;
 
