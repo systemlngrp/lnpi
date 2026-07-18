@@ -267,7 +267,7 @@ export function Trucks() {
                             <div className="text-sm font-bold">{truck.driverName.toUpperCase()}</div>
                             <div className="text-xs text-slate-600">{truck.mobileNo || "-"}</div>
                             <div className="text-xs text-slate-600">Login: {truck.driverLoginId || "-"}</div>
-                            <div className="text-xs font-bold text-black">Credentials: {truck.driverLoginId && truck.driverPassword ? "SET" : "NOT SET"}</div>
+                            <div className="text-xs font-bold text-black">Password: {truck.driverLoginId && truck.driverPassword ? "SET" : "NOT SET"}</div>
                             <div className="text-xs font-bold text-black">Loadings: {loadingCount}</div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -301,8 +301,8 @@ export function Trucks() {
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Driver Name</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Mobile No.</th>
               <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Driver Login</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Credentials</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Loadings</th>
+              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Password</th>
+              <th className="px-6 py-3 text-center text-sm font-bold text-black uppercase border border-black">Loadings</th>
               <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
             </tr>
           </thead>
@@ -326,7 +326,7 @@ export function Trucks() {
                   <td className="px-6 py-4 whitespace-nowrap text-xs font-bold border border-black">
                     {truck.driverLoginId && truck.driverPassword ? <span className="text-emerald-700">SET</span> : <span className="text-slate-500">NOT SET</span>}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-black border border-black">{loadingCount}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-black border border-black">{loadingCount}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium border border-black">
                     <button
                       title="Edit"

@@ -12,9 +12,7 @@ export const TRUCK_LIVE_STATUSES: TruckLiveStatus[] = [
   "REJECTED",
 ];
 
-export const TRUCK_DRIVER_UPDATE_STATUSES: TruckLiveStatus[] = TRUCK_LIVE_STATUSES.filter(
-  (status) => status !== "LOADING" && status !== "IN-TRANSIT"
-);
+export const TRUCK_DRIVER_UPDATE_STATUSES: TruckLiveStatus[] = [...TRUCK_LIVE_STATUSES];
 
 export const TRUCK_STATUS_STYLES: Record<string, { label: string; tile: string; badge: string }> = {
   "NOT UNLOADED": { label: "NOT UNLOADED", tile: "bg-cyan-300 text-red-600", badge: "bg-cyan-200 text-red-700 border-cyan-600" },

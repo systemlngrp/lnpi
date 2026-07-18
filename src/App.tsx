@@ -120,6 +120,7 @@ import { PaperRequirementReport } from "./pages/PaperRequirementReport";
 import { ConversionCostReport } from "./pages/ConversionCostReport";
 import { TruckStatusReport } from "./pages/TruckStatusReport";
 import { TruckStatusUpdate } from "./pages/TruckStatusUpdate";
+import { TruckLogs } from "./pages/TruckLogs";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -158,6 +159,7 @@ export default function App() {
           <Route index element={<HomeRedirect />} />
           <Route path="plant-head" element={<PlantHeadUnified />} />
           <Route path="truck/status-update" element={<TruckStatusUpdate />} />
+          <Route path="truck/logs" element={<TruckLogs />} />
           
           {/* Masters */}
           <Route path="masters/item-groups" element={<ItemGroups />} />

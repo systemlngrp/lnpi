@@ -493,9 +493,6 @@ const TRUCK_LIVE_STATUSES = [
   "REJECTED",
 ] as const;
 
-const DRIVER_TRUCK_LIVE_STATUSES = TRUCK_LIVE_STATUSES.filter(
-  (status) => status !== "LOADING" && status !== "IN-TRANSIT"
-);
 function normalizeTruckLiveStatus(raw: unknown) {
   const status = String(raw || "").trim().toUpperCase();
   return TRUCK_LIVE_STATUSES.includes(status as any) ? status : "";
@@ -2199,43 +2196,6 @@ async function applyTruckStatusUpdate(db: mysql.Pool, input: TruckStatusUpdateIn
   );
 
   return { id: logId, truckId, truckNo, liveStatus, statusUpdatedAt: now };
-}
-
-async function getLoadingSlipTruckStatusEvent(db: mysql.Pool, tableName: string, data: Record<string, any>) {
-  if (tableName !== "loading_slips") return null;
-  const slipId = String(data.id || "").trim();
-  if (!slipId) return null;
-
-  const nextTruckId = String(data.truckId || "").trim();
-  const nextInvoiceId = String(data.invoiceId || "").trim();
-  const [rows] = await db.query("SELECT id, truckId, invoiceId FROM `loading_slips` WHERE id = ? LIMIT 1", [slipId]);
-  const existing = (rows as any[])[0];
-
-  if (!existing && nextTruckId) {
-    return {
-      truckId: nextTruckId,
-      liveStatus: "LOADING",
-      statusUpdatedBy: "System",
-      updateSource: "System" as const,
-      sourceRefType: "Loading Slip",
-      sourceRefId: slipId,
-    };
-  }
-
-  const previousInvoiceId = String(existing?.invoiceId || "").trim();
-  const truckId = String(data.truckId || existing?.truckId || "").trim();
-  if (existing && !previousInvoiceId && nextInvoiceId && truckId) {
-    return {
-      truckId,
-      liveStatus: "IN-TRANSIT",
-      statusUpdatedBy: "System",
-      updateSource: "System" as const,
-      sourceRefType: "Invoice",
-      sourceRefId: nextInvoiceId,
-    };
-  }
-
-  return null;
 }
 
 function parseLoadingSlipLinesForTruckParty(raw: unknown) {
@@ -5989,7 +5949,6 @@ const createHandlers = (tableName: string) => {
         const updates = keys.map(k => `\`${k}\`=VALUES(\`${k}\`)`).join(",");
         
         const query = `INSERT INTO \`${tableName}\` (${columnNames}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`;
-        const loadingSlipTruckStatusEvent = await getLoadingSlipTruckStatusEvent(db, tableName, data);
 
         if (tableName === "orders") {
           const approvalStatuses = new Set(["Pending Scheduling", "Scheduled"]);
@@ -6073,9 +6032,6 @@ const createHandlers = (tableName: string) => {
 
         console.log(`[DB] Upserting to ${tableName}`, { id: data.id });
         await db.query(query, values);
-        if (loadingSlipTruckStatusEvent) {
-          await applyTruckStatusUpdate(db, loadingSlipTruckStatusEvent);
-        }
         res.json({ success: true });
       } catch (error) {
         console.error(`[DB] Error upserting to ${tableName}:`, error);
@@ -6397,7 +6353,7 @@ app.post("/api/truck-driver/status", async (req, res) => {
   if (!user || user.role !== "TruckDriver" || !user.truckId) return res.status(403).json({ error: "Forbidden" });
 
   const liveStatus = normalizeTruckLiveStatus(req.body?.liveStatus);
-  if (!liveStatus || !DRIVER_TRUCK_LIVE_STATUSES.includes(liveStatus as any)) {
+  if (!liveStatus) {
     return res.status(400).json({ error: "Invalid truck status" });
   }
 

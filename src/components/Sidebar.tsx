@@ -277,6 +277,14 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
+    section: "Truck",
+    color: "bg-violet-700",
+    items: [
+      { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
+      { name: "Truck Logs", href: "/truck/logs", icon: FileText },
+    ],
+  },
+  {
     section: "Gate Pass",
     color: "bg-cyan-800",
     items: [
@@ -298,7 +306,6 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
       { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
       { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
-      { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
     ],
   },
   {

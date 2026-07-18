@@ -34,6 +34,7 @@ import { normalizeOrderItemSource } from "../lib/orderItems";
 import { buildLinkedLoadingDetailsFromSlip, findLinkedItemByMasterErp, getLinkedSetsPerBox } from "../lib/linkedLoading";
 import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
 import { buildPhpPlateStockAlertMessage, getPhpPlateStockShortages } from "../lib/phpPlateStockValidation";
+import { normalizeTruckStatus } from "../lib/truckStatus";
 
 interface PendingPlan extends DispatchPlan {
   companyName: string;
@@ -113,6 +114,15 @@ export function PendingLoading() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [modalTruckId, setModalTruckId] = useState<string>("");
+  const availableTrucks = useMemo(
+    () => trucks
+      .filter((truck) => {
+        const status = normalizeTruckStatus(truck.liveStatus);
+        return !status || status === "EMPTY" || truck.id === modalTruckId;
+      })
+      .sort((a, b) => a.truckNo.localeCompare(b.truckNo)),
+    [modalTruckId, trucks]
+  );
   const [packingDetails, setPackingDetails] = useState<PackingDetail[]>(createEmptyPackingRows());
   const [extraItemsQty, setExtraItemsQty] = useState<number | "">("");
   const [linkedPackingDetails, setLinkedPackingDetails] = useState<Record<LinkedSide, PackingDetail[]>>({
@@ -780,8 +790,7 @@ export function PendingLoading() {
                     className="w-full border-2 border-black rounded p-1 text-sm font-bold focus:outline-none focus:border-indigo-600 bg-white"
                   >
                     <option value="">-- Select Truck --</option>
-                    {trucks
-                      .sort((a, b) => a.truckNo.localeCompare(b.truckNo))
+                    {availableTrucks
                       .map(truck => (
                         <option key={truck.id} value={truck.id}>{truck.truckNo}</option>
                       ))
