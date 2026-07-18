@@ -4,6 +4,7 @@ import { useData } from "../hooks/useData";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { Company, Order, OrderSchedule, Production } from "../types";
 import { Spinner } from "../components/Spinner";
+import { Select } from "../components/Select";
 
 import { TableControls } from "../components/TableControls";
 import { ClientPagination } from "../components/ClientPagination";
@@ -42,6 +43,8 @@ function parseLocalYmd(dateStr?: string) {
 
 export function PendingProduction() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
+  const [itemFilter, setItemFilter] = useState('');
 
   const navigate = useNavigate();
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -103,7 +106,10 @@ export function PendingProduction() {
           pendingQty: getPendingProductionQty(schedule, consumedQty),
         };
       })
-      .filter(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty, plannedWithoutFfgQty, consumedQty }) => {        if (!normalizedSearch) return true;
+      .filter(({ schedule, order, item, company, pendingQty, plannedQty, actualProducedQty, plannedWithoutFfgQty, consumedQty }) => {        if (companyFilter && order?.companyId !== companyFilter) return false;
+        const itemKey = item?.id || `${item?.name || ""}::${getPendingProductionErp(item, order)}`;
+        if (itemFilter && itemKey !== itemFilter) return false;
+        if (!normalizedSearch) return true;
         const canPlanFgJob = normalizeOrderItemSource(order?.itemSource) === "FG";
         const boxType = canPlanFgJob ? String((item as any)?.boxType || "").trim() : "";
         const erpCode = getPendingProductionErp(item, order);
@@ -131,7 +137,10 @@ export function PendingProduction() {
         const timeB = new Date(b.schedule.updateTimestamp || b.schedule.scheduledDate || 0).getTime();
         return timeB - timeA;
       });
-  }, [companies, consumptionByScheduleId, cutoffDate, orders, resolveOrderItem, schedules, searchTerm]);
+  }, [companies, companyFilter, consumptionByScheduleId, cutoffDate, itemFilter, orders, resolveOrderItem, schedules, searchTerm]);
+
+  const companyOptions = useMemo(() => Array.from(new Map(pendingRows.map((row) => [row.order?.companyId || "", { value: row.order?.companyId || "", label: row.company?.name || "" }])).values()).filter((option) => option.value && option.label).sort((a, b) => a.label.localeCompare(b.label)), [pendingRows]);
+  const itemOptions = useMemo(() => Array.from(new Map(pendingRows.map((row) => { const erp = getPendingProductionErp(row.item, row.order); const key = row.item?.id || `${row.item?.name || ""}::${erp}`; const name = row.item?.name || ""; return [key, { value: key, label: erp && name && !name.toLowerCase().includes(erp.toLowerCase()) ? `${name} - ${erp}` : name || erp, searchText: `${name} ${erp}` }]; })).values()).filter((option) => option.value && option.label).sort((a, b) => a.label.localeCompare(b.label)), [pendingRows]);
   const {
     page,
     setPage,
@@ -198,7 +207,14 @@ export function PendingProduction() {
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Production Plan</h2>
       </div>
 
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+      <div className="grid gap-3 md:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(260px,1.1fr)_auto] md:items-center">
+        <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+        <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
+        <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+        {(searchTerm || companyFilter || itemFilter) ? (
+          <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+        ) : null}
+      </div>
 
       <DataSummaryTiles totalRecords={schedules.length} filteredRecords={pendingRows.length} showingRecords={paginatedRows.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
 

@@ -3,6 +3,7 @@ import { useData } from "../hooks/useData";
 import { Production, OrderSchedule, Order, Company, SampleRequest, Item, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
 import { ExcelExport } from "../components/ExcelExport";
 import { ClientPagination } from "../components/ClientPagination";
 import { Spinner } from "../components/Spinner";
@@ -43,6 +44,8 @@ export function ProductionPlan() {
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
   const allowExports = exportsAllowed();
   const isLoading =
     productionsLoading ||
@@ -103,6 +106,9 @@ export function ProductionPlan() {
         const order = orders.find(o => o.id === schedule?.orderId);
         const company = companies.find(c => c.id === order?.companyId);
         
+        if (companyFilter && order?.companyId !== companyFilter) return false;
+        const itemKey = item?.id || `${item?.name || ""}::${p.erpCode || ""}`;
+        if (itemFilter && itemKey !== itemFilter) return false;
         return p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (order?.orderNo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -117,7 +123,10 @@ export function ProductionPlan() {
           productionPlanCompanyName: company?.name || production.companyName || "",
         };
       });
-  }, [productions, selectedDate, searchTerm, npdItems, schedules, orders, companies]);
+  }, [productions, selectedDate, searchTerm, companyFilter, itemFilter, npdItems, schedules, orders, companies]);
+
+  const companyOptions = useMemo(() => Array.from(new Map(filteredList.map((row) => { const schedule = schedules.find((s) => s.id === row.scheduleId); const order = orders.find((o) => o.id === schedule?.orderId); const company = companies.find((c) => c.id === order?.companyId); return [order?.companyId || "", { value: order?.companyId || "", label: company?.name || "" }]; })).values()).filter((option) => option.value && option.label).sort((a, b) => a.label.localeCompare(b.label)), [companies, filteredList, orders, schedules]);
+  const itemOptions = useMemo(() => Array.from(new Map(filteredList.map((row) => { const item = npdItems.find((i) => i.id === String(row.itemId || "").trim()); const erp = String(row.erpCode || ""); const name = item?.name || ""; const key = item?.id || `${name}::${erp}`; return [key, { value: key, label: erp && name && !name.toLowerCase().includes(erp.toLowerCase()) ? `${name} - ${erp}` : name || erp, searchText: `${name} ${erp}` }]; })).values()).filter((option) => option.value && option.label).sort((a, b) => a.label.localeCompare(b.label)), [filteredList, npdItems]);
   const sortedList = useMemo(() => sortProductionPlanRows(filteredList), [filteredList]);
   const {
     page,
@@ -229,11 +238,18 @@ export function ProductionPlan() {
         </div>
       </div>
 
-      <TableControls
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        placeholder="Search jobs..."
-      />
+      <div className="grid gap-3 md:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(260px,1.1fr)_auto] md:items-center">
+        <TableControls
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          placeholder="Search jobs..."
+        />
+        <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
+        <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+        {(searchTerm || companyFilter || itemFilter) ? (
+          <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+        ) : null}
+      </div>
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         {isLoading ? (

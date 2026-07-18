@@ -4,6 +4,7 @@ import { useNpdItems } from "../hooks/useNpdItems";
 import { Production, Item } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Search } from "lucide-react";
+import { Select } from "../components/Select";
 import { formatDate } from "../lib/serial";
 import { ClientPagination } from "../components/ClientPagination";
 import { DataSummaryTiles } from "../components/DataSummaryTiles";
@@ -35,6 +36,8 @@ export function ItemwiseLeastCost() {
   const npdItems = useNpdItems();
   const itemsLoading = false;
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
 
   const isLoading = prodsLoading || itemsLoading;
 
@@ -85,7 +88,10 @@ export function ItemwiseLeastCost() {
       if (!needle) return true;
       return row.erp.toLowerCase().includes(needle) || row.itemName.toLowerCase().includes(needle) || row.company.toLowerCase().includes(needle);
     });
-  }, [leastCostData, searchTerm]);
+  }, [companyFilter, itemFilter, leastCostData, searchTerm]);
+
+  const companyOptions = useMemo(() => Array.from(new Set(leastCostData.map((row) => row.company).filter(Boolean))).sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, label: name })), [leastCostData]);
+  const itemOptions = useMemo(() => Array.from(new Map(leastCostData.map((row) => [`${row.itemName}::${row.erp}`, { value: `${row.itemName}::${row.erp}`, label: row.erp && row.itemName && !row.itemName.toLowerCase().includes(row.erp.toLowerCase()) ? `${row.itemName} - ${row.erp}` : row.itemName || row.erp, searchText: `${row.itemName} ${row.erp}` }])).values()).filter((option) => option.label).sort((a, b) => a.label.localeCompare(b.label)), [leastCostData]);
 
   const {
     page,
@@ -114,16 +120,21 @@ export function ItemwiseLeastCost() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3 bg-white border-2 border-black rounded p-3">
-        <div className="flex min-w-72 items-center gap-2 rounded border border-black px-3 py-2">
+        <div className="flex min-w-72 flex-1 items-center gap-2 rounded border border-black px-3 py-2">
           <Search size={20} className="text-slate-400" />
-        <input
-          type="text"
-          placeholder="Search by ERP, Item or Company..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 outline-none text-sm font-medium"
-        />
+          <input
+            type="text"
+            placeholder="Search by ERP, Item or Company..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 outline-none text-sm font-medium"
+          />
         </div>
+        <div className="min-w-[220px] flex-1"><Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" /></div>
+        <div className="min-w-[260px] flex-1"><Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" /></div>
+        {(searchTerm || companyFilter || itemFilter) ? (
+          <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+        ) : null}
       </div>
 
       <DataSummaryTiles totalRecords={leastCostData.length} filteredRecords={filteredData.length} showingRecords={paginatedData.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />

@@ -4,6 +4,7 @@ import { Production, Machine, ProductionProcessing, Setting } from "../types";
 import { Hammer, Search, ChevronRight, ChevronDown, ClipboardList, ArrowLeft } from "lucide-react";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { Spinner } from "../components/Spinner";
+import { Select } from "../components/Select";
 import { formatDate } from "../lib/serial";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
@@ -40,6 +41,8 @@ export function MachinePendingProcessing() {
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
   const [expandedMachines, setExpandedMachines] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -124,6 +127,9 @@ export function MachinePendingProcessing() {
       .map(g => ({
         ...g,
         jobs: g.jobs.filter(j => {
+          if (companyFilter && j.companyName !== companyFilter) return false;
+          const itemKey = j.item?.id || `${j.itemName}::${j.erpCode}`;
+          if (itemFilter && itemKey !== itemFilter) return false;
           const search = searchTerm.toLowerCase();
           const blob = `${j.production.transactionNo} ${j.itemName} ${j.companyName} ${j.erpCode}`.toLowerCase();
           return blob.includes(search);
@@ -131,7 +137,23 @@ export function MachinePendingProcessing() {
       }))
       .filter(g => g.jobs.length > 0)
       .sort((a, b) => a.machineName.localeCompare(b.machineName));
-  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, filterMachineId, user]);
+  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, companyFilter, itemFilter, filterMachineId, user]);
+
+  const companyOptions = useMemo(() => {
+    const names = new Set<string>();
+    machineGroups.forEach((group) => group.jobs.forEach((job) => { if (job.companyName) names.add(job.companyName); }));
+    return Array.from(names).sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, label: name }));
+  }, [machineGroups]);
+
+  const itemOptions = useMemo(() => {
+    const map = new Map<string, { value: string; label: string; searchText: string }>();
+    machineGroups.forEach((group) => group.jobs.forEach((job) => {
+      const key = job.item?.id || `${job.itemName}::${job.erpCode}`;
+      if (!key || map.has(key)) return;
+      map.set(key, { value: key, label: job.erpCode && job.itemName && !job.itemName.toLowerCase().includes(job.erpCode.toLowerCase()) ? `${job.itemName} - ${job.erpCode}` : job.itemName || job.erpCode, searchText: `${job.itemName} ${job.erpCode}` });
+    }));
+    return Array.from(map.values()).filter((option) => option.label).sort((a, b) => a.label.localeCompare(b.label));
+  }, [machineGroups]);
 
   const toggleMachine = (id: string) => {
     const next = new Set(expandedMachines);
@@ -166,15 +188,22 @@ export function MachinePendingProcessing() {
             {filterMachineId ? `${selectedMachineName} - Pending Jobs` : "Pending Processing"}
           </h2>
         </div>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search job, item, company..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-          />
+        <div className="grid w-full gap-3 md:grid-cols-[minmax(240px,1.4fr)_minmax(200px,1fr)_minmax(240px,1.1fr)_auto] md:items-center md:max-w-4xl">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search job, item, company..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            />
+          </div>
+          <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
+          <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+          {(searchTerm || companyFilter || itemFilter) ? (
+            <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+          ) : null}
         </div>
       </div>
 

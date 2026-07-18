@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpDown, Save } from "lucide-react";
 import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useData } from "../hooks/useData";
@@ -187,6 +188,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [rowPlannedQty, setRowPlannedQty] = useState<Record<string, number | "">>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -288,10 +290,16 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
     return companies.filter((company) => ids.has(company.id)).sort((a, b) => a.name.localeCompare(b.name));
   }, [companies, rows]);
 
+  const companyOptions = useMemo(() => availableCompanies.map((company) => ({ value: company.id, label: company.name })), [availableCompanies]);
+  const itemOptions = useMemo(() => Array.from(new Map(rows.map((row) => { const item = row.linkedItem || row.fgItem; const erp = String(item?.erp || row.order?.erpCode || ""); const name = item?.name || ""; const key = item?.id || `${name}::${erp}`; return [key, { value: key, label: erp && name && !name.toLowerCase().includes(erp.toLowerCase()) ? `${name} - ${erp}` : name || erp, searchText: `${name} ${erp}` }]; })).values()).filter((option) => option.value && option.label).sort((a, b) => a.label.localeCompare(b.label)), [rows]);
+
   const filteredRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const filtered = rows.filter((row) => {
       if (selectedCompanyId && row.company?.id !== selectedCompanyId) return false;
+      const item = row.linkedItem || row.fgItem;
+      const itemKey = item?.id || `${item?.name || ""}::${item?.erp || row.order?.erpCode || ""}`;
+      if (selectedItemId && itemKey !== selectedItemId) return false;
       if (!normalizedSearch) return true;
       const haystack = [
         formatDate(row.schedule.scheduledDate),
@@ -331,7 +339,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
       }
       return sortDirection === "asc" ? compare : -compare;
     });
-  }, [rows, searchTerm, selectedCompanyId, sortDirection, sortKey]);
+  }, [rows, searchTerm, selectedCompanyId, selectedItemId, sortDirection, sortKey]);
 
   const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems } = useClientPagination(filteredRows, 25);
 
@@ -496,26 +504,35 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
               <div className="text-indigo-700 font-bold text-[10px] uppercase tracking-wider">Search Orders</div>
               <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder={`Search ${source} planning rows...`} />
             </div>
-            <div className="space-y-1">
+            <div className="min-w-[220px] flex-1 space-y-1">
               <div className="text-indigo-700 font-bold text-[10px] uppercase tracking-wider">Filter by Company</div>
-              <select
+              <Select
                 value={selectedCompanyId}
-                onChange={(e) => {
-                  setSelectedCompanyId(e.target.value);
+                onChange={(value) => {
+                  setSelectedCompanyId(value);
                   setSelectedIds(new Set());
                 }}
-                className="border-2 border-black rounded px-3 py-1.5 text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[240px]"
-              >
-                <option value="">All Companies</option>
-                {availableCompanies.map((company) => (
-                  <option key={company.id} value={company.id}>{company.name}</option>
-                ))}
-              </select>
+                options={companyOptions}
+                placeholder="All Companies"
+              />
             </div>
-            {(selectedCompanyId || searchTerm) && (
+            <div className="min-w-[260px] flex-1 space-y-1">
+              <div className="text-indigo-700 font-bold text-[10px] uppercase tracking-wider">Filter by Item</div>
+              <Select
+                value={selectedItemId}
+                onChange={(value) => {
+                  setSelectedItemId(value);
+                  setSelectedIds(new Set());
+                }}
+                options={itemOptions}
+                placeholder="All Items"
+              />
+            </div>
+            {(selectedCompanyId || selectedItemId || searchTerm) && (
               <button
                 onClick={() => {
                   setSelectedCompanyId("");
+                  setSelectedItemId("");
                   setSearchTerm("");
                   setSelectedIds(new Set());
                 }}

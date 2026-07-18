@@ -27,6 +27,7 @@ import {
   Truck as TruckIcon
 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { Select } from "../components/Select";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { normalizeOrderItemSource } from "../lib/orderItems";
@@ -39,6 +40,7 @@ interface GroupedLoading {
   slips: (LoadingSlip & {
     totalQty: number;
     items: string[];
+    itemKeys: string[];
   })[];
 }
 
@@ -77,6 +79,8 @@ export function PendingInvoicing() {
   const [trucks] = useData<Truck>("trucks", []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
   const didInitExpand = useRef(false);
   const [billingMode, setBillingMode] = useState<string | null>(null);
@@ -313,18 +317,38 @@ export function PendingInvoicing() {
         const lo = orders.find(o => o.id === lp?.orderId);
         return resolveSlipLineItemName(l, lo);
       });
+      const slipItemKeys = s.lines.map(l => {
+        const lp = plans.find(p => p.id === l.dispatchPlanId);
+        const lo = orders.find(o => o.id === lp?.orderId);
+        const itemId = resolveCanonicalSlipLineItemId(l, lo);
+        const itemName = resolveSlipLineItemName(l, lo);
+        const erp = String(l.erpCode || l.masterErp || lo?.erpCode || "").trim();
+        return itemId || `${itemName}::${erp}`;
+      });
 
       companyMap.get(groupId)!.slips.push({
         ...s,
         totalQty,
-        items: Array.from(new Set(slipItems))
+        items: Array.from(new Set(slipItems)),
+        itemKeys: Array.from(new Set(slipItemKeys))
       });
     });
 
     return Array.from(companyMap.values())
-      .filter(g => g.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
+      .map((group) => ({ ...group, slips: group.slips.filter((slip) => !itemFilter || slip.itemKeys.includes(itemFilter)) }))
+      .filter((group) => group.slips.length > 0)
+      .filter((group) => !companyFilter || group.companyId === companyFilter)
+      .filter((group) => {
+        const needle = searchTerm.trim().toLowerCase();
+        if (!needle) return true;
+        const slipText = group.slips.map((slip) => `${slip.slipNo || ""} ${slip.items.join(" ")}`).join(" ");
+        return `${group.companyName} ${slipText}`.toLowerCase().includes(needle);
+      })
       .sort((a, b) => a.companyName.localeCompare(b.companyName));
-  }, [loadingSlips, companies, plans, orders, npdItems, searchTerm, findItemAcrossSources, resolveOrderItem]);
+  }, [loadingSlips, companies, plans, orders, npdItems, searchTerm, companyFilter, itemFilter, findItemAcrossSources, resolveOrderItem]);
+
+  const companyOptions = useMemo(() => Array.from(new Map(groupedData.map((group) => [group.companyId, { value: group.companyId, label: group.companyName }])).values()).filter((option) => option.value && option.label).sort((a, b) => a.label.localeCompare(b.label)), [groupedData]);
+  const itemOptions = useMemo(() => { const map = new Map<string, { value: string; label: string; searchText: string }>(); groupedData.forEach((group) => group.slips.forEach((slip) => slip.items.forEach((name, index) => { const key = slip.itemKeys[index] || name; if (!key || map.has(key)) return; map.set(key, { value: key, label: name, searchText: name }); }))); return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label)); }, [groupedData]);
 
   useEffect(() => {
     if (didInitExpand.current) return;
@@ -821,15 +845,22 @@ export function PendingInvoicing() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Invoicing</h2>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text"
-            placeholder="Search company..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
-          />
+        <div className="grid w-full gap-3 md:grid-cols-[minmax(240px,1.4fr)_minmax(200px,1fr)_minmax(240px,1.1fr)_auto] md:items-center md:max-w-4xl">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search company, slip, item..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
+            />
+          </div>
+          <Select value={companyFilter} onChange={setCompanyFilter} options={companyOptions} placeholder="All Companies" />
+          <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+          {(searchTerm || companyFilter || itemFilter) ? (
+            <button type="button" onClick={() => { setSearchTerm(""); setCompanyFilter(""); setItemFilter(""); }} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">Clear Filters</button>
+          ) : null}
         </div>
       </div>
 
