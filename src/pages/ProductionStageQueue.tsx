@@ -83,7 +83,7 @@ export function ProductionStageQueue({
   const navigate = useNavigate();
   const [productions, setProductions] = useData<Production>("productions", []);
   const [materials] = useData<Material>("materials", []);
-  const { findItemAcrossSources } = useOrderItemCatalog();
+  const { findItemAcrossSources, resolveOrderItem } = useOrderItemCatalog();
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materialIssueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
@@ -146,11 +146,12 @@ export function ProductionStageQueue({
       .map((production) => {
         const schedule = schedules.find((row) => row.id === production.scheduleId);
         const order = orders.find((row) => row.id === schedule?.orderId);
-        const item = findItemAcrossSources(
-          String(production.itemId || order?.itemId || "").trim(),
-          production.itemSource,
-          production.erpCode || order?.erpCode
-        );
+        const item =
+          findItemAcrossSources(
+            String(production.itemId || order?.itemId || "").trim(),
+            production.itemSource || order?.itemSource,
+            production.erpCode || production.masterErp || order?.erpCode
+          ) || resolveOrderItem(order);
         const company = companies.find((row) => row.id === order?.companyId);
         const prereqQty = prereqMachine
           ? processing
@@ -254,6 +255,7 @@ export function ProductionStageQueue({
     predicate,
     processing,
     productions,
+    resolveOrderItem,
     schedules,
     searchTerm,
     companyFilter,
