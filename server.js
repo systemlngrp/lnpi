@@ -4728,8 +4728,8 @@ const createHandlers = (tableName) => {
               data.id = String(existingNpd.id);
             }
           }
-          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
-          const allowedColumns = await getExistingColumnNames(db, schemaName, "npd");
+          const schemaName2 = process.env.DB_NAME || "u380633007_Inpidata";
+          const allowedColumns = await getExistingColumnNames(db, schemaName2, "npd");
           Object.keys(data).forEach((key) => {
             if (!allowedColumns.has(key)) {
               delete data[key];
@@ -4971,7 +4971,7 @@ const createHandlers = (tableName) => {
           transactionNo: data.transactionNo || data.transaction_no
         });
         if (["loading_slips", "php_loading_slips", "plate_loading_slips"].includes(tableName)) {
-          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+          const schemaName2 = process.env.DB_NAME || "u380633007_Inpidata";
           const loadingSlipColumns = [
             { column: "dispatchPlanId", type: "VARCHAR(36)" },
             { column: "slipNo", type: "VARCHAR(100)" },
@@ -5014,7 +5014,7 @@ const createHandlers = (tableName) => {
           ];
           for (const loadingSlipColumn of loadingSlipColumns) {
             try {
-              await ensureColumnExists(db, schemaName, tableName, loadingSlipColumn.column, loadingSlipColumn.type);
+              await ensureColumnExists(db, schemaName2, tableName, loadingSlipColumn.column, loadingSlipColumn.type);
             } catch (error) {
               console.warn(
                 `[DB] Could not ensure ${tableName}.${loadingSlipColumn.column}:`,
@@ -5024,7 +5024,7 @@ const createHandlers = (tableName) => {
           }
           for (const tallyColumn of sharedTallyColumns) {
             try {
-              await ensureColumnExists(db, schemaName, tableName, tallyColumn.column, tallyColumn.type);
+              await ensureColumnExists(db, schemaName2, tableName, tallyColumn.column, tallyColumn.type);
             } catch (error) {
               console.warn(
                 `[DB] Could not ensure ${tableName}.${tallyColumn.column}:`,
@@ -5034,14 +5034,14 @@ const createHandlers = (tableName) => {
           }
           if (tableName === "php_loading_slips") {
             try {
-              await ensureColumnExists(db, schemaName, tableName, "phpConsumptionTransactionNo", "VARCHAR(100)");
+              await ensureColumnExists(db, schemaName2, tableName, "phpConsumptionTransactionNo", "VARCHAR(100)");
             } catch (error) {
               console.warn("[DB] Could not ensure php_loading_slips.phpConsumptionTransactionNo:", error.message);
             }
           }
           if (tableName === "plate_loading_slips") {
             try {
-              await ensureColumnExists(db, schemaName, tableName, "plateConsumptionTransactionNo", "VARCHAR(100)");
+              await ensureColumnExists(db, schemaName2, tableName, "plateConsumptionTransactionNo", "VARCHAR(100)");
             } catch (error) {
               console.warn("[DB] Could not ensure plate_loading_slips.plateConsumptionTransactionNo:", error.message);
             }
@@ -5054,7 +5054,7 @@ const createHandlers = (tableName) => {
           }
         }
         if (tableName === "gate_passes") {
-          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+          const schemaName2 = process.env.DB_NAME || "u380633007_Inpidata";
           const gatePassColumns = [
             { column: "gatePassType", type: "VARCHAR(30) NOT NULL DEFAULT 'Non-Returnable'" },
             { column: "invoiceId", type: "VARCHAR(36)" },
@@ -5082,7 +5082,7 @@ const createHandlers = (tableName) => {
           ];
           for (const gatePassColumn of gatePassColumns) {
             try {
-              await ensureColumnExists(db, schemaName, "gate_passes", gatePassColumn.column, gatePassColumn.type);
+              await ensureColumnExists(db, schemaName2, "gate_passes", gatePassColumn.column, gatePassColumn.type);
             } catch (error) {
               console.warn(`[DB] Could not ensure gate_passes.${gatePassColumn.column}:`, error.message);
             }
@@ -5123,10 +5123,20 @@ const createHandlers = (tableName) => {
           }
         }
         if (["productions", "php_job_master", "plate_job_master"].includes(tableName)) {
-          const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
-          await ensureColumnExists(db, schemaName, tableName, "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
+          const schemaName2 = process.env.DB_NAME || "u380633007_Inpidata";
+          await ensureColumnExists(db, schemaName2, tableName, "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
         }
+        const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+        const existingColumns = await getExistingColumnNames(db, schemaName, tableName);
+        Object.keys(data).forEach((key) => {
+          if (!existingColumns.has(key)) {
+            delete data[key];
+          }
+        });
         const keys = Object.keys(data);
+        if (keys.length === 0) {
+          return res.status(400).json({ error: "No valid columns provided." });
+        }
         const values = Object.values(data).map(
           (v) => typeof v === "object" && v !== null ? JSON.stringify(v) : v
         );

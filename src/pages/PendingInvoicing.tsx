@@ -64,6 +64,11 @@ interface InvoiceItemRow {
   allocations: InvoiceAllocationRow[];
 }
 
+function toPersistableLoadingSlip(slip: LoadingSlip & { totalQty?: number; items?: string[]; itemKeys?: string[] }): LoadingSlip {
+  const { totalQty: _totalQty, items: _items, itemKeys: _itemKeys, ...persistableSlip } = slip;
+  return persistableSlip;
+}
+
 export function PendingInvoicing() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -721,8 +726,8 @@ export function PendingInvoicing() {
         }
       }
 
-      const updatedSlips = invoiceModal.slips.map((slip: LoadingSlip) => ({
-        ...slip,
+      const updatedSlips = invoiceModal.slips.map((slip) => ({
+        ...toPersistableLoadingSlip(slip),
         invoiceId,
         updatedBy: "System User",
         updateTimestamp: timestamp,

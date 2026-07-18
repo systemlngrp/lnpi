@@ -5713,7 +5713,18 @@ const createHandlers = (tableName: string) => {
           await ensureColumnExists(db, schemaName, tableName, "itemSource", "VARCHAR(20) NOT NULL DEFAULT 'FG'");
         }
 
+        const schemaName = process.env.DB_NAME || "u380633007_Inpidata";
+        const existingColumns = await getExistingColumnNames(db, schemaName, tableName);
+        Object.keys(data).forEach((key) => {
+          if (!existingColumns.has(key)) {
+            delete data[key];
+          }
+        });
+
         const keys = Object.keys(data);
+        if (keys.length === 0) {
+          return res.status(400).json({ error: "No valid columns provided." });
+        }
         // Stringify any objects or arrays for MySQL JSON columns
         const values = Object.values(data).map(v => 
           (typeof v === "object" && v !== null) ? JSON.stringify(v) : v
