@@ -5,7 +5,9 @@ import {
   Material,
   MaterialIn,
   MaterialInPackingSlip,
+  MaterialIssue,
   MaterialIssueReelLine,
+  MaterialReturn,
   MaterialReturnReelLine,
   Production,
   ProductionProcessing,
@@ -33,7 +35,11 @@ function formatQty(value: number) {
 
 function hasFfgValue(production: Production) {
   const value = production.prodFromFFG;
-  return !(value === null || value === undefined || String(value).trim() === "");
+  if (value === null || value === undefined) return false;
+  const asString = String(value).trim();
+  if (!asString) return false;
+  const asNumber = Number(asString);
+  return Number.isFinite(asNumber) ? asNumber > 0 : true;
 }
 
 function getReelRateForSlip({
@@ -58,7 +64,9 @@ export function JobsInProgressReport() {
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
+  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
+  const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -70,6 +78,16 @@ export function JobsInProgressReport() {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
     const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
     const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
+    const issueProductionMap = new Map(
+      materialIssues
+        .filter((issue) => issue.issueType === "Job" && issue.productionId)
+        .map((issue) => [issue.id, issue.productionId as string])
+    );
+    const returnProductionMap = new Map(
+      materialReturns
+        .filter((entry) => entry.returnType === "Job" && entry.productionId)
+        .map((entry) => [entry.id, entry.productionId as string])
+    );
 
     const corrugationDateMap = new Map<string, string>();
     processing.forEach((entry) => {
@@ -82,22 +100,26 @@ export function JobsInProgressReport() {
 
     const issuedByProduction = new Map<string, { weight: number; value: number }>();
     issueReelLines.forEach((line) => {
-      const current = issuedByProduction.get(line.productionId) || { weight: 0, value: 0 };
+      const productionId = line.productionId || issueProductionMap.get(line.materialIssueId);
+      if (!productionId) return;
+      const current = issuedByProduction.get(productionId) || { weight: 0, value: 0 };
       const slip = packingSlipMap.get(line.packingSlipId);
       const rate = getReelRateForSlip({ slip, materialInMap, materialMap });
       current.weight += Number(line.weightKg || 0);
       current.value += Number(line.weightKg || 0) * rate;
-      issuedByProduction.set(line.productionId, current);
+      issuedByProduction.set(productionId, current);
     });
 
     const returnedByProduction = new Map<string, { weight: number; value: number }>();
     returnReelLines.forEach((line) => {
-      const current = returnedByProduction.get(line.productionId) || { weight: 0, value: 0 };
+      const productionId = line.productionId || returnProductionMap.get(line.materialReturnId);
+      if (!productionId) return;
+      const current = returnedByProduction.get(productionId) || { weight: 0, value: 0 };
       const slip = packingSlipMap.get(line.packingSlipId);
       const rate = getReelRateForSlip({ slip, materialInMap, materialMap });
       current.weight += Number(line.weightKg || 0);
       current.value += Number(line.weightKg || 0) * rate;
-      returnedByProduction.set(line.productionId, current);
+      returnedByProduction.set(productionId, current);
     });
 
     const query = searchTerm.trim().toLowerCase();
@@ -142,7 +164,7 @@ export function JobsInProgressReport() {
         if (dateDiff !== 0) return dateDiff;
         return a.jobNo.localeCompare(b.jobNo, undefined, { numeric: true, sensitivity: "base" });
       });
-  }, [dateFrom, dateTo, issueReelLines, materialIn, materials, minConsumed, packingSlips, processing, productions, returnReelLines, searchTerm]);
+  }, [dateFrom, dateTo, issueReelLines, materialIn, materialIssues, materialReturns, materials, minConsumed, packingSlips, processing, productions, returnReelLines, searchTerm]);
 
   const summary = useMemo(
     () =>
