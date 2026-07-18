@@ -22,6 +22,7 @@ type JobsInProgressRow = {
   corrugationDate: string;
   erpCode: string;
   plannedQty: number;
+  ffgQty: number;
   reelIssued: number;
   reelReturned: number;
   reelConsumed: number;
@@ -142,6 +143,7 @@ export function JobsInProgressReport() {
           corrugationDate: corrugationDateMap.get(production.id) || "",
           erpCode: String(production.erpCode || production.masterErp || ""),
           plannedQty: Number(production.qty || production.plannedQty || 0),
+          ffgQty: Number(production.prodFromFFG || 0),
           reelIssued,
           reelReturned,
           reelConsumed,
@@ -264,6 +266,7 @@ export function JobsInProgressReport() {
                   "Corrugation Date",
                   "ERP",
                   "Planned Qty",
+                  "FFG",
                   "Reel Issued",
                   "Reel Returned",
                   "Reel Consumed",
@@ -278,7 +281,7 @@ export function JobsInProgressReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="border-2 border-black px-6 py-10 text-center text-sm font-medium text-black">
+                  <td colSpan={10} className="border-2 border-black px-6 py-10 text-center text-sm font-medium text-black">
                     No jobs in progress match the current filters.
                   </td>
                 </tr>
@@ -290,6 +293,7 @@ export function JobsInProgressReport() {
                     <td className="border-2 border-black px-3 py-3 whitespace-nowrap">{formatDate(row.corrugationDate)}</td>
                     <td className="border-2 border-black px-3 py-3">{row.erpCode || "-"}</td>
                     <td className="border-2 border-black px-3 py-3 text-right font-semibold">{formatQty(row.plannedQty)}</td>
+                    <td className="border-2 border-black px-3 py-3 text-right font-semibold">{formatQty(row.ffgQty)}</td>
                     <td className="border-2 border-black px-3 py-3 text-right">{formatQty(row.reelIssued)}</td>
                     <td className="border-2 border-black px-3 py-3 text-right">{formatQty(row.reelReturned)}</td>
                     <td className="border-2 border-black bg-amber-50 px-3 py-3 text-right font-bold text-amber-800">{formatQty(row.reelConsumed)}</td>

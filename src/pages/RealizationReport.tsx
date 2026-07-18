@@ -5,9 +5,10 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { Download, FileText, RotateCcw, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { Company, Order, OrderSchedule, Production, Setting } from "../types";
+import { Company, Item, Order, OrderSchedule, Production, Setting } from "../types";
 import { formatDate, getFinancialYear } from "../lib/serial";
 import { parseRealizationTargets } from "../lib/realizationTargets";
+import { useNpdItems } from "../hooks/useNpdItems";
 
 type TargetRow = {
   fy: string;
@@ -76,6 +77,49 @@ function weightedAverage(weightedValue: number, qty: number) {
   return Number((weightedValue / qty).toFixed(2));
 }
 
+function positiveNumber(...values: unknown[]) {
+  for (const value of values) {
+    const numeric = Number(value || 0);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  }
+  return 0;
+}
+
+function gramsToKg(value: number) {
+  return value > 0 ? value / 1000 : 0;
+}
+
+function resolveTotalWeightOfSet(production: Production, item?: Item) {
+  const savedTotalWeight = positiveNumber(production.totalWeightOfSet);
+  if (savedTotalWeight > 0) return savedTotalWeight;
+
+  const productionSheetWeight = positiveNumber(production.sheetWeight, production.weightPerPcSetReq);
+  const productionPlateWeight = positiveNumber(production.plateWeight);
+  if (productionSheetWeight + productionPlateWeight > 0) {
+    return productionSheetWeight + productionPlateWeight;
+  }
+
+  const itemSheetWeightGms = positiveNumber(
+    (item as any)?.calculatedWeightPerBox,
+    (item as any)?.standardWeightGms,
+    (item as any)?.weightPerPcSetReq,
+    (item as any)?.weightPerPcReq
+  );
+  const itemPlateWeightGms = positiveNumber((item as any)?.platePhpWeight);
+  const itemPlateWeightKg = positiveNumber(item?.plateWeight, gramsToKg(itemPlateWeightGms));
+  return gramsToKg(itemSheetWeightGms) + itemPlateWeightKg;
+}
+
+function resolveRealizationPerKg(production: Production, order?: Order | null, item?: Item) {
+  const savedRealization = positiveNumber(production.realizationPerKg);
+  if (savedRealization > 0) return Number(savedRealization.toFixed(2));
+
+  const rate = positiveNumber(production.rate, order?.rate, (item as any)?.orderRate, item?.rate);
+  const totalWeightOfSet = resolveTotalWeightOfSet(production, item);
+  if (rate <= 0 || totalWeightOfSet <= 0) return 0;
+  return Number((rate / totalWeightOfSet).toFixed(2));
+}
+
 function findTargetForDate(targets: TargetRow[], date: Date) {
   const fy = getFinancialYear(toDateInput(date));
   const month = monthLabelFromDate(date);
@@ -129,6 +173,7 @@ export function RealizationReport() {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [companies] = useData<Company>("companies", []);
   const [settings] = useData<Setting>("settings", []);
+  const npdItems = useNpdItems();
 
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -141,6 +186,12 @@ export function RealizationReport() {
     const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
     const orderMap = new Map(orders.map((order) => [order.id, order]));
     const companyMap = new Map(companies.map((company) => [company.id, company]));
+    const itemById = new Map(npdItems.map((item) => [item.id, item]));
+    const itemByErp = new Map(
+      npdItems
+        .map((item) => [String(item.erp || "").trim(), item] as const)
+        .filter(([erp]) => Boolean(erp))
+    );
     const from = parseAppDate(fromDate);
     const to = parseAppDate(toDate);
     const fromTime = from ? normalizeDate(from).getTime() : null;
@@ -154,8 +205,15 @@ export function RealizationReport() {
         const order = schedule ? orderMap.get(schedule.orderId) : null;
         const company = order?.companyId ? companyMap.get(order.companyId) : null;
         const companySalesPerson = String(company?.salesPerson || "").trim() || "Unknown Sales Person";
+        const erpCode = String(production.erpCode || production.masterErp || order?.erpCode || "").trim();
+        const item =
+          itemById.get(String(production.npdId || "")) ||
+          itemById.get(String(production.itemId || "")) ||
+          itemById.get(String(order?.npdId || "")) ||
+          itemById.get(String(order?.itemId || "")) ||
+          itemByErp.get(erpCode);
         const qty = Number(production.qty || 0);
-        const realizationPerKg = Number(production.realizationPerKg || 0);
+        const realizationPerKg = resolveRealizationPerKg(production, order, item);
 
         return {
           productionId: production.id,
@@ -180,7 +238,7 @@ export function RealizationReport() {
         return true;
       })
       .map(({ dateValue: _dateValue, ...row }) => row);
-  }, [companies, companyId, fromDate, orders, productions, salesPersonId, schedules, toDate]);
+  }, [companies, companyId, fromDate, npdItems, orders, productions, salesPersonId, schedules, toDate]);
 
   const salesPersonOptions = useMemo(
     () =>

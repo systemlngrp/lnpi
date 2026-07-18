@@ -57,8 +57,6 @@ export function JobwiseReelConsumptionReport() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [minGpPercent, setMinGpPercent] = useState("");
-  const [positiveConsumptionOnly, setPositiveConsumptionOnly] = useState(false);
-  const [negativeConsumptionOnly, setNegativeConsumptionOnly] = useState(false);
 
   const rows = useMemo<JobwiseReelConsumptionRow[]>(() => {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -130,8 +128,6 @@ export function JobwiseReelConsumptionReport() {
         if (dateFrom && (!row.corrugationDate || new Date(row.corrugationDate).getTime() < new Date(dateFrom).getTime())) return false;
         if (dateTo && (!row.corrugationDate || new Date(row.corrugationDate).getTime() > new Date(dateTo).getTime())) return false;
         if (minGpPercent && row.gpPercent < Number(minGpPercent || 0)) return false;
-        if (positiveConsumptionOnly && row.reelConsumed <= 0) return false;
-        if (negativeConsumptionOnly && row.reelConsumed >= 0) return false;
         return true;
       })
       .sort((a, b) => {
@@ -146,9 +142,7 @@ export function JobwiseReelConsumptionReport() {
     materialIn,
     materials,
     minGpPercent,
-    negativeConsumptionOnly,
     packingSlips,
-    positiveConsumptionOnly,
     processing,
     productions,
     returnReelLines,
@@ -175,8 +169,6 @@ export function JobwiseReelConsumptionReport() {
     setDateFrom("");
     setDateTo("");
     setMinGpPercent("");
-    setPositiveConsumptionOnly(false);
-    setNegativeConsumptionOnly(false);
   };
 
   return (
@@ -205,7 +197,7 @@ export function JobwiseReelConsumptionReport() {
       </div>
 
       <div className="rounded border border-black bg-white p-3">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(3,minmax(130px,0.8fr))_minmax(190px,0.9fr)_auto] xl:items-center">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(3,minmax(130px,0.8fr))_auto] xl:items-center">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
@@ -240,32 +232,6 @@ export function JobwiseReelConsumptionReport() {
             placeholder="Min GP%"
             className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
           />
-
-          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
-            <input
-              type="checkbox"
-              checked={positiveConsumptionOnly}
-              onChange={(e) => {
-                setPositiveConsumptionOnly(e.target.checked);
-                if (e.target.checked) setNegativeConsumptionOnly(false);
-              }}
-              className="h-4 w-4 accent-indigo-600"
-            />
-            Positive consumption only
-          </label>
-
-          <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
-            <input
-              type="checkbox"
-              checked={negativeConsumptionOnly}
-              onChange={(e) => {
-                setNegativeConsumptionOnly(e.target.checked);
-                if (e.target.checked) setPositiveConsumptionOnly(false);
-              }}
-              className="h-4 w-4 accent-indigo-600"
-            />
-            Negative consumption only
-          </label>
 
           <button
             type="button"
