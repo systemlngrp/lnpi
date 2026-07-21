@@ -99,6 +99,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
         { id: "tomorrowPlanQty", tone: "bg-sky-50", valueTone: "text-sky-800" },
         { id: "tomorrowPlanValue", tone: "bg-fuchsia-50", valueTone: "text-fuchsia-800" },
         { id: "actualPaperUsed", tone: "bg-violet-50", valueTone: "text-violet-800" },
+        { id: "scrapSoldQty", tone: "bg-teal-50", valueTone: "text-teal-800" },
         { id: "wastage", tone: "bg-orange-50", valueTone: "text-orange-800" },
         { id: "planPaper", tone: "bg-indigo-50", valueTone: "text-indigo-800" },
         { id: "activeJobs", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
@@ -690,70 +691,51 @@ export function OperationDashboard() {
             Total Pending: {pendingTaskSummary.grandTotal.toLocaleString("en-IN")}
           </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse text-xs">
-            <thead className="sticky top-0 z-30 bg-slate-100">
-              <tr className="divide-x divide-slate-900 border-b-2 border-slate-900">
-                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">
-                  Pending Task Name
-                </th>
-                <th className="w-32 px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">
-                  Count
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-900 bg-white">
-              {pendingTaskSummary.groups.length === 0 ? (
-                <tr>
-                  <td colSpan={2} className="px-3 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    No pending tasks found.
-                  </td>
-                </tr>
-              ) : (
-                pendingTaskSummary.groups.map((group) => (
-                  <React.Fragment key={group.section}>
-                    <tr className="divide-x divide-slate-900 bg-slate-900 text-white">
-                      <td className="px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em]">
-                        {group.section}
-                      </td>
-                      <td className="px-3 py-2 text-right text-sm font-black">
-                        {group.sectionTotal.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
+        <div className="bg-white text-xs">
+          {pendingTaskSummary.groups.length === 0 ? (
+            <div className="px-3 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              No pending tasks found.
+            </div>
+          ) : (
+            <div className="divide-y-2 divide-slate-900">
+              {pendingTaskSummary.groups.map((group) => (
+                <div key={group.section}>
+                  <div className="flex items-center justify-between gap-3 bg-slate-900 px-3 py-2 text-white">
+                    <span className="text-[11px] font-black uppercase tracking-[0.16em]">{group.section}</span>
+                    <span className="text-sm font-black">{group.sectionTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="grid grid-cols-1 border-t-2 border-slate-900 sm:grid-cols-2 xl:grid-cols-4">
                     {group.rows.map((row, index) => (
-                      <tr
+                      <button
                         key={row.countKey}
+                        type="button"
                         onClick={() => navigate(row.countKey)}
                         className={cn(
-                          "cursor-pointer divide-x divide-slate-900 transition hover:bg-indigo-50",
+                          "flex min-h-[54px] items-center justify-between gap-3 border-b border-slate-900 px-3 py-2 text-left transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:border-r",
                           index % 2 === 0 ? "bg-white" : "bg-slate-50"
                         )}
                       >
-                        <td className="px-3 py-2 pl-6 text-[11px] font-bold uppercase tracking-wide text-slate-900 underline-offset-2 hover:underline">
+                        <span className="min-w-0 text-[11px] font-bold uppercase tracking-wide text-slate-900 underline-offset-2">
                           {row.name}
-                        </td>
-                        <td className="px-3 py-2 text-right text-sm font-black text-indigo-700">
+                        </span>
+                        <span className="shrink-0 text-sm font-black text-indigo-700">
                           {row.count.toLocaleString("en-IN")}
-                        </td>
-                      </tr>
+                        </span>
+                      </button>
                     ))}
-                  </React.Fragment>
-                ))
-              )}
-            </tbody>
-            {pendingTaskSummary.grandTotal > 0 ? (
-              <tfoot className="border-t-2 border-slate-900 bg-indigo-50">
-                <tr className="divide-x divide-slate-900">
-                  <td className="px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-900">
-                    Total Pending
-                  </td>
-                  <td className="px-3 py-2 text-right text-base font-black text-indigo-800">
-                    {pendingTaskSummary.grandTotal.toLocaleString("en-IN")}
-                  </td>
-                </tr>
-              </tfoot>
-            ) : null}
-          </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {pendingTaskSummary.grandTotal > 0 ? (
+            <div className="flex items-center justify-between gap-3 border-t-2 border-slate-900 bg-indigo-50 px-3 py-2">
+              <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-900">Total Pending</span>
+              <span className="text-base font-black text-indigo-800">
+                {pendingTaskSummary.grandTotal.toLocaleString("en-IN")}
+              </span>
+            </div>
+          ) : null}
         </div>
       </section>
 

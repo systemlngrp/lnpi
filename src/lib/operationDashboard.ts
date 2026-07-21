@@ -447,8 +447,9 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       title: "Operation",
       cards: [
         makeCard({ id: "production", label: "Production", value: totalProduction, format: "number" }),
-        makeCard({ id: "actualPaperUsed", label: "Actual Paper Used", value: totalActualPaperUsed, format: "number", decimals: 2 }),
         makeCard({ id: "linearMeter", label: "Linear Meter", value: totalProductionMeter, format: "number" }),
+        makeCard({ id: "actualPaperUsed", label: "Actual Paper Used", value: totalActualPaperUsed, format: "number", decimals: 2 }),
+        makeCard({ id: "scrapSoldQty", label: "Total Scrap Sold", value: totalScrapSoldQty, format: "number", decimals: 2 }),
         makeCard({ id: "wastage", label: "Total Wastage", value: totalWastage, format: "percent" }),
         makeCard({ id: "planPaper", label: "Plan Paper", value: totalPlanPaper, format: "number" }),
         makeCard({ id: "activeJobs", label: "Active Jobs", value: activeJobs, format: "number" }),
