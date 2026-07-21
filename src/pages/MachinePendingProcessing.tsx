@@ -8,7 +8,6 @@ import { Select } from "../components/Select";
 import { formatDate } from "../lib/serial";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
-import { useAuth } from "../auth/AuthContext";
 import { getRequiredMachinesForProduction } from "../lib/productionType";
 
 interface PendingMachineJob {
@@ -31,7 +30,6 @@ interface MachineGroup {
 export function MachinePendingProcessing() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
   const filterMachineId = searchParams.get("machineId") || "";
 
   const [productions] = useData<Production>("productions", []);
@@ -55,28 +53,9 @@ export function MachinePendingProcessing() {
 
   const machineGroups = useMemo(() => {
     const groups: Map<string, MachineGroup> = new Map();
-    const isMachineAssignedToOperator = (machine: Machine) => {
-      if (user?.role !== "Operator") return true;
-      const assignedIds = Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : [];
-      const assignedNames = Array.isArray(machine.assignedOperatorNames) ? machine.assignedOperatorNames : [];
-      const normalizedUserName = String(user.name || "").trim().toLowerCase();
-
-      return (
-        assignedIds.includes(user.id) ||
-        assignedNames.some((name) => String(name || "").trim().toLowerCase() === normalizedUserName)
-      );
-    };
-    const operatorAssignedMachineIds = new Set(
-      user?.role === "Operator"
-        ? machines
-            .filter((machine) => isMachineAssignedToOperator(machine))
-            .map((machine) => machine.id)
-        : []
-    );
 
     // Initialize groups for relevant machines
     machines.forEach(m => {
-      if (user?.role === "Operator" && !operatorAssignedMachineIds.has(m.id)) return;
       if (filterMachineId && m.id !== filterMachineId) return;
       groups.set(m.id, { machineId: m.id, machineName: m.name, jobs: [] });
     });
@@ -137,7 +116,7 @@ export function MachinePendingProcessing() {
       }))
       .filter(g => g.jobs.length > 0)
       .sort((a, b) => a.machineName.localeCompare(b.machineName));
-  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, companyFilter, itemFilter, filterMachineId, user]);
+  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, companyFilter, itemFilter, filterMachineId]);
 
   const companyOptions = useMemo(() => {
     const names = new Set<string>();

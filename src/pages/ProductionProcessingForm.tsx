@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Machine, User, ProductionProcessing } from "../types";
+import { Production, Machine, ProductionProcessing } from "../types";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -21,41 +21,15 @@ export function ProductionProcessingForm() {
   const lockJob = searchParams.get("lockJob") === "1";
   
   const [productions] = useData<Production>("productions", []);
-  const [machines, , machinesLoading] = useData<Machine>("machines", []);
-  const [users] = useData<User>("users", []);
+  const [machines] = useData<Machine>("machines", []);
   const [processing, setProcessing] = useData<ProductionProcessing>("production_processing", []);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [productionId, setProductionId] = useState(initialProductionId);
   const [machineId, setMachineId] = useState(initialMachineId);
-  const [shift, setShift] = useState<"" | "Day" | "Night">(initialShift as any || "");
+  const [shift, setShift] = useState<"" | "Day" | "Night">((initialShift as "" | "Day" | "Night") || "");
   const [qty, setQty] = useState<string>(initialQty);
-  const [operatorId, setOperatorId] = useState(user?.role === "Operator" ? user.id : "");
-
-  const isMachineAssignedToOperator = (machine: Machine) => {
-    if (user?.role !== "Operator") return true;
-    const assignedIds = Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : [];
-    const assignedNames = Array.isArray(machine.assignedOperatorNames) ? machine.assignedOperatorNames : [];
-    const normalizedUserName = String(user.name || "").trim().toLowerCase();
-
-    return (
-      assignedIds.includes(user.id) ||
-      assignedNames.some((name) => String(name || "").trim().toLowerCase() === normalizedUserName)
-    );
-  };
-
-  const assignedMachineIdsForUser = useMemo(
-    () =>
-      user?.role === "Operator"
-        ? new Set(
-            machines
-              .filter((machine) => isMachineAssignedToOperator(machine))
-              .map((machine) => machine.id)
-          )
-        : null,
-    [machines, user]
-  );
 
   const jobOptions = useMemo(() => {
     return productions
@@ -67,47 +41,10 @@ export function ProductionProcessingForm() {
   }, [productions]);
 
   const machineOptions = useMemo(() => {
-    const visibleMachines =
-      user?.role === "Operator" && assignedMachineIdsForUser
-        ? machines.filter((machine) => assignedMachineIdsForUser.has(machine.id))
-        : machines;
-
-    return [...visibleMachines]
+    return [...machines]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(m => ({ value: m.id, label: normalizeMachineName(m.name) }));
-  }, [assignedMachineIdsForUser, machines, user]);
-
-  const operatorOptions = useMemo(() => {
-    if (user?.role === "Operator") {
-      return [{ value: user.id, label: user.name }];
-    }
-
-    const selectedMachine = machines.find((machine) => machine.id === machineId);
-    const assignedIds = Array.isArray(selectedMachine?.assignedOperatorIds) ? selectedMachine.assignedOperatorIds : [];
-    const candidateUsers =
-      assignedIds.length > 0
-        ? users.filter((machineUser) => assignedIds.includes(machineUser.id))
-        : users.filter((machineUser) => machineUser.status !== "Inactive" && machineUser.role === "Operator");
-
-    return candidateUsers
-      .map((machineUser) => ({ value: machineUser.id, label: machineUser.name }))
-      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
-  }, [machineId, machines, user, users]);
-
-  useEffect(() => {
-    if (user?.role === "Operator") {
-      setOperatorId(user.id);
-      // Only clear machineId if machines are LOADED and it's not in the assigned list
-      if (!machinesLoading && machines.length > 0 && machineId && assignedMachineIdsForUser && !assignedMachineIdsForUser.has(machineId)) {
-        setMachineId("");
-      }
-      return;
-    }
-
-    if (operatorId && !operatorOptions.some((option) => option.value === operatorId)) {
-      setOperatorId("");
-    }
-  }, [assignedMachineIdsForUser, machineId, machines.length, machinesLoading, operatorId, operatorOptions, user]);
+  }, [machines]);
 
   const selectedProduction = useMemo(
     () => productions.find((production) => production.id === productionId),
@@ -159,22 +96,14 @@ export function ProductionProcessingForm() {
     if (isMandatoryField("production_processing_form", "machineId") && !machineId) missing.push("Machine");
     if (isMandatoryField("production_processing_form", "shift") && !shift) missing.push("Shift");
     if (isMandatoryField("production_processing_form", "qty") && !qty) missing.push("Quantity");
-    if (isMandatoryField("production_processing_form", "operatorId") && !operatorId) missing.push("Operator Name");
 
     if (missing.length) {
       alert(`Please fill mandatory fields: ${missing.join(", ")}`);
       return;
     }
 
-    const selectedOperator = users.find(u => u.id === operatorId);
-
     if (!selectedProduction || !selectedMachine) return;
-    if (user?.role === "Operator" && assignedMachineIdsForUser && !assignedMachineIdsForUser.has(selectedMachine.id)) {
-      alert("You are not assigned to this machine.");
-      return;
-    }
-    const operatorName = user?.role === "Operator" ? user.name : selectedOperator?.name;
-    if (!operatorName) return;
+
     const qtyNumber = Number(qty);
     if (!Number.isFinite(qtyNumber) || qtyNumber <= 0) {
       alert("Please enter a quantity greater than 0.");
@@ -182,6 +111,8 @@ export function ProductionProcessingForm() {
     }
 
     const normalizedMachineName = qtyContext?.normalizedMachineName ?? normalizeMachineName(selectedMachine.name);
+    const auditUserId = user?.id || "system";
+    const auditUserName = user?.name || "System User";
 
     setIsSubmitting(true);
     setTimeout(() => {
@@ -193,10 +124,10 @@ export function ProductionProcessingForm() {
         machineName: normalizedMachineName,
         shift: shift as "Day" | "Night",
         qty: qtyNumber,
-        operatorId,
-        operatorName,
+        operatorId: auditUserId,
+        operatorName: auditUserName,
         date,
-        updatedBy: "System User",
+        updatedBy: auditUserName,
         updateTimestamp: new Date().toISOString()
       };
 
@@ -292,18 +223,6 @@ export function ProductionProcessingForm() {
                   Plan: {qtyContext.plannedQty.toLocaleString()} | Reported: {qtyContext.alreadyProcessedQty.toLocaleString()} | Pending: {qtyContext.pendingQty.toLocaleString()}
                 </div>
               ) : null}
-            </div>
-
-            <div className="flex flex-col space-y-1">
-              <MandatoryLabel label="Operator Name" required className="font-bold text-black text-sm" />
-              <Select 
-                value={operatorId} 
-                onChange={setOperatorId} 
-                options={operatorOptions} 
-                placeholder="Select Operator..." 
-                required
-                disabled={user?.role === "Operator"} 
-              />
             </div>
           </div>
 
