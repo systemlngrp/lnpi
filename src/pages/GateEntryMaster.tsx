@@ -25,6 +25,7 @@ export function GateEntryMaster({ cancelledOnly = false }: GateEntryMasterProps 
   const filteredEntries = useMemo(
     () =>
       [...gateEntries]
+        .filter((entry) => !cancelledOnly || isGateEntryCancelled(entry))
         .filter((entry) => {
           const supplierName = getSupplierNameById(entry.supplierId, suppliers, companies);
           const haystack = [
@@ -116,7 +117,7 @@ export function GateEntryMaster({ cancelledOnly = false }: GateEntryMasterProps 
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search gate entry no, supplier, invoice no, truck no, status..."
+          placeholder={cancelledOnly ? "Search cancelled gate entry no, supplier, invoice no, truck no..." : "Search gate entry no, supplier, invoice no, truck no, status..."}
           className="w-full max-w-xl rounded-xl border-2 border-black px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-600"
         />
       </div>
