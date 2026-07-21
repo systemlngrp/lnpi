@@ -6,7 +6,9 @@ import { Company, GateEntry, GateEntryPhoto, Supplier } from "../types";
 import { hasGateEntryMrr, isGateEntryCancelled } from "../lib/gateEntryState";
 import { useAuth } from "../auth/AuthContext";
 
-export function GateEntryMaster() {
+type GateEntryMasterProps = { cancelledOnly?: boolean };
+
+export function GateEntryMaster({ cancelledOnly = false }: GateEntryMasterProps = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
@@ -18,6 +20,7 @@ export function GateEntryMaster() {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [previewPhoto, setPreviewPhoto] = useState<{ filename: string; slotNo: number } | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const pageTitle = cancelledOnly ? "Cancelled Gate Entry" : "Gate Entry Master";
 
   const filteredEntries = useMemo(
     () =>
@@ -42,7 +45,7 @@ export function GateEntryMaster() {
           const timeB = new Date(b.updateTimestamp || b.date || 0).getTime();
           return timeB - timeA;
         }),
-    [gateEntries, searchTerm, suppliers, companies]
+    [cancelledOnly, gateEntries, searchTerm, suppliers, companies]
   );
 
   const selectedEntry = filteredEntries.find((entry) => entry.id === selectedEntryId) || null;
@@ -97,14 +100,16 @@ export function GateEntryMaster() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4 border-b border-black pb-4">
-        <h2 className="text-xl font-bold uppercase tracking-tight text-black">Gate Entry Master</h2>
-        <button
-          type="button"
-          onClick={() => navigate("/gate-entry/form")}
-          className="flex items-center gap-2 rounded bg-indigo-600 px-4 py-2 font-bold text-white transition hover:bg-indigo-700"
-        >
-          <Plus size={16} /> Add Gate Entry
-        </button>
+        <h2 className="text-xl font-bold uppercase tracking-tight text-black">{pageTitle}</h2>
+        {!cancelledOnly ? (
+          <button
+            type="button"
+            onClick={() => navigate("/gate-entry/form")}
+            className="flex items-center gap-2 rounded bg-indigo-600 px-4 py-2 font-bold text-white transition hover:bg-indigo-700"
+          >
+            <Plus size={16} /> Add Gate Entry
+          </button>
+        ) : null}
       </div>
 
       <div className="rounded border border-black bg-white p-4 shadow-sm">
@@ -131,14 +136,14 @@ export function GateEntryMaster() {
             {filteredEntries.length === 0 ? (
               <tr>
                 <td colSpan={11} className="border border-black px-6 py-10 text-center font-medium text-black">
-                  No gate entries found.
+                  {cancelledOnly ? "No cancelled gate entries found." : "No gate entries found."}
                 </td>
               </tr>
             ) : (
               filteredEntries.map((entry) => {
                 const cancelled = isGateEntryCancelled(entry);
                 const linkedMrr = hasGateEntryMrr(entry);
-                const editable = !linkedMrr && !cancelled;
+                const editable = !cancelledOnly && !linkedMrr && !cancelled;
                 return (
                   <tr key={entry.id} className={cancelled ? "bg-red-50/50" : "hover:bg-slate-50"}>
                     <td className="border border-black px-4 py-3 text-sm font-semibold text-black">{entry.gateEntryNo || "Syncing..."}</td>
@@ -273,6 +278,10 @@ export function GateEntryMaster() {
       ) : null}
     </div>
   );
+}
+
+export function CancelledGateEntry() {
+  return <GateEntryMaster cancelledOnly />;
 }
 
 function getSupplierNameById(supplierId: string, suppliers: Supplier[], companies: Company[]) {

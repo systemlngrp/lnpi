@@ -107,6 +107,7 @@ const purchaseOrderItems: NavItem[] = [
 const gateEntryItems: NavItem[] = [
   { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
   { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
+  { name: "Cancelled Gate Entry", href: "/gate-entry/cancelled", icon: X },
 ];
 
 const materialReceiptItems: NavItem[] = [
