@@ -2455,6 +2455,7 @@ function entityPermissionKey(entity) {
     case "invoice_line_items":
       return "/billing";
     case "realization_rate_chart":
+    case "fixed_monthly_expenses":
       return "/reports";
     default:
       return "";
@@ -3837,6 +3838,19 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`fixed_monthly_expenses\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`fy\` VARCHAR(20) NOT NULL,
+          \`month\` INT NOT NULL,
+          \`monthName\` VARCHAR(50) NOT NULL,
+          \`lines\` JSON NOT NULL,
+          \`totalAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255),
+          UNIQUE KEY \`uniq_fixed_monthly_expenses_fy_month\` (\`fy\`, \`month\`)
+        )
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`uploaded_files\` (
           \`filename\` VARCHAR(255) PRIMARY KEY,
           \`mimeType\` VARCHAR(100),
@@ -4566,6 +4580,13 @@ async function initDb(retries = 5) {
         { table: "settings", column: "organizationLogo", type: "VARCHAR(255)" },
         { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "fixed_monthly_expenses", column: "fy", type: "VARCHAR(20) NOT NULL" },
+        { table: "fixed_monthly_expenses", column: "month", type: "INT NOT NULL" },
+        { table: "fixed_monthly_expenses", column: "monthName", type: "VARCHAR(50) NOT NULL" },
+        { table: "fixed_monthly_expenses", column: "lines", type: "JSON NOT NULL" },
+        { table: "fixed_monthly_expenses", column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "fixed_monthly_expenses", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "fixed_monthly_expenses", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "audit_dashboard_snapshots", column: "dateFrom", type: "VARCHAR(50) NOT NULL" },
         { table: "audit_dashboard_snapshots", column: "dateTo", type: "VARCHAR(50) NOT NULL" },
         { table: "audit_dashboard_snapshots", column: "invoiceValueTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
@@ -5811,7 +5832,7 @@ app.get("/api/truck-status-logs", async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "audit_dashboard_snapshots"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "audit_dashboard_snapshots"];
 app.get("/api/tally-sync-debug", (req, res) => {
   const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();
   return res.json({

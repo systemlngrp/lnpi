@@ -978,6 +978,23 @@ export interface Setting {
   updateTimestamp?: string;
 }
 
+export interface FixedMonthlyExpenseLine {
+  id: string;
+  expenseName: string;
+  amount: number;
+}
+
+export interface FixedMonthlyExpense {
+  id: string;
+  fy: string;
+  month: number;
+  monthName: string;
+  lines: FixedMonthlyExpenseLine[];
+  totalAmount: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export interface AuditDashboardSnapshot {
   id: string;
   dateFrom: string;
