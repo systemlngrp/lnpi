@@ -1826,6 +1826,76 @@ async function ensureMaterialInCurrencySchemaColumns(db, database) {
     await ensureColumnExists(db, database, "material_in_lines", column, type);
   }
 }
+function roundCurrency(value) {
+  return Number(Number(value || 0).toFixed(2));
+}
+function parseJsonArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function getMaterialInJsonLineRate(line) {
+  const invoiceRate = Number(line?.invoiceRate || 0);
+  if (invoiceRate > 0) return invoiceRate;
+  const poRate = Number(line?.poRate || 0);
+  if (poRate > 0) return poRate;
+  const rate = Number(line?.rate || 0);
+  if (rate > 0) return rate;
+  const actualQty = Number(line?.actualQty || 0);
+  const actualValue = Number(line?.actualValue || 0);
+  return actualQty > 0 && actualValue > 0 ? actualValue / actualQty : 0;
+}
+async function backfillNonJobMaterialIssueValuation(db) {
+  const [materialRows] = await db.query("SELECT id, openingRate FROM `materials`");
+  const openingRateByMaterial = new Map(
+    materialRows.map((row) => [String(row.id || ""), roundCurrency(Number(row.openingRate || 0))])
+  );
+  const [materialInRows] = await db.query("SELECT id, date, timestamp, `lines` FROM `material_in`");
+  const latestPurchaseByMaterial = /* @__PURE__ */ new Map();
+  for (const receipt of materialInRows) {
+    const time = new Date(receipt.timestamp || receipt.date || 0).getTime() || 0;
+    for (const line of parseJsonArray(receipt.lines)) {
+      const materialId = String(line?.itemId || "").trim();
+      if (!materialId) continue;
+      const rate = roundCurrency(getMaterialInJsonLineRate(line));
+      if (rate <= 0) continue;
+      const existing = latestPurchaseByMaterial.get(materialId);
+      if (!existing || time > existing.time) {
+        latestPurchaseByMaterial.set(materialId, { rate, time });
+      }
+    }
+  }
+  const [lineRows] = await db.query(`
+    SELECT mil.id, mil.materialId, mil.qty, mil.rate, mil.amount
+    FROM \`material_issue_lines\` mil
+    JOIN \`material_issues\` mi ON mi.id = mil.materialIssueId
+    WHERE LOWER(TRIM(COALESCE(mi.issueType, ''))) IN ('without job', 'general', 'withoutjob', 'without_job')
+  `);
+  let updatedCount = 0;
+  for (const line of lineRows) {
+    if (Number(line.rate || 0) > 0 || Number(line.amount || 0) > 0) continue;
+    const materialId = String(line.materialId || "").trim();
+    const qty = Number(line.qty || 0);
+    const lastPurchaseRate = latestPurchaseByMaterial.get(materialId)?.rate || 0;
+    const openingRate = openingRateByMaterial.get(materialId) || 0;
+    const rate = lastPurchaseRate > 0 ? lastPurchaseRate : openingRate;
+    const amount = roundCurrency(qty * rate);
+    if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
+    await db.query(
+      "UPDATE `material_issue_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ?",
+      [lastPurchaseRate, openingRate, rate, amount, line.id]
+    );
+    updatedCount += 1;
+  }
+  if (updatedCount > 0) {
+    console.log(`[DB] Backfilled non-job material issue valuation for ${updatedCount} line(s).`);
+  }
+}
 async function ensureAuditColumnsForAllTables(db, database) {
   const [rows] = await db.query(
     "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
@@ -4572,6 +4642,11 @@ async function initDb(retries = 5) {
         `);
       } catch (err) {
         console.warn("[DB] Could not backfill orders.orderAmount:", err.message);
+      }
+      try {
+        await backfillNonJobMaterialIssueValuation(db);
+      } catch (err) {
+        console.warn("[DB] Could not backfill non-job material issue valuation:", err.message);
       }
       try {
         await ensureUsersCanonicalData(db, database);
