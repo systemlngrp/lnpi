@@ -244,7 +244,19 @@ export function MachinePendingProcessing() {
                                   const now = new Date();
                                   const hour = now.getHours();
                                   const shift = (hour >= 8 && hour < 20) ? "Day" : "Night";
-                                  navigate(`/production-processing/form?productionId=${job.production.id}&machineId=${group.machineId}&lockMachine=1&lockJob=1&qty=${job.pendingQty}&shift=${shift}`);
+                                  const params = new URLSearchParams({
+                                    productionId: job.production.id,
+                                    machineId: group.machineId,
+                                    lockMachine: "1",
+                                    lockJob: "1",
+                                    jobNo: String(job.production.jobCardNo || job.production.transactionNo || ""),
+                                    machineName: group.machineName,
+                                    qty: String(job.pendingQty),
+                                    shift,
+                                    erp: job.erpCode,
+                                    itemName: job.itemName,
+                                  });
+                                  navigate(`/production-processing/form?${params.toString()}`);
                                 }}
                                 className="inline-flex items-center gap-1 bg-indigo-600 text-white px-3 py-1 rounded text-[10px] font-black uppercase hover:bg-indigo-700 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none"
                               >
