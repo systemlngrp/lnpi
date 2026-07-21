@@ -25,6 +25,7 @@ const OPERATOR_ALLOWED_PATHS = [
   "/production-processing/master",
   "/production-processing/form",
   "/production/pending-machine-processing",
+  "/production/pending-printing",
 ];
 
 function normalizeMenuAccess(raw: unknown): string[] {

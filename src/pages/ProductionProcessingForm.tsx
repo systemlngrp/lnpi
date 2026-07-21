@@ -35,6 +35,7 @@ function LockedReportForm() {
   const erp = searchParams.get("erp") || "";
   const initialQty = searchParams.get("qty") || "";
   const initialShift = searchParams.get("shift") || "";
+  const returnTo = searchParams.get("returnTo") || "";
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -98,7 +99,7 @@ function LockedReportForm() {
       }
 
       window.dispatchEvent(new CustomEvent("sync-data-production_processing"));
-      navigate(getProcessingBackUrl(machineId));
+      navigate(returnTo || getProcessingBackUrl(machineId));
     } catch (error) {
       console.error("Failed to submit processing report:", error);
       alert((error as Error).message || "Failed to submit report. Please try again.");
@@ -185,7 +186,7 @@ function LockedReportForm() {
             </button>
             <button
               type="button"
-              onClick={() => navigate(getProcessingBackUrl(machineId))}
+              onClick={() => navigate(returnTo || getProcessingBackUrl(machineId))}
               className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none"
             >
               Cancel

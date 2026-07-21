@@ -25,9 +25,11 @@ import type {
   Setting,
 } from "../types";
 import { deriveGatePassState, hasSavedReturnableReceiptGateEntry, isReturnableGatePass } from "./gatePassState";
+import { canCreateMrrForGateEntry } from "./gateEntryState";
 import { parseMandatoryMachinesByType } from "./mandatoryMachines";
 import { buildProductionCorrugatedSheetUsageMap, buildProductionMaterialUsageMap, getProductionActualPaperUsed, hasProductionCorrugatedSheetUsage } from "./productionMaterialUsage";
 import { getRequiredMachinesForProduction } from "./productionType";
+import { normalizeMachineName } from "./productionMachineNames";
 import { buildScheduleConsumptionByScheduleId } from "./productionScheduleQty";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "./productionStageFilters";
 import { withIndentTotals } from "./indentTotals";
@@ -76,6 +78,7 @@ export const PENDING_TASK_DEFINITIONS = [
   { section: "Jobs", name: "Pending NPD", countKey: "/production/pending-npd" },
   { section: "Jobs", name: "Pending Material Issue", countKey: "/production/pending-consumption" },
   { section: "Jobs", name: "Pending FG", countKey: "/production/pending-ffg" },
+  { section: "Jobs", name: "Pending Printing", countKey: "/production/pending-printing" },
   { section: "Jobs", name: "Pending Production Tally Entry", countKey: "/production/pending-tally" },
   { section: "Jobs", name: "Pending Job Closure", countKey: "/production/pending-job-closure" },
   { section: "Jobs", name: "Pending Machine Processing", countKey: "/production/pending-machine-processing" },
@@ -288,9 +291,11 @@ function getPendingMachineProcessingCount(
   processing: ProductionProcessing[] = [],
   settings: Setting[] = [],
   findItemAcrossSources?: (itemId: string, source?: string, erpCode?: string | number) => OrderCatalogItem | undefined,
-  user?: PendingTaskUser | null
+  user?: PendingTaskUser | null,
+  machineNameFilter?: string
 ) {
   if (machines.length === 0) return 0;
+  const normalizedMachineNameFilter = machineNameFilter ? normalizeMachineName(machineNameFilter) : "";
   const mandatoryMachinesMapping = parseMandatoryMachinesByType(settings[0]);
   const isMachineAssignedToOperator = (machine: Machine) => {
     if (user?.role !== "Operator") return true;
@@ -307,7 +312,9 @@ function getPendingMachineProcessingCount(
       const item = findItemAcrossSources?.(String(production.itemId || "").trim(), production.itemSource, production.erpCode);
       const requiredMachines = getRequiredMachinesForProduction(production, item, mandatoryMachinesMapping, machines);
       const pendingForProduction = requiredMachines.filter((machineName) => {
-        const machine = machines.find((m) => m.name.trim().toLowerCase() === machineName.trim().toLowerCase());
+        const normalizedRequiredMachine = normalizeMachineName(machineName);
+        if (normalizedMachineNameFilter && normalizedRequiredMachine !== normalizedMachineNameFilter) return false;
+        const machine = machines.find((m) => normalizeMachineName(m.name) === normalizedRequiredMachine);
         if (!machine || !visibleMachineIds.has(machine.id)) return false;
         const reportedForThisMachine = processing
           .filter((row) => row.productionId === production.id && row.machineId === machine.id)
@@ -398,6 +405,15 @@ export function buildPendingTaskCounts(args: BuildPendingTaskCountsArgs): Record
       args.findItemAcrossSources,
       args.user
     ),
+    "/production/pending-printing": getPendingMachineProcessingCount(
+      args.productions,
+      args.machines,
+      args.processing,
+      args.settings,
+      args.findItemAcrossSources,
+      args.user,
+      "Printing"
+    ),
     "/production/php/pending-planning": getPendingLinkedPlanningCount(
       "PHP",
       args.schedules,
@@ -426,7 +442,7 @@ export function buildPendingTaskCounts(args: BuildPendingTaskCountsArgs): Record
       Number(line.qty || 0) - Number(line.cancelledQty || 0) - Number(line.orderedQty || 0) > 0
     ).length,
     "/purchase-orders/pending-approval": args.purchaseOrders.filter((po) => po.status === "Pending Approval").length,
-    "/material-receipt/pending-mrr": args.gateEntries.filter((entry) => !(entry.mrrId || "").trim() && !(entry.mrrNo || "").trim() && !(entry.mrrDate || "").trim()).length,
+    "/material-receipt/pending-mrr": args.gateEntries.filter(canCreateMrrForGateEntry).length,
     "/material-receipt/pending-debit-note": args.materialIn.filter((m) => m.debitNote && !m.tallyTimestamp).length,
     "/material-movement/pending-non-job-issue": getPendingNonJobIssueCount(args.materialIssues, args.productions),
     "/material-movement/pending-consumption-tally": pendingConsumptionTallyCount,

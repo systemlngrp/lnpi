@@ -26,6 +26,7 @@ import * as XLSX from "xlsx";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { applySupplyTypeTaxRates, normalizeInvoiceCurrency, recalculateMaterialLine, summarizeMaterialInLines } from "../lib/materialInTaxes";
 import { getGatePassLinesWithReturns } from "../lib/gatePassState";
+import { canCreateMrrForGateEntry, isGateEntryCancelled } from "../lib/gateEntryState";
 import { parsePoMandatoryMrrTypes, supportsPoMandatorySetting } from "../lib/materialInPoMandatory";
 
 type PackingSlipDraft = {
@@ -240,6 +241,17 @@ export function MaterialInForm() {
     { value: "FG Purchase", label: "FG Purchase" },
     { value: "Service Return", label: "Service Return" },
   ];
+
+  useEffect(() => {
+    if (editingEntry) return;
+    if (!gateEntryId) return;
+    if (!linkedGateEntry) return;
+    if (canCreateMrrForGateEntry(linkedGateEntry)) return;
+    alert(isGateEntryCancelled(linkedGateEntry)
+      ? "Gate Entry is cancelled. MRR cannot be created for this Gate Entry."
+      : "MRR has already been created for this Gate Entry.");
+    navigate("/material-receipt/pending-mrr", { replace: true });
+  }, [editingEntry, gateEntryId, linkedGateEntry, navigate]);
 
   useEffect(() => {
     if (editingEntry) return;
@@ -1173,6 +1185,20 @@ export function MaterialInForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date || !invoiceNo || !invDate || !supplierId || lines.length === 0) return;
+
+    if (!editingEntry && gateEntryId && !linkedGateEntry) {
+      alert("Gate Entry could not be loaded. MRR cannot be created from this link.");
+      navigate("/material-receipt/pending-mrr", { replace: true });
+      return;
+    }
+
+    if (!editingEntry && linkedGateEntry && !canCreateMrrForGateEntry(linkedGateEntry)) {
+      alert(isGateEntryCancelled(linkedGateEntry)
+        ? "Gate Entry is cancelled. MRR cannot be created for this Gate Entry."
+        : "MRR has already been created for this Gate Entry.");
+      navigate("/material-receipt/pending-mrr", { replace: true });
+      return;
+    }
 
     const linesForSubmit =
       mrrType === "Reel"

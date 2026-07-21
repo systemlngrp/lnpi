@@ -341,6 +341,10 @@ export interface GateEntry {
   mrrId?: string;
   mrrDate?: string;
   mrrNo?: string;
+  status?: "Active" | "Cancelled";
+  cancelReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

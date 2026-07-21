@@ -9,6 +9,7 @@ import { formatDate } from "../lib/serial";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getRequiredMachinesForProduction } from "../lib/productionType";
+import { normalizeMachineName } from "../lib/productionMachineNames";
 
 interface PendingMachineJob {
   production: Production;
@@ -27,10 +28,11 @@ interface MachineGroup {
   jobs: PendingMachineJob[];
 }
 
-export function MachinePendingProcessing() {
+export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMachineName?: string; title?: string } = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterMachineId = searchParams.get("machineId") || "";
+  const fixedNormalizedMachineName = fixedMachineName ? normalizeMachineName(fixedMachineName) : "";
 
   const [productions] = useData<Production>("productions", []);
   const { findItemAcrossSources } = useOrderItemCatalog();
@@ -49,6 +51,12 @@ export function MachinePendingProcessing() {
     }
   }, [filterMachineId]);
 
+  useEffect(() => {
+    if (!fixedNormalizedMachineName) return;
+    const fixedMachine = machines.find((machine) => normalizeMachineName(machine.name) === fixedNormalizedMachineName);
+    if (fixedMachine) setExpandedMachines(new Set([fixedMachine.id]));
+  }, [fixedNormalizedMachineName, machines]);
+
   const mandatoryMachinesMapping = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
 
   const machineGroups = useMemo(() => {
@@ -56,6 +64,7 @@ export function MachinePendingProcessing() {
 
     // Initialize groups for relevant machines
     machines.forEach(m => {
+      if (fixedNormalizedMachineName && normalizeMachineName(m.name) !== fixedNormalizedMachineName) return;
       if (filterMachineId && m.id !== filterMachineId) return;
       groups.set(m.id, { machineId: m.id, machineName: m.name, jobs: [] });
     });
@@ -73,7 +82,9 @@ export function MachinePendingProcessing() {
       const requiredMachines = getRequiredMachinesForProduction(p, item, mandatoryMachinesMapping, machines);
       
       requiredMachines.forEach(machineName => {
-        const machine = machines.find(m => m.name.trim().toLowerCase() === machineName.trim().toLowerCase());
+        const normalizedRequiredMachine = normalizeMachineName(machineName);
+        if (fixedNormalizedMachineName && normalizedRequiredMachine !== fixedNormalizedMachineName) return;
+        const machine = machines.find(m => normalizeMachineName(m.name) === normalizedRequiredMachine);
         if (!machine) return;
         if (filterMachineId && machine.id !== filterMachineId) return;
 
@@ -116,7 +127,7 @@ export function MachinePendingProcessing() {
       }))
       .filter(g => g.jobs.length > 0)
       .sort((a, b) => a.machineName.localeCompare(b.machineName));
-  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, companyFilter, itemFilter, filterMachineId]);
+  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, companyFilter, itemFilter, filterMachineId, fixedNormalizedMachineName]);
 
   const companyOptions = useMemo(() => {
     const names = new Set<string>();
@@ -147,9 +158,9 @@ export function MachinePendingProcessing() {
   }, [filterMachineId, machines]);
 
   useEffect(() => {
-    if (filterMachineId) return;
+    if (filterMachineId || fixedNormalizedMachineName) return;
     setExpandedMachines(new Set(machineGroups.map((group) => group.machineId)));
-  }, [filterMachineId, machineGroups]);
+  }, [filterMachineId, fixedNormalizedMachineName, machineGroups]);
 
   return (
     <div className="space-y-6">
@@ -164,7 +175,7 @@ export function MachinePendingProcessing() {
             </button>
           )}
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">
-            {filterMachineId ? `${selectedMachineName} - Pending Jobs` : "Pending Processing"}
+            {title || (filterMachineId ? `${selectedMachineName} - Pending Jobs` : "Pending Processing")}
           </h2>
         </div>
         <div className="grid w-full gap-3 md:grid-cols-[minmax(240px,1.4fr)_minmax(200px,1fr)_minmax(240px,1.1fr)_auto] md:items-center md:max-w-4xl">
@@ -189,12 +200,12 @@ export function MachinePendingProcessing() {
       <div className="space-y-4">
         {machineGroups.length === 0 ? (
           <div className="bg-white border-2 border-dashed border-slate-300 rounded-lg p-12 text-center text-slate-500 font-medium italic">
-            No pending processing jobs found {filterMachineId ? `for ${selectedMachineName}` : ""}.
+            No pending processing jobs found {fixedNormalizedMachineName ? `for ${fixedNormalizedMachineName}` : filterMachineId ? `for ${selectedMachineName}` : ""}.
           </div>
         ) : (
           machineGroups.map((group) => (
             <div key={group.machineId} className="bg-white border border-black rounded shadow-sm overflow-hidden">
-              {!filterMachineId && (
+              {!filterMachineId && !fixedNormalizedMachineName && (
                 <button
                   onClick={() => toggleMachine(group.machineId)}
                   className="w-full flex items-center justify-between px-4 py-3 bg-slate-100 hover:bg-slate-200 transition-colors border-b border-black"
@@ -210,7 +221,7 @@ export function MachinePendingProcessing() {
                 </button>
               )}
 
-              {(filterMachineId || expandedMachines.has(group.machineId)) && (
+              {(filterMachineId || fixedNormalizedMachineName || expandedMachines.has(group.machineId)) && (
                 <div className="p-4">
                   <div className="overflow-x-auto border border-black">
                     <table className="min-w-full divide-y divide-black border-collapse">
@@ -255,6 +266,7 @@ export function MachinePendingProcessing() {
                                     shift,
                                     erp: job.erpCode,
                                     itemName: job.itemName,
+                                                                      ...(fixedNormalizedMachineName ? { returnTo: "/production/pending-printing" } : {}),
                                   });
                                   navigate(`/production-processing/form?${params.toString()}`);
                                 }}
@@ -277,4 +289,8 @@ export function MachinePendingProcessing() {
       </div>
     </div>
   );
+}
+
+export function PendingPrinting() {
+  return <MachinePendingProcessing fixedMachineName="Printing" title="Pending Printing" />;
 }

@@ -1,16 +1,15 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, Pencil, Plus, X } from "lucide-react";
+import { Eye, Pencil, Plus, X, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, GateEntry, GateEntryPhoto, Supplier } from "../types";
-
-function hasLinkedMrr(entry: GateEntry) {
-  return Boolean(String(entry.mrrId || "").trim() || String(entry.mrrNo || "").trim() || String(entry.mrrDate || "").trim());
-}
+import { hasGateEntryMrr, isGateEntryCancelled } from "../lib/gateEntryState";
+import { useAuth } from "../auth/AuthContext";
 
 export function GateEntryMaster() {
   const navigate = useNavigate();
-  const [gateEntries] = useData<GateEntry>("gate-entries", []);
+  const { user } = useAuth();
+  const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
   const [gateEntryPhotos] = useData<GateEntryPhoto>("gate-entry-photos", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
@@ -18,15 +17,21 @@ export function GateEntryMaster() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [previewPhoto, setPreviewPhoto] = useState<{ filename: string; slotNo: number } | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const filteredEntries = useMemo(
     () =>
       [...gateEntries]
         .filter((entry) => {
-          const s = suppliers.find((supplier) => supplier.id === entry.supplierId);
-          const c = companies.find((company) => company.id === entry.supplierId);
-          const supplierName = s ? s.name : c ? c.name : "";
-          const haystack = [entry.gateEntryNo, supplierName, entry.invoiceNo, entry.truckNo]
+          const supplierName = getSupplierNameById(entry.supplierId, suppliers, companies);
+          const haystack = [
+            entry.gateEntryNo,
+            supplierName,
+            entry.invoiceNo,
+            entry.truckNo,
+            entry.status,
+            entry.cancelReason,
+          ]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
@@ -47,15 +52,47 @@ export function GateEntryMaster() {
         .sort((a, b) => a.slotNo - b.slotNo)
     : [];
 
-  const getSupplierName = (supplierId: string) => {
-    const supplier = suppliers.find((row) => row.id === supplierId);
-    if (supplier) return supplier.name;
-    const company = companies.find((row) => row.id === supplierId);
-    if (company) return company.name;
-    return "";
-  };
+  const getSupplierName = (supplierId: string) => getSupplierNameById(supplierId, suppliers, companies);
 
   const getPhotoCount = (gateEntryId: string) => gateEntryPhotos.filter((photo) => photo.gateEntryId === gateEntryId).length;
+
+  const handleCancel = async (entry: GateEntry) => {
+    if (hasGateEntryMrr(entry)) {
+      alert("Gate Entry cannot be cancelled after MRR is created.");
+      return;
+    }
+    if (isGateEntryCancelled(entry)) return;
+
+    const reason = window.prompt(`Enter cancellation reason for ${entry.gateEntryNo || "this Gate Entry"}:`);
+    const trimmedReason = String(reason || "").trim();
+    if (!trimmedReason) return;
+
+    const timestamp = new Date().toISOString();
+    const actor = user?.name || "System User";
+    setCancellingId(entry.id);
+    try {
+      await setGateEntries((prev) =>
+        prev.map((row) =>
+          row.id === entry.id
+            ? {
+                ...row,
+                status: "Cancelled",
+                cancelReason: trimmedReason,
+                cancelledAt: timestamp,
+                cancelledBy: actor,
+                updatedBy: actor,
+                updateTimestamp: timestamp,
+              }
+            : row
+        )
+      );
+    } catch (error) {
+      console.error("Failed to cancel gate entry:", error);
+      alert("Failed to cancel Gate Entry. Please try again.");
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -74,7 +111,7 @@ export function GateEntryMaster() {
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search gate entry no, supplier, invoice no, truck no..."
+          placeholder="Search gate entry no, supplier, invoice no, truck no, status..."
           className="w-full max-w-xl rounded-xl border-2 border-black px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-600"
         />
       </div>
@@ -83,7 +120,7 @@ export function GateEntryMaster() {
         <table className="min-w-full border-collapse border border-black">
           <thead className="sticky top-0 z-30 bg-slate-100">
             <tr>
-              {["Gate Entry No", "Date", "Supplier Name", "Invoice No", "Invoice Value", "Truck No", "MRR No", "MRR Date", "Photos", "Action"].map((heading) => (
+              {["Gate Entry No", "Date", "Supplier Name", "Invoice No", "Invoice Value", "Truck No", "Status", "MRR No", "Cancel Details", "Photos", "Action"].map((heading) => (
                 <th key={heading} className="whitespace-nowrap border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">
                   {heading}
                 </th>
@@ -93,23 +130,36 @@ export function GateEntryMaster() {
           <tbody>
             {filteredEntries.length === 0 ? (
               <tr>
-                <td colSpan={10} className="border border-black px-6 py-10 text-center font-medium text-black">
+                <td colSpan={11} className="border border-black px-6 py-10 text-center font-medium text-black">
                   No gate entries found.
                 </td>
               </tr>
             ) : (
               filteredEntries.map((entry) => {
-                const editable = !hasLinkedMrr(entry);
+                const cancelled = isGateEntryCancelled(entry);
+                const linkedMrr = hasGateEntryMrr(entry);
+                const editable = !linkedMrr && !cancelled;
                 return (
-                  <tr key={entry.id} className="hover:bg-slate-50">
+                  <tr key={entry.id} className={cancelled ? "bg-red-50/50" : "hover:bg-slate-50"}>
                     <td className="border border-black px-4 py-3 text-sm font-semibold text-black">{entry.gateEntryNo || "Syncing..."}</td>
                     <td className="border border-black px-4 py-3 text-sm text-black">{entry.date}</td>
                     <td className="border border-black px-4 py-3 text-sm text-black">{getSupplierName(entry.supplierId)}</td>
                     <td className="border border-black px-4 py-3 text-sm text-black">{entry.invoiceNo}</td>
                     <td className="border border-black px-4 py-3 text-sm text-black">{Number(entry.invoiceValue || 0).toFixed(2)}</td>
                     <td className="border border-black px-4 py-3 text-sm text-black">{entry.truckNo}</td>
+                    <td className="border border-black px-4 py-3 text-sm font-bold">
+                      <span className={cancelled ? "text-red-700" : "text-emerald-700"}>{cancelled ? "Cancelled" : "Active"}</span>
+                    </td>
                     <td className="border border-black px-4 py-3 text-sm text-black">{entry.mrrNo || "-"}</td>
-                    <td className="border border-black px-4 py-3 text-sm text-black">{entry.mrrDate || "-"}</td>
+                    <td className="border border-black px-4 py-3 text-xs text-black">
+                      {cancelled ? (
+                        <div className="max-w-[260px] space-y-1">
+                          <div className="font-bold text-red-800">{entry.cancelReason || "No reason"}</div>
+                          <div>{entry.cancelledAt ? new Date(entry.cancelledAt).toLocaleString() : "-"}</div>
+                          <div>{entry.cancelledBy || "System User"}</div>
+                        </div>
+                      ) : "-"}
+                    </td>
                     <td className="border border-black px-4 py-3 text-sm text-black">{getPhotoCount(entry.id)} Photos</td>
                     <td className="border border-black px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -121,13 +171,23 @@ export function GateEntryMaster() {
                           <Eye size={15} /> View
                         </button>
                         {editable ? (
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/gate-entry/form?id=${entry.id}`)}
-                            className="inline-flex items-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
-                          >
-                            <Pencil size={15} /> Edit
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/gate-entry/form?id=${entry.id}`)}
+                              className="inline-flex items-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
+                            >
+                              <Pencil size={15} /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleCancel(entry)}
+                              disabled={cancellingId === entry.id}
+                              className="inline-flex items-center gap-2 rounded border border-red-700 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 transition hover:bg-red-100 disabled:opacity-60"
+                            >
+                              <XCircle size={15} /> {cancellingId === entry.id ? "Cancelling..." : "Cancel"}
+                            </button>
+                          </>
                         ) : null}
                       </div>
                     </td>
@@ -164,8 +224,12 @@ export function GateEntryMaster() {
               <InfoCard label="Invoice No" value={selectedEntry.invoiceNo} />
               <InfoCard label="Invoice Value" value={Number(selectedEntry.invoiceValue || 0).toFixed(2)} />
               <InfoCard label="Truck No" value={selectedEntry.truckNo} />
+              <InfoCard label="Status" value={isGateEntryCancelled(selectedEntry) ? "Cancelled" : "Active"} />
               <InfoCard label="MRR No" value={selectedEntry.mrrNo || "Pending"} />
               <InfoCard label="MRR Date" value={selectedEntry.mrrDate || "Pending"} />
+              <InfoCard label="Cancel Reason" value={selectedEntry.cancelReason || "-"} />
+              <InfoCard label="Cancelled By" value={selectedEntry.cancelledBy || "-"} />
+              <InfoCard label="Cancelled At" value={selectedEntry.cancelledAt ? new Date(selectedEntry.cancelledAt).toLocaleString() : "-"} />
               <InfoCard label="Photos" value={`${selectedPhotos.length}`} />
             </div>
 
@@ -209,6 +273,14 @@ export function GateEntryMaster() {
       ) : null}
     </div>
   );
+}
+
+function getSupplierNameById(supplierId: string, suppliers: Supplier[], companies: Company[]) {
+  const supplier = suppliers.find((row) => row.id === supplierId);
+  if (supplier) return supplier.name;
+  const company = companies.find((row) => row.id === supplierId);
+  if (company) return company.name;
+  return "";
 }
 
 function PhotoCard({

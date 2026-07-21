@@ -71,7 +71,7 @@ import { PendingNpd } from "./pages/PendingNpd";
 import { OperationDashboard } from "./pages/OperationDashboard";
 import { AuditDashboard } from "./pages/AuditDashboard";
 import { PendingJobClosure } from "./pages/PendingJobClosure";
-import { MachinePendingProcessing } from "./pages/MachinePendingProcessing";
+import { MachinePendingProcessing, PendingPrinting } from "./pages/MachinePendingProcessing";
 import { ProductionProcessingForm } from "./pages/ProductionProcessingForm";
 import { ProductionProcessingMaster } from "./pages/ProductionProcessingMaster";
 import { ItemwiseLeastCost } from "./pages/ItemwiseLeastCost";
@@ -245,6 +245,7 @@ export default function App() {
           <Route path="production/pending-tally" element={<ProductionPendingTally />} />
           <Route path="production/pending-job-closure" element={<PendingJobClosure />} />
           <Route path="production/pending-machine-processing" element={<MachinePendingProcessing />} />
+          <Route path="production/pending-printing" element={<PendingPrinting />} />
           <Route path="production/master" element={<ProductionMaster />} />
           <Route path="production/php/master" element={<PhpProductionMaster />} />
           <Route path="production/php/pending-planning" element={<PendingPhpPlanning />} />

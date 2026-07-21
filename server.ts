@@ -3272,6 +3272,10 @@ async function initDb(retries = 5) {
           \`mrrId\` VARCHAR(36),
           \`mrrDate\` VARCHAR(50),
           \`mrrNo\` VARCHAR(100),
+          \`status\` VARCHAR(20) DEFAULT 'Active',
+          \`cancelReason\` TEXT,
+          \`cancelledAt\` VARCHAR(255),
+          \`cancelledBy\` VARCHAR(255),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -4405,6 +4409,10 @@ await db.query(`
         { table: "gate_entries", column: "mrrId", type: "VARCHAR(36)" },
         { table: "gate_entries", column: "mrrDate", type: "VARCHAR(50)" },
         { table: "gate_entries", column: "mrrNo", type: "VARCHAR(100)" },
+        { table: "gate_entries", column: "status", type: "VARCHAR(20) DEFAULT 'Active'" },
+        { table: "gate_entries", column: "cancelReason", type: "TEXT" },
+        { table: "gate_entries", column: "cancelledAt", type: "VARCHAR(255)" },
+        { table: "gate_entries", column: "cancelledBy", type: "VARCHAR(255)" },
         { table: "gate_entries", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "gate_entries", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_entry_photos", column: "gateEntryId", type: "VARCHAR(36) NOT NULL" },

@@ -1,26 +1,26 @@
 import { useMemo, useState } from "react";
-import { Eye } from "lucide-react";
+import { Eye, XCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, GateEntry, GateEntryPhoto, Supplier } from "../types";
 import { useNavigate } from "react-router-dom";
-
-function hasMaterialReceipt(entry: GateEntry) {
-  return Boolean((entry.mrrId || "").trim() || (entry.mrrNo || "").trim() || (entry.mrrDate || "").trim());
-}
+import { canCreateMrrForGateEntry, hasGateEntryMrr } from "../lib/gateEntryState";
+import { useAuth } from "../auth/AuthContext";
 
 export function PendingMrr() {
   const navigate = useNavigate();
-  const [gateEntries] = useData<GateEntry>("gate-entries", []);
+  const { user } = useAuth();
+  const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
   const [gateEntryPhotos] = useData<GateEntryPhoto>("gate-entry-photos", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const pendingEntries = useMemo(
     () =>
       [...gateEntries]
-        .filter((entry) => !hasMaterialReceipt(entry))
+        .filter((entry) => canCreateMrrForGateEntry(entry))
         .filter((entry) => {
           const s = suppliers.find((supplier) => supplier.id === entry.supplierId);
           const c = companies.find((company) => company.id === entry.supplierId);
@@ -52,6 +52,44 @@ export function PendingMrr() {
     return "";
   };
   const getPhotoCount = (gateEntryId: string) => gateEntryPhotos.filter((photo) => photo.gateEntryId === gateEntryId).length;
+
+  const handleCancel = async (entry: GateEntry) => {
+    if (hasGateEntryMrr(entry)) {
+      alert("Gate Entry cannot be cancelled after MRR is created.");
+      return;
+    }
+
+    const reason = window.prompt(`Enter cancellation reason for ${entry.gateEntryNo || "this Gate Entry"}:`);
+    const trimmedReason = String(reason || "").trim();
+    if (!trimmedReason) return;
+
+    const timestamp = new Date().toISOString();
+    const actor = user?.name || "System User";
+    setCancellingId(entry.id);
+    try {
+      await setGateEntries((prev) =>
+        prev.map((row) =>
+          row.id === entry.id
+            ? {
+                ...row,
+                status: "Cancelled",
+                cancelReason: trimmedReason,
+                cancelledAt: timestamp,
+                cancelledBy: actor,
+                updatedBy: actor,
+                updateTimestamp: timestamp,
+              }
+            : row
+        )
+      );
+      if (selectedEntryId === entry.id) setSelectedEntryId(null);
+    } catch (error) {
+      console.error("Failed to cancel gate entry:", error);
+      alert("Failed to cancel Gate Entry. Please try again.");
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -115,6 +153,14 @@ export function PendingMrr() {
                       >
                         <Eye size={15} /> View
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCancel(entry)}
+                        disabled={cancellingId === entry.id}
+                        className="inline-flex items-center gap-2 rounded border border-red-700 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 transition hover:bg-red-100 disabled:opacity-60"
+                      >
+                        <XCircle size={15} /> {cancellingId === entry.id ? "Cancelling..." : "Cancel"}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -161,7 +207,7 @@ export function PendingMrr() {
                 </div>
               ) : (
                 selectedPhotos.map((photo) => (
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                  <div key={photo.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                     {photo.photo && photo.photo.toLowerCase().endsWith(".pdf") ? (
                       <div className="h-44 w-full flex flex-col items-center justify-center bg-red-50 text-red-700 gap-2 border-b border-slate-200">
                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
