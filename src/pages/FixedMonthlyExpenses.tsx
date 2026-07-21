@@ -176,7 +176,7 @@ export function FixedMonthlyExpenses() {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={line.amount}
+                      value={Number(line.amount || 0) > 0 ? line.amount : ""}
                       onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })}
                     />
                   </td>
