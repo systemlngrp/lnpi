@@ -204,6 +204,29 @@ const billingItems: NavItem[] = [
   { name: "Billing Master", href: "/billing/master", icon: FileText },
 ];
 
+const reportStockItems: NavItem[] = [
+  { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
+  { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
+  { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
+];
+
+const reportProductionItems: NavItem[] = [
+  { name: "Jobs in Progress", href: "/reports/jobs-in-progress", icon: BarChart3 },
+  { name: "Conversion Cost Report", href: "/reports/conversion-cost", icon: BarChart3 },
+  { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
+  { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
+  { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
+];
+
+const reportSalesItems: NavItem[] = [
+  { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
+  { name: "Wastage Report", href: "/reports/wastage", icon: BarChart3 },
+];
+
+const reportLogisticsItems: NavItem[] = [
+  { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
+];
+
 export const NAVIGATION: NavGroup[] = [
   {
     section: "Quick Access",
@@ -297,16 +320,10 @@ export const NAVIGATION: NavGroup[] = [
     section: "Report",
     color: "bg-sky-700",
     items: [
-      { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
-      { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
-      { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
-      { name: "Jobs in Progress", href: "/reports/jobs-in-progress", icon: BarChart3 },
-      { name: "Conversion Cost Report", href: "/reports/conversion-cost", icon: BarChart3 },
-      { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
-      { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
-      { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
-      { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
-      { name: "Wastage Report", href: "/reports/wastage", icon: BarChart3 },
+      { section: "Stock", items: reportStockItems },
+      { section: "Production", items: reportProductionItems },
+      { section: "Sales", items: reportSalesItems },
+      { section: "Logistics", items: reportLogisticsItems },
     ],
   },
   {

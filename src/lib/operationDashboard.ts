@@ -43,6 +43,7 @@ type BuildOperationDashboardSummaryArgs = {
   dispatchPlans: DispatchPlan[];
   loadingSlips: LoadingSlip[];
   invoices: Invoice[];
+  scrapSoldQty?: number;
   items: Item[];
   materials: Material[];
   materialIn: MaterialIn[];
@@ -411,8 +412,9 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const tomorrowPlanQty = sumProductionPlanQty(tomorrowProductions);
   const tomorrowPlanValue = sumProductionPlanValue(tomorrowProductions, args.schedules, args.orders);
   const nextPlanValue = sumPlanValue(nextSchedules, args.orders);
-  const totalWastage = getWastagePercent(filteredProductions, usageMap);
   const totalActualPaperUsed = getActualPaperUsed(filteredProductions, usageMap);
+  const totalScrapSoldQty = Number(args.scrapSoldQty || 0);
+  const totalWastage = totalActualPaperUsed > 0 ? (totalScrapSoldQty / totalActualPaperUsed) * 100 : 0;
   const totalPlanPaper = getPlanPaperTotal(filteredProductions);
   const totalSale = filteredInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);
   const todaySalesValue = todayInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);

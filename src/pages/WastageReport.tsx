@@ -6,44 +6,9 @@ import { Download, FileText, RotateCcw, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import type { Company, Invoice, InvoiceLineItem } from "../types";
-import { normalizeOrderItemSource } from "../lib/orderItems";
 import { formatDate } from "../lib/serial";
 import { formatCurrency } from "../lib/utils";
-
-type WastageRow = {
-  invoiceId: string;
-  invoiceNo: string;
-  invoiceDate: string;
-  companyId: string;
-  companyName: string;
-  erp: string;
-  itemName: string;
-  qty: number;
-  rate: number;
-  taxableAmount: number;
-  cgst: number;
-  sgst: number;
-  igst: number;
-  totalAmount: number;
-};
-
-function parseAppDate(value?: string | null) {
-  if (!value) return null;
-  const trimmed = String(value).trim();
-  if (!trimmed) return null;
-  const onlyDate = trimmed.slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(onlyDate)) {
-    const [year, month, day] = onlyDate.split("-").map(Number);
-    const date = new Date(year, month - 1, day);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  const parsed = new Date(trimmed);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function normalizeDate(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
+import { buildScrapInvoiceRows, summarizeScrapInvoiceRows } from "../lib/wastageReport";
 
 function formatQty(value: number) {
   return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -64,74 +29,20 @@ export function WastageReport() {
   const [toDate, setToDate] = useState("");
   const [companyId, setCompanyId] = useState("");
 
-  const reportRows = useMemo<WastageRow[]>(() => {
-    const invoiceMap = new Map(invoices.map((invoice) => [invoice.id, invoice]));
-    const companyMap = new Map(companies.map((company) => [company.id, company]));
-    const from = parseAppDate(fromDate);
-    const to = parseAppDate(toDate);
-    const fromTime = from ? normalizeDate(from) : null;
-    const toTime = to ? normalizeDate(to) : null;
-    const needle = searchTerm.trim().toLowerCase();
+  const reportRows = useMemo(
+    () =>
+      buildScrapInvoiceRows({
+        invoices,
+        lineItems,
+        companies,
+        filters: { fromDate, toDate, companyId, searchTerm },
+        findItem,
+        findItemAcrossSources,
+      }),
+    [companies, companyId, findItem, findItemAcrossSources, fromDate, invoices, lineItems, searchTerm, toDate]
+  );
 
-    return lineItems
-      .map((line) => {
-        const invoice = invoiceMap.get(line.invoiceId);
-        if (!invoice) return null;
-        const invoiceDate = parseAppDate(invoice.date);
-        const invoiceTime = invoiceDate ? normalizeDate(invoiceDate) : null;
-        const itemSource = normalizeOrderItemSource(line.itemSource);
-        const resolvedItem =
-          findItem(itemSource, line.itemId) ||
-          (line.npdId ? findItem("FG", line.npdId) : undefined) ||
-          findItemAcrossSources(line.itemId, itemSource);
-        const itemName = String(resolvedItem?.name || "Unknown").trim();
-        if (!itemName.toLowerCase().includes("scrap")) return null;
-
-        const company = companyMap.get(invoice.companyId);
-        const taxableAmount = Number(line.amount || 0);
-        const cgst = Number(line.cgst || 0);
-        const sgst = Number(line.sgst || 0);
-        const igst = Number(line.igst || 0);
-        const row: WastageRow = {
-          invoiceId: invoice.id,
-          invoiceNo: invoice.invoiceNo || "-",
-          invoiceDate: invoice.date,
-          companyId: invoice.companyId,
-          companyName: company?.name || "Unknown Company",
-          erp: String(resolvedItem?.erp || "").trim(),
-          itemName,
-          qty: Number(line.qty || 0),
-          rate: Number(line.rate || 0),
-          taxableAmount,
-          cgst,
-          sgst,
-          igst,
-          totalAmount: taxableAmount + cgst + sgst + igst,
-        };
-
-        if (fromTime != null && (invoiceTime == null || invoiceTime < fromTime)) return null;
-        if (toTime != null && (invoiceTime == null || invoiceTime > toTime)) return null;
-        if (companyId && row.companyId !== companyId) return null;
-        if (needle) {
-          const haystack = `${row.invoiceNo} ${row.companyName} ${row.erp} ${row.itemName}`.toLowerCase();
-          if (!haystack.includes(needle)) return null;
-        }
-        return row;
-      })
-      .filter((row): row is WastageRow => Boolean(row))
-      .sort((a, b) => String(b.invoiceDate || "").localeCompare(String(a.invoiceDate || "")) || a.itemName.localeCompare(b.itemName));
-  }, [companies, companyId, findItem, findItemAcrossSources, fromDate, invoices, lineItems, searchTerm, toDate]);
-
-  const summary = useMemo(() => {
-    const invoiceIds = new Set(reportRows.map((row) => row.invoiceId));
-    return {
-      totalQty: reportRows.reduce((sum, row) => sum + row.qty, 0),
-      taxableAmount: reportRows.reduce((sum, row) => sum + row.taxableAmount, 0),
-      gstValue: reportRows.reduce((sum, row) => sum + row.cgst + row.sgst + row.igst, 0),
-      totalAmount: reportRows.reduce((sum, row) => sum + row.totalAmount, 0),
-      invoiceCount: invoiceIds.size,
-    };
-  }, [reportRows]);
+  const summary = useMemo(() => summarizeScrapInvoiceRows(reportRows), [reportRows]);
 
   const companyOptions = useMemo(
     () => companies.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),

@@ -10,6 +10,7 @@ import type {
   GateEntry,
   GatePass,
   Invoice,
+  InvoiceLineItem,
   Indent,
   IndentLine,
   Item,
@@ -49,6 +50,7 @@ import {
   isDateWithinRange,
 } from "../lib/operationDashboard";
 import { buildPendingTaskCounts, getPendingTaskGroups } from "../lib/pendingTaskCounts";
+import { buildScrapInvoiceRows, summarizeScrapInvoiceRows } from "../lib/wastageReport";
 
 type ProcessingTotals = {
   paper: number;
@@ -169,7 +171,7 @@ export function OperationDashboard() {
   const [phpJobMaster] = useData<Production>("php_job_master", []);
   const [plateJobMaster] = useData<Production>("plate_job_master", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem, findItemAcrossSources, itemsBySource } = useOrderItemCatalog();
+  const { resolveOrderItem, findItem, findItemAcrossSources, itemsBySource } = useOrderItemCatalog();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
@@ -187,6 +189,7 @@ export function OperationDashboard() {
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [invoices] = useData<Invoice>("invoices", []);
+  const [invoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [indents] = useData<Indent>("indents", []);
@@ -298,6 +301,17 @@ export function OperationDashboard() {
     );
   }, [filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines, issueReelLines, returnReelLines]);
 
+  const scrapInvoiceSummary = useMemo(() => {
+    const scrapRows = buildScrapInvoiceRows({
+      invoices,
+      lineItems: invoiceLineItems,
+      companies,
+      filters: { fromDate: dateRange.from, toDate: dateRange.to },
+      findItem,
+      findItemAcrossSources,
+    });
+    return summarizeScrapInvoiceRows(scrapRows);
+  }, [companies, dateRange.from, dateRange.to, findItem, findItemAcrossSources, invoiceLineItems, invoices]);
   const rows: OperationRow[] = useMemo(() => {
     const sorted = filteredProductions
       .map((p) => {
@@ -360,6 +374,7 @@ export function OperationDashboard() {
         dispatchPlans,
         loadingSlips,
         invoices,
+        scrapSoldQty: scrapInvoiceSummary.totalQty,
         items: npdItems,
         materials,
         materialIn,
@@ -380,6 +395,7 @@ export function OperationDashboard() {
       dispatchPlans,
       loadingSlips,
       invoices,
+      scrapInvoiceSummary.totalQty,
       npdItems,
       materials,
       materialIn,
@@ -668,8 +684,11 @@ export function OperationDashboard() {
       </section>
 
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
-          Pending Tasks
+        <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
+          <span>Pending Tasks</span>
+          <span className="rounded border border-white/30 bg-white/10 px-2 py-0.5 text-right text-[10px] tracking-[0.12em]">
+            Total Pending: {pendingTaskSummary.grandTotal.toLocaleString("en-IN")}
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
