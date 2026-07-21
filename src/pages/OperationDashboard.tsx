@@ -45,7 +45,6 @@ import { formatDate } from "../lib/serial";
 import { cn, formatCurrency, formatNumber } from "../lib/utils";
 import {
   buildOperationDashboardSummary,
-  getLocalDateInputValue,
   getSafeRange,
   isDateWithinRange,
 } from "../lib/operationDashboard";
@@ -158,8 +157,7 @@ function formatMetricValue(card: OperationDashboardMetricCard) {
 }
 
 function getDefaultRange() {
-  const today = getLocalDateInputValue(new Date());
-  return { from: today, to: today };
+  return { from: "", to: "" };
 }
 
 function getSummaryCard(summary: OperationDashboardSummary, cardId: string) {
@@ -206,6 +204,10 @@ export function OperationDashboard() {
   const [dateRange, setDateRange] = useState(getDefaultRange);
   const [closedJobFilter, setClosedJobFilter] = useState<ClosedJobFilter>("no");
   const [pendingJobClosureCount, setPendingJobClosureCount] = useState<number>(0);
+  const operationExportFileName =
+    dateRange.from && dateRange.to
+      ? `Operation_Dashboard_${dateRange.from}_${dateRange.to}`
+      : "Operation_Dashboard_All_Dates";
 
   useEffect(() => {
     const refreshPendingJobClosureCount = async () => {
@@ -625,7 +627,7 @@ export function OperationDashboard() {
                 </select>
               </div>
               {allowExports ? (
-                <ExcelExport data={exportData} fileName={`Operation_Dashboard_${dateRange.from}_${dateRange.to}`} />
+                <ExcelExport data={exportData} fileName={operationExportFileName} />
               ) : null}
             </div>
           </div>
@@ -685,7 +687,7 @@ export function OperationDashboard() {
       </section>
 
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-        <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
+        <div className="flex items-center justify-between gap-3 bg-red-700 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
           <span>Pending Tasks</span>
           <span className="rounded border border-white/30 bg-white/10 px-2 py-0.5 text-right text-[10px] tracking-[0.12em]">
             Total Pending: {pendingTaskSummary.grandTotal.toLocaleString("en-IN")}

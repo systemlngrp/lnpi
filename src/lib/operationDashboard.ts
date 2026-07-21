@@ -134,6 +134,7 @@ function isSameAppDate(dateStr: string | undefined, compareValue: string) {
 }
 
 function getRangeLabel(dateRange: OperationDashboardDateRange) {
+  if (!dateRange.from && !dateRange.to) return "All Dates";
   return `${formatDisplayDate(dateRange.from)} to ${formatDisplayDate(dateRange.to)}`;
 }
 
