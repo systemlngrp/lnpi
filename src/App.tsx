@@ -119,6 +119,7 @@ import { RealizationReport } from "./pages/RealizationReport";
 import { PaperRequirementReport } from "./pages/PaperRequirementReport";
 import { ConversionCostReport } from "./pages/ConversionCostReport";
 import { TruckStatusReport } from "./pages/TruckStatusReport";
+import { WastageReport } from "./pages/WastageReport";
 import { TruckStatusUpdate } from "./pages/TruckStatusUpdate";
 import { TruckLogs } from "./pages/TruckLogs";
 
@@ -305,6 +306,7 @@ export default function App() {
           <Route path="reports/paper-requirement" element={<PaperRequirementReport />} />
           <Route path="reports/conversion-cost" element={<ConversionCostReport />} />
           <Route path="reports/truck-status" element={<TruckStatusReport />} />
+          <Route path="reports/wastage" element={<WastageReport />} />
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />

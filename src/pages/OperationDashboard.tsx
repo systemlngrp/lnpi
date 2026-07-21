@@ -48,7 +48,7 @@ import {
   getSafeRange,
   isDateWithinRange,
 } from "../lib/operationDashboard";
-import { buildPendingTaskCounts, getPendingTaskRows } from "../lib/pendingTaskCounts";
+import { buildPendingTaskCounts, getPendingTaskGroups } from "../lib/pendingTaskCounts";
 
 type ProcessingTotals = {
   paper: number;
@@ -394,7 +394,7 @@ export function OperationDashboard() {
     ]
   );
 
-  const pendingTaskRows = useMemo(() => {
+  const pendingTaskSummary = useMemo(() => {
     const counts = buildPendingTaskCounts({
       materialIn,
       productions,
@@ -430,7 +430,7 @@ export function OperationDashboard() {
       findItemAcrossSources,
       itemsBySource,
     });
-    return getPendingTaskRows(counts).filter((row) => row.count > 0);
+    return getPendingTaskGroups(counts);
   }, [
     materialIn,
     productions,
@@ -684,32 +684,56 @@ export function OperationDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-900 bg-white">
-              {pendingTaskRows.length === 0 ? (
+              {pendingTaskSummary.groups.length === 0 ? (
                 <tr>
                   <td colSpan={2} className="px-3 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">
                     No pending tasks found.
                   </td>
                 </tr>
               ) : (
-                pendingTaskRows.map((row, index) => (
-                  <tr
-                    key={row.countKey}
-                    onClick={() => navigate(row.countKey)}
-                    className={cn(
-                      "cursor-pointer divide-x divide-slate-900 transition hover:bg-indigo-50",
-                      index % 2 === 0 ? "bg-white" : "bg-slate-50"
-                    )}
-                  >
-                    <td className="px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-900 underline-offset-2 hover:underline">
-                      {row.name}
-                    </td>
-                    <td className="px-3 py-2 text-right text-sm font-black text-indigo-700">
-                      {row.count.toLocaleString("en-IN")}
-                    </td>
-                  </tr>
+                pendingTaskSummary.groups.map((group) => (
+                  <React.Fragment key={group.section}>
+                    <tr className="divide-x divide-slate-900 bg-slate-900 text-white">
+                      <td className="px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em]">
+                        {group.section}
+                      </td>
+                      <td className="px-3 py-2 text-right text-sm font-black">
+                        {group.sectionTotal.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                    {group.rows.map((row, index) => (
+                      <tr
+                        key={row.countKey}
+                        onClick={() => navigate(row.countKey)}
+                        className={cn(
+                          "cursor-pointer divide-x divide-slate-900 transition hover:bg-indigo-50",
+                          index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                        )}
+                      >
+                        <td className="px-3 py-2 pl-6 text-[11px] font-bold uppercase tracking-wide text-slate-900 underline-offset-2 hover:underline">
+                          {row.name}
+                        </td>
+                        <td className="px-3 py-2 text-right text-sm font-black text-indigo-700">
+                          {row.count.toLocaleString("en-IN")}
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
+            {pendingTaskSummary.grandTotal > 0 ? (
+              <tfoot className="border-t-2 border-slate-900 bg-indigo-50">
+                <tr className="divide-x divide-slate-900">
+                  <td className="px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-900">
+                    Total Pending
+                  </td>
+                  <td className="px-3 py-2 text-right text-base font-black text-indigo-800">
+                    {pendingTaskSummary.grandTotal.toLocaleString("en-IN")}
+                  </td>
+                </tr>
+              </tfoot>
+            ) : null}
           </table>
         </div>
       </section>

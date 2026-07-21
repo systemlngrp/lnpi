@@ -306,6 +306,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
       { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
       { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
+      { name: "Wastage Report", href: "/reports/wastage", icon: BarChart3 },
     ],
   },
   {
