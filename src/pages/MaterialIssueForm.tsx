@@ -19,7 +19,7 @@ import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
-import { getAvailableReelPackingSlips, getNonReelAvailableQty } from "../lib/materialMovement";
+import { getAvailableReelPackingSlips, getNonReelAvailableQty, resolveMaterialIssueRate } from "../lib/materialMovement";
 import {
   buildProductionCorrugatedSheetUsageMap,
   buildProductionMaterialUsageMap,
@@ -29,6 +29,17 @@ import {
 import { useNpdItems } from "../hooks/useNpdItems";
 
 type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean; isNpdConsumableItem?: boolean; npdSourceId?: string };
+type IssueLineDraft = {
+  id: string;
+  materialId: string;
+  qty: number;
+  uom: string;
+  isReel: boolean;
+  lastPurchaseRate?: number;
+  openingRate?: number;
+  rate?: number;
+  amount?: number;
+};
 
 function normalizeDate(value?: string | null) {
   return String(value || "").slice(0, 10);
@@ -48,6 +59,13 @@ function isConsumableNpdItem(value: unknown) {
 
   const truthyValues = new Set(["1", "true", "yes", "y", "on"]);
   return truthyValues.has(normalized);
+}
+
+function formatMoney(value?: number) {
+  return Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export function MaterialIssueForm() {
@@ -95,7 +113,7 @@ export function MaterialIssueForm() {
   const [remarks, setRemarks] = useState("");
   const [currentMaterialId, setCurrentMaterialId] = useState("");
   const [currentQty, setCurrentQty] = useState<number | "">("");
-  const [lines, setLines] = useState<Array<{ id: string; materialId: string; qty: number; uom: string; isReel: boolean }>>([]);
+  const [lines, setLines] = useState<IssueLineDraft[]>([]);
   const [selectedReels, setSelectedReels] = useState<Record<string, string[]>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -237,6 +255,8 @@ export function MaterialIssueForm() {
   ];
 
   const selectedProduction = productions.find((production) => production.id === productionId);
+  const showNonJobValuation = isWithoutJobIssue(issueType);
+  const issueLinesTotalAmount = lines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
 
   const getMaterial = (materialId: string) => issueMaterials.find((material) => material.id === materialId);
   const isNpdConsumableOption = (materialIdOrOption: string | IssueMaterialOption | undefined | null) => {
@@ -273,7 +293,13 @@ export function MaterialIssueForm() {
           return;
         }
       }
-      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false }]);
+      const valuation = isWithoutJobIssue(issueType)
+        ? resolveMaterialIssueRate(currentMaterialId, materials, materialIn, qty)
+        : {};
+      setLines((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false, ...valuation },
+      ]);
     } else {
       setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty: 0, uom: "KG", isReel: true }]);
     }
@@ -390,6 +416,10 @@ export function MaterialIssueForm() {
           materialId: line.materialId,
           qty: Number(line.qty || 0),
           uom: line.uom,
+          lastPurchaseRate: Number(line.lastPurchaseRate || 0),
+          openingRate: Number(line.openingRate || 0),
+          rate: Number(line.rate || 0),
+          amount: Number(line.amount || 0),
           updatedBy: "System User",
           updateTimestamp: timestamp,
         });
@@ -587,6 +617,14 @@ export function MaterialIssueForm() {
                     <th className="px-4 py-3 text-left text-xs font-black uppercase w-16">Sl No</th>
                     <th className="px-4 py-3 text-left text-xs font-black uppercase min-w-[200px]">Material Details</th>
                     <th className="px-4 py-3 text-right text-xs font-black uppercase w-48">Qty / Availability</th>
+                    {showNonJobValuation ? (
+                      <>
+                        <th className="px-4 py-3 text-right text-xs font-black uppercase w-36">Last Purchase Rate</th>
+                        <th className="px-4 py-3 text-right text-xs font-black uppercase w-32">Opening Rate</th>
+                        <th className="px-4 py-3 text-right text-xs font-black uppercase w-32">Rate</th>
+                        <th className="px-4 py-3 text-right text-xs font-black uppercase w-36">Amount</th>
+                      </>
+                    ) : null}
                     <th className="px-4 py-3 text-center text-xs font-black uppercase w-20">Action</th>
                   </tr>
                 </thead>
@@ -651,6 +689,22 @@ export function MaterialIssueForm() {
                             </div>
                           ) : null}
                         </td>
+                        {showNonJobValuation ? (
+                          <>
+                            <td className="px-4 py-4 text-right text-sm font-bold text-slate-800">
+                              {formatMoney(line.lastPurchaseRate)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-bold text-slate-800">
+                              {formatMoney(line.openingRate)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-black text-indigo-700">
+                              {formatMoney(line.rate)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-sm font-black text-emerald-700">
+                              {formatMoney(line.amount)}
+                            </td>
+                          </>
+                        ) : null}
                         <td className="px-4 py-4 text-center">
                           <button
                             type="button"
@@ -666,6 +720,14 @@ export function MaterialIssueForm() {
                   })}
                 </tbody>
               </table>
+              {showNonJobValuation ? (
+                <div className="mt-3 flex justify-end">
+                  <div className="min-w-[260px] rounded border-2 border-black bg-emerald-50 px-4 py-3 text-right">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-600">Total Amount</div>
+                    <div className="mt-1 text-lg font-black text-emerald-800">{formatMoney(issueLinesTotalAmount)}</div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

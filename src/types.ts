@@ -189,6 +189,10 @@ export interface MaterialIssueLine {
   materialId: string;
   qty: number;
   uom: string;
+  lastPurchaseRate?: number;
+  openingRate?: number;
+  rate?: number;
+  amount?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

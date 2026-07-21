@@ -2868,6 +2868,10 @@ async function initDb(retries = 5) {
           \`materialId\` VARCHAR(36) NOT NULL,
           \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`uom\` VARCHAR(50) NOT NULL,
+          \`lastPurchaseRate\` DECIMAL(15,2) DEFAULT 0,
+          \`openingRate\` DECIMAL(15,2) DEFAULT 0,
+          \`rate\` DECIMAL(15,2) DEFAULT 0,
+          \`amount\` DECIMAL(15,2) DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -3940,6 +3944,10 @@ async function initDb(retries = 5) {
         { table: "material_issue_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
         { table: "material_issue_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "material_issue_lines", column: "uom", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_issue_lines", column: "lastPurchaseRate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_issue_lines", column: "openingRate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_issue_lines", column: "rate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_issue_lines", column: "amount", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "material_issue_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_issue_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_issue_reel_lines", column: "materialIssueId", type: "VARCHAR(36) NOT NULL" },
