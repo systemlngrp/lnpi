@@ -9,7 +9,7 @@ import {
   Company,
 } from "../types";
 import { formatDate } from "../lib/serial";
-import { Search, Calendar, Building2, Package, X } from "lucide-react";
+import { Search, Calendar, Building2, Package, X, ArrowUpDown } from "lucide-react";
 import Select from "react-select";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { ClientPagination } from "../components/ClientPagination";
@@ -19,6 +19,8 @@ type SelectOption = {
   value: string;
   label: string;
 };
+
+type SortDirection = "asc" | "desc";
 
 const formatItemOptionLabel = (item: { name?: string; erp?: string | number }) => {
   const name = String(item.name || "").trim();
@@ -43,6 +45,7 @@ export function ScheduledOrdersMaster() {
   const [itemFilter, setItemFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [scheduleNoSortDirection, setScheduleNoSortDirection] = useState<SortDirection>("desc");
 
   const companyOptions = useMemo<SelectOption[]>(
     () =>
@@ -143,11 +146,13 @@ export function ScheduledOrdersMaster() {
       return matchSearch && matchCompany && matchItem && matchFromDate && matchToDate;
     })
     .sort((a, b) => {
-      const dateCompare = a.scheduledDate.localeCompare(b.scheduledDate);
-      if (dateCompare !== 0) return dateCompare;
-      return a.orderNo.localeCompare(b.orderNo, undefined, { numeric: true, sensitivity: 'base' });
+      const aScheduleNo = a.scheduleNo === "-" ? "" : a.scheduleNo;
+      const bScheduleNo = b.scheduleNo === "-" ? "" : b.scheduleNo;
+      const comparison = aScheduleNo.localeCompare(bScheduleNo, undefined, { numeric: true, sensitivity: "base" });
+      if (comparison !== 0) return scheduleNoSortDirection === "asc" ? comparison : -comparison;
+      return b.scheduledDate.localeCompare(a.scheduledDate);
     });
-  }, [schedules, orders, companies, resolveOrderItem, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate]);
+  }, [schedules, orders, companies, resolveOrderItem, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate, scheduleNoSortDirection]);
   const {
     page,
     setPage,
@@ -163,6 +168,11 @@ export function ScheduledOrdersMaster() {
     setItemFilter("");
     setFromDate("");
     setToDate("");
+  };
+
+  const toggleScheduleNoSort = () => {
+    setScheduleNoSortDirection((current) => current === "asc" ? "desc" : "asc");
+    setPage(1);
   };
 
   return (
@@ -265,8 +275,18 @@ export function ScheduledOrdersMaster() {
                   <span className="block">Date</span>
                 </th>
                 <th className="px-2 py-2 border border-black text-left leading-tight">
-                  <span className="block">Schedule</span>
-                  <span className="block">No</span>
+                  <button
+                    type="button"
+                    onClick={toggleScheduleNoSort}
+                    className="flex items-center gap-1 text-left font-bold hover:text-indigo-700"
+                    title={`Sort Schedule No ${scheduleNoSortDirection === "asc" ? "descending" : "ascending"}`}
+                  >
+                    <span>
+                      <span className="block">Schedule</span>
+                      <span className="block">No</span>
+                    </span>
+                    <ArrowUpDown size={13} className={scheduleNoSortDirection === "desc" ? "rotate-180" : ""} />
+                  </button>
                 </th>
                 <th className="px-2 py-2 border border-black text-left leading-tight">
                   <span className="block">Order</span>
