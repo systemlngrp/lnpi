@@ -6573,6 +6573,7 @@ app.post("/api/public/truck-status", async (req, res) => {
       updateSource: "PublicDriver",
       sourceRefType: "Public Driver Form",
       sourceRefId: truckId,
+      driverName: req.body?.driverName,
     });
     if (!result) return res.status(404).json({ error: "Vehicle not found" });
     return res.json({ ok: true, update: result });

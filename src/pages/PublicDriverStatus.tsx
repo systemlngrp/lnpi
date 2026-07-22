@@ -1,10 +1,77 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle, RotateCcw, Truck as TruckIcon } from "lucide-react";
+import { CheckCircle, ChevronDown, RotateCcw, Truck as TruckIcon } from "lucide-react";
 import type { Truck } from "../types";
 import { Spinner } from "../components/Spinner";
 
+type SearchableOption = {
+  value: string;
+  label: string;
+};
+
+type SearchableDropdownProps = {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: SearchableOption[];
+  onChange: (value: string) => void;
+};
+
 function isAuthVehicleListError(message: string) {
   return /unauthorized|forbidden/i.test(message);
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function SearchableDropdown({ label, value, placeholder, options, onChange }: SearchableDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const query = normalizeText(value);
+  const filteredOptions = useMemo(
+    () => options.filter((option) => normalizeText(option.label).includes(query)).slice(0, 80),
+    [options, query]
+  );
+
+  return (
+    <label className="relative block space-y-2">
+      <span className="text-xs font-black uppercase text-slate-600">{label}</span>
+      <div className="relative">
+        <input
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          className="w-full rounded border-2 border-black bg-white px-4 py-4 pr-11 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-700" />
+      </div>
+      {open ? (
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          {filteredOptions.length > 0 ? filteredOptions.map((option) => (
+            <button
+              key={`${label}-${option.value}`}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className="block w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-black uppercase text-black hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none"
+            >
+              <span className="block truncate">{option.label}</span>
+            </button>
+          )) : (
+            <div className="px-4 py-3 text-sm font-bold uppercase text-slate-500">No results found</div>
+          )}
+        </div>
+      ) : null}
+    </label>
+  );
 }
 
 const DRIVER_STATUS_OPTIONS = [
@@ -16,13 +83,23 @@ const DRIVER_STATUS_OPTIONS = [
 export function PublicDriverStatus() {
   const [trucks, setTrucks] = useState<Truck[]>([]);
   const [truckId, setTruckId] = useState("");
+  const [driverName, setDriverName] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const selectedTruck = useMemo(() => trucks.find((truck) => truck.id === truckId), [truckId, trucks]);
+  const driverOptions = useMemo<SearchableOption[]>(() => {
+    const names = new Map<string, string>();
+    trucks.forEach((truck) => {
+      const name = String(truck.driverName || "").trim();
+      if (name && !names.has(normalizeText(name))) names.set(normalizeText(name), name);
+    });
+    return Array.from(names.values())
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+      .map((name) => ({ value: name, label: name }));
+  }, [trucks]);
 
   useEffect(() => {
     let mounted = true;
@@ -47,9 +124,15 @@ export function PublicDriverStatus() {
     return () => { mounted = false; };
   }, []);
 
+  const handleTruckChange = (value: string) => {
+    setTruckId(value);
+    const truck = trucks.find((row) => row.id === value);
+    setDriverName(truck?.driverName || "");
+  };
+
   const handleSubmit = async () => {
-    if (!truckId || !status) {
-      setError("Select vehicle and status.");
+    if (!truckId || !driverName || !status) {
+      setError("Select vehicle, driver name and status.");
       return;
     }
     setSaving(true);
@@ -59,7 +142,7 @@ export function PublicDriverStatus() {
       const response = await fetch("/api/public/truck-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ truckId, status }),
+        body: JSON.stringify({ truckId, driverName, status }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Unable to update status.");
@@ -75,14 +158,11 @@ export function PublicDriverStatus() {
   return (
     <div className="min-h-screen bg-slate-100 px-3 py-4 text-black sm:px-6">
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-md flex-col justify-center">
-        <div className="overflow-hidden rounded border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-          <div className="border-b-2 border-black bg-indigo-700 px-5 py-5 text-white">
+        <div className="overflow-visible rounded border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+          <div className="rounded-t-sm border-b-2 border-black bg-indigo-700 px-5 py-5 text-white">
             <div className="flex items-center gap-3">
               <TruckIcon size={30} />
-              <div>
-                <div className="text-xs font-black uppercase opacity-80">LNPI OPS Portal</div>
-                <h1 className="text-2xl font-black uppercase leading-tight">Driver Status</h1>
-              </div>
+              <h1 className="text-2xl font-black uppercase leading-tight">Driver Status</h1>
             </div>
           </div>
 
@@ -99,7 +179,7 @@ export function PublicDriverStatus() {
                   <span className="text-xs font-black uppercase text-slate-600">Vehicle No. *</span>
                   <select
                     value={truckId}
-                    onChange={(event) => setTruckId(event.target.value)}
+                    onChange={(event) => handleTruckChange(event.target.value)}
                     className="w-full rounded border-2 border-black bg-white px-4 py-4 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
                   >
                     <option value="">Choose vehicle</option>
@@ -109,11 +189,13 @@ export function PublicDriverStatus() {
                   </select>
                 </label>
 
-                {selectedTruck ? (
-                  <div className="rounded border border-black bg-slate-50 px-3 py-2 text-xs font-bold uppercase text-slate-700">
-                    Driver: {selectedTruck.driverName || "-"} | Mobile: {selectedTruck.mobileNo || "-"}
-                  </div>
-                ) : null}
+                <SearchableDropdown
+                  label="Driver Name *"
+                  value={driverName}
+                  placeholder="Search driver"
+                  options={driverOptions}
+                  onChange={setDriverName}
+                />
 
                 <div className="space-y-2">
                   <div className="text-xs font-black uppercase text-slate-600">Status *</div>
@@ -134,7 +216,7 @@ export function PublicDriverStatus() {
                 <button
                   type="button"
                   onClick={() => void handleSubmit()}
-                  disabled={saving || !truckId || !status}
+                  disabled={saving || !truckId || !driverName || !status}
                   className="flex w-full items-center justify-center gap-2 rounded border-2 border-black bg-emerald-600 px-5 py-4 text-base font-black uppercase text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? <Spinner size={20} className="text-white" /> : <CheckCircle size={20} />}
@@ -143,7 +225,7 @@ export function PublicDriverStatus() {
 
                 <button
                   type="button"
-                  onClick={() => { setTruckId(""); setStatus(""); setError(""); setMessage(""); }}
+                  onClick={() => { setTruckId(""); setDriverName(""); setStatus(""); setError(""); setMessage(""); }}
                   className="flex w-full items-center justify-center gap-2 rounded border border-black bg-white px-4 py-3 text-sm font-black uppercase text-black hover:bg-slate-50"
                 >
                   <RotateCcw size={16} />

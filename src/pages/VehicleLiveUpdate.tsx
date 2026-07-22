@@ -8,7 +8,6 @@ import { Spinner } from "../components/Spinner";
 type SearchableOption = {
   value: string;
   label: string;
-  helper?: string;
 };
 
 type SearchableDropdownProps = {
@@ -31,7 +30,7 @@ function SearchableDropdown({ label, value, placeholder, options, onChange }: Se
   const [open, setOpen] = useState(false);
   const query = normalizeText(value);
   const filteredOptions = useMemo(
-    () => options.filter((option) => normalizeText(`${option.label} ${option.helper || ""}`).includes(query)).slice(0, 80),
+    () => options.filter((option) => normalizeText(option.label).includes(query)).slice(0, 80),
     [options, query]
   );
 
@@ -67,7 +66,6 @@ function SearchableDropdown({ label, value, placeholder, options, onChange }: Se
               className="block w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-black uppercase text-black hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none"
             >
               <span className="block truncate">{option.label}</span>
-              {option.helper ? <span className="mt-1 block truncate text-[11px] font-bold text-slate-500">{option.helper}</span> : null}
             </button>
           )) : (
             <div className="px-4 py-3 text-sm font-bold uppercase text-slate-500">No results found</div>
@@ -92,28 +90,22 @@ export function VehicleLiveUpdate() {
   const internalTrucks = useMemo(() => trucks.filter(isInternalTruck), [trucks]);
   const partyOptions = useMemo<SearchableOption[]>(
     () => companies
-      .map((company) => ({ value: company.name, label: company.name }))
-      .filter((option) => option.value)
-      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" })),
+      .map((company) => String(company.name || "").trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+      .map((name) => ({ value: name, label: name })),
     [companies]
   );
   const driverOptions = useMemo<SearchableOption[]>(() => {
-    const byName = new Map<string, SearchableOption>();
+    const names = new Map<string, string>();
     internalTrucks.forEach((truck) => {
       const name = String(truck.driverName || "").trim();
-      if (!name) return;
-      const key = normalizeText(name);
-      if (!byName.has(key)) {
-        byName.set(key, {
-          value: name,
-          label: name,
-          helper: [truck.truckNo, truck.mobileNo].filter(Boolean).join(" | "),
-        });
-      }
+      if (name && !names.has(normalizeText(name))) names.set(normalizeText(name), name);
     });
-    return Array.from(byName.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+    return Array.from(names.values())
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+      .map((name) => ({ value: name, label: name }));
   }, [internalTrucks]);
-  const selectedTruck = useMemo(() => internalTrucks.find((truck) => truck.id === truckId), [internalTrucks, truckId]);
 
   const authHeaders = useMemo(() => {
     const token = window.localStorage.getItem("authToken") || "";
@@ -168,14 +160,11 @@ export function VehicleLiveUpdate() {
         <h2 className="text-xl font-black uppercase tracking-tight text-black">Vehicle Live Update</h2>
       </div>
 
-      <div className="mx-auto w-full max-w-3xl overflow-visible rounded border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+      <div className="mx-auto w-full max-w-md overflow-visible rounded border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
         <div className="rounded-t-sm border-b-2 border-black bg-indigo-700 px-5 py-5 text-white">
           <div className="flex items-center gap-3">
             <TruckIcon size={30} />
-            <div>
-              <div className="text-xs font-black uppercase opacity-80">LNPI OPS Portal</div>
-              <h3 className="text-2xl font-black uppercase leading-tight">Office Vehicle Update</h3>
-            </div>
+            <h3 className="text-2xl font-black uppercase leading-tight">Office Vehicle Update</h3>
           </div>
         </div>
 
@@ -184,77 +173,67 @@ export function VehicleLiveUpdate() {
           {message ? <div className="rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">{message}</div> : null}
           {internalTrucks.length === 0 ? <div className="rounded border border-amber-700 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">No internal vehicles found in Truck Master.</div> : null}
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <label className="block space-y-2">
-              <span className="text-xs font-black uppercase text-slate-600">Vehicle No. *</span>
-              <select
-                value={truckId}
-                onChange={(event) => handleTruckChange(event.target.value)}
-                className="w-full rounded border-2 border-black bg-white px-4 py-4 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
-              >
-                <option value="">Choose vehicle</option>
-                {internalTrucks.map((truck) => (
-                  <option key={truck.id} value={truck.id}>{truck.truckNo}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block space-y-2">
-              <span className="text-xs font-black uppercase text-slate-600">Live Status *</span>
-              <select
-                value={liveStatus}
-                onChange={(event) => setLiveStatus(event.target.value as TruckLiveStatus)}
-                className="w-full rounded border-2 border-black bg-white px-4 py-4 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
-              >
-                <option value="">Select status</option>
-                {TRUCK_LIVE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
-            </label>
-
-            {selectedTruck ? (
-              <div className="rounded border border-black bg-slate-50 px-3 py-3 text-xs font-bold uppercase text-slate-700 md:col-span-2">
-                Driver: {selectedTruck.driverName || "-"} | Mobile: {selectedTruck.mobileNo || "-"}
-              </div>
-            ) : null}
-
-            <SearchableDropdown
-              label="Party"
-              value={partyName}
-              placeholder="Search party"
-              options={partyOptions}
-              onChange={setPartyName}
-            />
-
-            <SearchableDropdown
-              label="Driver Name"
-              value={driverName}
-              placeholder="Search driver"
-              options={driverOptions}
-              onChange={setDriverName}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => void handleSubmit()}
-              disabled={saving || !truckId || !liveStatus}
-              className="flex w-full items-center justify-center gap-2 rounded border-2 border-black bg-emerald-600 px-5 py-4 text-base font-black uppercase text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          <label className="block space-y-2">
+            <span className="text-xs font-black uppercase text-slate-600">Vehicle No. *</span>
+            <select
+              value={truckId}
+              onChange={(event) => handleTruckChange(event.target.value)}
+              className="w-full rounded border-2 border-black bg-white px-4 py-4 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
             >
-              {saving ? <Spinner size={20} className="text-white" /> : <CheckCircle size={20} />}
-              Submit
-            </button>
+              <option value="">Choose vehicle</option>
+              {internalTrucks.map((truck) => (
+                <option key={truck.id} value={truck.id}>{truck.truckNo}</option>
+              ))}
+            </select>
+          </label>
 
-            <button
-              type="button"
-              onClick={resetForm}
-              disabled={saving}
-              className="flex w-full items-center justify-center gap-2 rounded border border-black bg-white px-4 py-3 text-sm font-black uppercase text-black hover:bg-slate-50 disabled:opacity-50"
+          <label className="block space-y-2">
+            <span className="text-xs font-black uppercase text-slate-600">Live Status *</span>
+            <select
+              value={liveStatus}
+              onChange={(event) => setLiveStatus(event.target.value as TruckLiveStatus)}
+              className="w-full rounded border-2 border-black bg-white px-4 py-4 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
             >
-              <RotateCcw size={16} />
-              Clear Form
-            </button>
-          </div>
+              <option value="">Select status</option>
+              {TRUCK_LIVE_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </label>
+
+          <SearchableDropdown
+            label="Party"
+            value={partyName}
+            placeholder="Search party"
+            options={partyOptions}
+            onChange={setPartyName}
+          />
+
+          <SearchableDropdown
+            label="Driver Name"
+            value={driverName}
+            placeholder="Search driver"
+            options={driverOptions}
+            onChange={setDriverName}
+          />
+
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={saving || !truckId || !liveStatus}
+            className="flex w-full items-center justify-center gap-2 rounded border-2 border-black bg-emerald-600 px-5 py-4 text-base font-black uppercase text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? <Spinner size={20} className="text-white" /> : <CheckCircle size={20} />}
+            Submit
+          </button>
+
+          <button
+            type="button"
+            onClick={resetForm}
+            disabled={saving}
+            className="flex w-full items-center justify-center gap-2 rounded border border-black bg-white px-4 py-3 text-sm font-black uppercase text-black hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RotateCcw size={16} />
+            Clear Form
+          </button>
         </div>
       </div>
     </div>
