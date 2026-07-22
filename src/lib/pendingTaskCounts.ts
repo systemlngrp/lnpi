@@ -186,6 +186,10 @@ function getPendingFgQty(schedule: OrderSchedule, producedQty: number) {
   );
 }
 
+function getScheduledQty(schedule: OrderSchedule) {
+  return Math.max(Number(schedule.qty || 0) - Number(schedule.canceledQty || 0), 0);
+}
+
 function getPendingNonJobIssueCount(materialIssues: MaterialIssue[], productions: Production[]) {
   const firstJobDate = productions.map((p) => normalizeDate(p.date)).filter(Boolean).sort()[0];
   if (!firstJobDate) return 0;
@@ -240,7 +244,6 @@ function getPendingLinkedPlanningCount(
 ) {
   const sourceItems = itemsBySource[source] || [];
   const jobRows = source === "PHP" ? phpJobs : plateJobs;
-  const consumptionByScheduleId = buildScheduleConsumptionByScheduleId(fgProductions, phpJobs, plateJobs);
   const plannedQtyByScheduleId = new Map<string, number>();
 
   jobRows.forEach((row) => {
@@ -254,19 +257,18 @@ function getPendingLinkedPlanningCount(
   return schedules.filter((schedule) => {
     const order = orders.find((row) => row.id === schedule.orderId);
     const fgItem = resolveOrderItem?.(order);
-    const consumedQty = Number(consumptionByScheduleId.get(schedule.id)?.effectiveConsumedQty || 0);
-    const fgPendingQty = getPendingFgQty(schedule, consumedQty);
+    const scheduledQty = getScheduledQty(schedule);
     const isDirectSourceOrder = order?.itemSource === source;
     const scheduleErp = String(order?.erpCode || fgItem?.erp || "").trim();
     const linkedItem = isDirectSourceOrder
       ? sourceItems.find((item) => item.id === String(order?.itemId || "").trim())
       : findItemByErp(sourceItems, scheduleErp);
     const setsPerBox = getSetsPerBox(linkedItem);
-    const requiredQty = isDirectSourceOrder ? fgPendingQty : linkedItem && setsPerBox ? Number((fgPendingQty * setsPerBox).toFixed(2)) : 0;
+    const requiredQty = isDirectSourceOrder ? scheduledQty : linkedItem && setsPerBox ? Number((scheduledQty * setsPerBox).toFixed(2)) : 0;
     const alreadyPlannedQty = Number(plannedQtyByScheduleId.get(schedule.id) || 0);
     const remainingQty = Math.max(0, Number((requiredQty - alreadyPlannedQty).toFixed(2)));
 
-    if (fgPendingQty <= 0 || !linkedItem || remainingQty <= 0) return false;
+    if (scheduledQty <= 0 || !linkedItem || remainingQty <= 0) return false;
     return isDirectSourceOrder || Boolean(setsPerBox);
   }).length;
 }

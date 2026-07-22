@@ -224,6 +224,7 @@ export function PendingProduction() {
             <tr>
               <th className="px-3 py-2 border border-black">SL No</th>
               <th className="px-3 py-2 border border-black">Order No</th>
+              <th className="px-3 py-2 border border-black">Schedule No</th>
               <th className="px-3 py-2 border border-black">Schedule Date</th>
               <th className="px-3 py-2 border border-black">Company</th>
               <th className="px-3 py-2 border border-black">ERP</th>
@@ -241,7 +242,7 @@ export function PendingProduction() {
           <tbody>
             {pendingRows.length === 0 ? (
               <tr>
-                <td colSpan={14} className="px-6 py-8 text-center text-black font-medium">
+                <td colSpan={15} className="px-6 py-8 text-center text-black font-medium">
                   No pending production schedules.
                 </td>
               </tr>
@@ -255,6 +256,7 @@ export function PendingProduction() {
                 <tr key={schedule.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 border border-black font-bold">{(page - 1) * pageSize + index + 1}</td>
                   <td className="px-3 py-2 border border-black">{order?.orderNo || "-"}</td>
+                  <td className="px-3 py-2 border border-black font-bold text-indigo-700 whitespace-nowrap">{schedule.scheduleNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{formatDate(schedule.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{erpCode}</td>

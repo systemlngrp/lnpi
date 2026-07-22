@@ -2985,6 +2985,26 @@ async function generateSimpleTransactionNumber(
   return `${prefix}/${fy}/${String(lastNum + 1).padStart(5, "0")}`;
 }
 
+async function generateScheduleNo(db: mysql.Pool, scheduledDate?: string) {
+  return generateSimpleTransactionNumber(db, "orders_schedule", "scheduleNo", "SCH", scheduledDate);
+}
+
+async function backfillMissingScheduleNos(db: mysql.Pool) {
+  const [rows] = await db.query(
+    `SELECT \`id\`, \`scheduledDate\`
+     FROM \`orders_schedule\`
+     WHERE COALESCE(TRIM(\`scheduleNo\`), '') = ''
+     ORDER BY \`scheduledDate\` ASC, \`id\` ASC`
+  );
+
+  for (const row of rows as any[]) {
+    const scheduleNo = await generateScheduleNo(db, String(row.scheduledDate || ""));
+    await db.query("UPDATE `orders_schedule` SET `scheduleNo` = ? WHERE `id` = ?", [scheduleNo, String(row.id)]);
+  }
+
+  return (rows as any[]).length;
+}
+
 async function generateLoadingSlipNo(
   db: mysql.Pool,
   tableName: "loading_slips" | "php_loading_slips" | "plate_loading_slips",
@@ -3613,6 +3633,7 @@ async function initDb(retries = 5) {
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`orders_schedule\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
+          \`scheduleNo\` VARCHAR(50),
           \`orderId\` VARCHAR(36) NOT NULL,
           \`scheduledDate\` VARCHAR(50) NOT NULL,
           \`qty\` DECIMAL(15,2) NOT NULL,
@@ -4862,6 +4883,7 @@ await db.query(`
         { table: "orders", column: "orderAmount", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "orders", column: "poType", type: "VARCHAR(50)" },
         { table: "orders_schedule", column: "orderId", type: "VARCHAR(36) NOT NULL" },
+        { table: "orders_schedule", column: "scheduleNo", type: "VARCHAR(50)" },
         { table: "orders_schedule", column: "scheduledDate", type: "VARCHAR(50) NOT NULL" },
         { table: "orders_schedule", column: "qty", type: "DECIMAL(15,2) NOT NULL" },
         { table: "orders_schedule", column: "producedQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
@@ -5258,6 +5280,15 @@ await db.query(`
         }
       } catch (err) {
         console.warn("[DB] Could not backfill material_issues.consumptionTransactionNo:", (err as Error).message);
+      }
+
+      try {
+        const backfilledCount = await backfillMissingScheduleNos(db);
+        if (backfilledCount > 0) {
+          console.log(`[DB] Backfilled scheduleNo for ${backfilledCount} order schedule row(s).`);
+        }
+      } catch (err) {
+        console.warn("[DB] Could not backfill orders_schedule.scheduleNo:", (err as Error).message);
       }
 
       try {
@@ -5910,6 +5941,21 @@ const createHandlers = (tableName: string) => {
           } catch (err) {
             const message = (err as Error).message || "Could not auto-generate material issue serial.";
             console.warn("[DB] Could not auto-generate material issue serials:", message);
+            return res.status(400).json({ error: message });
+          }
+        }
+
+        if (tableName === "orders_schedule" && !String(data.scheduleNo || "").trim()) {
+          try {
+            const scheduleId = String(data.id || "").trim();
+            const [existingRows] = scheduleId
+              ? await db.query("SELECT `scheduleNo` FROM `orders_schedule` WHERE `id` = ? LIMIT 1", [scheduleId])
+              : [[]];
+            const existingScheduleNo = String((existingRows as any[])?.[0]?.scheduleNo || "").trim();
+            data.scheduleNo = existingScheduleNo || await generateScheduleNo(db, String(data.scheduledDate || ""));
+          } catch (err) {
+            const message = (err as Error).message || "Could not auto-generate schedule number.";
+            console.warn("[DB] Could not auto-generate scheduleNo:", message);
             return res.status(400).json({ error: message });
           }
         }

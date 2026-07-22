@@ -490,6 +490,7 @@ export interface Order {
 
 export interface OrderSchedule {
   id: string;
+  scheduleNo?: string;
   orderId: string;
   scheduledDate: string;
   qty?: number;

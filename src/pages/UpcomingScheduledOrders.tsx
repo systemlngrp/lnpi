@@ -167,6 +167,7 @@ export function UpcomingScheduledOrders() {
             <tr>
               <th className="px-3 py-2 border border-black">SL No</th>
               <th className="px-3 py-2 border border-black">Order No</th>
+              <th className="px-3 py-2 border border-black">Schedule No</th>
               <th className="px-3 py-2 border border-black">Schedule Date</th>
               <th className="px-3 py-2 border border-black">Company</th>
               <th className="px-3 py-2 border border-black">Item</th>
@@ -182,7 +183,7 @@ export function UpcomingScheduledOrders() {
           <tbody>
             {upcomingRows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-6 py-8 text-center text-black font-medium italic">
+                <td colSpan={13} className="px-6 py-8 text-center text-black font-medium italic">
                   No upcoming production schedules (beyond today + 2 days).
                 </td>
               </tr>
@@ -191,6 +192,7 @@ export function UpcomingScheduledOrders() {
                 <tr key={schedule.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 border border-black font-bold">{index + 1}</td>
                   <td className="px-3 py-2 border border-black font-medium">{order?.orderNo || "-"}</td>
+                  <td className="px-3 py-2 border border-black font-bold text-indigo-700 whitespace-nowrap">{schedule.scheduleNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap font-bold text-indigo-700">{formatDate(schedule.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>
                   <td className="px-3 py-2 border border-black">{item?.name || "-"}</td>
