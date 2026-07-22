@@ -25,7 +25,8 @@ from typing import Iterable
 import requests
 
 
-DEFAULT_PORT = "9000"
+DEFAULT_PORT = "9003"
+PORT_CHOICES = ("9001", "9002", "9003", "9004")
 TIMEOUT_SECONDS = 90
 COLUMNS = (
     ("item_name", "ERP Item Name", 42),
@@ -337,7 +338,7 @@ class StockPurchaseApp:
         controls = ttk.LabelFrame(top, text="Connection", padding=12)
         controls.pack(fill=X)
         ttk.Label(controls, text="Tally XML Port *").grid(row=0, column=0, sticky="w")
-        ttk.Entry(controls, textvariable=self.port_var, width=12).grid(row=1, column=0, sticky="w", padx=(0, 14))
+        ttk.Combobox(controls, textvariable=self.port_var, values=PORT_CHOICES, width=12).grid(row=1, column=0, sticky="w", padx=(0, 14))
         ttk.Label(controls, text="Company (optional; blank = company open in Tally)").grid(row=0, column=1, sticky="w")
         ttk.Entry(controls, textvariable=self.company_var, width=46).grid(row=1, column=1, sticky="ew", padx=(0, 14))
         self.fetch_button = ttk.Button(controls, text="Fetch Data", command=self.fetch_data)

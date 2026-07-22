@@ -28,7 +28,8 @@ function normalizeText(value: string) {
 
 function SearchableDropdown({ label, value, placeholder, options, onChange }: SearchableDropdownProps) {
   const [open, setOpen] = useState(false);
-  const query = normalizeText(value);
+  const [searchQuery, setSearchQuery] = useState("");
+  const query = normalizeText(searchQuery);
   const filteredOptions = useMemo(
     () => options.filter((option) => normalizeText(option.label).includes(query)).slice(0, 80),
     [options, query]
@@ -42,9 +43,13 @@ function SearchableDropdown({ label, value, placeholder, options, onChange }: Se
           value={value}
           onChange={(event) => {
             onChange(event.target.value);
+            setSearchQuery(event.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setSearchQuery("");
+            setOpen(true);
+          }}
           onBlur={() => window.setTimeout(() => setOpen(false), 150)}
           className="w-full rounded border-2 border-black bg-white px-4 py-4 pr-11 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
           placeholder={placeholder}
@@ -61,6 +66,7 @@ function SearchableDropdown({ label, value, placeholder, options, onChange }: Se
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 onChange(option.value);
+                setSearchQuery("");
                 setOpen(false);
               }}
               className="block w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-black uppercase text-black hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none"
