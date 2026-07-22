@@ -1,12 +1,81 @@
 import { useMemo, useState } from "react";
-import { CheckCircle, RotateCcw, Truck as TruckIcon } from "lucide-react";
+import { CheckCircle, ChevronDown, RotateCcw, Truck as TruckIcon } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type { Company, Truck, TruckLiveStatus } from "../types";
 import { TRUCK_LIVE_STATUSES } from "../lib/truckStatus";
 import { Spinner } from "../components/Spinner";
 
+type SearchableOption = {
+  value: string;
+  label: string;
+  helper?: string;
+};
+
+type SearchableDropdownProps = {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: SearchableOption[];
+  onChange: (value: string) => void;
+};
+
 function isInternalTruck(truck: Truck) {
   return String(truck.truckType || "").trim().toLowerCase() === "internal";
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function SearchableDropdown({ label, value, placeholder, options, onChange }: SearchableDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const query = normalizeText(value);
+  const filteredOptions = useMemo(
+    () => options.filter((option) => normalizeText(`${option.label} ${option.helper || ""}`).includes(query)).slice(0, 80),
+    [options, query]
+  );
+
+  return (
+    <label className="relative block space-y-2">
+      <span className="text-xs font-black uppercase text-slate-600">{label}</span>
+      <div className="relative">
+        <input
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          className="w-full rounded border-2 border-black bg-white px-4 py-4 pr-11 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-700" />
+      </div>
+      {open ? (
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          {filteredOptions.length > 0 ? filteredOptions.map((option) => (
+            <button
+              key={`${label}-${option.value}`}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className="block w-full border-b border-slate-200 px-4 py-3 text-left text-sm font-black uppercase text-black hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none"
+            >
+              <span className="block truncate">{option.label}</span>
+              {option.helper ? <span className="mt-1 block truncate text-[11px] font-bold text-slate-500">{option.helper}</span> : null}
+            </button>
+          )) : (
+            <div className="px-4 py-3 text-sm font-bold uppercase text-slate-500">No results found</div>
+          )}
+        </div>
+      ) : null}
+    </label>
+  );
 }
 
 export function VehicleLiveUpdate() {
@@ -21,10 +90,29 @@ export function VehicleLiveUpdate() {
   const [message, setMessage] = useState("");
 
   const internalTrucks = useMemo(() => trucks.filter(isInternalTruck), [trucks]);
-  const partyOptions = useMemo(
-    () => companies.slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" })),
+  const partyOptions = useMemo<SearchableOption[]>(
+    () => companies
+      .map((company) => ({ value: company.name, label: company.name }))
+      .filter((option) => option.value)
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" })),
     [companies]
   );
+  const driverOptions = useMemo<SearchableOption[]>(() => {
+    const byName = new Map<string, SearchableOption>();
+    internalTrucks.forEach((truck) => {
+      const name = String(truck.driverName || "").trim();
+      if (!name) return;
+      const key = normalizeText(name);
+      if (!byName.has(key)) {
+        byName.set(key, {
+          value: name,
+          label: name,
+          helper: [truck.truckNo, truck.mobileNo].filter(Boolean).join(" | "),
+        });
+      }
+    });
+    return Array.from(byName.values()).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [internalTrucks]);
   const selectedTruck = useMemo(() => internalTrucks.find((truck) => truck.id === truckId), [internalTrucks, truckId]);
 
   const authHeaders = useMemo(() => {
@@ -80,8 +168,8 @@ export function VehicleLiveUpdate() {
         <h2 className="text-xl font-black uppercase tracking-tight text-black">Vehicle Live Update</h2>
       </div>
 
-      <div className="mx-auto w-full max-w-3xl overflow-hidden rounded border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-        <div className="border-b-2 border-black bg-indigo-700 px-5 py-5 text-white">
+      <div className="mx-auto w-full max-w-3xl overflow-visible rounded border-2 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        <div className="rounded-t-sm border-b-2 border-black bg-indigo-700 px-5 py-5 text-white">
           <div className="flex items-center gap-3">
             <TruckIcon size={30} />
             <div>
@@ -129,29 +217,21 @@ export function VehicleLiveUpdate() {
               </div>
             ) : null}
 
-            <label className="block space-y-2">
-              <span className="text-xs font-black uppercase text-slate-600">Party</span>
-              <input
-                list="vehicle-live-update-companies"
-                value={partyName}
-                onChange={(event) => setPartyName(event.target.value)}
-                className="w-full rounded border-2 border-black bg-white px-4 py-4 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                placeholder="Search party"
-              />
-              <datalist id="vehicle-live-update-companies">
-                {partyOptions.map((company) => <option key={company.id} value={company.name} />)}
-              </datalist>
-            </label>
+            <SearchableDropdown
+              label="Party"
+              value={partyName}
+              placeholder="Search party"
+              options={partyOptions}
+              onChange={setPartyName}
+            />
 
-            <label className="block space-y-2">
-              <span className="text-xs font-black uppercase text-slate-600">Driver Name</span>
-              <input
-                value={driverName}
-                onChange={(event) => setDriverName(event.target.value)}
-                className="w-full rounded border-2 border-black bg-white px-4 py-4 text-base font-black uppercase focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                placeholder="Driver name"
-              />
-            </label>
+            <SearchableDropdown
+              label="Driver Name"
+              value={driverName}
+              placeholder="Search driver"
+              options={driverOptions}
+              onChange={setDriverName}
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
