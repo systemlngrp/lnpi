@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { Layout } from "./components/Layout";
 import { RequireAuth } from "./auth/RequireAuth";
@@ -143,9 +144,30 @@ function HomeRedirect() {
   return <Navigate to={firstAssignedView || "/operations-dashboard"} replace />;
 }
 
+function HashRouteSync() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const syncRouteFromHash = () => {
+      const target = window.location.hash.slice(1) || "/";
+      const current = `${location.pathname}${location.search}`;
+      if (target !== current) {
+        navigate(target, { replace: true });
+      }
+    };
+
+    window.addEventListener("hashchange", syncRouteFromHash);
+    return () => window.removeEventListener("hashchange", syncRouteFromHash);
+  }, [location.pathname, location.search, navigate]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <HashRouter>
+      <HashRouteSync />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
