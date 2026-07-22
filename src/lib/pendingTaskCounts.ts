@@ -385,7 +385,7 @@ export function buildPendingTaskCounts(args: BuildPendingTaskCountsArgs): Record
       if (!item) return false;
       const boxType = String(item.boxType || "").trim();
       const rapcValue = String(item.rapc ?? "").trim();
-      return !boxType && !rapcValue;
+      return !boxType || !rapcValue;
     }).length,
     "/production/pending-consumption": args.productions.filter((p) =>
       isProductionPendingConsumption(p, getProductionActualPaperUsed(p, productionUsageMap), hasProductionCorrugatedSheetUsage(p, productionCorrugatedSheetUsageMap))
