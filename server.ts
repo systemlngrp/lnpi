@@ -591,6 +591,12 @@ function hasPermission(user: AuthUser, required: string) {
   if (user.role === "TruckDriver") return required === "/truck/status-update";
   const list = user.menuAccess || [];
   if (list.includes("*")) return true;
+  if (
+    required === "/production-processing" &&
+    ["/production/pending-machine-processing", "/production/pending-printing", "/production-processing/master"].some((path) => list.includes(path))
+  ) {
+    return true;
+  }
   if (!required) return false;
   return list.some((entry) => {
     if (!entry) return false;
