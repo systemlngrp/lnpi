@@ -396,7 +396,14 @@ export function ProductionStageQueue({
         ) : null}
       </div>
 
-      <DataSummaryTiles totalRecords={productions.length} filteredRecords={rows.length} showingRecords={paginatedRows.length} pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`} />
+      <DataSummaryTiles
+        totalRecords={0}
+        filteredRecords={rows.length}
+        showingRecords={paginatedRows.length}
+        pageLabel={`${page} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`}
+        hideTotalRecords
+        filteredRecordsLabel="Total Records"
+      />
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="table-sticky-scroll">
