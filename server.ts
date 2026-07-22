@@ -597,6 +597,12 @@ function hasPermission(user: AuthUser, required: string) {
   ) {
     return true;
   }
+  if (
+    ["/orders", "/masters/companies", "/masters/npd"].includes(required) &&
+    list.includes("/production/pending-npd")
+  ) {
+    return true;
+  }
   if (!required) return false;
   return list.some((entry) => {
     if (!entry) return false;

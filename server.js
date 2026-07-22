@@ -537,6 +537,9 @@ function hasPermission(user, required) {
   if (required === "/production-processing" && ["/production/pending-machine-processing", "/production/pending-printing", "/production-processing/master"].some((path2) => list.includes(path2))) {
     return true;
   }
+  if (["/orders", "/masters/companies", "/masters/npd"].includes(required) && list.includes("/production/pending-npd")) {
+    return true;
+  }
   if (!required) return false;
   return list.some((entry) => {
     if (!entry) return false;

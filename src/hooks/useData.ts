@@ -57,6 +57,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
   const [error, setError] = useState<string | null>(null);
   const isFetchingRef = useRef(false);
   const lastFetchAtRef = useRef(0);
+  const forbiddenUntilRef = useRef(0);
 
   const isItemAlias = entity === "items" && !options?.endpointOverride;
   const resolvedEntity = isItemAlias ? "npd" : entity;
@@ -76,6 +77,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
     const now = Date.now();
 
     if (isFetchingRef.current) return;
+    if (now < forbiddenUntilRef.current) return;
     if (!force && now - lastFetchAtRef.current < 10_000) return;
 
     isFetchingRef.current = true;
@@ -85,6 +87,16 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const response = await fetch(endpoint, { headers });
+      if (response.status === 403) {
+        // Sidebar counts request data from modules that a selective user may not access.
+        // Treat that expected denial as an empty dataset rather than a recurring app error.
+        forbiddenUntilRef.current = Date.now() + 5 * 60_000;
+        lastFetchAtRef.current = Date.now();
+        setDataState([]);
+        dataRef.current = [];
+        setError(null);
+        return;
+      }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to fetch data");
@@ -93,6 +105,7 @@ export function useData<T extends { id: string }>(entity: string, initialValue: 
       const finalData = Array.isArray(result) ? result : (result && Array.isArray(result.rows) ? result.rows : []);
       setDataState(finalData);
       dataRef.current = finalData;
+      forbiddenUntilRef.current = 0;
       setError(null);
       lastFetchAtRef.current = Date.now();
       if (shouldCacheToLocalStorage) {
