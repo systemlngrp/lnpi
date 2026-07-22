@@ -117,6 +117,7 @@ export function MaterialInItemMaster() {
           parentStatus: m.status,
           parentTransactionNo: m.transactionNo,
           parentDate: m.date,
+          parentInvoiceNo: m.invoiceNo,
           parentSupplierId: m.supplierId,
           parentId: m.id,
           parentGateEntryNo: m.gateEntryNo || gateEntry?.gateEntryNo || "-",
@@ -168,6 +169,7 @@ export function MaterialInItemMaster() {
         itemName.toLowerCase().includes(q) ||
         supplierName.toLowerCase().includes(q) ||
         (item.parentTransactionNo || "").toLowerCase().includes(q) ||
+        (item.parentInvoiceNo || "").toLowerCase().includes(q) ||
         (item.ourReelNo || "").toLowerCase().includes(q) ||
         (item.supplierReelNo || "").toLowerCase().includes(q) ||
         (item.parentGateEntryNo || "").toLowerCase().includes(q) ||
@@ -259,6 +261,7 @@ export function MaterialInItemMaster() {
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Vehicle No</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier / Customer</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Item Name</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Invoice No</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Status</th>
             <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Qty</th>
             <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
@@ -281,6 +284,7 @@ export function MaterialInItemMaster() {
                 <td className="px-4 py-3 border border-black font-medium">{line.parentVehicleNo}</td>
                 <td className="px-4 py-3 border border-black">{getSupplierName(line.parentSupplierId)}</td>
                 <td className="px-4 py-3 border border-black">{itemName}</td>
+                <td className="px-4 py-3 border border-black whitespace-nowrap font-medium">{line.parentInvoiceNo || "-"}</td>
                 <td className="px-4 py-3 border border-black">
                   <span className={cn(
                     "px-2 py-[2px] rounded text-[10px] font-bold border uppercase tracking-wider",
