@@ -34,7 +34,7 @@ export function PendingNpd() {
         };
       })
       .filter(Boolean)
-      .filter((row) => row.item && (!row.boxType || !row.rapcValue));
+      .filter((row) => row.item && !row.boxType && !row.rapcValue);
 
     const needle = searchTerm.trim().toLowerCase();
     if (!needle) return rows;
@@ -66,7 +66,7 @@ export function PendingNpd() {
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending NPD</h2>
           <p className="text-sm text-slate-700 font-medium">
-            Scheduled NPD items where Box Type or RAPC is still missing.
+            Scheduled NPD items where both Box Type and RAPC are still blank.
           </p>
         </div>
         <label className="relative w-full lg:w-[360px]">
