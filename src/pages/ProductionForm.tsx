@@ -864,6 +864,8 @@ export function ProductionForm() {
               <InfoTile label="Item" value={selectedItem?.name || "-"} />
               <InfoTile label="Type" value={String((selectedItem as any)?.boxType || "-")} />
               <InfoTile label="ERP Code" value={selectedOrder.erpCode || "-"} />
+              <InfoTile label="Order Qty" value={`${selectedOrderQty}${selectedItem?.uom ? ` ${selectedItem.uom}` : ""}`} />
+              <InfoTile label="Balance Order Qty" value={`${balanceOrderQty}${selectedItem?.uom ? ` ${selectedItem.uom}` : ""}`} />
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -881,20 +883,6 @@ export function ProductionForm() {
                 className="border-2 border-black rounded p-2 text-black bg-yellow-100 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm"
               />
             </div>}
-
-            <ReadOnlyNumberField
-              label="Order Qty"
-              value={selectedOrderQty}
-              suffix={selectedItem?.uom || ""}
-              helpText="Selected order quantity from Orders."
-            />
-
-            <ReadOnlyNumberField
-              label="Balance Order Qty"
-              value={balanceOrderQty}
-              suffix={selectedItem?.uom || ""}
-              helpText="For the selected schedule, this is Scheduled Qty - Cancelled Qty - Invoiced Qty."
-            />
 
             {showField("Pending Order Quantity") && <ReadOnlyNumberField
               label="Pending Order Quantity"
