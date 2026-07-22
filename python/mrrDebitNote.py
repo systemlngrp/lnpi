@@ -3,6 +3,7 @@ import html
 import json
 import os
 import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
@@ -168,6 +169,31 @@ def normalize_date_for_tally(value: Any) -> str:
     if match:
         return "".join(match.groups())
     return datetime.now().strftime("%Y%m%d")
+
+
+def parse_tally_date(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    for fmt in ("%Y%m%d", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d-%b-%Y", "%d-%B-%Y"):
+        try:
+            return datetime.strptime(text[:10], fmt)
+        except ValueError:
+            pass
+    match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", text)
+    if match:
+        return datetime(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    return None
+
+
+def get_financial_year_bounds(tally_date: str) -> tuple[str, str]:
+    parsed = parse_tally_date(tally_date) or datetime.now()
+    start_year = parsed.year if parsed.month >= 4 else parsed.year - 1
+    return f"{start_year}0401", f"{start_year + 1}0331"
+
+
+def normalize_lookup_key(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
 
 
 def get_db_connection():
@@ -371,6 +397,7 @@ def build_debit_note_xml(note: DebitNote) -> str:
             <REFERENCEDATE>{esc(note.date)}</REFERENCEDATE>
             <VCHSTATUSDATE>{esc(note.date)}</VCHSTATUSDATE>
             <VOUCHERTYPENAME>Debit Note</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>{esc(note.voucher_no)}</VOUCHERNUMBER>
             <PARTYNAME>{esc(note.supplier_ledger)}</PARTYNAME>
             <PARTYLEDGERNAME>{esc(note.supplier_ledger)}</PARTYLEDGERNAME>
             <REFERENCE>{esc(note.mrr_no)}</REFERENCE>
@@ -485,6 +512,154 @@ def post_to_tally(xml: str) -> str:
     ) from last_error
 
 
+def clean_tally_xml(response_text: str) -> str:
+    text = str(response_text or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", text)
+    start = text.find("<")
+    if start > 0:
+        text = text[start:]
+    return text
+
+
+def build_company_static_variables() -> str:
+    if not COMPANY_NAME.strip():
+        return ""
+    return f"<SVCURRENTCOMPANY>{esc(COMPANY_NAME)}</SVCURRENTCOMPANY>"
+
+
+def safe_tally_text(element: ET.Element | None, tag_name: str) -> str:
+    if element is None:
+        return ""
+    child = element.find(tag_name)
+    if child is None:
+        return ""
+    return str(child.text or "").strip()
+
+
+def looks_like_voucher_element(element: ET.Element) -> bool:
+    return any(
+        safe_tally_text(element, field)
+        for field in ("VOUCHERNUMBER", "REFERENCE", "NARRATION", "PARTYLEDGERNAME", "PARTYNAME")
+    )
+
+
+def fetch_debit_note_vouchers_for_duplicate_check(note: DebitNote) -> list[dict[str, str]]:
+    from_date, to_date = get_financial_year_bounds(note.date)
+    xml_text = f"""
+    <ENVELOPE>
+        <HEADER>
+            <VERSION>1</VERSION>
+            <TALLYREQUEST>EXPORT</TALLYREQUEST>
+            <TYPE>COLLECTION</TYPE>
+            <ID>DebitNoteDuplicateCheck</ID>
+        </HEADER>
+        <BODY>
+            <DESC>
+                <STATICVARIABLES>
+                    {build_company_static_variables()}
+                    <SVFROMDATE>{from_date}</SVFROMDATE>
+                    <SVTODATE>{to_date}</SVTODATE>
+                    <VOUCHERTYPENAME>Debit Note</VOUCHERTYPENAME>
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+                <TDL>
+                    <TDLMESSAGE>
+                        <COLLECTION NAME="DebitNoteDuplicateCheck" ISMODIFY="No">
+                            <TYPE>Voucher</TYPE>
+                            <FETCH>Date</FETCH>
+                            <FETCH>VoucherNumber</FETCH>
+                            <FETCH>Reference</FETCH>
+                            <FETCH>Narration</FETCH>
+                            <FETCH>PartyLedgerName</FETCH>
+                            <FETCH>PartyName</FETCH>
+                            <FETCH>VoucherTypeName</FETCH>
+                        </COLLECTION>
+                    </TDLMESSAGE>
+                </TDL>
+            </DESC>
+        </BODY>
+    </ENVELOPE>
+    """
+    response_text = post_to_tally(xml_text)
+    cleaned = clean_tally_xml(response_text)
+    if not cleaned:
+        return []
+
+    try:
+        root = ET.fromstring(cleaned)
+    except ET.ParseError:
+        return []
+
+    vouchers: list[dict[str, str]] = []
+    seen_keys: set[tuple[str, str, str, str, str]] = set()
+    for element in root.iter():
+        if not looks_like_voucher_element(element):
+            continue
+        voucher_date = safe_tally_text(element, "DATE")
+        voucher_number = safe_tally_text(element, "VOUCHERNUMBER")
+        reference = safe_tally_text(element, "REFERENCE")
+        narration = safe_tally_text(element, "NARRATION")
+        party = safe_tally_text(element, "PARTYLEDGERNAME") or safe_tally_text(element, "PARTYNAME")
+        voucher_type = safe_tally_text(element, "VOUCHERTYPENAME")
+        if normalize_lookup_key(voucher_type) not in ("", normalize_lookup_key("Debit Note")):
+            continue
+        key = (voucher_date, voucher_number, reference, narration, party)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        vouchers.append(
+            {
+                "date": voucher_date,
+                "voucher_number": voucher_number,
+                "reference": reference,
+                "narration": narration,
+                "party": party,
+                "voucher_type": voucher_type,
+            }
+        )
+    return vouchers
+
+
+def find_duplicate_debit_note_in_tally(note: DebitNote) -> dict[str, str] | None:
+    normalized_mrr_no = normalize_lookup_key(note.mrr_no)
+    normalized_voucher_no = normalize_lookup_key(note.voucher_no)
+    for voucher in fetch_debit_note_vouchers_for_duplicate_check(note):
+        normalized_narration = normalize_lookup_key(voucher.get("narration"))
+        normalized_reference = normalize_lookup_key(voucher.get("reference"))
+        normalized_tally_voucher_no = normalize_lookup_key(voucher.get("voucher_number"))
+        if normalized_voucher_no and normalized_tally_voucher_no == normalized_voucher_no:
+            voucher["duplicate_reason"] = "voucher_number"
+            return voucher
+        if normalized_mrr_no and normalized_reference == normalized_mrr_no:
+            voucher["duplicate_reason"] = "mrr_no_in_reference"
+            return voucher
+        if normalized_mrr_no and normalized_mrr_no in normalized_narration:
+            voucher["duplicate_reason"] = "mrr_no_in_narration"
+            return voucher
+    return None
+
+
+def mark_duplicate_reconciled(conn, note: DebitNote, duplicate: dict[str, str]) -> None:
+    tally_voucher_no = duplicate.get("voucher_number") or "-"
+    reason = duplicate.get("duplicate_reason") or "duplicate_check"
+    remark = f"Debit Note already exists in Tally for MRR {note.mrr_no}. Tally voucher: {tally_voucher_no}. Reason: {reason}."
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE `material_in`
+            SET `debitTallySync` = %s, `debitRemarkTally` = %s
+            WHERE `id` = %s
+            """,
+            (datetime.now().isoformat(timespec="seconds"), remark, note.mrr_id),
+        )
+        conn.commit()
+    finally:
+        cursor.close()
+
+
 def mark_posted(conn, note: DebitNote, response_text: str) -> None:
     cursor = conn.cursor()
     try:
@@ -546,6 +721,17 @@ def main() -> None:
         if args.dry_run:
             return
         try:
+            duplicate = find_duplicate_debit_note_in_tally(note)
+            if duplicate:
+                mark_duplicate_reconciled(conn, note, duplicate)
+                print(
+                    "Duplicate found in Tally. Posting skipped. "
+                    f"Voucher: {duplicate.get('voucher_number') or '-'} | "
+                    f"Reason: {duplicate.get('duplicate_reason') or 'duplicate_check'}"
+                )
+                print("Hostinger DB updated: material_in.debitTallySync reconciled.")
+                return
+
             response_text = post_to_tally(xml)
             assert_tally_import_success(response_text)
         except (TallyUnavailableError, TallyImportError) as error:
