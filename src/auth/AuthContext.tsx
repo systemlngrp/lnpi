@@ -21,12 +21,6 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const TRUCK_DRIVER_ALLOWED_PATHS = ["/truck/status-update"];
-const OPERATOR_ALLOWED_PATHS = [
-  "/production-processing/master",
-  "/production-processing/form",
-  "/production/pending-machine-processing",
-  "/production/pending-printing",
-];
 
 function normalizeMenuAccess(raw: unknown): string[] {
   if (!raw) return [];
@@ -67,7 +61,6 @@ function normalizeRole(raw: unknown): AuthUser["role"] {
 function getEffectiveMenuAccess(user: AuthUser | null) {
   if (!user) return [];
   if (user.role === "TruckDriver") return TRUCK_DRIVER_ALLOWED_PATHS;
-  if (user.role === "Operator") return OPERATOR_ALLOWED_PATHS;
   return normalizeMenuAccess(user.menuAccess);
 }
 
@@ -102,29 +95,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshMe = useCallback(async () => {
+  const refreshMe = useCallback(async (showLoading = true) => {
     const token = window.localStorage.getItem("authToken") || "";
     if (!token) {
       setUser(null);
-      setLoading(false);
+      if (showLoading) setLoading(false);
       return;
     }
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const res = await authFetch("/api/auth/me");
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.localStorage.removeItem("authToken");
+          setUser(null);
+        }
+        return;
+      }
       const me = (await res.json()) as AuthUser;
       setUser({ ...me, role: normalizeRole(me.role), menuAccess: normalizeMenuAccess(me.menuAccess) });
     } catch {
-      window.localStorage.removeItem("authToken");
-      setUser(null);
+      // Keep the current user during a temporary connectivity failure.
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refreshMe();
+    void refreshMe();
+  }, [refreshMe]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshMe(false);
+    };
+    const intervalId = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [refreshMe]);
 
   const login = useCallback(async (identifier: string, password: string) => {

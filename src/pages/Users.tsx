@@ -141,7 +141,7 @@ export function Users() {
         mobile: formData.mobile.trim(),
         email: formData.email.trim() || null,
         designation: formData.designation.trim() || null,
-        menuAccess: formData.role === "Operator" ? [] : formData.menuAccess,
+        menuAccess: formData.menuAccess,
       };
       if (editingId && !String(payload.password || "").trim()) {
         delete payload.password;
@@ -210,8 +210,6 @@ export function Users() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [isFormOpen, isSubmitting]);
-
-  const isOperatorRole = formData.role === "Operator";
 
   return (
     <div className="space-y-6">
@@ -323,13 +321,7 @@ export function Users() {
                 <label className="font-bold text-black text-sm">Role *</label>
                 <select
                   value={formData.role}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      role: e.target.value as any,
-                      menuAccess: e.target.value === "Operator" ? [] : prev.menuAccess,
-                    }))
-                  }
+                  onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as any }))}
                   className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                 >
                   <option value="Admin">Admin</option>
@@ -374,23 +366,16 @@ export function Users() {
             <div className="border-2 border-black rounded p-3 bg-slate-50">
               <div className="flex items-center justify-between">
                 <div className="font-black text-black text-sm uppercase">Menu Access</div>
-                {!isOperatorRole ? (
-                  <div className="flex gap-2">
-                    <button type="button" onClick={setAllMenus} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-black hover:bg-indigo-700">
-                      Select All
-                    </button>
-                    <button type="button" onClick={clearAllMenus} className="bg-white text-black border border-black px-3 py-1 rounded text-xs font-black hover:bg-slate-100">
-                      Clear
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-              {isOperatorRole ? (
-                <div className="mt-3 rounded border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700">
-                  Operator users automatically get only `Production Processing` access at runtime.
+                <div className="flex gap-2">
+                  <button type="button" onClick={setAllMenus} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-black hover:bg-indigo-700">
+                    Select All
+                  </button>
+                  <button type="button" onClick={clearAllMenus} className="bg-white text-black border border-black px-3 py-1 rounded text-xs font-black hover:bg-slate-100">
+                    Clear
+                  </button>
                 </div>
-              ) : (
-                <div className="mt-3 space-y-3 max-h-[360px] overflow-auto pr-1">
+              </div>
+              <div className="mt-3 space-y-3 max-h-[360px] overflow-auto pr-1">
                   {allMenuItems.map((group) => (
                     <div key={group.section} className="bg-white border border-black rounded p-2">
                       <div className="flex items-center justify-between">
@@ -440,8 +425,7 @@ export function Users() {
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
+              </div>
                   </div>
 
             <div className="flex space-x-3 pt-2">

@@ -589,7 +589,6 @@ function hasPermission(user: AuthUser, required: string) {
   if (user.role === "Admin") return true;
   if (user.status !== "Active") return false;
   if (user.role === "TruckDriver") return required === "/truck/status-update";
-  if (user.role === "Operator") return true;
   const list = user.menuAccess || [];
   if (list.includes("*")) return true;
   if (!required) return false;
@@ -7533,14 +7532,6 @@ entities.forEach(entity => {
       if (!required) {
         if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
         return next();
-      }
-
-      if (user.role === "Operator") {
-        if (entity === "production_processing") {
-          if (req.method === "DELETE") return res.status(403).json({ error: "Forbidden" });
-        } else if (req.method !== "GET") {
-          return res.status(403).json({ error: "Forbidden" });
-        }
       }
 
       if (!hasPermission(user, required)) return res.status(403).json({ error: "Forbidden" });

@@ -139,10 +139,8 @@ function HomeRedirect() {
   if (user?.role === "TruckDriver") {
     return <Navigate to="/truck/status-update" replace />;
   }
-  if (user?.role === "Operator") {
-    return <Navigate to="/production/pending-machine-processing" replace />;
-  }
-  return <Navigate to="/operations-dashboard" replace />;
+  const firstAssignedView = user?.menuAccess.find((path) => path.startsWith("/") && path !== "/" && !path.includes("*"));
+  return <Navigate to={firstAssignedView || "/operations-dashboard"} replace />;
 }
 
 export default function App() {
