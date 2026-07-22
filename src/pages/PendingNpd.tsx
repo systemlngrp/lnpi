@@ -80,7 +80,14 @@ export function PendingNpd() {
         </label>
       </div>
 
-      <DataSummaryTiles totalRecords={schedules.length} filteredRecords={pendingRows.length} showingRecords={pendingRows.length} pageLabel="1 / 1" />
+      <DataSummaryTiles
+        totalRecords={0}
+        filteredRecords={pendingRows.length}
+        showingRecords={pendingRows.length}
+        pageLabel="1 / 1"
+        hideTotalRecords
+        filteredRecordsLabel="Total Records"
+      />
 
       <div className="table-sticky-scroll border border-black">
         <table className="min-w-full text-sm">
