@@ -119,7 +119,7 @@ export function PaperRequirementReport() {
 
   const [selectedRangeGsm, setSelectedRangeGsm] = useState("All");
   const [uptoDate, setUptoDate] = useState(() => toDateInput(new Date()));
-  const [netFilter, setNetFilter] = useState<NetFilter>("All");
+  const [netFilter, setNetFilter] = useState<NetFilter>("Need To Order");
   const [groupType, setGroupType] = useState<GroupTypeFilter>("All");
 
   const filteredTimestamp = useMemo(() => {
@@ -325,8 +325,8 @@ export function PaperRequirementReport() {
 
   const filteredRows = useMemo(() => {
     return reportData.filter((row) => {
+      if (row.netPaperToOrder <= 0) return false;
       if (selectedRangeGsm !== "All" && `${row.rapcRange} - ${row.gsm}` !== selectedRangeGsm) return false;
-      if (netFilter === "Need To Order" && row.netPaperToOrder <= 0) return false;
       if (netFilter === "Surplus" && row.netPaperToOrder >= 0) return false;
       return true;
     });
@@ -363,7 +363,7 @@ export function PaperRequirementReport() {
     setSearchTerm("");
     setSelectedRangeGsm("All");
     setUptoDate(toDateInput(new Date()));
-    setNetFilter("All");
+    setNetFilter("Need To Order");
     setGroupType("All");
   };
 
