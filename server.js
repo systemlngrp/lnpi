@@ -673,7 +673,7 @@ app.post("/api/auth/logout", requireAuth, async (_req, res) => {
   res.json({ success: true });
 });
 app.use("/api", (req, res, next) => {
-  if (req.path.startsWith("/auth/") || req.path === "/db-status" || req.path.startsWith("/npd-sync") || req.path.startsWith("/tally-sync")) return next();
+  if (req.path.startsWith("/auth/") || req.path === "/db-status" || req.path.startsWith("/public/") || req.path.startsWith("/npd-sync") || req.path.startsWith("/tally-sync")) return next();
   return requireAuth(req, res, next);
 });
 if (!fs.existsSync(path.join(process.cwd(), "uploads"))) {
