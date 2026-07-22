@@ -3,8 +3,8 @@ import { CheckCircle, RotateCcw, Truck as TruckIcon } from "lucide-react";
 import type { Truck } from "../types";
 import { Spinner } from "../components/Spinner";
 
-function friendlyDriverError(message: string) {
-  return /unauthorized|forbidden/i.test(message) ? "Vehicle list not available. Please contact office." : message;
+function isAuthVehicleListError(message: string) {
+  return /unauthorized|forbidden/i.test(message);
 }
 
 const DRIVER_STATUS_OPTIONS = [
@@ -31,10 +31,14 @@ export function PublicDriverStatus() {
         setLoading(true);
         const response = await fetch("/api/public/trucks");
         const data = await response.json().catch(() => []);
-        if (!response.ok) throw new Error(friendlyDriverError(data.error || "Unable to load vehicles."));
+        if (!response.ok) throw new Error(data.error || "Unable to load vehicles.");
         if (mounted) setTrucks(Array.isArray(data) ? data : []);
       } catch (err) {
-        if (mounted) setError(friendlyDriverError((err as Error).message || "Unable to load vehicles."));
+        if (mounted) {
+          const message = (err as Error).message || "Unable to load vehicles.";
+          setError(isAuthVehicleListError(message) ? "" : message);
+          setTrucks([]);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -58,11 +62,11 @@ export function PublicDriverStatus() {
         body: JSON.stringify({ truckId, status }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(friendlyDriverError(data.error || "Unable to update status."));
+      if (!response.ok) throw new Error(data.error || "Unable to update status.");
       setMessage("Vehicle status updated successfully.");
       setStatus("");
     } catch (err) {
-      setError(friendlyDriverError((err as Error).message || "Unable to update status."));
+      setError((err as Error).message || "Unable to update status.");
     } finally {
       setSaving(false);
     }

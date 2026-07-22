@@ -820,15 +820,16 @@ def mark_duplicate_reconciled(conn, note: DebitNote, duplicate: dict[str, str]) 
     tally_voucher_no = duplicate.get("voucher_number") or "-"
     reason = duplicate.get("duplicate_reason") or "duplicate_check"
     remark = f"Debit Note already exists in Tally for MRR {note.mrr_no}. Tally voucher: {tally_voucher_no}. Reason: {reason}."
+    sync_timestamp = datetime.now().isoformat(timespec="seconds")
     cursor = conn.cursor()
     try:
         cursor.execute(
             """
             UPDATE `material_in`
-            SET `debitTallySync` = %s, `debitRemarkTally` = %s
+            SET `debitTallySync` = %s, `debitTallyTimestamp` = %s, `debitRemarkTally` = %s
             WHERE `id` = %s
             """,
-            (datetime.now().isoformat(timespec="seconds"), remark, note.mrr_id),
+            (sync_timestamp, sync_timestamp, remark, note.mrr_id),
         )
         conn.commit()
     finally:
@@ -837,15 +838,16 @@ def mark_duplicate_reconciled(conn, note: DebitNote, duplicate: dict[str, str]) 
 
 def mark_posted(conn, note: DebitNote, response_text: str) -> None:
     ensure_db_connection(conn)
+    sync_timestamp = datetime.now().isoformat(timespec="seconds")
     cursor = conn.cursor()
     try:
         cursor.execute(
             """
             UPDATE `material_in`
-            SET `debitTallySync` = %s, `debitRemarkTally` = %s
+            SET `debitTallySync` = %s, `debitTallyTimestamp` = %s, `debitRemarkTally` = %s
             WHERE `id` = %s
             """,
-            (datetime.now().isoformat(timespec="seconds"), f"Debit Note posted to Tally. Response: {response_text[:500]}", note.mrr_id),
+            (sync_timestamp, sync_timestamp, f"Debit Note posted to Tally. Response: {response_text[:500]}", note.mrr_id),
         )
         conn.commit()
     finally:
