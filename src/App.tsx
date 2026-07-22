@@ -20,7 +20,7 @@ import { PurchaseOrderPendingIndentLines } from "./pages/PurchaseOrderPendingInd
 import { PurchaseOrderCreate } from "./pages/PurchaseOrderCreate";
 import { PurchaseOrderAll, PurchaseOrderApproved, PurchaseOrderPendingApproval, PurchaseOrderRejected } from "./pages/PurchaseOrderList";
 import { GateEntryForm } from "./pages/GateEntryForm";
-import { GateEntryMaster } from "./pages/GateEntryMaster";
+import { CancelledGateEntry, GateEntryMaster } from "./pages/GateEntryMaster";
 import { PendingMrr } from "./pages/PendingMrr";
 import { PendingTallyEntry } from "./pages/PendingTallyEntry";
 import { PendingDebitNote } from "./pages/PendingDebitNote";
@@ -71,7 +71,7 @@ import { PendingNpd } from "./pages/PendingNpd";
 import { OperationDashboard } from "./pages/OperationDashboard";
 import { AuditDashboard } from "./pages/AuditDashboard";
 import { PendingJobClosure } from "./pages/PendingJobClosure";
-import { MachinePendingProcessing } from "./pages/MachinePendingProcessing";
+import { MachinePendingProcessing, PendingPrinting } from "./pages/MachinePendingProcessing";
 import { ProductionProcessingForm } from "./pages/ProductionProcessingForm";
 import { ProductionProcessingMaster } from "./pages/ProductionProcessingMaster";
 import { ItemwiseLeastCost } from "./pages/ItemwiseLeastCost";
@@ -118,8 +118,12 @@ import { HitVsMissReport } from "./pages/HitVsMissReport";
 import { RealizationReport } from "./pages/RealizationReport";
 import { PaperRequirementReport } from "./pages/PaperRequirementReport";
 import { ConversionCostReport } from "./pages/ConversionCostReport";
+import { FixedMonthlyExpenses } from "./pages/FixedMonthlyExpenses";
+import { ConversionCostMonthWiseReport } from "./pages/ConversionCostMonthWiseReport";
 import { TruckStatusReport } from "./pages/TruckStatusReport";
+import { WastageReport } from "./pages/WastageReport";
 import { TruckStatusUpdate } from "./pages/TruckStatusUpdate";
+import { TruckLogs } from "./pages/TruckLogs";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -158,6 +162,7 @@ export default function App() {
           <Route index element={<HomeRedirect />} />
           <Route path="plant-head" element={<PlantHeadUnified />} />
           <Route path="truck/status-update" element={<TruckStatusUpdate />} />
+          <Route path="truck/logs" element={<TruckLogs />} />
           
           {/* Masters */}
           <Route path="masters/item-groups" element={<ItemGroups />} />
@@ -200,6 +205,7 @@ export default function App() {
           {/* Gate Entry */}
           <Route path="gate-entry/form" element={<GateEntryForm />} />
           <Route path="gate-entry/master" element={<GateEntryMaster />} />
+          <Route path="gate-entry/cancelled" element={<CancelledGateEntry />} />
 
           {/* Material Receipt */}
           <Route path="material-receipt/pending-mrr" element={<PendingMrr />} />
@@ -242,6 +248,7 @@ export default function App() {
           <Route path="production/pending-tally" element={<ProductionPendingTally />} />
           <Route path="production/pending-job-closure" element={<PendingJobClosure />} />
           <Route path="production/pending-machine-processing" element={<MachinePendingProcessing />} />
+          <Route path="production/pending-printing" element={<PendingPrinting />} />
           <Route path="production/master" element={<ProductionMaster />} />
           <Route path="production/php/master" element={<PhpProductionMaster />} />
           <Route path="production/php/pending-planning" element={<PendingPhpPlanning />} />
@@ -302,7 +309,10 @@ export default function App() {
           <Route path="reports/realization" element={<RealizationReport />} />
           <Route path="reports/paper-requirement" element={<PaperRequirementReport />} />
           <Route path="reports/conversion-cost" element={<ConversionCostReport />} />
+          <Route path="reports/fixed-monthly-expenses" element={<FixedMonthlyExpenses />} />
+          <Route path="reports/conversion-cost-month-wise" element={<ConversionCostMonthWiseReport />} />
           <Route path="reports/truck-status" element={<TruckStatusReport />} />
+          <Route path="reports/wastage" element={<WastageReport />} />
 
           {/* Documentation */}
           <Route path="plans/production-planning" element={<PlansProductionPlanning />} />

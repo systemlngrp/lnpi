@@ -2067,6 +2067,43 @@ async function ensureColumnExists(db: mysql.Pool, database: string, table: strin
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
 }
 
+async function ensureTruckStatusLogSchema(db: mysql.Pool, database: string) {
+  await db.query([
+    "CREATE TABLE IF NOT EXISTS `truck_status_logs` (",
+    "`id` VARCHAR(36) PRIMARY KEY,",
+    "`truckId` VARCHAR(36) NOT NULL,",
+    "`truckNo` VARCHAR(100),",
+    "`liveStatus` VARCHAR(50) NOT NULL,",
+    "`statusUpdatedAt` VARCHAR(255) NOT NULL,",
+    "`statusUpdatedBy` VARCHAR(255),",
+    "`updateSource` VARCHAR(50),",
+    "`sourceRefType` VARCHAR(50),",
+    "`sourceRefId` VARCHAR(100),",
+    "`updatedBy` VARCHAR(255),",
+    "`updateTimestamp` VARCHAR(255),",
+    "INDEX `idx_truck_status_logs_truckId` (`truckId`),",
+    "INDEX `idx_truck_status_logs_truckNo` (`truckNo`),",
+    "INDEX `idx_truck_status_logs_statusUpdatedAt` (`statusUpdatedAt`)",
+    ")",
+  ].join(" "));
+
+  const columns = [
+    { column: "truckId", type: "VARCHAR(36) NOT NULL" },
+    { column: "truckNo", type: "VARCHAR(100)" },
+    { column: "liveStatus", type: "VARCHAR(50) NOT NULL" },
+    { column: "statusUpdatedAt", type: "VARCHAR(255) NOT NULL" },
+    { column: "statusUpdatedBy", type: "VARCHAR(255)" },
+    { column: "updateSource", type: "VARCHAR(50)" },
+    { column: "sourceRefType", type: "VARCHAR(50)" },
+    { column: "sourceRefId", type: "VARCHAR(100)" },
+    { column: "updatedBy", type: "VARCHAR(255)" },
+    { column: "updateTimestamp", type: "VARCHAR(255)" },
+  ];
+
+  for (const { column, type } of columns) {
+    await ensureColumnExists(db, database, "truck_status_logs", column, type);
+  }
+}
 async function ensureCompaniesSchemaColumns(db: mysql.Pool, database: string) {
   for (const { column, type } of COMPANY_SCHEMA_COLUMNS) {
     await ensureColumnExists(db, database, "companies", column, type);
@@ -2079,6 +2116,85 @@ async function ensureMaterialInCurrencySchemaColumns(db: mysql.Pool, database: s
 
   for (const { column, type } of MATERIAL_IN_LINE_CURRENCY_SCHEMA_COLUMNS) {
     await ensureColumnExists(db, database, "material_in_lines", column, type);
+  }
+}
+
+function roundCurrency(value: number) {
+  return Number((Number(value || 0)).toFixed(2));
+}
+
+function parseJsonArray(value: unknown): any[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getMaterialInJsonLineRate(line: any) {
+  const invoiceRate = Number(line?.invoiceRate || 0);
+  if (invoiceRate > 0) return invoiceRate;
+  const poRate = Number(line?.poRate || 0);
+  if (poRate > 0) return poRate;
+  const rate = Number(line?.rate || 0);
+  if (rate > 0) return rate;
+  const actualQty = Number(line?.actualQty || 0);
+  const actualValue = Number(line?.actualValue || 0);
+  return actualQty > 0 && actualValue > 0 ? actualValue / actualQty : 0;
+}
+
+async function backfillNonJobMaterialIssueValuation(db: mysql.Pool) {
+  const [materialRows] = await db.query("SELECT id, openingRate FROM `materials`");
+  const openingRateByMaterial = new Map(
+    (materialRows as any[]).map((row) => [String(row.id || ""), roundCurrency(Number(row.openingRate || 0))])
+  );
+
+  const [materialInRows] = await db.query("SELECT id, date, timestamp, `lines` FROM `material_in`");
+  const latestPurchaseByMaterial = new Map<string, { rate: number; time: number }>();
+  for (const receipt of materialInRows as any[]) {
+    const time = new Date(receipt.timestamp || receipt.date || 0).getTime() || 0;
+    for (const line of parseJsonArray(receipt.lines)) {
+      const materialId = String(line?.itemId || "").trim();
+      if (!materialId) continue;
+      const rate = roundCurrency(getMaterialInJsonLineRate(line));
+      if (rate <= 0) continue;
+      const existing = latestPurchaseByMaterial.get(materialId);
+      if (!existing || time > existing.time) {
+        latestPurchaseByMaterial.set(materialId, { rate, time });
+      }
+    }
+  }
+
+  const [lineRows] = await db.query(`
+    SELECT mil.id, mil.materialId, mil.qty, mil.rate, mil.amount
+    FROM \`material_issue_lines\` mil
+    JOIN \`material_issues\` mi ON mi.id = mil.materialIssueId
+    WHERE LOWER(TRIM(COALESCE(mi.issueType, ''))) IN ('without job', 'general', 'withoutjob', 'without_job')
+  `);
+
+  let updatedCount = 0;
+  for (const line of lineRows as any[]) {
+    if (Number(line.rate || 0) > 0 || Number(line.amount || 0) > 0) continue;
+    const materialId = String(line.materialId || "").trim();
+    const qty = Number(line.qty || 0);
+    const lastPurchaseRate = latestPurchaseByMaterial.get(materialId)?.rate || 0;
+    const openingRate = openingRateByMaterial.get(materialId) || 0;
+    const rate = lastPurchaseRate > 0 ? lastPurchaseRate : openingRate;
+    const amount = roundCurrency(qty * rate);
+    if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
+
+    await db.query(
+      "UPDATE `material_issue_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ?",
+      [lastPurchaseRate, openingRate, rate, amount, line.id]
+    );
+    updatedCount += 1;
+  }
+
+  if (updatedCount > 0) {
+    console.log(`[DB] Backfilled non-job material issue valuation for ${updatedCount} line(s).`);
   }
 }
 
@@ -2120,6 +2236,102 @@ function applyAuditFields<T extends Record<string, any>>(
   };
 }
 
+type TruckStatusUpdateSource = "System" | "TruckDriver";
+
+type TruckStatusUpdateInput = {
+  truckId: string;
+  liveStatus: string;
+  statusUpdatedBy: string;
+  updateSource: TruckStatusUpdateSource;
+  sourceRefType?: string;
+  sourceRefId?: string;
+  statusUpdatedAt?: string;
+};
+
+async function applyTruckStatusUpdate(db: mysql.Pool, input: TruckStatusUpdateInput) {
+  const truckId = String(input.truckId || "").trim();
+  const liveStatus = normalizeTruckLiveStatus(input.liveStatus);
+  if (!truckId || !liveStatus) return null;
+
+  const [truckRows] = await db.query("SELECT id, truckNo FROM `trucks` WHERE id = ? LIMIT 1", [truckId]);
+  const truck = (truckRows as any[])[0];
+  if (!truck?.id) return null;
+
+  const now = input.statusUpdatedAt || new Date().toISOString();
+  const actor = String(input.statusUpdatedBy || input.updateSource || DEFAULT_SYSTEM_AUDIT_USER).trim() || DEFAULT_SYSTEM_AUDIT_USER;
+  const truckNo = String(truck.truckNo || "").trim();
+  const sourceRefType = String(input.sourceRefType || "").trim() || null;
+  const sourceRefId = String(input.sourceRefId || "").trim() || null;
+
+  await db.query(
+    "UPDATE `trucks` SET `liveStatus` = ?, `statusUpdatedAt` = ?, `statusUpdatedBy` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
+    [liveStatus, now, actor, actor, now, truckId]
+  );
+
+  const logId = crypto.randomUUID();
+  await db.query(
+    "INSERT INTO `truck_status_logs` (`id`, `truckId`, `truckNo`, `liveStatus`, `statusUpdatedAt`, `statusUpdatedBy`, `updateSource`, `sourceRefType`, `sourceRefId`, `updatedBy`, `updateTimestamp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [logId, truckId, truckNo, liveStatus, now, actor, input.updateSource, sourceRefType, sourceRefId, actor, now]
+  );
+
+  return { id: logId, truckId, truckNo, liveStatus, statusUpdatedAt: now };
+}
+
+function parseLoadingSlipLinesForTruckParty(raw: unknown) {
+  try {
+    const lines = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(lines) ? lines as Array<Record<string, any>> : [];
+  } catch {
+    return [];
+  }
+}
+
+async function getTruckActivePartyName(db: mysql.Pool, truckId: string) {
+  const id = String(truckId || "").trim();
+  if (!id) return "";
+
+  const [rows] = await db.query(
+    [
+      "SELECT id, companyId, companyName, `lines`, updateTimestamp, `date`",
+      "FROM `loading_slips`",
+      "WHERE truckId = ? AND COALESCE(`status`, 'Active') <> 'Cancelled'",
+      "ORDER BY COALESCE(updateTimestamp, `date`) DESC",
+      "LIMIT 1",
+    ].join(" "),
+    [id]
+  );
+  const slip = (rows as any[])[0];
+  if (!slip) return "";
+
+  const companyIds = new Set<string>();
+  const partyNames = new Set<string>();
+  const addName = (value: unknown) => {
+    const name = String(value || "").trim();
+    if (name) partyNames.add(name);
+  };
+  const addCompanyId = (value: unknown) => {
+    const companyId = String(value || "").trim();
+    if (companyId) companyIds.add(companyId);
+  };
+
+  addName(slip.companyName);
+  addCompanyId(slip.companyId);
+  parseLoadingSlipLinesForTruckParty(slip.lines).forEach((line) => {
+    addName(line.companyName);
+    addCompanyId(line.companyId);
+  });
+
+  if (companyIds.size) {
+    const ids = Array.from(companyIds);
+    const [companyRows] = await db.query(
+      `SELECT id, name FROM \`companies\` WHERE id IN (${ids.map(() => "?").join(",")})`,
+      ids
+    );
+    (companyRows as any[]).forEach((company) => addName(company.name));
+  }
+
+  return Array.from(partyNames).join(", ");
+}
 async function ensureGatePassNullableColumns(db: mysql.Pool, database: string) {
   const nullableColumns = [
     { column: "invoiceId", type: "VARCHAR(36) NULL" },
@@ -2650,6 +2862,7 @@ function entityPermissionKey(entity: string): string {
     case "invoice_line_items":
       return "/billing";
     case "realization_rate_chart":
+    case "fixed_monthly_expenses":
       return "/reports";
     default:
       return "";
@@ -3139,6 +3352,10 @@ async function initDb(retries = 5) {
           \`mrrId\` VARCHAR(36),
           \`mrrDate\` VARCHAR(50),
           \`mrrNo\` VARCHAR(100),
+          \`status\` VARCHAR(20) DEFAULT 'Active',
+          \`cancelReason\` TEXT,
+          \`cancelledAt\` VARCHAR(255),
+          \`cancelledBy\` VARCHAR(255),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -3205,6 +3422,10 @@ async function initDb(retries = 5) {
           \`materialId\` VARCHAR(36) NOT NULL,
           \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`uom\` VARCHAR(50) NOT NULL,
+          \`lastPurchaseRate\` DECIMAL(15,2) DEFAULT 0,
+          \`openingRate\` DECIMAL(15,2) DEFAULT 0,
+          \`rate\` DECIMAL(15,2) DEFAULT 0,
+          \`amount\` DECIMAL(15,2) DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -4135,6 +4356,20 @@ await db.query(`
         )
       `);
 
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`fixed_monthly_expenses\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`fy\` VARCHAR(20) NOT NULL,
+          \`month\` INT NOT NULL,
+          \`monthName\` VARCHAR(50) NOT NULL,
+          \`lines\` JSON NOT NULL,
+          \`totalAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255),
+          UNIQUE KEY \`uniq_fixed_monthly_expenses_fy_month\` (\`fy\`, \`month\`)
+        )
+      `);
+
 
       await db.query(`
         CREATE TABLE IF NOT EXISTS \`uploaded_files\` (
@@ -4272,6 +4507,10 @@ await db.query(`
         { table: "gate_entries", column: "mrrId", type: "VARCHAR(36)" },
         { table: "gate_entries", column: "mrrDate", type: "VARCHAR(50)" },
         { table: "gate_entries", column: "mrrNo", type: "VARCHAR(100)" },
+        { table: "gate_entries", column: "status", type: "VARCHAR(20) DEFAULT 'Active'" },
+        { table: "gate_entries", column: "cancelReason", type: "TEXT" },
+        { table: "gate_entries", column: "cancelledAt", type: "VARCHAR(255)" },
+        { table: "gate_entries", column: "cancelledBy", type: "VARCHAR(255)" },
         { table: "gate_entries", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "gate_entries", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_entry_photos", column: "gateEntryId", type: "VARCHAR(36) NOT NULL" },
@@ -4314,6 +4553,10 @@ await db.query(`
         { table: "material_issue_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
         { table: "material_issue_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "material_issue_lines", column: "uom", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_issue_lines", column: "lastPurchaseRate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_issue_lines", column: "openingRate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_issue_lines", column: "rate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_issue_lines", column: "amount", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "material_issue_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_issue_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_issue_reel_lines", column: "materialIssueId", type: "VARCHAR(36) NOT NULL" },
@@ -4861,6 +5104,13 @@ await db.query(`
         { table: "settings", column: "organizationLogo", type: "VARCHAR(255)" },
         { table: "settings", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "settings", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "fixed_monthly_expenses", column: "fy", type: "VARCHAR(20) NOT NULL" },
+        { table: "fixed_monthly_expenses", column: "month", type: "INT NOT NULL" },
+        { table: "fixed_monthly_expenses", column: "monthName", type: "VARCHAR(50) NOT NULL" },
+        { table: "fixed_monthly_expenses", column: "lines", type: "JSON NOT NULL" },
+        { table: "fixed_monthly_expenses", column: "totalAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "fixed_monthly_expenses", column: "updatedBy", type: "VARCHAR(255)" },
+        { table: "fixed_monthly_expenses", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "audit_dashboard_snapshots", column: "dateFrom", type: "VARCHAR(50) NOT NULL" },
         { table: "audit_dashboard_snapshots", column: "dateTo", type: "VARCHAR(50) NOT NULL" },
         { table: "audit_dashboard_snapshots", column: "invoiceValueTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
@@ -4943,6 +5193,12 @@ await db.query(`
         `);
       } catch (err) {
         console.warn("[DB] Could not backfill orders.orderAmount:", (err as Error).message);
+      }
+
+      try {
+        await backfillNonJobMaterialIssueValuation(db);
+      } catch (err) {
+        console.warn("[DB] Could not backfill non-job material issue valuation:", (err as Error).message);
       }
 
       try {
@@ -5038,6 +5294,7 @@ await db.query(`
       try {
         await ensureCompaniesSchemaColumns(db, database);
         await ensureMaterialInCurrencySchemaColumns(db, database);
+        await ensureTruckStatusLogSchema(db, database);
         await ensureAuditColumnsForAllTables(db, database);
       } catch (err) {
         console.warn("[DB] Could not ensure companies schema columns:", (err as Error).message);
@@ -6206,7 +6463,8 @@ app.get("/api/truck-driver/status", async (req, res) => {
     );
     const truck = (rows as any[])[0];
     if (!truck) return res.status(404).json({ error: "Truck not found" });
-    return res.json({ truck });
+    const partyName = await getTruckActivePartyName(db, user.truckId);
+    return res.json({ truck: { ...truck, partyName } });
   } catch (error) {
     console.error("[TRUCK_DRIVER] status fetch failed:", error);
     return res.status(500).json({ error: (error as Error).message });
@@ -6218,29 +6476,65 @@ app.post("/api/truck-driver/status", async (req, res) => {
   if (!user || user.role !== "TruckDriver" || !user.truckId) return res.status(403).json({ error: "Forbidden" });
 
   const liveStatus = normalizeTruckLiveStatus(req.body?.liveStatus);
-  if (!liveStatus) return res.status(400).json({ error: "Invalid truck status" });
+  if (!liveStatus) {
+    return res.status(400).json({ error: "Invalid truck status" });
+  }
 
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
 
   try {
-    const now = new Date().toISOString();
-    await db.query(
-      "UPDATE `trucks` SET `liveStatus` = ?, `statusUpdatedAt` = ?, `statusUpdatedBy` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
-      [liveStatus, now, user.userId || user.name || "Truck Driver", user.userId || user.name || "Truck Driver", now, user.truckId]
-    );
+    await applyTruckStatusUpdate(db, {
+      truckId: user.truckId,
+      liveStatus,
+      statusUpdatedBy: user.userId || user.name || "Truck Driver",
+      updateSource: "TruckDriver",
+      sourceRefType: "Truck Driver Update",
+      sourceRefId: user.truckId,
+    });
     const [rows] = await db.query(
       "SELECT id, truckNo, driverName, mobileNo, liveStatus, statusUpdatedAt, statusUpdatedBy FROM `trucks` WHERE id = ? LIMIT 1",
       [user.truckId]
     );
-    return res.json({ truck: (rows as any[])[0] });
+    const truck = (rows as any[])[0];
+    const partyName = await getTruckActivePartyName(db, user.truckId);
+    return res.json({ truck: { ...truck, partyName } });
   } catch (error) {
     console.error("[TRUCK_DRIVER] status update failed:", error);
     return res.status(500).json({ error: (error as Error).message });
   }
 });
+app.get("/api/truck-status-logs", async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.role === "TruckDriver") return res.status(403).json({ error: "Forbidden" });
+  if (!hasPermission(user, "/reports/truck-status")) return res.status(403).json({ error: "Forbidden" });
+
+  const truckNo = String(req.query.truckNo || "").trim();
+  if (!truckNo) return res.json([]);
+
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const [rows] = await db.query(
+      [
+        "SELECT id, truckId, truckNo, liveStatus, statusUpdatedAt, statusUpdatedBy",
+        "FROM `truck_status_logs`",
+        "WHERE LOWER(TRIM(`truckNo`)) = LOWER(TRIM(?))",
+        "ORDER BY `statusUpdatedAt` DESC, `updateTimestamp` DESC",
+        "LIMIT 500",
+      ].join(" "),
+      [truckNo]
+    );
+    return res.json(rows);
+  } catch (error) {
+    console.error("[TRUCK_STATUS_LOGS] fetch failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "audit_dashboard_snapshots"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "audit_dashboard_snapshots"];
 
 app.get("/api/tally-sync-debug", (req, res) => {
   const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();

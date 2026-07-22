@@ -5,6 +5,7 @@ import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import { Company, GateEntry, GateEntryPhoto, GatePass, Supplier } from "../types";
 import { getPendingQtyForGatePass, hasSavedReturnableReceiptGateEntry, isReturnableGatePass } from "../lib/gatePassState";
+import { hasGateEntryMrr, isGateEntryCancelled } from "../lib/gateEntryState";
 
 const PHOTO_SLOTS = 8;
 
@@ -35,14 +36,6 @@ function toInputDate(value?: string) {
   return Number.isNaN(date.getTime()) ? new Date().toISOString().slice(0, 10) : date.toISOString().slice(0, 10);
 }
 
-function hasLinkedMrr(entry?: Pick<GateEntry, "mrrId" | "mrrNo" | "mrrDate"> | null) {
-  return Boolean(
-    String(entry?.mrrId || "").trim() ||
-    String(entry?.mrrNo || "").trim() ||
-    String(entry?.mrrDate || "").trim()
-  );
-}
-
 export function GateEntryForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -59,7 +52,7 @@ export function GateEntryForm() {
 
   const editingEntry = gateEntries.find((entry) => entry.id === editGateEntryId) || null;
   const isEditing = Boolean(editingEntry);
-  const editingLocked = hasLinkedMrr(editingEntry);
+  const editingLocked = hasGateEntryMrr(editingEntry) || isGateEntryCancelled(editingEntry);
   const effectiveSourceGatePassId = editingEntry?.sourceGatePassId || sourceGatePassId;
   const sourceGatePass = gatePasses.find((gatePass) => gatePass.id === effectiveSourceGatePassId) || null;
   const entryPhotos = useMemo(
@@ -126,9 +119,9 @@ export function GateEntryForm() {
 
   useEffect(() => {
     if (!isEditing || !editingLocked) return;
-    alert("Gate Entry cannot be edited after MRR is created.");
+    alert(isGateEntryCancelled(editingEntry) ? "Gate Entry cannot be edited after cancellation." : "Gate Entry cannot be edited after MRR is created.");
     navigate("/gate-entry/master", { replace: true });
-  }, [editingLocked, isEditing, navigate]);
+  }, [editingEntry, editingLocked, isEditing, navigate]);
 
   useEffect(() => {
     if (purpose !== "Returnable Receipt") return;

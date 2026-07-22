@@ -25,9 +25,11 @@ import type {
   Setting,
 } from "../types";
 import { deriveGatePassState, hasSavedReturnableReceiptGateEntry, isReturnableGatePass } from "./gatePassState";
+import { canCreateMrrForGateEntry } from "./gateEntryState";
 import { parseMandatoryMachinesByType } from "./mandatoryMachines";
 import { buildProductionCorrugatedSheetUsageMap, buildProductionMaterialUsageMap, getProductionActualPaperUsed, hasProductionCorrugatedSheetUsage } from "./productionMaterialUsage";
 import { getRequiredMachinesForProduction } from "./productionType";
+import { normalizeMachineName } from "./productionMachineNames";
 import { buildScheduleConsumptionByScheduleId } from "./productionScheduleQty";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "./productionStageFilters";
 import { withIndentTotals } from "./indentTotals";
@@ -49,41 +51,52 @@ export type PendingTaskRow = {
   name: string;
   countKey: string;
   count: number;
+  section: PendingTaskSection;
+};
+
+export type PendingTaskSection = "Purchase" | "Orders" | "Jobs" | "Sales" | "Gate Pass";
+
+export type PendingTaskGroup = {
+  section: PendingTaskSection;
+  rows: PendingTaskRow[];
+  sectionTotal: number;
 };
 
 export const PENDING_TASK_DEFINITIONS = [
-  { name: "Indent Pending", countKey: "/indent/pending" },
-  { name: "Pending PO Items", countKey: "/purchase-orders/pending-indent-lines" },
-  { name: "Purchase Order Pending Approval", countKey: "/purchase-orders/pending-approval" },
-  { name: "Pending Material Receipt", countKey: "/material-receipt/pending-mrr" },
-  { name: "Pending MRR Approvals", countKey: "/material-receipt/approvals" },
-  { name: "Pending MRR Tally Posting", countKey: "/material-receipt/pending-tally" },
-  { name: "Pending Debit Note", countKey: "/material-receipt/pending-debit-note" },
-  { name: "Pending Non-Job Material Issue", countKey: "/material-movement/pending-non-job-issue" },
-  { name: "Pending Consumption Tally Posting", countKey: "/material-movement/pending-consumption-tally" },
-  { name: "Pending Salesman Approval", countKey: "/orders/pending-ph" },
-  { name: "Pending Scheduling", countKey: "/orders/pending-scheduling" },
-  { name: "Pending Production Plan", countKey: "/production/pending" },
-  { name: "Pending NPD", countKey: "/production/pending-npd" },
-  { name: "Pending Material Issue", countKey: "/production/pending-consumption" },
-  { name: "Pending FG", countKey: "/production/pending-ffg" },
-  { name: "Pending Production Tally Entry", countKey: "/production/pending-tally" },
-  { name: "Pending Job Closure", countKey: "/production/pending-job-closure" },
-  { name: "Pending Machine Processing", countKey: "/production/pending-machine-processing" },
-  { name: "Pending PHP Planning", countKey: "/production/php/pending-planning" },
-  { name: "Pending Plate Planning", countKey: "/production/plate/pending-planning" },
-  { name: "Pending PHP/Plate Sequencing", countKey: "/production/php-plate/pending-sequencing" },
-  { name: "Pending PHP/Plate Production", countKey: "/production/php-plate/pending-production" },
-  { name: "Pending Samples", countKey: "/samples/pending" },
-  { name: "Pending Dispatch Planning", countKey: "/dispatch/pending-planning" },
-  { name: "Pending Loading", countKey: "/loading/pending" },
-  { name: "Pending PHP Loading Tally", countKey: "/loading/php/pending-tally" },
-  { name: "Pending Plate Loading Tally", countKey: "/loading/plate/pending-tally" },
-  { name: "Pending Invoicing", countKey: "/billing/pending" },
-  { name: "Pending Billing Tally Posting", countKey: "/billing/pending-tally" },
-  { name: "Pending Returnable Gate Pass Items", countKey: "/gate-pass/pending-returnable" },
+  { section: "Purchase", name: "Indent Pending", countKey: "/indent/pending" },
+  { section: "Purchase", name: "Pending PO Items", countKey: "/purchase-orders/pending-indent-lines" },
+  { section: "Purchase", name: "Purchase Order Pending Approval", countKey: "/purchase-orders/pending-approval" },
+  { section: "Purchase", name: "Pending Material Receipt", countKey: "/material-receipt/pending-mrr" },
+  { section: "Purchase", name: "Pending MRR Approvals", countKey: "/material-receipt/approvals" },
+  { section: "Purchase", name: "Pending MRR Tally Posting", countKey: "/material-receipt/pending-tally" },
+  { section: "Purchase", name: "Pending Debit Note", countKey: "/material-receipt/pending-debit-note" },
+  { section: "Jobs", name: "Pending Non-Job Material Issue", countKey: "/material-movement/pending-non-job-issue" },
+  { section: "Jobs", name: "Pending Consumption Tally Posting", countKey: "/material-movement/pending-consumption-tally" },
+  { section: "Orders", name: "Pending Salesman Approval", countKey: "/orders/pending-ph" },
+  { section: "Orders", name: "Pending Scheduling", countKey: "/orders/pending-scheduling" },
+  { section: "Jobs", name: "Pending Production Plan", countKey: "/production/pending" },
+  { section: "Jobs", name: "Pending NPD", countKey: "/production/pending-npd" },
+  { section: "Jobs", name: "Pending Material Issue", countKey: "/production/pending-consumption" },
+  { section: "Jobs", name: "Pending FG", countKey: "/production/pending-ffg" },
+  { section: "Jobs", name: "Pending Printing", countKey: "/production/pending-printing" },
+  { section: "Jobs", name: "Pending Production Tally Entry", countKey: "/production/pending-tally" },
+  { section: "Jobs", name: "Pending Job Closure", countKey: "/production/pending-job-closure" },
+  { section: "Jobs", name: "Pending Machine Processing", countKey: "/production/pending-machine-processing" },
+  { section: "Jobs", name: "Pending PHP Planning", countKey: "/production/php/pending-planning" },
+  { section: "Jobs", name: "Pending Plate Planning", countKey: "/production/plate/pending-planning" },
+  { section: "Jobs", name: "Pending PHP/Plate Sequencing", countKey: "/production/php-plate/pending-sequencing" },
+  { section: "Jobs", name: "Pending PHP/Plate Production", countKey: "/production/php-plate/pending-production" },
+  { section: "Jobs", name: "Pending Samples", countKey: "/samples/pending" },
+  { section: "Sales", name: "Pending Dispatch Planning", countKey: "/dispatch/pending-planning" },
+  { section: "Sales", name: "Pending Loading", countKey: "/loading/pending" },
+  { section: "Sales", name: "Pending PHP Loading Tally", countKey: "/loading/php/pending-tally" },
+  { section: "Sales", name: "Pending Plate Loading Tally", countKey: "/loading/plate/pending-tally" },
+  { section: "Sales", name: "Pending Invoicing", countKey: "/billing/pending" },
+  { section: "Sales", name: "Pending Billing Tally Posting", countKey: "/billing/pending-tally" },
+  { section: "Gate Pass", name: "Pending Returnable Gate Pass Items", countKey: "/gate-pass/pending-returnable" },
 ] as const;
 
+const PENDING_TASK_SECTION_ORDER: PendingTaskSection[] = ["Purchase", "Orders", "Jobs", "Sales", "Gate Pass"];
 export type BuildPendingTaskCountsArgs = {
   materialIn: MaterialIn[];
   productions: Production[];
@@ -278,9 +291,11 @@ function getPendingMachineProcessingCount(
   processing: ProductionProcessing[] = [],
   settings: Setting[] = [],
   findItemAcrossSources?: (itemId: string, source?: string, erpCode?: string | number) => OrderCatalogItem | undefined,
-  user?: PendingTaskUser | null
+  user?: PendingTaskUser | null,
+  machineNameFilter?: string
 ) {
   if (machines.length === 0) return 0;
+  const normalizedMachineNameFilter = machineNameFilter ? normalizeMachineName(machineNameFilter) : "";
   const mandatoryMachinesMapping = parseMandatoryMachinesByType(settings[0]);
   const isMachineAssignedToOperator = (machine: Machine) => {
     if (user?.role !== "Operator") return true;
@@ -297,7 +312,9 @@ function getPendingMachineProcessingCount(
       const item = findItemAcrossSources?.(String(production.itemId || "").trim(), production.itemSource, production.erpCode);
       const requiredMachines = getRequiredMachinesForProduction(production, item, mandatoryMachinesMapping, machines);
       const pendingForProduction = requiredMachines.filter((machineName) => {
-        const machine = machines.find((m) => m.name.trim().toLowerCase() === machineName.trim().toLowerCase());
+        const normalizedRequiredMachine = normalizeMachineName(machineName);
+        if (normalizedMachineNameFilter && normalizedRequiredMachine !== normalizedMachineNameFilter) return false;
+        const machine = machines.find((m) => normalizeMachineName(m.name) === normalizedRequiredMachine);
         if (!machine || !visibleMachineIds.has(machine.id)) return false;
         const reportedForThisMachine = processing
           .filter((row) => row.productionId === production.id && row.machineId === machine.id)
@@ -388,6 +405,15 @@ export function buildPendingTaskCounts(args: BuildPendingTaskCountsArgs): Record
       args.findItemAcrossSources,
       args.user
     ),
+    "/production/pending-printing": getPendingMachineProcessingCount(
+      args.productions,
+      args.machines,
+      args.processing,
+      args.settings,
+      args.findItemAcrossSources,
+      args.user,
+      "Printing"
+    ),
     "/production/php/pending-planning": getPendingLinkedPlanningCount(
       "PHP",
       args.schedules,
@@ -416,7 +442,7 @@ export function buildPendingTaskCounts(args: BuildPendingTaskCountsArgs): Record
       Number(line.qty || 0) - Number(line.cancelledQty || 0) - Number(line.orderedQty || 0) > 0
     ).length,
     "/purchase-orders/pending-approval": args.purchaseOrders.filter((po) => po.status === "Pending Approval").length,
-    "/material-receipt/pending-mrr": args.gateEntries.filter((entry) => !(entry.mrrId || "").trim() && !(entry.mrrNo || "").trim() && !(entry.mrrDate || "").trim()).length,
+    "/material-receipt/pending-mrr": args.gateEntries.filter(canCreateMrrForGateEntry).length,
     "/material-receipt/pending-debit-note": args.materialIn.filter((m) => m.debitNote && !m.tallyTimestamp).length,
     "/material-movement/pending-non-job-issue": getPendingNonJobIssueCount(args.materialIssues, args.productions),
     "/material-movement/pending-consumption-tally": pendingConsumptionTallyCount,
@@ -475,4 +501,21 @@ export function getPendingTaskRows(counts: Record<string, number>): PendingTaskR
     ...task,
     count: counts[task.countKey] || 0,
   }));
+}
+
+export function getPendingTaskGroups(counts: Record<string, number>) {
+  const rows = getPendingTaskRows(counts).filter((row) => row.count > 0);
+  const groups = PENDING_TASK_SECTION_ORDER.map((section) => {
+    const sectionRows = rows.filter((row) => row.section === section);
+    return {
+      section,
+      rows: sectionRows,
+      sectionTotal: sectionRows.reduce((sum, row) => sum + row.count, 0),
+    };
+  }).filter((group) => group.rows.length > 0);
+
+  return {
+    groups,
+    grandTotal: groups.reduce((sum, group) => sum + group.sectionTotal, 0),
+  };
 }

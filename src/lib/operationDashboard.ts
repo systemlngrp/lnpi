@@ -43,6 +43,7 @@ type BuildOperationDashboardSummaryArgs = {
   dispatchPlans: DispatchPlan[];
   loadingSlips: LoadingSlip[];
   invoices: Invoice[];
+  scrapSoldQty?: number;
   items: Item[];
   materials: Material[];
   materialIn: MaterialIn[];
@@ -133,6 +134,7 @@ function isSameAppDate(dateStr: string | undefined, compareValue: string) {
 }
 
 function getRangeLabel(dateRange: OperationDashboardDateRange) {
+  if (!dateRange.from && !dateRange.to) return "All Dates";
   return `${formatDisplayDate(dateRange.from)} to ${formatDisplayDate(dateRange.to)}`;
 }
 
@@ -411,8 +413,9 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
   const tomorrowPlanQty = sumProductionPlanQty(tomorrowProductions);
   const tomorrowPlanValue = sumProductionPlanValue(tomorrowProductions, args.schedules, args.orders);
   const nextPlanValue = sumPlanValue(nextSchedules, args.orders);
-  const totalWastage = getWastagePercent(filteredProductions, usageMap);
   const totalActualPaperUsed = getActualPaperUsed(filteredProductions, usageMap);
+  const totalScrapSoldQty = Number(args.scrapSoldQty || 0);
+  const totalWastage = totalActualPaperUsed > 0 ? (totalScrapSoldQty / totalActualPaperUsed) * 100 : 0;
   const totalPlanPaper = getPlanPaperTotal(filteredProductions);
   const totalSale = filteredInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);
   const todaySalesValue = todayInvoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0);
@@ -445,8 +448,9 @@ export function buildOperationDashboardSummary(args: BuildOperationDashboardSumm
       title: "Operation",
       cards: [
         makeCard({ id: "production", label: "Production", value: totalProduction, format: "number" }),
-        makeCard({ id: "actualPaperUsed", label: "Actual Paper Used", value: totalActualPaperUsed, format: "number", decimals: 2 }),
         makeCard({ id: "linearMeter", label: "Linear Meter", value: totalProductionMeter, format: "number" }),
+        makeCard({ id: "actualPaperUsed", label: "Actual Paper Used", value: totalActualPaperUsed, format: "number", decimals: 2 }),
+        makeCard({ id: "scrapSoldQty", label: "Total Scrap Sold", value: totalScrapSoldQty, format: "number", decimals: 2 }),
         makeCard({ id: "wastage", label: "Total Wastage", value: totalWastage, format: "percent" }),
         makeCard({ id: "planPaper", label: "Plan Paper", value: totalPlanPaper, format: "number" }),
         makeCard({ id: "activeJobs", label: "Active Jobs", value: activeJobs, format: "number" }),

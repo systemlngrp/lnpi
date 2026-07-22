@@ -34,6 +34,7 @@ import { normalizeOrderItemSource } from "../lib/orderItems";
 import { buildLinkedLoadingDetailsFromSlip, findLinkedItemByMasterErp, getLinkedSetsPerBox } from "../lib/linkedLoading";
 import { upsertFgLinkedChildSlip } from "../lib/linkedLoadingSlipSync";
 import { buildPhpPlateStockAlertMessage, getPhpPlateStockShortages } from "../lib/phpPlateStockValidation";
+import { normalizeTruckStatus } from "../lib/truckStatus";
 
 interface PendingPlan extends DispatchPlan {
   companyName: string;
@@ -113,6 +114,15 @@ export function PendingLoading() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [modalTruckId, setModalTruckId] = useState<string>("");
+  const availableTrucks = useMemo(
+    () => trucks
+      .filter((truck) => {
+        const status = normalizeTruckStatus(truck.liveStatus);
+        return !status || status === "EMPTY";
+      })
+      .sort((a, b) => a.truckNo.localeCompare(b.truckNo)),
+    [modalTruckId, trucks]
+  );
   const [packingDetails, setPackingDetails] = useState<PackingDetail[]>(createEmptyPackingRows());
   const [extraItemsQty, setExtraItemsQty] = useState<number | "">("");
   const [linkedPackingDetails, setLinkedPackingDetails] = useState<Record<LinkedSide, PackingDetail[]>>({
@@ -230,6 +240,19 @@ export function PendingLoading() {
   const getPlanOpeningStockQty = (key: string) => Number(openingStockQtys[key] || 0);
   const getAlreadyLoadedForJob = (jobId: string) => existingLoadedByJobId.get(jobId) || 0;
 
+  const isTruckAvailableForLoading = (truckId: string) => {
+    const truck = trucks.find((row) => row.id === truckId);
+    if (!truck) return false;
+    const status = normalizeTruckStatus(truck.liveStatus);
+    return !status || status === "EMPTY";
+  };
+
+  useEffect(() => {
+    if (!modalTruckId) return;
+    if (isTruckAvailableForLoading(modalTruckId)) return;
+    setModalTruckId("");
+  }, [modalTruckId, trucks]);
+
   const getRemainingCapacityForJob = (jobId: string, currentRowQty = 0) => {
     const production = productionMap.get(jobId);
     const jobSource = normalizeOrderItemSource(production?.itemSource);
@@ -253,6 +276,7 @@ export function PendingLoading() {
     const totalPending = modal.plans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
     if (!modalTruckId) errors.push("Please select a truck.");
+    else if (!isTruckAvailableForLoading(modalTruckId)) errors.push("Selected truck is not EMPTY. Please select another truck.");
     if (rowLoadedQty <= 0) errors.push("Loaded qty must be greater than 0.");
     if (rowLoadedQty > totalPending + 0.0001) errors.push("Loaded qty cannot exceed total pending for loading.");
 
@@ -420,6 +444,12 @@ export function PendingLoading() {
 
     if (!validation.isValid) {
       alert(validation.errors[0] || "Loading data is invalid.");
+      return;
+    }
+
+    if (!isTruckAvailableForLoading(modalTruckId)) {
+      alert("Selected truck is not EMPTY. Please select another truck.");
+      setModalTruckId("");
       return;
     }
 
@@ -780,13 +810,17 @@ export function PendingLoading() {
                     className="w-full border-2 border-black rounded p-1 text-sm font-bold focus:outline-none focus:border-indigo-600 bg-white"
                   >
                     <option value="">-- Select Truck --</option>
-                    {trucks
-                      .sort((a, b) => a.truckNo.localeCompare(b.truckNo))
+                    {availableTrucks
                       .map(truck => (
                         <option key={truck.id} value={truck.id}>{truck.truckNo}</option>
                       ))
                     }
                   </select>
+                  {modalTruckId ? null : (
+                    <div className="mt-2 text-[10px] font-bold uppercase text-red-700">
+                      Only EMPTY trucks are available for loading.
+                    </div>
+                  )}
                 </div>
               </div>
 

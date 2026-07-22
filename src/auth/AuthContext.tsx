@@ -25,6 +25,7 @@ const OPERATOR_ALLOWED_PATHS = [
   "/production-processing/master",
   "/production-processing/form",
   "/production/pending-machine-processing",
+  "/production/pending-printing",
 ];
 
 function normalizeMenuAccess(raw: unknown): string[] {
@@ -78,6 +79,7 @@ function isAllowed(user: AuthUser | null, href: string) {
   if (user.role === "TruckDriver") return href === "/" || TRUCK_DRIVER_ALLOWED_PATHS.includes(href);
   const list = getEffectiveMenuAccess(user);
   if (list.includes("*")) return true;
+  if (href === "/truck/logs" && list.includes("/reports/truck-status")) return true;
   if (!href) return false;
   return list.some((entry) => {
     if (!entry) return false;

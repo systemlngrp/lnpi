@@ -107,6 +107,7 @@ const purchaseOrderItems: NavItem[] = [
 const gateEntryItems: NavItem[] = [
   { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
   { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
+  { name: "Cancelled Gate Entry", href: "/gate-entry/cancelled", icon: X },
 ];
 
 const materialReceiptItems: NavItem[] = [
@@ -143,6 +144,7 @@ const productionItems: NavItem[] = [
   { name: "Upcoming Scheduled Orders", href: "/production/upcoming", icon: Activity, countKey: "/orders/upcoming" },
   { name: "Pending Material Issue", href: "/production/pending-consumption", icon: FileText, countKey: "/production/pending-consumption" },
   { name: "Pending FG", href: "/production/pending-ffg", icon: FileText, countKey: "/production/pending-ffg" },
+  { name: "Pending Printing", href: "/production/pending-printing", icon: FileText, countKey: "/production/pending-printing" },
   { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
   { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
   { name: "Production Master", href: "/production/master", icon: Database },
@@ -202,6 +204,31 @@ const billingItems: NavItem[] = [
   { name: "Pending Invoicing", href: "/billing/pending", icon: Receipt, countKey: "/billing/pending" },
   { name: "Pending Tally Posting", href: "/billing/pending-tally", icon: CheckCircle, countKey: "/billing/pending-tally" },
   { name: "Billing Master", href: "/billing/master", icon: FileText },
+];
+
+const reportStockItems: NavItem[] = [
+  { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
+  { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
+  { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
+];
+
+const reportProductionItems: NavItem[] = [
+  { name: "Jobs in Progress", href: "/reports/jobs-in-progress", icon: BarChart3 },
+  { name: "Fixed Monthly Expenses", href: "/reports/fixed-monthly-expenses", icon: Database },
+  { name: "Conversion Cost Report", href: "/reports/conversion-cost", icon: BarChart3 },
+  { name: "Conversion Cost Month Wise", href: "/reports/conversion-cost-month-wise", icon: BarChart3 },
+  { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
+  { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
+  { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
+];
+
+const reportSalesItems: NavItem[] = [
+  { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
+  { name: "Wastage Report", href: "/reports/wastage", icon: BarChart3 },
+];
+
+const reportLogisticsItems: NavItem[] = [
+  { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
 ];
 
 export const NAVIGATION: NavGroup[] = [
@@ -277,6 +304,14 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
+    section: "Truck",
+    color: "bg-violet-700",
+    items: [
+      { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
+      { name: "Truck Logs", href: "/truck/logs", icon: FileText },
+    ],
+  },
+  {
     section: "Gate Pass",
     color: "bg-cyan-800",
     items: [
@@ -289,16 +324,10 @@ export const NAVIGATION: NavGroup[] = [
     section: "Report",
     color: "bg-sky-700",
     items: [
-      { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
-      { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
-      { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
-      { name: "Jobs in Progress", href: "/reports/jobs-in-progress", icon: BarChart3 },
-      { name: "Conversion Cost Report", href: "/reports/conversion-cost", icon: BarChart3 },
-      { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
-      { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
-      { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
-      { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
-      { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
+      { section: "Stock", items: reportStockItems },
+      { section: "Production", items: reportProductionItems },
+      { section: "Sales", items: reportSalesItems },
+      { section: "Logistics", items: reportLogisticsItems },
     ],
   },
   {

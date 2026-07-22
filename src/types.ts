@@ -189,6 +189,10 @@ export interface MaterialIssueLine {
   materialId: string;
   qty: number;
   uom: string;
+  lastPurchaseRate?: number;
+  openingRate?: number;
+  rate?: number;
+  amount?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -341,6 +345,10 @@ export interface GateEntry {
   mrrId?: string;
   mrrDate?: string;
   mrrNo?: string;
+  status?: "Active" | "Cancelled";
+  cancelReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -720,6 +728,21 @@ export interface Truck {
   liveStatus?: TruckLiveStatus | string;
   statusUpdatedAt?: string;
   statusUpdatedBy?: string;
+  partyName?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface TruckStatusLog {
+  id: string;
+  truckId: string;
+  truckNo: string;
+  liveStatus: TruckLiveStatus | string;
+  statusUpdatedAt: string;
+  statusUpdatedBy: string;
+  updateSource: "System" | "TruckDriver" | string;
+  sourceRefType?: string;
+  sourceRefId?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
@@ -951,6 +974,23 @@ export interface Setting {
   organizationAddress?: string;
   organizationGstDetails?: string;
   organizationLogo?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface FixedMonthlyExpenseLine {
+  id: string;
+  expenseName: string;
+  amount: number;
+}
+
+export interface FixedMonthlyExpense {
+  id: string;
+  fy: string;
+  month: number;
+  monthName: string;
+  lines: FixedMonthlyExpenseLine[];
+  totalAmount: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

@@ -10,6 +10,7 @@ import type {
   GateEntry,
   GatePass,
   Invoice,
+  InvoiceLineItem,
   Indent,
   IndentLine,
   Item,
@@ -44,11 +45,11 @@ import { formatDate } from "../lib/serial";
 import { cn, formatCurrency, formatNumber } from "../lib/utils";
 import {
   buildOperationDashboardSummary,
-  getLocalDateInputValue,
   getSafeRange,
   isDateWithinRange,
 } from "../lib/operationDashboard";
-import { buildPendingTaskCounts, getPendingTaskRows } from "../lib/pendingTaskCounts";
+import { buildPendingTaskCounts, getPendingTaskGroups } from "../lib/pendingTaskCounts";
+import { buildScrapInvoiceRows, summarizeScrapInvoiceRows } from "../lib/wastageReport";
 
 type ProcessingTotals = {
   paper: number;
@@ -97,6 +98,7 @@ const SUMMARY_GROUP_CONFIGS: SummaryGroupConfig[] = [
         { id: "tomorrowPlanQty", tone: "bg-sky-50", valueTone: "text-sky-800" },
         { id: "tomorrowPlanValue", tone: "bg-fuchsia-50", valueTone: "text-fuchsia-800" },
         { id: "actualPaperUsed", tone: "bg-violet-50", valueTone: "text-violet-800" },
+        { id: "scrapSoldQty", tone: "bg-teal-50", valueTone: "text-teal-800" },
         { id: "wastage", tone: "bg-orange-50", valueTone: "text-orange-800" },
         { id: "planPaper", tone: "bg-indigo-50", valueTone: "text-indigo-800" },
         { id: "activeJobs", tone: "bg-emerald-50", valueTone: "text-emerald-800" },
@@ -155,8 +157,7 @@ function formatMetricValue(card: OperationDashboardMetricCard) {
 }
 
 function getDefaultRange() {
-  const today = getLocalDateInputValue(new Date());
-  return { from: today, to: today };
+  return { from: "", to: "" };
 }
 
 function getSummaryCard(summary: OperationDashboardSummary, cardId: string) {
@@ -169,7 +170,7 @@ export function OperationDashboard() {
   const [phpJobMaster] = useData<Production>("php_job_master", []);
   const [plateJobMaster] = useData<Production>("plate_job_master", []);
   const npdItems = useNpdItems();
-  const { resolveOrderItem, findItemAcrossSources, itemsBySource } = useOrderItemCatalog();
+  const { resolveOrderItem, findItem, findItemAcrossSources, itemsBySource } = useOrderItemCatalog();
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
@@ -187,6 +188,7 @@ export function OperationDashboard() {
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [invoices] = useData<Invoice>("invoices", []);
+  const [invoiceLineItems] = useData<InvoiceLineItem>("invoice_line_items", []);
   const [consumptions] = useData<Consumption>("consumptions", []);
   const [sampleRequests] = useData<SampleRequest>("sample_requests", []);
   const [indents] = useData<Indent>("indents", []);
@@ -202,6 +204,10 @@ export function OperationDashboard() {
   const [dateRange, setDateRange] = useState(getDefaultRange);
   const [closedJobFilter, setClosedJobFilter] = useState<ClosedJobFilter>("no");
   const [pendingJobClosureCount, setPendingJobClosureCount] = useState<number>(0);
+  const operationExportFileName =
+    dateRange.from && dateRange.to
+      ? `Operation_Dashboard_${dateRange.from}_${dateRange.to}`
+      : "Operation_Dashboard_All_Dates";
 
   useEffect(() => {
     const refreshPendingJobClosureCount = async () => {
@@ -298,6 +304,17 @@ export function OperationDashboard() {
     );
   }, [filteredMaterialIssues, materialIssueLines, filteredMaterialReturns, materialReturnLines, issueReelLines, returnReelLines]);
 
+  const scrapInvoiceSummary = useMemo(() => {
+    const scrapRows = buildScrapInvoiceRows({
+      invoices,
+      lineItems: invoiceLineItems,
+      companies,
+      filters: { fromDate: dateRange.from, toDate: dateRange.to },
+      findItem,
+      findItemAcrossSources,
+    });
+    return summarizeScrapInvoiceRows(scrapRows);
+  }, [companies, dateRange.from, dateRange.to, findItem, findItemAcrossSources, invoiceLineItems, invoices]);
   const rows: OperationRow[] = useMemo(() => {
     const sorted = filteredProductions
       .map((p) => {
@@ -360,6 +377,7 @@ export function OperationDashboard() {
         dispatchPlans,
         loadingSlips,
         invoices,
+        scrapSoldQty: scrapInvoiceSummary.totalQty,
         items: npdItems,
         materials,
         materialIn,
@@ -380,6 +398,7 @@ export function OperationDashboard() {
       dispatchPlans,
       loadingSlips,
       invoices,
+      scrapInvoiceSummary.totalQty,
       npdItems,
       materials,
       materialIn,
@@ -394,7 +413,7 @@ export function OperationDashboard() {
     ]
   );
 
-  const pendingTaskRows = useMemo(() => {
+  const pendingTaskSummary = useMemo(() => {
     const counts = buildPendingTaskCounts({
       materialIn,
       productions,
@@ -430,7 +449,7 @@ export function OperationDashboard() {
       findItemAcrossSources,
       itemsBySource,
     });
-    return getPendingTaskRows(counts).filter((row) => row.count > 0);
+    return getPendingTaskGroups(counts);
   }, [
     materialIn,
     productions,
@@ -608,7 +627,7 @@ export function OperationDashboard() {
                 </select>
               </div>
               {allowExports ? (
-                <ExcelExport data={exportData} fileName={`Operation_Dashboard_${dateRange.from}_${dateRange.to}`} />
+                <ExcelExport data={exportData} fileName={operationExportFileName} />
               ) : null}
             </div>
           </div>
@@ -668,49 +687,57 @@ export function OperationDashboard() {
       </section>
 
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
-          Pending Tasks
+        <div className="flex items-center justify-between gap-3 bg-red-700 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900">
+          <span>Pending Tasks</span>
+          <span className="rounded border border-white/30 bg-white/10 px-2 py-0.5 text-right text-[10px] tracking-[0.12em]">
+            Total Pending: {pendingTaskSummary.grandTotal.toLocaleString("en-IN")}
+          </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse text-xs">
-            <thead className="sticky top-0 z-30 bg-slate-100">
-              <tr className="divide-x divide-slate-900 border-b-2 border-slate-900">
-                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">
-                  Pending Task Name
-                </th>
-                <th className="w-32 px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">
-                  Count
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-900 bg-white">
-              {pendingTaskRows.length === 0 ? (
-                <tr>
-                  <td colSpan={2} className="px-3 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    No pending tasks found.
-                  </td>
-                </tr>
-              ) : (
-                pendingTaskRows.map((row, index) => (
-                  <tr
-                    key={row.countKey}
-                    onClick={() => navigate(row.countKey)}
-                    className={cn(
-                      "cursor-pointer divide-x divide-slate-900 transition hover:bg-indigo-50",
-                      index % 2 === 0 ? "bg-white" : "bg-slate-50"
-                    )}
-                  >
-                    <td className="px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-900 underline-offset-2 hover:underline">
-                      {row.name}
-                    </td>
-                    <td className="px-3 py-2 text-right text-sm font-black text-indigo-700">
-                      {row.count.toLocaleString("en-IN")}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="bg-white text-xs">
+          {pendingTaskSummary.groups.length === 0 ? (
+            <div className="px-3 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              No pending tasks found.
+            </div>
+          ) : (
+            <div className="divide-y-2 divide-slate-900">
+              {pendingTaskSummary.groups.map((group) => (
+                <div key={group.section}>
+                  <div className="flex items-center justify-between gap-3 bg-slate-900 px-3 py-2 text-white">
+                    <span className="text-[11px] font-black uppercase tracking-[0.16em]">{group.section}</span>
+                    <span className="text-sm font-black">{group.sectionTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="grid grid-cols-1 border-t-2 border-slate-900 sm:grid-cols-2 xl:grid-cols-4">
+                    {group.rows.map((row, index) => (
+                      <button
+                        key={row.countKey}
+                        type="button"
+                        onClick={() => navigate(row.countKey)}
+                        className={cn(
+                          "flex min-h-[54px] items-center justify-between gap-3 border-b border-slate-900 px-3 py-2 text-left transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:border-r",
+                          index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                        )}
+                      >
+                        <span className="min-w-0 text-[11px] font-bold uppercase tracking-wide text-slate-900 underline-offset-2">
+                          {row.name}
+                        </span>
+                        <span className="shrink-0 text-sm font-black text-indigo-700">
+                          {row.count.toLocaleString("en-IN")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {pendingTaskSummary.grandTotal > 0 ? (
+            <div className="flex items-center justify-between gap-3 border-t-2 border-slate-900 bg-indigo-50 px-3 py-2">
+              <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-900">Total Pending</span>
+              <span className="text-base font-black text-indigo-800">
+                {pendingTaskSummary.grandTotal.toLocaleString("en-IN")}
+              </span>
+            </div>
+          ) : null}
         </div>
       </section>
 

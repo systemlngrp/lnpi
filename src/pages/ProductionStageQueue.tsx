@@ -291,6 +291,34 @@ export function ProductionStageQueue({
 
     if (!rawValue || Number.isNaN(nextValue) || nextValue <= 0) return;
 
+    const target = productions.find((production) => production.id === productionId);
+    if (!target) return;
+
+    const mandatoryMap = parseMandatoryMachinesByType(settings[0]);
+    const schedule = schedules.find((row) => row.id === target.scheduleId);
+    const order = orders.find((row) => row.id === schedule?.orderId);
+    const item =
+      findItemAcrossSources(
+        String(target.itemId || order?.itemId || "").trim(),
+        target.itemSource || order?.itemSource,
+        target.erpCode || target.masterErp || order?.erpCode
+      ) || resolveOrderItem(order);
+    const requiresPrinting = getRequiredMachinesForProduction(target, item, mandatoryMap, machines)
+      .map((machineName) => normalizeMachineName(machineName))
+      .includes("Printing");
+    const printingReportedQty = processing
+      .filter(
+        (entry) =>
+          entry.productionId === productionId &&
+          normalizeMachineName(entry.machineName) === "Printing"
+      )
+      .reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
+
+    if (requiresPrinting && printingReportedQty <= 0) {
+      alert("Printing reporting is mandatory before FG entry for this job.");
+      return;
+    }
+
     setSavingId(productionId);
     try {
       const timestamp = new Date().toISOString();

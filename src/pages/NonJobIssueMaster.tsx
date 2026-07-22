@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
-import { Material, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine } from "../types";
+import { Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine } from "../types";
 import { TableControls } from "../components/TableControls";
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/serial";
+import { resolveMaterialIssueRate } from "../lib/materialMovement";
 
 function isWithoutJobIssue(issueType?: string) {
   const t = String(issueType || "").trim().toLowerCase();
@@ -20,9 +21,17 @@ function DetailChip({ label, value }: { label: string; value?: React.ReactNode }
   );
 }
 
+function formatMoney(value?: number) {
+  return Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function NonJobIssueMaster() {
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materials] = useData<Material>("materials", []);
+  const [materialIn] = useData<MaterialIn>("material-in", []);
   const [issueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const npdItems = useNpdItems();
@@ -98,8 +107,23 @@ export function NonJobIssueMaster() {
     setDeletingId(null);
   };
 
-  const renderDetailsRow = (row: MaterialIssue) => {    const selectedLines = issueLines.filter((line) => line.materialIssueId === row.id);
+  const renderDetailsRow = (row: MaterialIssue) => {
+    const selectedLines = issueLines
+      .filter((line) => line.materialIssueId === row.id)
+      .map((line) => {
+        const fallback = resolveMaterialIssueRate(line.materialId, materials, materialIn, Number(line.qty || 0));
+        const savedRate = Number(line.rate || 0);
+        const savedAmount = Number(line.amount || 0);
+        return {
+          ...line,
+          lastPurchaseRate: Number(line.lastPurchaseRate || 0) || fallback.lastPurchaseRate,
+          openingRate: Number(line.openingRate || 0) || fallback.openingRate,
+          rate: savedRate > 0 ? savedRate : fallback.rate,
+          amount: savedAmount > 0 ? savedAmount : fallback.amount,
+        };
+      });
     const selectedReelLines = issueReelLines.filter((line) => line.materialIssueId === row.id);
+    const selectedLineAmountTotal = selectedLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
     const tallyValues = [
       ["Voucher", row.tallyVoucherNo],
       ["Date", formatDate(row.tallyVoucherDate)],
@@ -133,12 +157,16 @@ export function NonJobIssueMaster() {
                         <th className="px-2 py-1 text-left font-black uppercase">Item</th>
                         <th className="px-2 py-1 text-right font-black uppercase">Qty</th>
                         <th className="px-2 py-1 text-left font-black uppercase">UOM</th>
+                        <th className="px-2 py-1 text-right font-black uppercase">Last Purchase Rate</th>
+                        <th className="px-2 py-1 text-right font-black uppercase">Opening Rate</th>
+                        <th className="px-2 py-1 text-right font-black uppercase">Rate</th>
+                        <th className="px-2 py-1 text-right font-black uppercase">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-black">
                       {selectedLines.length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="px-2 py-2 text-center text-slate-600">No item lines found.</td>
+                          <td colSpan={7} className="px-2 py-2 text-center text-slate-600">No item lines found.</td>
                         </tr>
                       ) : (
                         selectedLines.map((line) => (
@@ -146,10 +174,26 @@ export function NonJobIssueMaster() {
                             <td className="px-2 py-1 font-semibold">{getItemName(line.materialId)}</td>
                             <td className="px-2 py-1 text-right font-semibold">{Number(line.qty || 0).toLocaleString()}</td>
                             <td className="px-2 py-1">{line.uom || "-"}</td>
+                            <td className="px-2 py-1 text-right font-semibold">{formatMoney(line.lastPurchaseRate)}</td>
+                            <td className="px-2 py-1 text-right font-semibold">{formatMoney(line.openingRate)}</td>
+                            <td className="px-2 py-1 text-right font-black text-indigo-700">{formatMoney(line.rate)}</td>
+                            <td className="px-2 py-1 text-right font-black text-emerald-700">{formatMoney(line.amount)}</td>
                           </tr>
                         ))
                       )}
                     </tbody>
+                    {selectedLines.length > 0 ? (
+                      <tfoot className="border-t-2 border-black bg-emerald-50">
+                        <tr className="divide-x divide-black">
+                          <td colSpan={6} className="px-2 py-1.5 text-right font-black uppercase text-slate-700">
+                            Total Amount
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-black text-emerald-800">
+                            {formatMoney(selectedLineAmountTotal)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    ) : null}
                   </table>
                 </div>
               </section>

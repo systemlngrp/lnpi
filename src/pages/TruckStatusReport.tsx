@@ -9,6 +9,7 @@ function getSortTime(value?: string) {
   return Number.isFinite(time) ? time : 0;
 }
 
+
 export function TruckStatusReport() {
   const [trucks] = useData<Truck>("trucks", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
@@ -22,6 +23,7 @@ export function TruckStatusReport() {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
 
   const activeSlipsByTruck = useMemo(() => {
     const map = new Map<string, LoadingSlip>();
