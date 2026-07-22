@@ -101,6 +101,18 @@ function isBlankRequiredValue(value: string | number) {
   return value === "" || value === null || value === undefined;
 }
 
+function hasLayerDefaultValue(value: unknown) {
+  return value !== "" && value !== null && value !== undefined;
+}
+
+function getLayerDefaultValue(
+  production: Production | undefined,
+  item: Item,
+  field: "l1" | "f1" | "l2" | "f2" | "l3"
+) {
+  return hasLayerDefaultValue(production?.[field]) ? production?.[field] : item[field] ?? "";
+}
+
 function isPlateItemForProductionForm(order?: Order, item?: Item) {
   const source = String(order?.itemSource || "").trim().toUpperCase();
   const itemLabel = String((item as any)?.boxType || item?.typeName || item?.name || "").trim().toUpperCase();
@@ -265,6 +277,23 @@ export function ProductionForm() {
     return map;
   }, [productions]);
 
+  const erpLowestGsmProductionMap = useMemo(() => {
+    const map = new Map<string, Production>();
+    productions.forEach((production) => {
+      if ((production.itemSource || "FG") !== "FG" || production.status === "Cancelled" || production.cancelTimestamp) return;
+
+      const erp = String(production.erpCode || "").trim();
+      const gsm = Number(production.gsm || 0);
+      if (!erp || gsm <= 0) return;
+
+      const existing = map.get(erp);
+      if (!existing || gsm < Number(existing.gsm || 0)) {
+        map.set(erp, production);
+      }
+    });
+    return map;
+  }, [productions]);
+
   const selectedSchedule = pendingSchedules.find((schedule) => schedule.id === selectedScheduleId);
   const selectedOrder = orders.find((order) => order.id === selectedSchedule?.orderId);
   const selectedItem = npdItems.find((item) => item.id === String(selectedOrder?.itemId || "").trim());
@@ -274,6 +303,19 @@ export function ProductionForm() {
     ? Number(consumptionByScheduleId.get(selectedSchedule.id)?.effectiveConsumedQty || 0)
     : 0;
   const pendingQty = selectedSchedule ? getPendingProductionQty(selectedSchedule, selectedScheduleConsumedQty) : 0;
+  const selectedScheduleInvoicedQty = selectedSchedule
+    ? getScheduleInvoicedQty(selectedSchedule.id, plans, loadingSlips)
+    : 0;
+  const selectedOrderQty = Number(selectedOrder?.qty || 0);
+  const balanceOrderQty = selectedSchedule
+    ? Math.max(
+        (Number(selectedSchedule.qty) || 0) -
+          (Number(selectedSchedule.canceledQty) || 0) -
+          selectedScheduleInvoicedQty,
+        0
+      )
+    : 0;
+  const selectedLowestGsmProduction = selectedErp ? erpLowestGsmProductionMap.get(selectedErp) : undefined;
   const reelFormulaMode = settings[0]?.reelAsPerCalculation || REEL_FORMULA_MODE.breadthHeightBased;
   const cuttingSizeFormulaMode = settings[0]?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_MODE.currentLogic;
   const gsmFormulaMode = settings[0]?.gsmAsPerCalculation || GSM_FORMULA_MODE.currentLogic;
@@ -412,17 +454,17 @@ export function ProductionForm() {
         plateWeight: selectedItem.plateWeight ?? "",
         top: selectedItem.l1 ?? "",
         takeUpFactor: selectedItem.takeUpFactor ?? "",
-        l1: selectedItem.l1 ?? "",
-        f1: selectedItem.f1 ?? "",
-        l2: selectedItem.l2 ?? "",
-        f2: selectedItem.f2 ?? "",
-        l3: selectedItem.l3 ?? "",
+        l1: getLayerDefaultValue(selectedLowestGsmProduction, selectedItem, "l1"),
+        f1: getLayerDefaultValue(selectedLowestGsmProduction, selectedItem, "f1"),
+        l2: getLayerDefaultValue(selectedLowestGsmProduction, selectedItem, "l2"),
+        f2: getLayerDefaultValue(selectedLowestGsmProduction, selectedItem, "f2"),
+        l3: getLayerDefaultValue(selectedLowestGsmProduction, selectedItem, "l3"),
         color1: selectedItem.printingColour1 || "",
         color2: selectedItem.printingColour2 || "",
         printingColor: joinPrintingColors(selectedItem.printingColour1, selectedItem.printingColour2),
       }));
     }
-  }, [selectedItem, selectedCompany, selectedOrder]);
+  }, [selectedItem, selectedCompany, selectedOrder, selectedLowestGsmProduction]);
 
   useEffect(() => {
     if (!selectedScheduleId) {
@@ -840,6 +882,20 @@ export function ProductionForm() {
               />
             </div>}
 
+            <ReadOnlyNumberField
+              label="Order Qty"
+              value={selectedOrderQty}
+              suffix={selectedItem?.uom || ""}
+              helpText="Selected order quantity from Orders."
+            />
+
+            <ReadOnlyNumberField
+              label="Balance Order Qty"
+              value={balanceOrderQty}
+              suffix={selectedItem?.uom || ""}
+              helpText="For the selected schedule, this is Scheduled Qty - Cancelled Qty - Invoiced Qty."
+            />
+
             {showField("Pending Order Quantity") && <ReadOnlyNumberField
               label="Pending Order Quantity"
               value={pendingOrderQtyForItem}
@@ -928,7 +984,7 @@ export function ProductionForm() {
                       ? "bg-slate-100 cursor-not-allowed focus:outline-none"
                       : quantityDeviationError || maximumAllowedProductionError
                         ? "border-red-600 bg-red-50 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600"
-                        : "focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                        : "bg-yellow-100 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                   )}
                 />
                 {selectedItem && <span className="absolute right-3 top-2.5 text-black font-bold opacity-60">{selectedItem.uom}</span>}

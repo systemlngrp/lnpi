@@ -25,7 +25,7 @@ from typing import Iterable
 import requests
 
 
-DEFAULT_PORT = "9004"
+DEFAULT_PORT = "9000"
 TIMEOUT_SECONDS = 90
 COLUMNS = (
     ("item_name", "ERP Item Name", 42),
@@ -60,12 +60,30 @@ def xml_escape(value: object) -> str:
     )
 
 
+def is_valid_xml_char(codepoint: int) -> bool:
+    return (
+        codepoint in (0x09, 0x0A, 0x0D)
+        or 0x20 <= codepoint <= 0xD7FF
+        or 0xE000 <= codepoint <= 0xFFFD
+        or 0x10000 <= codepoint <= 0x10FFFF
+    )
+
+
 def clean_xml(value: str) -> str:
     text = str(value or "").lstrip("\ufeff")
+
+    def clean_char_ref(match: re.Match[str]) -> str:
+        raw = match.group(1)
+        try:
+            codepoint = int(raw[1:], 16) if raw.lower().startswith("x") else int(raw, 10)
+        except ValueError:
+            return ""
+        return match.group(0) if is_valid_xml_char(codepoint) else ""
+
+    text = re.sub(r"&#(x[0-9A-Fa-f]+|\d+);", clean_char_ref, text)
     text = re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9A-Fa-f]+;)", "&amp;", text)
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
     return text.strip()
-
 
 def find_text(element: ET.Element, *tag_names: str) -> str:
     wanted = {name.upper() for name in tag_names}
@@ -142,7 +160,21 @@ class TallyClient:
         return f"""{company}
             <SVFROMDATE>20000101</SVFROMDATE>
             <SVTODATE>20991231</SVTODATE>
-            <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>"""
+            <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>"""
+
+    def companies_xml(self) -> str:
+        return """<ENVELOPE>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>EXPORT</TALLYREQUEST><TYPE>COLLECTION</TYPE><ID>CompaniesForPurchaseReport</ID></HEADER>
+  <BODY><DESC>
+    <STATICVARIABLES><SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
+    <TDL><TDLMESSAGE>
+      <COLLECTION NAME="CompaniesForPurchaseReport" ISMODIFY="No">
+        <TYPE>Company</TYPE>
+        <FETCH>Name</FETCH>
+      </COLLECTION>
+    </TDLMESSAGE></TDL>
+  </DESC></BODY>
+</ENVELOPE>"""
 
     def stock_items_xml(self) -> str:
         return f"""<ENVELOPE>
@@ -176,11 +208,26 @@ class TallyClient:
   </DESC></BODY>
 </ENVELOPE>"""
 
+    def fetch_company_names(self) -> list[str]:
+        return parse_company_names(self.post(self.companies_xml()))
+
     def fetch_rows(self) -> list[StockPurchaseRow]:
+        selected_company = self.company
+        if not selected_company:
+            companies = self.fetch_company_names()
+            if len(companies) == 1:
+                self.company = companies[0]
+                selected_company = self.company
+
         stock_response = self.post(self.stock_items_xml())
         stock_items = parse_stock_items(stock_response)
         if not stock_items:
-            raise RuntimeError("Tally returned no stock items. Check the selected company and XML access.")
+            company_text = f" for company '{selected_company}'" if selected_company else ""
+            raise RuntimeError(
+                f"Tally connected on port {self.port}, but returned 0 stock items{company_text}. "
+                "Open the inventory company in the same Tally instance that has XML/HTTP enabled, "
+                "or enter the exact company name shown in Tally. Also confirm stock-item masters exist."
+            )
 
         purchase_response = self.post(self.purchase_vouchers_xml())
         latest_purchase = parse_latest_purchases(purchase_response)
@@ -215,7 +262,21 @@ def parse_stock_items(xml_text: str) -> list[StockPurchaseRow]:
         )
     return rows
 
+def parse_company_names(xml_text: str) -> list[str]:
+    try:
+        root = ET.fromstring(clean_xml(xml_text))
+    except ET.ParseError:
+        return []
 
+    names: list[str] = []
+    seen: set[str] = set()
+    for company in root.findall(".//COMPANY"):
+        name = str(company.get("NAME") or find_text(company, "NAME")).strip()
+        key = name.casefold()
+        if name and key not in seen:
+            names.append(name)
+            seen.add(key)
+    return names
 def iter_inventory_entries(voucher: ET.Element) -> Iterable[ET.Element]:
     for entry in voucher.iter():
         if entry.tag.upper().endswith("INVENTORYENTRIES.LIST"):
@@ -314,16 +375,17 @@ class StockPurchaseApp:
             messagebox.showerror("Invalid port", str(error), parent=self.root)
             return
         self.fetch_button.configure(state="disabled")
-        self.status_var.set("Connecting to Tally and downloading stock items…")
+        self.status_var.set("Connecting to Tally and downloading stock items...")
         threading.Thread(target=self._fetch_worker, daemon=True).start()
 
     def _fetch_worker(self) -> None:
         try:
             client = TallyClient(self.port_var.get(), self.company_var.get())
             rows = client.fetch_rows()
-            self.root.after(0, lambda: self._fetch_complete(rows))
+            self.root.after(0, lambda rows=rows: self._fetch_complete(rows))
         except Exception as error:
-            self.root.after(0, lambda: self._fetch_failed(str(error)))
+            message = str(error)
+            self.root.after(0, lambda message=message: self._fetch_failed(message))
 
     def _fetch_complete(self, rows: list[StockPurchaseRow]) -> None:
         self.rows = rows
