@@ -2104,6 +2104,9 @@ async function ensureTruckStatusLogSchema(db: mysql.Pool, database: string) {
     "`updateSource` VARCHAR(50),",
     "`sourceRefType` VARCHAR(50),",
     "`sourceRefId` VARCHAR(100),",
+    "`invoiceNo` VARCHAR(100),",
+    "`partyName` VARCHAR(255),",
+    "`driverName` VARCHAR(255),",
     "`updatedBy` VARCHAR(255),",
     "`updateTimestamp` VARCHAR(255),",
     "INDEX `idx_truck_status_logs_truckId` (`truckId`),",
@@ -2121,6 +2124,9 @@ async function ensureTruckStatusLogSchema(db: mysql.Pool, database: string) {
     { column: "updateSource", type: "VARCHAR(50)" },
     { column: "sourceRefType", type: "VARCHAR(50)" },
     { column: "sourceRefId", type: "VARCHAR(100)" },
+    { column: "invoiceNo", type: "VARCHAR(100)" },
+    { column: "partyName", type: "VARCHAR(255)" },
+    { column: "driverName", type: "VARCHAR(255)" },
     { column: "updatedBy", type: "VARCHAR(255)" },
     { column: "updateTimestamp", type: "VARCHAR(255)" },
   ];
@@ -2261,7 +2267,7 @@ function applyAuditFields<T extends Record<string, any>>(
   };
 }
 
-type TruckStatusUpdateSource = "System" | "TruckDriver";
+type TruckStatusUpdateSource = "System" | "TruckDriver" | "PublicDriver" | "AppVehicleUpdate";
 
 type TruckStatusUpdateInput = {
   truckId: string;
@@ -2270,6 +2276,9 @@ type TruckStatusUpdateInput = {
   updateSource: TruckStatusUpdateSource;
   sourceRefType?: string;
   sourceRefId?: string;
+  invoiceNo?: string;
+  partyName?: string;
+  driverName?: string;
   statusUpdatedAt?: string;
 };
 
@@ -2287,6 +2296,9 @@ async function applyTruckStatusUpdate(db: mysql.Pool, input: TruckStatusUpdateIn
   const truckNo = String(truck.truckNo || "").trim();
   const sourceRefType = String(input.sourceRefType || "").trim() || null;
   const sourceRefId = String(input.sourceRefId || "").trim() || null;
+  const invoiceNo = String(input.invoiceNo || "").trim() || null;
+  const partyName = String(input.partyName || "").trim() || null;
+  const driverName = String(input.driverName || "").trim() || null;
 
   await db.query(
     "UPDATE `trucks` SET `liveStatus` = ?, `statusUpdatedAt` = ?, `statusUpdatedBy` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE id = ?",
@@ -2295,8 +2307,8 @@ async function applyTruckStatusUpdate(db: mysql.Pool, input: TruckStatusUpdateIn
 
   const logId = crypto.randomUUID();
   await db.query(
-    "INSERT INTO `truck_status_logs` (`id`, `truckId`, `truckNo`, `liveStatus`, `statusUpdatedAt`, `statusUpdatedBy`, `updateSource`, `sourceRefType`, `sourceRefId`, `updatedBy`, `updateTimestamp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [logId, truckId, truckNo, liveStatus, now, actor, input.updateSource, sourceRefType, sourceRefId, actor, now]
+    "INSERT INTO `truck_status_logs` (`id`, `truckId`, `truckNo`, `liveStatus`, `statusUpdatedAt`, `statusUpdatedBy`, `updateSource`, `sourceRefType`, `sourceRefId`, `invoiceNo`, `partyName`, `driverName`, `updatedBy`, `updateTimestamp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [logId, truckId, truckNo, liveStatus, now, actor, input.updateSource, sourceRefType, sourceRefId, invoiceNo, partyName, driverName, actor, now]
   );
 
   return { id: logId, truckId, truckNo, liveStatus, statusUpdatedAt: now };
@@ -4939,6 +4951,7 @@ await db.query(`
         { table: "trucks", column: "truckNo", type: "VARCHAR(50) NOT NULL" },
         { table: "trucks", column: "driverName", type: "VARCHAR(255)" },
         { table: "trucks", column: "mobileNo", type: "VARCHAR(20)" },
+        { table: "trucks", column: "truckType", type: "VARCHAR(20) NOT NULL DEFAULT 'External'" },
         { table: "trucks", column: "driverLoginId", type: "VARCHAR(100)" },
         { table: "trucks", column: "driverPassword", type: "VARCHAR(255)" },
         { table: "trucks", column: "liveStatus", type: "VARCHAR(50)" },
@@ -6474,6 +6487,86 @@ async function fetchTallyInvoiceContext(db: mysql.Pool, invoiceId: string) {
   };
 }
 
+function mapPublicDriverStatus(raw: unknown) {
+  const status = String(raw || "").trim().toUpperCase();
+  if (status === "REPORTED") return "REPORTED TO PARTY";
+  if (status === "UNLOADING") return "UNLOADING";
+  if (status === "RELEASED") return "RETURNING";
+  return normalizeTruckLiveStatus(raw);
+}
+
+app.get("/api/public/trucks", async (_req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const [rows] = await db.query(
+      "SELECT id, truckNo, driverName, mobileNo, liveStatus, statusUpdatedAt FROM `trucks` ORDER BY truckNo"
+    );
+    return res.json(rows);
+  } catch (error) {
+    console.error("[PUBLIC_TRUCKS] fetch failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/public/truck-status", async (req, res) => {
+  const truckId = String(req.body?.truckId || "").trim();
+  const liveStatus = mapPublicDriverStatus(req.body?.status || req.body?.liveStatus);
+  if (!truckId || !liveStatus) return res.status(400).json({ error: "Vehicle and valid status are required" });
+
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const result = await applyTruckStatusUpdate(db, {
+      truckId,
+      liveStatus,
+      statusUpdatedBy: "Driver Public Link",
+      updateSource: "PublicDriver",
+      sourceRefType: "Public Driver Form",
+      sourceRefId: truckId,
+    });
+    if (!result) return res.status(404).json({ error: "Vehicle not found" });
+    return res.json({ ok: true, update: result });
+  } catch (error) {
+    console.error("[PUBLIC_TRUCK_STATUS] update failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/truck-live-update", async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.role === "TruckDriver") return res.status(403).json({ error: "Forbidden" });
+  if (!hasPermission(user, "/reports/truck-status") && !hasPermission(user, "/truck/live-update")) return res.status(403).json({ error: "Forbidden" });
+
+  const truckId = String(req.body?.truckId || "").trim();
+  const liveStatus = normalizeTruckLiveStatus(req.body?.liveStatus);
+  if (!truckId || !liveStatus) return res.status(400).json({ error: "Vehicle and valid status are required" });
+
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+
+  try {
+    const result = await applyTruckStatusUpdate(db, {
+      truckId,
+      liveStatus,
+      statusUpdatedBy: user.userId || user.name || "App User",
+      updateSource: "AppVehicleUpdate",
+      sourceRefType: "Vehicle Live Update Form",
+      sourceRefId: truckId,
+      invoiceNo: req.body?.invoiceNo,
+      partyName: req.body?.partyName,
+      driverName: req.body?.driverName,
+    });
+    if (!result) return res.status(404).json({ error: "Vehicle not found" });
+    return res.json({ ok: true, update: result });
+  } catch (error) {
+    console.error("[TRUCK_LIVE_UPDATE] update failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
 app.get("/api/truck-driver/status", async (req, res) => {
   const user = await getRequestUser(req);
   if (!user || user.role !== "TruckDriver" || !user.truckId) return res.status(403).json({ error: "Forbidden" });
@@ -6533,24 +6626,46 @@ app.get("/api/truck-status-logs", async (req, res) => {
   const user = await getRequestUser(req);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
   if (user.role === "TruckDriver") return res.status(403).json({ error: "Forbidden" });
-  if (!hasPermission(user, "/reports/truck-status")) return res.status(403).json({ error: "Forbidden" });
+  if (!hasPermission(user, "/reports/truck-status") && !hasPermission(user, "/truck/logs")) return res.status(403).json({ error: "Forbidden" });
 
   const truckNo = String(req.query.truckNo || "").trim();
-  if (!truckNo) return res.json([]);
+  const source = String(req.query.source || "").trim();
+  const liveStatus = normalizeTruckLiveStatus(req.query.status);
+  const search = String(req.query.search || "").trim();
 
   const db = await getPool();
   if (!db) return res.status(500).json({ error: "DB connection not available" });
 
   try {
+    const where: string[] = [];
+    const params: any[] = [];
+    if (truckNo) {
+      where.push("LOWER(TRIM(`truckNo`)) = LOWER(TRIM(?))");
+      params.push(truckNo);
+    }
+    if (source) {
+      where.push("LOWER(TRIM(COALESCE(`updateSource`, ''))) = LOWER(TRIM(?))");
+      params.push(source);
+    }
+    if (liveStatus) {
+      where.push("`liveStatus` = ?");
+      params.push(liveStatus);
+    }
+    if (search) {
+      where.push("(LOWER(COALESCE(`truckNo`, '')) LIKE ? OR LOWER(COALESCE(`statusUpdatedBy`, '')) LIKE ? OR LOWER(COALESCE(`invoiceNo`, '')) LIKE ? OR LOWER(COALESCE(`partyName`, '')) LIKE ? OR LOWER(COALESCE(`driverName`, '')) LIKE ?)");
+      const like = `%${search.toLowerCase()}%`;
+      params.push(like, like, like, like, like);
+    }
+
     const [rows] = await db.query(
       [
-        "SELECT id, truckId, truckNo, liveStatus, statusUpdatedAt, statusUpdatedBy",
+        "SELECT id, truckId, truckNo, liveStatus, statusUpdatedAt, statusUpdatedBy, updateSource, sourceRefType, sourceRefId, invoiceNo, partyName, driverName, updatedBy, updateTimestamp",
         "FROM `truck_status_logs`",
-        "WHERE LOWER(TRIM(`truckNo`)) = LOWER(TRIM(?))",
+        where.length ? `WHERE ${where.join(" AND ")}` : "",
         "ORDER BY `statusUpdatedAt` DESC, `updateTimestamp` DESC",
-        "LIMIT 500",
-      ].join(" "),
-      [truckNo]
+        "LIMIT 1000",
+      ].filter(Boolean).join(" "),
+      params
     );
     return res.json(rows);
   } catch (error) {

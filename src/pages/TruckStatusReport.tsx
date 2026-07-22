@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, Truck as TruckIcon } from "lucide-react";
 import { useData } from "../hooks/useData";
-import type { Company, DispatchPlan, LoadingSlip, Order, Truck } from "../types";
+import type { Company, DispatchPlan, LoadingSlip, Order, Truck, TruckStatusLog } from "../types";
 import { formatTruckDateTime, formatTruckDuration, normalizeTruckStatus, TRUCK_LIVE_STATUSES, TRUCK_STATUS_STYLES } from "../lib/truckStatus";
 
 function getSortTime(value?: string) {
@@ -17,6 +17,7 @@ export function TruckStatusReport() {
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusLogs, setStatusLogs] = useState<TruckStatusLog[]>([]);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -24,6 +25,16 @@ export function TruckStatusReport() {
     return () => window.clearInterval(id);
   }, []);
 
+
+  
+  useEffect(() => {
+    const token = window.localStorage.getItem("authToken") || "";
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch("/api/truck-status-logs", { headers })
+      .then((response) => response.ok ? response.json() : [])
+      .then((data) => setStatusLogs(Array.isArray(data) ? data as TruckStatusLog[] : []))
+      .catch(() => setStatusLogs([]));
+  }, []);
 
   const activeSlipsByTruck = useMemo(() => {
     const map = new Map<string, LoadingSlip>();
@@ -35,6 +46,16 @@ export function TruckStatusReport() {
       });
     return map;
   }, [loadingSlips]);
+
+  const latestPartyByTruckId = useMemo(() => {
+    const map = new Map<string, string>();
+    statusLogs.forEach((log) => {
+      const truckId = String(log.truckId || "").trim();
+      const partyName = String(log.partyName || "").trim();
+      if (truckId && partyName && !map.has(truckId)) map.set(truckId, partyName);
+    });
+    return map;
+  }, [statusLogs]);
 
   const rows = useMemo(() => {
     const planById = new Map(dispatchPlans.map((plan) => [plan.id, plan]));
@@ -64,10 +85,11 @@ export function TruckStatusReport() {
       });
 
       const liveStatus = normalizeTruckStatus(truck.liveStatus) || "EMPTY";
+      const latestLogParty = latestPartyByTruckId.get(truck.id) || "";
       return {
         truck,
         liveStatus,
-        party: Array.from(partyNames).filter(Boolean).join(", ") || "-",
+        party: latestLogParty || Array.from(partyNames).filter(Boolean).join(", ") || "-",
       };
     }).filter((row) => {
       const q = searchTerm.trim().toLowerCase();
@@ -81,7 +103,7 @@ export function TruckStatusReport() {
       const statusA = a.liveStatus.localeCompare(b.liveStatus);
       return statusA || a.truck.truckNo.localeCompare(b.truck.truckNo, undefined, { numeric: true, sensitivity: "base" });
     });
-  }, [activeSlipsByTruck, companies, dispatchPlans, loadingSlips, orders, searchTerm, trucks]);
+  }, [activeSlipsByTruck, companies, dispatchPlans, latestPartyByTruckId, loadingSlips, orders, searchTerm, trucks]);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();

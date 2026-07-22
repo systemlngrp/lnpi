@@ -125,6 +125,8 @@ import { TruckStatusReport } from "./pages/TruckStatusReport";
 import { WastageReport } from "./pages/WastageReport";
 import { TruckStatusUpdate } from "./pages/TruckStatusUpdate";
 import { TruckLogs } from "./pages/TruckLogs";
+import { PublicDriverStatus } from "./pages/PublicDriverStatus";
+import { VehicleLiveUpdate } from "./pages/VehicleLiveUpdate";
 
 function BlankPage({ title }: { title: string }) {
   return (
@@ -171,6 +173,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
+        <Route path="/driver-status" element={<PublicDriverStatus />} />
         <Route
           path="/"
           element={
@@ -182,6 +185,7 @@ export default function App() {
           <Route index element={<HomeRedirect />} />
           <Route path="plant-head" element={<PlantHeadUnified />} />
           <Route path="truck/status-update" element={<TruckStatusUpdate />} />
+          <Route path="truck/live-update" element={<VehicleLiveUpdate />} />
           <Route path="truck/logs" element={<TruckLogs />} />
           
           {/* Masters */}

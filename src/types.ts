@@ -723,6 +723,7 @@ export interface Truck {
   truckNo: string;
   driverName: string;
   mobileNo: string;
+  truckType?: "Internal" | "External" | string;
   driverLoginId?: string;
   driverPassword?: string;
   liveStatus?: TruckLiveStatus | string;
@@ -740,9 +741,12 @@ export interface TruckStatusLog {
   liveStatus: TruckLiveStatus | string;
   statusUpdatedAt: string;
   statusUpdatedBy: string;
-  updateSource: "System" | "TruckDriver" | string;
+  updateSource: "System" | "TruckDriver" | "PublicDriver" | "AppVehicleUpdate" | string;
   sourceRefType?: string;
   sourceRefId?: string;
+  invoiceNo?: string;
+  partyName?: string;
+  driverName?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

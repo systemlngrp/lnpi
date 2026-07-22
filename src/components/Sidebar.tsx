@@ -308,6 +308,7 @@ export const NAVIGATION: NavGroup[] = [
     color: "bg-violet-700",
     items: [
       { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
+      { name: "Vehicle Live Update", href: "/truck/live-update", icon: Activity },
       { name: "Truck Logs", href: "/truck/logs", icon: FileText },
     ],
   },
