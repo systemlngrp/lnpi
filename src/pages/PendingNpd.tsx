@@ -96,6 +96,7 @@ export function PendingNpd() {
               <th className="px-3 py-2 border border-black">SL No</th>
               <th className="px-3 py-2 border border-black">Order No</th>
               <th className="px-3 py-2 border border-black">Order Date</th>
+              <th className="px-3 py-2 border border-black">Schedule No</th>
               <th className="px-3 py-2 border border-black">Schedule Date</th>
               <th className="px-3 py-2 border border-black">Company</th>
               <th className="px-3 py-2 border border-black">ERP</th>
@@ -107,7 +108,7 @@ export function PendingNpd() {
           <tbody>
             {pendingRows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-8 text-center text-black font-medium">
+                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium">
                   No scheduled items are pending NPD completion.
                 </td>
               </tr>
@@ -117,6 +118,7 @@ export function PendingNpd() {
                   <td className="px-3 py-2 border border-black font-bold whitespace-nowrap">{index + 1}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{order.orderNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{formatDate(order.orderDate)}</td>
+                  <td className="px-3 py-2 border border-black whitespace-nowrap font-bold text-indigo-700">{schedule.scheduleNo || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{formatDate(schedule.scheduledDate)}</td>
                   <td className="px-3 py-2 border border-black">{company?.name || "-"}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap">{order.erpCode || "-"}</td>

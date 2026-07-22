@@ -692,7 +692,7 @@ export function ProductionForm() {
 
     return {
       value: schedule.id,
-      label: `${order?.orderNo || "Order"} | ${company?.name || "Company"} | ${item?.name || "Item"} | ${formatDate(schedule.scheduledDate)} | Pending ${pending}`,
+      label: `${schedule.scheduleNo || "Schedule"} | ${order?.orderNo || "Order"} | ${company?.name || "Company"} | ${item?.name || "Item"} | ${formatDate(schedule.scheduledDate)} | Pending ${pending}`,
     };
   });
 

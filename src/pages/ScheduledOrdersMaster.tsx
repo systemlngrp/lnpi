@@ -109,6 +109,7 @@ export function ScheduledOrdersMaster() {
 
       return {
         ...s,
+        scheduleNo: s.scheduleNo || "-",
         orderNo: order?.orderNo || "-",
         companyId: company?.id || "",
         companyName: company?.name || "-",
@@ -264,6 +265,10 @@ export function ScheduledOrdersMaster() {
                   <span className="block">Date</span>
                 </th>
                 <th className="px-2 py-2 border border-black text-left leading-tight">
+                  <span className="block">Schedule</span>
+                  <span className="block">No</span>
+                </th>
+                <th className="px-2 py-2 border border-black text-left leading-tight">
                   <span className="block">Order</span>
                   <span className="block">No</span>
                 </th>
@@ -315,6 +320,7 @@ export function ScheduledOrdersMaster() {
                 <tr key={s.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
                   <td className="px-3 py-2 border border-black text-slate-500">{(page - 1) * pageSize + idx + 1}</td>
                   <td className="px-3 py-2 border border-black whitespace-nowrap font-medium">{formatDate(s.scheduledDate)}</td>
+                  <td className="px-3 py-2 border border-black whitespace-nowrap font-bold text-indigo-700">{s.scheduleNo}</td>
                   <td className="px-3 py-2 border border-black font-bold text-black">{s.orderNo}</td>
                   <td className="px-3 py-2 border border-black min-w-[170px] max-w-[240px] whitespace-normal break-words leading-snug" title={s.companyName}>{s.companyName}</td>
                   <td className="px-3 py-2 border border-black min-w-[150px]">{s.itemName}</td>
@@ -338,7 +344,7 @@ export function ScheduledOrdersMaster() {
               ))}
               {detailedSchedules.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
+                  <td colSpan={16} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
                     No schedules found matching your criteria
                   </td>
                 </tr>

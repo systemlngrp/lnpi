@@ -550,6 +550,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
                   />
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Scheduled Date", "scheduledDate")}</th>
+                <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">Schedule No</th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Order No", "orderNo")}</th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("Company", "companyName")}</th>
                 <th className="px-4 py-3 text-left text-xs text-black uppercase border border-black">{renderSortHeader("FG Item", "fgItemName")}</th>
@@ -567,7 +568,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
             <tbody className="divide-y divide-black bg-white">
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-6 py-8 text-center text-black font-medium">No pending {source} planning rows found.</td>
+                  <td colSpan={15} className="px-6 py-8 text-center text-black font-medium">No pending {source} planning rows found.</td>
                 </tr>
               ) : (
                 paginatedItems.map((row) => {
@@ -585,6 +586,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
                         />
                       </td>
                       <td className="px-4 py-4 text-xs font-bold border border-black whitespace-nowrap">{formatDate(row.schedule.scheduledDate)}</td>
+                      <td className="px-4 py-4 text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">{row.schedule.scheduleNo || "-"}</td>
                       <td className="px-4 py-4 text-xs border border-black whitespace-nowrap">{row.order?.orderNo || "-"}</td>
                       <td className="px-4 py-4 text-xs border border-black">{row.company?.name || "-"}</td>
                       <td className="px-4 py-4 text-xs border border-black">{row.isDirectSourceOrder ? "Direct Order" : row.fgItem?.name || "-"}</td>
@@ -615,7 +617,7 @@ function PendingLinkedProductionPlanning({ source }: PendingLinkedProductionPlan
             {selectedIds.size > 0 && (
               <tfoot className="bg-slate-100 border-t-2 border-black">
                 <tr className="divide-x divide-black font-black">
-                  <td colSpan={13} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
+                  <td colSpan={14} className="px-4 py-3 text-right text-xs uppercase text-slate-600">Total Planned for Submission:</td>
                   <td className="px-4 py-3 text-right text-sm text-indigo-700 bg-indigo-50 border border-black">{totalSelectedQty.toLocaleString()}</td>
                 </tr>
               </tfoot>
