@@ -555,8 +555,8 @@ function hasPermission(user, required) {
   return list.some((entry) => {
     if (!entry) return false;
     if (entry === required) return true;
-    if (required.startsWith(entry)) return true;
-    if (entry.startsWith(required)) return true;
+    if (entry !== "/" && required.startsWith(`${entry}/`)) return true;
+    if (required !== "/" && entry.startsWith(`${required}/`)) return true;
     if (entry.endsWith("/*") && required.startsWith(entry.slice(0, -1))) return true;
     return false;
   });

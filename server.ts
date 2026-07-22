@@ -621,8 +621,8 @@ function hasPermission(user: AuthUser, required: string) {
   return list.some((entry) => {
     if (!entry) return false;
     if (entry === required) return true;
-    if (required.startsWith(entry)) return true; // user granted section access like "/production"
-    if (entry.startsWith(required)) return true; // user granted a specific page under this section
+    if (entry !== "/" && required.startsWith(`${entry}/`)) return true; // user granted section access like "/production"
+    if (required !== "/" && entry.startsWith(`${required}/`)) return true; // user granted a specific page under this section
     if (entry.endsWith("/*") && required.startsWith(entry.slice(0, -1))) return true;
     return false;
   });

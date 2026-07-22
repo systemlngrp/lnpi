@@ -83,8 +83,8 @@ function isAllowed(user: AuthUser | null, href: string) {
   return list.some((entry) => {
     if (!entry) return false;
     if (entry === href) return true;
-    if (href.startsWith(entry)) return true; // user granted section access
-    if (entry.startsWith(href)) return true; // user granted a specific page
+    if (entry !== "/" && href.startsWith(`${entry}/`)) return true; // user granted section access
+    if (href !== "/" && entry.startsWith(`${href}/`)) return true; // user granted a specific page
     if (entry.endsWith("/*") && href.startsWith(entry.slice(0, -1))) return true;
     return false;
   });
