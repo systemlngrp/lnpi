@@ -7,8 +7,8 @@ pnpm-debug.log*
 package-lock.json
 .npm/
 .npm-cache/
-.py
-.exe
+python/tally_manufacturing_journal_posting.py
+dist/ManufacturingJournalTallySync.exe
 .spec
 
 # Build output
@@ -76,3 +76,5 @@ pythoncode/mrrtallysync.py
 pythoncode/mrrtallysync.py
 pythoncode/mrrtallysync.py
 backups/
+dist/ManufacturingJournalTallySync.exe
+python/tally_manufacturing_journal_posting.py
