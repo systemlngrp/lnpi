@@ -159,7 +159,13 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
 
   useEffect(() => {
     if (filterMachineId || fixedNormalizedMachineName) return;
-    setExpandedMachines(new Set(machineGroups.map((group) => group.machineId)));
+    const machineIds = machineGroups.map((group) => group.machineId);
+    setExpandedMachines((current) => {
+      if (current.size === machineIds.length && machineIds.every((id) => current.has(id))) {
+        return current;
+      }
+      return new Set(machineIds);
+    });
   }, [filterMachineId, fixedNormalizedMachineName, machineGroups]);
 
   return (
