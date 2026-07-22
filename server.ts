@@ -603,6 +603,20 @@ function hasPermission(user: AuthUser, required: string) {
   ) {
     return true;
   }
+  if (
+    [
+      "/production",
+      "/masters/machines",
+      "/masters/settings",
+      "/masters/npd",
+      "/masters/php-item-master",
+      "/masters/plate-item-master",
+      "/masters/materials",
+    ].includes(required) &&
+    ["/production/pending-machine-processing", "/production/pending-printing"].some((path) => list.includes(path))
+  ) {
+    return true;
+  }
   if (!required) return false;
   return list.some((entry) => {
     if (!entry) return false;
@@ -7539,6 +7553,12 @@ entities.forEach(entity => {
         if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
         return next();
       }
+
+      // Menu access controls which views a user can open. Once a permitted view is
+      // open, its supporting read requests must not fail because they belong to a
+      // different data domain (for example, a production queue reading item data).
+      // Keep create, update, and delete operations protected by the view permission.
+      if (req.method === "GET") return next();
 
       const required = entityPermissionKey(entity);
       if (!required) {

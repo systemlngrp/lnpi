@@ -540,6 +540,17 @@ function hasPermission(user, required) {
   if (["/orders", "/masters/companies", "/masters/npd"].includes(required) && list.includes("/production/pending-npd")) {
     return true;
   }
+  if ([
+    "/production",
+    "/masters/machines",
+    "/masters/settings",
+    "/masters/npd",
+    "/masters/php-item-master",
+    "/masters/plate-item-master",
+    "/masters/materials"
+  ].includes(required) && ["/production/pending-machine-processing", "/production/pending-printing"].some((path2) => list.includes(path2))) {
+    return true;
+  }
   if (!required) return false;
   return list.some((entry) => {
     if (!entry) return false;
@@ -6689,6 +6700,7 @@ entities.forEach((entity) => {
         if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
         return next();
       }
+      if (req.method === "GET") return next();
       const required = entityPermissionKey(entity);
       if (!required) {
         if (user.role !== "Admin") return res.status(403).json({ error: "Forbidden" });
