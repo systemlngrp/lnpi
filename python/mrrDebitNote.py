@@ -3,6 +3,7 @@ import html
 import json
 import os
 import re
+import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,12 +11,36 @@ from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
-import mysql.connector
-import requests
-from requests import exceptions as requests_exceptions
+try:
+    import mysql.connector
+except ModuleNotFoundError as error:
+    if error.name == "mysql":
+        print(
+            "Missing dependency: mysql-connector-python\n"
+            "Install it for this Python first:\n"
+            f'  "{sys.executable}" -m pip install mysql-connector-python',
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from error
+    raise
+
+try:
+    import requests
+    from requests import exceptions as requests_exceptions
+except ModuleNotFoundError as error:
+    if error.name == "requests":
+        print(
+            "Missing dependency: requests\n"
+            "Install it for this Python first:\n"
+            f'  "{sys.executable}" -m pip install requests',
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from error
+    raise
 
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+SCRIPT_DIR = Path(__file__).resolve().parent
+BASE_DIR = SCRIPT_DIR.parents[0]
 REQUEST_TIMEOUT = 30
 MONEY_Q = Decimal("0.01")
 
@@ -62,10 +87,46 @@ class DebitNote:
         return round_money(self.line.amount + self.cgst_amount + self.sgst_amount + self.igst_amount)
 
 
-def load_env_file() -> None:
-    env_path = BASE_DIR / ".env"
-    if not env_path.exists():
-        return
+def candidate_env_paths() -> list[Path]:
+    paths: list[Path] = []
+    explicit_env = os.getenv("LNPI_ENV_FILE")
+    if explicit_env:
+        paths.append(Path(explicit_env).expanduser())
+
+    paths.extend(
+        [
+            Path.cwd() / ".env",
+            SCRIPT_DIR / ".env",
+            BASE_DIR / ".env",
+            Path("D:/lnpi/.env"),
+        ]
+    )
+    paths.extend(parent / ".env" for parent in SCRIPT_DIR.parents)
+
+    unique_paths: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        try:
+            key = str(path.resolve())
+        except OSError:
+            key = str(path)
+        if key not in seen:
+            seen.add(key)
+            unique_paths.append(path)
+    return unique_paths
+
+
+def find_env_file() -> Path | None:
+    for env_path in candidate_env_paths():
+        if env_path.exists():
+            return env_path
+    return None
+
+
+def load_env_file() -> Path | None:
+    env_path = find_env_file()
+    if env_path is None:
+        return None
 
     for raw_line in env_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -76,11 +137,24 @@ def load_env_file() -> None:
         value = value.strip().strip('"').strip("'")
         if key and key not in os.environ:
             os.environ[key] = value
+    return env_path
 
 
-load_env_file()
+LOADED_ENV_PATH = load_env_file()
 
-COMPANY_NAME = os.getenv("LNPI_TALLY_COMPANY", "")
+# Built-in fallback config for running this script on another PC without a .env file.
+# Environment variables or .env values still override these values.
+BUILTIN_DB_CONFIG = {
+    "host": "193.203.184.152",
+    "port": "3306",
+    "user": "u380633007_lnpidata",
+    "password": "!Office1@",
+    "database": "u380633007_lnpidata",
+}
+BUILTIN_TALLY_URL = "http://127.0.0.1:9000"
+BUILTIN_TALLY_COMPANY = "Laxmi Narayan Packaging Industries"
+
+COMPANY_NAME = os.getenv("LNPI_TALLY_COMPANY") or os.getenv("TALLY_COMPANY") or BUILTIN_TALLY_COMPANY
 TALLY_ACTION = os.getenv("LNPI_TALLY_ACTION", "Create")
 DEFAULT_PURCHASE_RETURN_LEDGER = os.getenv("LNPI_DEBIT_PURCHASE_LEDGER", "Purchase Return")
 DEFAULT_CGST_LEDGER = os.getenv("LNPI_CGST_LEDGER", "Input CGST")
@@ -100,6 +174,7 @@ def build_tally_url_candidates() -> list[str]:
     preferred = (
         os.getenv("LNPI_TALLY_URL"),
         os.getenv("TALLY_URL"),
+        BUILTIN_TALLY_URL,
         "http://localhost:9004",
         "http://127.0.0.1:9004",
     )
@@ -116,19 +191,23 @@ ACTIVE_TALLY_URL: str | None = None
 
 def get_db_config() -> dict[str, Any]:
     config = {
-        "host": os.getenv("LNPI_DB_HOST") or os.getenv("DB_HOST"),
-        "user": os.getenv("LNPI_DB_USER") or os.getenv("DB_USER"),
-        "password": os.getenv("LNPI_DB_PASSWORD") or os.getenv("DB_PASSWORD"),
-        "database": os.getenv("LNPI_DB_NAME") or os.getenv("DB_NAME"),
-        "port": int(os.getenv("LNPI_DB_PORT") or os.getenv("DB_PORT") or "3306"),
+        "host": os.getenv("LNPI_DB_HOST") or os.getenv("DB_HOST") or BUILTIN_DB_CONFIG["host"],
+        "user": os.getenv("LNPI_DB_USER") or os.getenv("DB_USER") or BUILTIN_DB_CONFIG["user"],
+        "password": os.getenv("LNPI_DB_PASSWORD") or os.getenv("DB_PASSWORD") or BUILTIN_DB_CONFIG["password"],
+        "database": os.getenv("LNPI_DB_NAME") or os.getenv("DB_NAME") or BUILTIN_DB_CONFIG["database"],
+        "port": int(os.getenv("LNPI_DB_PORT") or os.getenv("DB_PORT") or BUILTIN_DB_CONFIG["port"]),
         "use_pure": True,
     }
     missing = [key for key in ("host", "user", "password", "database") if not config.get(key)]
     if missing:
+        searched = ", ".join(str(path) for path in candidate_env_paths())
         raise RuntimeError(
             "Missing DB config: "
             + ", ".join(missing)
-            + ". Set LNPI_DB_HOST, LNPI_DB_USER, LNPI_DB_PASSWORD, LNPI_DB_NAME in D:\\lnpi\\.env or PowerShell env."
+            + ". Set LNPI_DB_HOST, LNPI_DB_USER, LNPI_DB_PASSWORD, LNPI_DB_NAME "
+            + "or DB_HOST, DB_USER, DB_PASSWORD, DB_NAME in a .env file or PowerShell env. "
+            + "Searched .env paths: "
+            + searched
         )
     return config
 
@@ -523,6 +602,92 @@ def clean_tally_xml(response_text: str) -> str:
     return text
 
 
+def compact_lookup_key(value: Any) -> str:
+    return re.sub(r"[^0-9a-z]+", "", normalize_lookup_key(value))
+
+
+def fetch_tally_stock_item_names() -> list[str]:
+    xml_text = f"""
+    <ENVELOPE>
+        <HEADER>
+            <VERSION>1</VERSION>
+            <TALLYREQUEST>EXPORT</TALLYREQUEST>
+            <TYPE>COLLECTION</TYPE>
+            <ID>DebitNoteStockItemList</ID>
+        </HEADER>
+        <BODY>
+            <DESC>
+                <STATICVARIABLES>
+                    {build_company_static_variables()}
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+                <TDL>
+                    <TDLMESSAGE>
+                        <COLLECTION NAME="DebitNoteStockItemList" ISMODIFY="No">
+                            <TYPE>Stock Item</TYPE>
+                            <FETCH>Name</FETCH>
+                        </COLLECTION>
+                    </TDLMESSAGE>
+                </TDL>
+            </DESC>
+        </BODY>
+    </ENVELOPE>
+    """
+    response_text = post_to_tally(xml_text)
+    cleaned = clean_tally_xml(response_text)
+    if not cleaned:
+        return []
+    try:
+        root = ET.fromstring(cleaned)
+    except ET.ParseError:
+        return []
+
+    names: list[str] = []
+    seen: set[str] = set()
+    for element in root.iter():
+        tag = str(element.tag or "").upper()
+        raw_name = ""
+        if tag.endswith("STOCKITEM"):
+            raw_name = str(element.attrib.get("NAME") or "").strip() or safe_tally_text(element, "NAME")
+        if not raw_name:
+            continue
+        key = normalize_lookup_key(raw_name)
+        if key and key not in seen:
+            seen.add(key)
+            names.append(raw_name)
+    return names
+
+
+def resolve_tally_stock_item_name(item_name: str) -> str:
+    original = str(item_name or "").replace("\u00a0", " ").strip()
+    if not original:
+        return original
+
+    try:
+        stock_items = fetch_tally_stock_item_names()
+    except TallyUnavailableError:
+        raise
+    except Exception as error:
+        print(f"Warning: could not verify stock item in Tally: {error}")
+        return original
+
+    exact_by_key = {normalize_lookup_key(name): name for name in stock_items}
+    exact_match = exact_by_key.get(normalize_lookup_key(original))
+    if exact_match:
+        return exact_match
+
+    loose_key = compact_lookup_key(original)
+    loose_matches = [name for name in stock_items if compact_lookup_key(name) == loose_key]
+    if len(loose_matches) == 1:
+        print(f"Stock item matched in Tally: {original} -> {loose_matches[0]}")
+        return loose_matches[0]
+
+    similar = [name for name in stock_items if normalize_lookup_key(original) in normalize_lookup_key(name) or normalize_lookup_key(name) in normalize_lookup_key(original)]
+    if similar:
+        print("Stock item not exactly matched. Similar Tally items: " + ", ".join(similar[:5]))
+    return original
+
+
 def build_company_static_variables() -> str:
     if not COMPANY_NAME.strip():
         return ""
@@ -641,7 +806,17 @@ def find_duplicate_debit_note_in_tally(note: DebitNote) -> dict[str, str] | None
     return None
 
 
+def ensure_db_connection(conn) -> None:
+    try:
+        if conn.is_connected():
+            return
+    except mysql.connector.Error:
+        pass
+    conn.reconnect(attempts=3, delay=2)
+
+
 def mark_duplicate_reconciled(conn, note: DebitNote, duplicate: dict[str, str]) -> None:
+    ensure_db_connection(conn)
     tally_voucher_no = duplicate.get("voucher_number") or "-"
     reason = duplicate.get("duplicate_reason") or "duplicate_check"
     remark = f"Debit Note already exists in Tally for MRR {note.mrr_no}. Tally voucher: {tally_voucher_no}. Reason: {reason}."
@@ -661,6 +836,7 @@ def mark_duplicate_reconciled(conn, note: DebitNote, duplicate: dict[str, str]) 
 
 
 def mark_posted(conn, note: DebitNote, response_text: str) -> None:
+    ensure_db_connection(conn)
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -677,6 +853,7 @@ def mark_posted(conn, note: DebitNote, response_text: str) -> None:
 
 
 def mark_failed(conn, note: DebitNote, error_message: str) -> None:
+    ensure_db_connection(conn)
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -707,6 +884,8 @@ def main() -> None:
             print("No debit note MRR found in Hostinger DB for the given filter.")
             return
         note = build_note_from_db_row(conn, row)
+        if not args.dry_run:
+            note.line.item_name = resolve_tally_stock_item_name(note.line.item_name)
         xml = build_debit_note_xml(note)
         print(f"MRR: {note.mrr_no}")
         print(f"Debit Note: {note.voucher_no}")

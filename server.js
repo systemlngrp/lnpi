@@ -5833,7 +5833,7 @@ app.get("/api/public/trucks", async (_req, res) => {
   if (!db) return res.status(500).json({ error: "DB connection not available" });
   try {
     const [rows] = await db.query(
-      "SELECT id, truckNo, driverName, mobileNo, liveStatus, statusUpdatedAt FROM `trucks` ORDER BY truckNo"
+      "SELECT id, truckNo, driverName, mobileNo, truckType, liveStatus, statusUpdatedAt FROM `trucks` WHERE COALESCE(NULLIF(TRIM(`truckType`), ''), 'External') = 'Internal' ORDER BY truckNo"
     );
     return res.json(rows);
   } catch (error) {

@@ -3,6 +3,10 @@ import { CheckCircle, RotateCcw, Truck as TruckIcon } from "lucide-react";
 import type { Truck } from "../types";
 import { Spinner } from "../components/Spinner";
 
+function friendlyDriverError(message: string) {
+  return /unauthorized|forbidden/i.test(message) ? "Vehicle list not available. Please contact office." : message;
+}
+
 const DRIVER_STATUS_OPTIONS = [
   { value: "Reported", label: "Reported" },
   { value: "UNLOADING", label: "UNLOADING" },
@@ -27,10 +31,10 @@ export function PublicDriverStatus() {
         setLoading(true);
         const response = await fetch("/api/public/trucks");
         const data = await response.json().catch(() => []);
-        if (!response.ok) throw new Error(data.error || "Unable to load vehicles.");
+        if (!response.ok) throw new Error(friendlyDriverError(data.error || "Unable to load vehicles."));
         if (mounted) setTrucks(Array.isArray(data) ? data : []);
       } catch (err) {
-        if (mounted) setError((err as Error).message || "Unable to load vehicles.");
+        if (mounted) setError(friendlyDriverError((err as Error).message || "Unable to load vehicles."));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -54,11 +58,11 @@ export function PublicDriverStatus() {
         body: JSON.stringify({ truckId, status }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Unable to update status.");
+      if (!response.ok) throw new Error(friendlyDriverError(data.error || "Unable to update status."));
       setMessage("Vehicle status updated successfully.");
       setStatus("");
     } catch (err) {
-      setError((err as Error).message || "Unable to update status.");
+      setError(friendlyDriverError((err as Error).message || "Unable to update status."));
     } finally {
       setSaving(false);
     }
@@ -85,6 +89,7 @@ export function PublicDriverStatus() {
               <>
                 {error ? <div className="rounded border border-red-700 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{error}</div> : null}
                 {message ? <div className="rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">{message}</div> : null}
+                {!error && trucks.length === 0 ? <div className="rounded border border-amber-700 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">No internal vehicles found in Truck Master.</div> : null}
 
                 <label className="block space-y-2">
                   <span className="text-xs font-black uppercase text-slate-600">Vehicle No. *</span>
