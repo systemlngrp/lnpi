@@ -416,6 +416,7 @@ export interface Machine {
   id: string;
   name: string;
   maxOutputPerHour?: number;
+  uom?: string;
   assignedOperatorIds?: string[];
   assignedOperatorNames?: string[];
   updatedBy?: string;

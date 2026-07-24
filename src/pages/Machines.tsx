@@ -26,6 +26,7 @@ export function Machines() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [name, setName] = useState("");
   const [maxOutputPerHour, setMaxOutputPerHour] = useState<number | "">("");
+  const [uom, setUom] = useState("");
   const [selectedOperatorIds, setSelectedOperatorIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -61,6 +62,7 @@ export function Machines() {
         id: crypto.randomUUID(),
         name: normalizeMachineName(machineName),
         maxOutputPerHour: 0,
+        uom: "",
         updatedBy: "System",
         updateTimestamp: timestamp,
       })),
@@ -101,6 +103,7 @@ export function Machines() {
       const machineData = { 
         name: normalizedName, 
         maxOutputPerHour: maxOutputPerHour === "" ? 0 : Number(maxOutputPerHour),
+        uom: uom.trim().toUpperCase(),
         assignedOperatorIds: selectedOperatorIds,
         assignedOperatorNames,
         ...audit 
@@ -113,6 +116,7 @@ export function Machines() {
       }
       setName("");
       setMaxOutputPerHour("");
+      setUom("");
       setSelectedOperatorIds([]);
       setEditingId(null);
       setIsFormOpen(false);
@@ -120,6 +124,15 @@ export function Machines() {
     }, 500);
   };
 
+
+  const updateMachineUom = (machineId: string, nextUom: string) => {
+    const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
+    setMachines((prev) =>
+      prev.map((machine) =>
+        machine.id === machineId ? { ...machine, uom: nextUom.trim().toUpperCase(), ...audit } : machine
+      )
+    );
+  };
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
       setDeletingId(id);
@@ -166,14 +179,26 @@ export function Machines() {
                 className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600" 
               />
             </div>
-            <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Maximum Output Per Hr (In Kg)</label>
-              <input 
-                type="number" 
-                value={maxOutputPerHour} 
-                onChange={(e) => setMaxOutputPerHour(e.target.value === "" ? "" : Number(e.target.value))} 
-                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600" 
-              />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="flex flex-col space-y-1">
+                <label className="font-bold text-black text-sm">Maximum Per Hour</label>
+                <input 
+                  type="number" 
+                  value={maxOutputPerHour} 
+                  onChange={(e) => setMaxOutputPerHour(e.target.value === "" ? "" : Number(e.target.value))} 
+                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600" 
+                />
+              </div>
+              <div className="flex flex-col space-y-1">
+                <label className="font-bold text-black text-sm">UOM</label>
+                <input
+                  type="text"
+                  value={uom}
+                  onChange={(e) => setUom(e.target.value.toUpperCase())}
+                  placeholder="KG / PCS / SHEET"
+                  className="border-2 border-black rounded p-2 uppercase text-black focus:outline-none focus:border-indigo-600"
+                />
+              </div>
             </div>
             <div className="flex flex-col space-y-2">
               <label className="font-bold text-black text-sm">Assigned Operators</label>
@@ -209,7 +234,7 @@ export function Machines() {
               <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-8 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all">
                 {isSubmitting ? <Spinner size={20} className="text-white" /> : "Save"}
               </button>
-              <button type="button" onClick={() => { setIsFormOpen(false); setName(""); setMaxOutputPerHour(""); setSelectedOperatorIds([]); setEditingId(null); }} className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none">
+              <button type="button" onClick={() => { setIsFormOpen(false); setName(""); setMaxOutputPerHour(""); setUom(""); setSelectedOperatorIds([]); setEditingId(null); }} className="bg-white text-black border-2 border-black px-8 py-2 rounded font-bold hover:bg-slate-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none">
                 Cancel
               </button>
             </div>
@@ -233,7 +258,8 @@ export function Machines() {
               <tr className="divide-x divide-black">
                 <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">SL No</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine Name</th>
-                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Maximum Output Per Hr (In Kg)</th>
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Maximum Per Hour</th>
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">UOM</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Assigned Operators</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated By</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated Timestamp</th>
@@ -243,7 +269,7 @@ export function Machines() {
             <tbody className="bg-white divide-y divide-black">
               {machinesLoading ? (
                 <tr>
-                  <td colSpan={7} className="border border-black px-6 py-8 text-center text-black">
+                  <td colSpan={8} className="border border-black px-6 py-8 text-center text-black">
                     <div className="flex justify-center">
                       <Spinner />
                     </div>
@@ -251,7 +277,7 @@ export function Machines() {
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="border border-black px-6 py-8 text-center text-black font-medium">
+                  <td colSpan={8} className="border border-black px-6 py-8 text-center text-black font-medium">
                     No machines found.
                   </td>
                 </tr>
@@ -261,11 +287,12 @@ export function Machines() {
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black text-right">{index + 1}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold text-black">{normalizeMachineName(machine.name)}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{machine.maxOutputPerHour || 0}</td>
+                    <td className="border border-black px-6 py-4 whitespace-nowrap text-sm font-bold uppercase text-black">{machine.uom || "-"}</td>
                     <td className="border border-black px-6 py-4 text-sm text-black">{getAssignedOperatorNames(machine).length > 0 ? getAssignedOperatorNames(machine).join(", ") : "-"}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{machine.updatedBy || "-"}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-sm text-black">{machine.updateTimestamp ? new Date(machine.updateTimestamp).toLocaleString() : "-"}</td>
                     <td className="border border-black px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button onClick={() => { setName(normalizeMachineName(machine.name)); setMaxOutputPerHour(machine.maxOutputPerHour || ""); setSelectedOperatorIds(Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : []); setEditingId(machine.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center">
+                      <button onClick={() => { setName(normalizeMachineName(machine.name)); setMaxOutputPerHour(machine.maxOutputPerHour || ""); setUom(machine.uom || ""); setSelectedOperatorIds(Array.isArray(machine.assignedOperatorIds) ? machine.assignedOperatorIds : []); setEditingId(machine.id); setIsFormOpen(true); }} className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center">
                         <Edit size={16} className="mr-1" /> Edit
                       </button>
                       <button 
