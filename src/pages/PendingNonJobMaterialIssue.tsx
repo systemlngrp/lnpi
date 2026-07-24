@@ -27,6 +27,9 @@ export function PendingNonJobMaterialIssue() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [markingDate, setMarkingDate] = useState<string | null>(null);
+  const [notApplicableDate, setNotApplicableDate] = useState<string | null>(null);
+  const [notApplicableRemarks, setNotApplicableRemarks] = useState("");
+  const [notApplicableError, setNotApplicableError] = useState("");
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -72,12 +75,24 @@ export function PendingNonJobMaterialIssue() {
     });
     navigate(`/material-movement/issue?${params.toString()}`);
   };
-  const markNotApplicable = async (date: string) => {
-    const remarks = window.prompt(`Enter mandatory remarks for Not Applicable on ${formatDate(date) || date}`);
-    if (remarks === null) return;
-    const reason = remarks.trim();
+  const openNotApplicableModal = (date: string) => {
+    setNotApplicableDate(date);
+    setNotApplicableRemarks("");
+    setNotApplicableError("");
+  };
+
+  const closeNotApplicableModal = () => {
+    if (markingDate) return;
+    setNotApplicableDate(null);
+    setNotApplicableRemarks("");
+    setNotApplicableError("");
+  };
+
+  const markNotApplicable = async () => {
+    if (!notApplicableDate) return;
+    const reason = notApplicableRemarks.trim();
     if (!reason) {
-      alert("Remarks are mandatory for Not Applicable.");
+      setNotApplicableError("Remarks are mandatory for Not Applicable.");
       return;
     }
 
@@ -85,7 +100,7 @@ export function PendingNonJobMaterialIssue() {
     const issue: MaterialIssue = {
       id: crypto.randomUUID(),
       issueNo: "",
-      date,
+      date: notApplicableDate,
       issueType: "Without Job",
       remarks: reason,
       notApplicable: "Yes",
@@ -94,12 +109,15 @@ export function PendingNonJobMaterialIssue() {
       updateTimestamp: timestamp,
     };
 
-    setMarkingDate(date);
+    setMarkingDate(notApplicableDate);
     try {
       await setMaterialIssues([issue, ...materialIssues]);
+      setNotApplicableDate(null);
+      setNotApplicableRemarks("");
+      setNotApplicableError("");
     } catch (error) {
       console.error("Failed to mark Not Applicable:", error);
-      alert("Failed to mark date as Not Applicable.");
+      setNotApplicableError("Failed to mark date as Not Applicable.");
     } finally {
       setMarkingDate(null);
     }
@@ -147,7 +165,7 @@ export function PendingNonJobMaterialIssue() {
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        onClick={() => void markNotApplicable(date)}
+                        onClick={() => openNotApplicableModal(date)}
                         disabled={markingDate === date}
                         className="mr-2 bg-white text-black px-4 py-1.5 rounded border border-black text-xs font-bold hover:bg-slate-100 transition disabled:opacity-50"
                       >
@@ -168,7 +186,50 @@ export function PendingNonJobMaterialIssue() {
           </table>
         </div>
       </div>
-    </div>
+      {notApplicableDate ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded border-2 border-black bg-white p-5 shadow-2xl">
+            <div className="mb-4 border-b border-black pb-3">
+              <h3 className="text-lg font-black uppercase tracking-tight text-black">Not Applicable Remarks</h3>
+              <p className="mt-1 text-sm font-bold text-slate-600">{formatDate(notApplicableDate) || notApplicableDate}</p>
+            </div>
+
+            <label className="mb-2 block text-xs font-black uppercase text-black">Remarks *</label>
+            <textarea
+              value={notApplicableRemarks}
+              onChange={(e) => {
+                setNotApplicableRemarks(e.target.value);
+                if (notApplicableError) setNotApplicableError("");
+              }}
+              rows={4}
+              autoFocus
+              disabled={!!markingDate}
+              className="w-full resize-none rounded border-2 border-black p-3 text-sm font-semibold text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100"
+              placeholder="Enter mandatory remarks..."
+            />
+            {notApplicableError ? <div className="mt-2 text-xs font-bold text-red-600">{notApplicableError}</div> : null}
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeNotApplicableModal}
+                disabled={!!markingDate}
+                className="rounded border border-black bg-white px-4 py-2 text-sm font-bold uppercase text-black hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void markNotApplicable()}
+                disabled={!!markingDate}
+                className="rounded border border-black bg-indigo-600 px-4 py-2 text-sm font-bold uppercase text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {markingDate ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}    </div>
   );
 }
 
