@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Plus, Edit, Trash2 } from "lucide-react";
-import { Machine, User } from "../types";
+import { Machine, UnitMaster, User } from "../types";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
 import { DataSummaryTiles } from "../components/DataSummaryTiles";
@@ -21,6 +21,7 @@ const DEFAULT_MACHINES = [
 export function Machines() {
   const [machines, setMachines, machinesLoading] = useData<Machine>("machines", []);
   const [users] = useData<User>("users", []);
+  const [units] = useData<UnitMaster>("units", []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,6 +41,16 @@ export function Machines() {
   );
 
   const operatorNameById = useMemo(() => new Map(users.map((user) => [user.id, user.name])), [users]);
+
+  const unitOptions = useMemo(
+    () =>
+      [...units]
+        .filter((unit) => unit.active !== "No" && unit.name.trim())
+        .map((unit) => unit.name.trim().toUpperCase())
+        .filter((unitName, index, list) => list.indexOf(unitName) === index)
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
+    [units]
+  );
 
   // Seed defaults once data has finished loading, and only for missing names.
   useEffect(() => {
@@ -143,7 +154,7 @@ export function Machines() {
     setDeletingId(null);
   };
 
-  const filtered = machines.filter(m => normalizeMachineName(m.name).toLowerCase().includes(searchTerm.toLowerCase()));
+  const filtered = machines.filter(m => [normalizeMachineName(m.name), m.uom || ""].join(" ").toLowerCase().includes(searchTerm.toLowerCase()));
 
   const getAssignedOperatorNames = (machine: Machine) => {
     const savedNames = Array.isArray(machine.assignedOperatorNames) ? machine.assignedOperatorNames.filter(Boolean) : [];
@@ -191,13 +202,16 @@ export function Machines() {
               </div>
               <div className="flex flex-col space-y-1">
                 <label className="font-bold text-black text-sm">UOM</label>
-                <input
-                  type="text"
+                <select
                   value={uom}
-                  onChange={(e) => setUom(e.target.value.toUpperCase())}
-                  placeholder="KG / PCS / SHEET"
-                  className="border-2 border-black rounded p-2 uppercase text-black focus:outline-none focus:border-indigo-600"
-                />
+                  onChange={(e) => setUom(e.target.value)}
+                  className="border-2 border-black rounded p-2 uppercase text-black focus:outline-none focus:border-indigo-600 bg-white"
+                >
+                  <option value="">Select UOM</option>
+                  {unitOptions.map((unitName) => (
+                    <option key={unitName} value={unitName}>{unitName}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex flex-col space-y-2">
