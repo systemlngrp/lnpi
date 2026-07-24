@@ -289,9 +289,6 @@ export function DirectLoadingSlipModal({
                             <option key={row.id} value={row.truckNo} />
                           ))}
                         </datalist>
-                        <div className="mt-2 text-[10px] font-bold uppercase text-red-700">
-                          Suggestions show only EMPTY internal trucks. Type outside truck no in this same box.
-                        </div>
                       </>,
                       true
                     )}
