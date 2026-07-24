@@ -5,7 +5,7 @@ import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
 import { ClientPagination } from "../components/ClientPagination";
-import { ClipboardList, CheckCircle, XCircle } from "lucide-react";
+import { ClipboardList, CheckCircle, FileText, XCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
@@ -17,6 +17,7 @@ import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getProductionEffectiveType, getRequiredMachinesForProduction } from "../lib/productionType";
 import { getProductionMatchingFields, hasProductionMatchingFieldChanges } from "../lib/productionMatching";
+import { downloadJobCardPdf } from "../lib/jobCardPdf";
 
 const formatItemFilterLabel = (name: string, erp: string) => {
   if (!name) return erp;
@@ -459,6 +460,26 @@ export function ProductionMaster() {
     return `${machines} (${totalQty})`;
   };
 
+  const handleDownloadJobCard = async (production: Production) => {
+    try {
+      const schedule = production.scheduleId ? schedules.find((row) => row.id === production.scheduleId) || null : null;
+      const order = schedule ? orders.find((row) => row.id === schedule.orderId) || null : null;
+      const company = order ? companies.find((row) => row.id === order.companyId) || null : null;
+      const item = resolveProductionItem(production) || null;
+      await downloadJobCardPdf({
+        production,
+        schedule,
+        order,
+        company,
+        item,
+        setting: settings[0] || null,
+        createdBy: user?.name || user?.email || "System User",
+      });
+    } catch (error) {
+      console.error("Failed to generate Job Card PDF:", error);
+      alert("Failed to generate Job Card PDF.");
+    }
+  };
   const getMandatoryStatus = (production: Production, item?: any) => {
     const required = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines);
     if (required.length === 0) return { required, done: 0, missing: [] as string[] };
@@ -603,6 +624,13 @@ export function ProductionMaster() {
                         </div>
                       )}
                        <div className="flex gap-2 mt-2">
+                       <button
+                          type="button"
+                          onClick={() => void handleDownloadJobCard(p)}
+                          className="flex-1 bg-white text-black font-bold inline-flex items-center justify-center p-2 border border-black text-xs hover:bg-slate-50"
+                        >
+                          <FileText size={14} className="mr-1" /> Job Card
+                        </button>
                        <button 
                           onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
                           className="flex-1 bg-indigo-600 text-white font-bold inline-flex items-center justify-center p-2 border border-black text-xs hover:bg-indigo-700"
@@ -895,6 +923,14 @@ export function ProductionMaster() {
                       </td>
                       <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
                         <div className="flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => void handleDownloadJobCard(p)}
+                            title="Download Job Card PDF"
+                            className="text-slate-800 hover:text-black transition-all p-1"
+                          >
+                            <FileText size={16} />
+                          </button>
                           <button 
                             onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
                             title="Report Processing"
