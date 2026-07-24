@@ -118,14 +118,39 @@ python tally_mrr_posting.py
 
 ## Audit Dashboard Tally Helper
 
-`tally_audit_dashboard_helper.py` runs on the Windows PC where Tally is open and lets the hosted Audit Dashboard fetch values from the currently active Tally company.
+`tally_audit_dashboard_helper.py` runs on the Windows PC where Tally is open. It fetches values from the currently active Tally company and can also save those values directly into the LNPI MySQL `audit_dashboard_snapshots` table.
 
-It listens on `http://127.0.0.1:8765` and checks Tally XML/HTTP on localhost ports `9000` through `9004`.
+It listens on `http://127.0.0.1:8765` and checks Tally XML/HTTP on the configured ports. By default it checks `localhost:9000`.
 
-Run it before clicking **Fetch From Tally** in the Audit Dashboard:
+### Portable config file
+
+Create this local file next to the helper when running from another system:
+
+```text
+D:\lnpi\python\tally_audit_dashboard_helper.env
+```
+
+Example contents:
+
+```env
+LNPI_DB_HOST=your-db-host
+LNPI_DB_USER=your-db-user
+LNPI_DB_PASSWORD=your-db-password
+LNPI_DB_NAME=your-db-name
+LNPI_DB_PORT=3306
+LNPI_AUDIT_TALLY_HOSTS=localhost
+LNPI_AUDIT_TALLY_PORTS=9000,9001,9002,9003,9004
+LNPI_AUDIT_HELPER_HOST=127.0.0.1
+LNPI_AUDIT_HELPER_PORT=8765
+```
+
+The helper also accepts the shorter DB names `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, and `DB_PORT`. Do not commit the `.env` file; it is ignored by git.
+
+### Run
 
 ```powershell
 cd D:\lnpi\python
+pip install -r requirements.txt
 python tally_audit_dashboard_helper.py
 ```
 
@@ -135,4 +160,16 @@ Health check:
 Invoke-RestMethod http://127.0.0.1:8765/health
 ```
 
-Tally must be open with the correct company, and XML/HTTP must be enabled on one of ports `9000`, `9001`, `9002`, `9003`, or `9004`.
+Fetch from Tally and save to DB:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8765/audit-dashboard/tally-values?dateFrom=2026-07-24&dateTo=2026-07-24"
+```
+
+The DB row id will be deterministic:
+
+```text
+audit-2026-07-24-2026-07-24
+```
+
+If DB credentials are missing, the helper still returns Tally values but responds with `dbPersisted: false`. Tally must be open with the correct company, and XML/HTTP must be enabled on one of the configured ports.

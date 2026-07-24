@@ -78,3 +78,4 @@ pythoncode/mrrtallysync.py
 backups/
 dist/ManufacturingJournalTallySync.exe
 python/tally_manufacturing_journal_posting.py
+python/tally_audit_dashboard_helper.env

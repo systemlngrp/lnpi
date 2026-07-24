@@ -13,8 +13,14 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
+try:
+    import mysql.connector
+except ImportError:
+    mysql = None
+
 BASE_DIR = Path(__file__).resolve().parent
 LOG_FILE = BASE_DIR / "tally_audit_dashboard_helper.log"
+ENV_FILE = BASE_DIR / "tally_audit_dashboard_helper.env"
 
 
 def setup_logger() -> logging.Logger:
@@ -38,6 +44,136 @@ def setup_logger() -> logging.Logger:
 
 
 LOGGER = setup_logger()
+def load_env_file(path: Path = ENV_FILE) -> None:
+    if not path.exists():
+        return
+
+    for line_no, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            LOGGER.warning("Ignoring invalid env line %s in %s", line_no, path)
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            LOGGER.warning("Ignoring env line %s with empty key in %s", line_no, path)
+            continue
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+def first_env_value(*keys: str) -> str:
+    for key in keys:
+        value = os.getenv(key)
+        if value is not None and str(value).strip() != "":
+            return str(value).strip()
+    return ""
+
+
+def parse_db_port(value: str) -> int:
+    try:
+        port = int(value or "3306")
+    except ValueError:
+        LOGGER.warning("Invalid DB port %s; using 3306", value)
+        return 3306
+    return port if 1 <= port <= 65535 else 3306
+
+
+def get_db_config() -> tuple[Any, list[str]]:
+    config = {
+        "host": first_env_value("LNPI_DB_HOST", "DB_HOST"),
+        "user": first_env_value("LNPI_DB_USER", "DB_USER"),
+        "password": first_env_value("LNPI_DB_PASSWORD", "DB_PASSWORD"),
+        "database": first_env_value("LNPI_DB_NAME", "DB_NAME"),
+        "port": parse_db_port(first_env_value("LNPI_DB_PORT", "DB_PORT") or "3306"),
+    }
+    missing = []
+    if not config["host"]:
+        missing.append("LNPI_DB_HOST/DB_HOST")
+    if not config["user"]:
+        missing.append("LNPI_DB_USER/DB_USER")
+    if not config["password"]:
+        missing.append("LNPI_DB_PASSWORD/DB_PASSWORD")
+    if not config["database"]:
+        missing.append("LNPI_DB_NAME/DB_NAME")
+    return (None, missing) if missing else (config, [])
+
+
+def get_db_health() -> dict[str, Any]:
+    config, missing = get_db_config()
+    return {
+        "dbConfigured": config is not None,
+        "dbHost": config["host"] if config else first_env_value("LNPI_DB_HOST", "DB_HOST") or "",
+        "dbName": config["database"] if config else first_env_value("LNPI_DB_NAME", "DB_NAME") or "",
+        "dbPort": config["port"] if config else parse_db_port(first_env_value("LNPI_DB_PORT", "DB_PORT") or "3306"),
+        "dbMissing": missing,
+        "dbConfigFile": str(ENV_FILE),
+        "dbDriverAvailable": mysql is not None,
+    }
+
+
+def get_snapshot_id(date_from: str, date_to: str) -> str:
+    return f"audit-{date_from or 'all'}-{date_to or 'all'}"
+
+
+def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any]) -> dict[str, Any]:
+    snapshot_id = get_snapshot_id(date_from, date_to)
+    config, missing = get_db_config()
+    if missing:
+        LOGGER.warning("Skipping DB persistence for %s because DB config is missing: %s", snapshot_id, ", ".join(missing))
+        return {"dbPersisted": False, "snapshotId": snapshot_id, "dbMissing": missing}
+    if mysql is None:
+        LOGGER.warning("Skipping DB persistence for %s because mysql-connector-python is not installed", snapshot_id)
+        return {"dbPersisted": False, "snapshotId": snapshot_id, "dbMissing": ["mysql-connector-python"]}
+
+    timestamp = str(values.get("fetchedAt") or datetime.now().isoformat(timespec="seconds"))
+    params = (
+        snapshot_id,
+        date_from,
+        date_to,
+        round_money(float(values.get("invoiceValueTally") or 0)),
+        round_money(float(values.get("consumptionValueTally") or 0)),
+        round_money(float(values.get("saleValueTally") or 0)),
+        round_money(float(values.get("debitNoteTally") or 0)),
+        "Tally Audit Helper",
+        timestamp,
+    )
+    sql = """
+        INSERT INTO audit_dashboard_snapshots
+          (id, dateFrom, dateTo, invoiceValueTally, consumptionValueTally, saleValueTally, debitNoteTally, updatedBy, updateTimestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+          dateFrom = VALUES(dateFrom),
+          dateTo = VALUES(dateTo),
+          invoiceValueTally = VALUES(invoiceValueTally),
+          consumptionValueTally = VALUES(consumptionValueTally),
+          saleValueTally = VALUES(saleValueTally),
+          debitNoteTally = VALUES(debitNoteTally),
+          updatedBy = VALUES(updatedBy),
+          updateTimestamp = VALUES(updateTimestamp)
+    """
+
+    connection = None
+    try:
+        safe_config = {key: value for key, value in config.items() if key != "password"}
+        LOGGER.info("Persisting audit snapshot %s to MySQL %s", snapshot_id, safe_config)
+        connection = mysql.connector.connect(**config)
+        cursor = connection.cursor()
+        cursor.execute(sql, params)
+        connection.commit()
+        cursor.close()
+        LOGGER.info("Audit snapshot %s persisted successfully", snapshot_id)
+        return {"dbPersisted": True, "snapshotId": snapshot_id}
+    except Exception as error:
+        LOGGER.exception("Failed to persist audit snapshot %s: %s", snapshot_id, error)
+        return {"dbPersisted": False, "snapshotId": snapshot_id, "dbError": str(error)}
+    finally:
+        if connection and connection.is_connected():
+            connection.close()
+
+load_env_file()
 
 HELPER_HOST = os.getenv("LNPI_AUDIT_HELPER_HOST", "127.0.0.1")
 HELPER_PORT = int(os.getenv("LNPI_AUDIT_HELPER_PORT", "8765"))
@@ -364,6 +500,7 @@ class Handler(BaseHTTPRequestHandler):
                     "connectTimeoutSeconds": CONNECT_TIMEOUT,
                     "readTimeoutSeconds": REQUEST_TIMEOUT,
                     "logFile": str(LOG_FILE),
+                    **get_db_health(),
                 },
             )
             return
@@ -378,7 +515,8 @@ class Handler(BaseHTTPRequestHandler):
                     date_to = date_to or today
                 LOGGER.info("Audit dashboard GET fetch request from %s for %s to %s", self.client_address[0], date_from, date_to)
                 result = fetch_tally_values(date_from, date_to)
-                self._send_json(200, {"ok": True, **result})
+                db_result = persist_audit_snapshot(date_from, date_to, result)
+                self._send_json(200, {"ok": True, **result, **db_result})
             except Exception as error:
                 LOGGER.exception("Audit dashboard GET fetch failed: %s", error)
                 self._send_json(status_for_error(error), {"ok": False, "error": public_error_message(error)})
@@ -394,7 +532,8 @@ class Handler(BaseHTTPRequestHandler):
             date_from, date_to = get_request_date_range(data)
             LOGGER.info("Audit dashboard fetch request from %s for %s to %s", self.client_address[0], date_from, date_to)
             result = fetch_tally_values(date_from, date_to)
-            self._send_json(200, {"ok": True, **result})
+            db_result = persist_audit_snapshot(date_from, date_to, result)
+            self._send_json(200, {"ok": True, **result, **db_result})
         except Exception as error:
             LOGGER.exception("Audit dashboard fetch failed: %s", error)
             self._send_json(status_for_error(error), {"ok": False, "error": public_error_message(error)})
