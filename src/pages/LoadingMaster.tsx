@@ -68,6 +68,8 @@ export function LoadingMaster() {
   const [isDirectModalOpen, setIsDirectModalOpen] = useState(false);
   const [isSavingDirect, setIsSavingDirect] = useState(false);
 
+  const getTruckNo = (slip: LoadingSlip) => String(slip.truckNo || trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "-").trim() || "-";
+
   const companyOptions = useMemo(() => {
     const names = new Set<string>();
     loadingSlips.forEach((slip) => {
@@ -114,10 +116,11 @@ export function LoadingMaster() {
         erpCodes: summary.erpCodes.join(", "),
         itemKeys: summary.lineContexts.map((ctx) => `${ctx.itemName || ""}::${ctx.erpCode || ""}`),
         loadingSourceLabel: isDirectLoadingSlip(slip) ? "Direct" : "Dispatch Plan",
+        truckNo: getTruckNo(slip),
       };
     }).filter(slip => {
       const q = searchTerm.toLowerCase().trim();
-      const matchesSearch = !q || slip.slipNo.toLowerCase().includes(q) || slip.itemNames.toLowerCase().includes(q) || slip.companyNames.toLowerCase().includes(q) || slip.erpCodes.toLowerCase().includes(q);
+      const matchesSearch = !q || slip.slipNo.toLowerCase().includes(q) || slip.truckNo.toLowerCase().includes(q) || slip.itemNames.toLowerCase().includes(q) || slip.companyNames.toLowerCase().includes(q) || slip.erpCodes.toLowerCase().includes(q);
       const matchesCompany = !companyFilter || slip.companyNames.includes(companyFilter);
       const matchesErp = !erpFilter || slip.erpCodes.includes(erpFilter);
       const matchesItem = !itemFilter || slip.itemKeys.includes(itemFilter);
@@ -135,7 +138,7 @@ export function LoadingMaster() {
 
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
-  }, [loadingSlips, plans, orders, companies, resolveOrderItem, searchTerm, companyFilter, erpFilter, itemFilter]);
+  }, [loadingSlips, plans, orders, companies, resolveOrderItem, searchTerm, companyFilter, erpFilter, itemFilter, trucks]);
 
   const {
     page,
@@ -544,6 +547,7 @@ export function LoadingMaster() {
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Source</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Status</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Truck</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Company</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">Item</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider border-b border-black">ERP</th>
@@ -554,7 +558,7 @@ export function LoadingMaster() {
           <tbody className="bg-white divide-y divide-black">
             {paginatedSlips.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
+                <td colSpan={10} className="px-6 py-12 text-center text-slate-500 italic">No loading slips found.</td>
               </tr>
 ) : paginatedSlips.map((slip) => (
               <tr key={slip.id} className="hover:bg-slate-50 transition-colors divide-x divide-black">
@@ -586,6 +590,9 @@ export function LoadingMaster() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   {formatDate(slip.date)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold uppercase text-black">
+                  {slip.truckNo || "-"}
                 </td>
                 <td className="px-6 py-4 text-sm text-black align-top">
                   <div className="max-w-[240px] whitespace-normal break-words font-medium leading-5" title={slip.companyNames}>
@@ -657,7 +664,7 @@ export function LoadingMaster() {
               const lines = getSlipLines(draft);
               return (
                 <tr key={`${slip.id}-details`} className="bg-white">
-                  <td colSpan={9} className="px-6 pb-6 pt-2 border-t border-black">
+                  <td colSpan={10} className="px-6 pb-6 pt-2 border-t border-black">
                     <div className="rounded border border-black overflow-hidden">
                       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3 border-b border-black">
                         <div className="text-sm font-bold text-black">

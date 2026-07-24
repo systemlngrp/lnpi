@@ -120,7 +120,7 @@ export function GatePassForm() {
         ...slip,
         totalQty: slipLines.reduce((sum, line) => sum + Number(line.qty || 0), 0),
         amount: slipLines.reduce((sum, line) => sum + Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0), 0),
-        truckNo: trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "-",
+        truckNo: slip.truckNo || trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "-",
       };
     }).filter((row): row is InvoiceSlipRow => Boolean(row));
   }, [invoiceLineItems, loadingSlips, selectedInvoice, trucks]);

@@ -114,14 +114,16 @@ export function PendingLoading() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [modalTruckId, setModalTruckId] = useState<string>("");
+  const [modalManualTruckNo, setModalManualTruckNo] = useState("");
   const availableTrucks = useMemo(
     () => trucks
       .filter((truck) => {
         const status = normalizeTruckStatus(truck.liveStatus);
-        return !status || status === "EMPTY";
+        const isInternal = String(truck.truckType || "").trim().toLowerCase() === "internal";
+        return isInternal && (!status || status === "EMPTY");
       })
       .sort((a, b) => a.truckNo.localeCompare(b.truckNo)),
-    [modalTruckId, trucks]
+    [trucks]
   );
   const [packingDetails, setPackingDetails] = useState<PackingDetail[]>(createEmptyPackingRows());
   const [extraItemsQty, setExtraItemsQty] = useState<number | "">("");
@@ -243,8 +245,9 @@ export function PendingLoading() {
   const isTruckAvailableForLoading = (truckId: string) => {
     const truck = trucks.find((row) => row.id === truckId);
     if (!truck) return false;
+    const isInternal = String(truck.truckType || "").trim().toLowerCase() === "internal";
     const status = normalizeTruckStatus(truck.liveStatus);
-    return !status || status === "EMPTY";
+    return isInternal && (!status || status === "EMPTY");
   };
 
   useEffect(() => {
@@ -275,8 +278,10 @@ export function PendingLoading() {
 
     const totalPending = modal.plans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
-    if (!modalTruckId) errors.push("Please select a truck.");
-    else if (!isTruckAvailableForLoading(modalTruckId)) errors.push("Selected truck is not EMPTY. Please select another truck.");
+    const manualTruckNo = modalManualTruckNo.trim();
+    if (!modalTruckId && !manualTruckNo) errors.push("Please select an internal truck or enter manual truck no.");
+    if (modalTruckId && manualTruckNo) errors.push("Use either internal truck dropdown or manual truck no, not both.");
+    if (modalTruckId && !isTruckAvailableForLoading(modalTruckId)) errors.push("Selected truck is not an EMPTY internal truck. Please select another truck.");
     if (rowLoadedQty <= 0) errors.push("Loaded qty must be greater than 0.");
     if (rowLoadedQty > totalPending + 0.0001) errors.push("Loaded qty cannot exceed total pending for loading.");
 
@@ -305,7 +310,7 @@ export function PendingLoading() {
   const modalHasErrors = useMemo(() => {
     if (!loadingModal) return false;
     return !getModalValidation(loadingModal).isValid;
-  }, [jobSplitQtys, loadedQuantities, loadingModal, openingStockQtys, currentAdjustmentByJobId, existingLoadedByJobId, productionMap, modalTruckId, packingDetails, extraItemsQty]);
+  }, [jobSplitQtys, loadedQuantities, loadingModal, openingStockQtys, currentAdjustmentByJobId, existingLoadedByJobId, productionMap, modalTruckId, modalManualTruckNo, packingDetails, extraItemsQty]);
 
   const handleOpenLoad = (companyId: string, itemSource: OrderItemSource, itemId: string, itemName: string, itemPlans: PendingPlan[]) => {
     setLoadingModal({ companyId, itemSource, itemId, itemName, plans: itemPlans });
@@ -333,6 +338,7 @@ export function PendingLoading() {
       [modalKey]: Object.fromEntries(eligibleJobs.map((j) => [j.jobId, ""])),
     });
     setModalTruckId("");
+    setModalManualTruckNo("");
     setPackingDetails(createEmptyPackingRows());
     setExtraItemsQty("");
     setLinkedPackingDetails({ PHP: createEmptyPackingRows(), PLATE: createEmptyPackingRows() });
@@ -345,6 +351,7 @@ export function PendingLoading() {
     setJobSplitQtys({});
     setOpeningStockQtys({});
     setModalTruckId("");
+    setModalManualTruckNo("");
     setPackingDetails(createEmptyPackingRows());
     setExtraItemsQty("");
     setLinkedPackingDetails({ PHP: createEmptyPackingRows(), PLATE: createEmptyPackingRows() });
@@ -447,8 +454,8 @@ export function PendingLoading() {
       return;
     }
 
-    if (!isTruckAvailableForLoading(modalTruckId)) {
-      alert("Selected truck is not EMPTY. Please select another truck.");
+    if (modalTruckId && !isTruckAvailableForLoading(modalTruckId)) {
+      alert("Selected truck is not an EMPTY internal truck. Please select another truck.");
       setModalTruckId("");
       return;
     }
@@ -538,6 +545,7 @@ export function PendingLoading() {
         slipNo: "",
         date: new Date().toISOString().slice(0, 10),
         truckId: modalTruckId,
+        truckNo: modalManualTruckNo.trim() || trucks.find((truck) => truck.id === modalTruckId)?.truckNo || undefined,
         lines,
         packingDetails: packingDetails.filter(d => d.bundles > 0 && d.packSize > 0),
         extraItemsQty: Number(extraItemsQty || 0) || undefined,
@@ -806,7 +814,10 @@ export function PendingLoading() {
                   <div className="text-[10px] text-slate-500 uppercase font-black mb-1">Truck Number *</div>
                   <select
                     value={modalTruckId}
-                    onChange={(e) => setModalTruckId(e.target.value)}
+                    onChange={(e) => {
+                      setModalTruckId(e.target.value);
+                      if (e.target.value) setModalManualTruckNo("");
+                    }}
                     className="w-full border-2 border-black rounded p-1 text-sm font-bold focus:outline-none focus:border-indigo-600 bg-white"
                   >
                     <option value="">-- Select Truck --</option>
@@ -818,9 +829,19 @@ export function PendingLoading() {
                   </select>
                   {modalTruckId ? null : (
                     <div className="mt-2 text-[10px] font-bold uppercase text-red-700">
-                      Only EMPTY trucks are available for loading.
+                      Only EMPTY internal trucks are available for loading.
                     </div>
                   )}
+                  <div className="mt-3 text-[10px] text-slate-500 uppercase font-black mb-1">Manual Truck No</div>
+                  <input
+                    value={modalManualTruckNo}
+                    onChange={(e) => {
+                      setModalManualTruckNo(e.target.value.toUpperCase());
+                      if (e.target.value.trim()) setModalTruckId("");
+                    }}
+                    placeholder="Enter outside truck no"
+                    className="w-full border-2 border-black rounded p-1 text-sm font-bold uppercase focus:outline-none focus:border-indigo-600 bg-white"
+                  />
                 </div>
               </div>
 

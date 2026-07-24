@@ -57,7 +57,7 @@ export function StandaloneLoadingMaster({ source }: StandaloneLoadingMasterProps
           companyName: firstLine.companyName || firstProduction?.companyName || item?.companyName || "-",
           jobNo: firstAllocation?.sourceType === "job" ? firstAllocation.jobNo || firstProduction?.transactionNo || "-" : "-",
           fgSlipNo: fgSlip?.slipNo || "-",
-          truckNo: trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "-",
+          truckNo: slip.truckNo || trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "-",
           totalQty: relevantLines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0),
           isFgLinked,
           consumptionTxnNo:

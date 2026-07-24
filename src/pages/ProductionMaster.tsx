@@ -130,18 +130,31 @@ export function ProductionMaster() {
     );
   };
 
+  const mandatoryMachinesByType = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
+
   const processingTotalsMap = useMemo(() => {
     const map = new Map<string, Record<string, number>>();
-    processing.forEach((p) => {
-      const totals = map.get(p.productionId) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-      const machineColumn = PROCESSING_MACHINE_COLUMNS.find(col => (col.machineNames as readonly string[]).includes(p.machineName));
-      if (machineColumn) {
-        totals[machineColumn.key] += Number(p.qty || 0);
+    processing.forEach((entry) => {
+      const production = productions.find((row) => row.id === entry.productionId);
+      const item = resolveProductionItem(production);
+      const machineName = normalizeMachineName(entry.machineName);
+      const requiredMachines = production
+        ? getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines).map((name) => normalizeMachineName(name))
+        : [];
+
+      if ((machineName === "Rotary" || machineName === "Slotting") && !requiredMachines.includes(machineName)) {
+        return;
       }
-      map.set(p.productionId, totals);
+
+      const totals = map.get(entry.productionId) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
+      const machineColumn = PROCESSING_MACHINE_COLUMNS.find(col => (col.machineNames as readonly string[]).map((name) => normalizeMachineName(name)).includes(machineName));
+      if (machineColumn) {
+        totals[machineColumn.key] += Number(entry.qty || 0);
+      }
+      map.set(entry.productionId, totals);
     });
     return map;
-  }, [processing]);
+  }, [processing, productions, mandatoryMachinesByType, machines]);
 
   const processingMachinesMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -152,8 +165,6 @@ export function ProductionMaster() {
     });
     return map;
   }, [processing]);
-
-  const mandatoryMachinesByType = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
 
   const jobClosureStatusMap = useMemo(() => {
     const isCorrugationLiner = (name?: string | null) =>

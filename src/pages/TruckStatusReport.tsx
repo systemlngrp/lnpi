@@ -62,7 +62,7 @@ export function TruckStatusReport() {
     const orderById = new Map(orders.map((order) => [order.id, order]));
     const companyById = new Map(companies.map((company) => [company.id, company]));
 
-    return trucks.map((truck) => {
+    return trucks.filter(isInternalTruck).map((truck) => {
       const slip = activeSlipsByTruck.get(truck.id);
       const partyNames = new Set<string>();
 
@@ -108,7 +108,7 @@ export function TruckStatusReport() {
   const counts = useMemo(() => {
     const map = new Map<string, number>();
     TRUCK_LIVE_STATUSES.forEach((status) => map.set(status, 0));
-    trucks.forEach((truck) => {
+    trucks.filter(isInternalTruck).forEach((truck) => {
       const status = normalizeTruckStatus(truck.liveStatus) || "EMPTY";
       map.set(status, (map.get(status) || 0) + 1);
     });

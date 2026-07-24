@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { Company, DispatchPlan, LoadingSlip, Order, PackingDetail, Truck } from "../types";
 import type { OrderCatalogItem } from "../lib/orderItems";
 import { buildLinkedLoadingDetailsFromSlip } from "../lib/linkedLoading";
+import { normalizeTruckStatus } from "../lib/truckStatus";
 import { Select } from "./Select";
 import { X, Plus, Trash2 } from "lucide-react";
 
@@ -28,6 +29,7 @@ type Draft = {
   companyId: string;
   itemId: string;
   truckId: string;
+  manualTruckNo: string;
   loadedQty: number | "";
   rate: number | "";
   packingDetails: PackingDetail[];
@@ -40,6 +42,7 @@ const makeDraft = (): Draft => ({
   companyId: "",
   itemId: "",
   truckId: "",
+  manualTruckNo: "",
   loadedQty: "",
   rate: "",
   packingDetails: [makePacking()],
@@ -92,6 +95,16 @@ export function DirectLoadingSlipModal({
     [sortedItems]
   );
   const item = useMemo(() => allItems.find((row) => row.id === draft.itemId), [allItems, draft.itemId]);
+  const availableTrucks = useMemo(
+    () => trucks
+      .filter((truck) => {
+        const isInternal = String(truck.truckType || "").trim().toLowerCase() === "internal";
+        const status = normalizeTruckStatus(truck.liveStatus);
+        return isInternal && (!status || status === "EMPTY");
+      })
+      .sort((left, right) => left.truckNo.localeCompare(right.truckNo, undefined, { numeric: true, sensitivity: "base" })),
+    [trucks]
+  );
 
   const normalizedPacking = useMemo(
     () =>
@@ -106,12 +119,14 @@ export function DirectLoadingSlipModal({
   );
 
   const previewSlip = useMemo<LoadingSlip | null>(() => {
-    if (!company || !item || !draft.truckId || !(Number(draft.loadedQty || 0) > 0)) return null;
+    const manualTruckNo = draft.manualTruckNo.trim();
+    if (!company || !item || (!draft.truckId && !manualTruckNo) || (draft.truckId && manualTruckNo) || !(Number(draft.loadedQty || 0) > 0)) return null;
     return {
       id: "direct-preview",
       slipNo: "",
       date: draft.date,
       truckId: draft.truckId,
+      truckNo: manualTruckNo || availableTrucks.find((truck) => truck.id === draft.truckId)?.truckNo || undefined,
       loadingSource: "DIRECT",
       companyId: company.id,
       companyName: company.name,
@@ -136,7 +151,7 @@ export function DirectLoadingSlipModal({
       updatedBy: "System User",
       updateTimestamp: new Date().toISOString(),
     };
-  }, [company, item, draft, normalizedPacking]);
+  }, [company, item, draft, normalizedPacking, availableTrucks]);
 
   const isFgItem = item?.source === "FG";
   const phpDetails = useMemo(
@@ -177,7 +192,7 @@ export function DirectLoadingSlipModal({
 
   const handleSave = async () => {
     if (!previewSlip) {
-      alert("Please select company, item, truck and loaded qty.");
+      alert("Please select company, item, either internal truck or manual truck no, and loaded qty.");
       return;
     }
     setIsSaving(true);
@@ -258,11 +273,11 @@ export function DirectLoadingSlipModal({
                       "Truck",
                       <select
                         value={draft.truckId}
-                        onChange={(e) => setDraft((prev) => ({ ...prev, truckId: e.target.value }))}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, truckId: e.target.value, manualTruckNo: e.target.value ? "" : prev.manualTruckNo }))}
                         className="w-full rounded border border-black px-3 py-2 text-sm"
                       >
                         <option value="">Select Truck</option>
-                        {trucks.map((row) => (
+                        {availableTrucks.map((row) => (
                           <option key={row.id} value={row.id}>
                             {row.truckNo}
                           </option>
@@ -270,6 +285,17 @@ export function DirectLoadingSlipModal({
                       </select>,
                       true
                     )}
+                    <div className="mt-3">
+                      {field(
+                        "Manual Truck No",
+                        <input
+                          value={draft.manualTruckNo}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, manualTruckNo: e.target.value.toUpperCase(), truckId: e.target.value.trim() ? "" : prev.truckId }))}
+                          placeholder="Enter outside truck no"
+                          className="w-full rounded border border-black px-3 py-2 text-sm uppercase"
+                        />
+                      )}
+                    </div>
                   </td>
                 </tr>
               </tbody>

@@ -285,7 +285,7 @@ export async function downloadLoadingSlipPdf({
   const companyName = summary.companyNames[0] || firstContext?.companyName || slip.companyName || "-";
   const erpCode = summary.erpCodes[0] || firstContext?.erpCode || "-";
   const itemName = summary.itemNames[0] || firstContext?.itemName || slip.lines[0]?.itemName || "-";
-  const truckNo = String(trucks.find((row) => row.id === slip.truckId)?.truckNo || "-").trim() || "-";
+  const truckNo = String(slip.truckNo || trucks.find((row) => row.id === slip.truckId)?.truckNo || "-").trim() || "-";
   const totalQty = slip.lines.reduce((sum, line) => sum + Number(line.loadedQty || 0), 0);
   const boxExtraQty = Number(slip.extraItemsQty || 0) || 0;
   const phpRequiredQty = (slip.phpDetails || []).reduce((sum, detail) => sum + Number(detail.requiredQty || 0), 0);

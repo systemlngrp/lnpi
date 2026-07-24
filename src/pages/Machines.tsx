@@ -167,7 +167,7 @@ export function Machines() {
               />
             </div>
             <div className="flex flex-col space-y-1">
-              <label className="font-bold text-black text-sm">Maximum Output Per Hour</label>
+              <label className="font-bold text-black text-sm">Maximum Output Per Hr (In Kg)</label>
               <input 
                 type="number" 
                 value={maxOutputPerHour} 
@@ -233,7 +233,7 @@ export function Machines() {
               <tr className="divide-x divide-black">
                 <th className="border border-black px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">SL No</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Machine Name</th>
-                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Maximum Output</th>
+                <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Maximum Output Per Hr (In Kg)</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Assigned Operators</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated By</th>
                 <th className="border border-black px-6 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Updated Timestamp</th>

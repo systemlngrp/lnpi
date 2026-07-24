@@ -168,6 +168,7 @@ export interface MaterialIssue {
   productionId?: string;
   jobNo?: string;
   remarks?: string;
+  notApplicable?: "Yes" | "No" | string;
   tallyTimestamp?: string;
   tallyPostingStatus?: string;
   tallyVoucherNo?: string;
@@ -823,6 +824,7 @@ export interface LoadingSlip {
   slipNo: string;
   date: string;
   truckId: string;
+  truckNo?: string;
   lines: LoadingSlipLine[];
   loadingSource?: "DISPATCH_PLAN" | "DIRECT";
   companyId?: string;

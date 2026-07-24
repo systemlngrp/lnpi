@@ -4595,6 +4595,7 @@ await db.query(`
         { table: "material_issues", column: "productionId", type: "VARCHAR(36)" },
         { table: "material_issues", column: "jobNo", type: "VARCHAR(100)" },
         { table: "material_issues", column: "remarks", type: "TEXT" },
+        { table: "material_issues", column: "notApplicable", type: "VARCHAR(10)" },
         { table: "material_issues", column: "tallyTimestamp", type: "VARCHAR(255)" },
         { table: "material_issues", column: "tallyPostingStatus", type: "VARCHAR(50)" },
         { table: "material_issues", column: "tallyVoucherNo", type: "VARCHAR(100)" },
@@ -6444,7 +6445,7 @@ async function fetchTallyInvoiceContext(db: mysql.Pool, invoiceId: string) {
   if (loadingSlipIds.length) {
     const [loadingSlipRows] = await db.query(
       `
-        SELECT ls.id, ls.slipNo, ls.lines, tr.truckNo
+        SELECT ls.id, ls.slipNo, ls.lines, COALESCE(NULLIF(TRIM(ls.truckNo), ''), tr.truckNo) AS truckNo
         FROM \`loading_slips\` ls
         LEFT JOIN \`trucks\` tr ON tr.id = ls.truckId
         WHERE ls.id IN (${loadingSlipIds.map(() => "?").join(",")})

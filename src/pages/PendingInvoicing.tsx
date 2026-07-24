@@ -534,7 +534,7 @@ export function PendingInvoicing() {
   const shouldShowTransporter = useMemo(() => {
     if (!invoiceModal) return false;
     return invoiceModal.slips.some((slip) => {
-      const truckNo = trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "";
+      const truckNo = slip.truckNo || trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "";
       return truckNo.trim().toLowerCase() === "other";
     });
   }, [invoiceModal, trucks]);
@@ -939,7 +939,7 @@ export function PendingInvoicing() {
                         <td className="px-3 py-2 text-xs font-bold">{s.slipNo}</td>
                         <td className="px-3 py-2 text-xs">{formatDate(s.date)}</td>
                         <td className="px-3 py-2 text-xs font-bold text-indigo-700">
-                          {trucks.find(t => t.id === s.truckId)?.truckNo || "N/A"}
+                          {s.truckNo || trucks.find(t => t.id === s.truckId)?.truckNo || "N/A"}
                         </td>
                         <td className="px-3 py-2 text-xs truncate max-w-[200px]">{s.items.join(", ")}</td>
                         <td className="px-3 py-2 text-xs text-right font-medium">{s.totalQty.toLocaleString()}</td>

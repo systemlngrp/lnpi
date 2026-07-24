@@ -21,7 +21,7 @@ export function Trucks() {
   const [truckNo, setTruckNo] = useState("");
   const [driverName, setDriverName] = useState("");
   const [mobileNo, setMobileNo] = useState("");
-  const [truckType, setTruckType] = useState<"Internal" | "External">("External");
+  const [truckType, setTruckType] = useState<"Internal" | "External">("Internal");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +63,7 @@ export function Trucks() {
     setTruckNo("");
     setDriverName("");
     setMobileNo("");
-    setTruckType("External");
+    setTruckType("Internal");
     setEditingId(null);
     setIsFormOpen(false);
   };

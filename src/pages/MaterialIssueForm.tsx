@@ -358,6 +358,10 @@ export function MaterialIssueForm() {
     event.preventDefault();
     if (!date || lines.length === 0) return;
     if (issueType === "Job" && !productionId) return;
+    if (isWithoutJobIssue(issueType) && !remarks.trim()) {
+      alert("Remarks are mandatory for Without Job material issue.");
+      return;
+    }
 
     for (const line of lines) {
       if (line.isReel) {
@@ -582,8 +586,8 @@ export function MaterialIssueForm() {
               <Select options={jobOptions} value={productionId} onChange={setProductionId} required placeholder="Select Job..." />
             </Field>
           ) : null}
-          <Field label="Remarks" className="md:col-span-2">
-            <input value={remarks} onChange={(e) => setRemarks(e.target.value)} className="w-full border-2 border-black rounded p-2" />
+          <Field label="Remarks" required={isWithoutJobIssue(issueType)} className="md:col-span-2">
+            <input value={remarks} onChange={(e) => setRemarks(e.target.value)} required={isWithoutJobIssue(issueType)} className="w-full border-2 border-black rounded p-2" />
           </Field>
         </div>
 

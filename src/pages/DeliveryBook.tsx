@@ -38,7 +38,7 @@ export function DeliveryBook() {
         id: slip.id,
         slipNo: slip.slipNo,
         date: slip.date,
-        truckNo: truck?.truckNo || "-",
+        truckNo: slip.truckNo || truck?.truckNo || "-",
         driver: truck?.driverName || "-",
         company: company?.name || "Unknown",
         itemsSummary: itemsList.join(", "),

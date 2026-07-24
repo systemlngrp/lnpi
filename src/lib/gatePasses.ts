@@ -93,7 +93,7 @@ export function buildGatePassFromInvoice({
     Array.from(
       new Set(
         selectedSlips
-          .map((slip) => trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "")
+          .map((slip) => slip.truckNo || trucks.find((truck) => truck.id === slip.truckId)?.truckNo || "")
           .filter(Boolean)
       )
     ).join(", ");

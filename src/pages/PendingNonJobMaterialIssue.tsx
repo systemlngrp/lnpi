@@ -23,9 +23,10 @@ function addDays(dateStr: string, days: number) {
 export function PendingNonJobMaterialIssue() {
   const navigate = useNavigate();
   const [productions] = useData<Production>("productions", []);
-  const [materialIssues] = useData<MaterialIssue>("material-issues", []);
+  const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [markingDate, setMarkingDate] = useState<string | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -71,6 +72,38 @@ export function PendingNonJobMaterialIssue() {
     });
     navigate(`/material-movement/issue?${params.toString()}`);
   };
+  const markNotApplicable = async (date: string) => {
+    const remarks = window.prompt(`Enter mandatory remarks for Not Applicable on ${formatDate(date) || date}`);
+    if (remarks === null) return;
+    const reason = remarks.trim();
+    if (!reason) {
+      alert("Remarks are mandatory for Not Applicable.");
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const issue: MaterialIssue = {
+      id: crypto.randomUUID(),
+      issueNo: "",
+      date,
+      issueType: "Without Job",
+      remarks: reason,
+      notApplicable: "Yes",
+      tallyPostingStatus: "Not Applicable",
+      updatedBy: "System User",
+      updateTimestamp: timestamp,
+    };
+
+    setMarkingDate(date);
+    try {
+      await setMaterialIssues([issue, ...materialIssues]);
+    } catch (error) {
+      console.error("Failed to mark Not Applicable:", error);
+      alert("Failed to mark date as Not Applicable.");
+    } finally {
+      setMarkingDate(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -78,7 +111,7 @@ export function PendingNonJobMaterialIssue() {
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Pending Non-Job Material Issue</h2>
           <div className="text-xs text-slate-600">
-            Shows dates missing a â€œWithout Jobâ€ material issue entry (from first Job Date to today).
+            Shows dates missing a "Without Job" material issue entry (from first Job Date to today).
           </div>
         </div>
       </div>
@@ -112,6 +145,14 @@ export function PendingNonJobMaterialIssue() {
                   <tr key={date} className="divide-x divide-black hover:bg-slate-50">
                     <td className="px-4 py-3 text-sm font-bold">{formatDate(date) || date}</td>
                     <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => void markNotApplicable(date)}
+                        disabled={markingDate === date}
+                        className="mr-2 bg-white text-black px-4 py-1.5 rounded border border-black text-xs font-bold hover:bg-slate-100 transition disabled:opacity-50"
+                      >
+                        {markingDate === date ? "Saving..." : "Not Applicable"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => openForm(date)}
