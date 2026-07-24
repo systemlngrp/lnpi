@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Search, Truck as TruckIcon } from "lucide-react";
+import { Copy, Search, Truck as TruckIcon } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type { Company, DispatchPlan, LoadingSlip, Order, Truck, TruckStatusLog } from "../types";
 import { formatTruckDateTime, formatTruckDuration, normalizeTruckStatus, TRUCK_LIVE_STATUSES, TRUCK_STATUS_STYLES } from "../lib/truckStatus";
@@ -197,6 +197,20 @@ export function TruckStatusReport() {
           </table>
         </div>
       </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            const url = new URL("/driver-status", window.location.origin).toString();
+            void navigator.clipboard.writeText(url);
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded border-2 border-black bg-white px-4 py-3 text-sm font-black uppercase text-black hover:bg-slate-50"
+        >
+          <Copy size={16} />
+          Copy Driver Form Link
+        </button>
+      </div>
+
     </div>
   );
 }
