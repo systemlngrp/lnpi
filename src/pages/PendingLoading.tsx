@@ -278,9 +278,8 @@ export function PendingLoading() {
 
     const totalPending = modal.plans.reduce((sum, plan) => sum + Number(plan.pendingQty || 0), 0);
 
-    const manualTruckNo = modalManualTruckNo.trim();
-    if (!modalTruckId && !manualTruckNo) errors.push("Please select an internal truck or enter manual truck no.");
-    if (modalTruckId && manualTruckNo) errors.push("Use either internal truck dropdown or manual truck no, not both.");
+    const truckNoInput = modalManualTruckNo.trim();
+    if (!truckNoInput) errors.push("Please enter truck number.");
     if (modalTruckId && !isTruckAvailableForLoading(modalTruckId)) errors.push("Selected truck is not an EMPTY internal truck. Please select another truck.");
     if (rowLoadedQty <= 0) errors.push("Loaded qty must be greater than 0.");
     if (rowLoadedQty > totalPending + 0.0001) errors.push("Loaded qty cannot exceed total pending for loading.");
@@ -812,36 +811,26 @@ export function PendingLoading() {
 
                 <div className="bg-slate-50 p-4 border border-black rounded shadow-inner flex flex-col justify-center">
                   <div className="text-[10px] text-slate-500 uppercase font-black mb-1">Truck Number *</div>
-                  <select
-                    value={modalTruckId}
-                    onChange={(e) => {
-                      setModalTruckId(e.target.value);
-                      if (e.target.value) setModalManualTruckNo("");
-                    }}
-                    className="w-full border-2 border-black rounded p-1 text-sm font-bold focus:outline-none focus:border-indigo-600 bg-white"
-                  >
-                    <option value="">-- Select Truck --</option>
-                    {availableTrucks
-                      .map(truck => (
-                        <option key={truck.id} value={truck.id}>{truck.truckNo}</option>
-                      ))
-                    }
-                  </select>
-                  {modalTruckId ? null : (
-                    <div className="mt-2 text-[10px] font-bold uppercase text-red-700">
-                      Only EMPTY internal trucks are available for loading.
-                    </div>
-                  )}
-                  <div className="mt-3 text-[10px] text-slate-500 uppercase font-black mb-1">Manual Truck No</div>
                   <input
+                    list="pending-loading-truck-options"
                     value={modalManualTruckNo}
                     onChange={(e) => {
-                      setModalManualTruckNo(e.target.value.toUpperCase());
-                      if (e.target.value.trim()) setModalTruckId("");
+                      const value = e.target.value.toUpperCase();
+                      const match = availableTrucks.find((truck) => truck.truckNo.trim().toUpperCase() === value.trim().toUpperCase());
+                      setModalManualTruckNo(value);
+                      setModalTruckId(match?.id || "");
                     }}
-                    placeholder="Enter outside truck no"
+                    placeholder="Select or enter truck no"
                     className="w-full border-2 border-black rounded p-1 text-sm font-bold uppercase focus:outline-none focus:border-indigo-600 bg-white"
                   />
+                  <datalist id="pending-loading-truck-options">
+                    {availableTrucks.map((truck) => (
+                      <option key={truck.id} value={truck.truckNo} />
+                    ))}
+                  </datalist>
+                  <div className="mt-2 text-[10px] font-bold uppercase text-red-700">
+                    Suggestions show only EMPTY internal trucks. Type outside truck no in this same box.
+                  </div>
                 </div>
               </div>
 

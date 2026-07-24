@@ -119,14 +119,15 @@ export function DirectLoadingSlipModal({
   );
 
   const previewSlip = useMemo<LoadingSlip | null>(() => {
-    const manualTruckNo = draft.manualTruckNo.trim();
-    if (!company || !item || (!draft.truckId && !manualTruckNo) || (draft.truckId && manualTruckNo) || !(Number(draft.loadedQty || 0) > 0)) return null;
+    const truckNoInput = draft.manualTruckNo.trim();
+    const matchedTruck = availableTrucks.find((truck) => truck.truckNo.trim().toUpperCase() === truckNoInput.toUpperCase());
+    if (!company || !item || !truckNoInput || !(Number(draft.loadedQty || 0) > 0)) return null;
     return {
       id: "direct-preview",
       slipNo: "",
       date: draft.date,
-      truckId: draft.truckId,
-      truckNo: manualTruckNo || availableTrucks.find((truck) => truck.id === draft.truckId)?.truckNo || undefined,
+      truckId: matchedTruck?.id || "",
+      truckNo: truckNoInput || undefined,
       loadingSource: "DIRECT",
       companyId: company.id,
       companyName: company.name,
@@ -192,7 +193,7 @@ export function DirectLoadingSlipModal({
 
   const handleSave = async () => {
     if (!previewSlip) {
-      alert("Please select company, item, either internal truck or manual truck no, and loaded qty.");
+      alert("Please select company, item, truck number, and loaded qty.");
       return;
     }
     setIsSaving(true);
@@ -270,32 +271,30 @@ export function DirectLoadingSlipModal({
                   </td>
                   <td className="w-1/2 p-3 align-top">
                     {field(
-                      "Truck",
-                      <select
-                        value={draft.truckId}
-                        onChange={(e) => setDraft((prev) => ({ ...prev, truckId: e.target.value, manualTruckNo: e.target.value ? "" : prev.manualTruckNo }))}
-                        className="w-full rounded border border-black px-3 py-2 text-sm"
-                      >
-                        <option value="">Select Truck</option>
-                        {availableTrucks.map((row) => (
-                          <option key={row.id} value={row.id}>
-                            {row.truckNo}
-                          </option>
-                        ))}
-                      </select>,
-                      true
-                    )}
-                    <div className="mt-3">
-                      {field(
-                        "Manual Truck No",
+                      "Truck Number",
+                      <>
                         <input
+                          list="direct-loading-truck-options"
                           value={draft.manualTruckNo}
-                          onChange={(e) => setDraft((prev) => ({ ...prev, manualTruckNo: e.target.value.toUpperCase(), truckId: e.target.value.trim() ? "" : prev.truckId }))}
-                          placeholder="Enter outside truck no"
+                          onChange={(e) => {
+                            const value = e.target.value.toUpperCase();
+                            const match = availableTrucks.find((truck) => truck.truckNo.trim().toUpperCase() === value.trim().toUpperCase());
+                            setDraft((prev) => ({ ...prev, manualTruckNo: value, truckId: match?.id || "" }));
+                          }}
+                          placeholder="Select or enter truck no"
                           className="w-full rounded border border-black px-3 py-2 text-sm uppercase"
                         />
-                      )}
-                    </div>
+                        <datalist id="direct-loading-truck-options">
+                          {availableTrucks.map((row) => (
+                            <option key={row.id} value={row.truckNo} />
+                          ))}
+                        </datalist>
+                        <div className="mt-2 text-[10px] font-bold uppercase text-red-700">
+                          Suggestions show only EMPTY internal trucks. Type outside truck no in this same box.
+                        </div>
+                      </>,
+                      true
+                    )}
                   </td>
                 </tr>
               </tbody>
