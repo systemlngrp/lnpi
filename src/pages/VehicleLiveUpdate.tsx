@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CheckCircle, ChevronDown, Copy, RotateCcw, Truck as TruckIcon } from "lucide-react";
+import { CheckCircle, ChevronDown, RotateCcw, Truck as TruckIcon } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type { Company, Truck, TruckLiveStatus } from "../types";
 import { TRUCK_LIVE_STATUSES } from "../lib/truckStatus";
@@ -242,23 +242,6 @@ export function VehicleLiveUpdate() {
           </button>
         </div>
       </div>
-      <div className="mx-auto flex w-full max-w-md justify-end">
-        <button
-          type="button"
-          onClick={() => {
-            const url = new URL("/driver-status", window.location.origin).toString();
-            void navigator.clipboard.writeText(url).then(
-              () => setMessage("Driver form link copied."),
-              () => setError("Unable to copy driver form link.")
-            );
-          }}
-          className="inline-flex items-center justify-center gap-2 rounded border-2 border-black bg-white px-4 py-3 text-sm font-black uppercase text-black hover:bg-slate-50"
-        >
-          <Copy size={16} />
-          Copy Driver Form Link
-        </button>
-      </div>
-
-    </div>
+</div>
   );
 }
