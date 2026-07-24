@@ -4,6 +4,10 @@ import { useData } from "../hooks/useData";
 import type { Company, DispatchPlan, LoadingSlip, Order, Truck, TruckStatusLog } from "../types";
 import { formatTruckDateTime, formatTruckDuration, normalizeTruckStatus, TRUCK_LIVE_STATUSES, TRUCK_STATUS_STYLES } from "../lib/truckStatus";
 
+function isInternalTruck(truck: Truck) {
+  return String(truck.truckType || "").trim().toLowerCase() === "internal";
+}
+
 function getSortTime(value?: string) {
   const time = value ? new Date(value).getTime() : 0;
   return Number.isFinite(time) ? time : 0;
