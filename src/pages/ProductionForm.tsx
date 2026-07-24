@@ -24,6 +24,7 @@ import { fetchNpdItems } from "../lib/npdItems";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getProductionMatchingFields } from "../lib/productionMatching";
 import { buildScheduleConsumptionByScheduleId } from "../lib/productionScheduleQty";
+import { findRealizationTargetForDate, parseRealizationTargets } from "../lib/realizationTargets";
 
 const getJobMasterEntityName = (source: "PHP" | "PLATE") =>
   source === "PHP" ? "php_job_master" : "plate_job_master";
@@ -319,6 +320,14 @@ export function ProductionForm() {
   const reelFormulaMode = settings[0]?.reelAsPerCalculation || REEL_FORMULA_MODE.breadthHeightBased;
   const cuttingSizeFormulaMode = settings[0]?.cuttingSizeAsPerCalculation || CUTTING_SIZE_FORMULA_MODE.currentLogic;
   const gsmFormulaMode = settings[0]?.gsmAsPerCalculation || GSM_FORMULA_MODE.currentLogic;
+  const realizationTargets = useMemo(
+    () => parseRealizationTargets(settings[0]?.realizationPerKgTargets),
+    [settings]
+  );
+  const selectedRealizationTarget = useMemo(
+    () => findRealizationTargetForDate(realizationTargets, formData.date),
+    [formData.date, realizationTargets]
+  );
   const visibleColumns = useMemo(
     () => new Set(parseProductionFormVisibleColumns(settings[0]?.productionFormVisibleColumns)),
     [settings]
@@ -436,6 +445,14 @@ export function ProductionForm() {
     currentGsm > 0 &&
     leastGsm > 0 &&
     currentGsm > leastGsm;
+
+  const realizationValue = Number(formData.realizationPerKg || 0);
+  const realizationTargetValue = Number(selectedRealizationTarget?.value || 0);
+  const realizationBelowTarget =
+    Boolean(selectedRealizationTarget) &&
+    realizationValue > 0 &&
+    realizationTargetValue > 0 &&
+    realizationValue < realizationTargetValue;
 
   useEffect(() => {
     if (selectedItem) {
@@ -625,22 +642,24 @@ export function ProductionForm() {
         ? (reelAsPerCalc * cutting * (gsm - top) * paperRequiredNos) / 1000000000
         : "";
     const totalJobWeight = topPaperWeightKg !== "" && linerWeightKg !== "" ? topPaperWeightKg + linerWeightKg : "";
-    const totalJobWeightValue = totalJobWeight === "" ? 0 : Number(totalJobWeight || 0);
 
-    // NEW requirement:
-    // Sheet weight = Total Weight / Planned Qty
-    // Total Weight = Total Job Weight
     const plannedQty = qty;
-    const sheetWeight = plannedQty > 0 ? totalJobWeightValue / plannedQty : 0;
-    const totalPaperWeight = totalJobWeightValue;
-    const totalWeightOfSet = sheetWeight + plateWeight;
+    const reelActualWithTrimming = Number(formData.reelActualWithTrimming || 0);
+    const sheetWeight =
+      ups > 0
+        ? ((reelActualWithTrimming * cutting * gsm) / 1000000000) / ups
+        : "";
+    const sheetWeightValue = sheetWeight === "" ? 0 : Number(sheetWeight || 0);
+    const totalPaperWeight = sheetWeight === "" ? "" : sheetWeightValue * plannedQty;
+    const totalWeightOfSet = sheetWeight === "" ? "" : sheetWeightValue + plateWeight;
+    const totalWeightOfSetValue = totalWeightOfSet === "" ? 0 : Number(totalWeightOfSet || 0);
 
-    // Realization per kg = Rate / Total Wt of Set
-    const realizationPerKg = totalWeightOfSet > 0 ? rate / totalWeightOfSet : "";
+    const realizationPerKg =
+      totalWeightOfSetValue > 0 ? (rate / totalWeightOfSetValue) * noOfParts : "";
 
     const wastage =
-      prodFromFFG > 0 && sheetWeight > 0 && actualPaperUsed > 0
-        ? parseFloat((100 - ((prodFromFFG * sheetWeight) / actualPaperUsed) * 100).toFixed(2))
+      prodFromFFG > 0 && sheetWeightValue > 0 && actualPaperUsed > 0
+        ? parseFloat((100 - ((prodFromFFG * sheetWeightValue) / actualPaperUsed) * 100).toFixed(2))
         : "";
 
     let lineRequiredNos: number | "" = "";
@@ -661,9 +680,9 @@ export function ProductionForm() {
       gsm: round2(gsm),
       reelAsPerCalc: round2(reelAsPerCalc),
       cuttingWithTrimming: round2(cutting),
-      sheetWeight: round2(sheetWeight),
-      totalPaperWeight: round2(totalPaperWeight),
-      totalWeightOfSet: round2(totalWeightOfSet),
+      sheetWeight: sheetWeight === "" ? "" : round2(sheetWeight),
+      totalPaperWeight: totalPaperWeight === "" ? "" : round2(totalPaperWeight),
+      totalWeightOfSet: totalWeightOfSet === "" ? "" : round2(totalWeightOfSet),
       realizationPerKg: realizationPerKg === "" ? "" : round2(realizationPerKg),
       productionInMeter: round2(productionInMeter),
       plannedProductionInMeter: plannedProductionInMeter === "" ? "" : round2(Number(plannedProductionInMeter)),
@@ -1092,7 +1111,7 @@ export function ProductionForm() {
                 helpText="If ERP Code is blank, keep blank. If PLY is 3, use the same value as Paper Required (Nos). If PLY is 5, use Paper Required (Nos) x 2. If PLY is 2 and TYPE is 2 PLY LINER, use Planned Quantity divided by (UPS x No. of ups in Cutting (For Plates))."
               /> : null}
 
-              {showField("Sheet Weight") ? <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly helpText="Formula: Total Job Weight / Planned Qty." /> : null}
+              {showField("Sheet Weight") ? <FormInput label="Sheet Weight" value={formData.sheetWeight} readOnly helpText="Formula: ((Reel Actual with Trimming x Cutting with Trimming x GSM) / 1,000,000,000) / UPS. If UPS is 0 or blank, this stays blank." /> : null}
               {showField("Plate/PHP Weight") ? <FormInput label="Plate/PHP Weight" value={formData.plateWeight} readOnly type="number" step="0.00001" helpText="Auto-fetched from NPD Master for the selected item and divided by 1000." /> : null}
               {showField("Total Paper Wt") ? <FormInput label="Total Paper Wt" value={formData.totalPaperWeight} readOnly helpText="Formula: Sheet Weight x Planned Qty (equals Total Job Weight)." /> : null}
 
@@ -1101,7 +1120,13 @@ export function ProductionForm() {
               {showField("Actual Paper Used") ? <FormInput label="Actual Paper Used" value={formData.actualPaperUsed} readOnly type="number" step="0.00001" helpText="Workflow-managed field. It is derived from Material Issue minus Material Return against the job, and then used in Avg Weight and Wastage calculations." /> : null}
 
               {showField("Rate") ? <FormInput label="Rate" value={formData.rate} readOnly type="number" helpText="Auto-fetched from the selected order." /> : null}
-              {showField("Realization/KG") ? <FormInput label="Realization/KG" value={formData.realizationPerKg} readOnly helpText="Formula: Rate / Total Wt of Set." /> : null}
+              {showField("Realization/KG") ? <FormInput
+                label="Realization/KG"
+                value={formData.realizationPerKg}
+                readOnly
+                inputClassName={realizationBelowTarget ? "border-red-600 bg-red-50 text-red-800 font-bold" : undefined}
+                helpText="Formula: (Rate / Total Wt of Set) x No. of Parts. Turns red when below the configured realization target for this production date."
+              /> : null}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
@@ -1175,6 +1200,7 @@ function FormInput({
   step = "any",
   readOnly = false,
   required = false,
+  inputClassName,
   helpText,
 }: {
   label: string;
@@ -1184,6 +1210,7 @@ function FormInput({
   step?: string;
   readOnly?: boolean;
   required?: boolean;
+  inputClassName?: string;
   helpText?: string;
 }) {
   return (
@@ -1201,7 +1228,8 @@ function FormInput({
         onChange={(e) => onChange?.(type === "number" ? (e.target.value === "" ? "" : parseFloat(e.target.value)) : e.target.value)}
         className={cn(
           "border border-black rounded px-2 py-1 text-sm text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600",
-          readOnly ? "bg-slate-100 cursor-not-allowed" : "bg-yellow-100"
+          readOnly ? "bg-slate-100 cursor-not-allowed" : "bg-yellow-100",
+          inputClassName
         )}
       />
     </div>
