@@ -1011,6 +1011,10 @@ export interface AuditDashboardSnapshot {
   consumptionValueTally: number;
   saleValueTally: number;
   debitNoteTally: number;
+  invoiceCountTally?: number;
+  consumptionCountTally?: number;
+  saleCountTally?: number;
+  debitNoteCountTally?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

@@ -4411,6 +4411,10 @@ await db.query(`
           \`consumptionValueTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`saleValueTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`debitNoteTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`invoiceCountTally\` INT NOT NULL DEFAULT 0,
+          \`consumptionCountTally\` INT NOT NULL DEFAULT 0,
+          \`saleCountTally\` INT NOT NULL DEFAULT 0,
+          \`debitNoteCountTally\` INT NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -5181,6 +5185,10 @@ await db.query(`
         { table: "audit_dashboard_snapshots", column: "consumptionValueTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "saleValueTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "debitNoteTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "invoiceCountTally", type: "INT NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "consumptionCountTally", type: "INT NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "saleCountTally", type: "INT NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "debitNoteCountTally", type: "INT NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "audit_dashboard_snapshots", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "users", column: "role", type: "VARCHAR(20) NOT NULL DEFAULT 'Employee'" },

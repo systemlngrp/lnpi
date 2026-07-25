@@ -108,6 +108,8 @@ export function InvoicesMaster() {
 
   const getRoundOff = (invoice: Invoice) => Number(invoice.roundOff || 0);
   const getOtherCharges = (invoice: Invoice) => Number(invoice.otherCharges || 0);
+  const getGstTotal = (invoice: Invoice) =>
+    Number(invoice.cgst || 0) + Number(invoice.sgst || 0) + Number(invoice.igst || 0);
   const getGrandTotal = (invoice: Invoice) =>
     Number(invoice.totalAfterGst || 0) + getOtherCharges(invoice) + getRoundOff(invoice);
 
@@ -317,6 +319,14 @@ export function InvoicesMaster() {
       });
   }, [invoices, companies, searchTerm, companyFilter, itemFilter, lineItems, npdItems, slips, trucks, dispatchPlans, orders]);
 
+  const billingSummary = useMemo(
+    () => ({
+      totalCount: processedInvoices.length,
+      totalAmount: processedInvoices.reduce((sum, invoice) => sum + getGrandTotal(invoice), 0),
+    }),
+    [processedInvoices]
+  );
+
   const companyOptions = useMemo(() => {
     const names = Array.from(new Set(invoices.map((invoice) => companies.find((company) => company.id === invoice.companyId)?.name || "").filter(Boolean)));
     return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })).map((name) => ({ value: name, label: name }));
@@ -376,8 +386,21 @@ export function InvoicesMaster() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded border border-black bg-slate-50 px-4 py-3">
+          <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Total Count</div>
+          <div className="mt-1 text-xl font-black text-black">{billingSummary.totalCount.toLocaleString()}</div>
+        </div>
+        <div className="rounded border border-black bg-slate-50 px-4 py-3">
+          <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Total Amount</div>
+          <div className="mt-1 text-xl font-black text-indigo-700">
+            {billingSummary.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white border border-black rounded shadow-sm overflow-x-auto overflow-y-hidden">
-        <table className="min-w-[1600px] divide-y divide-black border-collapse">
+        <table className="min-w-[1800px] divide-y divide-black border-collapse">
           <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black">
               <th className="w-10 px-4 py-3"></th>
@@ -391,6 +414,8 @@ export function InvoicesMaster() {
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Remark</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Tally Id</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Item Summary</th>
+              <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Amount Before GST</th>
+              <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">GST</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-black uppercase tracking-wider">Total Amount</th>
               <th className="px-6 py-3 text-center text-xs font-bold text-black uppercase tracking-wider">Action</th>
             </tr>
@@ -398,7 +423,7 @@ export function InvoicesMaster() {
           <tbody className="bg-white divide-y divide-black">
             {paginatedInvoices.length === 0 ? (
               <tr>
-                <td colSpan={13} className="px-6 py-12 text-center text-slate-500 italic">
+                <td colSpan={15} className="px-6 py-12 text-center text-slate-500 italic">
                   No invoices found.
                 </td>
               </tr>
@@ -472,6 +497,12 @@ export function InvoicesMaster() {
                         {invoice.itemSummary}
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-slate-900">
+                      {Number(invoice.totalBeforeGst || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-slate-900">
+                      {getGstTotal(invoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-indigo-700">
                       {getGrandTotal(invoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
@@ -535,7 +566,7 @@ export function InvoicesMaster() {
                   </tr>
                   {expandedRows.has(invoice.id) && (
                     <tr className="bg-slate-50">
-                      <td colSpan={13} className="px-12 py-4">
+                      <td colSpan={15} className="px-12 py-4">
                         <div className="border-2 border-black rounded overflow-x-auto overflow-y-hidden shadow-sm">
                           <table className="min-w-[1100px] divide-y divide-black">
                             <thead className="sticky top-0 z-30 bg-slate-200">

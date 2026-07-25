@@ -25,19 +25,23 @@ type AuditMetricKey = "invoiceValue" | "consumptionValue" | "saleValue" | "debit
 type AuditMetric = {
   key: AuditMetricKey;
   label: string;
-  tallyField: keyof Pick<
-    AuditDashboardSnapshot,
-    "invoiceValueTally" | "consumptionValueTally" | "saleValueTally" | "debitNoteTally"
-  >;
   appValue: number;
   tallyValue: number;
+  appCount: number;
+  tallyCount: number;
   difference: number;
 };
 
-type TallyValues = Pick<
-  AuditDashboardSnapshot,
-  "invoiceValueTally" | "consumptionValueTally" | "saleValueTally" | "debitNoteTally"
->;
+type TallyValues = {
+  invoiceValueTally: number;
+  consumptionValueTally: number;
+  saleValueTally: number;
+  debitNoteTally: number;
+  invoiceCountTally: number;
+  consumptionCountTally: number;
+  saleCountTally: number;
+  debitNoteCountTally: number;
+};
 
 function roundMoney(value: number) {
   return Number(Number(value || 0).toFixed(2));
@@ -45,6 +49,10 @@ function roundMoney(value: number) {
 
 function formatMoney(value: number) {
   return roundMoney(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatCount(value: number) {
+  return Number(value || 0).toLocaleString("en-IN");
 }
 
 function getSnapshotId() {
@@ -73,6 +81,10 @@ function getSnapshotValues(snapshot?: AuditDashboardSnapshot): TallyValues {
     consumptionValueTally: roundMoney(Number(snapshot?.consumptionValueTally || 0)),
     saleValueTally: roundMoney(Number(snapshot?.saleValueTally || 0)),
     debitNoteTally: roundMoney(Number(snapshot?.debitNoteTally || 0)),
+    invoiceCountTally: Number(snapshot?.invoiceCountTally || 0),
+    consumptionCountTally: Number(snapshot?.consumptionCountTally || 0),
+    saleCountTally: Number(snapshot?.saleCountTally || 0),
+    debitNoteCountTally: Number(snapshot?.debitNoteCountTally || 0),
   };
 }
 
@@ -148,25 +160,29 @@ export function AuditDashboard() {
         return sum + Number(line.qty || 0) * Number(material?.openingRate || 0);
       }, 0);
 
-    return {
+return {
       invoiceValue: roundMoney(
         materialIn.reduce((sum, entry) => {
           const afterGst = Number(entry.totalInvoiceValueAfterGst || 0);
           return sum + (afterGst > 0 ? afterGst : Number(entry.totalInvoiceValue || 0));
         }, 0)
       ),
+      invoiceCount: materialIn.length,
       consumptionValue: roundMoney(issueReelValue + issueMaterialValue - returnReelValue - returnMaterialValue),
+      consumptionCount: materialIssues.length + materialReturns.length,
       saleValue: roundMoney(invoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0)),
+      saleCount: invoices.length,
       debitNote: roundMoney(materialIn.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
+      debitNoteCount: materialIn.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
     };
   }, [invoices, issueReelLines, materialIn, materialIssueLines, materialIssues, materialReturnLines, materialReturns, materials, packingSlips, returnReelLines]);
 
   const metrics = useMemo<AuditMetric[]>(() => {
     const baseMetrics: Array<Omit<AuditMetric, "difference">> = [
-      { key: "invoiceValue", label: "Invoice Value", tallyField: "invoiceValueTally", appValue: appValues.invoiceValue, tallyValue: tallyValues.invoiceValueTally },
-      { key: "consumptionValue", label: "Consumption Value", tallyField: "consumptionValueTally", appValue: appValues.consumptionValue, tallyValue: tallyValues.consumptionValueTally },
-      { key: "saleValue", label: "Sale Value", tallyField: "saleValueTally", appValue: appValues.saleValue, tallyValue: tallyValues.saleValueTally },
-      { key: "debitNote", label: "Debit Note", tallyField: "debitNoteTally", appValue: appValues.debitNote, tallyValue: tallyValues.debitNoteTally },
+      { key: "invoiceValue", label: "Invoice Value", appValue: appValues.invoiceValue, tallyValue: tallyValues.invoiceValueTally, appCount: appValues.invoiceCount, tallyCount: tallyValues.invoiceCountTally },
+      { key: "consumptionValue", label: "Consumption Value", appValue: appValues.consumptionValue, tallyValue: tallyValues.consumptionValueTally, appCount: appValues.consumptionCount, tallyCount: tallyValues.consumptionCountTally },
+      { key: "saleValue", label: "Sale Value", appValue: appValues.saleValue, tallyValue: tallyValues.saleValueTally, appCount: appValues.saleCount, tallyCount: tallyValues.saleCountTally },
+      { key: "debitNote", label: "Debit Note", appValue: appValues.debitNote, tallyValue: tallyValues.debitNoteTally, appCount: appValues.debitNoteCount, tallyCount: tallyValues.debitNoteCountTally },
     ];
 
     return baseMetrics.map((metric) => ({ ...metric, difference: roundMoney(metric.tallyValue - metric.appValue) }));
@@ -183,7 +199,7 @@ export function AuditDashboard() {
       "",
       ...differenceMetrics.map(
         (metric) =>
-          `${metric.label}: Tally ${formatMoney(metric.tallyValue)} | App ${formatMoney(metric.appValue)} | Difference ${formatMoney(metric.difference)}`
+          `${metric.label}: Tally Count ${formatCount(metric.tallyCount)} | App Count ${formatCount(metric.appCount)} | Tally ${formatMoney(metric.tallyValue)} | App ${formatMoney(metric.appValue)} | Difference ${formatMoney(metric.difference)}`
       ),
     ];
     return lines.join("\n");
@@ -251,6 +267,8 @@ export function AuditDashboard() {
             <thead className="bg-slate-100">
               <tr className="divide-x divide-slate-900 border-b-2 border-slate-900">
                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Particular</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Tally Count</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">App Count</th>
                 <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Tally Value</th>
                 <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">App Value</th>
                 <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Difference</th>
@@ -263,6 +281,8 @@ export function AuditDashboard() {
                 return (
                   <tr key={metric.key} className={cn("divide-x divide-slate-900", index % 2 === 0 ? "bg-white" : "bg-slate-50")}>
                     <td className="px-3 py-3 text-sm font-black uppercase tracking-wide text-slate-900">{metric.label}</td>
+                    <td className="px-3 py-3 text-right text-sm font-black text-slate-900">{formatCount(metric.tallyCount)}</td>
+                    <td className="px-3 py-3 text-right text-sm font-black text-indigo-800">{formatCount(metric.appCount)}</td>
                     <td className="px-3 py-3 text-right text-sm font-black text-slate-900">{formatMoney(metric.tallyValue)}</td>
                     <td className="px-3 py-3 text-right text-sm font-black text-indigo-800">{formatMoney(metric.appValue)}</td>
                     <td className={cn("px-3 py-3 text-right text-sm font-black", mismatched ? "text-red-700" : "text-emerald-700")}>{formatMoney(metric.difference)}</td>
