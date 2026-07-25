@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useData } from "../hooks/useData";
-import type { FixedMonthlyExpense, Material, MaterialIn, MaterialIssue, MaterialIssueLine } from "../types";
+import type { Consumption, FixedMonthlyExpense, Material, MaterialIn, MaterialIssue, MaterialIssueLine, Production } from "../types";
 import { FY_MONTHS, getCurrentFinancialYear, getFinancialYearFromDate, getFinancialYearOptions } from "../lib/financialYear";
 import { resolveMaterialIssueRate } from "../lib/materialMovement";
 
@@ -26,6 +26,10 @@ function formatMoney(value: number) {
   return Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function isConsumableIssue(issue?: MaterialIssue) {
   const type = String(issue?.issueType || "").toLowerCase();
   return type === "without job" || type === "general";
@@ -46,6 +50,8 @@ export function ConversionCostMonthWiseReport() {
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [fixedExpenses] = useData<FixedMonthlyExpense>("fixed_monthly_expenses", []);
+  const [consumptions] = useData<Consumption>("consumptions", []);
+  const [productions] = useData<Production>("productions", []);
 
   const [fy, setFy] = useState(getCurrentFinancialYear());
   const [monthFilter, setMonthFilter] = useState("");
@@ -78,14 +84,33 @@ export function ConversionCostMonthWiseReport() {
         .filter((record) => record.fy === fy && Number(record.month) === month.value)
         .reduce((sum, record) => sum + Number(record.totalAmount || 0), 0);
 
+      const totalConsumption = consumptions.reduce((sum, consumption) => {
+        if (consumption.status === "Cancelled") return sum;
+        if (getFinancialYearFromDate(consumption.date) !== fy) return sum;
+        const consumptionMonth = consumption.date ? new Date(consumption.date).getMonth() + 1 : 0;
+        if (consumptionMonth !== month.value) return sum;
+        return sum + Number(consumption.qty || 0);
+      }, 0);
+
+      const actualPaperUsed = productions.reduce((sum, production) => {
+        if (production.status === "Cancelled") return sum;
+        if (getFinancialYearFromDate(production.date) !== fy) return sum;
+        const productionMonth = production.date ? new Date(production.date).getMonth() + 1 : 0;
+        if (productionMonth !== month.value) return sum;
+        return sum + Number(production.actualPaperUsed || 0);
+      }, 0);
+
       return {
         month: month.label,
         monthValue: month.value,
         consumables: round2(consumables),
         fixed: round2(fixed),
+        totalConsumption: round2(totalConsumption),
+        actualPaperUsed: round2(actualPaperUsed),
+        ratio: actualPaperUsed > 0 ? round2(totalConsumption / actualPaperUsed) : 0,
       };
     });
-  }, [fy, issueLines, materialIn, materialIssues, materials, monthFilter, normalizedFixedExpenses]);
+  }, [consumptions, fy, issueLines, materialIn, materialIssues, materials, monthFilter, normalizedFixedExpenses, productions]);
 
   const totals = useMemo(
     () =>
@@ -93,11 +118,15 @@ export function ConversionCostMonthWiseReport() {
         (sum, row) => ({
           consumables: sum.consumables + row.consumables,
           fixed: sum.fixed + row.fixed,
+          totalConsumption: sum.totalConsumption + row.totalConsumption,
+          actualPaperUsed: sum.actualPaperUsed + row.actualPaperUsed,
         }),
-        { consumables: 0, fixed: 0 }
+        { consumables: 0, fixed: 0, totalConsumption: 0, actualPaperUsed: 0 }
       ),
     [rows]
   );
+
+  const totalRatio = totals.actualPaperUsed > 0 ? round2(totals.totalConsumption / totals.actualPaperUsed) : 0;
 
   const clearFilters = () => {
     setFy(getCurrentFinancialYear());
@@ -146,12 +175,15 @@ export function ConversionCostMonthWiseReport() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-900 bg-white">
-        <table className="w-full min-w-[720px] border-collapse text-sm">
+        <table className="w-full min-w-[980px] border-collapse text-sm">
           <thead>
             <tr className="bg-slate-100">
               <th className="border border-gray-900 p-2 text-left">Month</th>
               <th className="border border-gray-900 p-2 text-right">Consumables</th>
               <th className="border border-gray-900 p-2 text-right">Fixed and Semi Variable Expenses</th>
+              <th className="border border-gray-900 p-2 text-right">Total Consumption</th>
+              <th className="border border-gray-900 p-2 text-right">Actual Paper Used</th>
+              <th className="border border-gray-900 p-2 text-right">Ratio</th>
             </tr>
           </thead>
           <tbody>
@@ -160,6 +192,9 @@ export function ConversionCostMonthWiseReport() {
                 <td className="border border-gray-900 p-2 font-bold">{row.month}</td>
                 <td className="border border-gray-900 p-2 text-right">{formatMoney(row.consumables)}</td>
                 <td className="border border-gray-900 p-2 text-right">{formatMoney(row.fixed)}</td>
+                <td className="border border-gray-900 p-2 text-right">{formatNumber(row.totalConsumption)}</td>
+                <td className="border border-gray-900 p-2 text-right">{formatNumber(row.actualPaperUsed)}</td>
+                <td className="border border-gray-900 p-2 text-right">{formatNumber(row.ratio)}</td>
               </tr>
             ))}
           </tbody>
@@ -168,6 +203,9 @@ export function ConversionCostMonthWiseReport() {
               <td className="border border-gray-900 p-2 text-right">Total</td>
               <td className="border border-gray-900 p-2 text-right">{formatMoney(totals.consumables)}</td>
               <td className="border border-gray-900 p-2 text-right">{formatMoney(totals.fixed)}</td>
+              <td className="border border-gray-900 p-2 text-right">{formatNumber(totals.totalConsumption)}</td>
+              <td className="border border-gray-900 p-2 text-right">{formatNumber(totals.actualPaperUsed)}</td>
+              <td className="border border-gray-900 p-2 text-right">{formatNumber(totalRatio)}</td>
             </tr>
           </tfoot>
         </table>
