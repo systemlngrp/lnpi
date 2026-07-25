@@ -170,7 +170,16 @@ return {
       invoiceCount: materialIn.length,
       consumptionValue: roundMoney(issueReelValue + issueMaterialValue - returnReelValue - returnMaterialValue),
       consumptionCount: materialIssues.length + materialReturns.length,
-      saleValue: roundMoney(invoices.reduce((sum, invoice) => sum + Number(invoice.totalAfterGst || 0), 0)),
+      saleValue: roundMoney(
+        invoices.reduce(
+          (sum, invoice) =>
+            sum +
+            Number(invoice.totalAfterGst || 0) +
+            Number(invoice.otherCharges || 0) +
+            Number(invoice.roundOff || 0),
+          0
+        )
+      ),
       saleCount: invoices.length,
       debitNote: roundMoney(materialIn.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
       debitNoteCount: materialIn.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
