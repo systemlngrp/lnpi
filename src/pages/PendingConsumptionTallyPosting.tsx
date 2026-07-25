@@ -17,6 +17,12 @@ function formatMoney(value?: number) {
   });
 }
 
+function getIssueLineValue(line: MaterialIssueLine) {
+  const amount = Number(line.amount || 0);
+  if (amount > 0) return amount;
+  return Number(line.qty || 0) * Number(line.rate || 0);
+}
+
 export function PendingConsumptionTallyPosting() {
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [issueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
@@ -57,6 +63,23 @@ export function PendingConsumptionTallyPosting() {
     return issueMap;
   }, [issueLines, materialNameMap]);
 
+  const itemStatsByIssueId = useMemo(() => {
+    const statsMap = new Map<string, { itemCount: number; totalValue: number }>();
+
+    for (const line of issueLines) {
+      const issueId = String(line.materialIssueId || "").trim();
+      if (!issueId) continue;
+
+      const existing = statsMap.get(issueId) || { itemCount: 0, totalValue: 0 };
+      statsMap.set(issueId, {
+        itemCount: existing.itemCount + 1,
+        totalValue: existing.totalValue + getIssueLineValue(line),
+      });
+    }
+
+    return statsMap;
+  }, [issueLines]);
+
   const pendingRows = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return [...materialIssues]
@@ -93,7 +116,7 @@ export function PendingConsumptionTallyPosting() {
 
     return (
       <tr key={`${row.id}-details`} className="bg-slate-50">
-        <td colSpan={6} className="border-t border-black px-3 py-2">
+        <td colSpan={8} className="border-t border-black px-3 py-2">
           <div className="overflow-hidden rounded border border-black bg-white">
             <table className="min-w-full divide-y divide-black text-[11px]">
               <thead className="bg-slate-100">
@@ -119,7 +142,7 @@ export function PendingConsumptionTallyPosting() {
                       <td className="px-2 py-1 text-right font-semibold">{Number(line.qty || 0).toLocaleString()}</td>
                       <td className="px-2 py-1">{line.uom || "-"}</td>
                       <td className="px-2 py-1 text-right font-semibold">{formatMoney(line.rate)}</td>
-                      <td className="px-2 py-1 text-right font-black text-emerald-700">{formatMoney(line.amount)}</td>
+                      <td className="px-2 py-1 text-right font-black text-emerald-700">{formatMoney(getIssueLineValue(line))}</td>
                     </tr>
                   ))
                 )}
@@ -153,6 +176,8 @@ export function PendingConsumptionTallyPosting() {
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Issue No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Consumption No</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
+                <th className="px-4 py-3 text-right text-xs font-bold uppercase">No. of Items</th>
+                <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Value</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remark</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Error</th>
@@ -161,13 +186,14 @@ export function PendingConsumptionTallyPosting() {
             <tbody className="divide-y divide-black">
               {pendingRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-600 font-medium">
+                  <td colSpan={8} className="px-6 py-8 text-center text-slate-600 font-medium">
                     No pending Consumption Tally posting rows found.
                   </td>
                 </tr>
               ) : (
                 pendingRows.map((row) => {
                   const isExpanded = expandedIssueId === row.id;
+                  const itemStats = itemStatsByIssueId.get(row.id) || { itemCount: 0, totalValue: 0 };
                   return (
                     <React.Fragment key={row.id}>
                       <tr className="divide-x divide-black hover:bg-slate-50">
@@ -186,6 +212,8 @@ export function PendingConsumptionTallyPosting() {
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-indigo-700">{row.consumptionTransactionNo || "-"}</td>
                         <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
+                        <td className="px-4 py-3 text-right text-sm font-black text-slate-800">{itemStats.itemCount.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right text-sm font-black text-emerald-700">{formatMoney(itemStats.totalValue)}</td>
                         <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
                         <td className="px-4 py-3 text-sm">{row.tallyPostingRemark || row.remarks || "-"}</td>
                         <td className="px-4 py-3 text-sm text-red-700">{row.tallyPostingError || "-"}</td>
