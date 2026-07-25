@@ -86,7 +86,7 @@ export function PendingConsumptionTallyPosting() {
       .filter((row) => isWithoutJobIssue(row.issueType))
       .filter((row) => String(row.consumptionTransactionNo || "").trim() !== "")
       .filter((row) => String(row.tallyTimestamp || "").trim() === "")
-      .filter((row) => String(row.tallyPostingStatus || "").trim().toLowerCase() !== "not applicable")
+      .filter((row) => !["not applicable", "cancelled"].includes(String(row.tallyPostingStatus || "").trim().toLowerCase()))
       .filter((row) => {
         if (!q) return true;
         const haystack = [

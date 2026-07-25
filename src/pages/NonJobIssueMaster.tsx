@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from "react";
+import { useAuth } from "../auth/AuthContext";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialIssueReelLine } from "../types";
 import { TableControls } from "../components/TableControls";
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, XCircle } from "lucide-react";
 import { formatDate } from "../lib/serial";
 import { resolveMaterialIssueRate } from "../lib/materialMovement";
 
@@ -11,6 +12,8 @@ function isWithoutJobIssue(issueType?: string) {
   const t = String(issueType || "").trim().toLowerCase();
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
 }
+
+const CANCEL_ALLOWED_EMAIL = "pankaj@bizskilledu.com";
 
 function DetailChip({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
@@ -29,6 +32,7 @@ function formatMoney(value?: number) {
 }
 
 export function NonJobIssueMaster() {
+  const { user } = useAuth();
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
@@ -37,7 +41,7 @@ export function NonJobIssueMaster() {
   const npdItems = useNpdItems();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [expandedIssueId, setExpandedIssueId] = useState<string | null>(null);
 
   const materialNameMap = useMemo(() => {
@@ -81,6 +85,9 @@ export function NonJobIssueMaster() {
     return issueMap;
   }, [issueLines, materialNameMap]);
 
+  const canCancelIssues = String(user?.email || "").trim().toLowerCase() === CANCEL_ALLOWED_EMAIL;
+  const mainTableColSpan = canCancelIssues ? 7 : 6;
+
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return [...materialIssues]
@@ -96,15 +103,28 @@ export function NonJobIssueMaster() {
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.issueNo || "").localeCompare(a.issueNo || ""));
   }, [itemNameByIssueId, materialIssues, searchTerm]);
 
-  const handleDelete = (id: string) => {
-    if (deletingId !== id) {
-      setDeletingId(id);
-      setTimeout(() => setDeletingId(null), 3000);
+  const handleCancel = (row: MaterialIssue) => {
+    if (cancellingId !== row.id) {
+      setCancellingId(row.id);
+      setTimeout(() => setCancellingId(null), 3000);
       return;
     }
-    setMaterialIssues((prev) => prev.filter((row) => row.id !== id));
-    if (expandedIssueId === id) setExpandedIssueId(null);
-    setDeletingId(null);
+
+    const cancelBy = user?.name || user?.email || CANCEL_ALLOWED_EMAIL;
+    setMaterialIssues((prev) =>
+      prev.map((entry) =>
+        entry.id === row.id
+          ? {
+              ...entry,
+              tallyPostingStatus: "Cancelled",
+              tallyPostingRemark: entry.tallyPostingRemark || `Cancelled by ${CANCEL_ALLOWED_EMAIL}`,
+              updatedBy: cancelBy,
+              updateTimestamp: new Date().toISOString(),
+            }
+          : entry
+      )
+    );
+    setCancellingId(null);
   };
 
   const renderDetailsRow = (row: MaterialIssue) => {
@@ -136,7 +156,7 @@ export function NonJobIssueMaster() {
 
     return (
       <tr key={`${row.id}-details`} className="bg-slate-50">
-        <td colSpan={7} className="border-t border-black px-3 py-2">
+        <td colSpan={mainTableColSpan} className="border-t border-black px-3 py-2">
           <div className="space-y-2 text-[11px]">
             <div className="flex flex-wrap gap-x-3 gap-y-1 rounded border border-slate-300 bg-white px-3 py-2">
               <DetailChip label="Issue" value={row.issueNo} />
@@ -267,13 +287,13 @@ export function NonJobIssueMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Tally Status</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Items</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remarks</th>
-                <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th>
+                {canCancelIssues ? <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-black">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">
+                  <td colSpan={mainTableColSpan} className="px-6 py-8 text-center text-slate-600 font-medium">
                     No Without Job material issues found.
                   </td>
                 </tr>
@@ -301,16 +321,19 @@ export function NonJobIssueMaster() {
                         <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
                         <td className="px-4 py-3 text-sm">{itemNameByIssueId.get(row.id) || "-"}</td>
                         <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            type="button"
-                            title={deletingId === row.id ? "Confirm delete" : "Delete"}
-                            onClick={() => handleDelete(row.id)}
-                            className={`${deletingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center justify-end`}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
+                        {canCancelIssues ? (
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              title={cancellingId === row.id ? "Confirm cancel" : "Cancel"}
+                              onClick={() => handleCancel(row)}
+                              disabled={String(row.tallyPostingStatus || "").trim().toLowerCase() === "cancelled"}
+                              className={`${cancellingId === row.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 disabled:cursor-not-allowed disabled:text-slate-400 font-bold inline-flex items-center justify-end`}
+                            >
+                              <XCircle size={16} />
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                       {isExpanded ? renderDetailsRow(row) : null}
                     </React.Fragment>
