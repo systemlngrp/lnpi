@@ -105,6 +105,10 @@ export function PendingNonJobMaterialIssue() {
       remarks: reason,
       notApplicable: "Yes",
       tallyPostingStatus: "Not Applicable",
+      tallyTimestamp: timestamp,
+      tallyLastAttemptAt: timestamp,
+      tallyPostedBy: "System User",
+      tallyPostingRemark: reason,
       updatedBy: "System User",
       updateTimestamp: timestamp,
     };

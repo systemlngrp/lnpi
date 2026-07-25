@@ -110,6 +110,7 @@ export function NonJobIssueMaster() {
       return;
     }
 
+    const timestamp = new Date().toISOString();
     const cancelBy = user?.name || user?.email || CANCEL_ALLOWED_EMAIL;
     setMaterialIssues((prev) =>
       prev.map((entry) =>
@@ -117,9 +118,12 @@ export function NonJobIssueMaster() {
           ? {
               ...entry,
               tallyPostingStatus: "Cancelled",
+              tallyTimestamp: timestamp,
+              tallyLastAttemptAt: timestamp,
+              tallyPostedBy: cancelBy,
               tallyPostingRemark: entry.tallyPostingRemark || `Cancelled by ${CANCEL_ALLOWED_EMAIL}`,
               updatedBy: cancelBy,
-              updateTimestamp: new Date().toISOString(),
+              updateTimestamp: timestamp,
             }
           : entry
       )
