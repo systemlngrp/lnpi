@@ -76,6 +76,11 @@ function getSnapshotValues(snapshot?: AuditDashboardSnapshot): TallyValues {
   };
 }
 
+function getSnapshotSortTime(snapshot: AuditDashboardSnapshot) {
+  const parsed = new Date(snapshot.updateTimestamp || "").getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 export function AuditDashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
@@ -92,10 +97,14 @@ export function AuditDashboard() {
   const [fetchedAt, setFetchedAt] = useState("");
 
   const snapshotId = getSnapshotId();
-  const currentSnapshot = useMemo(
-    () => snapshots.find((entry) => entry.id === snapshotId || (entry.dateFrom === ALL_DATA_DATE_RANGE.from && entry.dateTo === ALL_DATA_DATE_RANGE.to)),
-    [snapshotId, snapshots]
-  );
+  const currentSnapshot = useMemo(() => {
+    const exactSnapshot = snapshots.find(
+      (entry) => entry.id === snapshotId || (entry.dateFrom === ALL_DATA_DATE_RANGE.from && entry.dateTo === ALL_DATA_DATE_RANGE.to)
+    );
+    if (exactSnapshot) return exactSnapshot;
+
+    return [...snapshots].sort((a, b) => getSnapshotSortTime(b) - getSnapshotSortTime(a))[0];
+  }, [snapshotId, snapshots]);
 
   useEffect(() => {
     setTallyValues(getSnapshotValues(currentSnapshot));
