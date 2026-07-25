@@ -321,8 +321,9 @@ export function InvoicesMaster() {
 
   const billingSummary = useMemo(
     () => ({
-      totalCount: processedInvoices.length,
-      totalAmount: processedInvoices.reduce((sum, invoice) => sum + getGrandTotal(invoice), 0),
+      beforeGst: processedInvoices.reduce((sum, invoice) => sum + Number(invoice.totalBeforeGst || 0), 0),
+      gst: processedInvoices.reduce((sum, invoice) => sum + getGstTotal(invoice), 0),
+      total: processedInvoices.reduce((sum, invoice) => sum + getGrandTotal(invoice), 0),
     }),
     [processedInvoices]
   );
@@ -386,15 +387,23 @@ export function InvoicesMaster() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="rounded border border-black bg-slate-50 px-4 py-3">
-          <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Total Count</div>
-          <div className="mt-1 text-xl font-black text-black">{billingSummary.totalCount.toLocaleString()}</div>
+          <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Before GST</div>
+          <div className="mt-1 text-xl font-black text-slate-900">
+            {billingSummary.beforeGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
         </div>
         <div className="rounded border border-black bg-slate-50 px-4 py-3">
-          <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Total Amount</div>
+          <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">GST</div>
+          <div className="mt-1 text-xl font-black text-slate-900">
+            {billingSummary.gst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+        <div className="rounded border border-black bg-slate-50 px-4 py-3">
+          <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Total</div>
           <div className="mt-1 text-xl font-black text-indigo-700">
-            {billingSummary.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            {billingSummary.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
         </div>
       </div>
