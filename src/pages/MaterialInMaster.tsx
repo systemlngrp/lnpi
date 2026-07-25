@@ -34,6 +34,11 @@ export function MaterialInMaster() {
   };
 
   const getSupplierName = (id: string) => suppliers.find((supplier) => supplier.id === id)?.name || id;
+  const formatMoney = (value?: number) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatText = (value?: string | number) => String(value || "").trim() || "-";
+  const getGstTotal = (entry: MaterialIn) => Number(entry.totalCgst || 0) + Number(entry.totalSgst || 0) + Number(entry.totalIgst || 0);
+  const getExpenseGstTotal = (entry: MaterialIn) => Number(entry.expenseCGST || 0) + Number(entry.expenseSGST || 0) + Number(entry.expenseIGST || 0);
+  const getApprovalText = (timestamp?: string, user?: string) => [timestamp ? formatDate(timestamp) : "", user || ""].filter(Boolean).join(" / ") || "-";
 
   const getLineItemsElement = (lines: MaterialIn["lines"] = []) => {
     const safeLines = Array.isArray(lines) ? lines : [];
@@ -68,10 +73,26 @@ export function MaterialInMaster() {
         })
         .join(" ");
 
-      const matchesSearch =
-        (entry.transactionNo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        itemNames.toLowerCase().includes(searchTerm.toLowerCase());
+      const searchableParentText = [
+        entry.transactionNo,
+        entry.mrrType,
+        entry.gateEntryNo,
+        entry.invoiceNo,
+        entry.invDate,
+        entry.status,
+        entry.debitNote,
+        entry.debitNoteDate,
+        entry.debitTallySync,
+        entry.debitRemarkTally,
+        entry.creditTallySync,
+        entry.creditRemarkTally,
+        entry.tallySyncRemark,
+        entry.updatedBy,
+        supplierName,
+        itemNames,
+      ].join(" ").toLowerCase();
+
+      const matchesSearch = searchableParentText.includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === "All" || entry.status === statusFilter;
       const receiptDate = entry.date || "";
@@ -101,7 +122,7 @@ export function MaterialInMaster() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
         <div className="flex items-center gap-4">
-          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material In Master</h2>
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Material Receipt Master</h2>
         </div>
       </div>
 
@@ -204,60 +225,113 @@ export function MaterialInMaster() {
           ))}
         </div>
 
-        <table className="hidden md:table min-w-full divide-y divide-black border-collapse border border-black">
-          <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
-            <tr className="divide-x divide-black">
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">MRR No</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Date</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Gate Entry No</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Supplier</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Items</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Invoice Value</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Invoice After GST</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actual Value</th>
-              <th className="px-6 py-3 text-left text-sm font-bold text-black uppercase border border-black">Status</th>
-              <th className="px-6 py-3 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-black bg-white">
-            {filteredMaterialIn.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="px-6 py-8 text-center text-black font-medium italic">No material in records found.</td>
+        <div className="overflow-x-auto">
+          <table className="hidden md:table min-w-[3600px] divide-y divide-black border-collapse border border-black">
+            <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
+              <tr className="divide-x divide-black">
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">MRR No</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">MRR Type</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Gate Entry No</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Supplier</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice No</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Date</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Items</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PH</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Accounts</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">MD</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Tally</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Invoice Value</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">GST</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Invoice After GST</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Actual Value</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Insurance</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Other Charges</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Expense GST</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Round Off</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Total Amount</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Debit Note No</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Debit Note Date</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Debit Amount</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Debit Tally</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Credit Tally</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Updated By</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Updated At</th>
+                <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase border border-black">Actions</th>
               </tr>
-            ) : (
-              filteredMaterialIn.map((entry) => (
-                <tr key={entry.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-black border border-black">{entry.transactionNo}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(entry.date)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{entry.gateEntryNo || ""}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{getSupplierName(entry.supplierId)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{getLineItemsElement(entry.lines)}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">{Number(entry.totalInvoiceValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">{Number(entry.totalInvoiceValueAfterGst || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-6 py-4 text-right text-sm font-medium text-black border border-black">
-                    <div>Actual: {Number(entry.totalActualValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    <div className="text-[11px] text-slate-500">
-                      Exp GST: {Number((entry.expenseCGST || 0) + (entry.expenseSGST || 0) + (entry.expenseIGST || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                    <div className="font-bold">Final: {Number(entry.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  </td>
-                  <td className="px-6 py-4 text-sm border border-black whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded text-[11px] font-bold border uppercase tracking-wider ${entry.status === "Completed" ? "bg-emerald-100 text-emerald-900 border-emerald-900" : "bg-amber-100 text-amber-900 border-amber-900"}`}>
-                      {entry.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => handleDelete(entry.id)} className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}>
-                        <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
-                      </button>
-                    </div>
-                  </td>
+            </thead>
+            <tbody className="divide-y divide-black bg-white">
+              {filteredMaterialIn.length === 0 ? (
+                <tr>
+                  <td colSpan={30} className="px-6 py-8 text-center text-black font-medium italic">No material receipt records found.</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                filteredMaterialIn.map((entry) => (
+                  <tr key={entry.id} className="hover:bg-slate-50 divide-x divide-black transition-colors">
+                    <td className="px-4 py-3 text-sm font-bold text-black border border-black whitespace-nowrap">{entry.transactionNo}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{formatText(entry.mrrType)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{formatDate(entry.date)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{formatText(entry.gateEntryNo)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[180px]">{getSupplierName(entry.supplierId)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{formatText(entry.invoiceNo)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{entry.invDate ? formatDate(entry.invDate) : "-"}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[320px] max-w-[420px]">{getLineItemsElement(entry.lines)}</td>
+                    <td className="px-4 py-3 text-xs border border-black whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded text-[11px] font-bold border uppercase tracking-wider ${entry.status === "Completed" ? "bg-emerald-100 text-emerald-900 border-emerald-900" : "bg-amber-100 text-amber-900 border-amber-900"}`}>
+                        {entry.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[160px]">{getApprovalText(entry.phTimestamp, entry.phEmailId)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[180px]">
+                      <div>{getApprovalText(entry.accTimestamp, entry.accEmailId)}</div>
+                      <div className="text-[11px] text-slate-500">{formatText(entry.accounts_remark)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[180px]">
+                      <div>{getApprovalText(entry.mdTimestamp, entry.mdEmailId)}</div>
+                      <div className="text-[11px] text-slate-500">{formatText(entry.md_approval_remark)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[180px]">
+                      <div>{entry.tallyTimestamp ? formatDate(entry.tallyTimestamp) : "-"}</div>
+                      <div className="text-[11px] text-slate-500">{formatText(entry.tallySyncRemark)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(entry.totalInvoiceValue)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(getGstTotal(entry))}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(entry.totalInvoiceValueAfterGst)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(entry.totalActualValue || entry.totalAmount)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(entry.insurance)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(entry.otherCharges)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(getExpenseGstTotal(entry))}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(entry.roundOff)}</td>
+                    <td className="px-4 py-3 text-right text-xs font-black text-indigo-700 border border-black whitespace-nowrap">{formatMoney(entry.totalAmount)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{formatText(entry.debitNote)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{entry.debitNoteDate ? formatDate(entry.debitNoteDate) : "-"}</td>
+                    <td className="px-4 py-3 text-right text-xs font-medium text-black border border-black whitespace-nowrap">{formatMoney(entry.debitNoteAmount)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[180px]">
+                      <div>{formatText(entry.debitTallySync)}</div>
+                      <div>{entry.debitTallyTimestamp ? formatDate(entry.debitTallyTimestamp) : "-"}</div>
+                      <div className="text-[11px] text-slate-500">{formatText(entry.debitRemarkTally)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[180px]">
+                      <div>{formatText(entry.creditTallySync)}</div>
+                      <div>{entry.creditTallyTimestamp ? formatDate(entry.creditTallyTimestamp) : "-"}</div>
+                      <div className="text-[11px] text-slate-500">{formatText(entry.creditRemarkTally)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{formatText(entry.updatedBy)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{entry.updateTimestamp ? formatDate(entry.updateTimestamp) : "-"}</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium border border-black whitespace-nowrap">
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => handleDelete(entry.id)} className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}>
+                          <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
