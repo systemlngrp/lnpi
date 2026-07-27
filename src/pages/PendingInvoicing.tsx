@@ -65,6 +65,26 @@ interface InvoiceItemRow {
   allocations: InvoiceAllocationRow[];
 }
 
+const roundHalfUp = (value: number, decimals: number) => {
+  const numeric = Number(value) || 0;
+  const factor = 10 ** decimals;
+  return (numeric < 0 ? -1 : 1) * Math.round((Math.abs(numeric) + 1e-9) * factor) / factor;
+};
+
+const roundMoney = (value: number) => roundHalfUp(value, 2);
+const roundWhole = (value: number) => roundHalfUp(value, 0);
+
+const calculateRoundedInvoiceLine = (qty: number, rate: number, gstRate: number, isInterState: boolean) => {
+  const amount = roundMoney(Number(qty || 0) * Number(rate || 0));
+  if (isInterState) {
+    const taxAmount = roundMoney((amount * Number(gstRate || 0)) / 100);
+    return { amount, cgst: 0, sgst: 0, igst: taxAmount };
+  }
+
+  const halfTax = roundMoney((amount * Number(gstRate || 0)) / 100 / 2);
+  return { amount, cgst: halfTax, sgst: halfTax, igst: 0 };
+};
+
 function toPersistableLoadingSlip(slip: LoadingSlip & { totalQty?: number; items?: string[]; itemKeys?: string[] }): LoadingSlip {
   const { totalQty: _totalQty, items: _items, itemKeys: _itemKeys, ...persistableSlip } = slip;
   return persistableSlip;
@@ -525,23 +545,24 @@ export function PendingInvoicing() {
         const rate = alloc.orderId === DIRECT_ALLOCATION_ID ? Number(itemRow.defaultRate || 0) : Number(order?.rate || 0);
         if (alloc.orderId !== DIRECT_ALLOCATION_ID && !order) return;
         const qty = Number(alloc.qty || 0);
-        const amount = qty * rate;
-        totalBeforeGst += amount;
-
-        const taxAmount = (amount * itemRow.gstRate) / 100;
-        if (isInterState) totalIgst += taxAmount;
-        else {
-          totalCgst += taxAmount / 2;
-          totalSgst += taxAmount / 2;
-        }
+        const lineAmounts = calculateRoundedInvoiceLine(qty, rate, itemRow.gstRate, isInterState);
+        totalBeforeGst += lineAmounts.amount;
+        totalCgst += lineAmounts.cgst;
+        totalSgst += lineAmounts.sgst;
+        totalIgst += lineAmounts.igst;
       });
     });
 
-    const totalAfterGst = totalBeforeGst + totalCgst + totalSgst + totalIgst;
-    const baseTotal = totalAfterGst + otherChargesValue;
-    const roundedGrandTotal = Math.round(baseTotal);
-    const roundOffValue = Number((roundedGrandTotal - baseTotal).toFixed(2));
-    const grandTotal = Number((baseTotal + roundOffValue).toFixed(2));
+    totalBeforeGst = roundMoney(totalBeforeGst);
+    totalCgst = roundMoney(totalCgst);
+    totalSgst = roundMoney(totalSgst);
+    totalIgst = roundMoney(totalIgst);
+
+    const totalAfterGst = roundMoney(totalBeforeGst + totalCgst + totalSgst + totalIgst);
+    const baseTotal = roundMoney(totalAfterGst + otherChargesValue);
+    const roundedGrandTotal = roundWhole(baseTotal);
+    const roundOffValue = roundMoney(roundedGrandTotal - baseTotal);
+    const grandTotal = roundMoney(baseTotal + roundOffValue);
 
     return { 
       totalBeforeGst, 
@@ -730,8 +751,7 @@ export function PendingInvoicing() {
           const rate = alloc.orderId === DIRECT_ALLOCATION_ID ? Number(itemRow.defaultRate || 0) : Number(order?.rate || 0);
           const parts = consumeFromPool(pool, Number(alloc.qty || 0));
           for (const part of parts) {
-            const amount = part.qty * rate;
-            const taxAmount = (amount * itemRow.gstRate) / 100;
+            const lineAmounts = calculateRoundedInvoiceLine(part.qty, rate, itemRow.gstRate, gstSupplyType === "INTER_STATE");
             lineItems.push({
               id: crypto.randomUUID(),
               invoiceId,
@@ -741,11 +761,11 @@ export function PendingInvoicing() {
               npdId: itemRow.itemSource === "FG" ? itemRow.itemId : undefined,
               qty: part.qty,
               rate,
-              amount,
+              amount: lineAmounts.amount,
               gstRate: itemRow.gstRate,
-              cgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
-              sgst: gstSupplyType === "INTER_STATE" ? 0 : taxAmount / 2,
-              igst: gstSupplyType === "INTER_STATE" ? taxAmount : 0
+              cgst: lineAmounts.cgst,
+              sgst: lineAmounts.sgst,
+              igst: lineAmounts.igst
             });
           }
         }
@@ -1088,7 +1108,12 @@ export function PendingInvoicing() {
                         const orderQty = order ? Number(order.qty || 0) : 0;
                         const pending = order ? Math.max(0, orderQty - dispatched) : 0;
                         const rate = isDirectAlloc ? Number(itemRow.defaultRate || 0) : order ? Number(order.rate || 0) : 0;
-                        const amount = Number(alloc.qty || 0) * rate;
+                        const amount = calculateRoundedInvoiceLine(
+                          Number(alloc.qty || 0),
+                          rate,
+                          itemRow.gstRate,
+                          gstSupplyType === "INTER_STATE"
+                        ).amount;
                         const otherAllocated = itemRow.allocations
                           .filter((a) => a.id !== alloc.id)
                           .reduce((s, a) => s + Number(a.qty || 0), 0);
