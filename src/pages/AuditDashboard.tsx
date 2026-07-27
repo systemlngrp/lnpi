@@ -132,6 +132,7 @@ export function AuditDashboard() {
     const returnIdSet = new Set(materialReturns.map((entry) => entry.id));
     const reelIssueLineIds = new Set(issueReelLines.map((line) => line.materialIssueLineId));
     const reelReturnLineIds = new Set(returnReelLines.map((line) => line.materialReturnLineId));
+    const tallyPostedMaterialIn = materialIn.filter((entry) => String(entry.tallyTimestamp || "").trim());
 
     const issueReelValue = issueReelLines
       .filter((line) => issueIdSet.has(line.materialIssueId))
@@ -163,12 +164,12 @@ export function AuditDashboard() {
 
 return {
       invoiceValue: roundMoney(
-        materialIn.reduce((sum, entry) => {
+        tallyPostedMaterialIn.reduce((sum, entry) => {
           const afterGst = Number(entry.totalInvoiceValueAfterGst || 0);
           return sum + (afterGst > 0 ? afterGst : Number(entry.totalInvoiceValue || 0));
         }, 0)
       ),
-      invoiceCount: materialIn.length,
+      invoiceCount: tallyPostedMaterialIn.length,
       consumptionValue: roundMoney(issueReelValue + issueMaterialValue - returnReelValue - returnMaterialValue),
       consumptionCount: materialIssues.length + materialReturns.length,
       saleValue: roundMoney(
