@@ -73,6 +73,7 @@ const roundHalfUp = (value: number, decimals: number) => {
 
 const roundMoney = (value: number) => roundHalfUp(value, 2);
 const roundWhole = (value: number) => roundHalfUp(value, 0);
+const OTHER_CHARGES_GST_RATES = [5, 12, 18, 28];
 
 const calculateRoundedInvoiceLine = (qty: number, rate: number, gstRate: number, isInterState: boolean) => {
   const amount = roundMoney(Number(qty || 0) * Number(rate || 0));
@@ -121,6 +122,7 @@ export function PendingInvoicing() {
   const [invoiceRows, setInvoiceRows] = useState<InvoiceItemRow[]>([]);
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
   const [otherCharges, setOtherCharges] = useState<number | "">("");
+  const [otherChargesGstRate, setOtherChargesGstRate] = useState<number | "">("");
   const [roundOff, setRoundOff] = useState<number | "">("");
   const [isRoundOffManual, setIsRoundOffManual] = useState(false);
   const [destination, setDestination] = useState("");
@@ -454,6 +456,7 @@ export function PendingInvoicing() {
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
     setOtherCharges("");
+    setOtherChargesGstRate("");
     setRoundOff("");
     setIsRoundOffManual(false);
     setDestination("");
@@ -469,6 +472,7 @@ export function PendingInvoicing() {
     setDestination("");
     setTransporter("");
     setOtherCharges("");
+    setOtherChargesGstRate("");
     setRoundOff("");
     setIsRoundOffManual(false);
     if (editInvoiceId) {
@@ -544,6 +548,11 @@ export function PendingInvoicing() {
     let totalSgst = 0;
     let totalIgst = 0;
     const otherChargesValue = Number(otherCharges || 0);
+    const taxableOtherCharges = otherChargesGstRate !== "" && otherChargesValue !== 0;
+    const otherChargesRate = taxableOtherCharges ? Number(otherChargesGstRate || 0) : 0;
+    let otherChargesCgst = 0;
+    let otherChargesSgst = 0;
+    let otherChargesIgst = 0;
 
     invoiceRows.forEach((itemRow) => {
       itemRow.allocations.forEach((alloc) => {
@@ -564,8 +573,23 @@ export function PendingInvoicing() {
     totalSgst = roundMoney(totalSgst);
     totalIgst = roundMoney(totalIgst);
 
+    if (taxableOtherCharges) {
+      totalBeforeGst = roundMoney(totalBeforeGst + otherChargesValue);
+      if (isInterState) {
+        otherChargesIgst = roundMoney((otherChargesValue * otherChargesRate) / 100);
+        totalIgst = roundMoney(totalIgst + otherChargesIgst);
+      } else {
+        const halfTax = roundMoney((otherChargesValue * otherChargesRate) / 100 / 2);
+        otherChargesCgst = halfTax;
+        otherChargesSgst = halfTax;
+        totalCgst = roundMoney(totalCgst + otherChargesCgst);
+        totalSgst = roundMoney(totalSgst + otherChargesSgst);
+      }
+    }
+
     const totalAfterGst = roundMoney(totalBeforeGst + totalCgst + totalSgst + totalIgst);
-    const baseTotal = roundMoney(totalAfterGst + otherChargesValue);
+    const nonTaxableOtherCharges = taxableOtherCharges ? 0 : otherChargesValue;
+    const baseTotal = roundMoney(totalAfterGst + nonTaxableOtherCharges);
     const roundedGrandTotal = roundWhole(baseTotal);
     const autoRoundOffValue = roundMoney(roundedGrandTotal - baseTotal);
     const roundOffValue = isRoundOffManual ? roundMoney(Number(roundOff || 0)) : autoRoundOffValue;
@@ -578,11 +602,16 @@ export function PendingInvoicing() {
       igst: totalIgst, 
       totalAfterGst, 
       otherCharges: otherChargesValue,
+      otherChargesGstRate: taxableOtherCharges ? otherChargesRate : null,
+      otherChargesCgst,
+      otherChargesSgst,
+      otherChargesIgst,
+      nonTaxableOtherCharges,
       autoRoundOff: autoRoundOffValue,
       roundOff: roundOffValue, 
       grandTotal
     };
-  }, [invoiceRows, gstSupplyType, orders, otherCharges, roundOff, isRoundOffManual]);
+  }, [invoiceRows, gstSupplyType, orders, otherCharges, otherChargesGstRate, roundOff, isRoundOffManual]);
 
   const shouldShowTransporter = useMemo(() => {
     if (!invoiceModal) return false;
@@ -618,6 +647,7 @@ export function PendingInvoicing() {
     setSelectedSlips(new Set(selected.map((slip) => slip.id)));
     setInvoiceModal({ companyId: invoice.companyId, slips: selected });
     setOtherCharges(Number(invoice.otherCharges || 0));
+    setOtherChargesGstRate(invoice.otherChargesGstRate === null || invoice.otherChargesGstRate === undefined || Number(invoice.otherChargesGstRate || 0) <= 0 ? "" : Number(invoice.otherChargesGstRate));
     setRoundOff(Number(invoice.roundOff || 0));
     setIsRoundOffManual(true);
     setDestination(invoice.destination || "");
@@ -713,6 +743,10 @@ export function PendingInvoicing() {
         igst: calculations.igst,
         totalAfterGst: calculations.totalAfterGst,
         otherCharges: calculations.otherCharges,
+        otherChargesGstRate: calculations.otherChargesGstRate,
+        otherChargesCgst: calculations.otherChargesCgst,
+        otherChargesSgst: calculations.otherChargesSgst,
+        otherChargesIgst: calculations.otherChargesIgst,
         roundOff: calculations.roundOff,
         tallyTimestamp: existingInvoice?.tallyTimestamp,
         tallyBy: existingInvoice?.tallyBy,
@@ -1223,17 +1257,46 @@ export function PendingInvoicing() {
                         </tr>
                       </>
                     )}
+                    {(calculations.otherChargesCgst || calculations.otherChargesSgst || calculations.otherChargesIgst) ? (
+                      <tr className="divide-x divide-black text-slate-500">
+                        <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase">Other Charges GST</td>
+                        <td className="px-3 py-2 text-right text-[11px]">
+                          {format2(calculations.otherChargesCgst + calculations.otherChargesSgst + calculations.otherChargesIgst)}
+                        </td>
+                        <td></td>
+                      </tr>
+                    ) : null}
                     <tr className="divide-x divide-black">
                       <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase text-slate-500">Other Charges</td>
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={otherCharges}
-                          onChange={(e) => setOtherCharges(e.target.value === "" ? "" : parseFloat(e.target.value))}
-                          className="w-28 px-2 py-1 border border-black rounded text-right text-[11px] font-bold"
-                        />
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-end gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={otherCharges}
+                            onChange={(e) => setOtherCharges(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                            className="w-24 px-2 py-1 border border-black rounded text-right text-[11px] font-bold"
+                          />
+                          <select
+                            value={otherChargesGstRate}
+                            onChange={(e) => setOtherChargesGstRate(e.target.value === "" ? "" : Number(e.target.value))}
+                            className="w-24 border border-black rounded px-2 py-1 text-right text-[11px] font-bold bg-white"
+                            title="Blank means non-taxable"
+                          >
+                            <option value="">No GST</option>
+                            {OTHER_CHARGES_GST_RATES.map((rate) => (
+                              <option key={rate} value={rate}>
+                                {rate}%
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
+                      <td></td>
+                    </tr>
+                    <tr className="divide-x divide-black text-slate-500">
+                      <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase">Total After GST</td>
+                      <td className="px-3 py-2 text-right text-[11px]">{format2(calculations.totalAfterGst)}</td>
                       <td></td>
                     </tr>
                     <tr className="divide-x divide-black">

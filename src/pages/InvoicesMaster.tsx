@@ -111,10 +111,14 @@ export function InvoicesMaster() {
 
   const getRoundOff = (invoice: Invoice) => Number(invoice.roundOff || 0);
   const getOtherCharges = (invoice: Invoice) => Number(invoice.otherCharges || 0);
+  const getOtherChargesGstRate = (invoice: Invoice) => Number(invoice.otherChargesGstRate || 0);
+  const hasTaxableOtherCharges = (invoice: Invoice) => getOtherCharges(invoice) !== 0 && getOtherChargesGstRate(invoice) > 0;
+  const getOtherChargesGstTotal = (invoice: Invoice) =>
+    Number(invoice.otherChargesCgst || 0) + Number(invoice.otherChargesSgst || 0) + Number(invoice.otherChargesIgst || 0);
   const getGstTotal = (invoice: Invoice) =>
     Number(invoice.cgst || 0) + Number(invoice.sgst || 0) + Number(invoice.igst || 0);
   const getGrandTotal = (invoice: Invoice) =>
-    Number(invoice.totalAfterGst || 0) + getOtherCharges(invoice) + getRoundOff(invoice);
+    Number(invoice.totalAfterGst || 0) + (hasTaxableOtherCharges(invoice) ? 0 : getOtherCharges(invoice)) + getRoundOff(invoice);
 
   const getInvoiceSlips = (invoiceId: string) =>
     slips.filter((slip) => slip.invoiceId === invoiceId && slip.status !== "Cancelled");
@@ -822,11 +826,21 @@ export function InvoicesMaster() {
                       </td>
                     </tr>
                     <tr className="divide-x divide-black">
-                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Other Charges</td>
+                      <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">
+                        Other Charges{hasTaxableOtherCharges(selectedInvoice) ? ` @ ${getOtherChargesGstRate(selectedInvoice)}% GST` : ""}
+                      </td>
                       <td className="px-4 py-2 text-right text-[10px] text-slate-500">
                         {getOtherCharges(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                     </tr>
+                    {getOtherChargesGstTotal(selectedInvoice) !== 0 && (
+                      <tr className="divide-x divide-black">
+                        <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Other Charges GST</td>
+                        <td className="px-4 py-2 text-right text-[10px] text-slate-500">
+                          {getOtherChargesGstTotal(selectedInvoice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    )}
                     <tr className="divide-x divide-black">
                       <td colSpan={5} className="px-4 py-2 text-right text-[10px] uppercase text-slate-500">Round Off</td>
                       <td className="px-4 py-2 text-right text-[10px] text-slate-500">

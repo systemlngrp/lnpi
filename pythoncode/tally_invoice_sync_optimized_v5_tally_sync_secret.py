@@ -893,6 +893,14 @@ def ensure_invoice_sync_columns(conn):
             cursor.execute("ALTER TABLE invoices ADD COLUMN tallyInvDate VARCHAR(255)")
         if not column_exists(conn, "invoices", "tallyInvId"):
             cursor.execute("ALTER TABLE invoices ADD COLUMN tallyInvId VARCHAR(255)")
+        if not column_exists(conn, "invoices", "otherChargesGstRate"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN otherChargesGstRate DECIMAL(5,2) NULL DEFAULT NULL")
+        if not column_exists(conn, "invoices", "otherChargesCgst"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN otherChargesCgst DECIMAL(15,2) NOT NULL DEFAULT 0")
+        if not column_exists(conn, "invoices", "otherChargesSgst"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN otherChargesSgst DECIMAL(15,2) NOT NULL DEFAULT 0")
+        if not column_exists(conn, "invoices", "otherChargesIgst"):
+            cursor.execute("ALTER TABLE invoices ADD COLUMN otherChargesIgst DECIMAL(15,2) NOT NULL DEFAULT 0")
         conn.commit()
     finally:
         cursor.close()
@@ -1920,6 +1928,14 @@ def derive_tax_rates(invoice_row, item_lines):
             "cgst_rate": primary_rate / 2,
             "sgst_rate": primary_rate / 2,
             "igst_rate": primary_rate,
+        }
+
+    other_charges_gst_rate = round(to_float(invoice_row.get("otherChargesGstRate")), 2)
+    if other_charges_gst_rate > 0:
+        return {
+            "cgst_rate": other_charges_gst_rate / 2,
+            "sgst_rate": other_charges_gst_rate / 2,
+            "igst_rate": other_charges_gst_rate,
         }
 
     return {

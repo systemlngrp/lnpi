@@ -884,6 +884,10 @@ export interface Invoice {
   igst: number;
   totalAfterGst: number;
   otherCharges?: number;
+  otherChargesGstRate?: number | null;
+  otherChargesCgst?: number;
+  otherChargesSgst?: number;
+  otherChargesIgst?: number;
   roundOff: number;
   tallyTimestamp?: string;
   tallyBy?: string;
