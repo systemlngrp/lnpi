@@ -18,7 +18,10 @@ type BuildGatePassOptions = {
 };
 
 export function getInvoiceGrandTotal(invoice: Invoice) {
-  return Number(invoice.totalAfterGst || 0) + Number(invoice.otherCharges || 0) + Number(invoice.roundOff || 0);
+  const otherCharges = Number(invoice.otherCharges || 0);
+  const otherChargesGstRate = Number(invoice.otherChargesGstRate || 0);
+  const nonTaxableOtherCharges = otherCharges !== 0 && otherChargesGstRate > 0 ? 0 : otherCharges;
+  return Number(invoice.totalAfterGst || 0) + nonTaxableOtherCharges + Number(invoice.roundOff || 0);
 }
 
 export function buildGatePassFromInvoice({

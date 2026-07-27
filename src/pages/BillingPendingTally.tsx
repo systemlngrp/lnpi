@@ -27,6 +27,7 @@ import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
 import { useAuth } from "../auth/AuthContext";
+import { getInvoiceGrandTotal } from "../lib/gatePasses";
 import { normalizeOrderItemSource } from "../lib/orderItems";
 
 const formatInr = new Intl.NumberFormat("en-IN", {
@@ -145,7 +146,7 @@ export function BillingPendingTally() {
           ...inv,
           companyName: company?.name || "Unknown",
           poNumbers,
-          grandTotal: Number(inv.totalAfterGst || 0) + Number(inv.otherCharges || 0) + Number(inv.roundOff || 0),
+          grandTotal: getInvoiceGrandTotal(inv),
           details,
           slipCount: invoiceSlips.length
         };

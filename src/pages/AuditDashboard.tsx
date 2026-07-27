@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Mail, MessageCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { getInvoiceGrandTotal } from "../lib/gatePasses";
 import type {
   AuditDashboardSnapshot,
   Invoice,
@@ -171,14 +172,7 @@ return {
       consumptionValue: roundMoney(issueReelValue + issueMaterialValue - returnReelValue - returnMaterialValue),
       consumptionCount: materialIssues.length + materialReturns.length,
       saleValue: roundMoney(
-        invoices.reduce(
-          (sum, invoice) =>
-            sum +
-            Number(invoice.totalAfterGst || 0) +
-            Number(invoice.otherCharges || 0) +
-            Number(invoice.roundOff || 0),
-          0
-        )
+        invoices.reduce((sum, invoice) => sum + getInvoiceGrandTotal(invoice), 0)
       ),
       saleCount: invoices.length,
       debitNote: roundMoney(materialIn.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
