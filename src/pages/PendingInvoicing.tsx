@@ -297,6 +297,26 @@ export function PendingInvoicing() {
     });
   };
 
+  const getInvoiceItemDisplayName = (itemRow: InvoiceItemRow) => {
+    const rowName = getMeaningfulItemName(itemRow.itemName);
+    if (rowName) return rowName;
+
+    for (const allocation of itemRow.allocations) {
+      if (!allocation.orderId || allocation.orderId === DIRECT_ALLOCATION_ID) continue;
+      const order = orders.find((entry) => entry.id === allocation.orderId);
+      if (!order) continue;
+      const resolvedItem = resolveOrderItem(order);
+      const orderItemName =
+        getMeaningfulItemName(resolvedItem?.name) ||
+        getMeaningfulItemName(order.erpCode) ||
+        getMeaningfulItemName(order.poNumber) ||
+        getMeaningfulItemName(order.orderNo);
+      if (orderItemName) return orderItemName;
+    }
+
+    return "Unknown";
+  };
+
   const groupedData = useMemo(() => {
     const uninvoiced = loadingSlips.filter((s) => !s.invoiceId && s.status !== "Cancelled");
     const companyMap = new Map<string, GroupedLoading>();
@@ -1019,7 +1039,7 @@ export function PendingInvoicing() {
                   </thead>
                   <tbody className="divide-y divide-black">
                     {invoiceRows.flatMap((itemRow) => {
-                      const itemName = itemRow.itemName || "Item";
+                      const itemName = getInvoiceItemDisplayName(itemRow);
                       const pendingOrdersForItem = orders.filter((o) => {
                         if (o.companyId !== invoiceModal.companyId) return false;
                         if (o.status === "Cancelled") return false;
@@ -1073,6 +1093,14 @@ export function PendingInvoicing() {
                           .filter((a) => a.id !== alloc.id)
                           .reduce((s, a) => s + Number(a.qty || 0), 0);
                         const maxAllowed = Math.max(0, Number(itemRow.totalQty || 0) - otherAllocated);
+                        const orderOptions = Array.from(
+                          new Map(
+                            [
+                              ...pendingOrdersForItem,
+                              ...(order && order.status !== "Cancelled" ? [order] : []),
+                            ].map((entry) => [entry.id, entry])
+                          ).values()
+                        );
 
                         return (
                           <tr key={alloc.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
@@ -1087,7 +1115,7 @@ export function PendingInvoicing() {
                               >
                                 <option value="">-- Choose Order --</option>
                                 {alloc.orderId === DIRECT_ALLOCATION_ID ? <option value={DIRECT_ALLOCATION_ID}>Direct Loading</option> : null}
-                                {pendingOrdersForItem.map((o) => (
+                                {orderOptions.map((o) => (
                                   <option key={o.id} value={o.id}>
                                     {o.orderNo} | {o.poNumber || "No PO"}
                                   </option>
