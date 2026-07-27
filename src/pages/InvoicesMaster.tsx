@@ -84,6 +84,7 @@ export function InvoicesMaster() {
 
   const currentSetting = settings[0];
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
+  const isPankajUser = currentUserEmail === "pankaj@bizskilledu.com";
   const allowedInvoiceEditUsers = useMemo(() => {
     if (!currentSetting?.allowInvoiceTallyEditUsers) return [] as string[];
     try {
@@ -98,6 +99,8 @@ export function InvoicesMaster() {
     currentSetting?.allowInvoiceTallyEdit === "Yes" &&
     Boolean(currentUserEmail) &&
     allowedInvoiceEditUsers.includes(currentUserEmail);
+  const canFullEditInvoice = (invoice: Invoice | null | undefined) =>
+    Boolean(invoice) && (isPankajUser || !invoice.tallyTimestamp);
 
   const toggleRow = (id: string) => {
     const next = new Set(expandedRows);
@@ -208,6 +211,8 @@ export function InvoicesMaster() {
   };
 
   const openInvoiceEditor = (invoiceId: string) => {
+    const invoice = invoices.find((row) => row.id === invoiceId);
+    if (!canFullEditInvoice(invoice)) return;
     navigate(`/billing/pending?editInvoiceId=${encodeURIComponent(invoiceId)}`);
   };
 
@@ -554,7 +559,7 @@ export function InvoicesMaster() {
                         >
                           <FileText size={18} />
                         </button>
-                        {!invoice.tallyTimestamp && (
+                        {canFullEditInvoice(invoice) && (
                           <button
                             onClick={() => openInvoiceEditor(invoice.id)}
                             className="p-1.5 text-amber-700 hover:bg-amber-50 rounded"
@@ -712,7 +717,7 @@ export function InvoicesMaster() {
 
               <div className="flex justify-end">
                 <div className="flex gap-3">
-                  {!selectedInvoice.tallyTimestamp && (
+                  {canFullEditInvoice(selectedInvoice) && (
                     <button
                       type="button"
                       onClick={() => openInvoiceEditor(selectedInvoice.id)}

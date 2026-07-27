@@ -33,6 +33,7 @@ import { cn } from "../lib/utils";
 import { normalizeOrderItemSource } from "../lib/orderItems";
 import { buildGatePassFromInvoice } from "../lib/gatePasses";
 import { useAutoRefreshPause } from "../hooks/useAutoRefresh";
+import { useAuth } from "../auth/AuthContext";
 
 interface GroupedLoading {
   companyId: string;
@@ -71,6 +72,7 @@ function toPersistableLoadingSlip(slip: LoadingSlip & { totalQty?: number; items
 
 export function PendingInvoicing() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loadingSlips, , , loadingSlipApi] = useData<LoadingSlip>("loading_slips", []);
   const [companies] = useData<Company>("companies", []);
@@ -103,6 +105,8 @@ export function PendingInvoicing() {
   const [transporter, setTransporter] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const editInvoiceId = String(searchParams.get("editInvoiceId") || "").trim();
+  const currentUserEmail = String(user?.email || "").trim().toLowerCase();
+  const isPankajUser = currentUserEmail === "pankaj@bizskilledu.com";
 
   useAutoRefreshPause(
     Boolean(billingMode) ||
@@ -546,7 +550,7 @@ export function PendingInvoicing() {
 
     const invoice = invoices.find((entry) => entry.id === editInvoiceId);
     if (!invoice) return;
-    if (invoice.tallyTimestamp) {
+    if (invoice.tallyTimestamp && !isPankajUser) {
       alert("This invoice is already posted to Tally and can no longer be edited.");
       setSearchParams({});
       navigate("/billing/master");
@@ -582,6 +586,7 @@ export function PendingInvoicing() {
     plans,
     orders,
     companies,
+    isPankajUser,
     navigate,
     setSearchParams,
   ]);
