@@ -132,7 +132,9 @@ export function AuditDashboard() {
     const returnIdSet = new Set(materialReturns.map((entry) => entry.id));
     const reelIssueLineIds = new Set(issueReelLines.map((line) => line.materialIssueLineId));
     const reelReturnLineIds = new Set(returnReelLines.map((line) => line.materialReturnLineId));
-    const tallyPostedMaterialIn = materialIn.filter((entry) => String(entry.tallyTimestamp || "").trim());
+    const tallyPostedMaterialIn = materialIn.filter(
+      (entry) => String(entry.tallyTimestamp || "").trim() && String(entry.transactionNo || "").trim() !== "1"
+    );
 
     const issueReelValue = issueReelLines
       .filter((line) => issueIdSet.has(line.materialIssueId))
