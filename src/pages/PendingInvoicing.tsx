@@ -121,6 +121,8 @@ export function PendingInvoicing() {
   const [invoiceRows, setInvoiceRows] = useState<InvoiceItemRow[]>([]);
   const [gstSupplyType, setGstSupplyType] = useState<"" | "INTRA_STATE" | "INTER_STATE">("");
   const [otherCharges, setOtherCharges] = useState<number | "">("");
+  const [roundOff, setRoundOff] = useState<number | "">("");
+  const [isRoundOffManual, setIsRoundOffManual] = useState(false);
   const [destination, setDestination] = useState("");
   const [transporter, setTransporter] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -452,6 +454,8 @@ export function PendingInvoicing() {
     const selected = companyGroup.slips.filter(s => selectedSlips.has(s.id));
     setInvoiceModal({ companyId: billingMode, slips: selected });
     setOtherCharges("");
+    setRoundOff("");
+    setIsRoundOffManual(false);
     setDestination("");
     setTransporter("");
     setInvoiceRows(buildInvoiceRowsFromSlips(selected));
@@ -465,6 +469,8 @@ export function PendingInvoicing() {
     setDestination("");
     setTransporter("");
     setOtherCharges("");
+    setRoundOff("");
+    setIsRoundOffManual(false);
     if (editInvoiceId) {
       setSearchParams({});
       navigate("/billing/master");
@@ -561,7 +567,8 @@ export function PendingInvoicing() {
     const totalAfterGst = roundMoney(totalBeforeGst + totalCgst + totalSgst + totalIgst);
     const baseTotal = roundMoney(totalAfterGst + otherChargesValue);
     const roundedGrandTotal = roundWhole(baseTotal);
-    const roundOffValue = roundMoney(roundedGrandTotal - baseTotal);
+    const autoRoundOffValue = roundMoney(roundedGrandTotal - baseTotal);
+    const roundOffValue = isRoundOffManual ? roundMoney(Number(roundOff || 0)) : autoRoundOffValue;
     const grandTotal = roundMoney(baseTotal + roundOffValue);
 
     return { 
@@ -571,10 +578,11 @@ export function PendingInvoicing() {
       igst: totalIgst, 
       totalAfterGst, 
       otherCharges: otherChargesValue,
+      autoRoundOff: autoRoundOffValue,
       roundOff: roundOffValue, 
       grandTotal
     };
-  }, [invoiceRows, gstSupplyType, orders, otherCharges]);
+  }, [invoiceRows, gstSupplyType, orders, otherCharges, roundOff, isRoundOffManual]);
 
   const shouldShowTransporter = useMemo(() => {
     if (!invoiceModal) return false;
@@ -610,6 +618,8 @@ export function PendingInvoicing() {
     setSelectedSlips(new Set(selected.map((slip) => slip.id)));
     setInvoiceModal({ companyId: invoice.companyId, slips: selected });
     setOtherCharges(Number(invoice.otherCharges || 0));
+    setRoundOff(Number(invoice.roundOff || 0));
+    setIsRoundOffManual(true);
     setDestination(invoice.destination || "");
     setTransporter(invoice.transporter || "");
     setGstSupplyType((companies.find((row) => row.id === invoice.companyId)?.gstSupplyType as any) || "INTRA_STATE");
@@ -1228,9 +1238,30 @@ export function PendingInvoicing() {
                     </tr>
                     <tr className="divide-x divide-black">
                       <td colSpan={8} className="px-3 py-2 text-right text-[10px] uppercase italic text-slate-400">Round Off</td>
-                      <td className="px-3 py-2 text-right text-[11px] font-bold">
-                        {calculations.roundOff > 0 ? "+" : ""}
-                        {format2(calculations.roundOff)}
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={isRoundOffManual ? roundOff : calculations.roundOff}
+                            onChange={(e) => {
+                              setIsRoundOffManual(true);
+                              setRoundOff(e.target.value === "" ? "" : parseFloat(e.target.value));
+                            }}
+                            className="w-24 px-2 py-1 border border-black rounded text-right text-[11px] font-bold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRoundOff("");
+                              setIsRoundOffManual(false);
+                            }}
+                            className="rounded border border-black bg-white px-2 py-1 text-[10px] font-black uppercase text-black hover:bg-slate-50"
+                            title={`Auto round off: ${format2(calculations.autoRoundOff)}`}
+                          >
+                            Auto
+                          </button>
+                        </div>
                       </td>
                       <td></td>
                     </tr>
