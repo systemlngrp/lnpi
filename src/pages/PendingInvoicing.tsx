@@ -685,12 +685,23 @@ export function PendingInvoicing() {
       return;
     }
 
-    const selected = loadingSlips
+    const savedLineItems = invoiceLineItems.filter((line) => line.invoiceId === editInvoiceId);
+    const savedSlipIds = new Set(savedLineItems.map((line) => String(line.loadingSlipId || "").trim()).filter(Boolean));
+    const selectedFromLines = loadingSlips
+      .filter((slip) => savedSlipIds.has(slip.id) && slip.status !== "Cancelled")
+      .map((slip) => getPendingSlip(slip, editInvoiceId))
+      .filter(Boolean);
+    const selectedFallback = loadingSlips
       .filter((slip) => slip.invoiceId === editInvoiceId && slip.status !== "Cancelled")
       .map((slip) => getPendingSlip(slip, editInvoiceId))
       .filter(Boolean);
+    const selected = selectedFromLines.length > 0 ? selectedFromLines : selectedFallback;
     if (selected.length === 0) {
-      alert("No active loading slips were found for this invoice.");
+      alert(
+        savedLineItems.length > 0
+          ? "Invoice has saved lines, but related loading slip is missing or cancelled."
+          : "No active loading slips were found for this invoice."
+      );
       setSearchParams({});
       navigate("/billing/master");
       return;
@@ -709,7 +720,6 @@ export function PendingInvoicing() {
 
     const seededRows = buildInvoiceRowsFromSlips(selected);
     if (seededRows.length === 0) return;
-    const savedLineItems = invoiceLineItems.filter((line) => line.invoiceId === editInvoiceId);
     const savedItemKeys = new Set(
       savedLineItems.map((line) => `${normalizeOrderItemSource(line.itemSource || "FG")}::${String(line.npdId || line.itemId || "").trim()}`)
     );
