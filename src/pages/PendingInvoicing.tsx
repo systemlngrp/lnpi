@@ -222,6 +222,53 @@ export function PendingInvoicing() {
     return String(resolvedItem?.id || line.itemId || order?.itemId || "").trim();
   };
 
+  const getSlipLineKey = (line: LoadingSlip["lines"][number], order?: Order) => {
+    const itemSource = normalizeOrderItemSource(line.itemSource || order?.itemSource || "FG");
+    const itemId = resolveCanonicalSlipLineItemId(line, order);
+    return itemId ? `${itemSource}::${itemId}` : "";
+  };
+
+  const getPendingSlip = (slip: LoadingSlip, includeInvoiceId = "") => {
+    if (slip.status === "Cancelled") return null;
+
+    const relevantLineItems = invoiceLineItems.filter(
+      (line) =>
+        String(line.loadingSlipId || "").trim() === slip.id &&
+        (!includeInvoiceId || String(line.invoiceId || "").trim() !== includeInvoiceId)
+    );
+
+    if (slip.invoiceId && relevantLineItems.length === 0 && !includeInvoiceId) return null;
+
+    const billedByLineKey = new Map<string, number>();
+    relevantLineItems.forEach((line) => {
+      const itemSource = normalizeOrderItemSource(line.itemSource || "FG");
+      const itemId = String(line.npdId || line.itemId || "").trim();
+      if (!itemId) return;
+      const key = `${itemSource}::${itemId}`;
+      billedByLineKey.set(key, (billedByLineKey.get(key) || 0) + Number(line.qty || 0));
+    });
+
+    const pendingLines = (slip.lines || [])
+      .map((line: any) => {
+        const plan = plans.find((p) => p.id === line.dispatchPlanId);
+        const order = orders.find((o) => o.id === plan?.orderId);
+        const lineKey = getSlipLineKey(line, order);
+        if (!lineKey) return null;
+
+        const loadedQty = Number(line.loadedQty || 0);
+        const billedQty = Math.min(loadedQty, Math.max(0, billedByLineKey.get(lineKey) || 0));
+        billedByLineKey.set(lineKey, Math.max(0, (billedByLineKey.get(lineKey) || 0) - billedQty));
+
+        const pendingQty = roundMoney(loadedQty - billedQty);
+        if (pendingQty <= 0.0001) return null;
+        return { ...line, loadedQty: pendingQty };
+      })
+      .filter(Boolean);
+
+    if (pendingLines.length === 0) return null;
+    return { ...slip, lines: pendingLines };
+  };
+
   const buildInvoiceRowsFromSlips = (selected: any[]) => {
     const itemMap = new Map<string, InvoiceItemRow>();
     const itemOrderQtyMap = new Map<string, Map<string, number>>();
@@ -342,10 +389,12 @@ export function PendingInvoicing() {
   };
 
   const groupedData = useMemo(() => {
-    const uninvoiced = loadingSlips.filter((s) => !s.invoiceId && s.status !== "Cancelled");
+    const pendingSlips = loadingSlips
+      .map((slip) => getPendingSlip(slip))
+      .filter(Boolean) as LoadingSlip[];
     const companyMap = new Map<string, GroupedLoading>();
 
-    uninvoiced.forEach(s => {
+    pendingSlips.forEach(s => {
       const firstLine = s.lines[0];
       if (!firstLine) return;
       const plan = plans.find(p => p.id === firstLine.dispatchPlanId);
@@ -398,7 +447,7 @@ export function PendingInvoicing() {
         return `${group.companyName} ${slipText}`.toLowerCase().includes(needle);
       })
       .sort((a, b) => a.companyName.localeCompare(b.companyName));
-  }, [loadingSlips, companies, plans, orders, npdItems, searchTerm, companyFilter, itemFilter, findItemAcrossSources, resolveOrderItem]);
+  }, [loadingSlips, invoiceLineItems, companies, plans, orders, npdItems, searchTerm, companyFilter, itemFilter, findItemAcrossSources, resolveOrderItem]);
 
   const companyOptions = useMemo(() => Array.from(new Map(groupedData.map((group) => [group.companyId, { value: group.companyId, label: group.companyName }])).values()).filter((option) => option.value && option.label).sort((a, b) => a.label.localeCompare(b.label)), [groupedData]);
   const itemOptions = useMemo(() => { const map = new Map<string, { value: string; label: string; searchText: string }>(); groupedData.forEach((group) => group.slips.forEach((slip) => slip.items.forEach((name, index) => { const key = slip.itemKeys[index] || name; if (!key || map.has(key)) return; map.set(key, { value: key, label: name, searchText: name }); }))); return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label)); }, [groupedData]);
@@ -423,30 +472,24 @@ export function PendingInvoicing() {
   };
 
   const totalDispatchedByOrderId = useMemo(() => {
-    const map = new Map<string, number>();
-    invoiceLineItems.forEach(li => {
-      const plan = plans.find(p => p.id === li.loadingSlipId); // Wait, loadingSlipId in li is actually dispatchPlanId in some contexts? 
-      // Let's verify types.ts. In types.ts: loadingSlipId: string; itemId: string; qty: number;
-      // In this project, invoice line items usually link to a loading slip.
-      // But we need total dispatched for an ORDER.
-      // Let's find all loading slips that are invoiced.
-    });
-
-    // Actually, we can get total dispatched from order objects if they are updated, 
-    // or by summing all invoiced line items for that order.
-    // Let's sum from loading slips that HAVE an invoiceId.
     const dispatchedMap = new Map<string, number>();
-    loadingSlips.forEach(s => {
-      if (!s.invoiceId || s.status === "Cancelled") return;
-      s.lines.forEach(l => {
-        const plan = plans.find(p => p.id === l.dispatchPlanId);
-        if (plan?.orderId) {
-          dispatchedMap.set(plan.orderId, (dispatchedMap.get(plan.orderId) || 0) + Number(l.loadedQty || 0));
-        }
+    invoiceLineItems.forEach((lineItem) => {
+      if (editInvoiceId && lineItem.invoiceId === editInvoiceId) return;
+      const slip = loadingSlips.find((entry) => entry.id === lineItem.loadingSlipId);
+      const slipLine = slip?.lines?.find((entry: any) => {
+        const plan = plans.find((p) => p.id === entry.dispatchPlanId);
+        const order = orders.find((o) => o.id === plan?.orderId);
+        return (
+          getSlipLineKey(entry, order) ===
+          `${normalizeOrderItemSource(lineItem.itemSource || "FG")}::${String(lineItem.npdId || lineItem.itemId || "").trim()}`
+        );
       });
+      const plan = slipLine ? plans.find((entry) => entry.id === slipLine.dispatchPlanId) : undefined;
+      if (!plan?.orderId) return;
+      dispatchedMap.set(plan.orderId, (dispatchedMap.get(plan.orderId) || 0) + Number(lineItem.qty || 0));
     });
     return dispatchedMap;
-  }, [loadingSlips, plans]);
+  }, [invoiceLineItems, loadingSlips, plans, orders, editInvoiceId]);
 
   const handleOpenInvoiceForm = () => {
     if (!billingMode) return;
@@ -503,10 +546,17 @@ export function PendingInvoicing() {
     setInvoiceRows((prev) =>
       prev.map((row) => {
         if (row.id !== itemRowId) return row;
-        const next = row.allocations.length === 1 ? row.allocations : row.allocations.filter((a) => a.id !== allocationId);
+        const next =
+          row.allocations.length === 1
+            ? [{ id: crypto.randomUUID(), orderId: "", qty: Number(row.totalQty || 0) }]
+            : row.allocations.filter((a) => a.id !== allocationId);
         return { ...row, allocations: next };
       })
     );
+  };
+
+  const removeInvoiceItemRow = (itemRowId: string) => {
+    setInvoiceRows((prev) => prev.filter((row) => row.id !== itemRowId));
   };
 
   const updateAllocation = (
@@ -635,7 +685,10 @@ export function PendingInvoicing() {
       return;
     }
 
-    const selected = loadingSlips.filter((slip) => slip.invoiceId === editInvoiceId && slip.status !== "Cancelled");
+    const selected = loadingSlips
+      .filter((slip) => slip.invoiceId === editInvoiceId && slip.status !== "Cancelled")
+      .map((slip) => getPendingSlip(slip, editInvoiceId))
+      .filter(Boolean);
     if (selected.length === 0) {
       alert("No active loading slips were found for this invoice.");
       setSearchParams({});
@@ -656,7 +709,15 @@ export function PendingInvoicing() {
 
     const seededRows = buildInvoiceRowsFromSlips(selected);
     if (seededRows.length === 0) return;
-    setInvoiceRows(applySavedInvoiceAllocations(seededRows, editInvoiceId));
+    const savedLineItems = invoiceLineItems.filter((line) => line.invoiceId === editInvoiceId);
+    const savedItemKeys = new Set(
+      savedLineItems.map((line) => `${normalizeOrderItemSource(line.itemSource || "FG")}::${String(line.npdId || line.itemId || "").trim()}`)
+    );
+    const editRows =
+      savedLineItems.length > 0
+        ? seededRows.filter((row) => savedItemKeys.has(`${row.itemSource}::${row.itemId}`))
+        : seededRows;
+    setInvoiceRows(applySavedInvoiceAllocations(editRows, editInvoiceId));
   }, [
     editInvoiceId,
     invoiceModal,
@@ -685,17 +746,7 @@ export function PendingInvoicing() {
       return;
     }
 
-    const loadedByItemId = new Map<string, number>();
-    const totalLoaded = invoiceModal.slips.reduce((sum, s) => 
-      sum + s.lines.reduce((lSum: number, l: any) => {
-        const qty = Number(l.loadedQty || 0);
-        const plan = plans.find(p => p.id === l.dispatchPlanId);
-        const order = orders.find(o => o.id === plan?.orderId);
-        const itemId = resolveCanonicalSlipLineItemId(l, order);
-        if (itemId) loadedByItemId.set(itemId, (loadedByItemId.get(itemId) || 0) + qty);
-        return lSum + qty;
-      }, 0)
-    , 0);
+    const totalLoaded = invoiceRows.reduce((sum, itemRow) => sum + Number(itemRow.totalQty || 0), 0);
     const totalInvoicedNow = invoiceRows.reduce(
       (sum, itemRow) => sum + itemRow.allocations.reduce((s, a) => s + Number(a.qty || 0), 0),
       0
@@ -815,12 +866,15 @@ export function PendingInvoicing() {
         }
       }
 
-      const updatedSlips = invoiceModal.slips.map((slip) => ({
-        ...toPersistableLoadingSlip(slip),
-        invoiceId,
-        updatedBy: "System User",
-        updateTimestamp: timestamp,
-      }));
+      const updatedSlips = invoiceModal.slips.map((draftSlip) => {
+        const originalSlip = loadingSlips.find((slip) => slip.id === draftSlip.id) || draftSlip;
+        return {
+          ...toPersistableLoadingSlip(originalSlip),
+          invoiceId,
+          updatedBy: "System User",
+          updateTimestamp: timestamp,
+        };
+      });
 
       const createdLineItemIds: string[] = [];
       let invoiceCreated = false;
@@ -883,8 +937,9 @@ export function PendingInvoicing() {
         await postEntity("gate_passes", initialGatePass);
         gatePassCreated = true;
       } catch (saveError) {
-        for (const originalSlip of invoiceModal.slips as LoadingSlip[]) {
-          if (!slipIdsUpdated.has(originalSlip.id)) continue;
+        for (const draftSlip of invoiceModal.slips as LoadingSlip[]) {
+          if (!slipIdsUpdated.has(draftSlip.id)) continue;
+          const originalSlip = loadingSlips.find((slip) => slip.id === draftSlip.id) || draftSlip;
           try {
             await postEntity("loading_slips", originalSlip);
           } catch (rollbackError) {
@@ -1138,6 +1193,13 @@ export function PendingInvoicing() {
                                   className="px-3 py-1.5 bg-white border-2 border-black text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-px hover:translate-y-px hover:shadow-none transition"
                                 >
                                   + Add Order
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeInvoiceItemRow(itemRow.id)}
+                                  className="px-3 py-1.5 bg-white border-2 border-rose-700 text-[10px] font-black uppercase text-rose-700 hover:bg-rose-50 transition"
+                                >
+                                  Remove Item
                                 </button>
                               </div>
                             </div>
