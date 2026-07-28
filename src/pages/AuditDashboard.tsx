@@ -56,6 +56,29 @@ function formatCount(value: number) {
   return Number(value || 0).toLocaleString("en-IN");
 }
 
+function getMaterialInPurchaseAuditValue(entry: MaterialIn) {
+  const lineGst = roundMoney(
+    (entry.lines || []).reduce(
+      (sum, line) => sum + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0),
+      0
+    )
+  );
+  const expenseGst = roundMoney(Number(entry.expenseCGST || 0) + Number(entry.expenseSGST || 0) + Number(entry.expenseIGST || 0));
+  const totalGst = roundMoney(Number(entry.totalCgst || 0) + Number(entry.totalSgst || 0) + Number(entry.totalIgst || 0));
+  const hasExpenseOnlyGst = expenseGst !== 0 && lineGst === 0 && expenseGst === totalGst;
+
+  if (hasExpenseOnlyGst) {
+    return roundMoney(
+      Number(entry.totalInvoiceValueAfterGst || 0) +
+        Number(entry.insurance || 0) +
+        Number(entry.otherCharges || 0) -
+        Number(entry.roundOff || 0)
+    );
+  }
+
+  return roundMoney(Number(entry.totalAmount || 0));
+}
+
 function getSnapshotId() {
   return `audit-${ALL_DATA_DATE_RANGE.from || "all"}-${ALL_DATA_DATE_RANGE.to || "all"}`;
 }
@@ -167,16 +190,7 @@ export function AuditDashboard() {
 return {
       invoiceValue: roundMoney(
         tallyPostedMaterialIn.reduce((sum, entry) => {
-          return (
-            sum +
-            Number(entry.totalInvoiceValueAfterGst || 0) +
-            Number(entry.insurance || 0) +
-            Number(entry.otherCharges || 0) +
-            Number(entry.expenseCGST || 0) +
-            Number(entry.expenseSGST || 0) +
-            Number(entry.expenseIGST || 0) -
-            Number(entry.roundOff || 0)
-          );
+          return sum + getMaterialInPurchaseAuditValue(entry);
         }, 0)
       ),
       invoiceCount: tallyPostedMaterialIn.length,
