@@ -167,8 +167,7 @@ export function AuditDashboard() {
 return {
       invoiceValue: roundMoney(
         tallyPostedMaterialIn.reduce((sum, entry) => {
-          const afterGst = Number(entry.totalInvoiceValueAfterGst || 0);
-          return sum + (afterGst > 0 ? afterGst : Number(entry.totalInvoiceValue || 0));
+          return sum + Number(entry.totalInvoiceValueAfterGst || 0) + Number(entry.insurance || 0) + Number(entry.otherCharges || 0) - Number(entry.roundOff || 0);
         }, 0)
       ),
       invoiceCount: tallyPostedMaterialIn.length,
