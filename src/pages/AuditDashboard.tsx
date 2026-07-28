@@ -171,15 +171,19 @@ export function AuditDashboard() {
         return sum + Number(line.weightKg || 0) * rate;
       }, 0);
 
-    const getIssueMaterialValue = (issueIds: Set<string>) => materialIssueLines
+    const getConsumptionMaterialAmount = (issueIds: Set<string>) => materialIssueLines
+      .filter((line) => issueIds.has(line.materialIssueId) && !reelIssueLineIds.has(line.id))
+      .reduce((sum, line) => sum + Number(line.amount || 0), 0);
+
+    const getManufacturingMaterialValue = (issueIds: Set<string>) => materialIssueLines
       .filter((line) => issueIds.has(line.materialIssueId) && !reelIssueLineIds.has(line.id))
       .reduce((sum, line) => {
         const material = materialMap.get(line.materialId);
         return sum + Number(line.qty || 0) * Number(material?.openingRate || 0);
       }, 0);
 
-    const consumptionValue = getIssueReelValue(consumptionIssueIdSet) + getIssueMaterialValue(consumptionIssueIdSet);
-    const manufacturingValue = getIssueReelValue(manufacturingIssueIdSet) + getIssueMaterialValue(manufacturingIssueIdSet);
+    const consumptionValue = getIssueReelValue(consumptionIssueIdSet) - getConsumptionMaterialAmount(consumptionIssueIdSet);
+    const manufacturingValue = getIssueReelValue(manufacturingIssueIdSet) + getManufacturingMaterialValue(manufacturingIssueIdSet);
 
     return {
       invoiceValue: roundMoney(
