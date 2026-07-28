@@ -46,7 +46,7 @@ export function recalculateMaterialLine(
 
   const invoiceValue = round2(invoiceQty * invoiceRate);
   const actualValue = round2(actualQty * invoiceRate);
-  const taxableAmount = round2(actualValue);
+  const taxableAmount = round2(invoiceValue);
   const gstRate = Number(line.gstRate || 0);
   const cgstRate = Number(line.cgstRate || 0);
   const sgstRate = Number(line.sgstRate || 0);
