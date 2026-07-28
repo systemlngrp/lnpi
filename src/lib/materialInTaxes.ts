@@ -144,8 +144,16 @@ export function summarizeMaterialInLines(
   const totalCgst = round2(lineCgst + expenseCGSTValue);
   const totalSgst = round2(lineSgst + expenseSGSTValue);
   const totalIgst = round2(lineIgst + expenseIGSTValue);
-  const totalInvoiceValueAfterGst = round2(totalInvoiceValue + totalCgst + totalSgst + totalIgst);
-  const totalAmount = round2(totalActualValue + totalCgst + totalSgst + totalIgst + insuranceValue + otherChargesValue + roundOffValue);
+  const totalInvoiceValueAfterGst = round2(totalInvoiceValue + lineCgst + lineSgst + lineIgst);
+  const totalAmount = round2(
+    totalInvoiceValueAfterGst +
+      insuranceValue +
+      otherChargesValue +
+      expenseCGSTValue +
+      expenseSGSTValue +
+      expenseIGSTValue +
+      roundOffValue
+  );
 
   return {
     lines: normalizedLines,
