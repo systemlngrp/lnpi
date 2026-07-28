@@ -11,9 +11,6 @@ import type {
   MaterialIssue,
   MaterialIssueLine,
   MaterialIssueReelLine,
-  MaterialReturn,
-  MaterialReturnLine,
-  MaterialReturnReelLine,
 } from "../types";
 import { cn } from "../lib/utils";
 
@@ -21,7 +18,7 @@ const ALERT_EMAILS = ["cfo@lngrp.in", "vivekagarwal@lngrp.in", "pankaj@bizskille
 const ALL_DATA_DATE_RANGE = { from: "", to: "" };
 const ALL_DATA_RANGE_LABEL = "All Dates";
 
-type AuditMetricKey = "invoiceValue" | "consumptionValue" | "saleValue" | "debitNote";
+type AuditMetricKey = "invoiceValue" | "consumptionValue" | "manufacturingValue" | "saleValue" | "debitNote";
 
 type AuditMetric = {
   key: AuditMetricKey;
@@ -36,10 +33,12 @@ type AuditMetric = {
 type TallyValues = {
   invoiceValueTally: number;
   consumptionValueTally: number;
+  manufacturingValueTally: number;
   saleValueTally: number;
   debitNoteTally: number;
   invoiceCountTally: number;
   consumptionCountTally: number;
+  manufacturingCountTally: number;
   saleCountTally: number;
   debitNoteCountTally: number;
 };
@@ -103,10 +102,12 @@ function getSnapshotValues(snapshot?: AuditDashboardSnapshot): TallyValues {
   return {
     invoiceValueTally: roundMoney(Number(snapshot?.invoiceValueTally || 0)),
     consumptionValueTally: roundMoney(Number(snapshot?.consumptionValueTally || 0)),
+    manufacturingValueTally: roundMoney(Number(snapshot?.manufacturingValueTally || 0)),
     saleValueTally: roundMoney(Number(snapshot?.saleValueTally || 0)),
     debitNoteTally: roundMoney(Number(snapshot?.debitNoteTally || 0)),
     invoiceCountTally: Number(snapshot?.invoiceCountTally || 0),
     consumptionCountTally: Number(snapshot?.consumptionCountTally || 0),
+    manufacturingCountTally: Number(snapshot?.manufacturingCountTally || 0),
     saleCountTally: Number(snapshot?.saleCountTally || 0),
     debitNoteCountTally: Number(snapshot?.debitNoteCountTally || 0),
   };
@@ -117,6 +118,10 @@ function getSnapshotSortTime(snapshot: AuditDashboardSnapshot) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function hasJobNo(issue: MaterialIssue) {
+  return String(issue.jobNo || "").trim() !== "";
+}
+
 export function AuditDashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
@@ -124,9 +129,6 @@ export function AuditDashboard() {
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
-  const [materialReturns] = useData<MaterialReturn>("material-returns", []);
-  const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
-  const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [invoices] = useData<Invoice>("invoices", []);
   const [snapshots] = useData<AuditDashboardSnapshot>("audit_dashboard_snapshots", []);
   const [tallyValues, setTallyValues] = useState<TallyValues>(getSnapshotValues());
@@ -151,51 +153,41 @@ export function AuditDashboard() {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
     const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
     const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
-    const issueIdSet = new Set(materialIssues.map((entry) => entry.id));
-    const returnIdSet = new Set(materialReturns.map((entry) => entry.id));
+    const consumptionIssueIdSet = new Set(materialIssues.filter((entry) => !hasJobNo(entry)).map((entry) => entry.id));
+    const manufacturingIssueIdSet = new Set(materialIssues.filter(hasJobNo).map((entry) => entry.id));
     const reelIssueLineIds = new Set(issueReelLines.map((line) => line.materialIssueLineId));
-    const reelReturnLineIds = new Set(returnReelLines.map((line) => line.materialReturnLineId));
     const tallyPostedMaterialIn = materialIn.filter(
       (entry) => String(entry.tallyTimestamp || "").trim() && String(entry.transactionNo || "").trim() !== "1"
     );
 
-    const issueReelValue = issueReelLines
-      .filter((line) => issueIdSet.has(line.materialIssueId))
+    const getIssueReelValue = (issueIds: Set<string>) => issueReelLines
+      .filter((line) => issueIds.has(line.materialIssueId))
       .reduce((sum, line) => {
         const rate = getReelRateForSlip({ slip: packingSlipMap.get(line.packingSlipId), materialInMap, materialMap });
         return sum + Number(line.weightKg || 0) * rate;
       }, 0);
 
-    const returnReelValue = returnReelLines
-      .filter((line) => returnIdSet.has(line.materialReturnId))
-      .reduce((sum, line) => {
-        const rate = getReelRateForSlip({ slip: packingSlipMap.get(line.packingSlipId), materialInMap, materialMap });
-        return sum + Number(line.weightKg || 0) * rate;
-      }, 0);
-
-    const issueMaterialValue = materialIssueLines
-      .filter((line) => issueIdSet.has(line.materialIssueId) && !reelIssueLineIds.has(line.id))
+    const getIssueMaterialValue = (issueIds: Set<string>) => materialIssueLines
+      .filter((line) => issueIds.has(line.materialIssueId) && !reelIssueLineIds.has(line.id))
       .reduce((sum, line) => {
         const material = materialMap.get(line.materialId);
         return sum + Number(line.qty || 0) * Number(material?.openingRate || 0);
       }, 0);
 
-    const returnMaterialValue = materialReturnLines
-      .filter((line) => returnIdSet.has(line.materialReturnId) && !reelReturnLineIds.has(line.id))
-      .reduce((sum, line) => {
-        const material = materialMap.get(line.materialId);
-        return sum + Number(line.qty || 0) * Number(material?.openingRate || 0);
-      }, 0);
+    const consumptionValue = getIssueReelValue(consumptionIssueIdSet) + getIssueMaterialValue(consumptionIssueIdSet);
+    const manufacturingValue = getIssueReelValue(manufacturingIssueIdSet) + getIssueMaterialValue(manufacturingIssueIdSet);
 
-return {
+    return {
       invoiceValue: roundMoney(
         tallyPostedMaterialIn.reduce((sum, entry) => {
           return sum + getMaterialInPurchaseAuditValue(entry);
         }, 0)
       ),
       invoiceCount: tallyPostedMaterialIn.length,
-      consumptionValue: roundMoney(issueReelValue + issueMaterialValue - returnReelValue - returnMaterialValue),
-      consumptionCount: materialIssues.length + materialReturns.length,
+      consumptionValue: roundMoney(consumptionValue),
+      consumptionCount: consumptionIssueIdSet.size,
+      manufacturingValue: roundMoney(manufacturingValue),
+      manufacturingCount: manufacturingIssueIdSet.size,
       saleValue: roundMoney(
         invoices.reduce((sum, invoice) => sum + getInvoiceGrandTotal(invoice), 0)
       ),
@@ -203,12 +195,13 @@ return {
       debitNote: roundMoney(materialIn.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
       debitNoteCount: materialIn.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
     };
-  }, [invoices, issueReelLines, materialIn, materialIssueLines, materialIssues, materialReturnLines, materialReturns, materials, packingSlips, returnReelLines]);
+  }, [invoices, issueReelLines, materialIn, materialIssueLines, materialIssues, materials, packingSlips]);
 
   const metrics = useMemo<AuditMetric[]>(() => {
     const baseMetrics: Array<Omit<AuditMetric, "difference">> = [
       { key: "invoiceValue", label: "Invoice Value", appValue: appValues.invoiceValue, tallyValue: tallyValues.invoiceValueTally, appCount: appValues.invoiceCount, tallyCount: tallyValues.invoiceCountTally },
       { key: "consumptionValue", label: "Consumption Value", appValue: appValues.consumptionValue, tallyValue: tallyValues.consumptionValueTally, appCount: appValues.consumptionCount, tallyCount: tallyValues.consumptionCountTally },
+      { key: "manufacturingValue", label: "Manufacturing Journal Audit", appValue: appValues.manufacturingValue, tallyValue: tallyValues.manufacturingValueTally, appCount: appValues.manufacturingCount, tallyCount: tallyValues.manufacturingCountTally },
       { key: "saleValue", label: "Sale Value", appValue: appValues.saleValue, tallyValue: tallyValues.saleValueTally, appCount: appValues.saleCount, tallyCount: tallyValues.saleCountTally },
       { key: "debitNote", label: "Debit Note", appValue: appValues.debitNote, tallyValue: tallyValues.debitNoteTally, appCount: appValues.debitNoteCount, tallyCount: tallyValues.debitNoteCountTally },
     ];

@@ -1013,10 +1013,12 @@ export interface AuditDashboardSnapshot {
   dateTo: string;
   invoiceValueTally: number;
   consumptionValueTally: number;
+  manufacturingValueTally?: number;
   saleValueTally: number;
   debitNoteTally: number;
   invoiceCountTally?: number;
   consumptionCountTally?: number;
+  manufacturingCountTally?: number;
   saleCountTally?: number;
   debitNoteCountTally?: number;
   updatedBy?: string;

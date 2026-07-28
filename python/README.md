@@ -118,7 +118,7 @@ python tally_mrr_posting.py
 
 ## Audit Dashboard Tally Helper
 
-`tally_audit_dashboard_helper.py` runs on the Windows PC where Tally is open. It fetches values from the currently active Tally company and can also save those values directly into the LNPI MySQL `audit_dashboard_snapshots` table.
+`tally_audit_dashboard_helper.py` runs on the Windows PC where Tally is open. It fetches Purchase, Consumption Journal, Manufacturing Journal, Sales, and Debit Note values from the currently active Tally company and can also save those values directly into the LNPI MySQL `audit_dashboard_snapshots` table.
 
 It listens on `http://127.0.0.1:8765` and checks Tally XML/HTTP on the configured ports. By default it checks `localhost:9000`.
 

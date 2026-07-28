@@ -135,22 +135,34 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
         date_to,
         round_money(float(values.get("invoiceValueTally") or 0)),
         round_money(float(values.get("consumptionValueTally") or 0)),
+        round_money(float(values.get("manufacturingValueTally") or 0)),
         round_money(float(values.get("saleValueTally") or 0)),
         round_money(float(values.get("debitNoteTally") or 0)),
+        get_voucher_count(values, "Purchase"),
+        get_voucher_count(values, "Consumption Journal"),
+        get_voucher_count(values, "Manufacturing Journal"),
+        get_voucher_count(values, "Sales"),
+        get_voucher_count(values, "Debit Note"),
         "Tally Audit Helper",
         timestamp,
     )
     sql = """
         INSERT INTO audit_dashboard_snapshots
-          (id, dateFrom, dateTo, invoiceValueTally, consumptionValueTally, saleValueTally, debitNoteTally, updatedBy, updateTimestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+          (id, dateFrom, dateTo, invoiceValueTally, consumptionValueTally, manufacturingValueTally, saleValueTally, debitNoteTally, invoiceCountTally, consumptionCountTally, manufacturingCountTally, saleCountTally, debitNoteCountTally, updatedBy, updateTimestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
           dateFrom = VALUES(dateFrom),
           dateTo = VALUES(dateTo),
           invoiceValueTally = VALUES(invoiceValueTally),
           consumptionValueTally = VALUES(consumptionValueTally),
+          manufacturingValueTally = VALUES(manufacturingValueTally),
           saleValueTally = VALUES(saleValueTally),
           debitNoteTally = VALUES(debitNoteTally),
+          invoiceCountTally = VALUES(invoiceCountTally),
+          consumptionCountTally = VALUES(consumptionCountTally),
+          manufacturingCountTally = VALUES(manufacturingCountTally),
+          saleCountTally = VALUES(saleCountTally),
+          debitNoteCountTally = VALUES(debitNoteCountTally),
           updatedBy = VALUES(updatedBy),
           updateTimestamp = VALUES(updateTimestamp)
     """
@@ -183,6 +195,7 @@ MAX_REQUEST_BYTES = int(os.getenv("LNPI_AUDIT_MAX_REQUEST_BYTES", "4096"))
 VOUCHER_TYPES = {
     "invoiceValueTally": "Purchase",
     "consumptionValueTally": "Consumption Journal",
+    "manufacturingValueTally": "Manufacturing Journal",
     "saleValueTally": "Sales",
     "debitNoteTally": "Debit Note",
 }
@@ -272,6 +285,16 @@ def parse_amount(value: Any) -> float:
 
 def round_money(value: float) -> float:
     return round(float(value or 0), 2)
+
+
+def get_voucher_count(values: dict[str, Any], voucher_type: str) -> int:
+    counts = values.get("counts") or {}
+    if not isinstance(counts, dict):
+        return 0
+    try:
+        return int(counts.get(voucher_type) or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def build_voucher_collection_xml(voucher_type: str, date_from: str, date_to: str) -> str:
