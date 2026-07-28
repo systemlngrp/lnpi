@@ -19,7 +19,7 @@ import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
-import { getAvailableReelPackingSlips, getNonReelAvailableQty, resolveMaterialIssueRate } from "../lib/materialMovement";
+import { calculateMaterialIssueAmount, getAvailableReelPackingSlips, getNonReelAvailableQty, resolveMaterialIssueRate, round2 } from "../lib/materialMovement";
 import {
   buildProductionCorrugatedSheetUsageMap,
   buildProductionMaterialUsageMap,
@@ -414,16 +414,21 @@ export function MaterialIssueForm() {
 
       lines.forEach((line) => {
         const issueLineId = crypto.randomUUID();
+        const savedQty = round2(Number(line.qty || 0));
+        const savedRate = round2(Number(line.rate || 0));
+        const savedAmount = isWithoutJobIssue(issueType)
+          ? calculateMaterialIssueAmount(savedQty, savedRate)
+          : round2(Number(line.amount || 0));
         nextLines.push({
           id: issueLineId,
           materialIssueId: issueId,
           materialId: line.materialId,
-          qty: Number(line.qty || 0),
+          qty: savedQty,
           uom: line.uom,
-          lastPurchaseRate: Number(line.lastPurchaseRate || 0),
-          openingRate: Number(line.openingRate || 0),
-          rate: Number(line.rate || 0),
-          amount: Number(line.amount || 0),
+          lastPurchaseRate: round2(Number(line.lastPurchaseRate || 0)),
+          openingRate: round2(Number(line.openingRate || 0)),
+          rate: savedRate,
+          amount: savedAmount,
           updatedBy: "System User",
           updateTimestamp: timestamp,
         });

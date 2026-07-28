@@ -8,8 +8,12 @@ import {
   MaterialReturnReelLine,
 } from "../types";
 
-function round2(value: number) {
+export function round2(value: number) {
   return Number((Number(value) || 0).toFixed(2));
+}
+
+export function calculateMaterialIssueAmount(qty: number, rate: number) {
+  return round2(round2(qty) * round2(rate));
 }
 
 function getMaterialInLineRate(line: MaterialIn["lines"][number]) {
@@ -48,7 +52,7 @@ export function resolveMaterialIssueRate(
     lastPurchaseRate,
     openingRate,
     rate,
-    amount: round2(Number(qty || 0) * rate),
+    amount: calculateMaterialIssueAmount(qty, rate),
   };
 }
 

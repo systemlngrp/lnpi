@@ -2201,7 +2201,7 @@ async function backfillNonJobMaterialIssueValuation(db: mysql.Pool) {
   }
 
   const [lineRows] = await db.query(`
-    SELECT mil.id, mil.materialId, mil.qty, mil.rate, mil.amount
+    SELECT mil.id, mil.materialId, mil.qty, mil.lastPurchaseRate, mil.openingRate, mil.rate, mil.amount
     FROM \`material_issue_lines\` mil
     JOIN \`material_issues\` mi ON mi.id = mil.materialIssueId
     WHERE LOWER(TRIM(COALESCE(mi.issueType, ''))) IN ('without job', 'general', 'withoutjob', 'without_job')
@@ -2209,14 +2209,23 @@ async function backfillNonJobMaterialIssueValuation(db: mysql.Pool) {
 
   let updatedCount = 0;
   for (const line of lineRows as any[]) {
-    if (Number(line.rate || 0) > 0 || Number(line.amount || 0) > 0) continue;
     const materialId = String(line.materialId || "").trim();
-    const qty = Number(line.qty || 0);
-    const lastPurchaseRate = latestPurchaseByMaterial.get(materialId)?.rate || 0;
-    const openingRate = openingRateByMaterial.get(materialId) || 0;
-    const rate = lastPurchaseRate > 0 ? lastPurchaseRate : openingRate;
-    const amount = roundCurrency(qty * rate);
+    const qty = roundCurrency(Number(line.qty || 0));
+    const latestPurchaseRate = latestPurchaseByMaterial.get(materialId)?.rate || 0;
+    const materialOpeningRate = openingRateByMaterial.get(materialId) || 0;
+    const lastPurchaseRate = roundCurrency(Number(line.lastPurchaseRate || 0)) || latestPurchaseRate;
+    const openingRate = roundCurrency(Number(line.openingRate || 0)) || materialOpeningRate;
+    const rate = roundCurrency(Number(line.rate || 0)) || (lastPurchaseRate > 0 ? lastPurchaseRate : openingRate);
+    const amount = roundCurrency(qty * roundCurrency(rate));
     if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
+    if (
+      roundCurrency(Number(line.lastPurchaseRate || 0)) === lastPurchaseRate &&
+      roundCurrency(Number(line.openingRate || 0)) === openingRate &&
+      roundCurrency(Number(line.rate || 0)) === rate &&
+      roundCurrency(Number(line.amount || 0)) === amount
+    ) {
+      continue;
+    }
 
     await db.query(
       "UPDATE `material_issue_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ?",

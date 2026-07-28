@@ -6,7 +6,7 @@ import { Material, MaterialIn, MaterialIssue, MaterialIssueLine, MaterialIssueRe
 import { TableControls } from "../components/TableControls";
 import { ChevronDown, ChevronRight, XCircle } from "lucide-react";
 import { formatDate } from "../lib/serial";
-import { resolveMaterialIssueRate } from "../lib/materialMovement";
+import { calculateMaterialIssueAmount, resolveMaterialIssueRate } from "../lib/materialMovement";
 
 function isWithoutJobIssue(issueType?: string) {
   const t = String(issueType || "").trim().toLowerCase();
@@ -137,13 +137,13 @@ export function NonJobIssueMaster() {
       .map((line) => {
         const fallback = resolveMaterialIssueRate(line.materialId, materials, materialIn, Number(line.qty || 0));
         const savedRate = Number(line.rate || 0);
-        const savedAmount = Number(line.amount || 0);
+        const rate = savedRate > 0 ? savedRate : fallback.rate;
         return {
           ...line,
           lastPurchaseRate: Number(line.lastPurchaseRate || 0) || fallback.lastPurchaseRate,
           openingRate: Number(line.openingRate || 0) || fallback.openingRate,
-          rate: savedRate > 0 ? savedRate : fallback.rate,
-          amount: savedAmount > 0 ? savedAmount : fallback.amount,
+          rate,
+          amount: calculateMaterialIssueAmount(Number(line.qty || 0), rate),
         };
       });
     const selectedReelLines = issueReelLines.filter((line) => line.materialIssueId === row.id);
