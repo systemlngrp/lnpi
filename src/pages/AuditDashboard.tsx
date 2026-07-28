@@ -122,6 +122,10 @@ function hasJobNo(issue: MaterialIssue) {
   return String(issue.jobNo || "").trim() !== "";
 }
 
+function isCancelledIssue(issue: MaterialIssue) {
+  return String(issue.tallyPostingStatus || "").trim().toLowerCase() === "cancelled";
+}
+
 export function AuditDashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
@@ -153,7 +157,7 @@ export function AuditDashboard() {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
     const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
     const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
-    const consumptionIssueIdSet = new Set(materialIssues.filter((entry) => !hasJobNo(entry)).map((entry) => entry.id));
+    const consumptionIssueIdSet = new Set(materialIssues.filter((entry) => !hasJobNo(entry) && !isCancelledIssue(entry)).map((entry) => entry.id));
     const manufacturingIssueIdSet = new Set(materialIssues.filter(hasJobNo).map((entry) => entry.id));
     const reelIssueLineIds = new Set(issueReelLines.map((line) => line.materialIssueLineId));
     const tallyPostedMaterialIn = materialIn.filter(
