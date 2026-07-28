@@ -129,6 +129,11 @@ function isCancelledIssue(issue: MaterialIssue) {
   return String(issue.tallyPostingStatus || "").trim().toLowerCase() === "cancelled";
 }
 
+function isNotApplicableIssue(issue: MaterialIssue) {
+  const normalized = String(issue.notApplicable || "").trim().toLowerCase();
+  return normalized === "yes" || normalized === "true" || normalized === "1";
+}
+
 export function AuditDashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
@@ -163,7 +168,11 @@ export function AuditDashboard() {
     const materialMap = new Map(materials.map((material) => [material.id, material]));
     const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
     const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
-    const consumptionIssueIdSet = new Set(materialIssues.filter((entry) => !hasJobNo(entry) && !isCancelledIssue(entry)).map((entry) => entry.id));
+    const consumptionIssueIdSet = new Set(
+      materialIssues
+        .filter((entry) => !hasJobNo(entry) && !isCancelledIssue(entry) && !isNotApplicableIssue(entry))
+        .map((entry) => entry.id)
+    );
     const manufacturingIssueIdSet = new Set(materialIssues.filter(hasJobNo).map((entry) => entry.id));
     const manufacturingReturnIdSet = new Set(materialReturns.filter((entry) => String(entry.jobNo || "").trim() !== "").map((entry) => entry.id));
     const reelIssueLineIds = new Set(issueReelLines.map((line) => line.materialIssueLineId));
