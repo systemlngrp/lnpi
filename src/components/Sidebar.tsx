@@ -329,12 +329,8 @@ export const NAVIGATION: NavGroup[] = [
       { section: "PHP Loading", items: phpLoadingItems },
       { section: "Plate Loading", items: plateLoadingItems },
       { section: "Truck", items: truckItems },
+      { section: "Billing", items: billingItems },
     ],
-  },
-  {
-    section: "Billing",
-    color: "bg-fuchsia-700",
-    items: billingItems,
   },
   {
     section: "Report",
