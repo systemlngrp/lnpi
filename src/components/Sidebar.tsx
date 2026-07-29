@@ -90,15 +90,15 @@ function isNavSubGroup(entry: NavEntry): entry is NavSubGroup {
 
 const indentItems: NavItem[] = [
   { name: "Indent Form", href: "/indent/form", icon: ClipboardList },
-  { name: "Pending", href: "/indent/pending", icon: Activity, countKey: "/indent/pending" },
-  { name: "Approved", href: "/indent/approved", icon: Database, countKey: "/indent/approved" },
-  { name: "Completed", href: "/indent/completed", icon: CheckCircle, countKey: "/indent/completed" },
-  { name: "Rejected", href: "/indent/rejected", icon: X, countKey: "/indent/rejected" },
+  { name: "Pending Approval", href: "/indent/pending", icon: Activity, countKey: "/indent/pending" },
+  { name: "Approved Indents", href: "/indent/approved", icon: Database, countKey: "/indent/approved" },
+  { name: "Indents Ordered", href: "/indent/completed", icon: CheckCircle, countKey: "/indent/completed" },
+  { name: "Rejected Indents", href: "/indent/rejected", icon: X, countKey: "/indent/rejected" },
 ];
 
 const purchaseOrderItems: NavItem[] = [
-  { name: "Pending PO Items", href: "/purchase-orders/pending-indent-lines", icon: Activity, countKey: "/purchase-orders/pending-indent-lines" },
-  { name: "All", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
+  { name: "Indents Not Ordered", href: "/purchase-orders/pending-indent-lines", icon: Activity, countKey: "/purchase-orders/pending-indent-lines" },
+  { name: "Purchase Order Master", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
   { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
   { name: "Approved", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
   { name: "Rejected", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
@@ -107,16 +107,16 @@ const purchaseOrderItems: NavItem[] = [
 const gateEntryItems: NavItem[] = [
   { name: "GE Form", href: "/gate-entry/form", icon: ClipboardList },
   { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
-  { name: "Cancelled Gate Entry", href: "/gate-entry/cancelled", icon: X },
+  { name: "Cancelled Gate Entry Master", href: "/gate-entry/cancelled", icon: X },
 ];
 
 const materialReceiptItems: NavItem[] = [
   { name: "Material Receipt Master", href: "/material-in/master", icon: Database },
-  { name: "Material Receipt Item Master", href: "/material-in/item-master", icon: Database },
+  { name: "Material Receipt (Itemized)", href: "/material-in/item-master", icon: Database },
   { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
   { name: "Pending MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
-  { name: "Pending Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
-  { name: "Pending Debit Note", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
+  { name: "Pending MRR Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
+  { name: "Pending Debit Note Tally Posting", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
 ];
 
 const materialIssueReturnItems: NavItem[] = [
