@@ -123,9 +123,9 @@ const materialIssueReturnItems: NavItem[] = [
   { name: "Material Issue and Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
   { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
   { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
-  { name: "Pending Non-Job Material Issue", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
-  { name: "Pending Consumption Tally Posting", href: "/material-movement/pending-consumption-tally", icon: FileText, countKey: "/material-movement/pending-consumption-tally" },
-  { name: "Non-Job Issue Master", href: "/material-movement/non-job-issue-master", icon: Database },
+  { name: "Pending Daily Consumables Entry", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
+  { name: "Pending Daily Consumables Tally Posting", href: "/material-movement/pending-consumption-tally", icon: FileText, countKey: "/material-movement/pending-consumption-tally" },
+  { name: "Daily Consumables Master", href: "/material-movement/non-job-issue-master", icon: Database },
   { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
   { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
 ];
@@ -170,8 +170,8 @@ const plateMasterItems: NavItem[] = [
 ];
 
 const productionProcessingItems: NavItem[] = [
-  { name: "Pending Processing", href: "/production/pending-machine-processing", icon: Hammer, countKey: "/production/pending-machine-processing" },
-  { name: "Reporting Master", href: "/production-processing/master", icon: Database },
+  { name: "Pending Production Processing", href: "/production/pending-machine-processing", icon: Hammer, countKey: "/production/pending-machine-processing" },
+  { name: "Production Processing Master", href: "/production-processing/master", icon: Database },
 ];
 
 const sampleItems: NavItem[] = [
@@ -286,9 +286,9 @@ export const NAVIGATION: NavGroup[] = [
       { section: "Material Issue and Return", items: materialIssueReturnItems },
 
       { section: "Production", items: productionItems },
-      { section: "PHP / Plate Process", items: phpPlateProcessItems },
-      { section: "PHP Master", items: phpMasterItems },
-      { section: "Plate Master", items: plateMasterItems },
+      { section: "PHP & Plate Production", items: phpPlateProcessItems },
+      { section: "PHP Production Master", items: phpMasterItems },
+      { section: "Plate Production Master", items: plateMasterItems },
       { section: "Production Processing", items: productionProcessingItems },
       { section: "Samples", items: sampleItems },
     ],
@@ -515,7 +515,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         items: [
           {
             section: "Production Processing",
-            items: productionProcessingItems.filter((item) => item.name === "Pending Processing"),
+            items: productionProcessingItems.filter((item) => item.name === "Pending Production Processing"),
           },
         ],
       },
