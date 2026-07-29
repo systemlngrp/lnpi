@@ -458,6 +458,7 @@ const COMPANY_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
   { column: "salesPerson", type: "VARCHAR(255)" },
   { column: "gstType", type: "VARCHAR(100)" },
   { column: "panNo", type: "VARCHAR(100)" },
+  { column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
 ];
 const MATERIAL_IN_CURRENCY_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
   { column: "invoiceCurrency", type: "VARCHAR(10) NULL" },
@@ -3676,7 +3677,8 @@ async function initDb(retries = 5) {
           \`panNo\` VARCHAR(50),
           \`pin\` VARCHAR(20),
           \`npdHostingerSync\` VARCHAR(255),
-          \`salesPerson\` VARCHAR(255)
+          \`salesPerson\` VARCHAR(255),
+          \`active\` VARCHAR(10) DEFAULT 'Yes'
         )
       `);
 

@@ -459,6 +459,7 @@ export interface Company {
   salesPerson?: string;
   gstType?: string;
   panNo?: string;
+  active?: "Yes" | "No";
   updatedBy?: string;
   updateTimestamp?: string;
 }

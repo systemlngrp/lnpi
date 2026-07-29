@@ -34,6 +34,7 @@ export function Companies() {
   const [salesPerson, setSalesPerson] = useState("");
   const [gstType, setGstType] = useState("");
   const [panNo, setPanNo] = useState("");
+  const [active, setActive] = useState<"Yes" | "No">("Yes");
 
   const resetForm = () => {
     setName("");
@@ -51,6 +52,7 @@ export function Companies() {
     setSalesPerson("");
     setGstType("");
     setPanNo("");
+    setActive("Yes");
     setEditingId(null);
   };
 
@@ -71,7 +73,8 @@ export function Companies() {
         "PIN": "400001",
         "Sales Person": "Jane Smith",
         "GST Type": "Regular",
-        "PAN No": "ABCDE1234F"
+        "PAN No": "ABCDE1234F",
+        "Active": "Yes"
       }
     ];
 
@@ -118,6 +121,7 @@ export function Companies() {
           salesPerson: String(row["Sales Person"] || "").trim() || undefined,
           gstType: String(row["GST Type"] || "").trim() || undefined,
           panNo: String(row["PAN No"] || "").trim() || undefined,
+          active: (String(row["Active"] || "Yes").trim().toLowerCase() === "no" ? "No" : "Yes") as Company["active"],
           ...audit,
         })).filter(c => c.name);
 
@@ -165,7 +169,8 @@ export function Companies() {
       "PIN": c.pin || "",
       "Sales Person": c.salesPerson || "",
       "GST Type": c.gstType || "",
-      "PAN No": c.panNo || ""
+      "PAN No": c.panNo || "",
+      "Active": c.active === "No" ? "No" : "Yes"
     }));
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -210,6 +215,7 @@ export function Companies() {
         salesPerson: salesPerson.trim() || undefined,
         gstType: gstType.trim() || undefined,
         panNo: panNo.trim() || undefined,
+        active,
         ...audit,
       };
 
@@ -263,6 +269,7 @@ export function Companies() {
     setSalesPerson(company.salesPerson || "");
     setGstType(company.gstType || "");
     setPanNo(company.panNo || "");
+    setActive(company.active === "No" ? "No" : "Yes");
     setEditingId(company.id);
     setIsFormOpen(true);
   };
@@ -286,7 +293,8 @@ export function Companies() {
         (c.district || "").toLowerCase().includes(q) ||
         (c.state || "").toLowerCase().includes(q) ||
         (c.salesPerson || "").toLowerCase().includes(q) ||
-        (c.panNo || "").toLowerCase().includes(q)
+        (c.panNo || "").toLowerCase().includes(q) ||
+        (c.active === "No" ? "inactive no" : "active yes").includes(q)
       );
     });
   }, [sortedCompanies, searchTerm]);
@@ -387,6 +395,14 @@ export function Companies() {
             </div>
 
             <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Active</label>
+              <select value={active} onChange={(e) => setActive(e.target.value === "No" ? "No" : "Yes")} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors">
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Deviation Allowed (%)</label>
               <input
                 type="number"
@@ -455,6 +471,7 @@ export function Companies() {
                   <div className="text-xs text-slate-700">{c.district} {c.state ? `| ${c.state}` : ""} {c.pin ? `| ${c.pin}` : ""}</div>
                   <div className="text-xs text-slate-700">GST Supply Type: {c.gstSupplyType || "INTRA_STATE"} {c.gstType ? `| Type: ${c.gstType}` : ""}</div>
                   <div className="text-xs text-slate-700">PAN: {c.panNo || "-"} | Sales Person: {c.salesPerson || "-"}</div>
+                  <div className="text-xs font-bold text-slate-700">Active: {c.active === "No" ? "No" : "Yes"}</div>
                   <div className="text-xs text-slate-700">Deviation Allowed: {c.deviationAllowed ?? "-"}%</div>
                   <div className="text-xs text-slate-700">Tolerance Allowed: {c.toleranceAllowed ?? "-"}%</div>
                 </div>
@@ -488,13 +505,14 @@ export function Companies() {
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Sales Person</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Deviation Allowed</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Tolerance Allowed</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Active</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {filteredCompanies.length === 0 ? (
                 <tr>
-                  <td colSpan={17} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                  <td colSpan={18} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                     {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found.'}
                   </td>
                 </tr>
@@ -521,6 +539,7 @@ export function Companies() {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.salesPerson}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.deviationAllowed ?? "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.toleranceAllowed ?? "-"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-black border border-black">{c.active === "No" ? "No" : "Yes"}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium border border-black">
                       <button
                         title="Edit"

@@ -133,10 +133,18 @@ export function OrderForm() {
     label: getOrderItemSourceLabel(source),
   }));
 
-  const companyOptions = companies
-    .slice()
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-    .map((company) => ({ value: company.id, label: company.name }));
+  const isCompanyActive = (company: Company) => company.active !== "No";
+
+  const companyOptions = useMemo(() => {
+    return companies
+      .filter((company) => isCompanyActive(company) || (editingId && company.id === companyId))
+      .slice()
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+      .map((company) => ({
+        value: company.id,
+        label: `${company.name}${isCompanyActive(company) ? "" : " (Inactive)"}`,
+      }));
+  }, [companies, companyId, editingId]);
 
   const normalizeCompanyName = (value: string | null | undefined) =>
     String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -147,7 +155,7 @@ export function OrderForm() {
     if (!item) return "";
     const companyName = normalizeCompanyName(item.companyName);
     if (!companyName) return "";
-    return companies.find((company) => normalizeCompanyName(company.name) === companyName)?.id || "";
+    return companies.find((company) => normalizeCompanyName(company.name) === companyName && isCompanyActive(company))?.id || "";
   };
 
   const itemOptions = useMemo(() => {
