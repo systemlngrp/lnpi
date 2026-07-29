@@ -142,7 +142,7 @@ const orderItems: NavItem[] = [
   { name: "Orders Master", href: "/orders/master", icon: FileText },
   { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
   { name: "Canceled Orders", href: "/orders/canceled", icon: X },
-  { name: "Pending Scheduled Orders with filters: Salesman, Company, Date From/To, Item", href: "/orders/scheduled", icon: Activity },
+  { name: "Pending Scheduled Orders", href: "/orders/scheduled", icon: Activity },
 ];
 
 const fgProductionItems: NavItem[] = [
@@ -164,15 +164,10 @@ const phpPlateProcessItems: NavItem[] = [
   { name: "Scheduling", href: "/production/php-plate/scheduling", icon: ClipboardList },
   { name: "Sequencing", href: "/production/php-plate/pending-sequencing", icon: Activity, countKey: "/production/php-plate/pending-sequencing" },
   { name: "Production", href: "/production/php-plate/pending-production", icon: Hammer, countKey: "/production/php-plate/pending-production" },
-];
-
-const phpMasterItems: NavItem[] = [
   { name: "PHP Production Master", href: "/production/php/master", icon: Database },
-];
-
-const plateMasterItems: NavItem[] = [
   { name: "Plate Production Master", href: "/production/plate/master", icon: Database },
 ];
+
 
 const productionProcessingItems: NavItem[] = [
   { name: "Pending Production Processing", href: "/production/pending-machine-processing", icon: Hammer, countKey: "/production/pending-machine-processing" },
@@ -232,8 +227,11 @@ const reportSalesItems: NavItem[] = [
   { name: "Wastage Report", href: "/reports/wastage", icon: BarChart3 },
 ];
 
-const reportLogisticsItems: NavItem[] = [
+const truckItems: NavItem[] = [
   { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
+  { name: "Vehicle Live Update", href: "/truck/live-update", icon: Activity },
+  { name: "Driver Form", href: "/driver-status", icon: ClipboardList },
+  { name: "Truck Logs", href: "/truck/logs", icon: FileText },
 ];
 const securityGatePassItems: NavItem[] = [
   { name: "Gate Pass Master", href: "/gate-pass/master", icon: Database },
@@ -319,8 +317,6 @@ export const NAVIGATION: NavGroup[] = [
       { section: "FG Production", items: fgProductionItems },
       { section: "Production Processing", items: productionProcessingItems },
       { section: "PHP & Plate Production", items: phpPlateProcessItems },
-      ...phpMasterItems,
-      ...plateMasterItems,
       { section: "Samples", items: sampleItems },
     ],
   },
@@ -332,16 +328,7 @@ export const NAVIGATION: NavGroup[] = [
       { section: "Loading", items: loadingItems },
       { section: "PHP Loading", items: phpLoadingItems },
       { section: "Plate Loading", items: plateLoadingItems },
-    ],
-  },
-  {
-    section: "Truck",
-    color: "bg-violet-700",
-    items: [
-      { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
-      { name: "Vehicle Live Update", href: "/truck/live-update", icon: Activity },
-      { name: "Driver Form", href: "/driver-status", icon: ClipboardList },
-      { name: "Truck Logs", href: "/truck/logs", icon: FileText },
+      { section: "Truck", items: truckItems },
     ],
   },
   {
@@ -653,27 +640,27 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
             : nested
               ? "bg-white/5 text-white hover:bg-black/20 hover:text-white font-medium"
               : "text-white hover:bg-black/20 hover:text-white font-medium",
-          "group flex items-center justify-between rounded-sm py-1.5 text-[11px] transition-all whitespace-nowrap",
+          "group flex items-start justify-between gap-2 rounded-sm py-1.5 text-[11px] transition-all",
           isCollapsed ? "px-2" : nested ? "pl-4 pr-2" : "px-2"
         )}
       >
-        <div className="flex items-center">
+        <div className="flex min-w-0 flex-1 items-start">
           <item.icon
             className={cn(
               isActive ? "text-black" : "text-white",
-              "mr-2 h-4 w-4 shrink-0"
+              "mr-2 mt-0.5 h-4 w-4 shrink-0"
             )}
             aria-hidden="true"
           />
           {!isCollapsed && (
-            <span className="block max-w-[180px] overflow-x-auto whitespace-nowrap scrollbar-thin">
+            <span className="block min-w-0 flex-1 whitespace-normal break-words leading-tight">
               {item.name}
             </span>
           )}
         </div>
         {count > 0 && !isCollapsed && (
           <span className={cn(
-            "flex items-center justify-center min-w-[18px] h-4.5 px-1 rounded-full text-[10px] font-black tracking-tighter shrink-0 ml-3",
+            "mt-0.5 flex h-4.5 min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-black tracking-tighter",
             isActive ? "bg-black text-white" : "bg-white text-black"
           )}>
             {count}
