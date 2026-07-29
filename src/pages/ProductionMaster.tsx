@@ -5,7 +5,7 @@ import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
 import { ClientPagination } from "../components/ClientPagination";
-import { ClipboardList, CheckCircle, FileText, XCircle } from "lucide-react";
+import { ClipboardList, CheckCircle, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
@@ -652,9 +652,10 @@ export function ProductionMaster() {
                         {p.status !== "Completed" && p.status !== "Cancelled" && (
                           <button 
                             onClick={() => openCancelModal(p.id)} 
-                            className="text-red-600 hover:text-red-900 font-bold inline-flex items-center justify-center p-2 border border-black text-xs min-w-[80px]"
+                            title="Cancel job"
+                            className="inline-flex items-center justify-center whitespace-nowrap rounded border border-red-700 bg-red-600 px-3 py-1.5 text-xs font-black text-white transition hover:bg-red-700"
                           >
-                            <XCircle size={14} className="mr-1" /> Cancel Job
+                            Cancel Job
                           </button>
                         )}
                       </div>
@@ -732,7 +733,7 @@ export function ProductionMaster() {
                 <th className="px-4 py-3 text-right text-xs font-bold text-emerald-900 uppercase border border-black whitespace-nowrap bg-emerald-50">Actual Paper (KG)</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Job Closer</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Close Date</th>
-                <th className="px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
+                <th className="min-w-[150px] px-4 py-3 text-center text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
@@ -921,7 +922,7 @@ export function ProductionMaster() {
                           required={p.closeBy === "Yes"}
                         />
                       </td>
-                      <td className="px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
+                      <td className="min-w-[150px] px-4 py-4 text-center text-xs font-medium border border-black whitespace-nowrap">
                         <div className="flex items-center justify-center gap-3">
                           <button
                             type="button"
@@ -955,9 +956,9 @@ export function ProductionMaster() {
                             <button 
                               onClick={() => openCancelModal(p.id)} 
                               title="Cancel job"
-                              className="text-red-600 hover:text-red-900 transition-all p-1"
+                              className="inline-flex items-center justify-center whitespace-nowrap rounded border border-red-700 bg-red-600 px-3 py-1.5 text-xs font-black text-white transition hover:bg-red-700"
                             >
-                              <XCircle size={16} />
+                              Cancel Job
                             </button>
                           )}
                         </div>
