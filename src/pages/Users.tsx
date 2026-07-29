@@ -442,7 +442,7 @@ export function Users() {
                   </button>
                 </div>
               </div>
-              <div className="mt-3 space-y-3 max-h-[360px] overflow-auto pr-1">
+              <div className="mt-3 space-y-3">
                 {allMenuItems.map((group) => {
                   const groupKeys = getGrandParentKeys(group);
                   const groupChecked = areAllSelected(groupKeys);
@@ -459,22 +459,15 @@ export function Users() {
                           />
                           <span className="truncate">{group.section}</span>
                         </label>
-                        <div className="flex shrink-0 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => addMenuKeys(groupKeys)}
-                            className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black hover:bg-indigo-700"
-                          >
-                            Select
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeMenuKeys(groupKeys)}
-                            className="bg-white text-black border border-black px-2 py-0.5 rounded text-[10px] font-black hover:bg-slate-100"
-                          >
-                            Clear
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeMenuKeys(groupKeys)}
+                          title="Clear"
+                          aria-label={`Clear ${group.section}`}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-100"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
 
                       <div className="mt-2 space-y-2">
@@ -495,24 +488,17 @@ export function Users() {
                                   />
                                   <span className="truncate">{parentLabel}</span>
                                 </label>
-                                <div className="flex shrink-0 gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => addMenuKeys(parentKeys)}
-                                    className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black hover:bg-indigo-700"
-                                  >
-                                    Select
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeMenuKeys(parentKeys)}
-                                    className="bg-white text-black border border-black px-2 py-0.5 rounded text-[10px] font-black hover:bg-slate-100"
-                                  >
-                                    Clear
-                                  </button>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeMenuKeys(parentKeys)}
+                                  title="Clear"
+                                  aria-label={`Clear ${parentLabel}`}
+                                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-100"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
                               </div>
-                              <div className="mt-2 grid grid-cols-1 gap-2 pl-5 sm:grid-cols-2">
+                              <div className="mt-2 grid grid-cols-1 gap-2 pl-5 sm:grid-cols-2 lg:grid-cols-3">
                                 {parent.children.map((child) => {
                                   const checked = selectedMenuAccess.has(child.key);
                                   return (
