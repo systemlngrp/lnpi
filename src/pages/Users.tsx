@@ -503,7 +503,7 @@ export function Users() {
                           const parentLabel = parent.section === DIRECT_MENU_SECTION ? "Direct Menu Items" : parent.section;
 
                           return (
-                            <div key={`${group.section}-${parent.section}`} className="rounded border border-indigo-200 bg-indigo-50/60 p-2">
+                            <div key={`${group.section}-${parent.section}`} className="rounded border border-indigo-300 bg-indigo-100/70 p-2">
                               <div className="flex items-center justify-between gap-3">
                                 <label className="flex min-w-0 items-center gap-2 text-xs font-black text-black">
                                   <IndeterminateCheckbox
