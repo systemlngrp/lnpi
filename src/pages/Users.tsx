@@ -500,12 +500,16 @@ export function Users() {
                           const parentKeys = getParentKeys(parent);
                           const parentChecked = areAllSelected(parentKeys);
                           const parentPartial = !parentChecked && areSomeSelected(parentKeys);
-                          const parentLabel = parent.section === DIRECT_MENU_SECTION ? "Direct Menu Items" : parent.section;
+                          const isDirectParent = parent.section === DIRECT_MENU_SECTION;
+                          const parentLabel = isDirectParent ? "Direct Menu Items" : parent.section;
 
                           return (
-                            <div key={`${group.section}-${parent.section}`} className="rounded border border-indigo-300 bg-indigo-100/70 p-2">
+                            <div
+                              key={`${group.section}-${parent.section}`}
+                              className={`rounded border p-2 ${isDirectParent ? "border-indigo-950 bg-indigo-900" : "border-indigo-300 bg-indigo-100/70"}`}
+                            >
                               <div className="flex items-center justify-between gap-3">
-                                <label className="flex min-w-0 items-center gap-2 text-xs font-black text-black">
+                                <label className={`flex min-w-0 items-center gap-2 text-xs font-black ${isDirectParent ? "text-white" : "text-black"}`}>
                                   <IndeterminateCheckbox
                                     checked={parentChecked}
                                     indeterminate={parentPartial}
@@ -529,7 +533,7 @@ export function Users() {
                                 {parent.children.map((child) => {
                                   const checked = selectedMenuAccess.has(child.key);
                                   return (
-                                    <label key={`${group.section}-${parent.section}-${child.key}`} className="flex min-w-0 items-start gap-2 text-xs font-bold text-black">
+                                    <label key={`${group.section}-${parent.section}-${child.key}`} className={`flex min-w-0 items-start gap-2 text-xs font-bold ${isDirectParent ? "text-white" : "text-black"}`}>
                                       <input
                                         type="checkbox"
                                         checked={checked}
