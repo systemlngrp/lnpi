@@ -506,7 +506,7 @@ export function Users() {
                           return (
                             <div
                               key={`${group.section}-${parent.section}`}
-                              className="rounded border border-indigo-950 bg-indigo-900 p-2"
+                              className="rounded border border-indigo-500 bg-indigo-400 p-2"
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <label className="flex min-w-0 items-center gap-2 text-xs font-black text-white">
