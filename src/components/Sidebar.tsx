@@ -332,6 +332,11 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
+    section: "Billing",
+    color: "bg-fuchsia-700",
+    items: billingItems,
+  },
+  {
     section: "Report",
     color: "bg-sky-700",
     items: [
