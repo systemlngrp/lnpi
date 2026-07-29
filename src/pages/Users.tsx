@@ -506,10 +506,10 @@ export function Users() {
                           return (
                             <div
                               key={`${group.section}-${parent.section}`}
-                              className="rounded border border-indigo-300 bg-indigo-200 p-2"
+                              className="rounded border border-slate-300 bg-white p-2"
                             >
                               <div className="flex items-center justify-between gap-3">
-                                <label className="flex min-w-0 items-center gap-2 text-xs font-black text-white">
+                                <label className="flex min-w-0 items-center gap-2 text-xs font-black text-black">
                                   <IndeterminateCheckbox
                                     checked={parentChecked}
                                     indeterminate={parentPartial}
