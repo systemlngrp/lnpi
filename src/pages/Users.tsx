@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Setting, User } from "../types";
-import { Plus, Edit, Trash2, Search, Eye, EyeOff } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Eye, EyeOff, Eraser } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { NAVIGATION } from "../components/Sidebar";
 import { ClientPagination } from "../components/ClientPagination";
@@ -58,7 +58,9 @@ export function Users() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [modalMode, setModalMode] = useState<"create" | "edit" | "view">("create");
   const [showPassword, setShowPassword] = useState(false);
+  const isViewMode = modalMode === "view";
   
   const [searchTerm, setSearchTerm] = useState("");
   const designationOptions = useMemo(() => parseDesignations(settings[0]), [settings]);
@@ -110,13 +112,14 @@ export function Users() {
   });
 
   const handleCreateNew = () => {
+    setModalMode("create");
     setEditingId(null);
     setShowPassword(false);
     setFormData({ userId: "", name: "", mobile: "", email: "", password: "", designation: "", role: "Employee", status: "Active", menuAccess: ["/"] });
     setIsFormOpen(true);
   };
 
-  const handleEdit = (user: User) => {
+  const loadUserForm = (user: User) => {
     setEditingId(user.id);
     setShowPassword(false);
     setFormData({
@@ -133,6 +136,15 @@ export function Users() {
     setIsFormOpen(true);
   };
 
+  const handleView = (user: User) => {
+    setModalMode("view");
+    loadUserForm(user);
+  };
+
+  const handleEdit = (user: User) => {
+    setModalMode("edit");
+    loadUserForm(user);
+  };
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = (id: string) => {
@@ -152,6 +164,8 @@ export function Users() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isViewMode) return;
 
     if (!formData.userId.trim()) {
       alert("User ID is required.");
@@ -309,7 +323,7 @@ export function Users() {
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-black">
                 <h3 className="text-lg font-bold text-black uppercase">
-                  {editingId ? "Edit User" : "Create User"}
+                  {isViewMode ? "View User" : editingId ? "Edit User" : "Create User"}
                 </h3>
                 <button
                   type="button"
@@ -331,7 +345,8 @@ export function Users() {
                   value={formData.userId}
                   onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
                   required
-                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  disabled={isViewMode}
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
               <div className="flex flex-col space-y-1">
@@ -341,7 +356,8 @@ export function Users() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
-                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  disabled={isViewMode}
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
             </div>
@@ -354,7 +370,8 @@ export function Users() {
                   value={formData.mobile}
                   onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                   required
-                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  disabled={isViewMode}
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
               <div className="flex flex-col space-y-1">
@@ -363,7 +380,8 @@ export function Users() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  disabled={isViewMode}
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
             </div>
@@ -374,7 +392,8 @@ export function Users() {
                 <select
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  disabled={isViewMode}
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-500"
                 >
                   <option value="">{designationOptions.length === 0 ? "No designations configured" : "Select designation"}</option>
                   {designationOptions.map((designation) => (
@@ -389,7 +408,8 @@ export function Users() {
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as any }))}
-                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  disabled={isViewMode}
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-500"
                 >
                   <option value="Admin">Admin</option>
                   <option value="Employee">Employee</option>
@@ -401,7 +421,8 @@ export function Users() {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  disabled={isViewMode}
+                  className="border-2 border-black rounded p-3 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-500"
                 >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
@@ -416,13 +437,15 @@ export function Users() {
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required={!editingId}
-                  className="w-full border-2 border-black rounded p-3 pr-12 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                  required={!editingId && !isViewMode}
+                  disabled={isViewMode}
+                  className="w-full border-2 border-black rounded p-3 pr-12 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-500"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-700 hover:text-black"
+                  disabled={isViewMode}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-700 hover:text-black disabled:text-slate-400"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -434,10 +457,10 @@ export function Users() {
               <div className="flex items-center justify-between">
                 <div className="font-black text-black text-sm uppercase">Menu Access</div>
                 <div className="flex gap-2">
-                  <button type="button" onClick={setAllMenus} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-black hover:bg-indigo-700">
+                  <button type="button" onClick={setAllMenus} disabled={isViewMode} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-black hover:bg-indigo-700 disabled:opacity-50">
                     Select All
                   </button>
-                  <button type="button" onClick={clearAllMenus} className="bg-white text-black border border-black px-3 py-1 rounded text-xs font-black hover:bg-slate-100">
+                  <button type="button" onClick={clearAllMenus} disabled={isViewMode} className="bg-white text-black border border-black px-3 py-1 rounded text-xs font-black hover:bg-slate-100 disabled:opacity-50">
                     Clear
                   </button>
                 </div>
@@ -455,6 +478,7 @@ export function Users() {
                           <IndeterminateCheckbox
                             checked={groupChecked}
                             indeterminate={groupPartial}
+                            disabled={isViewMode}
                             onChange={(e) => toggleMenuKeys(groupKeys, e.target.checked)}
                           />
                           <span className="truncate">{group.section}</span>
@@ -464,9 +488,10 @@ export function Users() {
                           onClick={() => removeMenuKeys(groupKeys)}
                           title="Clear"
                           aria-label={`Clear ${group.section}`}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-100"
+                          disabled={isViewMode}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-100 disabled:opacity-50"
                         >
-                          <Trash2 size={13} />
+                          <Eraser size={13} />
                         </button>
                       </div>
 
@@ -478,12 +503,13 @@ export function Users() {
                           const parentLabel = parent.section === DIRECT_MENU_SECTION ? "Direct Menu Items" : parent.section;
 
                           return (
-                            <div key={`${group.section}-${parent.section}`} className="rounded border border-slate-300 bg-slate-50 p-2">
+                            <div key={`${group.section}-${parent.section}`} className="rounded border border-indigo-200 bg-indigo-50/60 p-2">
                               <div className="flex items-center justify-between gap-3">
                                 <label className="flex min-w-0 items-center gap-2 text-xs font-black text-black">
                                   <IndeterminateCheckbox
                                     checked={parentChecked}
                                     indeterminate={parentPartial}
+                                    disabled={isViewMode}
                                     onChange={(e) => toggleMenuKeys(parentKeys, e.target.checked)}
                                   />
                                   <span className="truncate">{parentLabel}</span>
@@ -493,9 +519,10 @@ export function Users() {
                                   onClick={() => removeMenuKeys(parentKeys)}
                                   title="Clear"
                                   aria-label={`Clear ${parentLabel}`}
-                                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-100"
+                                  disabled={isViewMode}
+                                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-100 disabled:opacity-50"
                                 >
-                                  <Trash2 size={13} />
+                                  <Eraser size={13} />
                                 </button>
                               </div>
                               <div className="mt-2 grid grid-cols-1 gap-2 pl-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -506,6 +533,7 @@ export function Users() {
                                       <input
                                         type="checkbox"
                                         checked={checked}
+                                        disabled={isViewMode}
                                         onChange={(e) => toggleMenuKeys([child.key], e.target.checked)}
                                       />
                                       <span className="min-w-0 break-words leading-tight">{child.name}</span>
@@ -523,13 +551,15 @@ export function Users() {
               </div>
             </div>
             <div className="flex space-x-3 pt-2">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex items-center justify-center min-w-[120px] bg-indigo-600 text-white px-6 py-2 rounded font-bold hover:bg-indigo-700 transition disabled:opacity-50 border border-black shadow"
-              >
-                {isSubmitting ? <Spinner size={20} className="text-white" /> : (editingId ? "Update User" : "Create User")}
-              </button>
+              {!isViewMode ? (
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex items-center justify-center min-w-[120px] bg-indigo-600 text-white px-6 py-2 rounded font-bold hover:bg-indigo-700 transition disabled:opacity-50 border border-black shadow"
+                >
+                  {isSubmitting ? <Spinner size={20} className="text-white" /> : (editingId ? "Update User" : "Create User")}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
@@ -570,6 +600,13 @@ export function Users() {
                                 <div className="text-sm font-bold">{user.userId} / {user.name}</div>
                              </div>
                              <div className="flex items-center gap-2">
+                                 <button
+                                    onClick={() => handleView(user)}
+                                    className="text-slate-700 hover:text-black font-bold"
+                                    title="View"
+                                 >
+                                    <Eye size={16} />
+                                 </button>
                                  <button
                                     onClick={() => handleEdit(user)}
                                     className="text-indigo-600 hover:text-indigo-900 font-bold"
@@ -630,6 +667,12 @@ export function Users() {
                         <td className="px-6 py-4 text-sm text-black border border-black">{user.mobile}</td>
                         <td className="px-6 py-4 text-sm text-black border border-black">{user.email || "-"}</td>
                         <td className="px-6 py-4 text-right text-sm font-medium border border-black whitespace-nowrap">
+                          <button
+                            onClick={() => handleView(user)}
+                            className="text-slate-700 hover:text-black mr-4 font-bold inline-flex items-center"
+                          >
+                            <Eye size={16} className="mr-1" /> View
+                          </button>
                           <button
                             onClick={() => handleEdit(user)}
                             className="text-indigo-600 hover:text-indigo-900 mr-4 font-bold inline-flex items-center"
