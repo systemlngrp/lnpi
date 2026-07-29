@@ -506,10 +506,10 @@ export function Users() {
                           return (
                             <div
                               key={`${group.section}-${parent.section}`}
-                              className={`rounded border p-2 ${isDirectParent ? "border-indigo-950 bg-indigo-900" : "border-indigo-300 bg-indigo-100/70"}`}
+                              className="rounded border border-indigo-950 bg-indigo-900 p-2"
                             >
                               <div className="flex items-center justify-between gap-3">
-                                <label className={`flex min-w-0 items-center gap-2 text-xs font-black ${isDirectParent ? "text-white" : "text-black"}`}>
+                                <label className="flex min-w-0 items-center gap-2 text-xs font-black text-white">
                                   <IndeterminateCheckbox
                                     checked={parentChecked}
                                     indeterminate={parentPartial}
@@ -529,11 +529,11 @@ export function Users() {
                                   <Eraser size={13} />
                                 </button>
                               </div>
-                              <div className="mt-2 grid grid-cols-1 gap-2 pl-5 sm:grid-cols-2 lg:grid-cols-3">
+                              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                 {parent.children.map((child) => {
                                   const checked = selectedMenuAccess.has(child.key);
                                   return (
-                                    <label key={`${group.section}-${parent.section}-${child.key}`} className={`flex min-w-0 items-start gap-2 text-xs font-bold ${isDirectParent ? "text-white" : "text-black"}`}>
+                                    <label key={`${group.section}-${parent.section}-${child.key}`} className="flex min-w-0 items-start gap-2 rounded border border-indigo-300 bg-indigo-100 p-2 text-xs font-bold text-black">
                                       <input
                                         type="checkbox"
                                         checked={checked}
