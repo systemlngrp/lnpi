@@ -25,6 +25,9 @@ import { CancelledGateEntry, GateEntryMaster } from "./pages/GateEntryMaster";
 import { PendingMrr } from "./pages/PendingMrr";
 import { PendingTallyEntry } from "./pages/PendingTallyEntry";
 import { PendingDebitNote } from "./pages/PendingDebitNote";
+import { PendingPHApproval } from "./pages/PendingPHApproval";
+import { PendingAccountsApproval } from "./pages/PendingAccountsApproval";
+import { PendingMDApproval } from "./pages/PendingMDApproval";
 import { MaterialIssueForm } from "./pages/MaterialIssueForm";
 import { MaterialReturnForm } from "./pages/MaterialReturnForm";
 import { MaterialIssueMaster } from "./pages/MaterialIssueMaster";
@@ -234,6 +237,9 @@ export default function App() {
           {/* Material Receipt */}
           <Route path="material-receipt/pending-mrr" element={<PendingMrr />} />
           <Route path="material-receipt/approvals" element={<MrrApprovals />} />
+          <Route path="material-receipt/pending-ph-approval" element={<PendingPHApproval />} />
+          <Route path="material-receipt/pending-accounts-approval" element={<PendingAccountsApproval />} />
+          <Route path="material-receipt/pending-md-approval" element={<PendingMDApproval />} />
           <Route path="material-receipt/pending-tally" element={<PendingTallyEntry />} />
           <Route path="material-receipt/pending-debit-note" element={<PendingDebitNote />} />
 
@@ -324,6 +330,7 @@ export default function App() {
           <Route path="gate-pass/pending-returnable" element={<PendingReturnableItems />} />
 
           {/* Reports */}
+          <Route path="reports/other-consumables-inventory" element={<BlankPage title="Other Consumables Inventory" />} />
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
           <Route path="reports/reelwise-stock" element={<ReelwiseStockReport />} />
           <Route path="reports/jobwise-reel-consumption" element={<JobwiseReelConsumptionReport />} />

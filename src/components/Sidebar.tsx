@@ -98,10 +98,10 @@ const indentItems: NavItem[] = [
 
 const purchaseOrderItems: NavItem[] = [
   { name: "Indents Not Ordered", href: "/purchase-orders/pending-indent-lines", icon: Activity, countKey: "/purchase-orders/pending-indent-lines" },
+  { name: "Pending PO Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
+  { name: "Approved PO", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
+  { name: "Rejected PO", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
   { name: "Purchase Order Master", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
-  { name: "Pending Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
-  { name: "Approved", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
-  { name: "Rejected", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
 ];
 
 const gateEntryItems: NavItem[] = [
@@ -111,21 +111,26 @@ const gateEntryItems: NavItem[] = [
 ];
 
 const materialReceiptItems: NavItem[] = [
+  { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
   { name: "Material Receipt Master", href: "/material-in/master", icon: Database },
   { name: "Material Receipt (Itemized)", href: "/material-in/item-master", icon: Database },
-  { name: "Pending Material Receipt", href: "/material-receipt/pending-mrr", icon: Activity, countKey: "/material-receipt/pending-mrr" },
   { name: "Pending MRR Approvals", href: "/material-receipt/approvals", icon: CheckCircle, countKey: "/material-receipt/approvals" },
+  { name: "Pending PH Approval", href: "/material-receipt/pending-ph-approval", icon: UserCheck, countKey: "/material-receipt/pending-ph-approval" },
+  { name: "Pending Accounts Approval", href: "/material-receipt/pending-accounts-approval", icon: UserCheck, countKey: "/material-receipt/pending-accounts-approval" },
+  { name: "Pending MD Approval", href: "/material-receipt/pending-md-approval", icon: UserCheck, countKey: "/material-receipt/pending-md-approval" },
   { name: "Pending MRR Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
   { name: "Pending Debit Note Tally Posting", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
 ];
 
-const materialIssueReturnItems: NavItem[] = [
-  { name: "Material Issue and Return", href: "/material-movement/reel-issue-return", icon: ClipboardList },
+const materialIssueItems: NavItem[] = [
   { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
   { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
   { name: "Pending Daily Consumables Entry", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
   { name: "Pending Daily Consumables Tally Posting", href: "/material-movement/pending-consumption-tally", icon: FileText, countKey: "/material-movement/pending-consumption-tally" },
   { name: "Daily Consumables Master", href: "/material-movement/non-job-issue-master", icon: Database },
+];
+
+const materialReturnItems: NavItem[] = [
   { name: "Material Return Form", href: "/material-movement/return", icon: TrendingDown },
   { name: "Material Return Master", href: "/material-movement/return-master", icon: Database },
 ];
@@ -137,9 +142,10 @@ const orderItems: NavItem[] = [
   { name: "Orders Master", href: "/orders/master", icon: FileText },
   { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
   { name: "Canceled Orders", href: "/orders/canceled", icon: X },
+  { name: "Pending Scheduled Orders with filters: Salesman, Company, Date From/To, Item", href: "/orders/scheduled", icon: Activity },
 ];
 
-const productionItems: NavItem[] = [
+const fgProductionItems: NavItem[] = [
   { name: "Pending Production Plan", href: "/production/pending", icon: Activity, countKey: "/production/pending" },
   { name: "Pending NPD", href: "/production/pending-npd", icon: Activity, countKey: "/production/pending-npd" },
   { name: "Upcoming Scheduled Orders", href: "/production/upcoming", icon: Activity, countKey: "/orders/upcoming" },
@@ -149,7 +155,6 @@ const productionItems: NavItem[] = [
   { name: "Pending Tally Entry", href: "/production/pending-tally", icon: FileText, countKey: "/production/pending-tally" },
   { name: "Pending Job Closure", href: "/production/pending-job-closure", icon: FileText, countKey: "/production/pending-job-closure" },
   { name: "Production Master", href: "/production/master", icon: Database },
-  { name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 },
   { name: "Canceled Jobs", href: "/production/canceled", icon: X },
 ];
 
@@ -220,7 +225,6 @@ const reportProductionItems: NavItem[] = [
   { name: "Conversion Cost Month Wise", href: "/reports/conversion-cost-month-wise", icon: BarChart3 },
   { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
   { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
-  { name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 },
 ];
 
 const reportSalesItems: NavItem[] = [
@@ -231,6 +235,32 @@ const reportSalesItems: NavItem[] = [
 const reportLogisticsItems: NavItem[] = [
   { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
 ];
+const securityGatePassItems: NavItem[] = [
+  { name: "Gate Pass Master", href: "/gate-pass/master", icon: Database },
+  { name: "Pending Returnable Items", href: "/gate-pass/pending-returnable", icon: Activity, countKey: "/gate-pass/pending-returnable" },
+];
+
+const storeGatePassItems: NavItem[] = [
+  { name: "Gate Pass Form", href: "/gate-pass/form", icon: ClipboardList },
+  { name: "Pending Returnable Items", href: "/gate-pass/pending-returnable", icon: Activity, countKey: "/gate-pass/pending-returnable" },
+];
+
+const storeGateEntryItems: NavItem[] = [
+  { name: "Gate Entry Master", href: "/gate-entry/master", icon: Database },
+];
+
+const storeReportItems: NavItem[] = [
+  { name: "Other Consumables Inventory", href: "/reports/other-consumables-inventory", icon: BarChart3 },
+  { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
+  { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
+  { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
+];
+
+const npdDirectItems: NavItem[] = [
+  { name: "NPD Items", href: "/masters/npd", icon: Database },
+  { name: "PHP Item Master", href: "/masters/php-item-master", icon: Database },
+  { name: "Plate Item Master", href: "/masters/plate-item-master", icon: Database },
+];
 
 export const NAVIGATION: NavGroup[] = [
   {
@@ -240,6 +270,88 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Operation Dashboard", href: "/operations-dashboard", icon: BarChart3 },
       { name: "Audit Dashboard", href: "/audit-dashboard", icon: BarChart3 },
       { name: "Production Plan", href: "/production/plan", icon: ClipboardList },
+    ],
+  },
+  {
+    section: "Security",
+    color: "bg-red-700",
+    items: [
+      { section: "Gate Entry", items: gateEntryItems },
+      { section: "Gate Pass", items: securityGatePassItems },
+    ],
+  },
+  {
+    section: "Store",
+    color: "bg-orange-700",
+    items: [
+      { section: "Indent", items: indentItems },
+      { section: "Material Receipt", items: materialReceiptItems },
+      { section: "Material Issue", items: materialIssueItems },
+      { section: "Material Return", items: materialReturnItems },
+      { section: "Gate Pass", items: storeGatePassItems },
+      { section: "Gate Entry", items: storeGateEntryItems },
+      { section: "Report", items: storeReportItems },
+    ],
+  },
+  {
+    section: "NPD",
+    color: "bg-amber-700",
+    items: npdDirectItems,
+  },
+  {
+    section: "Purchase",
+    color: "bg-yellow-700",
+    items: [
+      { section: "Purchase Order", items: purchaseOrderItems },
+    ],
+  },
+  {
+    section: "Sales",
+    color: "bg-lime-700",
+    items: [
+      { section: "Orders", items: orderItems },
+    ],
+  },
+  {
+    section: "Production",
+    color: "bg-emerald-700",
+    items: [
+      { section: "FG Production", items: fgProductionItems },
+      { section: "Production Processing", items: productionProcessingItems },
+      { section: "PHP & Plate Production", items: phpPlateProcessItems },
+      ...phpMasterItems,
+      ...plateMasterItems,
+      { section: "Samples", items: sampleItems },
+    ],
+  },
+  {
+    section: "Dispatch",
+    color: "bg-blue-700",
+    items: [
+      { section: "Dispatch Planning", items: dispatchItems },
+      { section: "Loading", items: loadingItems },
+      { section: "PHP Loading", items: phpLoadingItems },
+      { section: "Plate Loading", items: plateLoadingItems },
+    ],
+  },
+  {
+    section: "Truck",
+    color: "bg-violet-700",
+    items: [
+      { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
+      { name: "Vehicle Live Update", href: "/truck/live-update", icon: Activity },
+      { name: "Driver Form", href: "/driver-status", icon: ClipboardList },
+      { name: "Truck Logs", href: "/truck/logs", icon: FileText },
+    ],
+  },
+  {
+    section: "Report",
+    color: "bg-sky-700",
+    items: [
+      { section: "Stock", items: reportStockItems },
+      { section: "Production", items: [{ name: "Itemwise Least Cost", href: "/production/least-cost", icon: BarChart3 }, ...reportProductionItems] },
+      { section: "Purchase", items: [{ name: "Paper Requirement", href: "/reports/paper-requirement", icon: BarChart3 }] },
+      { section: "Sales", items: reportSalesItems },
     ],
   },
   {
@@ -256,81 +368,9 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Trucks", href: "/masters/trucks", icon: Truck },
       { name: "Machine Master", href: "/masters/machines", icon: Hammer },
       { name: "RAPC Range Master", href: "/masters/rapc-ranges", icon: Database },
-      { name: "NPD Items", href: "/masters/npd", icon: Database },
-      { name: "PHP Item Master", href: "/masters/php-item-master", icon: Database },
-      { name: "Plate Item Master", href: "/masters/plate-item-master", icon: Database },
       { name: "Users", href: "/masters/users", icon: Users },
       { name: "Services", href: "/masters/services", icon: Database },
       { name: "Settings", href: "/masters/settings", icon: Database },
-    ],
-  },
-  {
-    section: "Purchase",
-    color: "bg-orange-700",
-    items: [
-      { section: "Indent", items: indentItems },
-      { section: "Purchase Order", items: purchaseOrderItems },
-      { section: "Gate Entry", items: gateEntryItems },
-      { section: "Material Receipt", items: materialReceiptItems },
-    ],
-  },
-  {
-    section: "Orders",
-    color: "bg-lime-700",
-    items: orderItems,
-  },
-  {
-    section: "Jobs",
-    color: "bg-emerald-700",
-    items: [
-      { section: "Material Issue and Return", items: materialIssueReturnItems },
-
-      { section: "Production", items: productionItems },
-      { section: "PHP & Plate Production", items: phpPlateProcessItems },
-      { section: "PHP Production Master", items: phpMasterItems },
-      { section: "Plate Production Master", items: plateMasterItems },
-      { section: "Production Processing", items: productionProcessingItems },
-      { section: "Samples", items: sampleItems },
-    ],
-  },
-  {
-    section: "Sales",
-    color: "bg-blue-700",
-    items: [
-      { section: "Dispatch", items: dispatchItems },
-      { section: "Loading", items: loadingItems },
-      { section: "PHP Loading", items: phpLoadingItems },
-      { section: "Plate Loading", items: plateLoadingItems },
-      { section: "Billing", items: billingItems },
-    ],
-  },
-  {
-    section: "Truck",
-    color: "bg-violet-700",
-    items: [
-      { name: "Truck Status", href: "/reports/truck-status", icon: Truck },
-      { name: "Vehicle Live Update", href: "/truck/live-update", icon: Activity },
-      { name: "Driver Form", href: "/driver-status", icon: ClipboardList },
-      { name: "Truck Logs", href: "/truck/logs", icon: FileText },
-    ],
-  },
-  {
-    section: "Gate Pass",
-    color: "bg-cyan-800",
-    items: [
-      { name: "Gate Pass Form", href: "/gate-pass/form", icon: ClipboardList },
-      { name: "Gate Pass Master", href: "/gate-pass/master", icon: Database },
-      { name: "Pending Returnable Items", href: "/gate-pass/pending-returnable", icon: Activity, countKey: "/gate-pass/pending-returnable" },
-    ],
-  },
-  {
-    section: "Report",
-    color: "bg-sky-700",
-    items: [
-      { section: "Stock", items: reportStockItems },
-      { section: "Production", items: reportProductionItems },
-      { section: "Sales", items: reportSalesItems },
-      { section: "Logistics", items: reportLogisticsItems },
     ],
   },
   {
@@ -344,18 +384,8 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
 ];
+const NAVIGATION_FOR_STANDARD_USERS: NavGroup[] = NAVIGATION;
 
-const NAVIGATION_WITH_SORTED_MASTERS: NavGroup[] = NAVIGATION.map((group) =>
-  group.section === "Master"
-    ? {
-        ...group,
-        items: [...group.items].sort((a, b) => {
-          if (isNavSubGroup(a) || isNavSubGroup(b)) return 0;
-          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-        }),
-      }
-    : group
-);
 export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const location = useLocation();
   const { hasAccess, user } = useAuth();
@@ -507,10 +537,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         },
       ];
     }
-    if (user?.role !== "Operator") return NAVIGATION_WITH_SORTED_MASTERS;
+    if (user?.role !== "Operator") return NAVIGATION_FOR_STANDARD_USERS;
     return [
       {
-        section: "Jobs",
+        section: "Production",
         color: "bg-emerald-700",
         items: [
           {

@@ -378,6 +378,9 @@ export function buildPendingTaskCounts(args: BuildPendingTaskCountsArgs): Record
 
   return {
     "/material-receipt/approvals": args.materialIn.filter((m) => ["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status)).length,
+    "/material-receipt/pending-ph-approval": args.materialIn.filter((m) => m.status === "Pending PH").length,
+    "/material-receipt/pending-accounts-approval": args.materialIn.filter((m) => m.status === "Pending Accounts").length,
+    "/material-receipt/pending-md-approval": args.materialIn.filter((m) => m.status === "Pending MD").length,
     "/material-receipt/pending-tally": args.materialIn.filter((m) => m.status === "Pending Tally").length,
     "/production/pending": getPendingProductionPlanCount(args.schedules, args.productions, args.phpJobMaster, args.plateJobMaster),
     "/production/pending-npd": args.schedules.filter((schedule) => {
