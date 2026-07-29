@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../hooks/useData";
 import { Setting, User } from "../types";
 import { Plus, Edit, Trash2, Search, Eye, EyeOff } from "lucide-react";
@@ -20,7 +20,38 @@ function parseDesignations(setting?: Setting) {
     return [];
   }
 }
+type MenuAccessChild = {
+  name: string;
+  key: string;
+};
 
+type MenuAccessParent = {
+  section: string;
+  children: MenuAccessChild[];
+};
+
+type MenuAccessGroup = {
+  section: string;
+  parents: MenuAccessParent[];
+};
+
+type IndeterminateCheckboxProps = React.InputHTMLAttributes<HTMLInputElement> & {
+  indeterminate?: boolean;
+};
+
+const DIRECT_MENU_SECTION = "Direct";
+
+function IndeterminateCheckbox({ indeterminate = false, checked, ...props }: IndeterminateCheckboxProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate && !checked;
+    }
+  }, [indeterminate, checked]);
+
+  return <input ref={inputRef} type="checkbox" checked={checked} {...props} />;
+}
 export function Users() {
   const [users, setUsers, usersLoading, userActions] = useData<User>("users", []);
   const [settings] = useData<Setting>("settings", []);
@@ -31,15 +62,29 @@ export function Users() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const designationOptions = useMemo(() => parseDesignations(settings[0]), [settings]);
-  const allMenuItems = useMemo(() => {
-    return NAVIGATION.map((group) => ({
-      section: group.section,
-      items: group.items.flatMap((item) =>
-        "items" in item
-          ? item.items.map((child) => ({ name: `${item.section} - ${child.name}`, key: child.href }))
-          : [{ name: item.name, key: item.href }]
-      ),
-    }));
+  const allMenuItems = useMemo<MenuAccessGroup[]>(() => {
+    return NAVIGATION.map((group) => {
+      const parents: MenuAccessParent[] = [];
+      let directParent: MenuAccessParent | null = null;
+
+      group.items.forEach((item) => {
+        if ("items" in item) {
+          parents.push({
+            section: item.section,
+            children: item.items.map((child) => ({ name: child.name, key: child.href })),
+          });
+          return;
+        }
+
+        if (!directParent) {
+          directParent = { section: DIRECT_MENU_SECTION, children: [] };
+          parents.push(directParent);
+        }
+        directParent.children.push({ name: item.name, key: item.href });
+      });
+
+      return { section: group.section, parents };
+    });
   }, []);
 
   const [formData, setFormData] = useState<{
@@ -185,8 +230,30 @@ export function Users() {
     paginatedItems: paginatedUsers,
   } = useClientPagination(sortedFilteredUsers, 25);
 
+  const selectedMenuAccess = useMemo(() => new Set(formData.menuAccess), [formData.menuAccess]);
+
+  const getParentKeys = (parent: MenuAccessParent) => parent.children.map((child) => child.key);
+  const getGrandParentKeys = (group: MenuAccessGroup) => group.parents.flatMap(getParentKeys);
+
+  const addMenuKeys = (keys: string[]) => {
+    setFormData((prev) => ({ ...prev, menuAccess: Array.from(new Set([...prev.menuAccess, ...keys])) }));
+  };
+
+  const removeMenuKeys = (keys: string[]) => {
+    const remove = new Set(keys);
+    setFormData((prev) => ({ ...prev, menuAccess: prev.menuAccess.filter((key) => !remove.has(key)) }));
+  };
+
+  const toggleMenuKeys = (keys: string[], checked: boolean) => {
+    if (checked) addMenuKeys(keys);
+    else removeMenuKeys(keys);
+  };
+
+  const areAllSelected = (keys: string[]) => keys.length > 0 && keys.every((key) => selectedMenuAccess.has(key));
+  const areSomeSelected = (keys: string[]) => keys.some((key) => selectedMenuAccess.has(key));
+
   const setAllMenus = () => {
-    const keys = allMenuItems.flatMap((g) => g.items.map((i) => i.key));
+    const keys = allMenuItems.flatMap(getGrandParentKeys);
     setFormData((prev) => ({ ...prev, menuAccess: Array.from(new Set(keys)) }));
   };
 
@@ -376,58 +443,99 @@ export function Users() {
                 </div>
               </div>
               <div className="mt-3 space-y-3 max-h-[360px] overflow-auto pr-1">
-                  {allMenuItems.map((group) => (
+                {allMenuItems.map((group) => {
+                  const groupKeys = getGrandParentKeys(group);
+                  const groupChecked = areAllSelected(groupKeys);
+                  const groupPartial = !groupChecked && areSomeSelected(groupKeys);
+
+                  return (
                     <div key={group.section} className="bg-white border border-black rounded p-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-black uppercase text-slate-600">{group.section}</div>
-                        <div className="flex gap-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="flex min-w-0 items-center gap-2 text-xs font-black uppercase text-slate-700">
+                          <IndeterminateCheckbox
+                            checked={groupChecked}
+                            indeterminate={groupPartial}
+                            onChange={(e) => toggleMenuKeys(groupKeys, e.target.checked)}
+                          />
+                          <span className="truncate">{group.section}</span>
+                        </label>
+                        <div className="flex shrink-0 gap-2">
                           <button
                             type="button"
-                            onClick={() => {
-                              const keys = group.items.map((i) => i.key);
-                              setFormData((prev) => ({ ...prev, menuAccess: Array.from(new Set([...prev.menuAccess, ...keys])) }));
-                            }}
+                            onClick={() => addMenuKeys(groupKeys)}
                             className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black hover:bg-indigo-700"
                           >
                             Select
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              const remove = new Set(group.items.map((i) => i.key));
-                              setFormData((prev) => ({ ...prev, menuAccess: prev.menuAccess.filter((k) => !remove.has(k)) }));
-                            }}
+                            onClick={() => removeMenuKeys(groupKeys)}
                             className="bg-white text-black border border-black px-2 py-0.5 rounded text-[10px] font-black hover:bg-slate-100"
                           >
                             Clear
                           </button>
                         </div>
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        {group.items.map((item) => {
-                          const checked = formData.menuAccess.includes(item.key);
+
+                      <div className="mt-2 space-y-2">
+                        {group.parents.map((parent) => {
+                          const parentKeys = getParentKeys(parent);
+                          const parentChecked = areAllSelected(parentKeys);
+                          const parentPartial = !parentChecked && areSomeSelected(parentKeys);
+                          const parentLabel = parent.section === DIRECT_MENU_SECTION ? "Direct Menu Items" : parent.section;
+
                           return (
-                            <label key={item.key} className="flex items-center gap-2 text-xs font-bold text-black">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => {
-                                  const next = e.target.checked
-                                    ? Array.from(new Set([...formData.menuAccess, item.key]))
-                                    : formData.menuAccess.filter((k) => k !== item.key);
-                                  setFormData({ ...formData, menuAccess: next });
-                                }}
-                              />
-                              <span>{item.name}</span>
-                            </label>
+                            <div key={`${group.section}-${parent.section}`} className="rounded border border-slate-300 bg-slate-50 p-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <label className="flex min-w-0 items-center gap-2 text-xs font-black text-black">
+                                  <IndeterminateCheckbox
+                                    checked={parentChecked}
+                                    indeterminate={parentPartial}
+                                    onChange={(e) => toggleMenuKeys(parentKeys, e.target.checked)}
+                                  />
+                                  <span className="truncate">{parentLabel}</span>
+                                </label>
+                                <div className="flex shrink-0 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => addMenuKeys(parentKeys)}
+                                    className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-black hover:bg-indigo-700"
+                                  >
+                                    Select
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeMenuKeys(parentKeys)}
+                                    className="bg-white text-black border border-black px-2 py-0.5 rounded text-[10px] font-black hover:bg-slate-100"
+                                  >
+                                    Clear
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="mt-2 grid grid-cols-1 gap-2 pl-5 sm:grid-cols-2">
+                                {parent.children.map((child) => {
+                                  const checked = selectedMenuAccess.has(child.key);
+                                  return (
+                                    <label key={`${group.section}-${parent.section}-${child.key}`} className="flex min-w-0 items-start gap-2 text-xs font-bold text-black">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(e) => toggleMenuKeys([child.key], e.target.checked)}
+                                      />
+                                      <span className="min-w-0 break-words leading-tight">{child.name}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
               </div>
-                  </div>
-
+            </div>
             <div className="flex space-x-3 pt-2">
               <button
                 type="submit"
