@@ -87,6 +87,8 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -122,6 +124,24 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const getLineCancelledQty = useCallback((line: PurchaseOrderLine) => Math.max(0, Number(line.cancelledQty || 0)), []);
   const getLinePendingQty = useCallback((line: PurchaseOrderLine) => {
     return Math.max(0, Number(line.qty || 0) - getLineReceivedQty(line.id) - getLineCancelledQty(line));
+  }, [getLineCancelledQty, getLineReceivedQty]);
+
+  const getOrderQtySummary = useCallback((lines: PurchaseOrderLine[]) => {
+    return lines.reduce(
+      (summary, line) => {
+        const totalQty = Number(line.qty || 0);
+        const receivedQty = getLineReceivedQty(line.id);
+        const cancelledQty = getLineCancelledQty(line);
+        const yetToReceive = Math.max(0, totalQty - receivedQty - cancelledQty);
+        return {
+          totalQty: summary.totalQty + totalQty,
+          totalReceived: summary.totalReceived + receivedQty,
+          totalCancel: summary.totalCancel + cancelledQty,
+          totalYetToReceive: summary.totalYetToReceive + yetToReceive,
+        };
+      },
+      { totalQty: 0, totalReceived: 0, totalCancel: 0, totalYetToReceive: 0 },
+    );
   }, [getLineCancelledQty, getLineReceivedQty]);
 
   const getActiveLineForTotals = useCallback((order: PurchaseOrder, line: PurchaseOrderLine): PurchaseOrderLine => {
@@ -174,6 +194,8 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         if (mode === "rejected") return po.status === "Rejected";
         return true;
       })
+      .filter((po) => !statusFilter || po.status === statusFilter)
+      .filter((po) => !supplierFilter || po.supplierId === supplierFilter)
       .filter((po) => {
         const lines = orderLines.filter((line) => line.purchaseOrderId === po.id);
         const modeLines = getModeLines(lines);
@@ -193,7 +215,29 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           new Date(b.updateTimestamp || b.poDate || 0).getTime() -
           new Date(a.updateTimestamp || a.poDate || 0).getTime(),
       );
-  }, [getModeLines, isLineMode, materialMap, mode, orderLines, purchaseOrders, searchTerm, supplierNameMap]);
+  }, [getModeLines, isLineMode, materialMap, mode, orderLines, purchaseOrders, searchTerm, statusFilter, supplierFilter, supplierNameMap]);
+  const filteredQtySummary = useMemo(() => {
+    return filteredOrders.reduce(
+      (summary, order) => {
+        const lines = getModeLines(orderLines.filter((line) => line.purchaseOrderId === order.id));
+        const orderSummary = getOrderQtySummary(lines);
+        return {
+          totalQty: summary.totalQty + orderSummary.totalQty,
+          totalReceived: summary.totalReceived + orderSummary.totalReceived,
+          totalCancel: summary.totalCancel + orderSummary.totalCancel,
+          totalYetToReceive: summary.totalYetToReceive + orderSummary.totalYetToReceive,
+        };
+      },
+      { totalQty: 0, totalReceived: 0, totalCancel: 0, totalYetToReceive: 0 },
+    );
+  }, [filteredOrders, getModeLines, getOrderQtySummary, orderLines]);
+
+  const supplierOptions = useMemo(() => {
+    return suppliers
+      .filter((supplier) => purchaseOrders.some((order) => order.supplierId === supplier.id))
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  }, [purchaseOrders, suppliers]);
+
   const {
     page,
     setPage,
@@ -588,24 +632,26 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         "PO No",
         "Date",
         "Supplier",
-        "Items Summary",
         "Total Qty",
+        "Total Received",
+        "Total Cancel",
+        "Total Yet To Receive",
         "Total Amount",
         ...(mode === "rejected" ? ["Rejection Reason"] : []),
         "Status",
       ]],
       body: filteredOrders.map((order) => {
         const lines = getModeLines(orderLines.filter((line) => line.purchaseOrderId === order.id));
-        const itemsSummary = lines
-          .map((line) => materialMap.get(line.materialId)?.name || "Unknown")
-          .join(", ");
+        const qtySummary = getOrderQtySummary(lines);
 
         return [
           order.poNo || "DRAFT",
           formatDate(order.poDate),
           supplierNameMap.get(order.supplierId) || "Unknown",
-          itemsSummary,
-          Number(order.totalQty || 0).toLocaleString(),
+          qtySummary.totalQty.toLocaleString(),
+          qtySummary.totalReceived.toLocaleString(),
+          qtySummary.totalCancel.toLocaleString(),
+          qtySummary.totalYetToReceive.toLocaleString(),
           Number(order.grandTotal ?? order.totalAmount ?? 0).toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
@@ -618,9 +664,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       theme: "grid",
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [37, 99, 235] },
-      columnStyles: {
-        3: { cellWidth: 90 },
-      },
+      columnStyles: {},
     });
 
     doc.save(`${getTitle(mode).replace(/\s+/g, "_")}.pdf`);
@@ -739,15 +783,50 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
               type="text"
-              placeholder="Search PO, supplier..."
+              placeholder="Search PO, supplier, item..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
             />
           </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-44"
+          >
+            <option value="">All Status</option>
+            <option value="Pending Approval">Pending Approval</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+          <select
+            value={supplierFilter}
+            onChange={(e) => setSupplierFilter(e.target.value)}
+            className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-56"
+          >
+            <option value="">All Suppliers</option>
+            {supplierOptions.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name || supplier.id}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        {[
+          { label: "Total Qty", value: filteredQtySummary.totalQty, className: "bg-indigo-50 text-indigo-800" },
+          { label: "Total Received", value: filteredQtySummary.totalReceived, className: "bg-emerald-50 text-emerald-800" },
+          { label: "Total Cancel", value: filteredQtySummary.totalCancel, className: "bg-red-50 text-red-800" },
+          { label: "Total Yet To Receive", value: filteredQtySummary.totalYetToReceive, className: "bg-amber-50 text-amber-800" },
+        ].map((tile) => (
+          <div key={tile.label} className={cn("rounded border border-black px-4 py-3", tile.className)}>
+            <div className="text-[10px] font-black uppercase tracking-wide opacity-80">{tile.label}</div>
+            <div className="mt-1 text-2xl font-black">{tile.value.toLocaleString()}</div>
+          </div>
+        ))}
+      </div>
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
           <thead className="sticky top-0 z-30 bg-slate-100">
@@ -755,8 +834,10 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
               <th className="w-10 px-4 py-3"></th>
               <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">PO Info</th>
               <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">Supplier</th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">Items Summary</th>
               <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Qty</th>
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Received</th>
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Cancel</th>
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Yet To Receive</th>
               <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Amount</th>
               {mode === "rejected" ? (
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">Rejection Reason</th>
@@ -767,7 +848,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           <tbody className="divide-y divide-black">
             {paginatedOrders.length === 0 ? (
               <tr>
-                <td colSpan={mode === "rejected" ? 8 : 7} className="px-4 py-12 text-center text-slate-500 italic">
+                <td colSpan={mode === "rejected" ? 10 : 9} className="px-4 py-12 text-center text-slate-500 italic">
                   No purchase orders found.
                 </td>
               </tr>
@@ -778,6 +859,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                 const visibleLines = getModeLines(lines);
                 const renderedLines = getRenderedLines(order, visibleLines);
                 const renderedTotals = getRenderedTotals(order, visibleLines);
+                const qtySummary = getOrderQtySummary(visibleLines);
                 const indentRefs = getOrderIndentRefs(order, visibleLines);
                 const showIntegratedTax = Number(renderedTotals.igst || 0) > 0 && Number(renderedTotals.cgst || 0) === 0 && Number(renderedTotals.sgst || 0) === 0;
                 const isEditing = editingOrderId === order.id;
@@ -814,22 +896,17 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                         )}
                       </td>
                       <td className="px-4 py-4 text-sm text-black font-medium">{supplierNameMap.get(order.supplierId) || "Unknown"}</td>
-                      <td className="px-4 py-4">
-                        <ul className="list-none space-y-0.5">
-                          {renderedLines.slice(0, 2).map((line, idx) => (
-                            <li key={idx} className="text-[10px] text-slate-700 font-bold uppercase truncate max-w-[200px]">
-                              - {materialMap.get(line.materialId)?.name || "Unknown"}
-                            </li>
-                          ))}
-                          {renderedLines.length > 2 && (
-                            <li className="text-[9px] text-indigo-600 font-black uppercase">
-                              + {renderedLines.length - 2} MORE ITEMS
-                            </li>
-                          )}
-                        </ul>
-                      </td>
                       <td className="px-4 py-4 text-sm text-black text-right font-bold">
-                        {Number(renderedTotals.totalQty || 0).toLocaleString()}
+                        {qtySummary.totalQty.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-emerald-700 text-right font-bold">
+                        {qtySummary.totalReceived.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-red-700 text-right font-bold">
+                        {qtySummary.totalCancel.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-amber-700 text-right font-bold">
+                        {qtySummary.totalYetToReceive.toLocaleString()}
                       </td>
                       <td className="px-4 py-4 text-sm text-black text-right font-mono font-bold">
                         {formatMoney(Number(renderedTotals.grandTotal || 0))}
@@ -941,7 +1018,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                     </tr>
                     {isExpanded && (
                       <tr className="bg-slate-50/50">
-                        <td colSpan={mode === "rejected" ? 8 : 7} className="px-12 py-4">
+                        <td colSpan={mode === "rejected" ? 10 : 9} className="px-12 py-4">
                           <div className="border-2 border-black rounded overflow-hidden shadow-sm">
                             <div className="bg-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-wider flex justify-between border-b border-black">
                               <span>PO Items Details</span>
