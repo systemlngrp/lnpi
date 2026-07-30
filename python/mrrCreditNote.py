@@ -32,6 +32,7 @@ class CreditNoteLine:
     item_name: str
     qty: Decimal
     rate: Decimal
+    gst_rate: Decimal
     unit: str = "NOS"
 
     @property
@@ -46,13 +47,14 @@ class CreditNote:
     date: str
     invoice_no: str
     party_ledger: str
-    sales_return_ledger: str
+    sales_ledger: str
     cgst_ledger: str
     sgst_ledger: str
     igst_ledger: str
     cgst_amount: Decimal
     sgst_amount: Decimal
     igst_amount: Decimal
+    round_off: Decimal
     lines: list[CreditNoteLine]
     narration: str
 
@@ -62,7 +64,7 @@ class CreditNote:
 
     @property
     def total_amount(self) -> Decimal:
-        return round_money(self.taxable_amount + self.cgst_amount + self.sgst_amount + self.igst_amount)
+        return round_money(self.taxable_amount + self.cgst_amount + self.sgst_amount + self.igst_amount + self.round_off)
 
 
 def load_env_file() -> None:
@@ -85,11 +87,51 @@ load_env_file()
 
 COMPANY_NAME = os.getenv("LNPI_TALLY_COMPANY", "")
 TALLY_ACTION = os.getenv("LNPI_TALLY_ACTION", "Create")
-DEFAULT_SALES_RETURN_LEDGER = "Sales A/C"
-DEFAULT_CGST_LEDGER = os.getenv("LNPI_CGST_LEDGER", "Input CGST")
-DEFAULT_SGST_LEDGER = os.getenv("LNPI_SGST_LEDGER", "Input SGST")
-DEFAULT_IGST_LEDGER = os.getenv("LNPI_IGST_LEDGER", "Input IGST")
+SALES_LEDGER_NAME = os.getenv("SALES_LEDGER_NAME", "Sales")
+SALES_5_LEDGER_NAME = os.getenv("SALES_5_LEDGER_NAME", "SALES 5%")
+SALES_18_LEDGER_NAME = os.getenv("SALES_18_LEDGER_NAME", "SALES 18%")
+ROUND_OFF_LEDGER_NAME = os.getenv("SALES_ROUND_OFF_LEDGER_NAME", "Round Off")
+CGST_LEDGER_NAME = os.getenv("OUTPUT_CGST_LEDGER_NAME", "Output CGST")
+SGST_LEDGER_NAME = os.getenv("OUTPUT_SGST_LEDGER_NAME", "Output SGST")
+IGST_LEDGER_NAME = os.getenv("OUTPUT_IGST_LEDGER_NAME", "Output IGST")
+CGST_LEDGER_PREFIX = os.getenv("CGST_LEDGER_PREFIX", "Tax - CGST @")
+SGST_LEDGER_PREFIX = os.getenv("SGST_LEDGER_PREFIX", "Tax - SGST @")
+IGST_LEDGER_PREFIX = os.getenv("IGST_LEDGER_PREFIX", "Tax - IGST @")
 
+
+
+def format_tax_rate(rate: Any) -> str:
+    value = to_decimal(rate)
+    if value == value.to_integral_value():
+        return f"{value:.1f}%"
+    return f"{value.normalize()}%"
+
+
+def resolve_tax_ledger_name(prefix: str, rate: Any, fallback_name: str) -> str:
+    rate_value = round_money(rate)
+    if rate_value <= 0:
+        return fallback_name
+    return f"{prefix} {format_tax_rate(rate_value)}"
+
+
+def derive_tax_rate(lines: list[CreditNoteLine], tax_type: str) -> Decimal:
+    gst_rates = [line.gst_rate for line in lines if line.gst_rate > 0]
+    if not gst_rates:
+        return Decimal("0")
+    gst_rate = max(gst_rates)
+    if tax_type in ("cgst", "sgst"):
+        return round_money(gst_rate / Decimal("2"))
+    return round_money(gst_rate)
+
+
+def resolve_sales_ledger_name(lines: list[CreditNoteLine]) -> str:
+    gst_rates = [line.gst_rate for line in lines if line.gst_rate > 0]
+    effective_gst_rate = max(gst_rates) if gst_rates else Decimal("0")
+    if abs(effective_gst_rate - Decimal("5")) < Decimal("0.01"):
+        return SALES_5_LEDGER_NAME
+    if abs(effective_gst_rate - Decimal("18")) < Decimal("0.01"):
+        return SALES_18_LEDGER_NAME
+    return SALES_LEDGER_NAME
 
 def build_tally_url_candidates() -> list[str]:
     candidates: list[str] = []
@@ -264,7 +306,7 @@ def get_pending_credit_note_rows(conn, mrr_no: str | None = None, limit: int = 1
 
     query = f"""
         SELECT `id`, `transactionNo`, `mrrType`, `date`, `timestamp`, `invoiceNo`, `invDate`,
-               `supplierId`, `lines`, `totalCgst`, `totalSgst`, `totalIgst`, `creditTallySync`, `creditTallyTimestamp`, `creditRemarkTally`
+               `supplierId`, `lines`, `totalCgst`, `totalSgst`, `totalIgst`, `roundOff`, `creditTallySync`, `creditTallyTimestamp`, `creditRemarkTally`
         FROM `material_in`
         WHERE {' AND '.join(where)}
         ORDER BY `date` ASC, `timestamp` ASC, `transactionNo` ASC
@@ -290,6 +332,7 @@ def build_note_lines(conn, raw_lines: list[dict[str, Any]]) -> list[CreditNoteLi
                 item_name=resolve_item_name(conn, line),
                 qty=qty,
                 rate=rate,
+                gst_rate=to_decimal(line.get("gstRate")),
                 unit=first_non_empty(line.get("uom"), line.get("unit"), "NOS"),
             )
         )
@@ -307,13 +350,14 @@ def build_note_from_db_row(conn, row: dict[str, Any]) -> CreditNote:
         date=normalize_date_for_tally(row.get("date") or row.get("timestamp") or row.get("invDate")),
         invoice_no=str(row.get("invoiceNo") or ""),
         party_ledger=party_name,
-        sales_return_ledger=DEFAULT_SALES_RETURN_LEDGER,
-        cgst_ledger=DEFAULT_CGST_LEDGER,
-        sgst_ledger=DEFAULT_SGST_LEDGER,
-        igst_ledger=DEFAULT_IGST_LEDGER,
+        sales_ledger=resolve_sales_ledger_name(lines),
+        cgst_ledger=resolve_tax_ledger_name(CGST_LEDGER_PREFIX, derive_tax_rate(lines, "cgst"), CGST_LEDGER_NAME),
+        sgst_ledger=resolve_tax_ledger_name(SGST_LEDGER_PREFIX, derive_tax_rate(lines, "sgst"), SGST_LEDGER_NAME),
+        igst_ledger=resolve_tax_ledger_name(IGST_LEDGER_PREFIX, derive_tax_rate(lines, "igst"), IGST_LEDGER_NAME),
         cgst_amount=round_money(row.get("totalCgst")),
         sgst_amount=round_money(row.get("totalSgst")),
         igst_amount=round_money(row.get("totalIgst")),
+        round_off=round_money(row.get("roundOff")),
         lines=lines,
         narration=f"Credit Note against Rejection In MRR {row.get('transactionNo')} Invoice {row.get('invoiceNo') or ''}".strip(),
     )
@@ -346,7 +390,7 @@ def build_inventory_entries(note: CreditNote) -> str:
               <ACTUALQTY>{money(line.qty)} {esc(line.unit)}</ACTUALQTY>
               <BILLEDQTY>{money(line.qty)} {esc(line.unit)}</BILLEDQTY>
               <ACCOUNTINGALLOCATIONS.LIST>
-                <LEDGERNAME>{esc(note.sales_return_ledger)}</LEDGERNAME>
+                <LEDGERNAME>{esc(note.sales_ledger)}</LEDGERNAME>
                 <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
                 <AMOUNT>-{money(line.amount)}</AMOUNT>
               </ACCOUNTINGALLOCATIONS.LIST>
@@ -356,10 +400,14 @@ def build_inventory_entries(note: CreditNote) -> str:
 
 
 def build_credit_note_xml(note: CreditNote) -> str:
-    tax_ledgers = ""
-    for ledger, amount in ((note.cgst_ledger, note.cgst_amount), (note.sgst_ledger, note.sgst_amount), (note.igst_ledger, note.igst_amount)):
+    reversal_ledgers = ""
+    for ledger, amount in (
+        (note.cgst_ledger, note.cgst_amount),
+        (note.sgst_ledger, note.sgst_amount),
+        (note.igst_ledger, note.igst_amount),
+    ):
         if amount:
-            tax_ledgers += f"""
+            reversal_ledgers += f"""
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>{esc(ledger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
@@ -367,6 +415,17 @@ def build_credit_note_xml(note: CreditNote) -> str:
               <ISPARTYLEDGER>No</ISPARTYLEDGER>
               <AMOUNT>-{money(amount)}</AMOUNT>
             </LEDGERENTRIES.LIST>"""
+
+    if note.round_off:
+        reversal_ledgers += f"""
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>{esc(ROUND_OFF_LEDGER_NAME)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>{money(-note.round_off)}</AMOUNT>
+            </LEDGERENTRIES.LIST>"""
+
     inventory_entries = build_inventory_entries(note)
 
     return f"""<ENVELOPE>
@@ -390,19 +449,19 @@ def build_credit_note_xml(note: CreditNote) -> str:
             <VOUCHERTYPENAME>Credit Note</VOUCHERTYPENAME>
             <PARTYNAME>{esc(note.party_ledger)}</PARTYNAME>
             <PARTYLEDGERNAME>{esc(note.party_ledger)}</PARTYLEDGERNAME>
-            <REFERENCE>{esc(note.mrr_no)}</REFERENCE>
+            <REFERENCE>{esc(note.invoice_no or note.mrr_no)}</REFERENCE>
             <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
             <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
             <ISINVOICE>Yes</ISINVOICE>
             <EFFECTIVEDATE>{esc(note.date)}</EFFECTIVEDATE>
-            <NARRATION>{esc(note.narration)} | {esc(build_line_narration(note))}</NARRATION>
+            <NARRATION>{esc(note.narration)} | Reversal of sales voucher style: {esc(build_line_narration(note))}</NARRATION>
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>{esc(note.party_ledger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
               <LEDGERFROMITEM>No</LEDGERFROMITEM>
               <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
               <AMOUNT>{money(note.total_amount)}</AMOUNT>
-            </LEDGERENTRIES.LIST>{inventory_entries}{tax_ledgers}
+            </LEDGERENTRIES.LIST>{inventory_entries}{reversal_ledgers}
             <GST.LIST></GST.LIST>
           </VOUCHER>
         </TALLYMESSAGE>
@@ -519,10 +578,10 @@ def process_row(conn, row: dict[str, Any], dry_run: bool) -> None:
     print(f"MRR: {note.mrr_no}")
     print(f"Credit Note: Tally auto-number")
     print(f"Party: {note.party_ledger}")
-    print(f"Ledger: {note.sales_return_ledger}")
+    print(f"Ledger: {note.sales_ledger}")
     print(f"Lines: {len(note.lines)}")
     print(f"Taxable: {money(note.taxable_amount)}")
-    print(f"CGST: {money(note.cgst_amount)} SGST: {money(note.sgst_amount)} IGST: {money(note.igst_amount)}")
+    print(f"CGST: {money(note.cgst_amount)} SGST: {money(note.sgst_amount)} IGST: {money(note.igst_amount)} Round Off: {money(note.round_off)}")
     print(f"Total: {money(note.total_amount)}")
     print(xml)
     if dry_run:

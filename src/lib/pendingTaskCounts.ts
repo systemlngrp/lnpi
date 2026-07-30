@@ -21,6 +21,7 @@ import type {
   Production,
   ProductionProcessing,
   PurchaseOrder,
+  PurchaseOrderLine,
   SampleRequest,
   Setting,
 } from "../types";
@@ -116,6 +117,7 @@ export type BuildPendingTaskCountsArgs = {
   indents: Indent[];
   indentLines: IndentLine[];
   purchaseOrders: PurchaseOrder[];
+  purchaseOrderLines?: PurchaseOrderLine[];
   gateEntries: GateEntry[];
   schedules: OrderSchedule[];
   dispatchPlans: DispatchPlan[];
@@ -340,6 +342,20 @@ function getPendingReturnableGatePassCount(gatePasses: GatePass[] = [], gateEntr
 }
 
 export function buildPendingTaskCounts(args: BuildPendingTaskCountsArgs): Record<string, number> {
+  const purchaseOrderLines = args.purchaseOrderLines || [];
+  const receivedQtyByPoLineId = new Map<string, number>();
+  args.materialIn.forEach((entry) => {
+    (entry.lines || []).forEach((line) => {
+      if (!line?.poLineId) return;
+      receivedQtyByPoLineId.set(
+        line.poLineId,
+        Number(receivedQtyByPoLineId.get(line.poLineId) || 0) + Number(line.actualQty || line.qty || 0),
+      );
+    });
+  });
+  const getPoLineCancelledQty = (line: PurchaseOrderLine) => Math.max(0, Number(line.cancelledQty || 0));
+  const getPoLinePendingQty = (line: PurchaseOrderLine) =>
+    Math.max(0, Number(line.qty || 0) - Number(receivedQtyByPoLineId.get(line.id) || 0) - getPoLineCancelledQty(line));
   const normalizedIndents = args.indents.map((indent) =>
     withIndentTotals(indent, args.indentLines.filter((line) => line.indentId === indent.id))
   );
@@ -448,6 +464,8 @@ export function buildPendingTaskCounts(args: BuildPendingTaskCountsArgs): Record
       Number(line.qty || 0) - Number(line.cancelledQty || 0) - Number(line.orderedQty || 0) > 0
     ).length,
     "/purchase-orders/pending-approval": args.purchaseOrders.filter((po) => po.status === "Pending Approval").length,
+    "/purchase-orders/item-not-received": purchaseOrderLines.filter((line) => getPoLinePendingQty(line) > 0).length,
+    "/purchase-orders/item-cancelled": purchaseOrderLines.filter((line) => getPoLineCancelledQty(line) > 0).length,
     "/material-receipt/pending-mrr": args.gateEntries.filter(canCreateMrrForGateEntry).length,
     "/material-receipt/pending-debit-note": args.materialIn.filter((m) => m.debitNote && !m.tallyTimestamp).length,
     "/material-receipt/pending-credit-note": args.materialIn.filter((m) => m.mrrType === "Rejection In" && !m.creditTallyTimestamp).length,

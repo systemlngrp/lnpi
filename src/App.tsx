@@ -19,7 +19,7 @@ import { IndentDetail } from "./pages/IndentDetail";
 import { IndentApproved, IndentCompleted, IndentPending, IndentRejected } from "./pages/IndentQueue";
 import { PurchaseOrderPendingIndentLines } from "./pages/PurchaseOrderPendingIndentLines";
 import { PurchaseOrderCreate } from "./pages/PurchaseOrderCreate";
-import { PurchaseOrderAll, PurchaseOrderApproved, PurchaseOrderPendingApproval, PurchaseOrderRejected } from "./pages/PurchaseOrderList";
+import { PurchaseOrderAll, PurchaseOrderApproved, PurchaseOrderItemCancelled, PurchaseOrderItemNotReceived, PurchaseOrderPendingApproval, PurchaseOrderRejected } from "./pages/PurchaseOrderList";
 import { GateEntryForm } from "./pages/GateEntryForm";
 import { CancelledGateEntry, GateEntryMaster } from "./pages/GateEntryMaster";
 import { PendingMrr } from "./pages/PendingMrr";
@@ -229,6 +229,8 @@ export default function App() {
           <Route path="purchase-orders/pending-approval" element={<PurchaseOrderPendingApproval />} />
           <Route path="purchase-orders/approved" element={<PurchaseOrderApproved />} />
           <Route path="purchase-orders/rejected" element={<PurchaseOrderRejected />} />
+          <Route path="purchase-orders/item-not-received" element={<PurchaseOrderItemNotReceived />} />
+          <Route path="purchase-orders/item-cancelled" element={<PurchaseOrderItemCancelled />} />
 
           {/* Gate Entry */}
           <Route path="gate-entry/form" element={<GateEntryForm />} />

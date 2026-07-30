@@ -30,7 +30,7 @@ import type {
   Supplier,
 } from "../types";
 
-type Mode = "pending-approval" | "approved" | "rejected" | "all";
+type Mode = "pending-approval" | "approved" | "rejected" | "all" | "item-not-received" | "item-cancelled";
 
 interface PurchaseOrderListProps {
   mode?: Mode;
@@ -63,6 +63,14 @@ export function PurchaseOrderApproved() {
 
 export function PurchaseOrderRejected() {
   return <PurchaseOrderList mode="rejected" />;
+}
+
+export function PurchaseOrderItemNotReceived() {
+  return <PurchaseOrderList mode="item-not-received" />;
+}
+
+export function PurchaseOrderItemCancelled() {
+  return <PurchaseOrderList mode="item-cancelled" />;
 }
 
 const formatMoney = (value: number) =>
@@ -150,6 +158,14 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     return Array.from(refs);
   }, [indentLineMap, indentMap]);
 
+  const isLineMode = mode === "item-not-received" || mode === "item-cancelled";
+
+  const getModeLines = useCallback((lines: PurchaseOrderLine[]) => {
+    if (mode === "item-not-received") return lines.filter((line) => getLinePendingQty(line) > 0);
+    if (mode === "item-cancelled") return lines.filter((line) => getLineCancelledQty(line) > 0);
+    return lines;
+  }, [getLineCancelledQty, getLinePendingQty, mode]);
+
   const filteredOrders = useMemo(() => {
     return purchaseOrders
       .filter((po) => {
@@ -159,18 +175,25 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         return true;
       })
       .filter((po) => {
+        const lines = orderLines.filter((line) => line.purchaseOrderId === po.id);
+        const modeLines = getModeLines(lines);
+        if (isLineMode && modeLines.length === 0) return false;
+
         const supplierName = (supplierNameMap.get(po.supplierId) || "").toLowerCase();
         const poNo = (po.poNo || "").toLowerCase();
+        const itemText = modeLines
+          .map((line) => [line.erpCode, materialMap.get(line.materialId)?.erpCode, materialMap.get(line.materialId)?.name].filter(Boolean).join(" "))
+          .join(" ")
+          .toLowerCase();
         const search = searchTerm.toLowerCase();
-        return supplierName.includes(search) || poNo.includes(search);
+        return supplierName.includes(search) || poNo.includes(search) || itemText.includes(search);
       })
       .sort(
         (a, b) =>
           new Date(b.updateTimestamp || b.poDate || 0).getTime() -
           new Date(a.updateTimestamp || a.poDate || 0).getTime(),
       );
-  }, [mode, purchaseOrders, searchTerm, supplierNameMap]);
-
+  }, [getModeLines, isLineMode, materialMap, mode, orderLines, purchaseOrders, searchTerm, supplierNameMap]);
   const {
     page,
     setPage,
@@ -544,6 +567,10 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         return "Approved Purchase Orders";
       case "rejected":
         return "Rejected Purchase Orders";
+      case "item-not-received":
+        return "PO Item Not Received";
+      case "item-cancelled":
+        return "PO Item Cancel";
       default:
         return "Purchase Orders Master";
     }
@@ -568,7 +595,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         "Status",
       ]],
       body: filteredOrders.map((order) => {
-        const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
+        const lines = getModeLines(orderLines.filter((line) => line.purchaseOrderId === order.id));
         const itemsSummary = lines
           .map((line) => materialMap.get(line.materialId)?.name || "Unknown")
           .join(", ");
@@ -600,7 +627,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   };
 
   const handleRowPdf = async (order: PurchaseOrder) => {
-    const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
+    const lines = getModeLines(orderLines.filter((line) => line.purchaseOrderId === order.id));
     const indentRefs = getOrderIndentRefs(order, lines);
     const supplierName = supplierNameMap.get(order.supplierId) || "Unknown";
     const showIntegratedTax = Number(order.igst || 0) > 0 && Number(order.cgst || 0) === 0 && Number(order.sgst || 0) === 0;
@@ -746,11 +773,12 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
               </tr>
             ) : (
               paginatedOrders.map((order) => {
-                const isExpanded = expandedRows.has(order.id);
+                const isExpanded = isLineMode || expandedRows.has(order.id);
                 const lines = orderLines.filter((line) => line.purchaseOrderId === order.id);
-                const renderedLines = getRenderedLines(order, lines);
-                const renderedTotals = getRenderedTotals(order, lines);
-                const indentRefs = getOrderIndentRefs(order, lines);
+                const visibleLines = getModeLines(lines);
+                const renderedLines = getRenderedLines(order, visibleLines);
+                const renderedTotals = getRenderedTotals(order, visibleLines);
+                const indentRefs = getOrderIndentRefs(order, visibleLines);
                 const showIntegratedTax = Number(renderedTotals.igst || 0) > 0 && Number(renderedTotals.cgst || 0) === 0 && Number(renderedTotals.sgst || 0) === 0;
                 const isEditing = editingOrderId === order.id;
                 const isAnotherOrderEditing = Boolean(editingOrderId && editingOrderId !== order.id);
@@ -760,8 +788,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                     <tr className={cn("hover:bg-slate-50 transition-colors divide-x divide-black", isExpanded && "bg-slate-50/50")}>
                       <td className="px-4 py-4 text-center">
                         <button
-                          onClick={() => handleToggleRow(order.id)}
-                          className="p-1 hover:bg-slate-200 rounded transition"
+                          onClick={() => !isLineMode && handleToggleRow(order.id)}
+                          disabled={isLineMode}
+                          className="p-1 hover:bg-slate-200 rounded transition disabled:cursor-default disabled:hover:bg-transparent"
                         >
                           {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </button>
@@ -898,7 +927,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                 </button>
                               </>
                             )
-                          ) : (
+                          ) : isLineMode ? null : (
                             <button
                               onClick={() => void handleToggleRow(order.id)}
                               className="text-indigo-600 hover:text-indigo-900 font-bold uppercase flex items-center gap-1 text-[11px]"

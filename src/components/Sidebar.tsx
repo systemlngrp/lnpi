@@ -43,6 +43,7 @@ import {
   Indent,
   IndentLine,
   PurchaseOrder,
+  PurchaseOrderLine,
   GateEntry,
   MaterialIssue,
   MaterialIssueLine,
@@ -101,6 +102,8 @@ const purchaseOrderItems: NavItem[] = [
   { name: "Pending PO Approval", href: "/purchase-orders/pending-approval", icon: UserCheck, countKey: "/purchase-orders/pending-approval" },
   { name: "Approved PO", href: "/purchase-orders/approved", icon: CheckCircle, countKey: "/purchase-orders/approved" },
   { name: "Rejected PO", href: "/purchase-orders/rejected", icon: X, countKey: "/purchase-orders/rejected" },
+  { name: "PO Item Not Received", href: "/purchase-orders/item-not-received", icon: Activity, countKey: "/purchase-orders/item-not-received" },
+  { name: "PO Item Cancel", href: "/purchase-orders/item-cancelled", icon: X, countKey: "/purchase-orders/item-cancelled" },
   { name: "Purchase Order Master", href: "/purchase-orders/all", icon: Database, countKey: "/purchase-orders/all" },
 ];
 
@@ -399,6 +402,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
   const [indents] = useData<Indent>("indents", []);
   const [indentLines] = useData<IndentLine>("indent-lines", []);
   const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
+  const [purchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
   const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [dispatchPlans] = useData<DispatchPlan>("dispatch_plans", []);
@@ -461,6 +465,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
         indents,
         indentLines,
         purchaseOrders,
+        purchaseOrderLines,
         gateEntries,
         schedules,
         dispatchPlans,
@@ -497,6 +502,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed }: SidebarProps) {
       indents,
       indentLines,
       purchaseOrders,
+      purchaseOrderLines,
       gateEntries,
       schedules,
       dispatchPlans,
