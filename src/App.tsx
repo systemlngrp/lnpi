@@ -122,7 +122,6 @@ import { EfficiencyReport } from "./pages/EfficiencyReport";
 import { HitVsMissReport } from "./pages/HitVsMissReport";
 import { RealizationReport } from "./pages/RealizationReport";
 import { PaperRequirementReport } from "./pages/PaperRequirementReport";
-import { ConversionCostReport } from "./pages/ConversionCostReport";
 import { FixedMonthlyExpenses } from "./pages/FixedMonthlyExpenses";
 import { ConversionCostMonthWiseReport } from "./pages/ConversionCostMonthWiseReport";
 import { TruckStatusReport } from "./pages/TruckStatusReport";
@@ -344,7 +343,6 @@ export default function App() {
           <Route path="reports/hit-vs-miss" element={<HitVsMissReport />} />
           <Route path="reports/realization" element={<RealizationReport />} />
           <Route path="reports/paper-requirement" element={<PaperRequirementReport />} />
-          <Route path="reports/conversion-cost" element={<ConversionCostReport />} />
           <Route path="reports/fixed-monthly-expenses" element={<FixedMonthlyExpenses />} />
           <Route path="reports/conversion-cost-month-wise" element={<ConversionCostMonthWiseReport />} />
           <Route path="reports/truck-status" element={<TruckStatusReport />} />

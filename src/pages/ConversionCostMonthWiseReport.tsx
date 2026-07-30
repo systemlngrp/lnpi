@@ -210,7 +210,7 @@ export function ConversionCostMonthWiseReport() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="border border-gray-900 bg-emerald-50 p-3">
           <p className="text-xs font-black uppercase text-slate-600">Consumables</p>
           <p className="text-2xl font-black text-emerald-700">{formatMoney(totals.consumables)}</p>
@@ -222,6 +222,10 @@ export function ConversionCostMonthWiseReport() {
         <div className="border border-gray-900 bg-amber-50 p-3">
           <p className="text-xs font-black uppercase text-slate-600">Total Conversion Cost</p>
           <p className="text-2xl font-black text-amber-700">{formatMoney(totals.consumables + totals.fixed)}</p>
+        </div>
+        <div className="border border-gray-900 bg-purple-50 p-3">
+          <p className="text-xs font-black uppercase text-slate-600">Overall Ratio</p>
+          <p className="text-2xl font-black text-purple-700">{formatNumber(totalRatio)}</p>
         </div>
       </div>
 
