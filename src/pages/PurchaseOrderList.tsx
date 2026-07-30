@@ -206,7 +206,8 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     return Array.from(refs);
   }, [indentLineMap, indentMap]);
 
-  const isLineMode = mode === "item-not-received" || mode === "item-cancelled";
+  const isFlatItemMode = mode === "item-not-received" || mode === "item-cancelled";
+  const isLineMode = isFlatItemMode;
 
   const getModeLines = useCallback((lines: PurchaseOrderLine[]) => {
     if (mode === "item-not-received") return lines.filter((line) => getLinePendingQty(line) > 0);
@@ -273,7 +274,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     [supplierOptions],
   );
 
-  const baseNotReceivedRows = useMemo<NotReceivedItemRow[]>(() => {
+  const baseFlatItemRows = useMemo<NotReceivedItemRow[]>(() => {
     const search = searchTerm.trim().toLowerCase();
     return purchaseOrders
       .filter((order) => !supplierFilter || order.supplierId === supplierFilter)
@@ -329,20 +330,20 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
 
   const poNumberOptions = useMemo(() => {
     const byId = new Map<string, string>();
-    baseNotReceivedRows.forEach((row) => {
+    baseFlatItemRows.forEach((row) => {
       if (!byId.has(row.order.id)) byId.set(row.order.id, row.order.poNo || "DRAFT");
     });
     return Array.from(byId.entries())
       .map(([id, poNo]) => ({ id, poNo }))
       .sort((a, b) => a.poNo.localeCompare(b.poNo));
-  }, [baseNotReceivedRows]);
+  }, [baseFlatItemRows]);
 
-  const filteredNotReceivedRows = useMemo(() => {
-    return baseNotReceivedRows.filter((row) => !poNumberFilter || row.order.id === poNumberFilter);
-  }, [baseNotReceivedRows, poNumberFilter]);
+  const filteredFlatItemRows = useMemo(() => {
+    return baseFlatItemRows.filter((row) => !poNumberFilter || row.order.id === poNumberFilter);
+  }, [baseFlatItemRows, poNumberFilter]);
 
   const filteredNotReceivedQtySummary = useMemo(() => {
-    return filteredNotReceivedRows.reduce(
+    return filteredFlatItemRows.reduce(
       (summary, row) => ({
         totalQty: summary.totalQty + Number(row.line.qty || 0),
         totalReceived: summary.totalReceived + row.receivedQty,
@@ -351,7 +352,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       }),
       { totalQty: 0, totalReceived: 0, totalCancel: 0, totalYetToReceive: 0 },
     );
-  }, [filteredNotReceivedRows]);
+  }, [filteredFlatItemRows]);
 
   const displayQtySummary = isFlatItemMode ? filteredNotReceivedQtySummary : filteredQtySummary;
 
@@ -370,8 +371,8 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     pageSize: itemPageSize,
     setPageSize: setItemPageSize,
     totalItems: totalNotReceivedItems,
-    paginatedItems: paginatedNotReceivedRows,
-  } = useClientPagination(filteredNotReceivedRows, 25);
+    paginatedItems: paginatedFlatItemRows,
+  } = useClientPagination(filteredFlatItemRows, 25);
 
   const page = isFlatItemMode ? itemPage : orderPage;
   const setPage = isFlatItemMode ? setItemPage : setOrderPage;
@@ -799,8 +800,8 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     doc.setFontSize(10);
     doc.text(`Search: ${searchTerm || "All"} | Total POs: ${filteredOrders.length}`, 14, 24);
 
-    if (mode === "item-not-received") {
-      doc.text(`Total Items: ${filteredNotReceivedRows.length}`, 14, 28);
+    if (isFlatItemMode) {
+      doc.text(`Total Items: ${filteredFlatItemRows.length}`, 14, 28);
       autoTable(doc, {
         head: [[
           "PO Number",
@@ -815,11 +816,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           "Cancelled",
           "Not Received",
           "Target Delivery",
-          "Cancel Qty",
-          "Action",
-          "Status",
+          ...(mode === "item-not-received" ? ["Cancel Qty", "Action", "Status"] : []),
         ]],
-        body: filteredNotReceivedRows.map((row) => [
+        body: filteredFlatItemRows.map((row) => [
           row.order.poNo || "DRAFT",
           formatDate(row.order.poDate),
           row.indent?.indentNo || "-",
@@ -832,9 +831,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           row.cancelledQty.toLocaleString(),
           row.pendingQty.toLocaleString(),
           row.line.targetDeliveryDate ? formatDate(row.line.targetDeliveryDate) : "-",
-          cancelQtyByLineId[row.line.id] || "",
-          row.order.status !== "Rejected" ? "Cancel" : "-",
-          row.order.status,
+          ...(mode === "item-not-received"
+            ? [cancelQtyByLineId[row.line.id] || "", row.order.status !== "Rejected" ? "Cancel" : "-", row.order.status]
+            : []),
         ]),
         startY: 34,
         theme: "grid",
@@ -1090,19 +1089,23 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                 <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Cancelled</th>
                 <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Not Received</th>
                 <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Target Delivery</th>
-                <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Cancel Qty</th>
-                <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Action</th>
+                {mode === "item-not-received" ? (
+                  <>
+                    <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Cancel Qty</th>
+                    <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Action</th>
+                  </>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-black">
-              {paginatedNotReceivedRows.length === 0 ? (
+              {paginatedFlatItemRows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500 italic">
+                  <td colSpan={mode === "item-not-received" ? 14 : 12} className="px-4 py-12 text-center text-slate-500 italic">
                     No PO items found.
                   </td>
                 </tr>
               ) : (
-                paginatedNotReceivedRows.map((row) => (
+                paginatedFlatItemRows.map((row) => (
                   <tr key={row.line.id} className="divide-x divide-black text-[10px] font-bold hover:bg-slate-50">
                     <td className="px-3 py-3 text-black uppercase">{row.order.poNo || "DRAFT"}</td>
                     <td className="px-3 py-3 text-black">{formatDate(row.order.poDate)}</td>
@@ -1116,36 +1119,40 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                     <td className="px-3 py-3 text-right text-red-700">{row.cancelledQty.toLocaleString()}</td>
                     <td className="px-3 py-3 text-right text-amber-700">{row.pendingQty.toLocaleString()}</td>
                     <td className="px-3 py-3 text-black">{row.line.targetDeliveryDate ? formatDate(row.line.targetDeliveryDate) : "-"}</td>
-                    <td className="px-3 py-3 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        max={row.pendingQty}
-                        step="0.01"
-                        value={cancelQtyByLineId[row.line.id] || ""}
-                        onChange={(e) =>
-                          setCancelQtyByLineId((prev) => ({
-                            ...prev,
-                            [row.line.id]: e.target.value,
-                          }))
-                        }
-                        disabled={row.order.status === "Rejected" || row.pendingQty <= 0}
-                        className="w-24 rounded border border-black px-2 py-1 text-right text-xs font-bold disabled:bg-slate-100"
-                      />
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      {row.order.status !== "Rejected" && row.pendingQty > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleCancelNotReceivedRow(row)}
-                          className="inline-flex items-center gap-1 rounded border border-red-700 bg-red-50 px-2 py-1 text-[9px] font-black uppercase text-red-700 hover:bg-red-100"
-                        >
-                          <X size={12} /> Cancel
-                        </button>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
+                    {mode === "item-not-received" ? (
+                      <>
+                        <td className="px-3 py-3 text-right">
+                          <input
+                            type="number"
+                            min="0"
+                            max={row.pendingQty}
+                            step="0.01"
+                            value={cancelQtyByLineId[row.line.id] || ""}
+                            onChange={(e) =>
+                              setCancelQtyByLineId((prev) => ({
+                                ...prev,
+                                [row.line.id]: e.target.value,
+                              }))
+                            }
+                            disabled={row.order.status === "Rejected" || row.pendingQty <= 0}
+                            className="w-24 rounded border border-black px-2 py-1 text-right text-xs font-bold disabled:bg-slate-100"
+                          />
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          {row.order.status !== "Rejected" && row.pendingQty > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleCancelNotReceivedRow(row)}
+                              className="inline-flex items-center gap-1 rounded border border-red-700 bg-red-50 px-2 py-1 text-[9px] font-black uppercase text-red-700 hover:bg-red-100"
+                            >
+                              <X size={12} /> Cancel
+                            </button>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      </>
+                    ) : null}
                   </tr>
                 ))
               )}
