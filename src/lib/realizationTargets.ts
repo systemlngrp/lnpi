@@ -1,9 +1,9 @@
-import { getFinancialYear } from "./serial";
-
 export type RealizationTargetRow = {
-  fy: string;
-  month: string;
+  dateFrom: string;
+  dateTo: string;
   value: number;
+  fy?: string;
+  month?: string;
 };
 
 const MONTH_OPTIONS = ["All", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -26,8 +26,28 @@ function toDateInput(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function monthLabelFromDate(date: Date) {
-  return MONTH_OPTIONS[date.getMonth() + 1] || "All";
+function normalizeDate(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+
+function fyRangeToDates(fy: string, month: string) {
+  const match = String(fy || "").trim().match(/^(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const startYear = 2000 + Number(match[1]);
+  const monthIndex = MONTH_OPTIONS.indexOf(month);
+  if (monthIndex > 0) {
+    const calendarYear = monthIndex >= 4 ? startYear : startYear + 1;
+    const start = new Date(calendarYear, monthIndex - 1, 1);
+    const end = new Date(calendarYear, monthIndex, 0);
+    return { dateFrom: toDateInput(start), dateTo: toDateInput(end) };
+  }
+
+  return {
+    dateFrom: toDateInput(new Date(startYear, 3, 1)),
+    dateTo: toDateInput(new Date(startYear + 1, 2, 31)),
+  };
 }
 
 export function parseRealizationTargets(raw?: string | null): RealizationTargetRow[] {
@@ -36,12 +56,32 @@ export function parseRealizationTargets(raw?: string | null): RealizationTargetR
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .map((row) => ({
-        fy: String((row?.fy ?? row?.year) || "").trim(),
-        month: String(row?.month || "All").trim() || "All",
-        value: Number(row?.value || 0),
-      }))
-      .filter((row) => row.fy && Number.isFinite(row.value));
+      .map((row) => {
+        const value = Number(row?.value || 0);
+        const directDateFrom = String(row?.dateFrom || "").trim();
+        const directDateTo = String(row?.dateTo || "").trim();
+        const parsedDateFrom = parseAppDate(directDateFrom);
+        const parsedDateTo = parseAppDate(directDateTo);
+        if (parsedDateFrom && parsedDateTo) {
+          return {
+            dateFrom: toDateInput(parsedDateFrom),
+            dateTo: toDateInput(parsedDateTo),
+            value,
+          };
+        }
+
+        const fy = String((row?.fy ?? row?.year) || "").trim();
+        const month = String(row?.month || "All").trim() || "All";
+        const legacyRange = fyRangeToDates(fy, MONTH_OPTIONS.includes(month) ? month : "All");
+        if (!legacyRange) return null;
+        return {
+          ...legacyRange,
+          value,
+          fy,
+          month: MONTH_OPTIONS.includes(month) ? month : "All",
+        };
+      })
+      .filter((row): row is RealizationTargetRow => Boolean(row) && Number.isFinite(row.value));
   } catch {
     return [];
   }
@@ -50,9 +90,25 @@ export function parseRealizationTargets(raw?: string | null): RealizationTargetR
 export function findRealizationTargetForDate(targets: RealizationTargetRow[], value?: string | null) {
   const date = parseAppDate(value);
   if (!date) return null;
-  const fy = getFinancialYear(toDateInput(date));
-  const month = monthLabelFromDate(date);
-  const exact = targets.find((row) => row.fy === fy && row.month === month);
-  if (exact) return exact;
-  return targets.find((row) => row.fy === fy && row.month === "All") || null;
+  const dateValue = normalizeDate(date).getTime();
+
+  return targets.reduce<RealizationTargetRow | null>((selected, row) => {
+    const from = parseAppDate(row.dateFrom);
+    const to = parseAppDate(row.dateTo);
+    if (!from || !to) return selected;
+
+    const fromValue = normalizeDate(from).getTime();
+    const toValue = normalizeDate(to).getTime();
+    if (dateValue < fromValue || dateValue > toValue) return selected;
+
+    if (!selected) return row;
+    const selectedFrom = parseAppDate(selected.dateFrom);
+    const selectedFromValue = selectedFrom ? normalizeDate(selectedFrom).getTime() : Number.NEGATIVE_INFINITY;
+    return fromValue >= selectedFromValue ? row : selected;
+  }, null);
+}
+
+export function describeRealizationTarget(row?: RealizationTargetRow | null) {
+  if (!row) return "Not set";
+  return `${row.dateFrom} to ${row.dateTo}`;
 }

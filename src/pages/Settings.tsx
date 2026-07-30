@@ -11,6 +11,7 @@ import { getFinancialYear } from "../lib/serial";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { PO_MANDATORY_MRR_TYPES, parsePoMandatoryMrrTypes } from "../lib/materialInPoMandatory";
 import { useAuth } from "../auth/AuthContext";
+import { parseRealizationTargets } from "../lib/realizationTargets";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -85,21 +86,25 @@ const DEFAULT_ITEM_TYPES = [
   "VERTICAL PLATE",
 ];
 
-const MONTH_OPTIONS = [
-  "All",
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+
+type RealizationDraftRow = {
+  dateFrom: string;
+  dateTo: string;
+  value: number | "";
+};
+
+function toDateInput(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getDefaultBenchmarkRange() {
+  const today = new Date();
+  return {
+    dateFrom: toDateInput(today),
+    dateTo: toDateInput(today),
+    value: "" as const,
+  };
+}
 
 type InvoiceSeriesRow = {
   fy: string;
@@ -122,7 +127,7 @@ function parseInvoiceNumberSeries(raw?: string): InvoiceSeriesRow[] {
         startingNumber: Number(row?.startingNumber || 1),
         paddingLength: Number(row?.paddingLength || 5),
         separator: String(row?.separator || "/") || "/",
-        active: String(row?.active || "Yes").trim() === "No" ? "No" : "Yes",
+        active: (String(row?.active || "Yes").trim() === "No" ? "No" : "Yes") as "Yes" | "No",
       }))
       .filter((row) => row.fy.length > 0 || row.prefix.length > 0);
   } catch {
@@ -230,34 +235,18 @@ export function SettingsPage() {
     const toFy = (startYear: number) => `${String(startYear % 100).padStart(2, "0")}-${String((startYear + 1) % 100).padStart(2, "0")}`;
     return Array.from({ length: 8 }, (_, i) => toFy(baseStartYear - 5 + i));
   }, []);
+  const realizationTargets = useMemo(
+    () => parseRealizationTargets(currentSetting?.realizationPerKgTargets),
+    [currentSetting?.realizationPerKgTargets]
+  );
 
-  const realizationTargets = useMemo(() => {
-    const raw = currentSetting?.realizationPerKgTargets;
-    if (!raw) return [] as { fy: string; month: string; value: number }[];
-    try {
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .filter((row) => row && (typeof row.fy === "string" || typeof row.year === "string"))
-        .map((row) => ({
-          fy: String((row.fy ?? row.year) || "").trim(),
-          month: String(row.month || "All").trim() || "All",
-          value: Number(row.value || 0),
-        }))
-        .filter((row) => row.fy.length > 0)
-        .sort((a, b) => a.fy.localeCompare(b.fy, undefined, { sensitivity: "base" }) || a.month.localeCompare(b.month));
-    } catch {
-      return [];
-    }
-  }, [currentSetting?.realizationPerKgTargets]);
-
-  const [realizationDraft, setRealizationDraft] = useState<{ fy: string; month: string; value: number | "" }[]>([]);
+  const [realizationDraft, setRealizationDraft] = useState<RealizationDraftRow[]>([]);
 
   useEffect(() => {
     setRealizationDraft(
       realizationTargets.map((row) => ({
-        fy: row.fy,
-        month: MONTH_OPTIONS.includes(row.month) ? row.month : "All",
+        dateFrom: row.dateFrom,
+        dateTo: row.dateTo,
         value: Number(row.value || 0),
       }))
     );
@@ -493,134 +482,116 @@ export function SettingsPage() {
       <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-5">
           <div className="space-y-4 border-b border-dashed border-black pb-5">
             <div>
-              <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Realization Setup (Year wise)</h3>
-            <p className="text-sm text-black leading-6">
-              Store year-wise target values for Realization/KG (used for reporting/benchmarking).
-            </p>
-          </div>
+              <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Realization Setup (Date Range)</h3>
+              <p className="text-sm text-black leading-6">
+                Store date-range benchmark values for Realization/KG. The report uses the row where Date From &lt;= today &lt;= Date To.
+              </p>
+            </div>
 
-          <div className="table-sticky-scroll border border-black rounded">
-            <table className="min-w-full divide-y divide-black border-collapse">
-              <thead className="sticky top-0 z-30 bg-slate-100">
-                <tr className="divide-x divide-black">
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">FY</th>
-                  <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Month</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Target Real/KG</th>
-                  <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-black">
-                {realizationDraft.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-4 text-sm text-slate-500 text-center">
-                      No realization targets configured.
-                    </td>
+            <div className="table-sticky-scroll border border-black rounded">
+              <table className="min-w-full divide-y divide-black border-collapse">
+                <thead className="sticky top-0 z-30 bg-slate-100">
+                  <tr className="divide-x divide-black">
+                    <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Date From</th>
+                    <th className="px-4 py-2 text-left text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Date To</th>
+                    <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Benchmark Rate</th>
+                    <th className="px-4 py-2 text-right text-xs font-bold text-black uppercase border border-black whitespace-nowrap">Action</th>
                   </tr>
-                ) : (
-                  realizationDraft.map((row, idx) => (
-                    <tr key={`${row.fy}-${row.month}-${idx}`} className="divide-x divide-black">
-                      <td className="px-4 py-2 border border-black">
-                        <select
-                          value={row.fy}
-                          onChange={(e) =>
-                            setRealizationDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, fy: e.target.value } : r)))
-                          }
-                          disabled={loading || saving}
-                          className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
-                        >
-                          {fyOptions.map((fy) => (
-                            <option key={fy} value={fy}>
-                              {fy}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-4 py-2 border border-black">
-                        <select
-                          value={row.month}
-                          onChange={(e) =>
-                            setRealizationDraft((prev) =>
-                              prev.map((r, i) => (i === idx ? { ...r, month: e.target.value } : r))
-                            )
-                          }
-                          disabled={loading || saving}
-                          className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
-                        >
-                          {MONTH_OPTIONS.map((m) => (
-                            <option key={m} value={m}>
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-4 py-2 border border-black text-right">
-                        <input
-                          type="number"
-                          value={row.value}
-                          onChange={(e) =>
-                            setRealizationDraft((prev) =>
-                              prev.map((r, i) =>
-                                i === idx ? { ...r, value: e.target.value === "" ? "" : Number(e.target.value) } : r
-                              )
-                            )
-                          }
-                          disabled={loading || saving}
-                          className="w-32 border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none text-right"
-                          step={0.01}
-                          min={0}
-                        />
-                      </td>
-                      <td className="px-4 py-2 border border-black text-right">
-                        <button
-                          type="button"
-                          onClick={() => setRealizationDraft((prev) => prev.filter((_, i) => i !== idx))}
-                          disabled={loading || saving}
-                          className="px-3 py-1 border-2 border-black rounded bg-white text-black text-xs font-bold hover:bg-slate-50"
-                        >
-                          Remove
-                        </button>
+                </thead>
+                <tbody className="bg-white divide-y divide-black">
+                  {realizationDraft.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-4 text-sm text-slate-500 text-center">
+                        No realization benchmarks configured.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    realizationDraft.map((row, idx) => (
+                      <tr key={`${row.dateFrom}-${row.dateTo}-${idx}`} className="divide-x divide-black">
+                        <td className="px-4 py-2 border border-black">
+                          <input
+                            type="date"
+                            value={row.dateFrom}
+                            onChange={(e) =>
+                              setRealizationDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, dateFrom: e.target.value } : r)))
+                            }
+                            disabled={loading || saving}
+                            className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
+                          />
+                        </td>
+                        <td className="px-4 py-2 border border-black">
+                          <input
+                            type="date"
+                            value={row.dateTo}
+                            onChange={(e) =>
+                              setRealizationDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, dateTo: e.target.value } : r)))
+                            }
+                            disabled={loading || saving}
+                            className="w-full border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none bg-white"
+                          />
+                        </td>
+                        <td className="px-4 py-2 border border-black text-right">
+                          <input
+                            type="number"
+                            value={row.value}
+                            onChange={(e) =>
+                              setRealizationDraft((prev) =>
+                                prev.map((r, i) =>
+                                  i === idx ? { ...r, value: e.target.value === "" ? "" : Number(e.target.value) } : r
+                                )
+                              )
+                            }
+                            disabled={loading || saving}
+                            className="w-32 border border-black rounded px-2 py-1 text-sm font-semibold text-black outline-none text-right"
+                            step={0.01}
+                            min={0}
+                          />
+                        </td>
+                        <td className="px-4 py-2 border border-black text-right">
+                          <button
+                            type="button"
+                            onClick={() => setRealizationDraft((prev) => prev.filter((_, i) => i !== idx))}
+                            disabled={loading || saving}
+                            className="px-3 py-1 border-2 border-black rounded bg-white text-black text-xs font-bold hover:bg-slate-50"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-          <div className="flex flex-wrap gap-3 items-center justify-between">
-            <button
-              type="button"
-              onClick={() =>
-                setRealizationDraft((prev) => [
-                  ...prev,
-                  { fy: getFinancialYear(new Date().toISOString()), month: "All", value: "" },
-                ])
-              }
-              disabled={loading || saving}
-              className="bg-white text-black border-2 border-black px-4 py-2 rounded font-bold hover:bg-slate-50 transition shadow-sm"
-            >
-              Add FY/Month
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const cleaned = realizationDraft
-                  .map((row) => ({
-                    fy: String(row.fy || "").trim(),
-                    month: MONTH_OPTIONS.includes(String(row.month || "").trim()) ? String(row.month || "").trim() : "All",
-                    value: Number(row.value || 0),
-                  }))
-                  .filter((row) => row.fy.length > 0);
-                void handleChange({ realizationPerKgTargets: JSON.stringify(cleaned) });
-              }}
-              disabled={loading || saving}
-              className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all"
-            >
-              {saving ? <Spinner size={18} className="text-white" /> : "Save Realization Setup"}
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setRealizationDraft((prev) => [...prev, getDefaultBenchmarkRange()])}
+                disabled={loading || saving}
+                className="bg-white text-black border-2 border-black px-4 py-2 rounded font-bold hover:bg-slate-50 transition shadow-sm"
+              >
+                Add Date Range
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const cleaned = realizationDraft
+                    .map((row) => ({
+                      dateFrom: String(row.dateFrom || "").trim(),
+                      dateTo: String(row.dateTo || "").trim(),
+                      value: Number(row.value || 0),
+                    }))
+                    .filter((row) => row.dateFrom.length > 0 && row.dateTo.length > 0 && Number.isFinite(row.value));
+                  void handleChange({ realizationPerKgTargets: JSON.stringify(cleaned) });
+                }}
+                disabled={loading || saving}
+                className="bg-emerald-600 text-white px-6 py-2 rounded font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all"
+              >
+                {saving ? <Spinner size={18} className="text-white" /> : "Save Realization Setup"}
               </button>
             </div>
           </div>
-
           <div className="space-y-4 border-b border-dashed border-black pb-5">
             <div>
               <h3 className="text-sm font-black uppercase text-slate-600 mb-2">PO Mandatory In MRR</h3>

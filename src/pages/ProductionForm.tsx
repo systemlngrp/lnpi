@@ -655,7 +655,7 @@ export function ProductionForm() {
     const totalWeightOfSetValue = totalWeightOfSet === "" ? 0 : Number(totalWeightOfSet || 0);
 
     const realizationPerKg =
-      totalWeightOfSetValue > 0 ? (rate / totalWeightOfSetValue) * noOfParts : "";
+      totalWeightOfSetValue > 0 ? rate / totalWeightOfSetValue : "";
 
     const wastage =
       prodFromFFG > 0 && sheetWeightValue > 0 && actualPaperUsed > 0
@@ -1125,7 +1125,7 @@ export function ProductionForm() {
                 value={formData.realizationPerKg}
                 readOnly
                 inputClassName={realizationBelowTarget ? "border-red-600 bg-red-50 text-red-800 font-bold" : undefined}
-                helpText="Formula: (Rate / Total Wt of Set) x No. of Parts. Turns red when below the configured realization target for this production date."
+                helpText="Formula: Rate / Total Wt of Set. Turns red when below the configured realization target for this production date."
               /> : null}
             </div>
 

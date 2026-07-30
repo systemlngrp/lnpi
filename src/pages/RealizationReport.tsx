@@ -6,14 +6,16 @@ import * as XLSX from "xlsx";
 import { Download, FileText, RotateCcw, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, Item, Order, OrderSchedule, Production, Setting } from "../types";
-import { formatDate, getFinancialYear } from "../lib/serial";
-import { parseRealizationTargets } from "../lib/realizationTargets";
+import { formatDate } from "../lib/serial";
+import { describeRealizationTarget, findRealizationTargetForDate, parseRealizationTargets } from "../lib/realizationTargets";
 import { useNpdItems } from "../hooks/useNpdItems";
 
 type TargetRow = {
-  fy: string;
-  month: string;
+  dateFrom: string;
+  dateTo: string;
   value: number;
+  fy?: string;
+  month?: string;
 };
 
 type RealizationSourceRow = {
@@ -21,7 +23,8 @@ type RealizationSourceRow = {
   date: string;
   qty: number;
   realizationPerKg: number;
-  weightedValue: number;
+  productionValue: number;
+  productionWeight: number;
   companyId: string;
   companyName: string;
   salesPersonId: string;
@@ -33,12 +36,12 @@ type RealizationSummaryRow = {
   id: string;
   name: string;
   qty: number;
-  weightedValue: number;
+  productionValue: number;
+  productionWeight: number;
   average: number;
   rowCount: number;
 };
 
-const MONTH_OPTIONS = ["All", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function parseAppDate(value?: string | null) {
   if (!value) return null;
@@ -62,19 +65,15 @@ function normalizeDate(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function monthLabelFromDate(date: Date) {
-  return MONTH_OPTIONS[date.getMonth() + 1] || "All";
-}
-
 function getTargetBadgeClass(value: number, benchmark: number) {
   if (value <= 0) return "border-slate-200 bg-slate-50 text-slate-700";
   if (value >= benchmark) return "border-emerald-200 bg-emerald-50 text-emerald-700";
   return "border-rose-200 bg-rose-50 text-rose-700";
 }
 
-function weightedAverage(weightedValue: number, qty: number) {
-  if (!Number.isFinite(weightedValue) || !Number.isFinite(qty) || qty <= 0) return 0;
-  return Number((weightedValue / qty).toFixed(2));
+function realizationAverage(productionValue: number, productionWeight: number) {
+  if (!Number.isFinite(productionValue) || !Number.isFinite(productionWeight) || productionWeight <= 0) return 0;
+  return Number((productionValue / productionWeight).toFixed(2));
 }
 
 function positiveNumber(...values: unknown[]) {
@@ -110,15 +109,8 @@ function resolveTotalWeightOfSet(production: Production, item?: Item) {
   return gramsToKg(itemSheetWeightGms) + itemPlateWeightKg;
 }
 
-function resolveRealizationPerKg(production: Production, order?: Order | null, item?: Item) {
-  const savedRealization = positiveNumber(production.realizationPerKg);
-  if (savedRealization > 0) return Number(savedRealization.toFixed(2));
-
-  const rate = positiveNumber(production.rate, order?.rate, (item as any)?.orderRate, item?.rate);
-  const totalWeightOfSet = resolveTotalWeightOfSet(production, item);
-  const noOfParts = positiveNumber(production.noOfParts, item?.noOfParts, 1);
-  if (rate <= 0 || totalWeightOfSet <= 0) return 0;
-  return Number(((rate / totalWeightOfSet) * noOfParts).toFixed(2));
+function resolveRate(production: Production, order?: Order | null, item?: Item) {
+  return positiveNumber(production.rate, order?.rate, (item as any)?.orderRate, item?.rate);
 }
 
 function normalizeSalesPerson(value?: string | null) {
@@ -129,39 +121,8 @@ function normalizeSalesPerson(value?: string | null) {
   };
 }
 
-function findTargetForDate(targets: TargetRow[], date: Date) {
-  const fy = getFinancialYear(toDateInput(date));
-  const month = monthLabelFromDate(date);
-  const exact = targets.find((row) => row.fy === fy && row.month === month);
-  if (exact) return exact;
-  return targets.find((row) => row.fy === fy && row.month === "All") || null;
-}
-
-function resolveTargetForRange(targets: TargetRow[], fromDate: string, toDate: string) {
-  if (targets.length === 0) return null;
-
-  const today = normalizeDate(new Date());
-  const from = parseAppDate(fromDate);
-  const to = parseAppDate(toDate);
-  const start = normalizeDate(from || today);
-  const end = normalizeDate(to || from || today);
-  const safeStart = start.getTime() <= end.getTime() ? start : end;
-  const safeEnd = start.getTime() <= end.getTime() ? end : start;
-
-  let cursor = new Date(safeStart);
-  let lastMatch: TargetRow | null = null;
-  while (cursor.getTime() <= safeEnd.getTime()) {
-    const match = findTargetForDate(targets, cursor);
-    if (match) lastMatch = match;
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-  }
-
-  if (lastMatch) return lastMatch;
-
-  const fallbackForToday = findTargetForDate(targets, today);
-  if (fallbackForToday) return fallbackForToday;
-
-  return targets[targets.length - 1] || null;
+function resolveCurrentTarget(targets: TargetRow[]) {
+  return findRealizationTargetForDate(targets, toDateInput(new Date()));
 }
 
 export function RealizationReport() {
@@ -222,14 +183,19 @@ export function RealizationReport() {
           itemById.get(String(order?.itemId || "")) ||
           itemByErp.get(erpCode);
         const qty = Number(production.qty || 0);
-        const realizationPerKg = resolveRealizationPerKg(production, order, item);
+        const rate = resolveRate(production, order, item);
+        const totalWeightOfSet = resolveTotalWeightOfSet(production, item);
+        const productionValue = Number((qty * rate).toFixed(2));
+        const productionWeight = Number((qty * totalWeightOfSet).toFixed(2));
+        const realizationPerKg = realizationAverage(productionValue, productionWeight);
 
         return {
           productionId: production.id,
           date: production.date,
           qty,
           realizationPerKg,
-          weightedValue: Number((qty * realizationPerKg).toFixed(2)),
+          productionValue,
+          productionWeight,
           companyId: company?.id || "",
           companyName: company?.name || "Unknown Company",
           salesPersonId: companySalesPerson.id,
@@ -238,7 +204,7 @@ export function RealizationReport() {
           dateValue: productionDate ? normalizeDate(productionDate).getTime() : null,
         };
       })
-      .filter((row) => Number.isFinite(row.realizationPerKg) && row.realizationPerKg > 0 && row.qty > 0)
+      .filter((row) => row.qty > 0 && row.productionValue > 0 && row.productionWeight > 0 && row.realizationPerKg > 0)
       .filter((row) => {
         if (fromTime != null && (row.dateValue == null || row.dateValue < fromTime)) return false;
         if (toTime != null && (row.dateValue == null || row.dateValue > toTime)) return false;
@@ -263,11 +229,13 @@ export function RealizationReport() {
 
   const overall = useMemo(() => {
     const totalQty = sourceRows.reduce((sum, row) => sum + row.qty, 0);
-    const totalWeighted = sourceRows.reduce((sum, row) => sum + row.weightedValue, 0);
+    const totalProductionValue = sourceRows.reduce((sum, row) => sum + row.productionValue, 0);
+    const totalProductionWeight = sourceRows.reduce((sum, row) => sum + row.productionWeight, 0);
     return {
       totalQty: Number(totalQty.toFixed(2)),
-      totalWeighted: Number(totalWeighted.toFixed(2)),
-      average: weightedAverage(totalWeighted, totalQty),
+      totalProductionValue: Number(totalProductionValue.toFixed(2)),
+      totalProductionWeight: Number(totalProductionWeight.toFixed(2)),
+      average: realizationAverage(totalProductionValue, totalProductionWeight),
       rowCount: sourceRows.length,
     };
   }, [sourceRows]);
@@ -280,17 +248,19 @@ export function RealizationReport() {
         id: key,
         name: row.salesPersonName,
         qty: 0,
-        weightedValue: 0,
+        productionValue: 0,
+        productionWeight: 0,
         average: 0,
         rowCount: 0,
       };
       current.qty += row.qty;
-      current.weightedValue += row.weightedValue;
+      current.productionValue += row.productionValue;
+      current.productionWeight += row.productionWeight;
       current.rowCount += 1;
       grouped.set(key, current);
     });
     return Array.from(grouped.values())
-      .map((row) => ({ ...row, average: weightedAverage(row.weightedValue, row.qty) }))
+      .map((row) => ({ ...row, average: realizationAverage(row.productionValue, row.productionWeight) }))
       .sort((a, b) => b.average - a.average || a.name.localeCompare(b.name));
   }, [sourceRows]);
 
@@ -302,21 +272,23 @@ export function RealizationReport() {
         id: key,
         name: row.companyName,
         qty: 0,
-        weightedValue: 0,
+        productionValue: 0,
+        productionWeight: 0,
         average: 0,
         rowCount: 0,
       };
       current.qty += row.qty;
-      current.weightedValue += row.weightedValue;
+      current.productionValue += row.productionValue;
+      current.productionWeight += row.productionWeight;
       current.rowCount += 1;
       grouped.set(key, current);
     });
     return Array.from(grouped.values())
-      .map((row) => ({ ...row, average: weightedAverage(row.weightedValue, row.qty) }))
+      .map((row) => ({ ...row, average: realizationAverage(row.productionValue, row.productionWeight) }))
       .sort((a, b) => b.average - a.average || a.name.localeCompare(b.name));
   }, [sourceRows]);
 
-  const currentTarget = useMemo(() => resolveTargetForRange(targets, fromDate, toDate), [fromDate, targets, toDate]);
+  const currentTarget = useMemo(() => resolveCurrentTarget(targets), [targets]);
 
   const selectedSalesPersonLabel = useMemo(() => {
     if (!salesPersonId) return "All";
@@ -337,8 +309,8 @@ export function RealizationReport() {
       { Metric: "Total Qty", Value: overall.totalQty },
       { Metric: "Filtered Production Rows", Value: overall.rowCount },
       { Metric: "Target Rate", Value: currentTarget?.value ?? "-" },
-      { Metric: "Target FY", Value: currentTarget?.fy ?? "-" },
-      { Metric: "Target Month", Value: currentTarget?.month ?? "-" },
+      { Metric: "Target Date From", Value: currentTarget?.dateFrom ?? "-" },
+      { Metric: "Target Date To", Value: currentTarget?.dateTo ?? "-" },
     ],
     [currentTarget, overall]
   );
@@ -434,7 +406,7 @@ export function RealizationReport() {
         </div>
         <div className="rounded border border-purple-300 bg-purple-50 p-4">
           <div className="text-xs font-black uppercase text-purple-700">Target Period</div>
-          <div className="mt-1 text-2xl font-black text-purple-900">{currentTarget ? `${currentTarget.month} ${currentTarget.fy}` : "Not set"}</div>
+          <div className="mt-1 text-2xl font-black text-purple-900">{describeRealizationTarget(currentTarget)}</div>
           <div className={`mt-1 inline-flex rounded border px-2 py-1 text-xs font-black ${getTargetBadgeClass(currentTarget?.value || 0, overall.average)}`}>
             Current Rate: {currentTarget?.value ?? "-"}
           </div>
