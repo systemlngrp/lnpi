@@ -116,8 +116,9 @@ function resolveRealizationPerKg(production: Production, order?: Order | null, i
 
   const rate = positiveNumber(production.rate, order?.rate, (item as any)?.orderRate, item?.rate);
   const totalWeightOfSet = resolveTotalWeightOfSet(production, item);
+  const noOfParts = positiveNumber(production.noOfParts, item?.noOfParts, 1);
   if (rate <= 0 || totalWeightOfSet <= 0) return 0;
-  return Number((rate / totalWeightOfSet).toFixed(2));
+  return Number(((rate / totalWeightOfSet) * noOfParts).toFixed(2));
 }
 
 function normalizeSalesPerson(value?: string | null) {
@@ -237,7 +238,7 @@ export function RealizationReport() {
           dateValue: productionDate ? normalizeDate(productionDate).getTime() : null,
         };
       })
-      .filter((row) => Number.isFinite(row.realizationPerKg) && row.realizationPerKg >= 0 && row.qty > 0)
+      .filter((row) => Number.isFinite(row.realizationPerKg) && row.realizationPerKg > 0 && row.qty > 0)
       .filter((row) => {
         if (fromTime != null && (row.dateValue == null || row.dateValue < fromTime)) return false;
         if (toTime != null && (row.dateValue == null || row.dateValue > toTime)) return false;
