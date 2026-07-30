@@ -198,7 +198,7 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
     }
 
     if (cancelQty > pendingDispatchPlan) {
-      setCancelErrors((prev) => ({ ...prev, [scheduleId]: "Cancel Qty cannot be greater than Pend Dispatch Plan." }));
+      setCancelErrors((prev) => ({ ...prev, [scheduleId]: "Cancel Qty cannot be greater than Pend Dispatch." }));
       return;
     }
 
@@ -382,7 +382,6 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
                 <th className="px-2 py-2 border border-black text-right bg-sky-50 text-sky-800 leading-tight">
                   <span className="block">Pend</span>
                   <span className="block">Dispatch</span>
-                  <span className="block">Plan</span>
                 </th>
                 {pendingOnly ? (
                   <th className="px-2 py-2 border border-black text-left bg-red-50 text-red-800 leading-tight">
