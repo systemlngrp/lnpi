@@ -814,6 +814,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           "Ordered Qty",
           "Received",
           "Cancelled",
+          ...(mode === "item-cancelled" ? ["Cancel By", "Cancel Reason"] : []),
           "Not Received",
           "Target Delivery",
           ...(mode === "item-not-received" ? ["Cancel Qty", "Action", "Status"] : []),
@@ -829,6 +830,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           Number(row.line.qty || 0).toLocaleString(),
           row.receivedQty.toLocaleString(),
           row.cancelledQty.toLocaleString(),
+          ...(mode === "item-cancelled" ? [row.line.cancelledBy || "-", row.line.cancelReason || "-"] : []),
           row.pendingQty.toLocaleString(),
           row.line.targetDeliveryDate ? formatDate(row.line.targetDeliveryDate) : "-",
           ...(mode === "item-not-received"
@@ -1087,6 +1089,12 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                 <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Ordered Qty</th>
                 <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Received</th>
                 <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Cancelled</th>
+                {mode === "item-cancelled" ? (
+                  <>
+                    <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Cancel By</th>
+                    <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Cancel Reason</th>
+                  </>
+                ) : null}
                 <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Not Received</th>
                 <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Target Delivery</th>
                 {mode === "item-not-received" ? (
@@ -1100,7 +1108,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
             <tbody className="divide-y divide-black">
               {paginatedFlatItemRows.length === 0 ? (
                 <tr>
-                  <td colSpan={mode === "item-not-received" ? 14 : 12} className="px-4 py-12 text-center text-slate-500 italic">
+                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500 italic">
                     No PO items found.
                   </td>
                 </tr>
@@ -1117,6 +1125,12 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                     <td className="px-3 py-3 text-right text-black">{Number(row.line.qty || 0).toLocaleString()}</td>
                     <td className="px-3 py-3 text-right text-emerald-700">{row.receivedQty.toLocaleString()}</td>
                     <td className="px-3 py-3 text-right text-red-700">{row.cancelledQty.toLocaleString()}</td>
+                    {mode === "item-cancelled" ? (
+                      <>
+                        <td className="px-3 py-3 text-black uppercase">{row.line.cancelledBy || "-"}</td>
+                        <td className="px-3 py-3 text-black min-w-[180px]">{row.line.cancelReason || "-"}</td>
+                      </>
+                    ) : null}
                     <td className="px-3 py-3 text-right text-amber-700">{row.pendingQty.toLocaleString()}</td>
                     <td className="px-3 py-3 text-black">{row.line.targetDeliveryDate ? formatDate(row.line.targetDeliveryDate) : "-"}</td>
                     {mode === "item-not-received" ? (
