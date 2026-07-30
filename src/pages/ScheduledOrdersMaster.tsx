@@ -35,7 +35,7 @@ type ScheduledOrdersMasterProps = {
 };
 
 export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMasterProps = {}) {
-  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const { resolveOrderItem, itemsBySource } = useOrderItemCatalog();
@@ -50,6 +50,9 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [scheduleNoSortDirection, setScheduleNoSortDirection] = useState<SortDirection>("desc");
+  const [cancelInputs, setCancelInputs] = useState<Record<string, string>>({});
+  const [cancelErrors, setCancelErrors] = useState<Record<string, string>>({});
+  const [savingCancelId, setSavingCancelId] = useState<string | null>(null);
 
   const companyOptions = useMemo<SelectOption[]>(
     () =>
@@ -180,10 +183,54 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
     setPage(1);
   };
 
+  const handleCancelInputChange = (scheduleId: string, value: string) => {
+    setCancelInputs((prev) => ({ ...prev, [scheduleId]: value }));
+    setCancelErrors((prev) => ({ ...prev, [scheduleId]: "" }));
+  };
+
+  const handleSaveCancelQty = async (scheduleId: string, pendingDispatchPlan: number) => {
+    const rawValue = (cancelInputs[scheduleId] || "").trim();
+    const cancelQty = Number(rawValue);
+
+    if (!rawValue || !Number.isFinite(cancelQty) || cancelQty <= 0) {
+      setCancelErrors((prev) => ({ ...prev, [scheduleId]: "Enter Cancel Qty greater than 0." }));
+      return;
+    }
+
+    if (cancelQty > pendingDispatchPlan) {
+      setCancelErrors((prev) => ({ ...prev, [scheduleId]: "Cancel Qty cannot be greater than Pend Dispatch Plan." }));
+      return;
+    }
+
+    setSavingCancelId(scheduleId);
+    try {
+      const timestamp = new Date().toISOString();
+      await setSchedules((prev) =>
+        prev.map((schedule) =>
+          schedule.id === scheduleId
+            ? {
+                ...schedule,
+                canceledQty: Number(schedule.canceledQty || 0) + cancelQty,
+                updatedBy: "System User",
+                updateTimestamp: timestamp,
+              }
+            : schedule,
+        ),
+      );
+      setCancelInputs((prev) => ({ ...prev, [scheduleId]: "" }));
+      setCancelErrors((prev) => ({ ...prev, [scheduleId]: "" }));
+    } catch (error) {
+      console.error("Failed to save cancel quantity:", error);
+      setCancelErrors((prev) => ({ ...prev, [scheduleId]: "Failed to save Cancel Qty." }));
+    } finally {
+      setSavingCancelId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">{pendingOnly ? "Pending Scheduled Orders" : "Scheduled Orders Master"}</h2>
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">{pendingOnly ? "Scheduled But Not Dispatched" : "Scheduled Orders Master"}</h2>
         <button 
           onClick={clearFilters}
           className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
@@ -320,8 +367,7 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
                 </th>
                 <th className="px-2 py-2 border border-black text-right bg-cyan-50 text-cyan-800 leading-tight">
                   <span className="block">Pending</span>
-                  <span className="block">Production</span>
-                  <span className="block">Planning</span>
+                  <span className="block">FFG</span>
                 </th>
                 <th className="px-2 py-2 border border-black text-right bg-amber-50 leading-tight">
                   <span className="block">Loaded</span>
@@ -334,10 +380,16 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
                   <span className="block">Inv</span>
                 </th>
                 <th className="px-2 py-2 border border-black text-right bg-sky-50 text-sky-800 leading-tight">
-                  <span className="block">Pend.</span>
-                  <span className="block">Order</span>
-                  <span className="block">Qty</span>
+                  <span className="block">Pend</span>
+                  <span className="block">Dispatch</span>
+                  <span className="block">Plan</span>
                 </th>
+                {pendingOnly ? (
+                  <th className="px-2 py-2 border border-black text-left bg-red-50 text-red-800 leading-tight">
+                    <span className="block">Cancel</span>
+                    <span className="block">Qty</span>
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-black bg-white">
@@ -365,11 +417,35 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
                   <td className={`px-3 py-2 border border-black text-right font-medium ${s.pendingOrderQty > 0 ? 'text-sky-800 bg-sky-50/40' : 'text-slate-400 bg-sky-50/20'}`}>
                     {s.pendingOrderQty.toLocaleString()}
                   </td>
+                  {pendingOnly ? (
+                    <td className="px-3 py-2 border border-black bg-red-50/20 min-w-[180px]">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={cancelInputs[s.id] || ""}
+                          onChange={(event) => handleCancelInputChange(s.id, event.target.value)}
+                          className="w-24 rounded border border-black px-2 py-1 text-right text-xs font-bold focus:outline-none focus:ring-1 focus:ring-black"
+                          aria-label={`Cancel Qty for ${s.scheduleNo}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveCancelQty(s.id, s.pendingOrderQty)}
+                          disabled={savingCancelId === s.id}
+                          className="rounded bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {savingCancelId === s.id ? "Saving" : "Save"}
+                        </button>
+                      </div>
+                      {cancelErrors[s.id] ? <div className="mt-1 text-[10px] font-bold text-red-700">{cancelErrors[s.id]}</div> : null}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               {detailedSchedules.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
+                  <td colSpan={pendingOnly ? 17 : 16} className="px-6 py-12 text-center text-slate-500 font-bold italic uppercase tracking-widest bg-slate-50/50">
                     No schedules found matching your criteria
                   </td>
                 </tr>
@@ -406,6 +482,7 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
                   <td className="px-3 py-2 text-right bg-sky-50 text-sky-800">
                     {detailedSchedules.reduce((sum, s) => sum + s.pendingOrderQty, 0).toLocaleString()}
                   </td>
+                  {pendingOnly ? <td className="px-3 py-2 bg-red-50" /> : null}
                 </tr>
               </tfoot>
             )}
