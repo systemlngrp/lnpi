@@ -9,6 +9,7 @@ import { OrderSchedule, Order, Company, Item, DispatchPlan, LoadingSlip, Product
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { normalizeOrderItemSource } from "../lib/orderItems";
+import { getFinancialYearFromDate } from "../lib/financialYear";
 import { ArrowUpDown, Save } from "lucide-react";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
@@ -412,8 +413,9 @@ export function PendingDispatchPlanning() {
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
+      const planFy = getFinancialYearFromDate(timestamp);
       let nextPlanNo = Math.max(0, ...dispatchPlans.map(p => {
-        const match = p.planNo?.match(/DP-(\d+)/);
+        const match = String(p.planNo || "").match(new RegExp(`^DP/${planFy}/(\\d+)$`));
         return match ? parseInt(match[1], 10) : 0;
       })) + 1;
 
@@ -424,7 +426,7 @@ export function PendingDispatchPlanning() {
         
         return {
           id: crypto.randomUUID(),
-          planNo: `DP-${String(nextPlanNo++).padStart(5, '0')}`,
+          planNo: `DP/${planFy}/${String(nextPlanNo++).padStart(5, '0')}`,
           scheduleId: id,
           orderId: schedule.orderId,
           truckId: "",

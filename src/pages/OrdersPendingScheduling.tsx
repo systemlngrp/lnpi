@@ -32,7 +32,7 @@ export function OrdersPendingScheduling() {
   const pending = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     return orders
-      .filter((order) => order.status === "Pending Scheduling" && (order.qty || 0) > totalScheduled(order.id))
+      .filter((order) => order.status === "Pending Scheduling")
       .map((order) => {
         const item = resolveOrderItem(order);
         const companyName = (companies as any[]).find((company) => company.id === order.companyId)?.name || "";
@@ -40,6 +40,7 @@ export function OrdersPendingScheduling() {
         const pendingQty = Number(order.qty || 0) - scheduledQty;
         return { order, item, companyName, scheduledQty, pendingQty };
       })
+      .filter(({ pendingQty }) => pendingQty > 0)
       .filter(({ order, item, companyName, pendingQty, scheduledQty }) => {
         if (!normalizedSearch) return true;
         const haystack = [

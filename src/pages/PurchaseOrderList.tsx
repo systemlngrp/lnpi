@@ -23,6 +23,7 @@ import type {
   Indent,
   IndentLine,
   Material,
+  MaterialIn,
   PurchaseOrder,
   PurchaseOrderLine,
   Setting,
@@ -70,10 +71,11 @@ const formatMoney = (value: number) =>
 export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [purchaseOrders, setPurchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
   const [orderLines, setPurchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
+  const [materialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
-  const [indents] = useData<Indent>("indents", []);
-  const [indentLines] = useData<IndentLine>("indent-lines", []);
+  const [indents, setIndents] = useData<Indent>("indents", []);
+  const [indentLines, setIndentLines] = useData<IndentLine>("indent-lines", []);
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -93,6 +95,46 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const supplierNameMap = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
   const indentMap = useMemo(() => new Map(indents.map((indent) => [indent.id, indent])), [indents]);
   const indentLineMap = useMemo(() => new Map(indentLines.map((line) => [line.id, line])), [indentLines]);
+  const receivedQtyByPoLineId = useMemo(() => {
+    const map = new Map<string, number>();
+    materialIn.forEach((entry) => {
+      if (!Array.isArray(entry.lines)) return;
+      entry.lines.forEach((line) => {
+        const poLineId = String(line?.poLineId || "").trim();
+        if (!poLineId) return;
+        const qty = Number(line.actualQty ?? line.qty ?? line.invoiceQty ?? 0);
+        if (!Number.isFinite(qty) || qty <= 0) return;
+        map.set(poLineId, (map.get(poLineId) || 0) + qty);
+      });
+    });
+    return map;
+  }, [materialIn]);
+
+  const getLineReceivedQty = useCallback((lineId: string) => Number(receivedQtyByPoLineId.get(lineId) || 0), [receivedQtyByPoLineId]);
+  const getLineCancelledQty = useCallback((line: PurchaseOrderLine) => Math.max(0, Number(line.cancelledQty || 0)), []);
+  const getLinePendingQty = useCallback((line: PurchaseOrderLine) => {
+    return Math.max(0, Number(line.qty || 0) - getLineReceivedQty(line.id) - getLineCancelledQty(line));
+  }, [getLineCancelledQty, getLineReceivedQty]);
+
+  const getActiveLineForTotals = useCallback((order: PurchaseOrder, line: PurchaseOrderLine): PurchaseOrderLine => {
+    const activeQty = Math.max(0, Number(line.qty || 0) - getLineCancelledQty(line));
+    const taxes = computePurchaseOrderTaxes(activeQty, Number(line.rate || 0), Number(line.gstRate || 0), supplierMap.get(order.supplierId)?.gstSupplyType);
+    return {
+      ...line,
+      qty: activeQty,
+      amount: taxes.amount,
+      gstRate: taxes.gstRate,
+      cgst: taxes.cgst,
+      sgst: taxes.sgst,
+      igst: taxes.igst,
+      lineTotal: taxes.lineTotal,
+    };
+  }, [getLineCancelledQty, supplierMap]);
+
+  const getLinesForTotals = useCallback(
+    (order: PurchaseOrder, lines: PurchaseOrderLine[]) => lines.map((line) => getActiveLineForTotals(order, line)),
+    [getActiveLineForTotals],
+  );
 
   const getOrderIndentRefs = useCallback((order: PurchaseOrder, lines: PurchaseOrderLine[]) => {
     const refs = new Set<string>();
@@ -185,8 +227,10 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       const draft = editingLines[line.id];
       if (!draft) return line;
 
+      const orderedQty = Number(draft.qty || 0);
+      const activeQty = Math.max(0, orderedQty - getLineCancelledQty(line));
       const taxes = computePurchaseOrderTaxes(
-        Number(draft.qty || 0),
+        activeQty,
         Number(draft.rate || 0),
         Number(draft.gstRate || 0),
         supplyType,
@@ -194,7 +238,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
 
       return {
         ...line,
-        qty: Number(draft.qty || 0),
+        qty: orderedQty,
         rate: Number(draft.rate || 0),
         gstRate: taxes.gstRate,
         amount: taxes.amount,
@@ -205,10 +249,10 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         targetDeliveryDate: draft.targetDeliveryDate || undefined,
       };
     });
-  }, [editingLines, editingOrderId, supplierMap]);
+  }, [editingLines, editingOrderId, getLineCancelledQty, supplierMap]);
 
   const getRenderedTotals = useCallback((order: PurchaseOrder, lines: PurchaseOrderLine[]) => {
-    const previewLines = getRenderedLines(order, lines);
+    const previewLines = getLinesForTotals(order, getRenderedLines(order, lines));
     const totals = summarizePurchaseOrderLines(previewLines);
     const roundOff = editingOrderId === order.id
       ? Number(editingHeader?.roundOff || 0)
@@ -219,7 +263,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       roundOff,
       grandTotal: Number((totals.grandTotal + roundOff).toFixed(2)),
     };
-  }, [editingHeader?.roundOff, editingOrderId, getRenderedLines]);
+  }, [editingHeader?.roundOff, editingOrderId, getLinesForTotals, getRenderedLines]);
 
   const handleSaveEdit = async (order: PurchaseOrder, lines: PurchaseOrderLine[]) => {
     if (editingOrderId !== order.id || !editingHeader) return;
@@ -244,6 +288,10 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         if (!Number.isFinite(qty) || qty <= 0) {
           throw new Error(`Please enter a valid qty for ${itemName}.`);
         }
+        const closedQty = getLineReceivedQty(line.id) + getLineCancelledQty(line);
+        if (qty + 0.0001 < closedQty) {
+          throw new Error(`Qty for ${itemName} cannot be less than received plus cancelled qty.`);
+        }
         if (!Number.isFinite(rate) || rate < 0) {
           throw new Error(`Please enter a valid rate for ${itemName}.`);
         }
@@ -251,7 +299,8 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           throw new Error(`Please enter a valid GST Rate for ${itemName}.`);
         }
 
-        const taxes = computePurchaseOrderTaxes(qty, rate, gstRate, supplyType);
+        const activeQty = Math.max(0, qty - getLineCancelledQty(line));
+        const taxes = computePurchaseOrderTaxes(activeQty, rate, gstRate, supplyType);
 
         return {
           ...line,
@@ -269,7 +318,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         };
       });
 
-      const totals = summarizePurchaseOrderLines(updatedLines);
+      const totals = summarizePurchaseOrderLines(updatedLines.map((line) => getActiveLineForTotals(order, line)));
       const updatedOrder: PurchaseOrder = {
         ...order,
         poDate: editingHeader.poDate || order.poDate,
@@ -296,6 +345,109 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     } catch (error) {
       console.error("Failed to save purchase order:", error);
       alert((error as Error).message || "Failed to save purchase order.");
+    }
+  };
+
+  const handleCancelPoLine = async (order: PurchaseOrder, line: PurchaseOrderLine) => {
+    const pendingQty = getLinePendingQty(line);
+    if (pendingQty <= 0) {
+      alert("This PO item has no not-received quantity available to cancel.");
+      return;
+    }
+
+    const rawQty = window.prompt(`Enter cancel qty for ${materialMap.get(line.materialId)?.name || "this item"}. Pending: ${pendingQty.toLocaleString()}`, String(pendingQty));
+    if (rawQty === null) return;
+    const cancelQty = Number(rawQty);
+    if (!Number.isFinite(cancelQty) || cancelQty <= 0 || cancelQty > pendingQty + 0.0001) {
+      alert("Cancel qty must be greater than 0 and cannot exceed not-received qty.");
+      return;
+    }
+
+    const reason = window.prompt("Enter cancellation reason:");
+    if (reason === null) return;
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      alert("Cancellation reason is required.");
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const activeQty = Math.max(0, Number(line.qty || 0) - Number(line.cancelledQty || 0) - cancelQty);
+    const taxes = computePurchaseOrderTaxes(activeQty, Number(line.rate || 0), Number(line.gstRate || 0), supplierMap.get(order.supplierId)?.gstSupplyType);
+    const updatedLine: PurchaseOrderLine = {
+      ...line,
+      amount: taxes.amount,
+      gstRate: taxes.gstRate,
+      cgst: taxes.cgst,
+      sgst: taxes.sgst,
+      igst: taxes.igst,
+      lineTotal: taxes.lineTotal,
+      cancelledQty: Number(line.cancelledQty || 0) + cancelQty,
+      cancelReason: trimmedReason,
+      cancelledAt: timestamp,
+      cancelledBy: "System User",
+      updatedBy: "System User",
+      updateTimestamp: timestamp,
+    };
+
+    const nextOrderLines = orderLines.map((row) => (row.id === line.id ? updatedLine : row));
+    const orderLinesForOrder = nextOrderLines.filter((row) => row.purchaseOrderId === order.id);
+    const totals = summarizePurchaseOrderLines(orderLinesForOrder.map((row) => getActiveLineForTotals(order, row)));
+    const updatedOrder: PurchaseOrder = {
+      ...order,
+      totalQty: totals.totalQty,
+      totalAmount: totals.taxableAmount,
+      taxableAmount: totals.taxableAmount,
+      cgst: totals.cgst,
+      sgst: totals.sgst,
+      igst: totals.igst,
+      grandTotal: Number((totals.grandTotal + Number(order.roundOff || 0)).toFixed(2)),
+      updatedBy: "System User",
+      updateTimestamp: timestamp,
+    };
+
+    const nextIndentLines = indentLines.map((indentLine) => {
+      if (indentLine.id !== line.indentLineId) return indentLine;
+      const orderedQty = Math.max(0, Number(indentLine.orderedQty || 0) - cancelQty);
+      const cancelledQty = Number(indentLine.cancelledQty || 0) + cancelQty;
+      const balanceQty = Math.max(0, Number(indentLine.qty || 0) - orderedQty - cancelledQty);
+      return {
+        ...indentLine,
+        orderedQty,
+        cancelledQty,
+        balanceQty,
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+      };
+    });
+
+    const nextIndents = indents.map((indent) => {
+      if (indent.id !== order.indentId) return indent;
+      const lines = nextIndentLines.filter((row) => row.indentId === indent.id);
+      const totalIndentQty = lines.reduce((sum, row) => sum + Number(row.qty || 0), 0);
+      const totalOrderedQty = lines.reduce((sum, row) => sum + Number(row.orderedQty || 0), 0);
+      const totalCancelledQty = lines.reduce((sum, row) => sum + Number(row.cancelledQty || 0), 0);
+      const totalBalanceQty = lines.reduce((sum, row) => sum + Number(row.balanceQty || 0), 0);
+      return {
+        ...indent,
+        totalIndentQty,
+        totalOrderedQty,
+        totalCancelledQty,
+        totalBalanceQty,
+        status: (totalBalanceQty <= 0 ? "Completed" : "Approved") as Indent["status"],
+        updatedBy: "System User",
+        updateTimestamp: timestamp,
+      };
+    });
+
+    try {
+      await setPurchaseOrderLines(nextOrderLines);
+      await setPurchaseOrders((prev) => prev.map((row) => (row.id === order.id ? updatedOrder : row)));
+      await setIndentLines(nextIndentLines);
+      await setIndents(nextIndents);
+    } catch (error) {
+      console.error("Failed to cancel PO item:", error);
+      alert("Failed to cancel PO item.");
     }
   };
 
@@ -808,7 +960,10 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                 <tr className="divide-x divide-black text-[9px] font-black uppercase text-slate-500">
                                   <th className="px-3 py-2 text-left">ERP</th>
                                   <th className="px-3 py-2 text-left">Item Name</th>
-                                  <th className="px-3 py-2 text-right">Qty</th>
+                                  <th className="px-3 py-2 text-right">Ordered Qty</th>
+                                  <th className="px-3 py-2 text-right">Received</th>
+                                  <th className="px-3 py-2 text-right">Cancelled</th>
+                                  <th className="px-3 py-2 text-right">Not Received</th>
                                   <th className="px-3 py-2 text-center">UOM</th>
                                   <th className="px-3 py-2 text-right">Rate</th>
                                   <th className="px-3 py-2 text-right">GST Rate</th>
@@ -823,10 +978,16 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                   <th className="px-3 py-2 text-right">Amount</th>
                                   <th className="px-3 py-2 text-right">Amount after GST</th>
                                   <th className="px-3 py-2 text-left">Target Delivery</th>
+                                  <th className="px-3 py-2 text-right">Cancel</th>
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-black">
-                                {renderedLines.map((line) => (
+                                {renderedLines.map((line) => {
+                                  const activeLine = getActiveLineForTotals(order, line);
+                                  const receivedQty = getLineReceivedQty(line.id);
+                                  const cancelledQty = getLineCancelledQty(line);
+                                  const pendingQty = getLinePendingQty(line);
+                                  return (
                                   <tr key={line.id} className="divide-x divide-black text-[10px] font-bold">
                                     <td className="px-3 py-2 text-black">{line.erpCode || materialMap.get(line.materialId)?.erpCode || ""}</td>
                                     <td className="px-3 py-2 text-black uppercase">{materialMap.get(line.materialId)?.name || "Unknown"}</td>
@@ -848,6 +1009,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                         Number(line.qty || 0).toLocaleString()
                                       )}
                                     </td>
+                                    <td className="px-3 py-2 text-right text-emerald-700">{receivedQty.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right text-red-700">{cancelledQty.toLocaleString()}</td>
+                                    <td className="px-3 py-2 text-right text-amber-700">{pendingQty.toLocaleString()}</td>
                                     <td className="px-3 py-2 text-center">{line.uom}</td>
                                     <td className="px-3 py-2 text-right">
                                       {isEditing ? (
@@ -889,16 +1053,16 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                       )}
                                     </td>
                                     {showIntegratedTax ? (
-                                      <td className="px-3 py-2 text-right">{formatMoney(Number(line.igst || 0))}</td>
+                                      <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.igst || 0))}</td>
                                     ) : (
                                       <>
-                                        <td className="px-3 py-2 text-right">{formatMoney(Number(line.cgst || 0))}</td>
-                                        <td className="px-3 py-2 text-right">{formatMoney(Number(line.sgst || 0))}</td>
+                                        <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.cgst || 0))}</td>
+                                        <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.sgst || 0))}</td>
                                       </>
                                     )}
-                                    <td className="px-3 py-2 text-right">{formatMoney(Number(line.amount || 0))}</td>
+                                    <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.amount || 0))}</td>
                                     <td className="px-3 py-2 text-right">
-                                      {formatMoney(Number(line.lineTotal ?? (Number(line.amount || 0) + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0))))}
+                                      {formatMoney(Number(activeLine.lineTotal ?? (Number(activeLine.amount || 0) + Number(activeLine.cgst || 0) + Number(activeLine.sgst || 0) + Number(activeLine.igst || 0))))}
                                     </td>
                                     <td className="px-3 py-2 text-left">
                                       {isEditing ? (
@@ -917,13 +1081,26 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                         line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-"
                                       )}
                                     </td>
+                                    <td className="px-3 py-2 text-right">
+                                      {order.status !== "Rejected" && !isEditing && pendingQty > 0 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleCancelPoLine(order, line)}
+                                          className="inline-flex items-center gap-1 rounded border border-red-700 bg-red-50 px-2 py-1 text-[9px] font-black uppercase text-red-700 hover:bg-red-100"
+                                        >
+                                          <X size={12} /> Cancel
+                                        </button>
+                                      ) : "-"}
+                                    </td>
                                   </tr>
-                                ))}
+                                  );
+                                })}
                                 <tr className="divide-x divide-black bg-slate-100 text-[10px] font-black">
-                                  <td className="px-3 py-2" colSpan={showIntegratedTax ? 7 : 8}>Summary</td>
+                                  <td className="px-3 py-2" colSpan={showIntegratedTax ? 10 : 11}>Summary</td>
                                   <td className="px-3 py-2 text-right">{formatMoney(renderedTotals.taxableAmount)}</td>
                                   <td className="px-3 py-2 text-right">{formatMoney(renderedTotals.grandTotal)}</td>
                                   <td className="px-3 py-2 text-left">Round Off: {formatMoney(renderedTotals.roundOff)}</td>
+                                  <td className="px-3 py-2"></td>
                                 </tr>
                               </tbody>
                             </table>

@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Setting, Supplier } from "../types";
+import { Company, Material, MaterialIn, Setting, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
-import { Trash2, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, Trash2 } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { normalizeMaterialInRecord, recalculateMaterialLine } from "../lib/materialInTaxes";
 
@@ -11,8 +11,10 @@ export function MaterialInMaster() {
   const [materials] = useData<Material>("materials", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
+  const [companies] = useData<Company>("companies", []);
   const [settings] = useData<Setting>("settings", []);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedItemRows, setExpandedItemRows] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [fromDate, setFromDate] = useState("");
@@ -33,12 +35,55 @@ export function MaterialInMaster() {
     setDeletingId(null);
   };
 
-  const getSupplierName = (id: string) => suppliers.find((supplier) => supplier.id === id)?.name || id;
+  const getSupplierName = (id: string) =>
+    suppliers.find((supplier) => supplier.id === id)?.name ||
+    companies.find((company) => company.id === id)?.name ||
+    id;
   const formatMoney = (value?: number) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const formatText = (value?: string | number) => String(value || "").trim() || "-";
   const getGstTotal = (entry: MaterialIn) => Number(entry.totalCgst || 0) + Number(entry.totalSgst || 0) + Number(entry.totalIgst || 0);
   const getExpenseGstTotal = (entry: MaterialIn) => Number(entry.expenseCGST || 0) + Number(entry.expenseSGST || 0) + Number(entry.expenseIGST || 0);
   const getApprovalText = (timestamp?: string, user?: string) => [timestamp ? formatDate(timestamp) : "", user || ""].filter(Boolean).join(" / ") || "-";
+  const toggleItemRow = (id: string) => {
+    setExpandedItemRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const getLineItemsSummary = (lines: MaterialIn["lines"] = []) => {
+    const safeLines = Array.isArray(lines) ? lines : [];
+    if (safeLines.length === 0) return "No items";
+    const names = safeLines
+      .slice(0, 2)
+      .map((rawLine) => {
+        const line = rawLine ? recalculateMaterialLine({ ...rawLine }) : null;
+        if (!line) return "";
+        return materials.find((item) => item.id === line.itemId)?.name || npdItems.find((item) => item.id === line.itemId)?.name || "Unknown";
+      })
+      .filter(Boolean);
+    const suffix = safeLines.length > 2 ? ` + ${safeLines.length - 2} more` : "";
+    return `${names.join(", ") || "Unknown"}${suffix}`;
+  };
+
+  const getToggleItemsElement = (entry: MaterialIn) => {
+    const isExpanded = expandedItemRows.has(entry.id);
+    return (
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => toggleItemRow(entry.id)}
+          className="inline-flex max-w-full items-center gap-2 text-left text-xs font-bold text-indigo-700 hover:text-indigo-900"
+        >
+          {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+          <span className="truncate">{getLineItemsSummary(entry.lines)}</span>
+        </button>
+        {isExpanded ? getLineItemsElement(entry.lines) : null}
+      </div>
+    );
+  };
 
   const getLineItemsElement = (lines: MaterialIn["lines"] = []) => {
     const safeLines = Array.isArray(lines) ? lines : [];
@@ -201,7 +246,7 @@ export function MaterialInMaster() {
               <div className="text-xs font-black text-slate-500 uppercase">Date / Supplier</div>
               <div className="text-sm">{formatDate(entry.date)} | {getSupplierName(entry.supplierId)}</div>
               <div className="text-xs font-black text-slate-500 uppercase">Items</div>
-              <div className="text-sm">{getLineItemsElement(entry.lines)}</div>
+              <div className="text-sm">{getToggleItemsElement(entry)}</div>
               <div className="flex justify-between items-center mt-2 border-t border-slate-100 pt-2">
                 <div className="text-right">
                   <div className="font-bold text-sm text-slate-500">Invoice: {Number(entry.totalInvoiceValue || 0).toLocaleString()}</div>
@@ -276,7 +321,7 @@ export function MaterialInMaster() {
                     <td className="px-4 py-3 text-xs text-black border border-black min-w-[180px]">{getSupplierName(entry.supplierId)}</td>
                     <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{formatText(entry.invoiceNo)}</td>
                     <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{entry.invDate ? formatDate(entry.invDate) : "-"}</td>
-                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[320px] max-w-[420px]">{getLineItemsElement(entry.lines)}</td>
+                    <td className="px-4 py-3 text-xs text-black border border-black min-w-[320px] max-w-[420px]">{getToggleItemsElement(entry)}</td>
                     <td className="px-4 py-3 text-xs border border-black whitespace-nowrap">
                       <span className={`px-2 py-1 rounded text-[11px] font-bold border uppercase tracking-wider ${entry.status === "Completed" ? "bg-emerald-100 text-emerald-900 border-emerald-900" : "bg-amber-100 text-amber-900 border-amber-900"}`}>
                         {entry.status}

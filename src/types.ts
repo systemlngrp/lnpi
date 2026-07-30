@@ -328,6 +328,10 @@ export interface PurchaseOrderLine {
   igst?: number;
   lineTotal?: number;
   targetDeliveryDate?: string;
+  cancelledQty?: number;
+  cancelReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

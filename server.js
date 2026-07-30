@@ -2900,6 +2900,10 @@ async function initDb(retries = 5) {
           \`igst\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`lineTotal\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`targetDeliveryDate\` VARCHAR(50),
+          \`cancelledQty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`cancelReason\` TEXT,
+          \`cancelledAt\` VARCHAR(255),
+          \`cancelledBy\` VARCHAR(255),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -4027,6 +4031,10 @@ async function initDb(retries = 5) {
         { table: "purchase_order_lines", column: "igst", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "lineTotal", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "purchase_order_lines", column: "targetDeliveryDate", type: "VARCHAR(50)" },
+        { table: "purchase_order_lines", column: "cancelledQty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "purchase_order_lines", column: "cancelReason", type: "TEXT" },
+        { table: "purchase_order_lines", column: "cancelledAt", type: "VARCHAR(255)" },
+        { table: "purchase_order_lines", column: "cancelledBy", type: "VARCHAR(255)" },
         { table: "purchase_order_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "purchase_order_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "gate_entries", column: "gateEntryNo", type: "VARCHAR(100)" },
