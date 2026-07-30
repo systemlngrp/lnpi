@@ -61,6 +61,11 @@ type NotReceivedItemRow = {
   pendingQty: number;
 };
 
+type NotReceivedCancelRequest = {
+  row: NotReceivedItemRow;
+  cancelQty: number;
+};
+
 export function PurchaseOrderAll() {
   return <PurchaseOrderList mode="all" />;
 }
@@ -101,9 +106,12 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [poNumberFilter, setPoNumberFilter] = useState("");
   const [fromDateFilter, setFromDateFilter] = useState("");
   const [toDateFilter, setToDateFilter] = useState("");
   const [cancelQtyByLineId, setCancelQtyByLineId] = useState<Record<string, string>>({});
+  const [cancelRequest, setCancelRequest] = useState<NotReceivedCancelRequest | null>(null);
+  const [cancelReasonDraft, setCancelReasonDraft] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -253,10 +261,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   }, [purchaseOrders, suppliers]);
 
-  const filteredNotReceivedRows = useMemo<NotReceivedItemRow[]>(() => {
+  const baseNotReceivedRows = useMemo<NotReceivedItemRow[]>(() => {
     const search = searchTerm.trim().toLowerCase();
     return purchaseOrders
-      .filter((order) => !statusFilter || order.status === statusFilter)
       .filter((order) => !supplierFilter || order.supplierId === supplierFilter)
       .filter((order) => !fromDateFilter || String(order.poDate || "") >= fromDateFilter)
       .filter((order) => !toDateFilter || String(order.poDate || "") <= toDateFilter)
@@ -306,7 +313,21 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           String(a.order.poNo || "").localeCompare(String(b.order.poNo || "")) ||
           String(a.itemLabel || "").localeCompare(String(b.itemLabel || "")),
       );
-  }, [fromDateFilter, getLineCancelledQty, getLinePendingQty, getLineReceivedQty, indentLineMap, indentMap, materialMap, orderLines, purchaseOrders, searchTerm, statusFilter, supplierFilter, supplierNameMap, toDateFilter]);
+  }, [fromDateFilter, getLineCancelledQty, getLinePendingQty, getLineReceivedQty, indentLineMap, indentMap, materialMap, orderLines, purchaseOrders, searchTerm, supplierFilter, supplierNameMap, toDateFilter]);
+
+  const poNumberOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    baseNotReceivedRows.forEach((row) => {
+      if (!byId.has(row.order.id)) byId.set(row.order.id, row.order.poNo || "DRAFT");
+    });
+    return Array.from(byId.entries())
+      .map(([id, poNo]) => ({ id, poNo }))
+      .sort((a, b) => a.poNo.localeCompare(b.poNo));
+  }, [baseNotReceivedRows]);
+
+  const filteredNotReceivedRows = useMemo(() => {
+    return baseNotReceivedRows.filter((row) => !poNumberFilter || row.order.id === poNumberFilter);
+  }, [baseNotReceivedRows, poNumberFilter]);
 
   const filteredNotReceivedQtySummary = useMemo(() => {
     return filteredNotReceivedRows.reduce(
@@ -514,7 +535,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     }
   };
 
-  const handleCancelPoLine = async (order: PurchaseOrder, line: PurchaseOrderLine, requestedCancelQty?: number) => {
+  const handleCancelPoLine = async (order: PurchaseOrder, line: PurchaseOrderLine, requestedCancelQty?: number, requestedReason?: string) => {
     const pendingQty = getLinePendingQty(line);
     if (pendingQty <= 0) {
       alert("This PO item has no not-received quantity available to cancel.");
@@ -532,7 +553,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       return false;
     }
 
-    const reason = window.prompt("Enter cancellation reason:");
+    const reason = requestedReason === undefined ? window.prompt("Enter cancellation reason:") : requestedReason;
     if (reason === null) return false;
     const trimmedReason = reason.trim();
     if (!trimmedReason) {
@@ -622,21 +643,39 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     }
   };
 
-  const handleCancelNotReceivedRow = async (row: NotReceivedItemRow) => {
+  const handleCancelNotReceivedRow = (row: NotReceivedItemRow) => {
     const rawQty = cancelQtyByLineId[row.line.id] || "";
     const cancelQty = Number(rawQty);
     if (!Number.isFinite(cancelQty) || cancelQty <= 0 || cancelQty > row.pendingQty + 0.0001) {
       alert("Cancel qty must be greater than 0 and cannot exceed not-received qty.");
-      return false;
+      return;
     }
 
-    const didCancel = await handleCancelPoLine(row.order, row.line, cancelQty);
+    setCancelRequest({ row, cancelQty });
+    setCancelReasonDraft("");
+  };
+
+  const closeCancelReasonModal = () => {
+    setCancelRequest(null);
+    setCancelReasonDraft("");
+  };
+
+  const confirmCancelNotReceivedRow = async () => {
+    if (!cancelRequest) return;
+    const reason = cancelReasonDraft.trim();
+    if (!reason) {
+      alert("Cancellation reason is required.");
+      return;
+    }
+
+    const didCancel = await handleCancelPoLine(cancelRequest.row.order, cancelRequest.row.line, cancelRequest.cancelQty, reason);
     if (!didCancel) return;
     setCancelQtyByLineId((prev) => {
       const next = { ...prev };
-      delete next[row.line.id];
+      delete next[cancelRequest.row.line.id];
       return next;
     });
+    closeCancelReasonModal();
   };
 
   const handleApprove = async (order: PurchaseOrder) => {
@@ -957,16 +996,31 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
               className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
             />
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-44"
-          >
-            <option value="">All Status</option>
-            <option value="Pending Approval">Pending Approval</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-          </select>
+          {mode === "item-not-received" ? (
+            <select
+              value={poNumberFilter}
+              onChange={(e) => setPoNumberFilter(e.target.value)}
+              className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-44"
+            >
+              <option value="">All PO Numbers</option>
+              {poNumberOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.poNo}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-44"
+            >
+              <option value="">All Status</option>
+              <option value="Pending Approval">Pending Approval</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          )}
           <select
             value={supplierFilter}
             onChange={(e) => setSupplierFilter(e.target.value)}
@@ -1044,12 +1098,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
               ) : (
                 paginatedNotReceivedRows.map((row) => (
                   <tr key={row.line.id} className="divide-x divide-black text-[10px] font-bold hover:bg-slate-50">
-                    <td className="px-3 py-3 text-black uppercase">
-                      <div>{row.order.poNo || "DRAFT"}</div>
-                      <div className="mt-1 inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase text-slate-700">
-                        {row.order.status}
-                      </div>
-                    </td>
+                    <td className="px-3 py-3 text-black uppercase">{row.order.poNo || "DRAFT"}</td>
                     <td className="px-3 py-3 text-black">{formatDate(row.order.poDate)}</td>
                     <td className="px-3 py-3 text-black uppercase">{row.indent?.indentNo || "-"}</td>
                     <td className="px-3 py-3 text-black">{row.indent?.requisitionDate ? formatDate(row.indent.requisitionDate) : "-"}</td>
@@ -1494,6 +1543,63 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       </div>
       )}
 
+      {cancelRequest ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded border-2 border-black bg-white p-4 shadow-xl">
+            <div className="flex items-start justify-between gap-3 border-b border-black pb-3">
+              <div>
+                <h3 className="text-sm font-black uppercase text-black">Cancel Reason</h3>
+                <p className="mt-1 text-xs font-bold text-slate-600">
+                  {cancelRequest.row.order.poNo || "DRAFT"} | {cancelRequest.row.itemLabel}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCancelReasonModal}
+                className="rounded border border-black px-2 py-1 text-xs font-black uppercase text-black hover:bg-slate-100"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 py-3 text-xs font-bold text-black">
+              <div className="rounded border border-slate-300 bg-slate-50 p-2">
+                <div className="text-[10px] font-black uppercase text-slate-500">Pending Qty</div>
+                <div className="mt-1 text-sm font-black">{cancelRequest.row.pendingQty.toLocaleString()}</div>
+              </div>
+              <div className="rounded border border-red-300 bg-red-50 p-2">
+                <div className="text-[10px] font-black uppercase text-red-600">Cancel Qty</div>
+                <div className="mt-1 text-sm font-black text-red-700">{cancelRequest.cancelQty.toLocaleString()}</div>
+              </div>
+            </div>
+            <label className="block text-xs font-black uppercase text-slate-600">
+              Reason
+              <textarea
+                value={cancelReasonDraft}
+                onChange={(e) => setCancelReasonDraft(e.target.value)}
+                className="mt-1 w-full rounded border-2 border-black p-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black"
+                rows={4}
+                autoFocus
+              />
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeCancelReasonModal}
+                className="rounded border border-black bg-white px-3 py-2 text-xs font-black uppercase text-black hover:bg-slate-100"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmCancelNotReceivedRow()}
+                className="rounded border border-red-700 bg-red-600 px-3 py-2 text-xs font-black uppercase text-white hover:bg-red-700"
+              >
+                Confirm Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <ClientPagination
         page={page}
         pageSize={pageSize}
