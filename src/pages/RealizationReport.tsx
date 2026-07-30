@@ -9,6 +9,7 @@ import { Company, Item, Order, OrderSchedule, Production, Setting } from "../typ
 import { formatDate } from "../lib/serial";
 import { describeRealizationTarget, findRealizationTargetForDate, parseRealizationTargets } from "../lib/realizationTargets";
 import { useNpdItems } from "../hooks/useNpdItems";
+import { Select } from "../components/Select";
 
 type TargetRow = {
   dateFrom: string;
@@ -215,6 +216,17 @@ export function RealizationReport() {
       .map(({ dateValue: _dateValue, ...row }) => row);
   }, [companies, companyId, fromDate, npdItems, orders, productions, salesPersonId, schedules, toDate]);
 
+  const companyOptions = useMemo(
+    () => [
+      { value: "", label: "All Companies" },
+      ...companies
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((company) => ({ value: company.id, label: company.name, searchText: company.name })),
+    ],
+    [companies]
+  );
+
   const salesPersonOptions = useMemo(() => {
     const byId = new Map<string, string>();
     companies.forEach((company) => {
@@ -222,9 +234,12 @@ export function RealizationReport() {
       if (salesPerson.label === "Unknown Sales Person") return;
       if (!byId.has(salesPerson.id)) byId.set(salesPerson.id, salesPerson.label);
     });
-    return Array.from(byId.entries())
-      .map(([id, label]) => ({ id, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+    return [
+      { value: "", label: "All Sales Persons" },
+      ...Array.from(byId.entries())
+        .map(([id, label]) => ({ value: id, label, searchText: label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    ];
   }, [companies]);
 
   const overall = useMemo(() => {
@@ -292,7 +307,7 @@ export function RealizationReport() {
 
   const selectedSalesPersonLabel = useMemo(() => {
     if (!salesPersonId) return "All";
-    return salesPersonOptions.find((option) => option.id === salesPersonId)?.label || salesPersonId;
+    return salesPersonOptions.find((option) => option.value === salesPersonId)?.label || salesPersonId;
   }, [salesPersonId, salesPersonOptions]);
 
   const handleClear = () => {
@@ -439,29 +454,20 @@ export function RealizationReport() {
             title="To"
             className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
           />
-          <select
+          <Select
+            id="realization-company-filter"
+            options={companyOptions}
             value={companyId}
-            onChange={(e) => setCompanyId(e.target.value)}
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-          >
-            <option value="">All Companies</option>
-            {companies
-              .slice()
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((company) => (
-                <option key={company.id} value={company.id}>{company.name}</option>
-              ))}
-          </select>
-          <select
+            onChange={setCompanyId}
+            placeholder="All Companies"
+          />
+          <Select
+            id="realization-sales-person-filter"
+            options={salesPersonOptions}
             value={salesPersonId}
-            onChange={(e) => setSalesPersonId(e.target.value)}
-            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-          >
-            <option value="">All Sales Persons</option>
-            {salesPersonOptions.map((salesPerson) => (
-              <option key={salesPerson.id} value={salesPerson.id}>{salesPerson.label}</option>
-            ))}
-          </select>
+            onChange={setSalesPersonId}
+            placeholder="All Sales Persons"
+          />
           <button
             type="button"
             onClick={handleClear}
@@ -491,13 +497,13 @@ export function RealizationReport() {
 
       <div className="space-y-3 rounded border-2 border-black bg-white p-3 shadow-sm">
         <div className="text-sm font-black uppercase text-black">Sales Person vs Realization</div>
-        <div className="max-h-[calc(100vh-300px)] w-full overflow-auto relative">
+        <div className="w-full overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-[12px]">
-            <thead className="sticky top-0 z-20">
+            <thead className="bg-indigo-700 text-white">
               <tr className="bg-indigo-700 text-white">
-                <th className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">Metric</th>
+                <th className="whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">Metric</th>
                 {salesRows.map((row) => (
-                  <th key={row.id} className="sticky top-0 z-20 min-w-[150px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-center text-xs font-black uppercase text-white">
+                  <th key={row.id} className="min-w-[150px] whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-center text-xs font-black uppercase text-white">
                     {row.name}
                   </th>
                 ))}
@@ -522,13 +528,13 @@ export function RealizationReport() {
 
       <div className="space-y-3 rounded border-2 border-black bg-white p-3 shadow-sm">
         <div className="text-sm font-black uppercase text-black">Company Average Realization</div>
-        <div className="max-h-[calc(100vh-300px)] w-full overflow-auto relative">
+        <div className="w-full overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-[12px]">
-            <thead className="sticky top-0 z-20">
+            <thead className="bg-indigo-700 text-white">
               <tr className="bg-indigo-700 text-white">
-                <th className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">SL No</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">Company</th>
-                <th className="sticky top-0 z-20 whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-right text-xs font-black uppercase text-white">Average Realization/Kg</th>
+                <th className="whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">SL No</th>
+                <th className="whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase text-white">Company</th>
+                <th className="whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-right text-xs font-black uppercase text-white">Average Realization/Kg</th>
               </tr>
             </thead>
             <tbody>
