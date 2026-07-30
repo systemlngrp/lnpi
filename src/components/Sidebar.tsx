@@ -142,7 +142,7 @@ const orderItems: NavItem[] = [
   { name: "Orders Master", href: "/orders/master", icon: FileText },
   { name: "Scheduled Orders Master", href: "/orders/scheduled", icon: Database },
   { name: "Canceled Orders", href: "/orders/canceled", icon: X },
-  { name: "Pending Scheduled Orders", href: "/orders/scheduled", icon: Activity },
+  { name: "Pending Scheduled Orders", href: "/orders/scheduled-pending", icon: Activity },
 ];
 
 const fgProductionItems: NavItem[] = [

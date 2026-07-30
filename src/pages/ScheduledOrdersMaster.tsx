@@ -30,7 +30,11 @@ const formatItemOptionLabel = (item: { name?: string; erp?: string | number }) =
   return `${name} - ${erp}`;
 };
 
-export function ScheduledOrdersMaster() {
+type ScheduledOrdersMasterProps = {
+  pendingOnly?: boolean;
+};
+
+export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMasterProps = {}) {
   const [schedules] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
@@ -129,6 +133,7 @@ export function ScheduledOrdersMaster() {
         pendingOrderQty: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0) - invoiced, 0)
       };
     })
+    .filter((s) => !pendingOnly || s.pendingOrderQty > 0)
     .filter(s => {
       const normalizedSearch = searchTerm.trim().toLowerCase();
       const matchSearch = !normalizedSearch || [
@@ -152,7 +157,7 @@ export function ScheduledOrdersMaster() {
       if (comparison !== 0) return scheduleNoSortDirection === "asc" ? comparison : -comparison;
       return b.scheduledDate.localeCompare(a.scheduledDate);
     });
-  }, [schedules, orders, companies, resolveOrderItem, productions, plans, loadingSlips, searchTerm, companyFilter, itemFilter, fromDate, toDate, scheduleNoSortDirection]);
+  }, [schedules, orders, companies, resolveOrderItem, productions, plans, loadingSlips, pendingOnly, searchTerm, companyFilter, itemFilter, fromDate, toDate, scheduleNoSortDirection]);
   const {
     page,
     setPage,
@@ -178,7 +183,7 @@ export function ScheduledOrdersMaster() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Scheduled Orders Master</h2>
+        <h2 className="text-xl font-bold text-black uppercase tracking-tight">{pendingOnly ? "Pending Scheduled Orders" : "Scheduled Orders Master"}</h2>
         <button 
           onClick={clearFilters}
           className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-black rounded hover:bg-slate-50 transition-colors uppercase"
@@ -416,4 +421,8 @@ export function ScheduledOrdersMaster() {
       </div>
     </div>
   );
+}
+
+export function PendingScheduledOrders() {
+  return <ScheduledOrdersMaster pendingOnly />;
 }

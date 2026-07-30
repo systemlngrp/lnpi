@@ -91,7 +91,7 @@ import { OrderForm } from "./pages/OrderForm";
 import { OrdersPendingPH } from "./pages/OrdersPendingPH";
 import { OrdersPendingScheduling } from "./pages/OrdersPendingScheduling";
 import { OrdersMaster } from "./pages/OrdersMaster";
-import { ScheduledOrdersMaster } from "./pages/ScheduledOrdersMaster";
+import { PendingScheduledOrders, ScheduledOrdersMaster } from "./pages/ScheduledOrdersMaster";
 import { UpcomingScheduledOrders } from "./pages/UpcomingScheduledOrders";
 import { PendingDispatchPlanning } from "./pages/PendingDispatchPlanning";
 import { PendingPhpPlanning, PendingPlatePlanning } from "./pages/PendingLinkedProductionPlanning";
@@ -261,6 +261,7 @@ export default function App() {
           <Route path="orders/pending-scheduling" element={<OrdersPendingScheduling />} />
           <Route path="orders/master" element={<OrdersMaster />} />
           <Route path="orders/scheduled" element={<ScheduledOrdersMaster />} />
+          <Route path="orders/scheduled-pending" element={<PendingScheduledOrders />} />
           <Route path="orders/canceled" element={<CanceledOrders />} />
           
           {/* Material In */}
