@@ -120,6 +120,14 @@ function resolveRealizationPerKg(production: Production, order?: Order | null, i
   return Number((rate / totalWeightOfSet).toFixed(2));
 }
 
+function normalizeSalesPerson(value?: string | null) {
+  const label = String(value || "").trim().replace(/\s+/g, " ") || "Unknown Sales Person";
+  return {
+    id: label.toUpperCase(),
+    label,
+  };
+}
+
 function findTargetForDate(targets: TargetRow[], date: Date) {
   const fy = getFinancialYear(toDateInput(date));
   const month = monthLabelFromDate(date);
@@ -204,7 +212,7 @@ export function RealizationReport() {
         const schedule = production.scheduleId ? scheduleMap.get(production.scheduleId) : null;
         const order = schedule ? orderMap.get(schedule.orderId) : null;
         const company = order?.companyId ? companyMap.get(order.companyId) : null;
-        const companySalesPerson = String(company?.salesPerson || "").trim() || "Unknown Sales Person";
+        const companySalesPerson = normalizeSalesPerson(company?.salesPerson);
         const erpCode = String(production.erpCode || production.masterErp || order?.erpCode || "").trim();
         const item =
           itemById.get(String(production.npdId || "")) ||
@@ -223,8 +231,8 @@ export function RealizationReport() {
           weightedValue: Number((qty * realizationPerKg).toFixed(2)),
           companyId: company?.id || "",
           companyName: company?.name || "Unknown Company",
-          salesPersonId: companySalesPerson,
-          salesPersonName: companySalesPerson,
+          salesPersonId: companySalesPerson.id,
+          salesPersonName: companySalesPerson.label,
           jobNo: String(production.transactionNo || production.jobCardNo || "-"),
           dateValue: productionDate ? normalizeDate(productionDate).getTime() : null,
         };
@@ -240,13 +248,17 @@ export function RealizationReport() {
       .map(({ dateValue: _dateValue, ...row }) => row);
   }, [companies, companyId, fromDate, npdItems, orders, productions, salesPersonId, schedules, toDate]);
 
-  const salesPersonOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(companies.map((company) => String(company.salesPerson || "").trim()).filter(Boolean))
-      ).sort((a, b) => a.localeCompare(b)),
-    [companies]
-  );
+  const salesPersonOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    companies.forEach((company) => {
+      const salesPerson = normalizeSalesPerson(company.salesPerson);
+      if (salesPerson.label === "Unknown Sales Person") return;
+      if (!byId.has(salesPerson.id)) byId.set(salesPerson.id, salesPerson.label);
+    });
+    return Array.from(byId.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [companies]);
 
   const overall = useMemo(() => {
     const totalQty = sourceRows.reduce((sum, row) => sum + row.qty, 0);
@@ -304,6 +316,11 @@ export function RealizationReport() {
   }, [sourceRows]);
 
   const currentTarget = useMemo(() => resolveTargetForRange(targets, fromDate, toDate), [fromDate, targets, toDate]);
+
+  const selectedSalesPersonLabel = useMemo(() => {
+    if (!salesPersonId) return "All";
+    return salesPersonOptions.find((option) => option.id === salesPersonId)?.label || salesPersonId;
+  }, [salesPersonId, salesPersonOptions]);
 
   const handleClear = () => {
     setSearchTerm("");
@@ -363,7 +380,7 @@ export function RealizationReport() {
     doc.text("Realization Report", 14, 16);
     doc.setFontSize(10);
     doc.text(`From: ${fromDate ? formatDate(fromDate) : "All"} | To: ${toDate ? formatDate(toDate) : "All"}`, 14, 23);
-    doc.text(`Company: ${companies.find((company) => company.id === companyId)?.name || "All"} | Sales Person: ${salesPersonId || "All"}`, 14, 29);
+    doc.text(`Company: ${companies.find((company) => company.id === companyId)?.name || "All"} | Sales Person: ${selectedSalesPersonLabel}`, 14, 29);
 
     autoTable(doc, {
       head: [["Metric", "Value"]],
@@ -469,7 +486,7 @@ export function RealizationReport() {
           >
             <option value="">All Sales Persons</option>
             {salesPersonOptions.map((salesPerson) => (
-              <option key={salesPerson} value={salesPerson}>{salesPerson}</option>
+              <option key={salesPerson.id} value={salesPerson.id}>{salesPerson.label}</option>
             ))}
           </select>
           <button
