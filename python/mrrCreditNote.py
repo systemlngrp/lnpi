@@ -240,7 +240,7 @@ def resolve_item_name(conn, line: dict[str, Any]) -> str:
 def ensure_credit_tracking_columns(conn) -> None:
     cursor = conn.cursor()
     try:
-        for column, column_type in (("creditTallySync", "VARCHAR(255)"), ("creditRemarkTally", "TEXT")):
+        for column, column_type in (("creditTallySync", "VARCHAR(255)"), ("creditTallyTimestamp", "VARCHAR(255)"), ("creditRemarkTally", "TEXT")):
             try:
                 cursor.execute(f"ALTER TABLE `material_in` ADD COLUMN `{column}` {column_type}")
                 conn.commit()
@@ -254,8 +254,8 @@ def ensure_credit_tracking_columns(conn) -> None:
 def get_pending_credit_note_rows(conn, mrr_no: str | None = None, limit: int = 1) -> list[dict[str, Any]]:
     cursor = conn.cursor(dictionary=True)
     where = [
-        "`mrrType` = 'FG Purchase'",
-        "COALESCE(NULLIF(TRIM(`creditTallySync`), ''), '') = ''",
+        "`mrrType` = 'Rejection In'",
+        "COALESCE(NULLIF(TRIM(`creditTallyTimestamp`), ''), '') = ''",
     ]
     params: list[Any] = []
     if mrr_no:
@@ -264,7 +264,7 @@ def get_pending_credit_note_rows(conn, mrr_no: str | None = None, limit: int = 1
 
     query = f"""
         SELECT `id`, `transactionNo`, `mrrType`, `date`, `timestamp`, `invoiceNo`, `invDate`,
-               `supplierId`, `lines`, `totalCgst`, `totalSgst`, `totalIgst`, `creditTallySync`, `creditRemarkTally`
+               `supplierId`, `lines`, `totalCgst`, `totalSgst`, `totalIgst`, `creditTallySync`, `creditTallyTimestamp`, `creditRemarkTally`
         FROM `material_in`
         WHERE {' AND '.join(where)}
         ORDER BY `date` ASC, `timestamp` ASC, `transactionNo` ASC
@@ -294,7 +294,7 @@ def build_note_lines(conn, raw_lines: list[dict[str, Any]]) -> list[CreditNoteLi
             )
         )
     if not note_lines:
-        raise RuntimeError("FG Purchase MRR has no valid positive-quantity/rate lines for Credit Note.")
+        raise RuntimeError("Rejection In MRR has no valid positive-quantity/rate lines for Credit Note.")
     return note_lines
 
 
@@ -315,7 +315,7 @@ def build_note_from_db_row(conn, row: dict[str, Any]) -> CreditNote:
         sgst_amount=round_money(row.get("totalSgst")),
         igst_amount=round_money(row.get("totalIgst")),
         lines=lines,
-        narration=f"Credit Note against FG Purchase MRR {row.get('transactionNo')} Invoice {row.get('invoiceNo') or ''}".strip(),
+        narration=f"Credit Note against Rejection In MRR {row.get('transactionNo')} Invoice {row.get('invoiceNo') or ''}".strip(),
     )
 
 
@@ -483,13 +483,14 @@ def post_to_tally(xml: str) -> str:
 def mark_posted(conn, note: CreditNote, response_text: str) -> None:
     cursor = conn.cursor()
     try:
+        sync_timestamp = datetime.now().isoformat(timespec="seconds")
         cursor.execute(
             """
             UPDATE `material_in`
-            SET `creditTallySync` = %s, `creditRemarkTally` = %s
+            SET `creditTallySync` = %s, `creditTallyTimestamp` = %s, `creditRemarkTally` = %s
             WHERE `id` = %s
             """,
-            (datetime.now().isoformat(timespec="seconds"), f"Credit Note posted to Tally. Response: {response_text[:500]}", note.mrr_id),
+            (sync_timestamp, sync_timestamp, f"Credit Note posted to Tally. Response: {response_text[:500]}", note.mrr_id),
         )
         conn.commit()
     finally:
@@ -538,14 +539,14 @@ def process_row(conn, row: dict[str, Any], dry_run: bool) -> None:
     print("Tally Response:")
     print(response_text)
     mark_posted(conn, note, response_text)
-    print("Hostinger DB updated: material_in.creditTallySync set.")
+    print("Hostinger DB updated: material_in.creditTallyTimestamp set.")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Post FG Purchase MRR Credit Note from Hostinger DB to Tally")
+    parser = argparse.ArgumentParser(description="Post Rejection In MRR Credit Note from Hostinger DB to Tally")
     parser.add_argument("--mrr", help="MRR transaction number")
     parser.add_argument("--dry-run", action="store_true", help="Print XML only; do not post to Tally or update DB")
-    parser.add_argument("--limit", type=int, default=1, help="Maximum pending FG Purchase MRR rows to process")
+    parser.add_argument("--limit", type=int, default=1, help="Maximum pending Rejection In MRR rows to process")
     args = parser.parse_args()
 
     conn = get_db_connection()
@@ -553,7 +554,7 @@ def main() -> None:
         ensure_credit_tracking_columns(conn)
         rows = get_pending_credit_note_rows(conn, mrr_no=args.mrr, limit=args.limit)
         if not rows:
-            print("No pending FG Purchase MRR found for Credit Note posting.")
+            print("No pending Rejection In MRR found for Credit Note posting.")
             return
         for row in rows:
             process_row(conn, row, args.dry_run)

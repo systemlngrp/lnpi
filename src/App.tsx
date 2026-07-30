@@ -25,6 +25,7 @@ import { CancelledGateEntry, GateEntryMaster } from "./pages/GateEntryMaster";
 import { PendingMrr } from "./pages/PendingMrr";
 import { PendingTallyEntry } from "./pages/PendingTallyEntry";
 import { PendingDebitNote } from "./pages/PendingDebitNote";
+import { PendingCreditNote } from "./pages/PendingCreditNote";
 import { PendingPHApproval } from "./pages/PendingPHApproval";
 import { PendingAccountsApproval } from "./pages/PendingAccountsApproval";
 import { PendingMDApproval } from "./pages/PendingMDApproval";
@@ -242,6 +243,7 @@ export default function App() {
           <Route path="material-receipt/pending-md-approval" element={<PendingMDApproval />} />
           <Route path="material-receipt/pending-tally" element={<PendingTallyEntry />} />
           <Route path="material-receipt/pending-debit-note" element={<PendingDebitNote />} />
+          <Route path="material-receipt/pending-credit-note" element={<PendingCreditNote />} />
 
           {/* Material Movement */}
           <Route path="material-movement/reel-issue-return" element={<ReelIssueReturnForm />} />

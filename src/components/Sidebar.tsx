@@ -120,6 +120,7 @@ const materialReceiptItems: NavItem[] = [
   { name: "Pending MD Approval", href: "/material-receipt/pending-md-approval", icon: UserCheck, countKey: "/material-receipt/pending-md-approval" },
   { name: "Pending MRR Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
   { name: "Pending Debit Note Tally Posting", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
+  { name: "Pending Credit Note Tally Posting", href: "/material-receipt/pending-credit-note", icon: FileText, countKey: "/material-receipt/pending-credit-note" },
 ];
 
 const materialIssueItems: NavItem[] = [
