@@ -49,6 +49,18 @@ type EditingLineDraft = {
   targetDeliveryDate: string;
 };
 
+type NotReceivedItemRow = {
+  order: PurchaseOrder;
+  line: PurchaseOrderLine;
+  indent?: Indent;
+  supplierName: string;
+  itemLabel: string;
+  erpCode: string | number;
+  receivedQty: number;
+  cancelledQty: number;
+  pendingQty: number;
+};
+
 export function PurchaseOrderAll() {
   return <PurchaseOrderList mode="all" />;
 }
@@ -89,6 +101,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [fromDateFilter, setFromDateFilter] = useState("");
+  const [toDateFilter, setToDateFilter] = useState("");
+  const [cancelQtyByLineId, setCancelQtyByLineId] = useState<Record<string, string>>({});
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -238,14 +253,98 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   }, [purchaseOrders, suppliers]);
 
+  const filteredNotReceivedRows = useMemo<NotReceivedItemRow[]>(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return purchaseOrders
+      .filter((order) => !statusFilter || order.status === statusFilter)
+      .filter((order) => !supplierFilter || order.supplierId === supplierFilter)
+      .filter((order) => !fromDateFilter || String(order.poDate || "") >= fromDateFilter)
+      .filter((order) => !toDateFilter || String(order.poDate || "") <= toDateFilter)
+      .flatMap((order) => {
+        const supplierName = supplierNameMap.get(order.supplierId) || "Unknown";
+        return orderLines
+          .filter((line) => line.purchaseOrderId === order.id)
+          .map((line) => {
+            const indentLine = indentLineMap.get(line.indentLineId);
+            const indent = (order.indentId ? indentMap.get(order.indentId) : undefined) || (indentLine?.indentId ? indentMap.get(indentLine.indentId) : undefined);
+            const item = materialMap.get(line.materialId);
+            const receivedQty = getLineReceivedQty(line.id);
+            const cancelledQty = getLineCancelledQty(line);
+            const pendingQty = getLinePendingQty(line);
+            return {
+              order,
+              line,
+              indent,
+              supplierName,
+              itemLabel: item?.name || "Unknown",
+              erpCode: line.erpCode || item?.erpCode || "",
+              receivedQty,
+              cancelledQty,
+              pendingQty,
+            };
+          });
+      })
+      .filter((row) => row.pendingQty > 0)
+      .filter((row) => {
+        if (!search) return true;
+        const haystack = [
+          row.order.poNo,
+          row.supplierName,
+          row.itemLabel,
+          row.erpCode,
+          row.indent?.indentNo,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(search);
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.order.updateTimestamp || b.order.poDate || 0).getTime() -
+            new Date(a.order.updateTimestamp || a.order.poDate || 0).getTime() ||
+          String(a.order.poNo || "").localeCompare(String(b.order.poNo || "")) ||
+          String(a.itemLabel || "").localeCompare(String(b.itemLabel || "")),
+      );
+  }, [fromDateFilter, getLineCancelledQty, getLinePendingQty, getLineReceivedQty, indentLineMap, indentMap, materialMap, orderLines, purchaseOrders, searchTerm, statusFilter, supplierFilter, supplierNameMap, toDateFilter]);
+
+  const filteredNotReceivedQtySummary = useMemo(() => {
+    return filteredNotReceivedRows.reduce(
+      (summary, row) => ({
+        totalQty: summary.totalQty + Number(row.line.qty || 0),
+        totalReceived: summary.totalReceived + row.receivedQty,
+        totalCancel: summary.totalCancel + row.cancelledQty,
+        totalYetToReceive: summary.totalYetToReceive + row.pendingQty,
+      }),
+      { totalQty: 0, totalReceived: 0, totalCancel: 0, totalYetToReceive: 0 },
+    );
+  }, [filteredNotReceivedRows]);
+
+  const displayQtySummary = mode === "item-not-received" ? filteredNotReceivedQtySummary : filteredQtySummary;
+
   const {
-    page,
-    setPage,
-    pageSize,
-    setPageSize,
-    totalItems,
+    page: orderPage,
+    setPage: setOrderPage,
+    pageSize: orderPageSize,
+    setPageSize: setOrderPageSize,
+    totalItems: totalOrderItems,
     paginatedItems: paginatedOrders,
   } = useClientPagination(filteredOrders, 25);
+
+  const {
+    page: itemPage,
+    setPage: setItemPage,
+    pageSize: itemPageSize,
+    setPageSize: setItemPageSize,
+    totalItems: totalNotReceivedItems,
+    paginatedItems: paginatedNotReceivedRows,
+  } = useClientPagination(filteredNotReceivedRows, 25);
+
+  const page = mode === "item-not-received" ? itemPage : orderPage;
+  const setPage = mode === "item-not-received" ? setItemPage : setOrderPage;
+  const pageSize = mode === "item-not-received" ? itemPageSize : orderPageSize;
+  const setPageSize = mode === "item-not-received" ? setItemPageSize : setOrderPageSize;
+  const totalItems = mode === "item-not-received" ? totalNotReceivedItems : totalOrderItems;
 
   const handleToggleRow = (id: string) => {
     const next = new Set(expandedRows);
@@ -415,27 +514,30 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     }
   };
 
-  const handleCancelPoLine = async (order: PurchaseOrder, line: PurchaseOrderLine) => {
+  const handleCancelPoLine = async (order: PurchaseOrder, line: PurchaseOrderLine, requestedCancelQty?: number) => {
     const pendingQty = getLinePendingQty(line);
     if (pendingQty <= 0) {
       alert("This PO item has no not-received quantity available to cancel.");
-      return;
+      return false;
     }
 
-    const rawQty = window.prompt(`Enter cancel qty for ${materialMap.get(line.materialId)?.name || "this item"}. Pending: ${pendingQty.toLocaleString()}`, String(pendingQty));
-    if (rawQty === null) return;
+    const rawQty =
+      requestedCancelQty === undefined
+        ? window.prompt(`Enter cancel qty for ${materialMap.get(line.materialId)?.name || "this item"}. Pending: ${pendingQty.toLocaleString()}`, String(pendingQty))
+        : String(requestedCancelQty);
+    if (rawQty === null) return false;
     const cancelQty = Number(rawQty);
     if (!Number.isFinite(cancelQty) || cancelQty <= 0 || cancelQty > pendingQty + 0.0001) {
       alert("Cancel qty must be greater than 0 and cannot exceed not-received qty.");
-      return;
+      return false;
     }
 
     const reason = window.prompt("Enter cancellation reason:");
-    if (reason === null) return;
+    if (reason === null) return false;
     const trimmedReason = reason.trim();
     if (!trimmedReason) {
       alert("Cancellation reason is required.");
-      return;
+      return false;
     }
 
     const timestamp = new Date().toISOString();
@@ -512,10 +614,29 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       await setPurchaseOrders((prev) => prev.map((row) => (row.id === order.id ? updatedOrder : row)));
       await setIndentLines(nextIndentLines);
       await setIndents(nextIndents);
+      return true;
     } catch (error) {
       console.error("Failed to cancel PO item:", error);
       alert("Failed to cancel PO item.");
+      return false;
     }
+  };
+
+  const handleCancelNotReceivedRow = async (row: NotReceivedItemRow) => {
+    const rawQty = cancelQtyByLineId[row.line.id] || "";
+    const cancelQty = Number(rawQty);
+    if (!Number.isFinite(cancelQty) || cancelQty <= 0 || cancelQty > row.pendingQty + 0.0001) {
+      alert("Cancel qty must be greater than 0 and cannot exceed not-received qty.");
+      return false;
+    }
+
+    const didCancel = await handleCancelPoLine(row.order, row.line, cancelQty);
+    if (!didCancel) return;
+    setCancelQtyByLineId((prev) => {
+      const next = { ...prev };
+      delete next[row.line.id];
+      return next;
+    });
   };
 
   const handleApprove = async (order: PurchaseOrder) => {
@@ -626,6 +747,53 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     doc.text(getTitle(mode), 14, 16);
     doc.setFontSize(10);
     doc.text(`Search: ${searchTerm || "All"} | Total POs: ${filteredOrders.length}`, 14, 24);
+
+    if (mode === "item-not-received") {
+      doc.text(`Total Items: ${filteredNotReceivedRows.length}`, 14, 28);
+      autoTable(doc, {
+        head: [[
+          "PO Number",
+          "PO Date",
+          "Indent Number",
+          "Indent Date",
+          "Supplier",
+          "ERP",
+          "Item Label",
+          "Ordered Qty",
+          "Received",
+          "Cancelled",
+          "Not Received",
+          "Target Delivery",
+          "Cancel Qty",
+          "Action",
+          "Status",
+        ]],
+        body: filteredNotReceivedRows.map((row) => [
+          row.order.poNo || "DRAFT",
+          formatDate(row.order.poDate),
+          row.indent?.indentNo || "-",
+          row.indent?.requisitionDate ? formatDate(row.indent.requisitionDate) : "-",
+          row.supplierName,
+          row.erpCode,
+          row.itemLabel,
+          Number(row.line.qty || 0).toLocaleString(),
+          row.receivedQty.toLocaleString(),
+          row.cancelledQty.toLocaleString(),
+          row.pendingQty.toLocaleString(),
+          row.line.targetDeliveryDate ? formatDate(row.line.targetDeliveryDate) : "-",
+          cancelQtyByLineId[row.line.id] || "",
+          row.order.status !== "Rejected" ? "Cancel" : "-",
+          row.order.status,
+        ]),
+        startY: 34,
+        theme: "grid",
+        styles: { fontSize: 7, cellPadding: 1.8 },
+        headStyles: { fillColor: [37, 99, 235] },
+      });
+
+      doc.save(`${getTitle(mode).replace(/\s+/g, "_")}.pdf`);
+      return;
+    }
 
     autoTable(doc, {
       head: [[
@@ -811,15 +979,33 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
               </option>
             ))}
           </select>
+          {mode === "item-not-received" ? (
+            <>
+              <input
+                type="date"
+                value={fromDateFilter}
+                onChange={(e) => setFromDateFilter(e.target.value)}
+                className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-40"
+                aria-label="From Date"
+              />
+              <input
+                type="date"
+                value={toDateFilter}
+                onChange={(e) => setToDateFilter(e.target.value)}
+                className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-40"
+                aria-label="To Date"
+              />
+            </>
+          ) : null}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         {[
-          { label: "Total Qty", value: filteredQtySummary.totalQty, className: "bg-indigo-50 text-indigo-800" },
-          { label: "Total Received", value: filteredQtySummary.totalReceived, className: "bg-emerald-50 text-emerald-800" },
-          { label: "Total Cancel", value: filteredQtySummary.totalCancel, className: "bg-red-50 text-red-800" },
-          { label: "Total Yet To Receive", value: filteredQtySummary.totalYetToReceive, className: "bg-amber-50 text-amber-800" },
+          { label: "Total Qty", value: displayQtySummary.totalQty, className: "bg-indigo-50 text-indigo-800" },
+          { label: "Total Received", value: displayQtySummary.totalReceived, className: "bg-emerald-50 text-emerald-800" },
+          { label: "Total Cancel", value: displayQtySummary.totalCancel, className: "bg-red-50 text-red-800" },
+          { label: "Total Yet To Receive", value: displayQtySummary.totalYetToReceive, className: "bg-amber-50 text-amber-800" },
         ].map((tile) => (
           <div key={tile.label} className={cn("rounded border border-black px-4 py-3", tile.className)}>
             <div className="text-[10px] font-black uppercase tracking-wide opacity-80">{tile.label}</div>
@@ -827,6 +1013,91 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           </div>
         ))}
       </div>
+      {mode === "item-not-received" ? (
+        <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
+          <table className="min-w-full border-collapse">
+            <thead className="sticky top-0 z-30 bg-slate-100">
+              <tr className="divide-x divide-black border-b border-black">
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">PO Number</th>
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">PO Date</th>
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Indent Number</th>
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Indent Date</th>
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Supplier</th>
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">ERP</th>
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Item Label</th>
+                <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Ordered Qty</th>
+                <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Received</th>
+                <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Cancelled</th>
+                <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Not Received</th>
+                <th className="px-3 py-3 text-left text-xs font-bold uppercase text-black">Target Delivery</th>
+                <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Cancel Qty</th>
+                <th className="px-3 py-3 text-right text-xs font-bold uppercase text-black">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black">
+              {paginatedNotReceivedRows.length === 0 ? (
+                <tr>
+                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500 italic">
+                    No PO items found.
+                  </td>
+                </tr>
+              ) : (
+                paginatedNotReceivedRows.map((row) => (
+                  <tr key={row.line.id} className="divide-x divide-black text-[10px] font-bold hover:bg-slate-50">
+                    <td className="px-3 py-3 text-black uppercase">
+                      <div>{row.order.poNo || "DRAFT"}</div>
+                      <div className="mt-1 inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase text-slate-700">
+                        {row.order.status}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-black">{formatDate(row.order.poDate)}</td>
+                    <td className="px-3 py-3 text-black uppercase">{row.indent?.indentNo || "-"}</td>
+                    <td className="px-3 py-3 text-black">{row.indent?.requisitionDate ? formatDate(row.indent.requisitionDate) : "-"}</td>
+                    <td className="px-3 py-3 text-black uppercase">{row.supplierName}</td>
+                    <td className="px-3 py-3 text-black">{row.erpCode}</td>
+                    <td className="px-3 py-3 text-black uppercase min-w-[220px]">{row.itemLabel}</td>
+                    <td className="px-3 py-3 text-right text-black">{Number(row.line.qty || 0).toLocaleString()}</td>
+                    <td className="px-3 py-3 text-right text-emerald-700">{row.receivedQty.toLocaleString()}</td>
+                    <td className="px-3 py-3 text-right text-red-700">{row.cancelledQty.toLocaleString()}</td>
+                    <td className="px-3 py-3 text-right text-amber-700">{row.pendingQty.toLocaleString()}</td>
+                    <td className="px-3 py-3 text-black">{row.line.targetDeliveryDate ? formatDate(row.line.targetDeliveryDate) : "-"}</td>
+                    <td className="px-3 py-3 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        max={row.pendingQty}
+                        step="0.01"
+                        value={cancelQtyByLineId[row.line.id] || ""}
+                        onChange={(e) =>
+                          setCancelQtyByLineId((prev) => ({
+                            ...prev,
+                            [row.line.id]: e.target.value,
+                          }))
+                        }
+                        disabled={row.order.status === "Rejected"}
+                        className="w-24 rounded border border-black px-2 py-1 text-right text-xs font-bold disabled:bg-slate-100"
+                      />
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      {row.order.status !== "Rejected" ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleCancelNotReceivedRow(row)}
+                          className="inline-flex items-center gap-1 rounded border border-red-700 bg-red-50 px-2 py-1 text-[9px] font-black uppercase text-red-700 hover:bg-red-100"
+                        >
+                          <X size={12} /> Cancel
+                        </button>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
         <table className="min-w-full border-collapse">
           <thead className="sticky top-0 z-30 bg-slate-100">
@@ -1221,6 +1492,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           </tbody>
         </table>
       </div>
+      )}
 
       <ClientPagination
         page={page}
