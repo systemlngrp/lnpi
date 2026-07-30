@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import Select from "react-select";
 import {
   Check,
   ChevronDown,
@@ -31,6 +32,11 @@ import type {
 } from "../types";
 
 type Mode = "pending-approval" | "approved" | "rejected" | "all" | "item-not-received" | "item-cancelled";
+
+type SelectOption = {
+  value: string;
+  label: string;
+};
 
 interface PurchaseOrderListProps {
   mode?: Mode;
@@ -104,7 +110,6 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
   const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
   const [poNumberFilter, setPoNumberFilter] = useState("");
   const [fromDateFilter, setFromDateFilter] = useState("");
@@ -217,7 +222,6 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
         if (mode === "rejected") return po.status === "Rejected";
         return true;
       })
-      .filter((po) => !statusFilter || po.status === statusFilter)
       .filter((po) => !supplierFilter || po.supplierId === supplierFilter)
       .filter((po) => {
         const lines = orderLines.filter((line) => line.purchaseOrderId === po.id);
@@ -238,7 +242,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           new Date(b.updateTimestamp || b.poDate || 0).getTime() -
           new Date(a.updateTimestamp || a.poDate || 0).getTime(),
       );
-  }, [getModeLines, isLineMode, materialMap, mode, orderLines, purchaseOrders, searchTerm, statusFilter, supplierFilter, supplierNameMap]);
+  }, [getModeLines, isLineMode, materialMap, mode, orderLines, purchaseOrders, searchTerm, supplierFilter, supplierNameMap]);
   const filteredQtySummary = useMemo(() => {
     return filteredOrders.reduce(
       (summary, order) => {
@@ -260,6 +264,14 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
       .filter((supplier) => purchaseOrders.some((order) => order.supplierId === supplier.id))
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   }, [purchaseOrders, suppliers]);
+
+  const supplierSelectOptions = useMemo<SelectOption[]>(() =>
+    supplierOptions.map((supplier) => ({
+      value: supplier.id,
+      label: supplier.name || supplier.id,
+    })),
+    [supplierOptions],
+  );
 
   const baseNotReceivedRows = useMemo<NotReceivedItemRow[]>(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -291,7 +303,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
             };
           });
       })
-      .filter((row) => row.pendingQty > 0)
+      .filter((row) => (mode === "item-cancelled" ? row.cancelledQty > 0 : row.pendingQty > 0))
       .filter((row) => {
         if (!search) return true;
         const haystack = [
@@ -313,7 +325,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           String(a.order.poNo || "").localeCompare(String(b.order.poNo || "")) ||
           String(a.itemLabel || "").localeCompare(String(b.itemLabel || "")),
       );
-  }, [fromDateFilter, getLineCancelledQty, getLinePendingQty, getLineReceivedQty, indentLineMap, indentMap, materialMap, orderLines, purchaseOrders, searchTerm, supplierFilter, supplierNameMap, toDateFilter]);
+  }, [fromDateFilter, getLineCancelledQty, getLinePendingQty, getLineReceivedQty, indentLineMap, indentMap, materialMap, orderLines, purchaseOrders, searchTerm, mode, supplierFilter, supplierNameMap, toDateFilter]);
 
   const poNumberOptions = useMemo(() => {
     const byId = new Map<string, string>();
@@ -341,7 +353,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     );
   }, [filteredNotReceivedRows]);
 
-  const displayQtySummary = mode === "item-not-received" ? filteredNotReceivedQtySummary : filteredQtySummary;
+  const displayQtySummary = isFlatItemMode ? filteredNotReceivedQtySummary : filteredQtySummary;
 
   const {
     page: orderPage,
@@ -361,11 +373,11 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
     paginatedItems: paginatedNotReceivedRows,
   } = useClientPagination(filteredNotReceivedRows, 25);
 
-  const page = mode === "item-not-received" ? itemPage : orderPage;
-  const setPage = mode === "item-not-received" ? setItemPage : setOrderPage;
-  const pageSize = mode === "item-not-received" ? itemPageSize : orderPageSize;
-  const setPageSize = mode === "item-not-received" ? setItemPageSize : setOrderPageSize;
-  const totalItems = mode === "item-not-received" ? totalNotReceivedItems : totalOrderItems;
+  const page = isFlatItemMode ? itemPage : orderPage;
+  const setPage = isFlatItemMode ? setItemPage : setOrderPage;
+  const pageSize = isFlatItemMode ? itemPageSize : orderPageSize;
+  const setPageSize = isFlatItemMode ? setItemPageSize : setOrderPageSize;
+  const totalItems = isFlatItemMode ? totalNotReceivedItems : totalOrderItems;
 
   const handleToggleRow = (id: string) => {
     const next = new Set(expandedRows);
@@ -996,7 +1008,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
               className="w-full pl-10 pr-4 py-2 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-sm"
             />
           </div>
-          {mode === "item-not-received" ? (
+          {isFlatItemMode ? (
             <select
               value={poNumberFilter}
               onChange={(e) => setPoNumberFilter(e.target.value)}
@@ -1009,31 +1021,25 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                 </option>
               ))}
             </select>
-          ) : (
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-44"
-            >
-              <option value="">All Status</option>
-              <option value="Pending Approval">Pending Approval</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-          )}
-          <select
-            value={supplierFilter}
-            onChange={(e) => setSupplierFilter(e.target.value)}
-            className="w-full rounded border border-black bg-white px-3 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-1 focus:ring-black md:w-56"
-          >
-            <option value="">All Suppliers</option>
-            {supplierOptions.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.name || supplier.id}
-              </option>
-            ))}
-          </select>
-          {mode === "item-not-received" ? (
+          ) : null}
+          <div className="w-full md:w-64">
+            <Select<SelectOption, false>
+              options={supplierSelectOptions}
+              value={supplierSelectOptions.find((option) => option.value === supplierFilter) || null}
+              onChange={(option) => setSupplierFilter(option?.value || "")}
+              isClearable
+              placeholder="All Suppliers"
+              menuPlacement="bottom"
+              menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+              menuPosition="fixed"
+              styles={{
+                control: (provided) => ({ ...provided, minHeight: 38, borderColor: "black", borderRadius: 4, fontSize: 14, fontWeight: 600 }),
+                menu: (provided) => ({ ...provided, zIndex: 9999 }),
+                menuPortal: (provided) => ({ ...provided, zIndex: 9999 }),
+              }}
+            />
+          </div>
+          {isFlatItemMode ? (
             <>
               <input
                 type="date"
@@ -1067,7 +1073,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           </div>
         ))}
       </div>
-      {mode === "item-not-received" ? (
+      {isFlatItemMode ? (
         <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
           <table className="min-w-full border-collapse">
             <thead className="sticky top-0 z-30 bg-slate-100">
@@ -1123,12 +1129,12 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                             [row.line.id]: e.target.value,
                           }))
                         }
-                        disabled={row.order.status === "Rejected"}
+                        disabled={row.order.status === "Rejected" || row.pendingQty <= 0}
                         className="w-24 rounded border border-black px-2 py-1 text-right text-xs font-bold disabled:bg-slate-100"
                       />
                     </td>
                     <td className="px-3 py-3 text-right">
-                      {row.order.status !== "Rejected" ? (
+                      {row.order.status !== "Rejected" && row.pendingQty > 0 ? (
                         <button
                           type="button"
                           onClick={() => void handleCancelNotReceivedRow(row)}
@@ -1152,7 +1158,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           <thead className="sticky top-0 z-30 bg-slate-100">
             <tr className="divide-x divide-black border-b border-black">
               <th className="w-10 px-4 py-3"></th>
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">PO Info</th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">PO Number</th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">PO Date</th>
+              <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">Required Date</th>
               <th className="px-4 py-3 text-left text-xs font-bold uppercase text-black">Supplier</th>
               <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Qty</th>
               <th className="px-4 py-3 text-right text-xs font-bold uppercase text-black">Total Received</th>
@@ -1168,7 +1176,7 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
           <tbody className="divide-y divide-black">
             {paginatedOrders.length === 0 ? (
               <tr>
-                <td colSpan={mode === "rejected" ? 10 : 9} className="px-4 py-12 text-center text-slate-500 italic">
+                <td colSpan={mode === "rejected" ? 12 : 11} className="px-4 py-12 text-center text-slate-500 italic">
                   No purchase orders found.
                 </td>
               </tr>
@@ -1197,24 +1205,9 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                           {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </button>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="font-bold text-sm text-black uppercase">{order.poNo || "DRAFT"}</div>
-                        <div className="text-[10px] text-slate-500 font-bold uppercase">{formatDate(order.poDate)}</div>
-                        {mode !== "pending-approval" && (
-                          <div
-                            className={cn(
-                              "mt-1 inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase",
-                              order.status === "Approved"
-                                ? "border-emerald-700 bg-emerald-100 text-emerald-800"
-                                : order.status === "Rejected"
-                                  ? "border-red-700 bg-red-100 text-red-800"
-                                  : "border-amber-700 bg-amber-100 text-amber-800",
-                            )}
-                          >
-                            {order.status}
-                          </div>
-                        )}
-                      </td>
+                      <td className="px-4 py-4 font-bold text-sm text-black uppercase">{order.poNo || "DRAFT"}</td>
+                      <td className="px-4 py-4 text-sm text-black font-medium whitespace-nowrap">{formatDate(order.poDate)}</td>
+                      <td className="px-4 py-4 text-sm text-black font-medium whitespace-nowrap">{formatDate(order.requiredDate)}</td>
                       <td className="px-4 py-4 text-sm text-black font-medium">{supplierNameMap.get(order.supplierId) || "Unknown"}</td>
                       <td className="px-4 py-4 text-sm text-black text-right font-bold">
                         {qtySummary.totalQty.toLocaleString()}
@@ -1234,153 +1227,23 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                       {mode === "rejected" ? (
                         <td className="px-4 py-4 text-sm text-red-700 italic">{order.rejectedRemarks || ""}</td>
                       ) : null}
-                      <td className="px-4 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleRowPdf(order)}
-                            disabled={pdfOrderId === order.id}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-rose-300 bg-rose-50 text-rose-700 font-black text-[10px] uppercase hover:bg-rose-100 transition disabled:opacity-50"
-                          >
-                            {pdfOrderId === order.id ? <Spinner size={12} /> : <FileText size={14} />}
-                            PDF
-                          </button>
-                          {mode === "pending-approval" ? (
-                            isEditing ? (
-                              <>
-                                <button
-                                  onClick={() => void handleSaveEdit(order, lines)}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-emerald-700 bg-emerald-50 text-emerald-700 font-black text-[10px] uppercase hover:bg-emerald-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                                >
-                                  <Save size={14} /> Save
-                                </button>
-                                <button
-                                  onClick={cancelEditing}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-slate-500 bg-slate-50 text-slate-700 font-black text-[10px] uppercase hover:bg-slate-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                                >
-                                  <X size={14} /> Cancel
-                                </button>
-                              </>
-                            ) : rejectingId === order.id ? (
-                              <div className="flex flex-col gap-2 min-w-[200px]">
-                                <textarea
-                                  value={remarks}
-                                  onChange={(e) => setRemarks(e.target.value)}
-                                  placeholder="Enter reason for rejection..."
-                                  className="w-full rounded border-2 border-red-600 p-2 text-xs focus:outline-none"
-                                  rows={2}
-                                  autoFocus
-                                />
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => void handleReject(order)}
-                                    disabled={submittingId === order.id}
-                                    className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded text-[10px] font-black uppercase"
-                                  >
-                                    Confirm Reject
-                                  </button>
-                                  <button
-                                    onClick={() => setRejectingId(null)}
-                                    className="bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-[10px] font-black uppercase"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => startEditing(order, lines)}
-                                  disabled={isAnotherOrderEditing}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-indigo-700 bg-indigo-50 text-indigo-700 font-black text-[10px] uppercase hover:bg-indigo-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
-                                >
-                                  <Pencil size={14} /> Edit
-                                </button>
-                                <button
-                                  onClick={() => void handleApprove(order)}
-                                  disabled={submittingId === order.id || isAnotherOrderEditing}
-                                  className={cn(
-                                    "flex items-center gap-1.5 px-3 py-1.5 rounded border-2 font-black text-[10px] uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50",
-                                    confirmId === order.id
-                                      ? "bg-emerald-600 text-white border-black animate-pulse"
-                                      : "bg-emerald-50 text-emerald-700 border-emerald-700 hover:bg-emerald-100",
-                                  )}
-                                >
-                                  {submittingId === order.id ? (
-                                    <Spinner size={12} />
-                                  ) : (
-                                    <>
-                                      <Check size={14} />
-                                      {confirmId === order.id ? "Confirm Approve?" : "Approve"}
-                                    </>
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => void handleReject(order)}
-                                  disabled={submittingId === order.id || isAnotherOrderEditing}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border-2 border-red-700 bg-red-50 text-red-700 font-black text-[10px] uppercase hover:bg-red-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
-                                >
-                                  <X size={14} /> Reject
-                                </button>
-                              </>
-                            )
-                          ) : isLineMode ? null : (
-                            <button
-                              onClick={() => void handleToggleRow(order.id)}
-                              className="text-indigo-600 hover:text-indigo-900 font-bold uppercase flex items-center gap-1 text-[11px]"
-                            >
-                              {isExpanded ? "Hide" : "Details"}
-                              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                            </button>
-                          )}
-                        </div>
+                      <td className="px-4 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => void handleRowPdf(order)}
+                          disabled={pdfOrderId === order.id}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition disabled:opacity-50"
+                          title="Download PO PDF"
+                          aria-label="Download PO PDF"
+                        >
+                          {pdfOrderId === order.id ? <Spinner size={12} /> : <FileText size={14} />}
+                        </button>
                       </td>
                     </tr>
                     {isExpanded && (
                       <tr className="bg-slate-50/50">
-                        <td colSpan={mode === "rejected" ? 10 : 9} className="px-12 py-4">
-                          <div className="border-2 border-black rounded overflow-hidden shadow-sm">
-                            <div className="bg-slate-200 px-4 py-2 text-[10px] font-black uppercase tracking-wider flex justify-between border-b border-black">
-                              <span>PO Items Details</span>
-                              <span>Indent Ref: {indentRefs.join(", ") || "-"}</span>
-                            </div>
-                            <div className="grid gap-3 border-b border-black bg-white px-4 py-3 md:grid-cols-4">
-                              <label className="text-[10px] font-black uppercase text-slate-600">
-                                PO Date
-                                <input
-                                  type="date"
-                                  value={isEditing ? editingHeader?.poDate || "" : order.poDate || ""}
-                                  onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, poDate: e.target.value } : prev))}
-                                  disabled={!isEditing}
-                                  className="mt-1 w-full rounded border border-black px-2 py-1.5 text-xs font-medium text-black disabled:bg-slate-100"
-                                />
-                              </label>
-                              <label className="text-[10px] font-black uppercase text-slate-600">
-                                Required Date
-                                <input
-                                  type="date"
-                                  value={isEditing ? editingHeader?.requiredDate || "" : order.requiredDate || ""}
-                                  onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, requiredDate: e.target.value } : prev))}
-                                  disabled={!isEditing}
-                                  className="mt-1 w-full rounded border border-black px-2 py-1.5 text-xs font-medium text-black disabled:bg-slate-100"
-                                />
-                              </label>
-                              <label className="text-[10px] font-black uppercase text-slate-600">
-                                Round Off
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={isEditing ? editingHeader?.roundOff || "0" : String(Number(order.roundOff || 0))}
-                                  onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, roundOff: e.target.value } : prev))}
-                                  disabled={!isEditing}
-                                  className="mt-1 w-full rounded border border-black px-2 py-1.5 text-xs font-medium text-black disabled:bg-slate-100"
-                                />
-                              </label>
-                              <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
-                                <div className="text-[10px] font-black uppercase text-slate-600">Grand Total</div>
-                                <div className="mt-1 text-sm font-black text-slate-900">{formatMoney(renderedTotals.grandTotal)}</div>
-                              </div>
-                            </div>
+                        <td colSpan={mode === "rejected" ? 12 : 11} className="px-12 py-4">
+                          <div className="overflow-hidden rounded border-2 border-black shadow-sm">
                             <table className="min-w-full divide-y divide-black">
                               <thead className="sticky top-0 z-30 bg-slate-100">
                                 <tr className="divide-x divide-black text-[9px] font-black uppercase text-slate-500">
@@ -1404,7 +1267,6 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                   <th className="px-3 py-2 text-right">Amount</th>
                                   <th className="px-3 py-2 text-right">Amount after GST</th>
                                   <th className="px-3 py-2 text-left">Target Delivery</th>
-                                  <th className="px-3 py-2 text-right">Cancel</th>
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-black">
@@ -1414,120 +1276,37 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                   const cancelledQty = getLineCancelledQty(line);
                                   const pendingQty = getLinePendingQty(line);
                                   return (
-                                  <tr key={line.id} className="divide-x divide-black text-[10px] font-bold">
-                                    <td className="px-3 py-2 text-black">{line.erpCode || materialMap.get(line.materialId)?.erpCode || ""}</td>
-                                    <td className="px-3 py-2 text-black uppercase">{materialMap.get(line.materialId)?.name || "Unknown"}</td>
-                                    <td className="px-3 py-2 text-right">
-                                      {isEditing ? (
-                                        <input
-                                          type="number"
-                                          step="0.01"
-                                          value={editingLines[line.id]?.qty || ""}
-                                          onChange={(e) =>
-                                            setEditingLines((prev) => ({
-                                              ...prev,
-                                              [line.id]: { ...prev[line.id], qty: e.target.value },
-                                            }))
-                                          }
-                                          className="w-20 rounded border border-black px-2 py-1 text-right"
-                                        />
-                                      ) : (
-                                        Number(line.qty || 0).toLocaleString()
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-2 text-right text-emerald-700">{receivedQty.toLocaleString()}</td>
-                                    <td className="px-3 py-2 text-right text-red-700">{cancelledQty.toLocaleString()}</td>
-                                    <td className="px-3 py-2 text-right text-amber-700">{pendingQty.toLocaleString()}</td>
-                                    <td className="px-3 py-2 text-center">{line.uom}</td>
-                                    <td className="px-3 py-2 text-right">
-                                      {isEditing ? (
-                                        <input
-                                          type="number"
-                                          step="0.01"
-                                          value={editingLines[line.id]?.rate || ""}
-                                          onChange={(e) =>
-                                            setEditingLines((prev) => ({
-                                              ...prev,
-                                              [line.id]: { ...prev[line.id], rate: e.target.value },
-                                            }))
-                                          }
-                                          className="w-24 rounded border border-black px-2 py-1 text-right"
-                                        />
-                                      ) : (
-                                        formatMoney(Number(line.rate || 0))
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-2 text-right">
-                                      {isEditing ? (
-                                        <input
-                                          type="number"
-                                          step="0.01"
-                                          value={editingLines[line.id]?.gstRate || ""}
-                                          onChange={(e) =>
-                                            setEditingLines((prev) => ({
-                                              ...prev,
-                                              [line.id]: { ...prev[line.id], gstRate: e.target.value },
-                                            }))
-                                          }
-                                          className="w-20 rounded border border-black px-2 py-1 text-right"
-                                        />
-                                      ) : (
-                                        `${Number(line.gstRate || 0).toLocaleString(undefined, {
+                                    <tr key={line.id} className="divide-x divide-black text-[10px] font-bold">
+                                      <td className="px-3 py-2 text-black">{line.erpCode || materialMap.get(line.materialId)?.erpCode || ""}</td>
+                                      <td className="px-3 py-2 text-black uppercase">{materialMap.get(line.materialId)?.name || "Unknown"}</td>
+                                      <td className="px-3 py-2 text-right">{Number(line.qty || 0).toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-right text-emerald-700">{receivedQty.toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-right text-red-700">{cancelledQty.toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-right text-amber-700">{pendingQty.toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-center">{line.uom}</td>
+                                      <td className="px-3 py-2 text-right">{formatMoney(Number(line.rate || 0))}</td>
+                                      <td className="px-3 py-2 text-right">
+                                        {`${Number(line.gstRate || 0).toLocaleString(undefined, {
                                           minimumFractionDigits: 2,
                                           maximumFractionDigits: 2,
-                                        })}%`
-                                      )}
-                                    </td>
-                                    {showIntegratedTax ? (
-                                      <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.igst || 0))}</td>
-                                    ) : (
-                                      <>
-                                        <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.cgst || 0))}</td>
-                                        <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.sgst || 0))}</td>
-                                      </>
-                                    )}
-                                    <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.amount || 0))}</td>
-                                    <td className="px-3 py-2 text-right">
-                                      {formatMoney(Number(activeLine.lineTotal ?? (Number(activeLine.amount || 0) + Number(activeLine.cgst || 0) + Number(activeLine.sgst || 0) + Number(activeLine.igst || 0))))}
-                                    </td>
-                                    <td className="px-3 py-2 text-left">
-                                      {isEditing ? (
-                                        <input
-                                          type="date"
-                                          value={editingLines[line.id]?.targetDeliveryDate || ""}
-                                          onChange={(e) =>
-                                            setEditingLines((prev) => ({
-                                              ...prev,
-                                              [line.id]: { ...prev[line.id], targetDeliveryDate: e.target.value },
-                                            }))
-                                          }
-                                          className="rounded border border-black px-2 py-1"
-                                        />
+                                        })}%`}
+                                      </td>
+                                      {showIntegratedTax ? (
+                                        <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.igst || 0))}</td>
                                       ) : (
-                                        line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-"
+                                        <>
+                                          <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.cgst || 0))}</td>
+                                          <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.sgst || 0))}</td>
+                                        </>
                                       )}
-                                    </td>
-                                    <td className="px-3 py-2 text-right">
-                                      {order.status !== "Rejected" && !isEditing && pendingQty > 0 ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => void handleCancelPoLine(order, line)}
-                                          className="inline-flex items-center gap-1 rounded border border-red-700 bg-red-50 px-2 py-1 text-[9px] font-black uppercase text-red-700 hover:bg-red-100"
-                                        >
-                                          <X size={12} /> Cancel
-                                        </button>
-                                      ) : "-"}
-                                    </td>
-                                  </tr>
+                                      <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.amount || 0))}</td>
+                                      <td className="px-3 py-2 text-right">
+                                        {formatMoney(Number(activeLine.lineTotal ?? (Number(activeLine.amount || 0) + Number(activeLine.cgst || 0) + Number(activeLine.sgst || 0) + Number(activeLine.igst || 0))))}
+                                      </td>
+                                      <td className="px-3 py-2 text-left">{line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-"}</td>
+                                    </tr>
                                   );
                                 })}
-                                <tr className="divide-x divide-black bg-slate-100 text-[10px] font-black">
-                                  <td className="px-3 py-2" colSpan={showIntegratedTax ? 10 : 11}>Summary</td>
-                                  <td className="px-3 py-2 text-right">{formatMoney(renderedTotals.taxableAmount)}</td>
-                                  <td className="px-3 py-2 text-right">{formatMoney(renderedTotals.grandTotal)}</td>
-                                  <td className="px-3 py-2 text-left">Round Off: {formatMoney(renderedTotals.roundOff)}</td>
-                                  <td className="px-3 py-2"></td>
-                                </tr>
                               </tbody>
                             </table>
                           </div>
