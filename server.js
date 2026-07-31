@@ -1909,6 +1909,63 @@ function getMaterialInJsonLineRate(line) {
   const actualValue = Number(line?.actualValue || 0);
   return actualQty > 0 && actualValue > 0 ? actualValue / actualQty : 0;
 }
+function isTruthyDbValue(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  const normalized = String(value || "").trim().toLowerCase();
+  return (/* @__PURE__ */ new Set(["1", "true", "yes", "y", "on"])).has(normalized);
+}
+async function buildMaterialValuationMaps(db) {
+  const [materialRows] = await db.query("SELECT id, openingRate FROM `materials`");
+  const openingRateByMaterial = new Map(
+    materialRows.map((row) => [String(row.id || ""), roundCurrency(Number(row.openingRate || 0))])
+  );
+  const [itemRows] = await db.query("SELECT id, rate, consumable FROM `items`");
+  const npdRateByMaterialId = /* @__PURE__ */ new Map();
+  for (const item of itemRows) {
+    if (!isTruthyDbValue(item.consumable)) continue;
+    const itemId = String(item.id || "").trim();
+    const rate = roundCurrency(Number(item.rate || 0));
+    if (itemId && rate > 0) npdRateByMaterialId.set(`npd:${itemId}`, rate);
+  }
+  const [materialInRows] = await db.query("SELECT id, date, timestamp, `lines` FROM `material_in`");
+  const latestPurchaseByMaterial = /* @__PURE__ */ new Map();
+  for (const receipt of materialInRows) {
+    const time = new Date(receipt.timestamp || receipt.date || 0).getTime() || 0;
+    for (const line of parseJsonArray(receipt.lines)) {
+      const materialId = String(line?.itemId || "").trim();
+      if (!materialId) continue;
+      const rate = roundCurrency(getMaterialInJsonLineRate(line));
+      if (rate <= 0) continue;
+      const existing = latestPurchaseByMaterial.get(materialId);
+      if (!existing || time > existing.time) {
+        latestPurchaseByMaterial.set(materialId, { rate, time });
+      }
+    }
+  }
+  const [packingSlipRows] = await db.query(`
+    SELECT ps.id, ps.materialId, ps.materialInId, ps.materialLineId, m.openingRate, mi.lines
+    FROM \`material_in_packing_slips\` ps
+    LEFT JOIN \`material_in\` mi ON mi.id = ps.materialInId
+    LEFT JOIN \`materials\` m ON m.id = ps.materialId
+  `);
+  const receiptRateByPackingSlip = /* @__PURE__ */ new Map();
+  for (const slip of packingSlipRows) {
+    const receiptLine = parseJsonArray(slip.lines).find((line) => String(line?.id || "") === String(slip.materialLineId || ""));
+    const receiptRate = receiptLine ? roundCurrency(getMaterialInJsonLineRate(receiptLine)) : 0;
+    const openingRate = roundCurrency(Number(slip.openingRate || 0));
+    const rate = receiptRate > 0 ? receiptRate : openingRate;
+    if (rate > 0) receiptRateByPackingSlip.set(String(slip.id || ""), rate);
+  }
+  return { openingRateByMaterial, latestPurchaseByMaterial, npdRateByMaterialId, receiptRateByPackingSlip };
+}
+function resolveBackfillMaterialRate(materialId, maps) {
+  const lastPurchaseRate = maps.latestPurchaseByMaterial.get(materialId)?.rate || 0;
+  const openingRate = maps.openingRateByMaterial.get(materialId) || 0;
+  const npdRate = maps.npdRateByMaterialId.get(materialId) || 0;
+  const rate = lastPurchaseRate > 0 ? lastPurchaseRate : openingRate > 0 ? openingRate : npdRate;
+  return { lastPurchaseRate: lastPurchaseRate || npdRate, openingRate, rate };
+}
 async function backfillNonJobMaterialIssueValuation(db) {
   const [materialRows] = await db.query("SELECT id, openingRate FROM `materials`");
   const openingRateByMaterial = new Map(
@@ -1957,6 +2014,115 @@ async function backfillNonJobMaterialIssueValuation(db) {
   }
   if (updatedCount > 0) {
     console.log(`[DB] Backfilled non-job material issue valuation for ${updatedCount} line(s).`);
+  }
+}
+async function backfillOldJobMaterialIssueReturnValuation(db) {
+  const maps = await buildMaterialValuationMaps(db);
+  const [issueLineRows] = await db.query(`
+    SELECT mil.id, mil.materialId, mil.qty, mil.lastPurchaseRate, mil.openingRate, mil.rate, mil.amount
+    FROM \`material_issue_lines\` mil
+    JOIN \`material_issues\` mi ON mi.id = mil.materialIssueId
+    WHERE LOWER(TRIM(COALESCE(mi.issueType, ''))) = 'job'
+      AND COALESCE(mil.lastPurchaseRate, 0) = 0
+      AND COALESCE(mil.openingRate, 0) = 0
+      AND COALESCE(mil.rate, 0) = 0
+      AND COALESCE(mil.amount, 0) = 0
+  `);
+  const [issueReelRows] = await db.query("SELECT materialIssueLineId, packingSlipId, weightKg FROM `material_issue_reel_lines`");
+  const issueReelsByLine = /* @__PURE__ */ new Map();
+  for (const reelLine of issueReelRows) {
+    const key = String(reelLine.materialIssueLineId || "");
+    issueReelsByLine.set(key, [...issueReelsByLine.get(key) || [], reelLine]);
+  }
+  let issueUpdatedCount = 0;
+  for (const line of issueLineRows) {
+    const lineId = String(line.id || "");
+    const materialId = String(line.materialId || "").trim();
+    const qty = roundCurrency(Number(line.qty || 0));
+    const reelLines = issueReelsByLine.get(lineId) || [];
+    const resolved = resolveBackfillMaterialRate(materialId, maps);
+    const reelAmount = reelLines.reduce((sum, reelLine) => {
+      const rate2 = maps.receiptRateByPackingSlip.get(String(reelLine.packingSlipId || "")) || 0;
+      return sum + Number(reelLine.weightKg || 0) * rate2;
+    }, 0);
+    const amount = reelLines.length > 0 ? roundCurrency(reelAmount) : roundCurrency(qty * resolved.rate);
+    const rate = reelLines.length > 0 && qty > 0 ? roundCurrency(amount / qty) : resolved.rate;
+    const lastPurchaseRate = reelLines.length > 0 ? rate : resolved.lastPurchaseRate;
+    const openingRate = resolved.openingRate;
+    if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
+    await db.query(
+      "UPDATE `material_issue_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ? AND COALESCE(`lastPurchaseRate`, 0) = 0 AND COALESCE(`openingRate`, 0) = 0 AND COALESCE(`rate`, 0) = 0 AND COALESCE(`amount`, 0) = 0",
+      [lastPurchaseRate, openingRate, rate, amount, line.id]
+    );
+    issueUpdatedCount += 1;
+  }
+  const [jobIssueValueRows] = await db.query(`
+    SELECT mi.productionId, mi.jobNo, mil.materialId, mil.qty, mil.rate, mil.amount
+    FROM \`material_issue_lines\` mil
+    JOIN \`material_issues\` mi ON mi.id = mil.materialIssueId
+    WHERE LOWER(TRIM(COALESCE(mi.issueType, ''))) = 'job'
+  `);
+  const issueValueByJobMaterial = /* @__PURE__ */ new Map();
+  for (const line of jobIssueValueRows) {
+    const materialId = String(line.materialId || "").trim();
+    const qty = Number(line.qty || 0);
+    const amount = Number(line.amount || 0) > 0 ? Number(line.amount || 0) : qty * Number(line.rate || 0);
+    if (!materialId || qty <= 0 || amount <= 0) continue;
+    const keys = [
+      String(line.productionId || "").trim() ? `pid:${String(line.productionId || "").trim()}` : "",
+      String(line.jobNo || "").trim() ? `job:${String(line.jobNo || "").trim()}` : ""
+    ].filter(Boolean);
+    for (const jobKey of keys) {
+      const key = `${jobKey}::${materialId}`;
+      const existing = issueValueByJobMaterial.get(key) || { qty: 0, amount: 0 };
+      issueValueByJobMaterial.set(key, { qty: existing.qty + qty, amount: existing.amount + amount });
+    }
+  }
+  const [returnLineRows] = await db.query(`
+    SELECT mrl.id, mr.productionId, mr.jobNo, mrl.materialId, mrl.qty
+    FROM \`material_return_lines\` mrl
+    JOIN \`material_returns\` mr ON mr.id = mrl.materialReturnId
+    WHERE LOWER(TRIM(COALESCE(mr.returnType, ''))) = 'job'
+      AND COALESCE(mrl.lastPurchaseRate, 0) = 0
+      AND COALESCE(mrl.openingRate, 0) = 0
+      AND COALESCE(mrl.rate, 0) = 0
+      AND COALESCE(mrl.amount, 0) = 0
+  `);
+  const [returnReelRows] = await db.query("SELECT materialReturnLineId, packingSlipId, weightKg FROM `material_return_reel_lines`");
+  const returnReelsByLine = /* @__PURE__ */ new Map();
+  for (const reelLine of returnReelRows) {
+    const key = String(reelLine.materialReturnLineId || "");
+    returnReelsByLine.set(key, [...returnReelsByLine.get(key) || [], reelLine]);
+  }
+  let returnUpdatedCount = 0;
+  for (const line of returnLineRows) {
+    const lineId = String(line.id || "");
+    const materialId = String(line.materialId || "").trim();
+    const qty = roundCurrency(Number(line.qty || 0));
+    const reelLines = returnReelsByLine.get(lineId) || [];
+    const reelAmount = reelLines.reduce((sum, reelLine) => {
+      const rate2 = maps.receiptRateByPackingSlip.get(String(reelLine.packingSlipId || "")) || 0;
+      return sum + Number(reelLine.weightKg || 0) * rate2;
+    }, 0);
+    const productionId = String(line.productionId || "").trim();
+    const jobNo = String(line.jobNo || "").trim();
+    const issueValue = (productionId ? issueValueByJobMaterial.get(`pid:${productionId}::${materialId}`) : void 0) || (jobNo ? issueValueByJobMaterial.get(`job:${jobNo}::${materialId}`) : void 0);
+    const issueRate = issueValue && issueValue.qty > 0 && issueValue.amount > 0 ? roundCurrency(issueValue.amount / issueValue.qty) : 0;
+    const resolved = resolveBackfillMaterialRate(materialId, maps);
+    const fallbackRate = issueRate > 0 ? issueRate : resolved.rate;
+    const amount = reelLines.length > 0 ? roundCurrency(reelAmount) : roundCurrency(qty * fallbackRate);
+    const rate = reelLines.length > 0 && qty > 0 ? roundCurrency(amount / qty) : fallbackRate;
+    const lastPurchaseRate = reelLines.length > 0 ? rate : issueRate > 0 ? issueRate : resolved.lastPurchaseRate;
+    const openingRate = resolved.openingRate;
+    if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
+    await db.query(
+      "UPDATE `material_return_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ? AND COALESCE(`lastPurchaseRate`, 0) = 0 AND COALESCE(`openingRate`, 0) = 0 AND COALESCE(`rate`, 0) = 0 AND COALESCE(`amount`, 0) = 0",
+      [lastPurchaseRate, openingRate, rate, amount, line.id]
+    );
+    returnUpdatedCount += 1;
+  }
+  if (issueUpdatedCount > 0 || returnUpdatedCount > 0) {
+    console.log(`[DB] Backfilled old job issue/return valuation for ${issueUpdatedCount} issue line(s), ${returnUpdatedCount} return line(s).`);
   }
 }
 async function ensureAuditColumnsForAllTables(db, database) {
@@ -3068,6 +3234,10 @@ async function initDb(retries = 5) {
           \`materialId\` VARCHAR(36) NOT NULL,
           \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`uom\` VARCHAR(50) NOT NULL,
+          \`lastPurchaseRate\` DECIMAL(15,2) DEFAULT 0,
+          \`openingRate\` DECIMAL(15,2) DEFAULT 0,
+          \`rate\` DECIMAL(15,2) DEFAULT 0,
+          \`amount\` DECIMAL(15,2) DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -4160,6 +4330,10 @@ async function initDb(retries = 5) {
         { table: "material_return_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
         { table: "material_return_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "material_return_lines", column: "uom", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_return_lines", column: "lastPurchaseRate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_return_lines", column: "openingRate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_return_lines", column: "rate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_return_lines", column: "amount", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "material_return_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_return_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_return_reel_lines", column: "materialReturnId", type: "VARCHAR(36) NOT NULL" },
@@ -4785,6 +4959,11 @@ async function initDb(retries = 5) {
         await backfillNonJobMaterialIssueValuation(db);
       } catch (err) {
         console.warn("[DB] Could not backfill non-job material issue valuation:", err.message);
+      }
+      try {
+        await backfillOldJobMaterialIssueReturnValuation(db);
+      } catch (err) {
+        console.warn("[DB] Could not backfill old job material issue/return valuation:", err.message);
       }
       try {
         await ensureUsersCanonicalData(db, database);
