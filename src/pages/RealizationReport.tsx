@@ -6,8 +6,8 @@ import * as XLSX from "xlsx";
 import { Download, FileText, RotateCcw, Search } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Company, Item, Order, OrderSchedule, Production, Setting } from "../types";
-import { formatDate } from "../lib/serial";
-import { describeRealizationTarget, findRealizationTargetForDate, parseRealizationTargets } from "../lib/realizationTargets";
+import { formatDate, getFinancialYear } from "../lib/serial";
+import { findRealizationTargetForDate, parseRealizationTargets } from "../lib/realizationTargets";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { Select } from "../components/Select";
 
@@ -304,6 +304,7 @@ export function RealizationReport() {
   }, [sourceRows]);
 
   const currentTarget = useMemo(() => resolveCurrentTarget(targets), [targets]);
+  const currentTargetFy = useMemo(() => currentTarget ? `FY ${getFinancialYear(currentTarget.dateFrom)}` : "Not set", [currentTarget]);
 
   const selectedSalesPersonLabel = useMemo(() => {
     if (!salesPersonId) return "All";
@@ -421,8 +422,8 @@ export function RealizationReport() {
         </div>
         <div className="rounded border border-purple-300 bg-purple-50 p-4">
           <div className="text-xs font-black uppercase text-purple-700">Target Period</div>
-          <div className="mt-1 text-2xl font-black text-purple-900">{describeRealizationTarget(currentTarget)}</div>
-          <div className={`mt-1 inline-flex rounded border px-2 py-1 text-xs font-black ${getTargetBadgeClass(currentTarget?.value || 0, overall.average)}`}>
+          <div className="mt-1 text-sm font-black text-purple-900">{currentTargetFy}</div>
+          <div className={`mt-2 text-2xl font-black ${getTargetBadgeClass(currentTarget?.value || 0, overall.average)}`}>
             Current Rate: {currentTarget?.value ?? "-"}
           </div>
         </div>
