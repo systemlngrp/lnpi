@@ -3,6 +3,7 @@ import { Copy, Search, Truck as TruckIcon } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type { Company, DispatchPlan, LoadingSlip, Order, Truck, TruckStatusLog } from "../types";
 import { formatTruckDateTime, formatTruckDuration, normalizeTruckStatus, TRUCK_LIVE_STATUSES, TRUCK_STATUS_STYLES } from "../lib/truckStatus";
+import { Select } from "../components/Select";
 
 function isInternalTruck(truck: Truck) {
   return String(truck.truckType || "").trim().toLowerCase() === "internal";
@@ -21,6 +22,9 @@ export function TruckStatusReport() {
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [searchTerm, setSearchTerm] = useState("");
+  const [vehicleNoFilter, setVehicleNoFilter] = useState("");
+  const [partyFilter, setPartyFilter] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const [statusLogs, setStatusLogs] = useState<TruckStatusLog[]>([]);
   const [now, setNow] = useState(Date.now());
 
@@ -61,7 +65,7 @@ export function TruckStatusReport() {
     return map;
   }, [statusLogs]);
 
-  const rows = useMemo(() => {
+  const baseRows = useMemo(() => {
     const planById = new Map(dispatchPlans.map((plan) => [plan.id, plan]));
     const orderById = new Map(orders.map((order) => [order.id, order]));
     const companyById = new Map(companies.map((company) => [company.id, company]));
@@ -95,19 +99,57 @@ export function TruckStatusReport() {
         liveStatus,
         party: latestLogParty || Array.from(partyNames).filter(Boolean).join(", ") || "-",
       };
-    }).filter((row) => {
-      const q = searchTerm.trim().toLowerCase();
+    }).sort((a, b) => {
+      const statusA = a.liveStatus.localeCompare(b.liveStatus);
+      return statusA || a.truck.truckNo.localeCompare(b.truck.truckNo, undefined, { numeric: true, sensitivity: "base" });
+    });
+  }, [activeSlipsByTruck, companies, dispatchPlans, latestPartyByTruckId, loadingSlips, orders, trucks]);
+
+
+  const vehicleNoOptions = useMemo(
+    () => [
+      { value: "", label: "All Vehicle No." },
+      ...Array.from(new Set(baseRows.map((row) => String(row.truck.truckNo || "").trim()).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+        .map((truckNo) => ({ value: truckNo, label: truckNo, searchText: truckNo })),
+    ],
+    [baseRows]
+  );
+
+  const partyOptions = useMemo(
+    () => [
+      { value: "", label: "All Party" },
+      ...Array.from(new Set(baseRows.map((row) => String(row.party || "").trim()).filter((party) => party && party !== "-")))
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+        .map((party) => ({ value: party, label: party, searchText: party })),
+    ],
+    [baseRows]
+  );
+
+  const rows = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return baseRows.filter((row) => {
+      if (vehicleNoFilter && row.truck.truckNo !== vehicleNoFilter) return false;
+      if (partyFilter && row.party !== partyFilter) return false;
       if (!q) return true;
       return [row.truck.truckNo, row.liveStatus, row.party, row.truck.driverName, row.truck.mobileNo]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
         .includes(q);
-    }).sort((a, b) => {
-      const statusA = a.liveStatus.localeCompare(b.liveStatus);
-      return statusA || a.truck.truckNo.localeCompare(b.truck.truckNo, undefined, { numeric: true, sensitivity: "base" });
     });
-  }, [activeSlipsByTruck, companies, dispatchPlans, latestPartyByTruckId, loadingSlips, orders, searchTerm, trucks]);
+  }, [baseRows, partyFilter, searchTerm, vehicleNoFilter]);
+
+  const handleCopyDriverFormLink = async () => {
+    const url = new URL("/driver-status", window.location.origin).toString();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyFeedback(true);
+      window.setTimeout(() => setCopyFeedback(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy driver form link:", error);
+    }
+  };
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -121,22 +163,48 @@ export function TruckStatusReport() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 border-b border-black pb-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-4 border-b border-black pb-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="flex items-center gap-3 text-indigo-700">
           <TruckIcon size={26} />
           <h2 className="text-xl font-black uppercase tracking-tight text-black">Company Vehicle Status [Live]</h2>
         </div>
-        <div className="relative w-full lg:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search vehicle, status, party, driver..."
-            className="w-full rounded border-2 border-black bg-white py-2 pl-10 pr-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-600"
+        <div className="grid w-full gap-2 xl:max-w-5xl xl:grid-cols-[minmax(220px,1fr)_minmax(180px,0.75fr)_minmax(220px,0.9fr)_auto] xl:items-start">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search vehicle, status, party, driver..."
+              className="min-h-[46px] w-full rounded border-2 border-black bg-white py-2 pl-10 pr-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-600"
+            />
+          </div>
+          <Select
+            id="truck-status-vehicle-filter"
+            options={vehicleNoOptions}
+            value={vehicleNoFilter}
+            onChange={setVehicleNoFilter}
+            placeholder="All Vehicle No."
           />
+          <Select
+            id="truck-status-party-filter"
+            options={partyOptions}
+            value={partyFilter}
+            onChange={setPartyFilter}
+            placeholder="All Party"
+          />
+          <div className="flex flex-col items-stretch gap-1">
+            <button
+              type="button"
+              onClick={() => void handleCopyDriverFormLink()}
+              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded border-2 border-black bg-white px-4 py-2 text-sm font-black uppercase text-black hover:bg-slate-50"
+            >
+              <Copy size={16} />
+              {copyFeedback ? "Copied" : "Copy Driver Form Link"}
+            </button>
+            {copyFeedback ? <div className="text-right text-xs font-black uppercase text-emerald-700">Link copied</div> : null}
+          </div>
         </div>
       </div>
-
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-9">
         {TRUCK_LIVE_STATUSES.map((status) => {
           const style = TRUCK_STATUS_STYLES[status];
@@ -196,19 +264,6 @@ export function TruckStatusReport() {
             </tbody>
           </table>
         </div>
-      </div>
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => {
-            const url = new URL("/driver-status", window.location.origin).toString();
-            void navigator.clipboard.writeText(url);
-          }}
-          className="inline-flex items-center justify-center gap-2 rounded border-2 border-black bg-white px-4 py-3 text-sm font-black uppercase text-black hover:bg-slate-50"
-        >
-          <Copy size={16} />
-          Copy Driver Form Link
-        </button>
       </div>
 
     </div>
