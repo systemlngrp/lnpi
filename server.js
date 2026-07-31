@@ -1926,7 +1926,21 @@ async function buildMaterialValuationMaps(db) {
     if (!isTruthyDbValue(item.consumable)) continue;
     const itemId = String(item.id || "").trim();
     const rate = roundCurrency(Number(item.rate || 0));
-    if (itemId && rate > 0) npdRateByMaterialId.set(`npd:${itemId}`, rate);
+    if (itemId && rate > 0) {
+      npdRateByMaterialId.set(itemId, rate);
+      npdRateByMaterialId.set(`npd:${itemId}`, rate);
+    }
+  }
+  const [npdRows] = await db.query("SELECT id, npdId, erp, rate FROM `npd`");
+  for (const item of npdRows) {
+    const rate = roundCurrency(Number(item.rate || 0));
+    if (rate <= 0) continue;
+    for (const key of [item.id, item.npdId, item.erp]) {
+      const normalized = String(key || "").trim();
+      if (!normalized) continue;
+      npdRateByMaterialId.set(normalized, rate);
+      npdRateByMaterialId.set(`npd:${normalized}`, rate);
+    }
   }
   const [materialInRows] = await db.query("SELECT id, date, timestamp, `lines` FROM `material_in`");
   const latestPurchaseByMaterial = /* @__PURE__ */ new Map();

@@ -5,15 +5,11 @@ import { getInvoiceGrandTotal } from "../lib/gatePasses";
 import type {
   AuditDashboardSnapshot,
   Invoice,
-  Material,
   MaterialIn,
-  MaterialInPackingSlip,
   MaterialIssue,
   MaterialIssueLine,
-  MaterialIssueReelLine,
   MaterialReturn,
   MaterialReturnLine,
-  MaterialReturnReelLine,
   Production,
 } from "../types";
 import { cn } from "../lib/utils";
@@ -86,22 +82,6 @@ function getSnapshotId() {
   return `audit-${ALL_DATA_DATE_RANGE.from || "all"}-${ALL_DATA_DATE_RANGE.to || "all"}`;
 }
 
-function getReelRateForSlip({
-  slip,
-  materialInMap,
-  materialMap,
-}: {
-  slip?: MaterialInPackingSlip;
-  materialInMap: Map<string, MaterialIn>;
-  materialMap: Map<string, Material>;
-}) {
-  if (!slip) return 0;
-  const receipt = materialInMap.get(slip.materialInId);
-  const line = receipt?.lines.find((entry) => entry.id === slip.materialLineId);
-  const material = materialMap.get(slip.materialId);
-  return Number(line?.invoiceRate ?? line?.poRate ?? line?.rate ?? material?.openingRate ?? 0);
-}
-
 function getSnapshotValues(snapshot?: AuditDashboardSnapshot): TallyValues {
   return {
     invoiceValueTally: roundMoney(Number(snapshot?.invoiceValueTally || 0)),
@@ -137,14 +117,10 @@ function isNotApplicableIssue(issue: MaterialIssue) {
 
 export function AuditDashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
-  const [materials] = useData<Material>("materials", []);
-  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
-  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [materialReturns] = useData<MaterialReturn>("material-returns", []);
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
-  const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [invoices] = useData<Invoice>("invoices", []);
   const [productions] = useData<Production>("productions", []);
   const [snapshots] = useData<AuditDashboardSnapshot>("audit_dashboard_snapshots", []);
@@ -167,9 +143,6 @@ export function AuditDashboard() {
   }, [currentSnapshot]);
 
   const appValues = useMemo(() => {
-    const materialMap = new Map(materials.map((material) => [material.id, material]));
-    const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
-    const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
     const consumptionIssueIdSet = new Set(
       materialIssues
         .filter((entry) => !hasJobNo(entry) && !isCancelledIssue(entry) && !isNotApplicableIssue(entry))
@@ -195,55 +168,31 @@ export function AuditDashboard() {
     };
     const manufacturingIssueIdSet = new Set(materialIssues.filter(isManufacturingProductionEntry).map((entry) => entry.id));
     const manufacturingReturnIdSet = new Set(materialReturns.filter(isManufacturingProductionEntry).map((entry) => entry.id));
-    const reelIssueLineIds = new Set(issueReelLines.map((line) => line.materialIssueLineId));
-    const reelReturnLineIds = new Set(returnReelLines.map((line) => line.materialReturnLineId));
     const tallyPostedMaterialIn = materialIn.filter(
       (entry) => String(entry.tallyTimestamp || "").trim() && String(entry.transactionNo || "").trim() !== "1"
     );
 
-    const getIssueReelValue = (issueIds: Set<string>) => issueReelLines
+    const getIssueLineValue = (issueIds: Set<string>) => materialIssueLines
       .filter((line) => issueIds.has(line.materialIssueId))
-      .reduce((sum, line) => {
-        const rate = getReelRateForSlip({ slip: packingSlipMap.get(line.packingSlipId), materialInMap, materialMap });
-        return sum + Number(line.weightKg || 0) * rate;
-      }, 0);
-
-    const getConsumptionMaterialAmount = (issueIds: Set<string>) => materialIssueLines
-      .filter((line) => issueIds.has(line.materialIssueId))
-      .reduce((sum, line) => sum + Number(line.amount || 0), 0);
-
-    const getManufacturingIssueMaterialValue = (issueIds: Set<string>) => materialIssueLines
-      .filter((line) => issueIds.has(line.materialIssueId) && !reelIssueLineIds.has(line.id))
       .reduce((sum, line) => {
         const savedAmount = Number(line.amount || 0);
         if (savedAmount > 0) return sum + savedAmount;
         const savedRate = Number(line.rate || 0);
-        if (savedRate > 0) return sum + Number(line.qty || 0) * savedRate;
-        const material = materialMap.get(line.materialId);
-        return sum + Number(line.qty || 0) * Number(material?.openingRate || 0);
+        return sum + Number(line.qty || 0) * savedRate;
       }, 0);
 
-    const getReturnReelValue = (returnIds: Set<string>) => returnReelLines
+    const getReturnLineValue = (returnIds: Set<string>) => materialReturnLines
       .filter((line) => returnIds.has(line.materialReturnId))
       .reduce((sum, line) => {
-        const rate = getReelRateForSlip({ slip: packingSlipMap.get(line.packingSlipId), materialInMap, materialMap });
-        return sum + Number(line.weightKg || 0) * rate;
-      }, 0);
-
-    const getReturnMaterialValue = (returnIds: Set<string>) => materialReturnLines
-      .filter((line) => returnIds.has(line.materialReturnId) && !reelReturnLineIds.has(line.id))
-      .reduce((sum, line) => {
         const savedAmount = Number(line.amount || 0);
         if (savedAmount > 0) return sum + savedAmount;
         const savedRate = Number(line.rate || 0);
-        if (savedRate > 0) return sum + Number(line.qty || 0) * savedRate;
-        const material = materialMap.get(line.materialId);
-        return sum + Number(line.qty || 0) * Number(material?.openingRate || 0);
+        return sum + Number(line.qty || 0) * savedRate;
       }, 0);
 
-    const consumptionValue = getConsumptionMaterialAmount(consumptionIssueIdSet);
-    const manufacturingIssueValue = getIssueReelValue(manufacturingIssueIdSet) + getManufacturingIssueMaterialValue(manufacturingIssueIdSet);
-    const manufacturingReturnValue = getReturnReelValue(manufacturingReturnIdSet) + getReturnMaterialValue(manufacturingReturnIdSet);
+    const consumptionValue = getIssueLineValue(consumptionIssueIdSet);
+    const manufacturingIssueValue = getIssueLineValue(manufacturingIssueIdSet);
+    const manufacturingReturnValue = getReturnLineValue(manufacturingReturnIdSet);
     const manufacturingValue = manufacturingIssueValue - manufacturingReturnValue;
 
     return {
@@ -264,7 +213,7 @@ export function AuditDashboard() {
       debitNote: roundMoney(materialIn.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
       debitNoteCount: materialIn.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
     };
-  }, [invoices, issueReelLines, materialIn, materialIssueLines, materialIssues, materialReturnLines, materialReturns, materials, packingSlips, productions, returnReelLines]);
+  }, [invoices, materialIn, materialIssueLines, materialIssues, materialReturnLines, materialReturns, productions]);
 
   const metrics = useMemo<AuditMetric[]>(() => {
     const baseMetrics: Array<Omit<AuditMetric, "difference">> = [
