@@ -14,6 +14,7 @@ import type {
   MaterialReturn,
   MaterialReturnLine,
   MaterialReturnReelLine,
+  Production,
 } from "../types";
 import { cn } from "../lib/utils";
 
@@ -145,6 +146,7 @@ export function AuditDashboard() {
   const [materialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [invoices] = useData<Invoice>("invoices", []);
+  const [productions] = useData<Production>("productions", []);
   const [snapshots] = useData<AuditDashboardSnapshot>("audit_dashboard_snapshots", []);
   const [tallyValues, setTallyValues] = useState<TallyValues>(getSnapshotValues());
   const [fetchedAt, setFetchedAt] = useState("");
@@ -173,8 +175,26 @@ export function AuditDashboard() {
         .filter((entry) => !hasJobNo(entry) && !isCancelledIssue(entry) && !isNotApplicableIssue(entry))
         .map((entry) => entry.id)
     );
-    const manufacturingIssueIdSet = new Set(materialIssues.filter(hasJobNo).map((entry) => entry.id));
-    const manufacturingReturnIdSet = new Set(materialReturns.filter((entry) => String(entry.jobNo || "").trim() !== "").map((entry) => entry.id));
+    const manufacturingProductions = productions.filter(
+      (production) =>
+        !production.cancelTimestamp &&
+        production.status !== "Cancelled" &&
+        Number(production.prodFromFFG || 0) > 0
+    );
+    const manufacturingProductionIdSet = new Set(manufacturingProductions.map((production) => production.id));
+    const manufacturingProductionJobNoSet = new Set(
+      manufacturingProductions
+        .map((production) => String(production.transactionNo || "").trim())
+        .filter(Boolean)
+    );
+    const isManufacturingProductionEntry = (entry: { productionId?: string; jobNo?: string }) => {
+      const productionId = String(entry.productionId || "").trim();
+      if (productionId) return manufacturingProductionIdSet.has(productionId);
+      const jobNo = String(entry.jobNo || "").trim();
+      return jobNo ? manufacturingProductionJobNoSet.has(jobNo) : false;
+    };
+    const manufacturingIssueIdSet = new Set(materialIssues.filter(isManufacturingProductionEntry).map((entry) => entry.id));
+    const manufacturingReturnIdSet = new Set(materialReturns.filter(isManufacturingProductionEntry).map((entry) => entry.id));
     const reelIssueLineIds = new Set(issueReelLines.map((line) => line.materialIssueLineId));
     const reelReturnLineIds = new Set(returnReelLines.map((line) => line.materialReturnLineId));
     const tallyPostedMaterialIn = materialIn.filter(
@@ -228,7 +248,7 @@ export function AuditDashboard() {
       consumptionValue: roundMoney(consumptionValue),
       consumptionCount: consumptionIssueIdSet.size,
       manufacturingValue: roundMoney(manufacturingValue),
-      manufacturingCount: manufacturingIssueIdSet.size,
+      manufacturingCount: manufacturingProductionIdSet.size,
       saleValue: roundMoney(
         invoices.reduce((sum, invoice) => sum + getInvoiceGrandTotal(invoice), 0)
       ),
@@ -236,7 +256,7 @@ export function AuditDashboard() {
       debitNote: roundMoney(materialIn.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
       debitNoteCount: materialIn.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
     };
-  }, [invoices, issueReelLines, materialIn, materialIssueLines, materialIssues, materialReturnLines, materialReturns, materials, packingSlips, returnReelLines]);
+  }, [invoices, issueReelLines, materialIn, materialIssueLines, materialIssues, materialReturnLines, materialReturns, materials, packingSlips, productions, returnReelLines]);
 
   const metrics = useMemo<AuditMetric[]>(() => {
     const baseMetrics: Array<Omit<AuditMetric, "difference">> = [
