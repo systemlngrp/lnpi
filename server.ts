@@ -2356,10 +2356,12 @@ async function backfillOldJobMaterialIssueReturnValuation(db: mysql.Pool) {
     FROM \`material_issue_lines\` mil
     JOIN \`material_issues\` mi ON mi.id = mil.materialIssueId
     WHERE LOWER(TRIM(COALESCE(mi.issueType, ''))) = 'job'
-      AND COALESCE(mil.lastPurchaseRate, 0) = 0
-      AND COALESCE(mil.openingRate, 0) = 0
-      AND COALESCE(mil.rate, 0) = 0
-      AND COALESCE(mil.amount, 0) = 0
+      AND (
+        COALESCE(mil.lastPurchaseRate, 0) = 0
+        OR COALESCE(mil.openingRate, 0) = 0
+        OR COALESCE(mil.rate, 0) = 0
+        OR COALESCE(mil.amount, 0) = 0
+      )
   `);
   const [issueReelRows] = await db.query("SELECT materialIssueLineId, packingSlipId, weightKg FROM `material_issue_reel_lines`");
   const issueReelsByLine = new Map<string, any[]>();
@@ -2373,21 +2375,28 @@ async function backfillOldJobMaterialIssueReturnValuation(db: mysql.Pool) {
     const lineId = String(line.id || "");
     const materialId = String(line.materialId || "").trim();
     const qty = roundCurrency(Number(line.qty || 0));
+    const existingLastPurchaseRate = roundCurrency(Number(line.lastPurchaseRate || 0));
+    const existingOpeningRate = roundCurrency(Number(line.openingRate || 0));
+    const existingRate = roundCurrency(Number(line.rate || 0));
+    const existingAmount = roundCurrency(Number(line.amount || 0));
     const reelLines = issueReelsByLine.get(lineId) || [];
     const resolved = resolveBackfillMaterialRate(materialId, maps);
     const reelAmount = reelLines.reduce((sum, reelLine) => {
       const rate = maps.receiptRateByPackingSlip.get(String(reelLine.packingSlipId || "")) || 0;
       return sum + Number(reelLine.weightKg || 0) * rate;
     }, 0);
-    const amount = reelLines.length > 0 ? roundCurrency(reelAmount) : roundCurrency(qty * resolved.rate);
-    const rate = reelLines.length > 0 && qty > 0 ? roundCurrency(amount / qty) : resolved.rate;
-    const lastPurchaseRate = reelLines.length > 0 ? rate : resolved.lastPurchaseRate;
-    const openingRate = resolved.openingRate;
-    if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
+    const computedAmount = reelLines.length > 0 ? roundCurrency(reelAmount) : roundCurrency(qty * resolved.rate);
+    const computedRate = reelLines.length > 0 && qty > 0 ? roundCurrency(computedAmount / qty) : resolved.rate;
+    const computedLastPurchaseRate = reelLines.length > 0 ? computedRate : resolved.lastPurchaseRate;
+    const finalRate = existingRate > 0 ? existingRate : computedRate;
+    const finalAmount = existingAmount > 0 ? existingAmount : roundCurrency(qty * finalRate || computedAmount);
+    const finalLastPurchaseRate = existingLastPurchaseRate > 0 ? existingLastPurchaseRate : computedLastPurchaseRate;
+    const finalOpeningRate = existingOpeningRate > 0 ? existingOpeningRate : resolved.openingRate;
+    if (finalRate <= 0 && finalAmount <= 0 && finalOpeningRate <= 0 && finalLastPurchaseRate <= 0) continue;
 
     await db.query(
-      "UPDATE `material_issue_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ? AND COALESCE(`lastPurchaseRate`, 0) = 0 AND COALESCE(`openingRate`, 0) = 0 AND COALESCE(`rate`, 0) = 0 AND COALESCE(`amount`, 0) = 0",
-      [lastPurchaseRate, openingRate, rate, amount, line.id]
+      "UPDATE `material_issue_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ? AND (COALESCE(`lastPurchaseRate`, 0) = 0 OR COALESCE(`openingRate`, 0) = 0 OR COALESCE(`rate`, 0) = 0 OR COALESCE(`amount`, 0) = 0)",
+      [finalLastPurchaseRate, finalOpeningRate, finalRate, finalAmount, line.id]
     );
     issueUpdatedCount += 1;
   }
@@ -2416,14 +2425,16 @@ async function backfillOldJobMaterialIssueReturnValuation(db: mysql.Pool) {
   }
 
   const [returnLineRows] = await db.query(`
-    SELECT mrl.id, mr.productionId, mr.jobNo, mrl.materialId, mrl.qty
+    SELECT mrl.id, mr.productionId, mr.jobNo, mrl.materialId, mrl.qty, mrl.lastPurchaseRate, mrl.openingRate, mrl.rate, mrl.amount
     FROM \`material_return_lines\` mrl
     JOIN \`material_returns\` mr ON mr.id = mrl.materialReturnId
     WHERE LOWER(TRIM(COALESCE(mr.returnType, ''))) = 'job'
-      AND COALESCE(mrl.lastPurchaseRate, 0) = 0
-      AND COALESCE(mrl.openingRate, 0) = 0
-      AND COALESCE(mrl.rate, 0) = 0
-      AND COALESCE(mrl.amount, 0) = 0
+      AND (
+        COALESCE(mrl.lastPurchaseRate, 0) = 0
+        OR COALESCE(mrl.openingRate, 0) = 0
+        OR COALESCE(mrl.rate, 0) = 0
+        OR COALESCE(mrl.amount, 0) = 0
+      )
   `);
   const [returnReelRows] = await db.query("SELECT materialReturnLineId, packingSlipId, weightKg FROM `material_return_reel_lines`");
   const returnReelsByLine = new Map<string, any[]>();
@@ -2437,6 +2448,10 @@ async function backfillOldJobMaterialIssueReturnValuation(db: mysql.Pool) {
     const lineId = String(line.id || "");
     const materialId = String(line.materialId || "").trim();
     const qty = roundCurrency(Number(line.qty || 0));
+    const existingLastPurchaseRate = roundCurrency(Number(line.lastPurchaseRate || 0));
+    const existingOpeningRate = roundCurrency(Number(line.openingRate || 0));
+    const existingRate = roundCurrency(Number(line.rate || 0));
+    const existingAmount = roundCurrency(Number(line.amount || 0));
     const reelLines = returnReelsByLine.get(lineId) || [];
     const reelAmount = reelLines.reduce((sum, reelLine) => {
       const rate = maps.receiptRateByPackingSlip.get(String(reelLine.packingSlipId || "")) || 0;
@@ -2450,15 +2465,18 @@ async function backfillOldJobMaterialIssueReturnValuation(db: mysql.Pool) {
     const issueRate = issueValue && issueValue.qty > 0 && issueValue.amount > 0 ? roundCurrency(issueValue.amount / issueValue.qty) : 0;
     const resolved = resolveBackfillMaterialRate(materialId, maps);
     const fallbackRate = issueRate > 0 ? issueRate : resolved.rate;
-    const amount = reelLines.length > 0 ? roundCurrency(reelAmount) : roundCurrency(qty * fallbackRate);
-    const rate = reelLines.length > 0 && qty > 0 ? roundCurrency(amount / qty) : fallbackRate;
-    const lastPurchaseRate = reelLines.length > 0 ? rate : issueRate > 0 ? issueRate : resolved.lastPurchaseRate;
-    const openingRate = resolved.openingRate;
-    if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
+    const computedAmount = reelLines.length > 0 ? roundCurrency(reelAmount) : roundCurrency(qty * fallbackRate);
+    const computedRate = reelLines.length > 0 && qty > 0 ? roundCurrency(computedAmount / qty) : fallbackRate;
+    const computedLastPurchaseRate = reelLines.length > 0 ? computedRate : issueRate > 0 ? issueRate : resolved.lastPurchaseRate;
+    const finalRate = existingRate > 0 ? existingRate : computedRate;
+    const finalAmount = existingAmount > 0 ? existingAmount : roundCurrency(qty * finalRate || computedAmount);
+    const finalLastPurchaseRate = existingLastPurchaseRate > 0 ? existingLastPurchaseRate : computedLastPurchaseRate;
+    const finalOpeningRate = existingOpeningRate > 0 ? existingOpeningRate : resolved.openingRate;
+    if (finalRate <= 0 && finalAmount <= 0 && finalOpeningRate <= 0 && finalLastPurchaseRate <= 0) continue;
 
     await db.query(
-      "UPDATE `material_return_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ? AND COALESCE(`lastPurchaseRate`, 0) = 0 AND COALESCE(`openingRate`, 0) = 0 AND COALESCE(`rate`, 0) = 0 AND COALESCE(`amount`, 0) = 0",
-      [lastPurchaseRate, openingRate, rate, amount, line.id]
+      "UPDATE `material_return_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ? AND (COALESCE(`lastPurchaseRate`, 0) = 0 OR COALESCE(`openingRate`, 0) = 0 OR COALESCE(`rate`, 0) = 0 OR COALESCE(`amount`, 0) = 0)",
+      [finalLastPurchaseRate, finalOpeningRate, finalRate, finalAmount, line.id]
     );
     returnUpdatedCount += 1;
   }
