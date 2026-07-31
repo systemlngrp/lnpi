@@ -111,7 +111,8 @@ export function ReelIssueReturnForm() {
     const mrr = materialIn.find((row) => row.id === slip.materialInId);
     if (!mrr) return 0;
     const line = mrr.lines.find((row) => row.id === slip.materialLineId);
-    return Number(line?.invoiceRate || line?.rate || 0);
+    const material = materials.find((row) => row.id === slip.materialId);
+    return Number(line?.invoiceRate || line?.poRate || line?.rate || material?.openingRate || 0);
   };
 
   const consumptionSummary = useMemo(() => {
@@ -450,17 +451,26 @@ export function ReelIssueReturnForm() {
           .forEach((line) => {
             const issueLineId = crypto.randomUUID();
             const totalWeight = computeIssueLineWeight(line);
+            const reelIds = selectedIssueReels[line.id] || [];
+            const totalValue = getAvailableReelPackingSlips(line.materialId, packingSlips, materialIssueReelLines, materialReturnReelLines)
+              .filter((slip) => reelIds.includes(slip.id))
+              .reduce((sum, slip) => sum + Number(slip.weightKg || 0) * getReelInvoiceRate(slip.id), 0);
+            const savedAmount = Number(totalValue.toFixed(2));
+            const savedRate = totalWeight > 0 ? Number((savedAmount / totalWeight).toFixed(2)) : 0;
+            const material = materials.find((row) => row.id === line.materialId);
             createdLines.push({
               id: issueLineId,
               materialIssueId: issueId,
               materialId: line.materialId,
               qty: Number(totalWeight.toFixed(2)),
               uom: "KG",
+              lastPurchaseRate: savedRate,
+              openingRate: Number(Number(material?.openingRate || 0).toFixed(2)),
+              rate: savedRate,
+              amount: savedAmount,
               updatedBy: "System User",
               updateTimestamp: timestamp,
             });
-
-            const reelIds = selectedIssueReels[line.id] || [];
             getAvailableReelPackingSlips(line.materialId, packingSlips, materialIssueReelLines, materialReturnReelLines)
               .filter((slip) => reelIds.includes(slip.id))
               .forEach((slip) => {
@@ -518,12 +528,24 @@ export function ReelIssueReturnForm() {
           if (totalWeight <= 0) continue;
 
           const returnLineId = crypto.randomUUID();
+          const totalValue = Object.entries(drafts).reduce((sum, [packingSlipId, qty]) => {
+            const returnQty = Number(qty || 0);
+            if (returnQty <= 0) return sum;
+            return sum + returnQty * getReelInvoiceRate(packingSlipId);
+          }, 0);
+          const savedAmount = Number(totalValue.toFixed(2));
+          const savedRate = totalWeight > 0 ? Number((savedAmount / totalWeight).toFixed(2)) : 0;
+          const material = materials.find((row) => row.id === line.materialId);
           createdLines.push({
             id: returnLineId,
             materialReturnId: returnId,
             materialId: line.materialId,
             qty: Number(totalWeight.toFixed(2)),
             uom: "KG",
+            lastPurchaseRate: savedRate,
+            openingRate: Number(Number(material?.openingRate || 0).toFixed(2)),
+            rate: savedRate,
+            amount: savedAmount,
             updatedBy: "System User",
             updateTimestamp: timestamp,
           });

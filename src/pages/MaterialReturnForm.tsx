@@ -2,7 +2,10 @@ import { useMemo, useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
+  Item,
   Material,
+  MaterialIn,
+  MaterialInPackingSlip,
   MaterialIssue,
   MaterialIssueLine,
   MaterialIssueReelLine,
@@ -16,12 +19,23 @@ import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 
 import { TableControls } from "../components/TableControls";
-import { getReturnableReelLinesForJob } from "../lib/materialMovement";
+import { calculateMaterialIssueAmount, getReturnableReelLinesForJob, resolveMaterialIssueRate, round2 } from "../lib/materialMovement";
 import {
   buildProductionCorrugatedSheetUsageMap,
   buildProductionMaterialUsageMap,
   syncProductionWorkflowFromUsage,
 } from "../lib/productionMaterialUsage";
+import { useNpdItems } from "../hooks/useNpdItems";
+
+type ReturnMaterialOption = Material & { isNpdConsumableItem?: boolean; npdSourceId?: string; rate?: number };
+type ReturnLineDraft = { id: string; materialId: string; qty: number; uom: string; isReel: boolean; lastPurchaseRate?: number; openingRate?: number; rate?: number; amount?: number };
+
+function isConsumableNpdItem(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  const normalized = String(value || "").trim().toLowerCase();
+  return new Set(["1", "true", "yes", "y", "on"]).has(normalized);
+}
 
 export function MaterialReturnForm() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,6 +51,9 @@ export function MaterialReturnForm() {
   }, [searchTerm]);
 
   const [materials] = useData<Material>("materials", []);
+  const [materialIn] = useData<MaterialIn>("material-in", []);
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
+  const npdItems = useNpdItems();
   const [productions, setProductions] = useData<Production>("productions", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
   const [materialIssueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
@@ -51,7 +68,7 @@ export function MaterialReturnForm() {
   const [remarks, setRemarks] = useState("");
   const [currentMaterialId, setCurrentMaterialId] = useState("");
   const [currentQty, setCurrentQty] = useState<number | "">("");
-  const [lines, setLines] = useState<Array<{ id: string; materialId: string; qty: number; uom: string; isReel: boolean }>>([]);
+  const [lines, setLines] = useState<ReturnLineDraft[]>([]);
   const [returnQtyDrafts, setReturnQtyDrafts] = useState<Record<string, Record<string, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -67,9 +84,44 @@ export function MaterialReturnForm() {
     [productions]
   );
 
+  const returnMaterials = useMemo<ReturnMaterialOption[]>(() => {
+    if (returnType !== "Job") return materials;
+
+    const existingMaterialIds = new Set(materials.map((material) => String(material.id)));
+    const existingMaterialErpKeys = new Set(
+      materials
+        .map((material) => String(material.erpCode || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const npdConsumableItems: ReturnMaterialOption[] = [];
+
+    npdItems.forEach((item: Item) => {
+      if (!isConsumableNpdItem(item.consumable)) return;
+      const itemId = String(item.id || "").trim();
+      if (!itemId || existingMaterialIds.has(itemId)) return;
+      const erpCode = String(item.erp || "").trim().toLowerCase();
+      if (erpCode && existingMaterialErpKeys.has(erpCode)) return;
+      const syntheticId = `npd:${itemId}`;
+      if (npdConsumableItems.some((entry) => String(entry.id) === syntheticId)) return;
+      npdConsumableItems.push({
+        id: syntheticId,
+        type: "Other",
+        erpCode: item.erp,
+        name: item.name,
+        uom: item.uom || "PCS",
+        rate: Number(item.rate || 0),
+        active: "Yes",
+        isNpdConsumableItem: true,
+        npdSourceId: itemId,
+      });
+    });
+
+    return [...materials, ...npdConsumableItems];
+  }, [materials, npdItems, returnType]);
+
   const materialOptions = useMemo(
     () =>
-      materials
+      returnMaterials
         .filter((material) => material.active !== "No")
         .filter((material) => (returnType === "General" ? material.type !== "Reel" : true))
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -77,16 +129,15 @@ export function MaterialReturnForm() {
           value: material.id,
           label: `${material.name}${material.erpCode ? ` (${material.erpCode})` : ""}`,
         })),
-    [materials, returnType]
+    [returnMaterials, returnType]
   );
-
   const typeOptions = [
     { value: "Job", label: "Against Job" },
     { value: "General", label: "Without Job" },
   ];
 
   const selectedProduction = productions.find((production) => production.id === productionId);
-  const getMaterial = (materialId: string) => materials.find((material) => material.id === materialId);
+  const getMaterial = (materialId: string) => returnMaterials.find((material) => material.id === materialId);
 
   const handleAddLine = () => {
     if (!currentMaterialId) return;
@@ -105,7 +156,8 @@ export function MaterialReturnForm() {
     if (!isReel) {
       const qty = Number(currentQty || 0);
       if (qty <= 0) return;
-      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false }]);
+      const valuation = resolveReturnLineValuation(currentMaterialId, qty);
+      setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false, ...valuation }]);
     } else {
       setLines((prev) => [...prev, { id: crypto.randomUUID(), materialId: currentMaterialId, qty: 0, uom: "KG", isReel: true }]);
     }
@@ -125,6 +177,55 @@ export function MaterialReturnForm() {
 
   const getReturnableReels = (materialId: string) =>
     productionId ? getReturnableReelLinesForJob(materialId, productionId, materialIssueReelLines, materialReturnReelLines) : [];
+
+  const getReelInvoiceRate = (packingSlipId: string) => {
+    const slip = packingSlips.find((row) => row.id === packingSlipId);
+    if (!slip) return 0;
+    const receipt = materialIn.find((row) => row.id === slip.materialInId);
+    const receiptLine = receipt?.lines.find((row) => row.id === slip.materialLineId);
+    const material = getMaterial(slip.materialId);
+    return Number(receiptLine?.invoiceRate || receiptLine?.poRate || receiptLine?.rate || material?.openingRate || 0);
+  };
+
+  const resolveReturnLineValuation = (materialId: string, qty: number) => {
+    const material = getMaterial(materialId);
+    const production = selectedProduction;
+    const jobIssueIds = new Set(
+      materialIssues
+        .filter((issue) => {
+          if (returnType !== "Job") return false;
+          const issueProductionId = String(issue.productionId || "").trim();
+          if (issueProductionId) return issueProductionId === productionId;
+          return String(issue.jobNo || "").trim() === String(production?.transactionNo || "").trim();
+        })
+        .map((issue) => issue.id)
+    );
+    const issuedLines = materialIssueLines.filter(
+      (issueLine) => jobIssueIds.has(issueLine.materialIssueId) && issueLine.materialId === materialId
+    );
+    const issuedQty = issuedLines.reduce((sum, issueLine) => sum + Number(issueLine.qty || 0), 0);
+    const issuedAmount = issuedLines.reduce((sum, issueLine) => {
+      const amount = Number(issueLine.amount || 0);
+      if (amount > 0) return sum + amount;
+      const rate = Number(issueLine.rate || 0);
+      return sum + Number(issueLine.qty || 0) * rate;
+    }, 0);
+    const issueRate = issuedQty > 0 && issuedAmount > 0 ? round2(issuedAmount / issuedQty) : 0;
+    if (issueRate > 0) {
+      return {
+        lastPurchaseRate: issueRate,
+        openingRate: round2(Number(material?.openingRate || 0)),
+        rate: issueRate,
+        amount: calculateMaterialIssueAmount(qty, issueRate),
+      };
+    }
+
+    const baseValuation = resolveMaterialIssueRate(materialId, materials, materialIn, qty);
+    const npdRate = material?.isNpdConsumableItem ? round2(Number(material.rate || 0)) : 0;
+    return baseValuation.rate > 0 || npdRate <= 0
+      ? baseValuation
+      : { ...baseValuation, rate: npdRate, amount: calculateMaterialIssueAmount(qty, npdRate) };
+  };
 
   const updateReturnQty = (lineId: string, materialId: string, packingSlipId: string, value: string) => {
     setReturnQtyDrafts((prev) => {
@@ -204,12 +305,36 @@ export function MaterialReturnForm() {
 
       lines.forEach((line) => {
         const returnLineId = crypto.randomUUID();
+        const savedQty = round2(Number(line.qty || 0));
+        let savedRate = round2(Number(line.rate || 0));
+        let savedAmount = calculateMaterialIssueAmount(savedQty, savedRate);
+        let savedLastPurchaseRate = round2(Number(line.lastPurchaseRate || 0));
+        const savedOpeningRate = round2(Number(line.openingRate || getMaterial(line.materialId)?.openingRate || 0));
+
+        if (line.isReel) {
+          const drafts = returnQtyDrafts[line.id] || {};
+          const reelAmount = getReturnableReels(line.materialId)
+            .filter((reelLine) => Number(drafts[reelLine.packingSlipId] || 0) > 0)
+            .reduce(
+              (sum, reelLine) =>
+                sum + Number(drafts[reelLine.packingSlipId] || 0) * getReelInvoiceRate(reelLine.packingSlipId),
+              0
+            );
+          savedAmount = round2(reelAmount);
+          savedRate = savedQty > 0 ? round2(savedAmount / savedQty) : 0;
+          savedLastPurchaseRate = savedRate;
+        }
+
         nextLines.push({
           id: returnLineId,
           materialReturnId: returnId,
           materialId: line.materialId,
-          qty: Number(line.qty || 0),
+          qty: savedQty,
           uom: line.uom,
+          lastPurchaseRate: savedLastPurchaseRate,
+          openingRate: savedOpeningRate,
+          rate: savedRate,
+          amount: savedAmount,
           updatedBy: "System User",
           updateTimestamp: timestamp,
         });

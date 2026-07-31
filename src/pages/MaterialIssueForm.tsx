@@ -28,7 +28,7 @@ import {
 } from "../lib/productionMaterialUsage";
 import { useNpdItems } from "../hooks/useNpdItems";
 
-type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean; isNpdConsumableItem?: boolean; npdSourceId?: string };
+type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean; isNpdConsumableItem?: boolean; npdSourceId?: string; rate?: number };
 type IssueLineDraft = {
   id: string;
   materialId: string;
@@ -202,6 +202,7 @@ export function MaterialIssueForm() {
               erpCode: item.erp,
               name: item.name,
               uom: item.uom || "PCS",
+              rate: Number(item.rate || 0),
               active: "Yes",
               isNpdConsumableItem: true,
               npdSourceId: itemId,
@@ -225,6 +226,7 @@ export function MaterialIssueForm() {
           erpCode: item.erp,
           name: item.name,
           uom: item.uom || "PCS",
+          rate: Number(item.rate || 0),
           active: "Yes",
           isNpdConsumableItem: true,
           npdSourceId: itemId,
@@ -293,9 +295,11 @@ export function MaterialIssueForm() {
           return;
         }
       }
-      const valuation = isWithoutJobIssue(issueType)
-        ? resolveMaterialIssueRate(currentMaterialId, materials, materialIn, qty)
-        : {};
+      const baseValuation = resolveMaterialIssueRate(currentMaterialId, materials, materialIn, qty);
+      const npdRate = isNpdConsumable ? round2(Number(material.rate || 0)) : 0;
+      const valuation = baseValuation.rate > 0 || npdRate <= 0
+        ? baseValuation
+        : { ...baseValuation, rate: npdRate, amount: calculateMaterialIssueAmount(qty, npdRate) };
       setLines((prev) => [
         ...prev,
         { id: crypto.randomUUID(), materialId: currentMaterialId, qty, uom: material.uom || "", isReel: false, ...valuation },
@@ -415,18 +419,35 @@ export function MaterialIssueForm() {
       lines.forEach((line) => {
         const issueLineId = crypto.randomUUID();
         const savedQty = round2(Number(line.qty || 0));
-        const savedRate = round2(Number(line.rate || 0));
-        const savedAmount = isWithoutJobIssue(issueType)
-          ? calculateMaterialIssueAmount(savedQty, savedRate)
-          : round2(Number(line.amount || 0));
+        let savedRate = round2(Number(line.rate || 0));
+        let savedAmount = calculateMaterialIssueAmount(savedQty, savedRate);
+        let savedLastPurchaseRate = round2(Number(line.lastPurchaseRate || 0));
+        const savedOpeningRate = round2(Number(line.openingRate || getMaterial(line.materialId)?.openingRate || 0));
+
+        if (line.isReel) {
+          const reelIds = selectedReels[line.id] || [];
+          const reelAmount = getAvailableReelPackingSlips(line.materialId, packingSlips, materialIssueReelLines, materialReturnReelLines)
+            .filter((slip) => reelIds.includes(slip.id))
+            .reduce((sum, slip) => {
+              const receipt = materialIn.find((entry) => entry.id === slip.materialInId);
+              const receiptLine = receipt?.lines.find((entry) => entry.id === slip.materialLineId);
+              const material = getMaterial(line.materialId);
+              const rate = Number(receiptLine?.invoiceRate || receiptLine?.poRate || receiptLine?.rate || material?.openingRate || 0);
+              return sum + Number(slip.weightKg || 0) * rate;
+            }, 0);
+          savedAmount = round2(reelAmount);
+          savedRate = savedQty > 0 ? round2(savedAmount / savedQty) : 0;
+          savedLastPurchaseRate = savedRate;
+        }
+
         nextLines.push({
           id: issueLineId,
           materialIssueId: issueId,
           materialId: line.materialId,
           qty: savedQty,
           uom: line.uom,
-          lastPurchaseRate: round2(Number(line.lastPurchaseRate || 0)),
-          openingRate: round2(Number(line.openingRate || 0)),
+          lastPurchaseRate: savedLastPurchaseRate,
+          openingRate: savedOpeningRate,
           rate: savedRate,
           amount: savedAmount,
           updatedBy: "System User",

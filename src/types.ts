@@ -230,6 +230,10 @@ export interface MaterialReturnLine {
   materialId: string;
   qty: number;
   uom: string;
+  lastPurchaseRate?: number;
+  openingRate?: number;
+  rate?: number;
+  amount?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

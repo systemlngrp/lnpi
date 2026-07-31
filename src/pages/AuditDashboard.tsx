@@ -215,6 +215,10 @@ export function AuditDashboard() {
     const getManufacturingIssueMaterialValue = (issueIds: Set<string>) => materialIssueLines
       .filter((line) => issueIds.has(line.materialIssueId) && !reelIssueLineIds.has(line.id))
       .reduce((sum, line) => {
+        const savedAmount = Number(line.amount || 0);
+        if (savedAmount > 0) return sum + savedAmount;
+        const savedRate = Number(line.rate || 0);
+        if (savedRate > 0) return sum + Number(line.qty || 0) * savedRate;
         const material = materialMap.get(line.materialId);
         return sum + Number(line.qty || 0) * Number(material?.openingRate || 0);
       }, 0);
@@ -229,6 +233,10 @@ export function AuditDashboard() {
     const getReturnMaterialValue = (returnIds: Set<string>) => materialReturnLines
       .filter((line) => returnIds.has(line.materialReturnId) && !reelReturnLineIds.has(line.id))
       .reduce((sum, line) => {
+        const savedAmount = Number(line.amount || 0);
+        if (savedAmount > 0) return sum + savedAmount;
+        const savedRate = Number(line.rate || 0);
+        if (savedRate > 0) return sum + Number(line.qty || 0) * savedRate;
         const material = materialMap.get(line.materialId);
         return sum + Number(line.qty || 0) * Number(material?.openingRate || 0);
       }, 0);

@@ -3582,6 +3582,10 @@ async function initDb(retries = 5) {
           \`materialId\` VARCHAR(36) NOT NULL,
           \`qty\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`uom\` VARCHAR(50) NOT NULL,
+          \`lastPurchaseRate\` DECIMAL(15,2) DEFAULT 0,
+          \`openingRate\` DECIMAL(15,2) DEFAULT 0,
+          \`rate\` DECIMAL(15,2) DEFAULT 0,
+          \`amount\` DECIMAL(15,2) DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -4713,6 +4717,10 @@ await db.query(`
         { table: "material_return_lines", column: "materialId", type: "VARCHAR(36) NOT NULL" },
         { table: "material_return_lines", column: "qty", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "material_return_lines", column: "uom", type: "VARCHAR(50) NOT NULL" },
+        { table: "material_return_lines", column: "lastPurchaseRate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_return_lines", column: "openingRate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_return_lines", column: "rate", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "material_return_lines", column: "amount", type: "DECIMAL(15,2) DEFAULT 0" },
         { table: "material_return_lines", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "material_return_lines", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_return_reel_lines", column: "materialReturnId", type: "VARCHAR(36) NOT NULL" },
