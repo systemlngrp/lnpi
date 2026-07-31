@@ -919,6 +919,28 @@ def query_tally_item(name_or_alias: str, company_name: str | None = None) -> boo
     return bool(get_tally_item_record_by_name(name_or_alias, company_name))
 
 
+def tally_response_contains_voucher(response_text: str, voucher_number: str) -> bool:
+    target = normalize_lookup_token(voucher_number)
+    if not target:
+        return False
+
+    cleaned_response = clean_tally_xml(response_text)
+    if target and target in normalize_lookup_token(cleaned_response):
+        return True
+
+    try:
+        root = ET.fromstring(cleaned_response)
+    except ET.ParseError:
+        return False
+
+    for element in root.iter():
+        tag_name = str(element.tag or "").upper().split("}")[-1]
+        if tag_name != "VOUCHERNUMBER":
+            continue
+        if normalize_lookup_token(element.text) == target:
+            return True
+    return False
+
 def voucher_exists_in_tally(company_name: str | None, voucher_number: str, voucher_type: str) -> bool:
     safe_number = escape_xml(voucher_number)
     safe_type = escape_xml(voucher_type)
@@ -954,9 +976,11 @@ def voucher_exists_in_tally(company_name: str | None, voucher_number: str, vouch
     try:
         response_text = post_xml_to_tally(xml_text)
     except Exception as error:
-        LOGGER.warning("Voucher existence check failed for %s: %s", voucher_number, error)
-        return False
-    return safe_number in response_text
+        raise RuntimeError(
+            f"Could not confirm whether Consumption Journal {voucher_number} already exists in Tally. "
+            "Posting stopped to avoid creating a duplicate."
+        ) from error
+    return tally_response_contains_voucher(response_text, voucher_number)
 
 
 def get_db_connection():
@@ -983,6 +1007,8 @@ def get_pending_non_job_issues(conn) -> list[dict[str, Any]]:
                  OR LOWER(TRIM(COALESCE(`issueType`, ''))) = 'general'
               )
               AND COALESCE(`tallyTimestamp`, '') = ''
+              AND COALESCE(TRIM(`tallyVoucherNo`), '') = ''
+              AND LOWER(TRIM(COALESCE(`tallyPostingStatus`, ''))) <> 'posted'
             ORDER BY `date` ASC, `consumptionTransactionNo` ASC, `issueNo` ASC
             """
         )
@@ -1112,7 +1138,12 @@ def resolve_issue_context(conn, issue: dict[str, Any]) -> dict[str, Any]:
 
         tally_name = ensure_app_group_item_exists(None, name, erp_code, unit_name)
 
-        rate = get_latest_material_rate(conn, material_id, material_type, opening_rate)
+        amount = round(to_float(issue_line.get("amount")), 2)
+        last_purchase_rate = to_float(issue_line.get("lastPurchaseRate"))
+        issue_line_opening_rate = to_float(issue_line.get("openingRate"))
+        stored_rate = to_float(issue_line.get("rate"))
+        fallback_rate = stored_rate or last_purchase_rate or issue_line_opening_rate or opening_rate
+        rate = round(amount / quantity, 5) if amount > 0 else fallback_rate
         line_entry = {
             "materialId": material_id,
             "name": name,
@@ -1121,6 +1152,7 @@ def resolve_issue_context(conn, issue: dict[str, Any]) -> dict[str, Any]:
             "uom": unit_name,
             "qty": quantity,
             "rate": rate,
+            "amount": amount if amount > 0 else round(quantity * rate, 2),
         }
         lines.append(line_entry)
 
@@ -1151,6 +1183,10 @@ def format_rate(rate: float, unit_name: str) -> str:
     return f"{rate_text}/{unit_name}"
 
 
+def format_amount(amount: float) -> str:
+    return f"{amount:.2f}"
+
+
 def build_consumption_journal_xml(company_name: str | None, context: dict[str, Any]) -> str:
     issue = context["issue"]
     narration = (
@@ -1164,14 +1200,19 @@ def build_consumption_journal_xml(company_name: str | None, context: dict[str, A
     for line in context["lines"]:
         qty_text = format_qty(to_float(line.get("qty")), str(line.get("uom") or "NOS"))
         rate = to_float(line.get("rate"))
+        amount = to_float(line.get("amount"))
         rate_tag = ""
         if rate > 0:
             rate_tag = f"<RATE>{escape_xml(format_rate(rate, str(line.get('uom') or 'NOS')))}</RATE>"
+        amount_tag = ""
+        if amount > 0:
+            amount_tag = f"<AMOUNT>{escape_xml(format_amount(amount))}</AMOUNT>"
         inventory_entries.append(
             f"""
             <INVENTORYENTRIESOUT.LIST>
                 <STOCKITEMNAME>{escape_xml(line['tallyName'])}</STOCKITEMNAME>
                 {rate_tag}
+                {amount_tag}
                 <ACTUALQTY>{escape_xml(qty_text)}</ACTUALQTY>
                 <BILLEDQTY>{escape_xml(qty_text)}</BILLEDQTY>
             </INVENTORYENTRIESOUT.LIST>
