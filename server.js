@@ -1795,6 +1795,42 @@ async function ensureColumnExists(db, database, table, column, type) {
   if (rows.length > 0) return;
   await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${type}`);
 }
+function getDispatchPlanFinancialYear(dateValue) {
+  const parsed = dateValue ? new Date(dateValue) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "";
+  const month = parsed.getMonth() + 1;
+  const year = parsed.getFullYear();
+  const startYear = month >= 4 ? year : year - 1;
+  return `${String(startYear).slice(-2)}-${String(startYear + 1).slice(-2)}`;
+}
+function formatDispatchPlanNo(fy, sequence) {
+  return `DP/${fy}/${String(sequence).padStart(5, "0")}`;
+}
+async function migrateLegacyDispatchPlanNos(db) {
+  const [rows] = await db.query("SELECT `id`, `planNo`, `date` FROM `dispatch_plans` WHERE `planNo` REGEXP '^DP-[0-9]+$'");
+  let migrated = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    const match = String(row.planNo || "").trim().match(/^DP-(\d+)$/i);
+    const fy = getDispatchPlanFinancialYear(row.date);
+    if (!match || !fy) {
+      skipped += 1;
+      continue;
+    }
+    const nextPlanNo = formatDispatchPlanNo(fy, Number.parseInt(match[1], 10));
+    const [conflicts] = await db.query("SELECT `id` FROM `dispatch_plans` WHERE `planNo` = ? AND `id` <> ? LIMIT 1", [nextPlanNo, row.id]);
+    if (conflicts.length > 0) {
+      console.warn(`[DB] Skipping dispatch planNo migration for ${row.planNo}; target ${nextPlanNo} already exists.`);
+      skipped += 1;
+      continue;
+    }
+    await db.query("UPDATE `dispatch_plans` SET `planNo` = ? WHERE `id` = ?", [nextPlanNo, row.id]);
+    migrated += 1;
+  }
+  if (migrated > 0 || skipped > 0) {
+    console.log(`[DB] Dispatch planNo migration complete. Migrated: ${migrated}, skipped: ${skipped}.`);
+  }
+}
 async function ensureTruckStatusLogSchema(db, database) {
   await db.query([
     "CREATE TABLE IF NOT EXISTS `truck_status_logs` (",
@@ -4844,6 +4880,11 @@ async function initDb(retries = 5) {
         await ensureAuditColumnsForAllTables(db, database);
       } catch (err) {
         console.warn("[DB] Could not ensure companies schema columns:", err.message);
+      }
+      try {
+        await migrateLegacyDispatchPlanNos(db);
+      } catch (err) {
+        console.warn("[DB] Could not migrate legacy dispatch plan numbers:", err.message);
       }
       try {
         await ensureIndianStatesSeed(db);
