@@ -200,55 +200,55 @@ export function ReelwiseStockReport() {
         </div>
       </div>
 
-      <div className="rounded border border-black bg-white p-3">
-        <div className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(130px,1fr))]">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+      <div className="rounded border border-black bg-white p-2">
+        <div className="grid gap-2">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_170px_105px_130px_105px]">
+            <div className="relative w-full min-w-0">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search reel / ERP / supplier / MRR / size / GSM / BF"
-                className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+                className="h-[34px] w-full rounded border-2 border-black pl-8 pr-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
               />
             </div>
-            <Select value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" />
-            <Select value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" />
-            <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
-            <Select value={bfFilter} onChange={setBfFilter} options={bfOptions} placeholder="All BF" />
+            <div className="min-w-0"><Select compact value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" /></div>
+            <div className="min-w-0"><Select compact value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" /></div>
+            <div className="min-w-0"><Select compact value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" /></div>
+            <div className="min-w-0"><Select compact value={bfFilter} onChange={setBfFilter} options={bfOptions} placeholder="All BF" /></div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(120px,1fr))_minmax(180px,0.9fr)]">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[130px_130px_90px_90px_150px_145px_155px_90px] xl:items-center">
             <input
               type="date"
               value={mrrDateFrom}
               onChange={(e) => setMrrDateFrom(e.target.value)}
               title="MRR Date From"
-              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+              className="h-[34px] w-full rounded border-2 border-black px-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
             <input
               type="date"
               value={mrrDateTo}
               onChange={(e) => setMrrDateTo(e.target.value)}
               title="MRR Date To"
-              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+              className="h-[34px] w-full rounded border-2 border-black px-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
             <input
               type="number"
               value={minAge}
               onChange={(e) => setMinAge(e.target.value)}
               placeholder="Min age"
-              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+              className="h-[34px] w-full rounded border-2 border-black px-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
             <input
               type="number"
               value={maxAge}
               onChange={(e) => setMaxAge(e.target.value)}
               placeholder="Max age"
-              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+              className="h-[34px] w-full rounded border-2 border-black px-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
-            <div className="grid grid-cols-3 gap-1 rounded border-2 border-black bg-white p-1">
+            <div className="grid h-[34px] grid-cols-3 gap-1 rounded border-2 border-black bg-white p-1">
               {[
                 { label: "All", value: "all" as const },
                 { label: "> 500", value: "gt500" as const },
@@ -258,46 +258,44 @@ export function ReelwiseStockReport() {
                   key={option.value}
                   type="button"
                   onClick={() => setAvailabilityFilter(option.value)}
-                  className={`rounded px-2 py-2 text-xs font-black ${availabilityFilter === option.value ? "bg-indigo-600 text-white" : "bg-slate-50 text-black hover:bg-slate-100"}`}
+                  className={`rounded px-1 text-[11px] font-black ${availabilityFilter === option.value ? "bg-indigo-600 text-white" : "bg-slate-50 text-black hover:bg-slate-100"}`}
                 >
                   {option.label}
                 </button>
               ))}
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+            <label className="inline-flex h-[34px] min-w-0 items-center gap-1.5 rounded border-2 border-black bg-white px-2 text-[10px] font-black uppercase leading-tight text-black">
               <input
                 type="checkbox"
                 checked={stockYetToIssueOnly}
                 onChange={(e) => setStockYetToIssueOnly(e.target.checked)}
-                className="h-4 w-4 accent-indigo-600"
+                className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
               />
-              Stock yet to issue
+              <span className="truncate">Stock yet to issue</span>
             </label>
-            <label className="inline-flex min-h-[42px] items-center gap-2 rounded border-2 border-black bg-white px-3 text-xs font-black uppercase text-black">
+            <label className="inline-flex h-[34px] min-w-0 items-center gap-1.5 rounded border-2 border-black bg-white px-2 text-[10px] font-black uppercase leading-tight text-black">
               <input
                 type="checkbox"
                 checked={excludeZeroAvailable}
                 onChange={(e) => setExcludeZeroAvailable(e.target.checked)}
-                className="h-4 w-4 accent-indigo-600"
+                className="h-3.5 w-3.5 shrink-0 accent-indigo-600"
               />
-              Exclude 0 Available
+              <span className="truncate">Exclude 0 Available</span>
             </label>
             {hasActiveFilters ? (
               <button
                 type="button"
                 onClick={handleClearFilters}
-                className="min-h-[42px] rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+                className="h-[34px] rounded border border-black bg-white px-2 text-[11px] font-bold text-black hover:bg-slate-50"
               >
-                Clear Filters
+                Clear
               </button>
-            ) : null}
+            ) : (
+              <div className="hidden xl:block" />
+            )}
           </div>
         </div>
       </div>
-
       <div className="bg-white rounded shadow-sm border-2 border-black overflow-hidden">
         <div className="max-h-[calc(100vh-250px)] w-full overflow-auto relative">
           <table className="w-full min-w-max border-collapse">

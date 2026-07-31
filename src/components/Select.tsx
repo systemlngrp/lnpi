@@ -18,9 +18,10 @@ interface SelectProps {
   id?: string;
   required?: boolean;
   disabled?: boolean;
+  compact?: boolean;
 }
 
-export function Select({ options, value, onChange, onAdd, placeholder = "Select...", id, required, disabled }: SelectProps) {
+export function Select({ options, value, onChange, onAdd, placeholder = "Select...", id, required, disabled, compact = false }: SelectProps) {
   const selectedOption = options.find(opt => opt.value === value) || null;
 
   const handleChange = (newValue: SingleValue<OptionType>, actionMeta: ActionMeta<OptionType>) => {
@@ -66,19 +67,19 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
               '&:hover': {
                 borderColor: state.isFocused ? '#4f46e5' : '#000000'
               },
-              padding: '2px',
+              padding: compact ? '0px' : '2px',
               borderRadius: '0.25rem',
               color: '#000000',
               backgroundColor: '#ffffff',
-              minHeight: '42px'
+              minHeight: compact ? '34px' : '42px'
             }),
             option: (base, state) => ({
               ...base,
               backgroundColor: state.isSelected ? '#4f46e5' : state.isFocused ? '#f0f0ff' : 'white',
               color: state.isSelected ? 'white' : 'black',
-              fontSize: '14px',
+              fontSize: compact ? '12px' : '14px',
               fontWeight: state.isSelected ? '700' : '500',
-              padding: '10px 12px',
+              padding: compact ? '7px 9px' : '10px 12px',
               cursor: 'pointer'
             }),
             menu: (base) => ({
@@ -95,12 +96,12 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
               ...base,
               color: '#000000',
               fontWeight: '700',
-              fontSize: '14px'
+              fontSize: compact ? '12px' : '14px'
             }),
             placeholder: (base) => ({
               ...base,
               color: '#64748b',
-              fontSize: '14px',
+              fontSize: compact ? '12px' : '14px',
               fontWeight: '600'
             }),
             input: (base) => ({
