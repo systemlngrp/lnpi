@@ -171,18 +171,11 @@ function buildReelConsumptionRows({
 }): ReelConsumptionPdfRow[] {
   const materialMap = new Map(materials.map((material) => [material.id, material]));
   const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
-  const allIssuedBySlip = new Map<string, number>();
-  const allReturnedBySlip = new Map<string, number>();
   const jobReturnedBySlip = new Map<string, number>();
 
-  issueReelLines.forEach((line) => {
-    allIssuedBySlip.set(line.packingSlipId, (allIssuedBySlip.get(line.packingSlipId) || 0) + Number(line.weightKg || 0));
-  });
   returnReelLines.forEach((line) => {
-    allReturnedBySlip.set(line.packingSlipId, (allReturnedBySlip.get(line.packingSlipId) || 0) + Number(line.weightKg || 0));
-    if (line.productionId === production.id) {
-      jobReturnedBySlip.set(line.packingSlipId, (jobReturnedBySlip.get(line.packingSlipId) || 0) + Number(line.weightKg || 0));
-    }
+    if (line.productionId !== production.id) return;
+    jobReturnedBySlip.set(line.packingSlipId, (jobReturnedBySlip.get(line.packingSlipId) || 0) + Number(line.weightKg || 0));
   });
 
   const rowsBySlip = new Map<string, ReelConsumptionPdfRow>();
@@ -195,28 +188,44 @@ function buildReelConsumptionRows({
         .filter((entry) => entry.productionId === production.id && entry.packingSlipId === line.packingSlipId)
         .reduce((sum, entry) => sum + Number(entry.weightKg || 0), 0);
       const returnedForJobSlip = jobReturnedBySlip.get(line.packingSlipId) || 0;
-      const baseWeight = Number(slip?.weightKg || 0);
-      const balance = round2(Math.max(0, baseWeight - (allIssuedBySlip.get(line.packingSlipId) || 0) + (allReturnedBySlip.get(line.packingSlipId) || 0)));
 
       rowsBySlip.set(line.packingSlipId, {
         reelNo: firstValue(line.ourReelNo, slip?.ourReelNo),
         tfb: inferTfb(production, raw, material),
         bf: firstValue(material?.bf),
         gsm: firstValue(material?.gsm),
-        weight: round2(issuedForJobSlip - returnedForJobSlip),
-        balance,
+        weight: round2(issuedForJobSlip),
+        balance: round2(Math.max(0, issuedForJobSlip - returnedForJobSlip)),
       });
     });
 
   return Array.from(rowsBySlip.values()).filter((row) => row.weight > 0);
 }
 
+function processingTimestamp(entry: ProductionProcessing) {
+  return firstValue(entry.updateTimestamp, entry.date);
+}
+
 function processingTimeValue(entry: ProductionProcessing) {
-  return new Date(entry.date || entry.updateTimestamp || 0).getTime() || 0;
+  return new Date(processingTimestamp(entry) || 0).getTime() || 0;
 }
 
 function processingDateLabel(entry?: ProductionProcessing) {
-  return entry ? formatDate(entry.date || entry.updateTimestamp || "") : "";
+  if (!entry) return "";
+  const timestamp = processingTimestamp(entry);
+  if (!timestamp) return "";
+  if (!entry.updateTimestamp) return formatDate(timestamp);
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return String(timestamp);
+  return date.toLocaleString();
+}
+
+function calculatedWastagePercent(production: Production) {
+  const prodFromFFG = Number(production.prodFromFFG || 0);
+  const sheetWeight = Number(production.sheetWeight || 0);
+  const actualPaperUsed = Number(production.actualPaperUsed || 0);
+  if (!(prodFromFFG > 0 && sheetWeight > 0 && actualPaperUsed > 0)) return "";
+  return round2(100 - ((prodFromFFG * sheetWeight) / actualPaperUsed) * 100);
 }
 
 function normalizeProcessMachineName(value: unknown) {
@@ -307,10 +316,11 @@ function drawJobCardOperationsPage(doc: jsPDF, args: {
 
   y = ensureSecondPageSpace(doc, y + 8, 28, x, w);
   y = pageSection(doc, x, y, w, "REPORTS");
+  const calculatedWastage = calculatedWastagePercent(args.production);
   const reportRows: Array<[string, unknown]> = [
     ["Final FG Produced", args.production.prodFromFFG ? num(args.production.prodFromFFG, 2) : ""],
-    ["Corrugation Wastage %", args.production.wastage ? num(args.production.wastage, 2) : ""],
-    ["Overall Wastage %", args.production.wastage ? num(args.production.wastage, 2) : ""],
+    ["Corrugation Wastage %", calculatedWastage === "" ? "" : num(calculatedWastage, 2)],
+    ["Overall Wastage %", calculatedWastage === "" ? "" : num(calculatedWastage, 2)],
   ];
   reportRows.forEach(([label, value]) => {
     cell(doc, x, y, 86, 9, label, { bold: true });
