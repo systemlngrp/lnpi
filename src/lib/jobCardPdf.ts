@@ -195,7 +195,7 @@ function buildReelConsumptionRows({
         bf: firstValue(material?.bf),
         gsm: firstValue(material?.gsm),
         weight: round2(issuedForJobSlip),
-        balance: round2(Math.max(0, issuedForJobSlip - returnedForJobSlip)),
+        balance: round2(returnedForJobSlip),
       });
     });
 
@@ -220,13 +220,6 @@ function processingDateLabel(entry?: ProductionProcessing) {
   return date.toLocaleString();
 }
 
-function calculatedWastagePercent(production: Production) {
-  const prodFromFFG = Number(production.prodFromFFG || 0);
-  const sheetWeight = Number(production.sheetWeight || 0);
-  const actualPaperUsed = Number(production.actualPaperUsed || 0);
-  if (!(prodFromFFG > 0 && sheetWeight > 0 && actualPaperUsed > 0)) return "";
-  return round2(100 - ((prodFromFFG * sheetWeight) / actualPaperUsed) * 100);
-}
 
 function normalizeProcessMachineName(value: unknown) {
   return String(value || "").trim().toLowerCase();
@@ -316,11 +309,10 @@ function drawJobCardOperationsPage(doc: jsPDF, args: {
 
   y = ensureSecondPageSpace(doc, y + 8, 28, x, w);
   y = pageSection(doc, x, y, w, "REPORTS");
-  const calculatedWastage = calculatedWastagePercent(args.production);
   const reportRows: Array<[string, unknown]> = [
     ["Final FG Produced", args.production.prodFromFFG ? num(args.production.prodFromFFG, 2) : ""],
-    ["Corrugation Wastage %", calculatedWastage === "" ? "" : num(calculatedWastage, 2)],
-    ["Overall Wastage %", calculatedWastage === "" ? "" : num(calculatedWastage, 2)],
+    ["Corrugation Wastage %", args.production.wastage ? num(args.production.wastage, 2) : ""],
+    ["Overall Wastage %", args.production.wastage ? num(args.production.wastage, 2) : ""],
   ];
   reportRows.forEach(([label, value]) => {
     cell(doc, x, y, 86, 9, label, { bold: true });
