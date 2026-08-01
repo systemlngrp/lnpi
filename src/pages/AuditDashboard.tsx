@@ -115,6 +115,10 @@ function isNotApplicableIssue(issue: MaterialIssue) {
   return normalized === "yes" || normalized === "true" || normalized === "1";
 }
 
+function isDebitNotePostedToTally(entry: MaterialIn) {
+  return String(entry.debitTallySync || "").trim() !== "";
+}
+
 export function AuditDashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
@@ -171,6 +175,7 @@ export function AuditDashboard() {
     const tallyPostedMaterialIn = materialIn.filter(
       (entry) => String(entry.tallyTimestamp || "").trim() && String(entry.transactionNo || "").trim() !== "1"
     );
+    const tallyPostedDebitNotes = materialIn.filter(isDebitNotePostedToTally);
 
     const getIssueLineValue = (issueIds: Set<string>) => materialIssueLines
       .filter((line) => issueIds.has(line.materialIssueId))
@@ -210,8 +215,8 @@ export function AuditDashboard() {
         invoices.reduce((sum, invoice) => sum + getInvoiceGrandTotal(invoice), 0)
       ),
       saleCount: invoices.length,
-      debitNote: roundMoney(materialIn.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
-      debitNoteCount: materialIn.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
+      debitNote: roundMoney(tallyPostedDebitNotes.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
+      debitNoteCount: tallyPostedDebitNotes.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
     };
   }, [invoices, materialIn, materialIssueLines, materialIssues, materialReturnLines, materialReturns, productions]);
 
