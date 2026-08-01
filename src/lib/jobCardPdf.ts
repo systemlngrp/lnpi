@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import type { Company, Order, OrderSchedule, Production, Setting } from "../types";
+import type { Company, Material, MaterialInPackingSlip, MaterialIssueReelLine, MaterialReturnReelLine, Order, OrderSchedule, Production, ProductionProcessing, Setting } from "../types";
 import type { OrderCatalogItem } from "./orderItems";
 import { formatDate } from "./serial";
 
@@ -12,6 +12,11 @@ type PdfArgs = {
   itemErp?: string | number;
   phpItem?: OrderCatalogItem | null;
   plateItem?: OrderCatalogItem | null;
+  materials?: Material[];
+  packingSlips?: MaterialInPackingSlip[];
+  issueReelLines?: MaterialIssueReelLine[];
+  returnReelLines?: MaterialReturnReelLine[];
+  processingEntries?: ProductionProcessing[];
   setting?: Setting | null;
   createdBy?: string;
 };
@@ -107,6 +112,212 @@ function layerRow(doc: jsPDF, x: number, y: number, label: string, gsm: unknown,
   cell(doc, x + 163, y, 33, 6, "");
 }
 
+
+type ReelConsumptionPdfRow = {
+  reelNo: string;
+  tfb: string;
+  bf: string;
+  gsm: string;
+  weight: number;
+  balance: number;
+};
+
+function round2(value: number) {
+  return Number(Number(value || 0).toFixed(2));
+}
+
+function normalizedNumber(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? round2(n) : undefined;
+}
+
+function inferTfb(production: Production, raw: any, material?: Material) {
+  const materialGsm = normalizedNumber(material?.gsm);
+  const materialBf = normalizedNumber(material?.bf);
+  if (!materialGsm) return "";
+
+  const candidates = [
+    { label: "T", gsm: production.top, bf: raw.psL1Bf || raw.rsl1Bf },
+    { label: "F", gsm: production.f1, bf: raw.psF1Bf || raw.rsf2Bf },
+    { label: "B", gsm: production.l1, bf: raw.psL1Bf || raw.rsl1Bf },
+    { label: "F", gsm: production.f2, bf: raw.psF2Bf || raw.rsf4Bf },
+    { label: "B", gsm: production.l2, bf: raw.psL2Bf },
+    { label: "B", gsm: production.l3, bf: raw.psL3Bf || raw.rsl3Bf },
+  ].filter((row) => {
+    const rowGsm = normalizedNumber(row.gsm);
+    if (!rowGsm || rowGsm !== materialGsm) return false;
+    const rowBf = normalizedNumber(row.bf);
+    return !materialBf || !rowBf || rowBf === materialBf;
+  });
+
+  const labels = Array.from(new Set(candidates.map((row) => row.label)));
+  return labels.length === 1 ? labels[0] : "";
+}
+
+function buildReelConsumptionRows({
+  production,
+  raw,
+  materials = [],
+  packingSlips = [],
+  issueReelLines = [],
+  returnReelLines = [],
+}: {
+  production: Production;
+  raw: any;
+  materials?: Material[];
+  packingSlips?: MaterialInPackingSlip[];
+  issueReelLines?: MaterialIssueReelLine[];
+  returnReelLines?: MaterialReturnReelLine[];
+}): ReelConsumptionPdfRow[] {
+  const materialMap = new Map(materials.map((material) => [material.id, material]));
+  const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
+  const allIssuedBySlip = new Map<string, number>();
+  const allReturnedBySlip = new Map<string, number>();
+  const jobReturnedBySlip = new Map<string, number>();
+
+  issueReelLines.forEach((line) => {
+    allIssuedBySlip.set(line.packingSlipId, (allIssuedBySlip.get(line.packingSlipId) || 0) + Number(line.weightKg || 0));
+  });
+  returnReelLines.forEach((line) => {
+    allReturnedBySlip.set(line.packingSlipId, (allReturnedBySlip.get(line.packingSlipId) || 0) + Number(line.weightKg || 0));
+    if (line.productionId === production.id) {
+      jobReturnedBySlip.set(line.packingSlipId, (jobReturnedBySlip.get(line.packingSlipId) || 0) + Number(line.weightKg || 0));
+    }
+  });
+
+  const rowsBySlip = new Map<string, ReelConsumptionPdfRow>();
+  issueReelLines
+    .filter((line) => line.productionId === production.id)
+    .forEach((line) => {
+      const slip = packingSlipMap.get(line.packingSlipId);
+      const material = materialMap.get(line.materialId || slip?.materialId || "");
+      const issuedForJobSlip = issueReelLines
+        .filter((entry) => entry.productionId === production.id && entry.packingSlipId === line.packingSlipId)
+        .reduce((sum, entry) => sum + Number(entry.weightKg || 0), 0);
+      const returnedForJobSlip = jobReturnedBySlip.get(line.packingSlipId) || 0;
+      const baseWeight = Number(slip?.weightKg || 0);
+      const balance = round2(Math.max(0, baseWeight - (allIssuedBySlip.get(line.packingSlipId) || 0) + (allReturnedBySlip.get(line.packingSlipId) || 0)));
+
+      rowsBySlip.set(line.packingSlipId, {
+        reelNo: firstValue(line.ourReelNo, slip?.ourReelNo),
+        tfb: inferTfb(production, raw, material),
+        bf: firstValue(material?.bf),
+        gsm: firstValue(material?.gsm),
+        weight: round2(issuedForJobSlip - returnedForJobSlip),
+        balance,
+      });
+    });
+
+  return Array.from(rowsBySlip.values()).filter((row) => row.weight > 0);
+}
+
+function processingTimeValue(entry: ProductionProcessing) {
+  return new Date(entry.date || entry.updateTimestamp || 0).getTime() || 0;
+}
+
+function processingDateLabel(entry?: ProductionProcessing) {
+  return entry ? formatDate(entry.date || entry.updateTimestamp || "") : "";
+}
+
+function normalizeProcessMachineName(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function sumProcessingQty(entries: ProductionProcessing[], machineName: string) {
+  const normalized = normalizeProcessMachineName(machineName);
+  return entries
+    .filter((entry) => normalizeProcessMachineName(entry.machineName) === normalized)
+    .reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
+}
+
+function pageSection(doc: jsPDF, x: number, y: number, w: number, title: string) {
+  return section(doc, x, y, w, title);
+}
+
+function ensureSecondPageSpace(doc: jsPDF, y: number, needed: number, x: number, w: number, title?: string) {
+  if (y + needed <= 286) return y;
+  doc.addPage();
+  const nextY = 12;
+  return title ? pageSection(doc, x, nextY, w, title) : nextY;
+}
+
+function drawJobCardOperationsPage(doc: jsPDF, args: {
+  production: Production;
+  raw: any;
+  materials?: Material[];
+  packingSlips?: MaterialInPackingSlip[];
+  issueReelLines?: MaterialIssueReelLine[];
+  returnReelLines?: MaterialReturnReelLine[];
+  processingEntries?: ProductionProcessing[];
+}) {
+  const x = 7;
+  const w = 196;
+  let y = 12;
+  doc.addPage();
+
+  const reelRows = buildReelConsumptionRows(args);
+  y = pageSection(doc, x, y, w, "Reel Consumption Details");
+  const widths = [36, 26, 18, 18, 42, 56];
+  const headers = ["Reel No.", "T/F/B", "BF", "GSM", "Weight", "Balance Reel"];
+  const drawReelHeader = (headerY: number) => {
+    let cx = x;
+    headers.forEach((header, index) => {
+      cell(doc, cx, headerY, widths[index], 6, header, { fill: WHITE, bold: true });
+      cx += widths[index];
+    });
+    return headerY + 6;
+  };
+  y = drawReelHeader(y);
+
+  const rowsToDraw = reelRows.length ? reelRows : Array.from({ length: 8 }, () => null as ReelConsumptionPdfRow | null);
+  rowsToDraw.forEach((row) => {
+    if (y + 6 > 286) {
+      doc.addPage();
+      y = pageSection(doc, x, 12, w, "Reel Consumption Details");
+      y = drawReelHeader(y);
+    }
+    const values = row ? [row.reelNo, row.tfb, row.bf, row.gsm, num(row.weight, 2), num(row.balance, 2)] : ["", "", "", "", "", ""];
+    let rowX = x;
+    values.forEach((value, index) => {
+      cell(doc, rowX, y, widths[index], 6, value, { bold: Boolean(row) });
+      rowX += widths[index];
+    });
+    y += 6;
+  });
+
+  y = ensureSecondPageSpace(doc, y + 8, 50, x, w);
+  y = pageSection(doc, x, y, w, "PROCESS DATA");
+  const processing = (args.processingEntries || []).filter((entry) => entry.productionId === args.production.id);
+  const sortedProcessing = [...processing].sort((a, b) => processingTimeValue(a) - processingTimeValue(b));
+  const operatorNames = Array.from(new Set(processing.map((entry) => String(entry.operatorName || "").trim()).filter(Boolean))).join(" / ");
+  const processRows: Array<[string, unknown]> = [
+    ["Job Start Time", processingDateLabel(sortedProcessing[0])],
+    ["Job End Time", processingDateLabel(sortedProcessing[sortedProcessing.length - 1])],
+    ["Paper Produced", sumProcessingQty(processing, "Corrugation Paper") ? num(sumProcessingQty(processing, "Corrugation Paper"), 2) : ""],
+    ["Liner Produced", sumProcessingQty(processing, "Corrugation Liner") ? num(sumProcessingQty(processing, "Corrugation Liner"), 2) : ""],
+    ["Operator Name", operatorNames],
+    ["Operator Signature", ""],
+  ];
+  processRows.forEach(([label, value]) => {
+    const rowH = label === "Operator Signature" ? 10 : 6;
+    cell(doc, x, y, 80, rowH, label, { bold: true });
+    cell(doc, x + 80, y, 116, rowH, value, { bold: true, align: "left" });
+    y += rowH;
+  });
+
+  y = ensureSecondPageSpace(doc, y + 8, 28, x, w);
+  y = pageSection(doc, x, y, w, "REPORTS");
+  const reportRows: Array<[string, unknown]> = [
+    ["Final FG Produced", args.production.prodFromFFG ? num(args.production.prodFromFFG, 2) : ""],
+    ["Corrugation Wastage %", args.production.wastage ? num(args.production.wastage, 2) : ""],
+    ["Overall Wastage %", args.production.wastage ? num(args.production.wastage, 2) : ""],
+  ];
+  reportRows.forEach(([label, value]) => {
+    cell(doc, x, y, 86, 9, label, { bold: true });
+    cell(doc, x + 86, y, 110, 9, value, { bold: true, align: "left" });
+    y += 9;
+  });
+}
 function targetSize(production: Production, item?: OrderCatalogItem | null) {
   return firstValue(
     valueOf(production, item, "targetBox"),
@@ -121,7 +332,7 @@ function formatDimension(...values: unknown[]) {
   return parts.some(Boolean) ? parts.join("   ") : "";
 }
 
-export async function downloadJobCardPdf({ production, schedule, order, company, item, itemErp, phpItem, plateItem, setting, createdBy }: PdfArgs) {
+export async function downloadJobCardPdf({ production, schedule, order, company, item, itemErp, phpItem, plateItem, materials, packingSlips, issueReelLines, returnReelLines, processingEntries, setting, createdBy }: PdfArgs) {
   const doc = new jsPDF("p", "mm", "a4");
   const raw = rawOf(item);
   const phpRaw = rawOf(phpItem);
@@ -323,6 +534,16 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   doc.setFontSize(8);
   doc.text("PREPARED BY", x + 10, signatureY);
   doc.text("APPROVED BY", x + w - 10, signatureY, { align: "right" });
+
+  drawJobCardOperationsPage(doc, {
+    production,
+    raw,
+    materials,
+    packingSlips,
+    issueReelLines,
+    returnReelLines,
+    processingEntries,
+  });
 
   doc.save(`JobCard_${safeFileName(jobNo)}.pdf`);
 }

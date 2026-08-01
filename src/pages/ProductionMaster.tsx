@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
-import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, Machine } from "../types";
+import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, Machine, Material, MaterialInPackingSlip, MaterialIssueReelLine, MaterialReturnReelLine } from "../types";
 import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
@@ -45,6 +45,10 @@ export function ProductionMaster() {
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [machines] = useData<Machine>("machines", []);
+  const [materials] = useData<Material>("materials", []);
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
+  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
+  const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const { findItemAcrossSources, resolveOrderItem, phpItems, plateItems } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -487,6 +491,11 @@ export function ProductionMaster() {
         itemErp,
         phpItem,
         plateItem,
+        materials,
+        packingSlips,
+        issueReelLines,
+        returnReelLines,
+        processingEntries: processing,
         setting: settings[0] || null,
         createdBy: user?.name || user?.email || "System User",
       });
