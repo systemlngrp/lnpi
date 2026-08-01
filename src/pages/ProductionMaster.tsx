@@ -475,15 +475,16 @@ export function ProductionMaster() {
       const order = schedule ? orders.find((row) => row.id === schedule.orderId) || null : null;
       const company = order ? companies.find((row) => row.id === order.companyId) || null : null;
       const item = resolveProductionItem(production) || null;
-      const linkedErp = firstNonBlank(production.erpCode, order?.erpCode, item?.erp, production.masterErp);
-      const phpItem = linkedErp ? findLinkedItemByErp(phpItems, linkedErp) || null : null;
-      const plateItem = linkedErp ? findLinkedItemByErp(plateItems, linkedErp) || null : null;
+      const itemErp = firstNonBlank(production.erpCode, order?.erpCode, item?.erp, production.masterErp);
+      const phpItem = itemErp ? findLinkedItemByErp(phpItems, itemErp) || null : null;
+      const plateItem = itemErp ? findLinkedItemByErp(plateItems, itemErp) || null : null;
       await downloadJobCardPdf({
         production,
         schedule,
         order,
         company,
         item,
+        itemErp,
         phpItem,
         plateItem,
         setting: settings[0] || null,

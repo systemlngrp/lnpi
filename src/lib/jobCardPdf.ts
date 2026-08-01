@@ -9,6 +9,7 @@ type PdfArgs = {
   order?: Order | null;
   company?: Company | null;
   item?: OrderCatalogItem | null;
+  itemErp?: string | number;
   phpItem?: OrderCatalogItem | null;
   plateItem?: OrderCatalogItem | null;
   setting?: Setting | null;
@@ -120,11 +121,14 @@ function formatDimension(...values: unknown[]) {
   return parts.some(Boolean) ? parts.join("   ") : "";
 }
 
-export async function downloadJobCardPdf({ production, schedule, order, company, item, phpItem, plateItem, setting, createdBy }: PdfArgs) {
+export async function downloadJobCardPdf({ production, schedule, order, company, item, itemErp, phpItem, plateItem, setting, createdBy }: PdfArgs) {
   const doc = new jsPDF("p", "mm", "a4");
   const raw = rawOf(item);
   const phpRaw = rawOf(phpItem);
   const plateRaw = rawOf(plateItem);
+  const displayItemErp = firstValue(itemErp, production.erpCode, order?.erpCode, item?.erp, raw.erp, raw.erpCode, raw.erpItemCode, raw.masterItemNameErpCode);
+  const phpErp = firstValue(phpItem?.erp, phpRaw.erp, phpRaw.erpCode, phpRaw.erpItemCode, phpRaw.masterErp, phpRaw.masterErpCode, phpRaw.masterItemNameErpCode);
+  const plateErp = firstValue(plateItem?.erp, plateRaw.erp, plateRaw.erpCode, plateRaw.erpItemCode, plateRaw.masterErp, plateRaw.masterErpCode, plateRaw.masterItemNameErpCode);
   const x = 7;
   const w = 196;
   let y = 8;
@@ -183,6 +187,10 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x + 38, y, 66, 6, itemName, { bold: true });
   cell(doc, x + 104, y, 45, 6, "Target BS", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 149, y, 47, 6, firstValue(production.boardGsmReq, raw.boardGsmReq));
+  y += 6;
+  cell(doc, x, y, 38, 6, "Item ERP", { fill: LIGHT_ORANGE, bold: true, align: "left" });
+  cell(doc, x + 38, y, 66, 6, displayItemErp, { bold: true });
+  cell(doc, x + 104, y, 92, 6, "");
   y += 6;
   cell(doc, x, y, 38, 6, "Size (ID) L X W X H", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 66, 6, formatDimension(lId, wId, hId), { bold: true });
@@ -253,6 +261,9 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   y += 12;
 
   y = section(doc, x, y, w, "PLATE SPECIFICATION");
+  cell(doc, x, y, 38, 6, "Plate ERP", { fill: LIGHT_ORANGE, bold: true, align: "left" });
+  cell(doc, x + 38, y, 158, 6, plateErp, { bold: true, align: "left" });
+  y += 6;
   cell(doc, x, y, 38, 6, "Size (L X W)", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 46, 6, formatDimension(plateRaw.length, plateRaw.breadth, raw.cuttingSizeLengthPiece, raw.cuttingSizeWidthPiece));
   cell(doc, x + 84, y, 18, 6, "PLY", { fill: LIGHT_ORANGE, bold: true });
@@ -266,6 +277,9 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   y += 6;
 
   y = section(doc, x, y, w, "PHP SPECIFICATION");
+  cell(doc, x, y, 38, 6, "PHP ERP", { fill: LIGHT_ORANGE, bold: true, align: "left" });
+  cell(doc, x + 38, y, 158, 6, phpErp, { bold: true, align: "left" });
+  y += 6;
   cell(doc, x, y, 38, 6, "Size (L X W X H)", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 64, 6, formatDimension(phpRaw.length, phpRaw.breadth, phpRaw.height, lOd, wOd, hOd));
   cell(doc, x + 102, y, 46, 6, "Required Qty Per CFB", { fill: LIGHT_ORANGE, bold: true });
