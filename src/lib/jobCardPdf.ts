@@ -238,9 +238,9 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   y += 6;
   layerRow(doc, x, y, "Backing 3", production.l3, raw.psL3Bf || raw.rsl3Bf, "");
   cell(doc, x + 118, y - 6, 45, 6, "Overall GSM Target", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 163, y - 6, 33, 6, num(firstValue(production.boardGsmReq, production.gsm, raw.calculatedBGsm), 0), { bold: true });
+  cell(doc, x + 163, y - 6, 33, 6, num(raw.standardBGsm, 0), { bold: true });
   cell(doc, x + 118, y, 45, 6, "Overall GSM Achieved", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 163, y, 33, 6, num(production.leastGsm || raw.gsmLeastCost, 0), { bold: true });
+  cell(doc, x + 163, y, 33, 6, num(firstValue(production.gsm, raw.calculatedBGsm), 0), { bold: true });
   y += 6;
 
   y = section(doc, x, y, w, "REMARKS (if any)");
