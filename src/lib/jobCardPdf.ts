@@ -147,7 +147,8 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   const targetPaper = Number(production.topPaperWeightKg || production.totalPaperWeight || 0);
   const targetLiner = Number(production.linerWeightKg || 0);
   const totalTarget = Number(production.totalJobWeight || 0) || targetPaper + targetLiner;
-  const hasPlateData = [plateItem?.erp, plateRaw.erpItemCode, plateRaw.masterItemNameErpCode, plateRaw.length, plateRaw.breadth, plateRaw.numberOfSetsPerBox].some(hasValue);
+  const hasPlateData = hasValue(plateErp);
+  const hasPhpData = hasValue(phpErp);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
@@ -265,15 +266,15 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x + 38, y, 158, 6, plateErp, { bold: true, align: "left" });
   y += 6;
   cell(doc, x, y, 38, 6, "Size (L X W)", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 38, y, 46, 6, formatDimension(plateRaw.length, plateRaw.breadth, raw.cuttingSizeLengthPiece, raw.cuttingSizeWidthPiece));
+  cell(doc, x + 38, y, 46, 6, hasPlateData ? formatDimension(plateRaw.length, plateRaw.breadth) : "");
   cell(doc, x + 84, y, 18, 6, "PLY", { fill: LIGHT_ORANGE, bold: true });
   cell(doc, x + 102, y, 46, 6, "Required Qty Per CFB", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, firstValue(plateRaw.numberOfSetsPerBox, production.setsPerBox, raw.numberOfSetsPerBox));
+  cell(doc, x + 148, y, 48, 6, hasPlateData ? firstValue(plateRaw.numberOfSetsPerBox) : "");
   y += 6;
   cell(doc, x, y, 84, 6, "Flute Direction", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 84, y, 18, 6, firstValue(plateRaw.fluteType, production.fluteType, production.flute, raw.fluteType));
+  cell(doc, x + 84, y, 18, 6, hasPlateData ? firstValue(plateRaw.fluteType) : "");
   cell(doc, x + 102, y, 46, 6, "BS", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, hasPlateData ? firstValue(plateRaw.boardGsmReq, production.boardGsmReq, raw.boardGsmReq) : "");
+  cell(doc, x + 148, y, 48, 6, hasPlateData ? firstValue(plateRaw.boardGsmReq) : "");
   y += 6;
 
   y = section(doc, x, y, w, "PHP SPECIFICATION");
@@ -281,16 +282,16 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x + 38, y, 158, 6, phpErp, { bold: true, align: "left" });
   y += 6;
   cell(doc, x, y, 38, 6, "Size (L X W X H)", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 38, y, 64, 6, formatDimension(phpRaw.length, phpRaw.breadth, phpRaw.height, lOd, wOd, hOd));
+  cell(doc, x + 38, y, 64, 6, hasPhpData ? formatDimension(phpRaw.length, phpRaw.breadth, phpRaw.height) : "");
   cell(doc, x + 102, y, 46, 6, "Required Qty Per CFB", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, firstValue(phpRaw.numberOfSetsPerBox, production.setsPerBox, raw.numberOfSetsPerBox));
+  cell(doc, x + 148, y, 48, 6, hasPhpData ? firstValue(phpRaw.numberOfSetsPerBox) : "");
   y += 6;
   const phpRows = [
-    ["Holes (Length)", firstValue(phpRaw.holesOrientationL, raw.holesOrientationL, production.noOfHolesInPhp)],
-    ["Holes (Width)", firstValue(phpRaw.holesOrientationW, raw.holesOrientationW)],
-    ["Ply", firstValue(phpRaw.noOfPly, production.ply, raw.noOfPly)],
-    ["Flute Direction", firstValue(phpRaw.fluteType, production.fluteType, production.flute, raw.fluteType)],
-    ["GSM", firstValue(phpRaw.boardGsmReq, production.gsm, production.boardGsmReq, raw.calculatedBGsm)],
+    ["Holes (Length)", hasPhpData ? firstValue(phpRaw.holesOrientationL) : ""],
+    ["Holes (Width)", hasPhpData ? firstValue(phpRaw.holesOrientationW) : ""],
+    ["Ply", hasPhpData ? firstValue(phpRaw.noOfPly) : ""],
+    ["Flute Direction", hasPhpData ? firstValue(phpRaw.fluteType) : ""],
+    ["GSM", hasPhpData ? firstValue(phpRaw.boardGsmReq) : ""],
   ];
   cell(doc, x + 68, y, 128, 30, "PHP DIAGRAM", { fill: [253, 233, 217], bold: true });
   phpRows.forEach(([label, value], index) => {
