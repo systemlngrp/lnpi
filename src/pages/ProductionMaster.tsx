@@ -18,6 +18,15 @@ import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getProductionEffectiveType, getRequiredMachinesForProduction } from "../lib/productionType";
 import { getProductionMatchingFields, hasProductionMatchingFieldChanges } from "../lib/productionMatching";
 import { downloadJobCardPdf } from "../lib/jobCardPdf";
+import { findLinkedItemByErp } from "../lib/linkedLoading";
+
+const firstNonBlank = (...values: unknown[]) => {
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+};
 
 const formatItemFilterLabel = (name: string, erp: string) => {
   if (!name) return erp;
@@ -36,7 +45,7 @@ export function ProductionMaster() {
   const [settings] = useData<Setting>("settings", []);
   const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
   const [machines] = useData<Machine>("machines", []);
-  const { findItemAcrossSources, resolveOrderItem } = useOrderItemCatalog();
+  const { findItemAcrossSources, resolveOrderItem, phpItems, plateItems } = useOrderItemCatalog();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
@@ -466,12 +475,17 @@ export function ProductionMaster() {
       const order = schedule ? orders.find((row) => row.id === schedule.orderId) || null : null;
       const company = order ? companies.find((row) => row.id === order.companyId) || null : null;
       const item = resolveProductionItem(production) || null;
+      const linkedErp = firstNonBlank(production.erpCode, order?.erpCode, item?.erp, production.masterErp);
+      const phpItem = linkedErp ? findLinkedItemByErp(phpItems, linkedErp) || null : null;
+      const plateItem = linkedErp ? findLinkedItemByErp(plateItems, linkedErp) || null : null;
       await downloadJobCardPdf({
         production,
         schedule,
         order,
         company,
         item,
+        phpItem,
+        plateItem,
         setting: settings[0] || null,
         createdBy: user?.name || user?.email || "System User",
       });

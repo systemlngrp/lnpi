@@ -9,6 +9,8 @@ type PdfArgs = {
   order?: Order | null;
   company?: Company | null;
   item?: OrderCatalogItem | null;
+  phpItem?: OrderCatalogItem | null;
+  plateItem?: OrderCatalogItem | null;
   setting?: Setting | null;
   createdBy?: string;
 };
@@ -118,9 +120,11 @@ function formatDimension(...values: unknown[]) {
   return parts.some(Boolean) ? parts.join("   ") : "";
 }
 
-export async function downloadJobCardPdf({ production, schedule, order, company, item, setting, createdBy }: PdfArgs) {
+export async function downloadJobCardPdf({ production, schedule, order, company, item, phpItem, plateItem, setting, createdBy }: PdfArgs) {
   const doc = new jsPDF("p", "mm", "a4");
   const raw = rawOf(item);
+  const phpRaw = rawOf(phpItem);
+  const plateRaw = rawOf(plateItem);
   const x = 7;
   const w = 196;
   let y = 8;
@@ -139,7 +143,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   const targetPaper = Number(production.topPaperWeightKg || production.totalPaperWeight || 0);
   const targetLiner = Number(production.linerWeightKg || 0);
   const totalTarget = Number(production.totalJobWeight || 0) || targetPaper + targetLiner;
-  const hasPlateData = [raw.cuttingSizeLengthPiece, raw.cuttingSizeWidthPiece, raw.sheetRequiredLengthPiece].some(hasValue);
+  const hasPlateData = [plateItem?.erp, plateRaw.erpItemCode, plateRaw.masterItemNameErpCode, plateRaw.length, plateRaw.breadth, plateRaw.numberOfSetsPerBox].some(hasValue);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
@@ -250,29 +254,29 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
 
   y = section(doc, x, y, w, "PLATE SPECIFICATION");
   cell(doc, x, y, 38, 6, "Size (L X W)", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 38, y, 46, 6, formatDimension(raw.cuttingSizeLengthPiece, raw.cuttingSizeWidthPiece));
+  cell(doc, x + 38, y, 46, 6, formatDimension(plateRaw.length, plateRaw.breadth, raw.cuttingSizeLengthPiece, raw.cuttingSizeWidthPiece));
   cell(doc, x + 84, y, 18, 6, "PLY", { fill: LIGHT_ORANGE, bold: true });
   cell(doc, x + 102, y, 46, 6, "Required Qty Per CFB", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, firstValue(production.setsPerBox, raw.numberOfSetsPerBox));
+  cell(doc, x + 148, y, 48, 6, firstValue(plateRaw.numberOfSetsPerBox, production.setsPerBox, raw.numberOfSetsPerBox));
   y += 6;
   cell(doc, x, y, 84, 6, "Flute Direction", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 84, y, 18, 6, firstValue(production.fluteType, production.flute, raw.fluteType));
+  cell(doc, x + 84, y, 18, 6, firstValue(plateRaw.fluteType, production.fluteType, production.flute, raw.fluteType));
   cell(doc, x + 102, y, 46, 6, "BS", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, hasPlateData ? firstValue(production.boardGsmReq, raw.boardGsmReq) : "");
+  cell(doc, x + 148, y, 48, 6, hasPlateData ? firstValue(plateRaw.boardGsmReq, production.boardGsmReq, raw.boardGsmReq) : "");
   y += 6;
 
   y = section(doc, x, y, w, "PHP SPECIFICATION");
   cell(doc, x, y, 38, 6, "Size (L X W X H)", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 38, y, 64, 6, formatDimension(lOd, wOd, hOd));
+  cell(doc, x + 38, y, 64, 6, formatDimension(phpRaw.length, phpRaw.breadth, phpRaw.height, lOd, wOd, hOd));
   cell(doc, x + 102, y, 46, 6, "Required Qty Per CFB", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, firstValue(production.setsPerBox, raw.numberOfSetsPerBox));
+  cell(doc, x + 148, y, 48, 6, firstValue(phpRaw.numberOfSetsPerBox, production.setsPerBox, raw.numberOfSetsPerBox));
   y += 6;
   const phpRows = [
-    ["Holes (Length)", firstValue(raw.holesOrientationL, production.noOfHolesInPhp)],
-    ["Holes (Width)", firstValue(raw.holesOrientationW)],
-    ["Ply", firstValue(production.ply, raw.noOfPly)],
-    ["Flute Direction", firstValue(production.fluteType, production.flute, raw.fluteType)],
-    ["GSM", firstValue(production.gsm, production.boardGsmReq, raw.calculatedBGsm)],
+    ["Holes (Length)", firstValue(phpRaw.holesOrientationL, raw.holesOrientationL, production.noOfHolesInPhp)],
+    ["Holes (Width)", firstValue(phpRaw.holesOrientationW, raw.holesOrientationW)],
+    ["Ply", firstValue(phpRaw.noOfPly, production.ply, raw.noOfPly)],
+    ["Flute Direction", firstValue(phpRaw.fluteType, production.fluteType, production.flute, raw.fluteType)],
+    ["GSM", firstValue(phpRaw.boardGsmReq, production.gsm, production.boardGsmReq, raw.calculatedBGsm)],
   ];
   cell(doc, x + 68, y, 128, 30, "PHP DIAGRAM", { fill: [253, 233, 217], bold: true });
   phpRows.forEach(([label, value], index) => {
