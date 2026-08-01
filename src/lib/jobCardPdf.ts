@@ -177,7 +177,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x, y, 38, 6, "Item Name", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 66, 6, itemName, { bold: true });
   cell(doc, x + 104, y, 45, 6, "Target BS", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 149, y, 47, 6, firstValue(raw.bsKgCm2Calculated, production.brustingStrengthReq));
+  cell(doc, x + 149, y, 47, 6, firstValue(production.boardGsmReq, raw.boardGsmReq));
   y += 6;
   cell(doc, x, y, 38, 6, "Size (ID) L X W X H", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 66, 6, formatDimension(lId, wId, hId), { bold: true });
@@ -190,7 +190,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x + 149, y, 47, 6, firstValue(production.ply, raw.ply, raw.noOfPly), { bold: true });
   y += 6;
   cell(doc, x, y, 38, 6, "Printing Colour", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 38, y, 66, 6, firstValue(production.printingColor, raw.printingColor, raw.printingColour1), { bold: true });
+  cell(doc, x + 38, y, 66, 6, firstValue(production.color1, raw.color1, raw.printingColour1), { bold: true });
   cell(doc, x + 104, y, 45, 6, "Target Box weight", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 149, y, 47, 6, num(firstValue(production.weightPerPcSetReq, production.plateWeight, raw.calculatedWeightPerBox, raw.standardWeightGms)), { bold: true });
   y += 6;
@@ -252,25 +252,25 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x + 38, y, 46, 6, formatDimension(raw.cuttingSizeLengthPiece, raw.cuttingSizeWidthPiece));
   cell(doc, x + 84, y, 18, 6, "PLY", { fill: LIGHT_ORANGE, bold: true });
   cell(doc, x + 102, y, 46, 6, "Required Qty Per CFB", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, firstValue(raw.sheetRequiredLengthPiece));
+  cell(doc, x + 148, y, 48, 6, firstValue(production.setsPerBox, raw.numberOfSetsPerBox));
   y += 6;
   cell(doc, x, y, 84, 6, "Flute Direction", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 84, y, 18, 6, "");
+  cell(doc, x + 84, y, 18, 6, firstValue(production.fluteType, production.flute, raw.fluteType));
   cell(doc, x + 102, y, 46, 6, "BS", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, firstValue(raw.bsKgCm2Calculated, production.brustingStrengthReq));
+  cell(doc, x + 148, y, 48, 6, firstValue(production.boardGsmReq, raw.boardGsmReq));
   y += 6;
 
   y = section(doc, x, y, w, "PHP SPECIFICATION");
   cell(doc, x, y, 38, 6, "Size (L X W X H)", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 64, 6, formatDimension(lOd, wOd, hOd));
   cell(doc, x + 102, y, 46, 6, "Required Qty Per CFB", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, firstValue(raw.sheetRequiredLengthPiece, production.requiredQty));
+  cell(doc, x + 148, y, 48, 6, firstValue(production.setsPerBox, raw.numberOfSetsPerBox));
   y += 6;
   const phpRows = [
     ["Holes (Length)", firstValue(raw.holesOrientationL, production.noOfHolesInPhp)],
     ["Holes (Width)", firstValue(raw.holesOrientationW)],
     ["Ply", firstValue(production.ply, raw.noOfPly)],
-    ["Flute Direction", firstValue(raw.fluteDirection)],
+    ["Flute Direction", firstValue(production.fluteType, production.flute, raw.fluteType)],
     ["GSM", firstValue(production.gsm, production.boardGsmReq, raw.calculatedBGsm)],
   ];
   cell(doc, x + 68, y, 128, 30, "PHP DIAGRAM", { fill: [253, 233, 217], bold: true });
