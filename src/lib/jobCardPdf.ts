@@ -139,6 +139,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   const targetPaper = Number(production.topPaperWeightKg || production.totalPaperWeight || 0);
   const targetLiner = Number(production.linerWeightKg || 0);
   const totalTarget = Number(production.totalJobWeight || 0) || targetPaper + targetLiner;
+  const hasPlateData = [raw.cuttingSizeLengthPiece, raw.cuttingSizeWidthPiece, raw.sheetRequiredLengthPiece].some(hasValue);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
@@ -257,7 +258,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x, y, 84, 6, "Flute Direction", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 84, y, 18, 6, firstValue(production.fluteType, production.flute, raw.fluteType));
   cell(doc, x + 102, y, 46, 6, "BS", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 148, y, 48, 6, firstValue(production.boardGsmReq, raw.boardGsmReq));
+  cell(doc, x + 148, y, 48, 6, hasPlateData ? firstValue(production.boardGsmReq, raw.boardGsmReq) : "");
   y += 6;
 
   y = section(doc, x, y, w, "PHP SPECIFICATION");
