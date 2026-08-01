@@ -317,11 +317,12 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x + 149, y, 47, 12, production.actualPaperUsed ? num(production.actualPaperUsed, 2) : "");
   y += 17;
 
+  const signatureY = Math.min(y + 8, 292);
   doc.setFont("helvetica", "bolditalic");
   doc.setTextColor(0, 32, 96);
   doc.setFontSize(8);
-  doc.text("PREPARED BY", x + 10, 286);
-  doc.text("APPROVED BY", x + w - 10, 286, { align: "right" });
+  doc.text("PREPARED BY", x + 10, signatureY);
+  doc.text("APPROVED BY", x + w - 10, signatureY, { align: "right" });
 
   doc.save(`JobCard_${safeFileName(jobNo)}.pdf`);
 }
