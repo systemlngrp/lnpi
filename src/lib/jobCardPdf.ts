@@ -427,7 +427,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x, y, 38, 6, "Printing Colour", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 66, 6, firstValue(production.color1, raw.color1, raw.printingColour1), { bold: true });
   cell(doc, x + 104, y, 45, 6, "Target Box weight", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 149, y, 47, 6, num(firstValue(production.weightPerPcSetReq, production.plateWeight, raw.calculatedWeightPerBox, raw.standardWeightGms)), { bold: true });
+  cell(doc, x + 149, y, 47, 6, num(firstValue(production.plannedQty, production.qty)), { bold: true });
   y += 6;
 
   y = section(doc, x, y, w, "CFB SPECIFICATION");
