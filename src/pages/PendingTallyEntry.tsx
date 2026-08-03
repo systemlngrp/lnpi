@@ -37,7 +37,7 @@ export function PendingTallyEntry() {
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
   const canPostTally = currentUserEmail === "pankaj@bizskilledu.com";
-  const tableColumnCount = canPostTally ? 19 : 17;
+  const tableColumnCount = canPostTally ? 20 : 18;
   const formatMoney = (value?: number) =>
     `${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -175,6 +175,7 @@ export function PendingTallyEntry() {
                     </th>
                   ) : null}
                   <th className="px-4 py-3 text-left">Trn No</th>
+                  <th className="px-4 py-3 text-left">MRR Type</th>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Supplier</th>
                   <th className="px-4 py-3 text-left">Items</th>
@@ -218,6 +219,7 @@ export function PendingTallyEntry() {
                             </td>
                           ) : null}
                           <td className="px-4 py-4 whitespace-nowrap">{m.transactionNo}</td>
+                          <td className="px-4 py-4 whitespace-nowrap">{m.mrrType || "-"}</td>
                           <td className="px-4 py-4 whitespace-nowrap">{formatDate(m.date)}</td>
                           <td className="px-4 py-4">{getSupplierName(m.supplierId)}</td>
                           <td className="px-4 py-4 whitespace-nowrap">{m.lines?.length || 0} Item(s)</td>
