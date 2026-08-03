@@ -192,7 +192,7 @@ export function Dashboard() {
   const pendingAccounts = filteredMaterialIn.filter((entry) => entry.status === "Pending Accounts").length;
   const pendingMD = filteredMaterialIn.filter((entry) => entry.status === "Pending MD").length;
 
-  const tallyMatIn = filteredMaterialIn.filter((entry) => entry.status === "Pending Tally").length;
+  const tallyMatIn = filteredMaterialIn.filter((entry) => entry.status === "Pending Tally" && String(entry.mrrType || "").trim().toLowerCase() !== "rejection in").length;
   const tallyProd = filteredProductions.filter((entry) => isProductionReadyForTally(entry, getProductionActualPaperUsed(entry, productionUsageMap), hasProductionCorrugatedSheetUsage(entry, productionCorrugatedSheetUsageMap))).length;
   const pendingDispatchPlanning = schedules.filter((s) => {
     if (!s?.scheduledDate) return false;
