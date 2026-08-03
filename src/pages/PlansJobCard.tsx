@@ -1,210 +1,357 @@
 import { useEffect, useState } from "react";
+import { FileText } from "lucide-react";
+import jsPDF from "jspdf";
 import { TableControls } from "../components/TableControls";
 
-const jobCardMappings = [
+type JobCardMapping = {
+  field: string;
+  source: string;
+  key: string;
+  notes: string;
+};
+
+const jobCardMappings: JobCardMapping[] = [
   {
     field: "Date",
     source: "productions",
-    key: "date",
-    notes: "Printed with the app date formatter from the selected production job.",
+    key: "productions.date",
+    notes: "Printed with formatDate from the selected production job.",
   },
   {
     field: "Job No.",
     source: "productions",
-    key: "jobCardNo, transactionNo",
-    notes: "Uses Job Card No. first; if blank, uses production transaction number.",
+    key: "productions.jobCardNo, productions.transactionNo",
+    notes: "Uses jobCardNo first; if blank, uses transactionNo.",
   },
   {
     field: "Box Type",
-    source: "productions / item catalog",
-    key: "jobType, item.boxType, raw.boxType, methodology",
-    notes: "Production job type is preferred, then item/NPD box type, then production methodology.",
+    source: "productions, npd",
+    key: "productions.jobType, npd.boxType, productions.methodology",
+    notes: "Uses production job type first, then NPD box type, then production methodology. If all are blank, PDF prints REGULAR.",
   },
   {
     field: "Lot No.",
     source: "productions",
-    key: "lotNo",
+    key: "productions.lotNo",
     notes: "Optional production field. Blank if not saved on the job.",
   },
   {
     field: "PO Qty",
-    source: "orders / orders_schedule / productions",
-    key: "orders.qty, orders_schedule.qty, plannedQty, qty",
-    notes: "Uses order quantity first, then schedule quantity, then production planned/job quantity.",
+    source: "orders, orders_schedule, productions",
+    key: "orders.qty, orders_schedule.qty, productions.plannedQty, productions.qty",
+    notes: "Uses the first non-blank value in this order.",
   },
   {
     field: "Party Name",
-    source: "companies / productions / item catalog",
-    key: "companies.name, companyName, raw.customerName, raw.companyName, raw.company",
-    notes: "Company master name is preferred, with production and NPD/customer fields as fallback.",
+    source: "companies, productions, npd",
+    key: "companies.name, productions.companyName, npd.customerName, npd.companyName, npd.company",
+    notes: "Company master name is preferred, then production company name, then NPD customer/company fields.",
   },
   {
     field: "Item Name",
-    source: "item catalog / NPD items / productions",
-    key: "item.name, raw.itemName, itemId",
-    notes: "Uses resolved item catalog name; falls back to raw NPD item name or production item id.",
+    source: "npd, productions",
+    key: "npd.name, npd.itemName, productions.itemId",
+    notes: "NPD item name is preferred; raw NPD itemName and production itemId are fallbacks.",
   },
   {
     field: "Target CS",
-    source: "productions / NPD item raw",
-    key: "targetBox, rapc, requiredQty, qty",
-    notes: "Uses target box from production/NPD when present, then RAPC, then required quantity or production quantity.",
+    source: "npd",
+    key: "npd.csKgTarget, npd.csKgStd",
+    notes: "Uses csKgTarget first; if blank, uses csKgStd.",
   },
   {
     field: "Target BS",
-    source: "productions / NPD item raw",
-    key: "boardGsmReq",
+    source: "productions, npd",
+    key: "productions.boardGsmReq, npd.boardGsmReq",
     notes: "Production board GSM requirement is preferred, then NPD boardGsmReq.",
   },
   {
     field: "Item ERP",
-    source: "productions / orders / item catalog / NPD raw",
-    key: "erpCode, orders.erpCode, item.erp, raw.erp, raw.erpCode, raw.erpItemCode, raw.masterItemNameErpCode",
-    notes: "First non-blank ERP value is printed.",
+    source: "productions, orders, npd",
+    key: "productions.erpCode, orders.erpCode, npd.erp, npd.erpCode, npd.erpItemCode, npd.masterItemNameErpCode",
+    notes: "Uses the first non-blank ERP value resolved for the Job Card.",
   },
   {
     field: "Size (ID) L x W x H",
-    source: "productions / item catalog",
-    key: "lengthId, length, breadthId, breadth, heightId, height",
-    notes: "Uses saved production dimensions first, then item dimensions.",
+    source: "productions, npd",
+    key: "productions.lengthId, productions.length, productions.breadthId, productions.breadth, productions.heightId, productions.height, npd.lengthId, npd.length, npd.breadthId, npd.breadth, npd.heightId, npd.height",
+    notes: "For each dimension, production value is checked first, then NPD raw value via the same key list.",
   },
   {
     field: "Size (OD) L x W x H",
-    source: "productions / item catalog",
-    key: "lengthOd, lOd, breadthOd, wOd, heightOd, hOd",
-    notes: "Uses OD fields where available; length/breadth/height are fallback values.",
+    source: "productions, npd",
+    key: "productions.lengthOd, productions.lOd, productions.length, productions.breadthOd, productions.wOd, productions.breadth, productions.heightOd, productions.hOd, productions.height, npd.lengthOd, npd.lOd, npd.length, npd.breadthOd, npd.wOd, npd.breadth, npd.heightOd, npd.hOd, npd.height",
+    notes: "OD fields are preferred; length, breadth, and height are fallbacks.",
   },
   {
     field: "Flap",
-    source: "NPD item raw / productions",
-    key: "raw.flapSize, flap",
-    notes: "Uses NPD flap size first, then production flap field.",
+    source: "npd, productions",
+    key: "npd.flapSize, productions.flap",
+    notes: "Uses NPD flapSize first, then production flap.",
   },
   {
     field: "Ply",
-    source: "productions / NPD item raw",
-    key: "ply, raw.ply, raw.noOfPly",
+    source: "productions, npd",
+    key: "productions.ply, npd.ply, npd.noOfPly",
     notes: "Production ply is preferred, then NPD ply fields.",
   },
   {
     field: "Printing Colour",
-    source: "productions / NPD item raw",
-    key: "color1, raw.color1, raw.printingColour1",
-    notes: "Current PDF prints the first available printing colour value.",
+    source: "productions, npd",
+    key: "productions.color1, npd.color1, npd.printingColour1",
+    notes: "Current PDF prints the first available colour value from this list.",
   },
   {
     field: "Target Box weight",
-    source: "NPD item raw",
-    key: "standardWeightGms",
-    notes: "Prints Standard Weight(gms) from NPD. Blank if the value is missing or non-numeric.",
+    source: "npd",
+    key: "npd.standardWeightGms",
+    notes: "Prints Standard Weight(gms) from NPD. Blank if missing or non-numeric.",
   },
   {
     field: "Target Box",
-    source: "productions / NPD item raw",
-    key: "targetBox, rapc, requiredQty, qty",
-    notes: "Same target-size resolver as Target CS.",
+    source: "productions, npd",
+    key: "productions.targetBox, npd.targetBox, productions.rapc, npd.rapc, productions.requiredQty, productions.qty",
+    notes: "Uses targetBox first, then RAPC, then required quantity, then production quantity.",
   },
   {
     field: "Deckle",
-    source: "productions / NPD item raw",
-    key: "reelAsPerCalc, raw.deckleSize, raw.reelSize",
+    source: "productions, npd",
+    key: "productions.reelAsPerCalc, npd.deckleSize, npd.reelSize",
     notes: "Production reel calculation is preferred, then NPD deckle/reel size.",
   },
   {
     field: "Flute Type",
-    source: "productions / NPD item raw",
-    key: "fluteType, flute, raw.fluteType",
-    notes: "Production flute type/flute values are preferred.",
+    source: "productions, npd",
+    key: "productions.fluteType, productions.flute, npd.fluteType",
+    notes: "Production flute type/flute is preferred, then NPD fluteType.",
   },
   {
     field: "Cutting",
-    source: "productions / NPD item raw",
-    key: "cuttingWithTrimming, raw.cuttingSize, raw.cuttingWithTrimming",
+    source: "productions, npd",
+    key: "productions.cuttingWithTrimming, npd.cuttingSize, npd.cuttingWithTrimming",
     notes: "Production cutting with trimming is preferred, then NPD cutting fields.",
   },
   {
     field: "Flute %",
-    source: "productions / NPD item raw",
-    key: "takeUpFactor, raw.takeUpFactor, raw.takeUp",
-    notes: "Shows the first available take-up/flute percentage factor.",
+    source: "productions, npd",
+    key: "productions.takeUpFactor, npd.takeUpFactor, npd.takeUp",
+    notes: "Uses the first available take-up/flute factor.",
   },
   {
     field: "Papers",
     source: "productions",
-    key: "paperRequiredNos, lineRequiredNos",
+    key: "productions.paperRequiredNos, productions.lineRequiredNos",
     notes: "Paper required quantity is preferred; liner required is fallback.",
   },
   {
     field: "Liners",
     source: "productions",
-    key: "lineRequiredNos, paperRequiredNos",
+    key: "productions.lineRequiredNos, productions.paperRequiredNos",
     notes: "Liner required quantity is preferred; paper required is fallback.",
   },
   {
     field: "No. of Outs",
-    source: "productions / NPD item raw",
-    key: "ups, raw.ups, raw.noOfUps",
+    source: "productions, npd",
+    key: "productions.ups, npd.ups, npd.noOfUps",
     notes: "Production UPS is preferred, then NPD UPS fields.",
   },
   {
-    field: "Combination Rows - GSM",
+    field: "Combination Row - Top",
+    source: "productions, npd",
+    key: "productions.top, npd.psL1Bf, npd.rsl1Bf, productions.reelAsPerCalc, npd.deckleSize",
+    notes: "GSM uses productions.top. BF uses psL1Bf or rsl1Bf. Size uses reelAsPerCalc or deckleSize. Cutter label is A.",
+  },
+  {
+    field: "Combination Row - Fluting 1",
+    source: "productions, npd",
+    key: "productions.f1, npd.psF1Bf, npd.rsf2Bf, productions.reelAsPerCalc, npd.deckleSize",
+    notes: "GSM uses productions.f1. BF uses psF1Bf or rsf2Bf. Size uses reelAsPerCalc or deckleSize. Cutter label is B.",
+  },
+  {
+    field: "Combination Row - Backing 1",
+    source: "productions, npd",
+    key: "productions.l1, npd.psL1Bf, npd.rsl1Bf, productions.reelAsPerCalc, npd.deckleSize",
+    notes: "GSM uses productions.l1. BF uses psL1Bf or rsl1Bf. Size uses reelAsPerCalc or deckleSize. Cutter label is C.",
+  },
+  {
+    field: "Combination Row - Fluting 2",
+    source: "productions, npd",
+    key: "productions.f2, npd.psF2Bf, npd.rsf4Bf",
+    notes: "GSM uses productions.f2. BF uses psF2Bf or rsf4Bf. Cutter label is D.",
+  },
+  {
+    field: "Combination Row - Backing 2",
+    source: "productions, npd",
+    key: "productions.l2, npd.psL2Bf",
+    notes: "GSM uses productions.l2. BF uses psL2Bf.",
+  },
+  {
+    field: "Combination Row - Backing 3",
+    source: "productions, npd",
+    key: "productions.l3, npd.psL3Bf, npd.rsl3Bf",
+    notes: "GSM uses productions.l3. BF uses psL3Bf or rsl3Bf.",
+  },
+  {
+    field: "Overall GSM Target",
+    source: "npd",
+    key: "npd.standardBGsm",
+    notes: "Printed as a whole number when present.",
+  },
+  {
+    field: "Overall GSM Achieved",
+    source: "productions, npd",
+    key: "productions.gsm, npd.calculatedBGsm",
+    notes: "Production GSM is preferred, then NPD calculatedBGsm.",
+  },
+  {
+    field: "Remarks",
     source: "productions",
-    key: "top, f1, l1, f2, l2, l3",
-    notes: "Top, fluting, and backing GSM values are taken from production layer fields.",
+    key: "productions.remarks",
+    notes: "Printed directly in the remarks section.",
   },
   {
-    field: "Combination Rows - BF",
-    source: "NPD item raw",
-    key: "psL1Bf, rsl1Bf, psF1Bf, rsf2Bf, psF2Bf, rsf4Bf, psL2Bf, psL3Bf, rsl3Bf",
-    notes: "BF values are read from NPD raw paper specification fields.",
+    field: "Plate ERP",
+    source: "plate_item_master",
+    key: "plate_item_master.erp, plate_item_master.raw.erp, plate_item_master.raw.erpCode, plate_item_master.raw.erpItemCode, plate_item_master.raw.masterErp, plate_item_master.raw.masterErpCode, plate_item_master.raw.masterItemNameErpCode",
+    notes: "Linked Plate item is found by ERP; first non-blank ERP value is printed.",
   },
   {
-    field: "Combination Rows - Size",
-    source: "productions / NPD item raw",
-    key: "reelAsPerCalc, raw.deckleSize",
-    notes: "Top and first backing/fluting rows use reel calculation or NPD deckle size.",
+    field: "Plate Size (L x W)",
+    source: "plate_item_master",
+    key: "plate_item_master.raw.length, plate_item_master.raw.breadth",
+    notes: "Printed only when linked Plate item data exists.",
   },
   {
-    field: "Plate/PHP Specification",
-    source: "PHP item master / Plate item master",
-    key: "linked item ERP and raw item fields",
-    notes: "Linked PHP/Plate items are found by ERP and their raw fields are printed in the lower specification section.",
+    field: "Plate Required Qty Per CFB",
+    source: "plate_item_master",
+    key: "plate_item_master.raw.numberOfSetsPerBox",
+    notes: "Printed only when linked Plate item data exists.",
+  },
+  {
+    field: "Plate Flute Direction",
+    source: "plate_item_master",
+    key: "plate_item_master.raw.fluteType",
+    notes: "Printed only when linked Plate item data exists.",
+  },
+  {
+    field: "Plate BS",
+    source: "plate_item_master",
+    key: "plate_item_master.raw.boardGsmReq",
+    notes: "Printed only when linked Plate item data exists.",
+  },
+  {
+    field: "PHP ERP",
+    source: "php_item_master",
+    key: "php_item_master.erp, php_item_master.raw.erp, php_item_master.raw.erpCode, php_item_master.raw.erpItemCode, php_item_master.raw.masterErp, php_item_master.raw.masterErpCode, php_item_master.raw.masterItemNameErpCode",
+    notes: "Linked PHP item is found by ERP; first non-blank ERP value is printed.",
+  },
+  {
+    field: "PHP Size (L x W x H)",
+    source: "php_item_master",
+    key: "php_item_master.raw.length, php_item_master.raw.breadth, php_item_master.raw.height",
+    notes: "Printed only when linked PHP item data exists.",
+  },
+  {
+    field: "PHP Required Qty Per CFB",
+    source: "php_item_master",
+    key: "php_item_master.raw.numberOfSetsPerBox",
+    notes: "Printed only when linked PHP item data exists.",
+  },
+  {
+    field: "PHP Holes / Ply / GSM",
+    source: "php_item_master",
+    key: "php_item_master.raw.holesOrientationL, php_item_master.raw.holesOrientationW, php_item_master.raw.noOfPly, php_item_master.raw.fluteType, php_item_master.raw.boardGsmReq",
+    notes: "Printed in the PHP specification rows and diagram area.",
   },
   {
     field: "Target Paper Weight",
     source: "productions",
-    key: "topPaperWeightKg, totalPaperWeight",
-    notes: "Uses top paper weight first; total paper weight is fallback.",
+    key: "productions.topPaperWeightKg, productions.totalPaperWeight",
+    notes: "Uses topPaperWeightKg first; totalPaperWeight is fallback.",
   },
   {
     field: "Target Liner Weight",
     source: "productions",
-    key: "linerWeightKg",
+    key: "productions.linerWeightKg",
     notes: "Uses saved production liner weight.",
   },
   {
     field: "Total Target weight",
     source: "productions",
-    key: "totalJobWeight, topPaperWeightKg + linerWeightKg",
-    notes: "Uses saved total job weight; if blank, adds target paper and liner weights.",
+    key: "productions.totalJobWeight, productions.topPaperWeightKg + productions.linerWeightKg",
+    notes: "Uses totalJobWeight; if blank, adds target paper and liner weights.",
   },
   {
-    field: "Actual Paper / Consumed Weight",
-    source: "productions / material issue-return reel lines",
-    key: "actualPaperUsed, material-issue-reel-lines.weightKg, material-return-reel-lines.weightKg",
-    notes: "Uses saved actual paper where present; process page can derive issued minus returned reel weight.",
+    field: "Actual Paper weight",
+    source: "productions",
+    key: "productions.actualPaperUsed",
+    notes: "Printed in official data when saved on the production job.",
   },
   {
-    field: "Reel Consumption Details",
-    source: "material-in-packing-slips / material issue-return reel lines / materials",
-    key: "ourReelNo, materialId, weightKg, gsm, bf",
-    notes: "Rows are built for reels issued to this job, with returned weight as balance.",
+    field: "Actual Consumed weight",
+    source: "productions",
+    key: "productions.actualPaperUsed",
+    notes: "Current PDF uses the same actualPaperUsed value for consumed weight.",
+  },
+  {
+    field: "Reel No.",
+    source: "material-in-packing-slips, material-issue-reel-lines",
+    key: "material-in-packing-slips.ourReelNo, material-issue-reel-lines.ourReelNo",
+    notes: "Issue reel line reel number is preferred; packing slip reel number is fallback.",
+  },
+  {
+    field: "Reel T/F/B",
+    source: "productions, npd, materials",
+    key: "productions.top, productions.f1, productions.l1, productions.f2, productions.l2, productions.l3, npd.psL1Bf, npd.rsl1Bf, npd.psF1Bf, npd.rsf2Bf, npd.psF2Bf, npd.rsf4Bf, npd.psL2Bf, npd.psL3Bf, npd.rsl3Bf, materials.gsm, materials.bf",
+    notes: "Inferred by matching issued material GSM/BF against production/NPD paper layer values.",
+  },
+  {
+    field: "Reel BF / GSM",
+    source: "materials",
+    key: "materials.bf, materials.gsm",
+    notes: "Material master values for the issued reel material.",
+  },
+  {
+    field: "Reel Weight",
+    source: "material-issue-reel-lines",
+    key: "material-issue-reel-lines.weightKg",
+    notes: "Sums issued reel weight for this production and packing slip.",
+  },
+  {
+    field: "Balance Reel",
+    source: "material-return-reel-lines",
+    key: "material-return-reel-lines.weightKg",
+    notes: "Sums returned reel weight for this production and packing slip.",
   },
   {
     field: "Process Data",
     source: "production_processing",
-    key: "productionId, machineName, qty, operatorName, date, updateTimestamp",
-    notes: "Shows process entries linked to the production job, sorted by process timestamp.",
+    key: "production_processing.productionId, production_processing.machineName, production_processing.qty, production_processing.operatorName, production_processing.date, production_processing.updateTimestamp",
+    notes: "Rows linked to the production job are sorted by timestamp for process data.",
+  },
+  {
+    field: "Reports - Final FG Produced",
+    source: "productions",
+    key: "productions.prodFromFFG",
+    notes: "Printed on the second Job Card page when available.",
+  },
+  {
+    field: "Reports - Wastage %",
+    source: "productions, material-issue-reel-lines, material-return-reel-lines",
+    key: "productions.prodFromFFG, productions.sheetWeight, productions.actualPaperUsed, material-issue-reel-lines.weightKg, material-return-reel-lines.weightKg",
+    notes: "Calculated as 100 - ((Prod FFG x Sheet Weight) / Actual Paper Used) x 100 when all required values exist.",
+  },
+  {
+    field: "Organization Name",
+    source: "settings",
+    key: "settings.organizationName",
+    notes: "Uses organizationName from settings; default is LAXMI NARAYAN PACKAGING INDUSTRIES.",
+  },
+  {
+    field: "Created By",
+    source: "createdBy argument, productions",
+    key: "createdBy, productions.updatedBy",
+    notes: "PDF call passes createdBy; production updatedBy is fallback. If both are blank, PDF prints System User.",
   },
 ];
 
@@ -220,13 +367,89 @@ export function PlansJobCard() {
     });
   }, [searchTerm]);
 
+  const handleDownloadPdf = () => {
+    const doc = new jsPDF("p", "mm", "a4");
+    const marginX = 12;
+    const pageBottom = 285;
+    let y = 16;
+
+    const ensureSpace = (height: number) => {
+      if (y + height > pageBottom) {
+        doc.addPage();
+        y = 16;
+      }
+    };
+
+    const addText = (text: string, x = marginX, width = 186, lineHeight = 4.2) => {
+      const lines = doc.splitTextToSize(text, width) as string[];
+      ensureSpace(lines.length * lineHeight + 2);
+      doc.text(lines, x, y);
+      y += lines.length * lineHeight + 2;
+    };
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Documentation - Job Card", marginX, y);
+    y += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    addText("Job Card PDF field mapping with exact app table/data names, source keys, and fallback logic.");
+
+    const widths = [38, 40, 58, 56];
+    const headers = ["Job Card Field", "Source Table/Data", "Source Column/Key", "Logic / Notes"];
+    const drawHeader = () => {
+      ensureSpace(8);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      let x = marginX;
+      headers.forEach((header, index) => {
+        doc.rect(x, y, widths[index], 7);
+        doc.text(doc.splitTextToSize(header, widths[index] - 2) as string[], x + 1, y + 4.5);
+        x += widths[index];
+      });
+      y += 7;
+      doc.setFont("helvetica", "normal");
+    };
+
+    drawHeader();
+    jobCardMappings.forEach((row) => {
+      const values = [row.field, row.source, row.key, row.notes];
+      doc.setFontSize(6.4);
+      const wrapped = values.map((value, index) => doc.splitTextToSize(value, widths[index] - 2) as string[]);
+      const rowHeight = Math.max(9, Math.max(...wrapped.map((lines) => lines.length)) * 3.4 + 3);
+      if (y + rowHeight > pageBottom) {
+        doc.addPage();
+        y = 16;
+        drawHeader();
+      }
+      let x = marginX;
+      wrapped.forEach((lines, index) => {
+        doc.rect(x, y, widths[index], rowHeight);
+        doc.text(lines, x + 1, y + 4);
+        x += widths[index];
+      });
+      y += rowHeight;
+    });
+
+    doc.save("Job_Card_Documentation.pdf");
+  };
+
   return (
     <div className="space-y-6">
-      <div className="border-b border-black pb-4">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Documentation - Job Card</h2>
-        <p className="mt-2 text-sm text-slate-700 font-medium">
-          This page maps Job Card PDF fields to the app data source, source key, and current fallback logic.
-        </p>
+      <div className="flex flex-col gap-3 border-b border-black pb-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-black uppercase tracking-tight">Documentation - Job Card</h2>
+          <p className="mt-2 text-sm text-slate-700 font-medium">
+            This page maps Job Card PDF fields to exact app table/data names, source keys, and fallback logic.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownloadPdf}
+          className="inline-flex items-center gap-2 rounded border border-black bg-red-600 px-4 py-2 text-sm font-bold text-white shadow hover:bg-red-700"
+        >
+          <FileText size={16} /> PDF
+        </button>
       </div>
 
       <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
