@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Edit, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Edit, Eye, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type { FixedMonthlyExpense, FixedMonthlyExpenseLine } from "../types";
 import { FY_MONTHS, getCurrentFinancialYear, getFinancialYearOptions, getMonthName } from "../lib/financialYear";
@@ -34,6 +34,7 @@ export function FixedMonthlyExpenses() {
   const [fy, setFy] = useState(getCurrentFinancialYear());
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
   const [lines, setLines] = useState<FixedMonthlyExpenseLine[]>(defaultLines);
+  const [viewRecord, setViewRecord] = useState<(FixedMonthlyExpense & { lines: FixedMonthlyExpenseLine[] }) | null>(null);
 
   const normalizedRecords = useMemo(
     () => records.map((record) => ({ ...record, lines: normalizeLines(record.lines) })),
@@ -56,6 +57,9 @@ export function FixedMonthlyExpenses() {
       .slice()
       .sort((a, b) => b.fy.localeCompare(a.fy) || (monthOrder.get(Number(a.month)) || 0) - (monthOrder.get(Number(b.month)) || 0));
   }, [normalizedRecords]);
+
+  const viewLines = viewRecord ? normalizeLines(viewRecord.lines) : [];
+  const viewTotalAmount = viewLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
 
   const resetForm = () => {
     setFy(getCurrentFinancialYear());
@@ -230,9 +234,14 @@ export function FixedMonthlyExpenses() {
                 <td className="border border-gray-900 p-2">{normalizeLines(record.lines).map((line) => line.expenseName).join(", ") || "-"}</td>
                 <td className="border border-gray-900 p-2 text-right font-bold">{formatMoney(Number(record.totalAmount || 0))}</td>
                 <td className="border border-gray-900 p-2 text-center">
-                  <button className="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-1.5 text-xs font-bold text-white" type="button" onClick={() => loadRecord(record)}>
-                    <Edit size={14} /> Edit
-                  </button>
+                  <div className="flex items-center justify-center gap-2">
+                    <button className="inline-flex items-center gap-2 rounded border border-gray-900 px-3 py-1.5 text-xs font-bold" type="button" onClick={() => setViewRecord(record)} title="View details">
+                      <Eye size={14} /> View
+                    </button>
+                    <button className="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-1.5 text-xs font-bold text-white" type="button" onClick={() => loadRecord(record)}>
+                      <Edit size={14} /> Edit
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -246,6 +255,60 @@ export function FixedMonthlyExpenses() {
           </tbody>
         </table>
       </div>
+      {viewRecord ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setViewRecord(null)}>
+          <div className="w-full max-w-2xl rounded border-2 border-gray-900 bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 border-b border-gray-900 px-5 py-4">
+              <div>
+                <h3 className="text-lg font-black uppercase tracking-tight">Fixed Monthly Expenses</h3>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  FY: {viewRecord.fy} | Month: {viewRecord.monthName || getMonthName(Number(viewRecord.month))}
+                </p>
+              </div>
+              <button className="rounded border border-gray-900 px-3 py-1.5 text-sm font-bold hover:bg-slate-100" type="button" onClick={() => setViewRecord(null)}>
+                Close
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="overflow-hidden rounded border border-gray-900 bg-white">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="w-20 border border-gray-900 p-2 text-left">Sl No</th>
+                      <th className="border border-gray-900 p-2 text-left">Expense</th>
+                      <th className="w-40 border border-gray-900 p-2 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewLines.map((line, index) => (
+                      <tr key={line.id || `${line.expenseName}-${index}`}>
+                        <td className="border border-gray-900 p-2 font-bold">{index + 1}</td>
+                        <td className="border border-gray-900 p-2">{line.expenseName || "-"}</td>
+                        <td className="border border-gray-900 p-2 text-right font-bold">{formatMoney(Number(line.amount || 0))}</td>
+                      </tr>
+                    ))}
+                    {!viewLines.length && (
+                      <tr>
+                        <td className="border border-gray-900 p-4 text-center text-slate-500" colSpan={3}>
+                          No expenses found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 font-black">
+                      <td className="border border-gray-900 p-2 text-right" colSpan={2}>
+                        Total
+                      </td>
+                      <td className="border border-gray-900 p-2 text-right">{formatMoney(Number(viewRecord.totalAmount || 0) || viewTotalAmount)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
