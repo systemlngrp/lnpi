@@ -1,14 +1,14 @@
-import { Fragment, useMemo, useState, useEffect } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { ChevronDown, ChevronRight, Eye, FileText, RotateCcw, ThumbsUp, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, FileText, RotateCcw, Search, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 
-import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { renderOrganizationHeader } from "../lib/pdfOrganizationHeader";
@@ -37,6 +37,20 @@ function getLineSummary(lines: IndentLine[], materials: Material[]) {
     .join(", ");
 }
 
+
+function makeOptions(values: Array<string | number>) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+    .map((value) => ({ value, label: value }));
+}
+
+function toDateOnly(value?: string) {
+  return String(value || "").split("T")[0];
+}
+
+function getIndentLineItemName(line: IndentLine, materialById: Map<string, Material>) {
+  return materialById.get(line.materialId)?.name || String(line.erpCode || "Unknown Material");
+}
 function IndentQueue({ mode }: { mode: QueueMode }) {
   const navigate = useNavigate();
   const [indents, setIndents] = useData<Indent>("indents", []);
@@ -48,6 +62,11 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
   const [unapproveConfirmId, setUnapproveConfirmId] = useState<string | null>(null);
   const [pdfIndentId, setPdfIndentId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [requestedByFilter, setRequestedByFilter] = useState("");
+  const [indentTypeFilter, setIndentTypeFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [expandedIndentIds, setExpandedIndentIds] = useState<Set<string>>(new Set());
 
   const currentSetting = settings[0];
@@ -62,17 +81,41 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
     });
   };
 
+  const materialById = useMemo(() => new Map(materials.map((material) => [material.id, material])), [materials]);
+
+  const statusIndents = useMemo(
+    () => indents.filter((indent) => indent.status === mode),
+    [indents, mode]
+  );
+
+  const requestedByOptions = useMemo(() => makeOptions(statusIndents.map((indent) => indent.requestedBy)), [statusIndents]);
+  const indentTypeOptions = useMemo(() => makeOptions(statusIndents.map((indent) => indent.indentType)), [statusIndents]);
+  const itemOptions = useMemo(() => {
+    const statusIndentIds = new Set(statusIndents.map((indent) => indent.id));
+    return makeOptions(
+      indentLines
+        .filter((line) => statusIndentIds.has(line.indentId))
+        .map((line) => getIndentLineItemName(line, materialById))
+    );
+  }, [indentLines, materialById, statusIndents]);
+
   const visibleIndents = useMemo(
     () =>
-      indents
+      statusIndents
         .filter((indent) => {
-          if (indent.status !== mode) return false;
-          if (!searchTerm.trim()) return true;
-          
+          const indentDate = toDateOnly(indent.requisitionDate);
+          if (requestedByFilter && indent.requestedBy !== requestedByFilter) return false;
+          if (indentTypeFilter && indent.indentType !== indentTypeFilter) return false;
+          if (dateFrom && indentDate < dateFrom) return false;
+          if (dateTo && indentDate > dateTo) return false;
+
+          const indentLinesForThis = indentLines.filter((line) => line.indentId === indent.id);
+          if (itemFilter && !indentLinesForThis.some((line) => getIndentLineItemName(line, materialById) === itemFilter)) return false;
+
           const q = searchTerm.toLowerCase().trim();
-          const indentLinesForThis = indentLines.filter(l => l.indentId === indent.id);
+          if (!q) return true;
           const itemSummary = getLineSummary(indentLinesForThis, materials).toLowerCase();
-          
+
           return (
             (indent.indentNo || "").toLowerCase().includes(q) ||
             (indent.requestedBy || "").toLowerCase().includes(q) ||
@@ -85,7 +128,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
           const timeB = new Date(b.updateTimestamp || b.requisitionDate || 0).getTime();
           return timeB - timeA;
         }),
-    [indents, mode, searchTerm, indentLines, materials]
+    [dateFrom, dateTo, indentLines, indentTypeFilter, itemFilter, materialById, materials, requestedByFilter, searchTerm, statusIndents]
   );
 
   const displayRows = useMemo(
@@ -94,12 +137,12 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
         ? visibleIndents.flatMap((indent) =>
             indentLines
               .filter((line) => line.indentId === indent.id)
+              .filter((line) => !itemFilter || getIndentLineItemName(line, materialById) === itemFilter)
               .map((line) => ({ indent, line }))
           )
         : visibleIndents.map((indent) => ({ indent, line: null as IndentLine | null })),
-    [indentLines, mode, visibleIndents]
+    [indentLines, itemFilter, materialById, mode, visibleIndents]
   );
-
   const {
     page,
     setPage,
@@ -362,11 +405,42 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
         <h2 className="text-xl font-bold text-black uppercase tracking-tight">{getQueueTitle(mode)}</h2>
       </div>
 
+<div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(145px,1fr))_auto] xl:items-center">
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search requisition, requested by, type, item..."
+            className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
+        </div>
+        <Select value={requestedByFilter} onChange={setRequestedByFilter} options={requestedByOptions} placeholder="All Requested By" />
+        <Select value={indentTypeFilter} onChange={setIndentTypeFilter} options={indentTypeOptions} placeholder="All Indent Types" />
+        <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
+        {searchTerm || requestedByFilter || indentTypeFilter || itemFilter || dateFrom || dateTo ? (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setRequestedByFilter("");
+              setIndentTypeFilter("");
+              setItemFilter("");
+              setDateFrom("");
+              setDateTo("");
+            }}
+            className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+          >
+            Clear Filters
+          </button>
+        ) : null}
+      </div>
+
       <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
-
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
-
-      <table className="min-w-full border-collapse">
+        <table className="min-w-full border-collapse">
           <thead className="sticky top-0 z-30">
             <tr className="bg-slate-100">
               <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black whitespace-nowrap">Requisition No</th>
