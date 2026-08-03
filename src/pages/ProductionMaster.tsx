@@ -33,6 +33,15 @@ const formatItemFilterLabel = (name: string, erp: string) => {
   if (!erp || name.toLowerCase().includes(erp.toLowerCase())) return name;
   return `${name} - ${erp}`;
 };
+const formatDecimal = (value: unknown) => {
+  if (value === null || value === undefined || String(value).trim() === "") return "-";
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return "-";
+  return numberValue.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
 
 export function ProductionMaster() {
   const navigate = useNavigate();
@@ -612,18 +621,18 @@ export function ProductionMaster() {
                         Type: {getProductionEffectiveType(p, item) || "-"} | Print: {displayRow.printingColor || "-"}
                       </div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">
-                        OD: {getItemValue(item, "lOd") || "-"}Ã—{getItemValue(item, "wOd") || "-"}Ã—{getItemValue(item, "hOd") || "-"}
+                        OD: {formatDecimal(getItemValue(item, "lOd"))}Ã—{formatDecimal(getItemValue(item, "wOd"))}Ã—{formatDecimal(getItemValue(item, "hOd"))}
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <div className="flex flex-col">
-                          <span>{p.qty} {p.uom}</span>
-                          <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-1 rounded border border-indigo-100">Production FFG: {Number(p.prodFromFFG || 0).toLocaleString()}</span>
+                          <span>{formatDecimal(p.qty)} {p.uom}</span>
+                          <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-1 rounded border border-indigo-100">Production FFG: {formatDecimal(p.prodFromFFG || 0)}</span>
                         </div>
-                        <span className="font-bold text-amber-700">Loaded: {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}</span>
+                        <span className="font-bold text-amber-700">Loaded: {formatDecimal(loadedQtyByProductionId.get(p.id) || 0)}</span>
                         <div className="flex flex-col items-end text-[10px] font-bold text-indigo-700 bg-indigo-50 p-1 border border-indigo-100 rounded">
-                          <div>Pa:{procTotals.paper} | Li:{procTotals.liner} | Pr:{procTotals.printing}</div>
-                          <div>Ps:{procTotals.pasting} | St:{procTotals.stitching} | Pu:{procTotals.punching} | Gl:{procTotals.gluing}</div>
-                          <div className="mt-1 pt-1 border-t border-indigo-200 text-emerald-700 font-black">Actual Paper: {Number(p.actualPaperUsed || 0).toFixed(2)} KG</div>
+                          <div>Pa:{formatDecimal(procTotals.paper)} | Li:{formatDecimal(procTotals.liner)} | Pr:{formatDecimal(procTotals.printing)}</div>
+                          <div>Ps:{formatDecimal(procTotals.pasting)} | St:{formatDecimal(procTotals.stitching)} | Pu:{formatDecimal(procTotals.punching)} | Gl:{formatDecimal(procTotals.gluing)}</div>
+                          <div className="mt-1 pt-1 border-t border-indigo-200 text-emerald-700 font-black">Actual Paper: {formatDecimal(p.actualPaperUsed || 0)} KG</div>
                         </div>
                         <div className="flex flex-col items-end">
                             {p.gsm && <span className="font-bold text-indigo-700">GSM: {p.gsm}</span>}
@@ -819,10 +828,10 @@ export function ProductionMaster() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{p.qty} {p.uom}</td>
-                      <td className="px-4 py-4 text-center text-xs font-medium text-black border border-black whitespace-nowrap">{p.ups || getItemValue(item, "ups") || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs font-medium text-emerald-700 border border-black whitespace-nowrap">{formatDecimal(p.qty)} {p.uom}</td>
+                      <td className="px-4 py-4 text-center text-xs font-medium text-black border border-black whitespace-nowrap">{formatDecimal(firstNonBlank(p.ups, getItemValue(item, "ups")))}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-amber-700 border border-black whitespace-nowrap bg-amber-50/40">
-                        {Number(loadedQtyByProductionId.get(p.id) || 0).toLocaleString()}
+                        {formatDecimal(loadedQtyByProductionId.get(p.id) || 0)}
                       </td>
 
                       <td
@@ -831,7 +840,7 @@ export function ProductionMaster() {
                           isPaperOutOfRange ? "bg-red-100 text-red-700" : "bg-indigo-50/30 text-indigo-700"
                         )}
                       >
-                        {procTotals.paper.toLocaleString()}
+                        {formatDecimal(procTotals.paper)}
                       </td>
                       <td
                         className={cn(
@@ -839,58 +848,58 @@ export function ProductionMaster() {
                           isLinerOutOfRange ? "bg-red-100 text-red-700" : "bg-indigo-50/30 text-indigo-700"
                         )}
                       >
-                        {procTotals.liner.toLocaleString()}
+                        {formatDecimal(procTotals.liner)}
                       </td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.printing.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.pasting.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.stitching.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.punching.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{procTotals.gluing.toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{formatDecimal(procTotals.printing)}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{formatDecimal(procTotals.pasting)}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{formatDecimal(procTotals.stitching)}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{formatDecimal(procTotals.punching)}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap bg-indigo-50/30">{formatDecimal(procTotals.gluing)}</td>
                       
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.length || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.breadth || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.height || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "lOd") || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "wOd") || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{getItemValue(item, "hOd") || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(displayRow.length)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(displayRow.breadth)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(displayRow.height)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{formatDecimal(getItemValue(item, "lOd"))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{formatDecimal(getItemValue(item, "wOd"))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-600">{formatDecimal(getItemValue(item, "hOd"))}</td>
 
-                      <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{displayRow.ply || "-"}</td>
+                      <td className="px-4 py-4 text-center text-xs text-black border border-black whitespace-nowrap">{formatDecimal(displayRow.ply)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{displayRow.flute || displayRow.fluteType || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.l1 || (item as any)?.l1 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.f1 || (item as any)?.f1 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.l2 || (item as any)?.l2 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.f2 || (item as any)?.f2 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{displayRow.l3 || (item as any)?.l3 || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.top || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-700">{displayRow.gsm || displayRow.boardGsmReq || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-black text-emerald-700">{erpLeastGsmMap.get(erp) || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(firstNonBlank(displayRow.l1, (item as any)?.l1))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(firstNonBlank(displayRow.f1, (item as any)?.f1))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(firstNonBlank(displayRow.l2, (item as any)?.l2))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(firstNonBlank(displayRow.f2, (item as any)?.f2))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(firstNonBlank(displayRow.l3, (item as any)?.l3))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.top)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-medium text-indigo-700">{formatDecimal(firstNonBlank(displayRow.gsm, displayRow.boardGsmReq))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap font-black text-emerald-700">{formatDecimal(erpLeastGsmMap.get(erp))}</td>
 
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.color1 || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.color2 || "-"}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{displayRow.printingColor || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.paperRequiredNos || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.topPaperWeightKg || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.linerWeightKg || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.totalJobWeight || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.lineRequiredNos || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.paperRequiredNos)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.topPaperWeightKg)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.linerWeightKg)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.totalJobWeight)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.lineRequiredNos)}</td>
                       
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.totalPaperWeight || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.avgWeight || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.wastage || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.totalPaperWeight)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.avgWeight)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.wastage)}</td>
                       <td className="px-4 py-4 text-right text-xs font-bold text-indigo-700 border border-black whitespace-nowrap">
-                        {Number(p.realizationPerKg || 0) ? Number(p.realizationPerKg || 0).toFixed(2) : "-"}
+                        {formatDecimal(p.realizationPerKg)}
                       </td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).reelAsPerCalc || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).reelActualWithTrimming || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{(p as any).cuttingWithTrimming || getItemValue(item, "cuttingSize") || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.plannedProductionInMeter ?? "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{p.sheetWeight || "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal((p as any).reelAsPerCalc)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal((p as any).reelActualWithTrimming)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(firstNonBlank((p as any).cuttingWithTrimming, getItemValue(item, "cuttingSize")))}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.plannedProductionInMeter)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.sheetWeight)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">{p.fluteBatches || "-"}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{Number(p.rate) ? Number(p.rate).toFixed(2) : (p.rate || "-")}</td>
-                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{Number(p.qty || 0) && Number(p.rate || 0) ? (Number(p.qty || 0) * Number(p.rate || 0)).toLocaleString() : "-"}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(p.rate)}</td>
+                      <td className="px-4 py-4 text-right text-xs text-black border border-black whitespace-nowrap">{formatDecimal(Number(p.qty || 0) * Number(p.rate || 0))}</td>
 
-                      <td className="px-4 py-4 text-right text-xs font-bold text-black border border-black whitespace-nowrap bg-indigo-50/20">{Number(p.prodFromFFG || 0).toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap bg-emerald-50/30">{Number(p.actualPaperUsed || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-black border border-black whitespace-nowrap bg-indigo-50/20">{formatDecimal(p.prodFromFFG || 0)}</td>
+                      <td className="px-4 py-4 text-right text-xs font-bold text-emerald-700 border border-black whitespace-nowrap bg-emerald-50/30">{formatDecimal(p.actualPaperUsed || 0)}</td>
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
                         <select
                           value={p.closeBy || ""}
