@@ -33,6 +33,17 @@ function isProcessingEntryComplete(entry: ProductionProcessing) {
   return true;
 }
 
+function getIncompleteProcessingFields(entry: ProductionProcessing) {
+  const fields: string[] = [];
+  const qtyValue = Number(entry.qty || 0);
+  if (!Number.isFinite(qtyValue) || qtyValue <= 0) fields.push("Qty");
+  if (!String(entry.machineId || "").trim()) fields.push("Machine");
+  if (!String(entry.operatorId || "").trim()) fields.push("Operator");
+  if (!String(entry.shift || "").trim()) fields.push("Shift");
+  if (!String(entry.date || "").trim()) fields.push("Date");
+  return fields;
+}
+
 export function buildJobClosureStatusMap({
   productions,
   processing,
@@ -67,9 +78,13 @@ export function buildJobClosureStatusMap({
         return;
       }
 
-      if (!stepRecords.some(isProcessingEntryComplete)) {
+      const incompleteFields = Array.from(
+        new Set(stepRecords.flatMap((entry) => getIncompleteProcessingFields(entry))),
+      );
+
+      if (incompleteFields.length > 0 || !stepRecords.every(isProcessingEntryComplete)) {
         missing.push(machineName);
-        reasons.push(`Incomplete processing entry: ${machineName}`);
+        reasons.push(`Incomplete processing entry: ${machineName} (${incompleteFields.join(", ")})`);
         return;
       }
 
