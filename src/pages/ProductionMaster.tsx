@@ -5,8 +5,7 @@ import { formatDate } from "../lib/serial";
 import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
 import { ClientPagination } from "../components/ClientPagination";
-import { ClipboardList, CheckCircle, FileText } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { CheckCircle, FileText } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
@@ -44,7 +43,6 @@ const formatDecimal = (value: unknown) => {
 };
 
 export function ProductionMaster() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const [productions, setProductions] = useData<Production>("productions", []);
   const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
@@ -664,12 +662,6 @@ export function ProductionMaster() {
                         >
                           <FileText size={14} className="mr-1" /> Job Card
                         </button>
-                       <button 
-                          onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
-                          className="flex-1 bg-indigo-600 text-white font-bold inline-flex items-center justify-center p-2 border border-black text-xs hover:bg-indigo-700"
-                        >
-                          <ClipboardList size={14} className="mr-1" /> Report Proc.
-                        </button>
                         {p.status !== "Completed" && p.status !== "Cancelled" && jobClosureStatusMap.get(p.id)?.canClose ? (
                           <button
                             onClick={() => handleCloseJob(p.id)}
@@ -688,7 +680,7 @@ export function ProductionMaster() {
                             title="Cancel job"
                             className="inline-flex items-center justify-center whitespace-nowrap rounded border border-red-700 bg-red-600 px-3 py-1.5 text-xs font-black text-white transition hover:bg-red-700"
                           >
-                            Cancel Job
+                            Cancel
                           </button>
                         )}
                       </div>
@@ -965,13 +957,6 @@ export function ProductionMaster() {
                           >
                             <FileText size={16} />
                           </button>
-                          <button 
-                            onClick={() => navigate(`/production-processing/form?productionId=${p.id}`)}
-                            title="Report Processing"
-                            className="text-indigo-600 hover:text-indigo-900 transition-all p-1"
-                          >
-                            <ClipboardList size={16} />
-                          </button>
                           {p.status !== "Completed" && p.status !== "Cancelled" && jobClosureStatusMap.get(p.id)?.canClose ? (
                             <button
                               onClick={() => handleCloseJob(p.id)}
@@ -991,7 +976,7 @@ export function ProductionMaster() {
                               title="Cancel job"
                               className="inline-flex items-center justify-center whitespace-nowrap rounded border border-red-700 bg-red-600 px-3 py-1.5 text-xs font-black text-white transition hover:bg-red-700"
                             >
-                              Cancel Job
+                              Cancel
                             </button>
                           )}
                         </div>

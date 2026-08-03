@@ -372,6 +372,7 @@ export const NAVIGATION: NavGroup[] = [
       { name: "Production", href: "/plans/production", icon: BookOpenText },
       { name: "Items", href: "/plans/items", icon: BookOpenText },
       { name: "Loading Plan", href: "/plans/loading", icon: BookOpenText },
+      { name: "Job Card", href: "/plans/job-card", icon: BookOpenText },
     ],
   },
 ];

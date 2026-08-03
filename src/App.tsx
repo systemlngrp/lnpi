@@ -113,6 +113,7 @@ import { PlansProductionPlanning } from "./pages/PlansProductionPlanning";
 import { PlansItems } from "./pages/PlansItems";
 import { PlansProduction } from "./pages/PlansProduction";
 import { PlansLoading } from "./pages/PlansLoading";
+import { PlansJobCard } from "./pages/PlansJobCard";
 import { SettingsPage } from "./pages/Settings";
 import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
 import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
@@ -353,6 +354,7 @@ export default function App() {
           <Route path="plans/production" element={<PlansProduction />} />
           <Route path="plans/items" element={<PlansItems />} />
           <Route path="plans/loading" element={<PlansLoading />} />
+          <Route path="plans/job-card" element={<PlansJobCard />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
