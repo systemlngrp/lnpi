@@ -404,6 +404,8 @@ export function PendingJobClosure() {
                 const leastGsm = erpLeastGsmMap.get(erp);
                 const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                 const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
+                  const closureStatus = jobClosureStatusMap.get(p.id);
+                  const mandatoryCloseDataComplete = closureStatus?.canClose === true;
                 const mandatory = getMandatoryStatus(p, item);
                 
                 return (
@@ -492,7 +494,7 @@ export function PendingJobClosure() {
                             Change Date
                           </button>
                         )}
-                        {jobClosureStatusMap.get(p.id)?.canClose ? (
+                        {mandatoryCloseDataComplete ? (
                           <button
                             onClick={() => handleCloseJob(p.id)}
                             className={`flex-1 font-bold inline-flex items-center justify-center p-2 border border-black text-xs ${
@@ -605,7 +607,15 @@ export function PendingJobClosure() {
                   const leastGsm = erpLeastGsmMap.get(erp);
                   const isHighGsm = p.gsm && leastGsm && Number(p.gsm) > Number(leastGsm);
                   const procTotals = processingTotalsMap.get(p.id) || { paper: 0, liner: 0, printing: 0, pasting: 0, stitching: 0, punching: 0, gluing: 0 };
-                  
+                  const closureStatus = jobClosureStatusMap.get(p.id);
+                  const mandatoryCloseDataComplete = closureStatus?.canClose === true;
+                  const baseCloseFieldsDisabled = !Number(p.actualPaperUsed || 0) || !Number(p.prodFromFFG || 0);
+                  const closeFieldsDisabled = baseCloseFieldsDisabled || !mandatoryCloseDataComplete;
+                  const closeFieldsDisabledTitle = !mandatoryCloseDataComplete
+                    ? "Complete all mandatory machine processing data to enable job closer"
+                    : baseCloseFieldsDisabled
+                      ? "Actual Paper and Production FFG are required to enable job closer"
+                      : undefined;                  
                     return (
                     <tr key={p.id} className={`${isHighGsm ? "bg-amber-50" : "hover:bg-slate-50"} divide-x divide-black transition-colors`}>
                       <td className="px-4 py-4 text-xs font-bold text-black border border-black whitespace-nowrap">{srNo}</td>
@@ -692,10 +702,10 @@ export function PendingJobClosure() {
                       <td className="px-4 py-4 text-xs text-black border border-black whitespace-nowrap">
                         <select
                           value={p.closeBy || ""}
-                          disabled={!Number(p.actualPaperUsed || 0) || !Number(p.prodFromFFG || 0)}
+                          disabled={closeFieldsDisabled}
                           onChange={(e) => {
                             const nextValue = e.target.value;
-                            if (nextValue === "Yes" && !jobClosureStatusMap.get(p.id)?.canClose) {
+                            if (nextValue === "Yes" && !mandatoryCloseDataComplete) {
                               alert(formatJobCloseBlockedMessage(jobClosureStatusMap.get(p.id)));
                               return;
                             }
@@ -713,6 +723,7 @@ export function PendingJobClosure() {
                             );
                           }}
                           onBlur={(e) => void updateCloseMeta(p.id, { closeBy: e.target.value, closeDate: p.closeDate })}
+                          title={closeFieldsDisabledTitle}
                           className="w-24 border border-black rounded px-2 py-1 text-xs bg-white disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
                           <option value=""></option>
@@ -724,15 +735,16 @@ export function PendingJobClosure() {
                         <input
                           type="date"
                           value={(p.closeDate || "").split("T")[0]}
-                          disabled={!Number(p.actualPaperUsed || 0) || !Number(p.prodFromFFG || 0)}
+                          disabled={closeFieldsDisabled}
                           onChange={(e) => {
-                            if (p.closeBy === "Yes" && !jobClosureStatusMap.get(p.id)?.canClose) {
+                            if (p.closeBy === "Yes" && !mandatoryCloseDataComplete) {
                               alert(formatJobCloseBlockedMessage(jobClosureStatusMap.get(p.id)));
                               return;
                             }
                             void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeDate: e.target.value } : row)));
                           }}
                           onBlur={(e) => void updateCloseMeta(p.id, { closeDate: e.target.value, closeBy: p.closeBy })}
+                          title={closeFieldsDisabledTitle}
                           className={`w-36 border rounded px-2 py-1 text-xs disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 ${p.closeBy === "Yes" && !p.closeDate ? "border-red-600" : "border-black"}`}
                           required={p.closeBy === "Yes"}
                         />
@@ -779,7 +791,7 @@ export function PendingJobClosure() {
                               Date
                             </button>
                           )}
-                          {p.status !== "Completed" && p.status !== "Cancelled" && jobClosureStatusMap.get(p.id)?.canClose ? (
+                          {p.status !== "Completed" && p.status !== "Cancelled" && mandatoryCloseDataComplete ? (
                             <button
                               onClick={() => handleCloseJob(p.id)}
                               title={closingId === p.id ? "Click to confirm close" : "Close job"}
