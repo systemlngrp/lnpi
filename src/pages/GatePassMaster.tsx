@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Download, Eye, FilePlus2, Pencil, Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Select } from "../components/Select";
@@ -27,7 +27,6 @@ export function GatePassMaster() {
   const [typeFilter, setTypeFilter] = useState("");
   const [recipientFilter, setRecipientFilter] = useState("");
   const [truckFilter, setTruckFilter] = useState("");
-  const [derivedStateFilter, setDerivedStateFilter] = useState("");
   const [selectedGatePassId, setSelectedGatePassId] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
@@ -52,25 +51,22 @@ export function GatePassMaster() {
       gatePasses.map((gatePass) => {
         const type = gatePass.gatePassType || "Non-Returnable";
         const recipient = getGatePassInvoiceDisplayNo(gatePass);
-        const derivedState = isReturnableGatePass(gatePass) ? deriveGatePassState(gatePass, materialIn) : "-";
-        return { gatePass, type, recipient, truck: gatePass.truckNo || "-", derivedState };
+        return { gatePass, type, recipient, truck: gatePass.truckNo || "-" };
       }),
-    [gatePasses, invoices, materialIn]
+    [gatePasses, invoices]
   );
 
   const typeOptions = useMemo(() => makeOptions(filterRows.map((row) => row.type)), [filterRows]);
   const recipientOptions = useMemo(() => makeOptions(filterRows.map((row) => row.recipient)), [filterRows]);
   const truckOptions = useMemo(() => makeOptions(filterRows.map((row) => row.truck === "-" ? "" : row.truck)), [filterRows]);
-  const derivedStateOptions = useMemo(() => makeOptions(filterRows.map((row) => row.derivedState === "-" ? "" : row.derivedState)), [filterRows]);
 
   const filteredGatePasses = useMemo(
     () =>
       filterRows
-        .filter(({ gatePass, type, recipient, truck, derivedState }) => {
+        .filter(({ gatePass, type, recipient, truck }) => {
           if (typeFilter && type !== typeFilter) return false;
           if (recipientFilter && recipient !== recipientFilter) return false;
           if (truckFilter && truck !== truckFilter) return false;
-          if (derivedStateFilter && derivedState !== derivedStateFilter) return false;
           const haystack = [
             gatePass.gatePassNo,
             gatePass.invoiceNo,
@@ -78,7 +74,6 @@ export function GatePassMaster() {
             recipient,
             gatePass.truckNo,
             type,
-            derivedState,
           ]
             .filter(Boolean)
             .join(" ")
@@ -87,20 +82,19 @@ export function GatePassMaster() {
         })
         .map((row) => row.gatePass)
         .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime()),
-    [filterRows, invoices, searchTerm, typeFilter, recipientFilter, truckFilter, derivedStateFilter]
+    [filterRows, invoices, searchTerm, typeFilter, recipientFilter, truckFilter]
   );
 
   const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems } = useClientPagination(filteredGatePasses, 25);
 
   const selectedGatePass = filteredGatePasses.find((gatePass) => gatePass.id === selectedGatePassId) || null;
 
-  const hasActiveFilters = Boolean(searchTerm || typeFilter || recipientFilter || truckFilter || derivedStateFilter);
+  const hasActiveFilters = Boolean(searchTerm || typeFilter || recipientFilter || truckFilter);
   const clearFilters = () => {
     setSearchTerm("");
     setTypeFilter("");
     setRecipientFilter("");
     setTruckFilter("");
-    setDerivedStateFilter("");
   };
 
   const handleDownloadPdf = async (gatePass: GatePass) => {
@@ -138,7 +132,7 @@ export function GatePassMaster() {
         </button>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(150px,1fr))_auto] xl:items-center">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(3,minmax(150px,1fr))_auto] xl:items-center">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
@@ -151,7 +145,6 @@ export function GatePassMaster() {
         <Select value={typeFilter} onChange={setTypeFilter} options={typeOptions} placeholder="All Types" />
         <Select value={recipientFilter} onChange={setRecipientFilter} options={recipientOptions} placeholder="All Recipients / Invoices" />
         <Select value={truckFilter} onChange={setTruckFilter} options={truckOptions} placeholder="All Trucks" />
-        <Select value={derivedStateFilter} onChange={setDerivedStateFilter} options={derivedStateOptions} placeholder="All Derived States" />
         {hasActiveFilters ? (
           <button type="button" onClick={clearFilters} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">
             Clear Filters
@@ -164,7 +157,7 @@ export function GatePassMaster() {
           <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-30 bg-slate-100">
               <tr className="divide-x divide-black">
-                {["Gate Pass No", "Type", "Date", "Invoice / Recipient", "Truck", "Total Qty", "Total Amount", "Derived State", "Actions"].map((heading) => (
+                {["Gate Pass No", "Type", "Date", "Invoice / Recipient", "Truck", "Total Qty", "Total Amount", "Actions"].map((heading) => (
                   <th key={heading} className="border-b border-black px-4 py-3 text-left text-xs font-black uppercase text-black">{heading}</th>
                 ))}
               </tr>
@@ -172,7 +165,7 @@ export function GatePassMaster() {
             <tbody className="divide-y divide-black bg-white">
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">No gate passes found.</td>
+                  <td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500">No gate passes found.</td>
                 </tr>
               ) : (
                 paginatedItems.map((gatePass) => (
@@ -184,7 +177,6 @@ export function GatePassMaster() {
                     <td className="px-4 py-3 text-sm text-black">{gatePass.truckNo || "-"}</td>
                     <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalQty || 0).toLocaleString()}</td>
                     <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-3 text-sm font-bold text-indigo-700">{isReturnableGatePass(gatePass) ? deriveGatePassState(gatePass, materialIn) : "-"}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <button type="button" onClick={() => setSelectedGatePassId(gatePass.id)} className="rounded border border-black p-2 text-black hover:bg-slate-100" title="View">

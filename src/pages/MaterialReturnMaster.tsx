@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { MaterialReturn, MaterialReturnLine, MaterialReturnReelLine, Material, Production } from "../types";
 import { Select } from "../components/Select";
 import { Trash2, Package, Layers, Disc, Search } from "lucide-react";
 import { formatDate } from "../lib/serial";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 
 function formatNumber(value: number) {
   return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -215,6 +217,25 @@ export function MaterialReturnMaster() {
   const getJobDate = (productionId?: string) =>
     productions.find((p) => p.id === productionId)?.date || "";
 
+  const activeRows = activeTab === "general"
+    ? processedData.general
+    : activeTab === "reel-summary"
+      ? processedData.reelSummary
+      : processedData.reelDetails;
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    paginatedItems,
+  } = useClientPagination(activeRows, 25);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, searchTerm, fromDate, toDate, typeFilter, materialFilter, jobFilter, reelFilter, setPage]);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-4 border-b border-black">
@@ -247,8 +268,7 @@ export function MaterialReturnMaster() {
         </div>
       </div>
 
-      <div className="rounded border border-black bg-white p-3">
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(6,minmax(140px,1fr))_auto] xl:items-center">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(6,minmax(140px,1fr))_auto] xl:items-center">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
@@ -291,7 +311,6 @@ export function MaterialReturnMaster() {
               Clear Filters
             </button>
           ) : null}
-        </div>
       </div>
       <div className="flex border-b border-black mt-2">
         <button
@@ -336,12 +355,12 @@ export function MaterialReturnMaster() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
-                {processedData.general.length === 0 ? (
+                {activeRows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">No general material returns found.</td>
                   </tr>
                 ) : (
-                  processedData.general.map((row) => (
+                  paginatedItems.map((row: any) => (
                     <tr key={row.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-sm font-bold text-indigo-700">{row.returnNo}</td>
                       <td className="px-4 py-3 text-sm">{formatDate(row.date)}</td>
@@ -371,12 +390,12 @@ export function MaterialReturnMaster() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
-                {processedData.reelSummary.length === 0 ? (
+                {activeRows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">No reel returns found.</td>
                   </tr>
                 ) : (
-                  processedData.reelSummary.map((row, idx) => (
+                  paginatedItems.map((row: any, idx) => (
                     <tr key={idx} className="divide-x divide-black hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-sm font-bold text-emerald-700">{row.returnNo}</td>
                       <td className="px-4 py-3 text-sm">{formatDate(row.date)}</td>
@@ -406,12 +425,12 @@ export function MaterialReturnMaster() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
-                {processedData.reelDetails.length === 0 ? (
+                {activeRows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">No reel details found.</td>
                   </tr>
                 ) : (
-                  processedData.reelDetails.map((row) => (
+                  paginatedItems.map((row: any) => (
                     <tr key={row.id} className="divide-x divide-black hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-sm font-bold text-amber-700">{row.returnNo}</td>
                       <td className="px-4 py-3 text-sm">{formatDate(row.date)}</td>
@@ -428,6 +447,8 @@ export function MaterialReturnMaster() {
           )}
         </div>
       </div>
+
+      <ClientPagination page={page} pageSize={pageSize} totalItems={totalItems} onPageChange={setPage} onPageSizeChange={setPageSize} />
     </div>
   );
 }

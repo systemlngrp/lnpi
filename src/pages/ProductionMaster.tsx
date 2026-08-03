@@ -2,10 +2,9 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useData } from "../hooks/useData";
 import { Production, OrderSchedule, Order, Company, ProductionProcessing, Setting, LoadingSlip, LoadingSlipLine, Machine, Material, MaterialInPackingSlip, MaterialIssueReelLine, MaterialReturnReelLine } from "../types";
 import { formatDate } from "../lib/serial";
-import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
 import { ClientPagination } from "../components/ClientPagination";
-import { CheckCircle, FileText } from "lucide-react";
+import { CheckCircle, FileText, Search } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { PROCESSING_MACHINE_COLUMNS } from "../lib/productionProcessingSummary";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
@@ -513,11 +512,15 @@ export function ProductionMaster() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(260px,1.1fr)_auto] md:items-center">
-        <TableControls 
-          searchTerm={searchTerm} 
-          onSearchChange={setSearchTerm} 
-          placeholder="Search job, order, ERP, company, item..." 
-        />
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search job, order, ERP, company, item..."
+            className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm font-medium focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
+        </div>
         <Select
           value={companyFilter}
           onChange={setCompanyFilter}
