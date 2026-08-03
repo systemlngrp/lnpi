@@ -115,6 +115,7 @@ import { PlansProduction } from "./pages/PlansProduction";
 import { PlansLoading } from "./pages/PlansLoading";
 import { PlansJobCard } from "./pages/PlansJobCard";
 import { SettingsPage } from "./pages/Settings";
+import { OtherConsumablesInventoryReport } from "./pages/OtherConsumablesInventoryReport";
 import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
 import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
 import { JobwiseReelConsumptionReport } from "./pages/JobwiseReelConsumptionReport";
@@ -335,7 +336,7 @@ export default function App() {
           <Route path="gate-pass/pending-returnable" element={<PendingReturnableItems />} />
 
           {/* Reports */}
-          <Route path="reports/other-consumables-inventory" element={<BlankPage title="Other Consumables Inventory" />} />
+          <Route path="reports/other-consumables-inventory" element={<OtherConsumablesInventoryReport />} />
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
           <Route path="reports/reelwise-stock" element={<ReelwiseStockReport />} />
           <Route path="reports/jobwise-reel-consumption" element={<JobwiseReelConsumptionReport />} />
