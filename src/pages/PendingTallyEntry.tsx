@@ -43,7 +43,7 @@ export function PendingTallyEntry() {
 
   const pendingList = useMemo(() => {
     return materialIn
-      .filter((m) => m.status === "Pending Tally")
+      .filter((m) => m.status === "Pending Tally" && String(m.mrrType || "").trim().toLowerCase() !== "rejection in")
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [materialIn]);
 
