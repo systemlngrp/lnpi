@@ -60,7 +60,7 @@ export function OtherConsumablesInventoryReport() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
-  const [uomFilter, setUomFilter] = useState("");
+  const [itemFilter, setItemFilter] = useState("");
 
   const groupById = useMemo(() => new Map(materialGroups.map((group) => [group.id, group])), [materialGroups]);
 
@@ -130,17 +130,17 @@ export function OtherConsumablesInventoryReport() {
   }, [groupById, issueLines, materialIn, materials, returnLines]);
 
   const groupOptions = useMemo(() => makeOptions(allRows.map((row) => row.groupName === "-" ? "" : row.groupName)), [allRows]);
-  const uomOptions = useMemo(() => makeOptions(allRows.map((row) => row.uom === "-" ? "" : row.uom)), [allRows]);
+  const itemOptions = useMemo(() => makeOptions(allRows.map((row) => row.itemName)), [allRows]);
 
   const rows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     return allRows.filter((row) => {
       if (groupFilter && row.groupName !== groupFilter) return false;
-      if (uomFilter && row.uom !== uomFilter) return false;
+      if (itemFilter && row.itemName !== itemFilter) return false;
       if (!query) return true;
       return [row.erp, row.itemName, row.uom, row.groupName].some((value) => String(value || "").toLowerCase().includes(query));
     });
-  }, [allRows, groupFilter, searchTerm, uomFilter]);
+  }, [allRows, groupFilter, itemFilter, searchTerm]);
 
   const totals = useMemo(
     () => rows.reduce(
@@ -157,12 +157,12 @@ export function OtherConsumablesInventoryReport() {
     [rows]
   );
 
-  const hasActiveFilters = Boolean(searchTerm || groupFilter || uomFilter);
+  const hasActiveFilters = Boolean(searchTerm || groupFilter || itemFilter);
 
   const clearFilters = () => {
     setSearchTerm("");
     setGroupFilter("");
-    setUomFilter("");
+    setItemFilter("");
   };
 
   return (
@@ -196,12 +196,12 @@ export function OtherConsumablesInventoryReport() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search ERP / item / UOM / group"
+              placeholder="Search ERP / item / group"
               className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
           </div>
           <Select value={groupFilter} onChange={setGroupFilter} options={groupOptions} placeholder="All Groups" />
-          <Select value={uomFilter} onChange={setUomFilter} options={uomOptions} placeholder="All UOM" />
+          <Select value={itemFilter} onChange={setItemFilter} options={itemOptions} placeholder="All Items" />
           {hasActiveFilters ? (
             <button
               type="button"
