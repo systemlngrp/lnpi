@@ -1,11 +1,20 @@
-import { useMemo, useState } from "react";
-import { Download, Eye, FilePlus2, Pencil, X } from "lucide-react";
+﻿import { useMemo, useState } from "react";
+import { Download, Eye, FilePlus2, Pencil, Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Select } from "../components/Select";
+import { ClientPagination } from "../components/ClientPagination";
+import { useClientPagination } from "../hooks/useClientPagination";
 import { useData } from "../hooks/useData";
 import { downloadGatePassPdf } from "../lib/gatePassPdf";
 import { deriveGatePassState, getGatePassLinesWithReturns, getGatePassPrimaryPartyName, isReturnableGatePass } from "../lib/gatePassState";
 import { GatePass, Invoice, MaterialIn, Setting } from "../types";
 import { formatDate } from "../lib/serial";
+
+function makeOptions(values: Array<string | number>) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+    .map((value) => ({ value, label: value }));
+}
 
 export function GatePassMaster() {
   const navigate = useNavigate();
@@ -15,6 +24,10 @@ export function GatePassMaster() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [recipientFilter, setRecipientFilter] = useState("");
+  const [truckFilter, setTruckFilter] = useState("");
+  const [derivedStateFilter, setDerivedStateFilter] = useState("");
   const [selectedGatePassId, setSelectedGatePassId] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
@@ -34,29 +47,61 @@ export function GatePassMaster() {
     return Boolean(getLinkedInvoice(gatePass)?.tallyInvNo);
   };
 
+  const filterRows = useMemo(
+    () =>
+      gatePasses.map((gatePass) => {
+        const type = gatePass.gatePassType || "Non-Returnable";
+        const recipient = getGatePassInvoiceDisplayNo(gatePass);
+        const derivedState = isReturnableGatePass(gatePass) ? deriveGatePassState(gatePass, materialIn) : "-";
+        return { gatePass, type, recipient, truck: gatePass.truckNo || "-", derivedState };
+      }),
+    [gatePasses, invoices, materialIn]
+  );
+
+  const typeOptions = useMemo(() => makeOptions(filterRows.map((row) => row.type)), [filterRows]);
+  const recipientOptions = useMemo(() => makeOptions(filterRows.map((row) => row.recipient)), [filterRows]);
+  const truckOptions = useMemo(() => makeOptions(filterRows.map((row) => row.truck === "-" ? "" : row.truck)), [filterRows]);
+  const derivedStateOptions = useMemo(() => makeOptions(filterRows.map((row) => row.derivedState === "-" ? "" : row.derivedState)), [filterRows]);
+
   const filteredGatePasses = useMemo(
     () =>
-      [...gatePasses]
-        .filter((gatePass) => {
+      filterRows
+        .filter(({ gatePass, type, recipient, truck, derivedState }) => {
+          if (typeFilter && type !== typeFilter) return false;
+          if (recipientFilter && recipient !== recipientFilter) return false;
+          if (truckFilter && truck !== truckFilter) return false;
+          if (derivedStateFilter && derivedState !== derivedStateFilter) return false;
           const haystack = [
             gatePass.gatePassNo,
             gatePass.invoiceNo,
             getLinkedInvoice(gatePass)?.tallyInvNo,
-            getGatePassPrimaryPartyName(gatePass),
+            recipient,
             gatePass.truckNo,
-            gatePass.gatePassType,
-            isReturnableGatePass(gatePass) ? deriveGatePassState(gatePass, materialIn) : "",
+            type,
+            derivedState,
           ]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
           return haystack.includes(searchTerm.toLowerCase());
         })
+        .map((row) => row.gatePass)
         .sort((a, b) => new Date(b.updateTimestamp || b.date || 0).getTime() - new Date(a.updateTimestamp || a.date || 0).getTime()),
-    [gatePasses, invoices, materialIn, searchTerm]
+    [filterRows, invoices, searchTerm, typeFilter, recipientFilter, truckFilter, derivedStateFilter]
   );
 
+  const { page, setPage, pageSize, setPageSize, totalItems, paginatedItems } = useClientPagination(filteredGatePasses, 25);
+
   const selectedGatePass = filteredGatePasses.find((gatePass) => gatePass.id === selectedGatePassId) || null;
+
+  const hasActiveFilters = Boolean(searchTerm || typeFilter || recipientFilter || truckFilter || derivedStateFilter);
+  const clearFilters = () => {
+    setSearchTerm("");
+    setTypeFilter("");
+    setRecipientFilter("");
+    setTruckFilter("");
+    setDerivedStateFilter("");
+  };
 
   const handleDownloadPdf = async (gatePass: GatePass) => {
     if (!canDownloadGatePassPdf(gatePass)) {
@@ -93,54 +138,75 @@ export function GatePassMaster() {
         </button>
       </div>
 
-      <div className="rounded border border-black bg-white p-4 shadow-sm">
-        <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search gate pass no, invoice no, recipient/company, truck..." className="w-full max-w-xl rounded border border-black px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black" />
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(150px,1fr))_auto] xl:items-center">
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search gate pass, invoice, recipient, truck..."
+            className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+          />
+        </div>
+        <Select value={typeFilter} onChange={setTypeFilter} options={typeOptions} placeholder="All Types" />
+        <Select value={recipientFilter} onChange={setRecipientFilter} options={recipientOptions} placeholder="All Recipients / Invoices" />
+        <Select value={truckFilter} onChange={setTruckFilter} options={truckOptions} placeholder="All Trucks" />
+        <Select value={derivedStateFilter} onChange={setDerivedStateFilter} options={derivedStateOptions} placeholder="All Derived States" />
+        {hasActiveFilters ? (
+          <button type="button" onClick={clearFilters} className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">
+            Clear Filters
+          </button>
+        ) : null}
       </div>
 
-      <div className="table-frozen-scroll rounded border border-black bg-white shadow-sm">
-        <table className="min-w-full border-collapse">
-          <thead className="sticky top-0 z-30 bg-slate-100">
-            <tr className="divide-x divide-black">
-              {["Gate Pass No", "Type", "Date", "Invoice / Recipient", "Truck", "Total Qty", "Total Amount", "Derived State", "Actions"].map((heading) => (
-                <th key={heading} className="border-b border-black px-4 py-3 text-left text-xs font-black uppercase text-black">{heading}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-black bg-white">
-            {filteredGatePasses.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">No gate passes found.</td>
+      <div className="overflow-hidden rounded border border-black bg-white shadow-sm">
+        <div className="max-h-[calc(100vh-260px)] w-full overflow-auto relative">
+          <table className="w-full min-w-max border-collapse">
+            <thead className="sticky top-0 z-30 bg-slate-100">
+              <tr className="divide-x divide-black">
+                {["Gate Pass No", "Type", "Date", "Invoice / Recipient", "Truck", "Total Qty", "Total Amount", "Derived State", "Actions"].map((heading) => (
+                  <th key={heading} className="border-b border-black px-4 py-3 text-left text-xs font-black uppercase text-black">{heading}</th>
+                ))}
               </tr>
-            ) : (
-              filteredGatePasses.map((gatePass) => (
-                <tr key={gatePass.id} className="divide-x divide-black hover:bg-slate-50">
-                  <td className="px-4 py-3 text-sm font-bold text-black">{gatePass.gatePassNo || "Pending"}</td>
-                  <td className="px-4 py-3 text-sm text-black">{gatePass.gatePassType || "Non-Returnable"}</td>
-                  <td className="px-4 py-3 text-sm text-black">{formatDate(gatePass.date)}</td>
-                  <td className="px-4 py-3 text-sm text-black">{getGatePassInvoiceDisplayNo(gatePass)}</td>
-                  <td className="px-4 py-3 text-sm text-black">{gatePass.truckNo || "-"}</td>
-                  <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalQty || 0).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-4 py-3 text-sm font-bold text-indigo-700">{isReturnableGatePass(gatePass) ? deriveGatePassState(gatePass, materialIn) : "-"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <button type="button" onClick={() => setSelectedGatePassId(gatePass.id)} className="rounded border border-black p-2 text-black hover:bg-slate-100" title="View">
-                        <Eye size={15} />
-                      </button>
-                      <button type="button" onClick={() => navigate(`/gate-pass/form?id=${gatePass.id}`)} className="rounded border border-black p-2 text-black hover:bg-slate-100" title="Edit">
-                        <Pencil size={15} />
-                      </button>
-                      <button type="button" onClick={() => handleDownloadPdf(gatePass)} disabled={isDownloading === gatePass.id || !canDownloadGatePassPdf(gatePass)} className="rounded border border-black p-2 text-black hover:bg-slate-100 disabled:opacity-50" title={canDownloadGatePassPdf(gatePass) ? "Download PDF" : "PDF available after Tally invoice number is generated"}>
-                        {isDownloading === gatePass.id ? <span className="text-xs font-bold">...</span> : <Download size={15} />}
-                      </button>
-                    </div>
-                  </td>
+            </thead>
+            <tbody className="divide-y divide-black bg-white">
+              {paginatedItems.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center text-sm text-slate-500">No gate passes found.</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                paginatedItems.map((gatePass) => (
+                  <tr key={gatePass.id} className="divide-x divide-black hover:bg-slate-50">
+                    <td className="px-4 py-3 text-sm font-bold text-black">{gatePass.gatePassNo || "Pending"}</td>
+                    <td className="px-4 py-3 text-sm text-black">{gatePass.gatePassType || "Non-Returnable"}</td>
+                    <td className="px-4 py-3 text-sm text-black">{formatDate(gatePass.date)}</td>
+                    <td className="px-4 py-3 text-sm text-black">{getGatePassInvoiceDisplayNo(gatePass)}</td>
+                    <td className="px-4 py-3 text-sm text-black">{gatePass.truckNo || "-"}</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalQty || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium text-black">{Number(gatePass.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3 text-sm font-bold text-indigo-700">{isReturnableGatePass(gatePass) ? deriveGatePassState(gatePass, materialIn) : "-"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button type="button" onClick={() => setSelectedGatePassId(gatePass.id)} className="rounded border border-black p-2 text-black hover:bg-slate-100" title="View">
+                          <Eye size={15} />
+                        </button>
+                        <button type="button" onClick={() => navigate(`/gate-pass/form?id=${gatePass.id}`)} className="rounded border border-black p-2 text-black hover:bg-slate-100" title="Edit">
+                          <Pencil size={15} />
+                        </button>
+                        <button type="button" onClick={() => handleDownloadPdf(gatePass)} disabled={isDownloading === gatePass.id || !canDownloadGatePassPdf(gatePass)} className="rounded border border-black p-2 text-black hover:bg-slate-100 disabled:opacity-50" title={canDownloadGatePassPdf(gatePass) ? "Download PDF" : "PDF available after Tally invoice number is generated"}>
+                          {isDownloading === gatePass.id ? <span className="text-xs font-bold">...</span> : <Download size={15} />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      <ClientPagination page={page} pageSize={pageSize} totalItems={totalItems} onPageChange={setPage} onPageSizeChange={setPageSize} />
 
       {selectedGatePass ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
