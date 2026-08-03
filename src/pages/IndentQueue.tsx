@@ -1,8 +1,8 @@
-import { useMemo, useState, useEffect } from "react";
+import { Fragment, useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { CheckCircle, Eye, FileText, RotateCcw, ThumbsUp, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, FileText, RotateCcw, ThumbsUp, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { Spinner } from "../components/Spinner";
 import { ClientPagination } from "../components/ClientPagination";
@@ -48,8 +48,19 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
   const [unapproveConfirmId, setUnapproveConfirmId] = useState<string | null>(null);
   const [pdfIndentId, setPdfIndentId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedIndentIds, setExpandedIndentIds] = useState<Set<string>>(new Set());
 
   const currentSetting = settings[0];
+  const showExpandableItems = mode !== "Pending";
+
+  const toggleIndentItems = (indentId: string) => {
+    setExpandedIndentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(indentId)) next.delete(indentId);
+      else next.add(indentId);
+      return next;
+    });
+  };
 
   const visibleIndents = useMemo(
     () =>
@@ -373,7 +384,6 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
               ) : (
                 <>
                   <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Indent Type</th>
-                  <th className="border border-black px-4 py-3 text-left text-sm font-bold uppercase text-black">Items</th>
                 </>
               )}
               {mode === "Rejected" ? (
@@ -388,7 +398,7 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
             {paginatedDisplayRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={mode === "Pending" ? 10 : mode === "Rejected" ? 8 : 7}
+                  colSpan={mode === "Pending" ? 10 : mode === "Rejected" ? 7 : 6}
                   className="border border-black px-6 py-10 text-center font-medium text-black"
                 >
                   No indent records found.
@@ -401,9 +411,22 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                 const canUnapprove = mode === "Approved" && canIndentBeUnapproved(lineRows);
 
                 return (
-                  <tr key={line ? `${indent.id}-${line.id}` : indent.id} className="hover:bg-slate-50">
+                  <Fragment key={line ? `${indent.id}-${line.id}` : indent.id}>
+                  <tr className="hover:bg-slate-50">
                     <td className="border border-black px-4 py-4 text-sm font-bold text-black whitespace-nowrap">
-                      {indent.indentNo || indent.id}
+                      <div className="flex items-center gap-2">
+                        {showExpandableItems ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleIndentItems(indent.id)}
+                            title={expandedIndentIds.has(indent.id) ? "Hide items" : "Show items"}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded border border-black bg-white text-black hover:bg-slate-100"
+                          >
+                            {expandedIndentIds.has(indent.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </button>
+                        ) : null}
+                        <span>{indent.indentNo || indent.id}</span>
+                      </div>
                     </td>
                     <td className="border border-black px-4 py-4 text-sm text-black">{indent.requestedBy}</td>
                     <td className="border border-black px-4 py-4 text-sm text-black whitespace-nowrap">{formatDate(indent.requisitionDate)}</td>
@@ -423,19 +446,6 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                     ) : (
                       <>
                         <td className="border border-black px-4 py-4 text-sm text-black">{indent.indentType}</td>
-                        <td className="border border-black px-4 py-4 text-sm text-black min-w-[360px]">
-                          <ul className="space-y-1">
-                            {lineRows.map((row) => {
-                              const rowMaterial = materials.find((m) => m.id === row.materialId);
-                              return (
-                                <li key={row.id}>
-                                  <span className="font-medium">{rowMaterial?.name || row.erpCode || "Unknown Material"}</span>
-                                  <span className="ml-2">[{row.qty} {row.uom || ""}]</span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </td>
                       </>
                     )}
                     {mode === "Rejected" ? (
@@ -510,6 +520,50 @@ function IndentQueue({ mode }: { mode: QueueMode }) {
                       </div>
                     </td>
                   </tr>
+                  {showExpandableItems && expandedIndentIds.has(indent.id) ? (
+                    <tr key={`${indent.id}-items`} className="bg-slate-50">
+                      <td colSpan={mode === "Rejected" ? 7 : 6} className="border border-black p-0">
+                        <div className="p-4">
+                          <div className="mb-2 text-xs font-black uppercase text-slate-600">Items</div>
+                          <div className="overflow-auto rounded border border-black bg-white">
+                            <table className="min-w-full border-collapse">
+                              <thead className="bg-slate-100">
+                                <tr>
+                                  {["ERP", "Item", "Qty", "Unit", "Target Delivery", "Ordered Qty", "Cancelled Qty", "Balance Qty"].map((heading) => (
+                                    <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-black uppercase text-black">{heading}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {lineRows.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={8} className="border border-black px-4 py-6 text-center text-sm text-slate-600">No item lines found.</td>
+                                  </tr>
+                                ) : (
+                                  lineRows.map((row) => {
+                                    const rowMaterial = materials.find((m) => m.id === row.materialId);
+                                    return (
+                                      <tr key={row.id}>
+                                        <td className="border border-black px-3 py-2 text-sm text-black">{row.erpCode || ""}</td>
+                                        <td className="border border-black px-3 py-2 text-sm font-medium text-black">{rowMaterial?.name || row.erpCode || "Unknown Material"}</td>
+                                        <td className="border border-black px-3 py-2 text-right text-sm text-black">{Number(row.qty || 0).toLocaleString()}</td>
+                                        <td className="border border-black px-3 py-2 text-sm text-black">{row.uom || ""}</td>
+                                        <td className="border border-black px-3 py-2 text-sm text-black">{row.targetDeliveryDate ? formatDate(row.targetDeliveryDate) : ""}</td>
+                                        <td className="border border-black px-3 py-2 text-right text-sm text-black">{Number(row.orderedQty || 0).toLocaleString()}</td>
+                                        <td className="border border-black px-3 py-2 text-right text-sm text-black">{Number(row.cancelledQty || 0).toLocaleString()}</td>
+                                        <td className="border border-black px-3 py-2 text-right text-sm font-bold text-black">{Number(row.balanceQty || 0).toLocaleString()}</td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
                 );
               })
             )}
