@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { MaterialIssue, MaterialIssueLine, MaterialIssueReelLine, Material, Production } from "../types";
-import { TableControls } from "../components/TableControls";
 import { Select } from "../components/Select";
-import { Trash2, Package, Layers, Disc } from "lucide-react";
+import { Trash2, Package, Layers, Disc, Search } from "lucide-react";
 import { formatDate } from "../lib/serial";
 
 function isWithoutJobIssue(issueType?: string) {
@@ -253,70 +252,52 @@ export function MaterialIssueMaster() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 items-end gap-4 bg-slate-50 p-4 border border-black rounded shadow-sm">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase text-slate-500">From Date</label>
+      <div className="rounded border border-black bg-white p-3">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(6,minmax(140px,1fr))_auto] xl:items-center">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search issue no, job no, reel no, material..."
+              className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+          <Select options={issueTypeOptions} value={typeFilter} onChange={(value) => setTypeFilter(value || "all")} placeholder="All Types" />
+          <Select options={materialOptions} value={materialFilter} onChange={setMaterialFilter} placeholder="All Materials" />
+          <Select options={jobOptions} value={jobFilter} onChange={setJobFilter} placeholder="All Jobs" />
+          <Select options={reelOptions} value={reelFilter} onChange={setReelFilter} placeholder="All Reels" />
           <input
             type="date"
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
-            className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
           />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase text-slate-500">To Date</label>
           <input
             type="date"
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}
-            className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
           />
+          {(fromDate || toDate || typeFilter !== "all" || searchTerm || materialFilter || jobFilter || reelFilter) ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+                setTypeFilter("all");
+                setSearchTerm("");
+                setMaterialFilter("");
+                setJobFilter("");
+                setReelFilter("");
+              }}
+              className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+            >
+              Clear Filters
+            </button>
+          ) : null}
         </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase text-slate-500">Issue Type</label>
-          <Select compact options={issueTypeOptions} value={typeFilter} onChange={(value) => setTypeFilter(value || "all")} placeholder="All Types" />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase text-slate-500">Material</label>
-          <Select compact options={materialOptions} value={materialFilter} onChange={setMaterialFilter} placeholder="All Materials" />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase text-slate-500">Job No</label>
-          <Select compact options={jobOptions} value={jobFilter} onChange={setJobFilter} placeholder="All Jobs" />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase text-slate-500">Reel No</label>
-          <Select compact options={reelOptions} value={reelFilter} onChange={setReelFilter} placeholder="All Reels" />
-        </div>
-
-        <div className="flex flex-col gap-1 xl:col-span-1">
-          <label className="text-[10px] font-black uppercase text-slate-500">Search</label>
-          <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search Job No, Reel No, Material..." />
-        </div>
-
-        {(fromDate || toDate || typeFilter !== "all" || searchTerm || materialFilter || jobFilter || reelFilter) && (
-          <button
-            onClick={() => {
-              setFromDate("");
-              setToDate("");
-              setTypeFilter("all");
-              setSearchTerm("");
-              setMaterialFilter("");
-              setJobFilter("");
-              setReelFilter("");
-            }}
-            className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
-          >
-            Reset Filters
-          </button>
-        )}
       </div>
-
       <div className="flex border-b border-black mt-2">
         <button
           onClick={() => setActiveTab("general")}
