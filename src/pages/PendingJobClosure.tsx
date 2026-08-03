@@ -15,6 +15,7 @@ import { getProductionDisplayStatus } from "../lib/productionStageFilters";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getProductionEffectiveType, getRequiredMachinesForProduction } from "../lib/productionType";
+import { buildJobClosureStatusMap, formatJobCloseBlockedMessage } from "../lib/jobClosureValidation";
 
 export function PendingJobClosure() {
   const navigate = useNavigate();
@@ -51,11 +52,26 @@ export function PendingJobClosure() {
   };
 
   const updateCloseMeta = async (id: string, patch: Partial<Pick<Production, "closeBy" | "closeDate">>) => {
+    const target = productions.find((p) => p.id === id);
+    if (!target || target.status === "Completed" || target.status === "Cancelled") return;
+
     const resolvedPatch = { ...patch };
-    if (resolvedPatch.closeBy === "Yes" && !resolvedPatch.closeDate) {
-      alert("Close Date is mandatory when Closer is Yes.");
-      return;
+    const nextCloseBy = String(resolvedPatch.closeBy ?? target.closeBy ?? "").trim();
+    const nextCloseDate = String(resolvedPatch.closeDate ?? target.closeDate ?? "").trim();
+
+    if (nextCloseBy === "Yes") {
+      if (!nextCloseDate) {
+        alert("Close Date is mandatory when Closer is Yes.");
+        return;
+      }
+
+      const closureStatus = jobClosureStatusMap.get(id);
+      if (!closureStatus?.canClose) {
+        alert(formatJobCloseBlockedMessage(closureStatus));
+        return;
+      }
     }
+
     const timestamp = new Date().toISOString();
     await setProductions((prev) =>
       prev.map((p) =>
@@ -149,65 +165,14 @@ export function PendingJobClosure() {
   const mandatoryMachinesByType = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
 
   const jobClosureStatusMap = useMemo(() => {
-    const isCorrugationLiner = (name?: string | null) =>
-      String(normalizeMachineName(name || "")).trim().toLowerCase() === "corrugation liner";
-
-    const result = new Map<string, { canClose: boolean; reasons: string[] }>();
-
-    productions.forEach((production) => {
-      const item = resolveProductionItem(production);
-      const effectiveType = getProductionEffectiveType(production, item);
-      const requiredMachines = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines).map((m) =>
-        normalizeMachineName(m)
-      );
-
-      const records = processing.filter((entry) => entry.productionId === production.id);
-      const planQty = Number(production.qty || 0);
-
-      const reasons: string[] = [];
-
-      if (requiredMachines.length === 0) {
-        reasons.push(`No required process steps configured for Type: ${String(effectiveType || "-")}`);
-      }
-
-      const isEntryComplete = (entry: ProductionProcessing) => {
-        const qtyValue = Number(entry.qty || 0);
-        if (!Number.isFinite(qtyValue) || qtyValue <= 0) return false;
-        if (!String(entry.machineId || "").trim()) return false;
-        if (!String(entry.operatorId || "").trim()) return false;
-        if (!String(entry.shift || "").trim()) return false;
-        if (!String(entry.date || "").trim()) return false;
-        return true;
-      };
-
-      requiredMachines.forEach((machineName) => {
-        const normalized = normalizeMachineName(machineName);
-        const stepRecords = records.filter(
-          (r) => normalizeMachineName(r.machineName) === normalized
-        );
-        if (stepRecords.length === 0) {
-          reasons.push(`Missing processing step: ${normalized}`);
-          return;
-        }
-
-        if (!stepRecords.some(isEntryComplete)) {
-          reasons.push(`Incomplete processing entry: ${normalized}`);
-        }
-
-        if (!isCorrugationLiner(normalized) && planQty > 0) {
-          const stepQty = stepRecords.reduce((sum, r) => sum + Number(r.qty || 0), 0);
-          if (stepQty > planQty) {
-            reasons.push(`Qty exceeds Plan Qty for ${normalized} (Plan ${planQty}, Reported ${stepQty})`);
-          }
-        }
-      });
-
-      result.set(production.id, { canClose: reasons.length === 0, reasons });
+    return buildJobClosureStatusMap({
+      productions,
+      processing,
+      mandatoryMachinesByType,
+      machines,
+      resolveProductionItem,
     });
-
-    return result;
   }, [productions, processing, mandatoryMachinesByType, machines, findItemAcrossSources]);
-
   const erpLeastGsmMap = useMemo(() => {
     const map = new Map<string, number>();
     productions.forEach(p => {
@@ -324,7 +289,7 @@ export function PendingJobClosure() {
     const closureStatus = jobClosureStatusMap.get(id);
     if (!closureStatus?.canClose) {
       const reasons = closureStatus?.reasons?.length ? closureStatus.reasons : ["Processing data is incomplete."];
-      alert(`Job Close is blocked:\n- ${reasons.join("\n- ")}`);
+      alert(formatJobCloseBlockedMessage(closureStatus));
       return;
     }
 
@@ -395,12 +360,12 @@ export function PendingJobClosure() {
   } = useClientPagination(filteredList, 25);
 
   const getMandatoryStatus = (production: Production, item?: any) => {
-    const required = getRequiredMachinesForProduction(production, item, mandatoryMachinesByType, machines);
-    if (required.length === 0) return { required, done: 0, missing: [] as string[] };
-
-    const doneSet = processingMachinesMap.get(production.id) || new Set<string>();
-    const missing = required.filter((name) => !doneSet.has(normalizeMachineName(name)));
-    return { required, done: required.length - missing.length, missing };
+    const status = jobClosureStatusMap.get(production.id);
+    return {
+      required: status?.required || [],
+      done: status?.done || 0,
+      missing: status?.missing || [],
+    };
   };
 
   const cancelTarget = cancelModalJobId ? productions.find((p) => p.id === cancelModalJobId) : null;
@@ -730,6 +695,10 @@ export function PendingJobClosure() {
                           disabled={!Number(p.actualPaperUsed || 0) || !Number(p.prodFromFFG || 0)}
                           onChange={(e) => {
                             const nextValue = e.target.value;
+                            if (nextValue === "Yes" && !jobClosureStatusMap.get(p.id)?.canClose) {
+                              alert(formatJobCloseBlockedMessage(jobClosureStatusMap.get(p.id)));
+                              return;
+                            }
                             const today = new Date().toISOString().split("T")[0];
                             void setProductions((prev) =>
                               prev.map((row) =>
@@ -756,7 +725,13 @@ export function PendingJobClosure() {
                           type="date"
                           value={(p.closeDate || "").split("T")[0]}
                           disabled={!Number(p.actualPaperUsed || 0) || !Number(p.prodFromFFG || 0)}
-                          onChange={(e) => void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeDate: e.target.value } : row)))}
+                          onChange={(e) => {
+                            if (p.closeBy === "Yes" && !jobClosureStatusMap.get(p.id)?.canClose) {
+                              alert(formatJobCloseBlockedMessage(jobClosureStatusMap.get(p.id)));
+                              return;
+                            }
+                            void setProductions((prev) => prev.map((row) => (row.id === p.id ? { ...row, closeDate: e.target.value } : row)));
+                          }}
                           onBlur={(e) => void updateCloseMeta(p.id, { closeDate: e.target.value, closeBy: p.closeBy })}
                           className={`w-36 border rounded px-2 py-1 text-xs disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 ${p.closeBy === "Yes" && !p.closeDate ? "border-red-600" : "border-black"}`}
                           required={p.closeBy === "Yes"}
