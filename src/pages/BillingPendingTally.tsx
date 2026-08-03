@@ -52,7 +52,7 @@ export function BillingPendingTally() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
   const canPostTally = currentUserEmail === "pankaj@bizskilledu.com";
-  const tableColumnCount = canPostTally ? 7 : 6;
+  const tableColumnCount = canPostTally ? 8 : 7;
   const toggleRow = (id: string) => {
     const next = new Set(expandedRows);
     if (next.has(id)) next.delete(id);
@@ -222,6 +222,7 @@ export function BillingPendingTally() {
             <tr className="divide-x divide-black">
               <th className="w-10 px-4 py-3 text-center"></th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Invoice Details</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Date</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">Company</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase">PO Numbers</th>
               <th className="px-4 py-3 text-right text-xs font-bold text-black uppercase">Total Amount</th>
@@ -255,8 +256,8 @@ export function BillingPendingTally() {
                         <Receipt size={14} className="text-indigo-600" />
                         {inv.invoiceNo}
                       </div>
-                      <div className="text-[10px] text-slate-500 mt-1">{formatDate(inv.date)}</div>
                     </td>
+                    <td className="px-4 py-4 text-sm font-medium whitespace-nowrap">{formatDate(inv.date)}</td>
                     <td className="px-4 py-4 text-sm font-medium">{inv.companyName}</td>
                     <td className="px-4 py-4">
                       {inv.poNumbers.length > 0 ? (

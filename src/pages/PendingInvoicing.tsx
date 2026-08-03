@@ -1065,19 +1065,21 @@ export function PendingInvoicing() {
             </div>
 
             {expandedCompanies.has(group.companyId) && (
-              <div className="p-4 table-frozen-scroll">
-                <table className="min-w-full border-collapse border border-black">
-                  <thead className="sticky top-0 z-30 bg-slate-50">
+              <div className="p-4">
+                <div className="overflow-hidden rounded border border-black bg-white">
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full min-w-[760px] border-collapse">
+                      <thead className="sticky top-0 z-30 bg-slate-50">
                     <tr className="divide-x divide-black border-b border-black">
                       {billingMode === group.companyId && <th className="w-10 px-2 py-2"></th>}
-                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Slip No</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Date</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Truck No</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Items</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Total Qty</th>
+                      <th className="w-[150px] px-3 py-2 text-left text-[10px] font-bold uppercase">Loading Slip No</th>
+                      <th className="w-[110px] px-3 py-2 text-left text-[10px] font-bold uppercase">Date</th>
+                      <th className="w-[130px] px-3 py-2 text-left text-[10px] font-bold uppercase">Truck No</th>
+                      <th className="min-w-[360px] px-3 py-2 text-left text-[10px] font-bold uppercase">Item Name(s)</th>
+                      <th className="w-[120px] px-3 py-2 text-right text-[10px] font-bold uppercase">Total Qty</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-black">
+                      <tbody className="divide-y divide-black">
                     {group.slips.map((s) => (
                       <tr key={s.id} className="divide-x divide-black hover:bg-slate-50">
                         {billingMode === group.companyId && (
@@ -1095,12 +1097,22 @@ export function PendingInvoicing() {
                         <td className="px-3 py-2 text-xs font-bold text-indigo-700">
                           {s.truckNo || trucks.find(t => t.id === s.truckId)?.truckNo || "N/A"}
                         </td>
-                        <td className="px-3 py-2 text-xs truncate max-w-[200px]">{s.items.join(", ")}</td>
+                        <td className="min-w-[360px] px-3 py-2 text-xs whitespace-normal break-words leading-relaxed">
+                          <div className="space-y-1">
+                            {s.items.map((itemName) => (
+                              <div key={itemName} className="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-semibold text-black">
+                                {itemName}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
                         <td className="px-3 py-2 text-xs text-right font-medium">{s.totalQty.toLocaleString()}</td>
                       </tr>
                     ))}
-                  </tbody>
-                </table>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </div>
