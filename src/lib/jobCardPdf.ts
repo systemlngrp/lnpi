@@ -57,6 +57,13 @@ function num(value: unknown, decimals = 2) {
 function rawOf(item?: OrderCatalogItem | null) {
   return item?.raw || {};
 }
+function getStandardBoxWeight(item?: OrderCatalogItem | null) {
+  const raw = rawOf(item);
+  const value = raw.standardWeightGms ?? (item as any)?.standardWeightGms;
+  if (!hasValue(value)) return "";
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : "";
+}
 
 function valueOf(production: Production, item: OrderCatalogItem | null | undefined, ...keys: string[]) {
   const raw = rawOf(item);
@@ -447,7 +454,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x, y, 38, 6, "Printing Colour", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 66, 6, firstValue(production.color1, raw.color1, raw.printingColour1), { bold: true });
   cell(doc, x + 104, y, 45, 6, "Target Box weight", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 149, y, 47, 6, num(firstValue(production.plannedQty, production.qty)), { bold: true });
+  cell(doc, x + 149, y, 47, 6, num(getStandardBoxWeight(item)), { bold: true });
   y += 6;
 
   y = section(doc, x, y, w, "CFB SPECIFICATION");
