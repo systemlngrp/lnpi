@@ -1413,15 +1413,13 @@ export function Materials() {
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Balance</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Closing Value</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">UOM</th>
-                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Tally Sync</th>
-                    <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Tally ID</th>
                     <th className="sticky top-0 z-20 bg-indigo-700 px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider border-b-2 border-black whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
                   {filteredMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan={22} className="px-6 py-10 text-center text-slate-500 font-medium italic">
+                      <td colSpan={20} className="px-6 py-10 text-center text-slate-500 font-medium italic">
                         No materials matching your search criteria.
                       </td>
                     </tr>
@@ -1463,24 +1461,6 @@ export function Materials() {
                             {values.closingValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-black text-[10px] font-black uppercase">{material.uom || "-"}</td>
-                          <td className="px-4 py-3 text-black text-[10px] font-bold">
-                            {material.tallyTimestamp ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="text-emerald-600 font-bold uppercase">Synced</span>
-                                <span className="text-[8px] text-slate-500 whitespace-nowrap">{material.tallyTimestamp}</span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col gap-1">
-                                <span className="text-rose-600 font-bold uppercase">Pending</span>
-                                {material.tallySyncRemark && (
-                                  <span className="text-[8px] text-rose-500 font-medium">{material.tallySyncRemark}</span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-black text-[8px] font-mono break-all max-w-[100px]">
-                            {material.tallyMaterialId || "-"}
-                          </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             {isVirtualReceiptItem ? (
                               <span className="rounded border border-slate-400 bg-slate-50 px-2 py-1 text-[9px] font-black uppercase text-slate-600">
