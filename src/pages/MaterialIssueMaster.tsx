@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { MaterialIssue, MaterialIssueLine, MaterialIssueReelLine, Material, Production } from "../types";
 import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
 import { Trash2, Package, Layers, Disc } from "lucide-react";
 import { formatDate } from "../lib/serial";
 
@@ -9,6 +10,29 @@ function isWithoutJobIssue(issueType?: string) {
   const t = String(issueType || "").trim().toLowerCase();
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
 }
+
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function resolveLineRate(line: MaterialIssueLine | undefined, material: Material | undefined) {
+  const qty = Number(line?.qty || 0);
+  const amount = Number(line?.amount || 0);
+  if (qty > 0 && amount > 0) return amount / qty;
+
+  const candidates = [line?.rate, line?.lastPurchaseRate, line?.openingRate, material?.openingRate];
+  for (const candidate of candidates) {
+    const rate = Number(candidate || 0);
+    if (rate > 0) return rate;
+  }
+  return 0;
+}
+
+const issueTypeOptions = [
+  { value: "all", label: "All Types" },
+  { value: "job", label: "Job Specific" },
+  { value: "general", label: "Without Job" },
+];
 
 export function MaterialIssueMaster() {
   const [materialIssues, setMaterialIssues] = useData<MaterialIssue>("material-issues", []);
@@ -22,95 +46,158 @@ export function MaterialIssueMaster() {
   const [activeTab, setActiveTab] = useState<"general" | "reel-summary" | "reel-details">("general");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all"); // all, job, general
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [materialFilter, setMaterialFilter] = useState("");
+  const [jobFilter, setJobFilter] = useState("");
+  const [reelFilter, setReelFilter] = useState("");
 
-  const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
+  const materialMap = useMemo(() => new Map(materials.map((m) => [m.id, m])), [materials]);
+  const issueLineMap = useMemo(() => new Map(issueLines.map((line) => [line.id, line])), [issueLines]);
+
+  const materialOptions = useMemo(() => {
+    const optionMap = new Map<string, string>();
+    issueLines.forEach((line) => {
+      const material = materialMap.get(line.materialId);
+      if (material) optionMap.set(material.id, material.name);
+    });
+    reelLines.forEach((line) => {
+      const material = materialMap.get(line.materialId);
+      if (material) optionMap.set(material.id, material.name);
+    });
+    return Array.from(optionMap.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }));
+  }, [issueLines, reelLines, materialMap]);
+
+  const jobOptions = useMemo(() => {
+    const jobs = new Set<string>();
+    materialIssues.forEach((issue) => {
+      if (issue.jobNo) jobs.add(issue.jobNo);
+    });
+    reelLines.forEach((line) => {
+      if (line.jobNo) jobs.add(line.jobNo);
+    });
+    return Array.from(jobs).sort().map((jobNo) => ({ value: jobNo, label: jobNo }));
+  }, [materialIssues, reelLines]);
+
+  const reelOptions = useMemo(() => {
+    return Array.from(new Set(reelLines.map((line) => line.ourReelNo).filter(Boolean)))
+      .sort()
+      .map((reelNo) => ({ value: reelNo, label: reelNo }));
+  }, [reelLines]);
 
   const processedData = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
 
-    // 1. Filter raw issues first
-    const filteredIssues = materialIssues.filter(i => {
-      // Custom Date Range filter
-      const issueDate = i.date?.split("T")[0] || "";
+    const filteredIssues = materialIssues.filter((issue) => {
+      const issueDate = issue.date?.split("T")[0] || "";
       if (fromDate && issueDate < fromDate) return false;
       if (toDate && issueDate > toDate) return false;
 
-      // Type filter
-      const isJob = !isWithoutJobIssue(i.issueType);
+      const isJob = !isWithoutJobIssue(issue.issueType);
       if (typeFilter === "job" && !isJob) return false;
       if (typeFilter === "general" && isJob) return false;
 
       return true;
     });
 
-    const issueIds = new Set(filteredIssues.map(i => i.id));
+    const issueIds = new Set(filteredIssues.map((issue) => issue.id));
+    const issueMap = new Map(filteredIssues.map((issue) => [issue.id, issue]));
 
-    // 2. General Material Lines
-    const general = issueLines.filter(l => issueIds.has(l.materialIssueId)).map(line => {
-      const parent = filteredIssues.find(i => i.id === line.materialIssueId);
-      if (!parent) return null;
-      const material = materialMap.get(line.materialId);
-      return {
-        ...line,
-        issueNo: parent.issueNo,
-        date: parent.date,
-        jobNo: parent.jobNo,
-        remarks: parent.remarks,
-        materialName: material?.name || "Unknown Material",
-      };
-    }).filter(Boolean) as any[];
+    const matchesText = (item: any) => {
+      if (!q) return true;
+      return Object.values(item).some((val) => String(val).toLowerCase().includes(q));
+    };
 
-    // 3. Reel Details
-    const reelDetails = reelLines.filter(l => issueIds.has(l.materialIssueId)).map(reel => {
-      const parent = filteredIssues.find(i => i.id === reel.materialIssueId);
-      if (!parent) return null;
-      const material = materialMap.get(reel.materialId);
-      const specs = material ? `${material.gsm || "-"} GSM / ${material.bf || "-"} BF / ${material.size || "-"} ${material.sizeUom || ""}` : "Unknown";
-      return {
-        ...reel,
-        issueNo: parent.issueNo,
-        date: parent.date,
-        jobNo: parent.jobNo,
-        remarks: parent.remarks,
-        specs,
-      };
-    }).filter(Boolean) as any[];
+    const matchesCommonFilters = (item: any) => {
+      if (materialFilter && item.materialId !== materialFilter) return false;
+      if (jobFilter && item.jobNo !== jobFilter) return false;
+      return matchesText(item);
+    };
 
-    // 4. Reel Summary (Grouped)
+    const general = issueLines
+      .filter((line) => issueIds.has(line.materialIssueId))
+      .map((line) => {
+        const parent = issueMap.get(line.materialIssueId);
+        if (!parent) return null;
+        const material = materialMap.get(line.materialId);
+        return {
+          ...line,
+          issueNo: parent.issueNo,
+          date: parent.date,
+          jobNo: parent.jobNo,
+          remarks: parent.remarks,
+          materialName: material?.name || "Unknown Material",
+          issueType: parent.issueType,
+          reelNos: reelLines
+            .filter((reel) => reel.materialIssueLineId === line.id)
+            .map((reel) => reel.ourReelNo)
+            .join(" "),
+        };
+      })
+      .filter(Boolean)
+      .filter((line: any) => {
+        if (reelFilter && !String(line.reelNos || "").split(" ").includes(reelFilter)) return false;
+        return matchesCommonFilters(line);
+      }) as any[];
+
+    const reelDetails = reelLines
+      .filter((line) => issueIds.has(line.materialIssueId))
+      .map((reel) => {
+        const parent = issueMap.get(reel.materialIssueId);
+        if (!parent) return null;
+        const material = materialMap.get(reel.materialId);
+        const line = issueLineMap.get(reel.materialIssueLineId);
+        const rate = resolveLineRate(line, material);
+        const specs = material ? `${material.gsm || "-"} GSM / ${material.bf || "-"} BF / ${material.size || "-"} ${material.uom || ""}` : "Unknown";
+        return {
+          ...reel,
+          issueNo: parent.issueNo,
+          date: parent.date,
+          jobNo: parent.jobNo,
+          remarks: parent.remarks,
+          specs,
+          materialName: material?.name || "Unknown Material",
+          issueType: parent.issueType,
+          rate,
+          value: Number(reel.weightKg || 0) * rate,
+        };
+      })
+      .filter(Boolean)
+      .filter((reel: any) => {
+        if (reelFilter && reel.ourReelNo !== reelFilter) return false;
+        return matchesCommonFilters(reel);
+      }) as any[];
+
     const summaryMap = new Map<string, any>();
-    reelDetails.forEach(reel => {
+    reelDetails.forEach((reel) => {
       const key = `${reel.materialIssueId}_${reel.materialId}`;
       if (!summaryMap.has(key)) {
         summaryMap.set(key, {
           ...reel,
           totalWeight: 0,
+          totalValue: 0,
           reelCount: 0,
         });
       }
       const existing = summaryMap.get(key);
       existing.totalWeight += Number(reel.weightKg || 0);
+      existing.totalValue += Number(reel.value || 0);
       existing.reelCount += 1;
     });
-    const reelSummary = Array.from(summaryMap.values());
 
-    const filterFn = (item: any) => {
-      if (!q) return true;
-      return Object.values(item).some(val => 
-        String(val).toLowerCase().includes(q)
-      );
-    };
+    const finalGeneral = general.sort((a, b) => b.date.localeCompare(a.date));
+    const finalReelSummary = Array.from(summaryMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+    const finalReelDetails = reelDetails.sort((a, b) => b.date.localeCompare(a.date));
+    const visibleIssueIds = new Set([...finalGeneral, ...finalReelDetails].map((row) => row.materialIssueId));
+    const visibleIssues = filteredIssues.filter((issue) => visibleIssueIds.has(issue.id));
 
-    const finalGeneral = general.filter(filterFn).sort((a, b) => b.date.localeCompare(a.date));
-    const finalReelSummary = reelSummary.filter(filterFn).sort((a, b) => b.date.localeCompare(a.date));
-    const finalReelDetails = reelDetails.filter(filterFn).sort((a, b) => b.date.localeCompare(a.date));
-
-    // Calculate Metrics
     const metrics = {
-      totalTransactions: filteredIssues.length,
-      totalWeight: reelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
-      jobIssues: filteredIssues.filter(i => !isWithoutJobIssue(i.issueType)).length,
-      generalIssues: filteredIssues.filter(i => isWithoutJobIssue(i.issueType)).length,
+      totalTransactions: visibleIssues.length,
+      totalWeight: finalReelDetails.reduce((sum, row) => sum + Number(row.weightKg || 0), 0),
+      totalValue: finalReelDetails.reduce((sum, row) => sum + Number(row.value || 0), 0),
+      jobIssues: visibleIssues.filter((issue) => !isWithoutJobIssue(issue.issueType)).length,
+      generalIssues: visibleIssues.filter((issue) => isWithoutJobIssue(issue.issueType)).length,
     };
 
     return {
@@ -119,7 +206,7 @@ export function MaterialIssueMaster() {
       reelDetails: finalReelDetails,
       metrics,
     };
-  }, [materialIssues, issueLines, reelLines, materialMap, searchTerm, fromDate, toDate, typeFilter]);
+  }, [materialIssues, issueLines, reelLines, materialMap, issueLineMap, searchTerm, fromDate, toDate, typeFilter, materialFilter, jobFilter, reelFilter]);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -143,15 +230,18 @@ export function MaterialIssueMaster() {
         </div>
       </div>
 
-      {/* Colorful Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Transactions</div>
           <div className="text-3xl font-black">{processedData.metrics.totalTransactions.toLocaleString()}</div>
         </div>
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Reel Weight</div>
-          <div className="text-3xl font-black">{processedData.metrics.totalWeight.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs">KG</span></div>
+          <div className="text-3xl font-black">{formatNumber(processedData.metrics.totalWeight)} <span className="text-xs">KG</span></div>
+        </div>
+        <div className="bg-gradient-to-br from-cyan-500 to-cyan-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Reel Value</div>
+          <div className="text-3xl font-black">{formatNumber(processedData.metrics.totalValue)}</div>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Job Issues</div>
@@ -163,13 +253,12 @@ export function MaterialIssueMaster() {
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="flex flex-wrap items-end gap-4 bg-slate-50 p-4 border border-black rounded shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 items-end gap-4 bg-slate-50 p-4 border border-black rounded shadow-sm">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase text-slate-500">From Date</label>
-          <input 
+          <input
             type="date"
-            value={fromDate} 
+            value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
             className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
           />
@@ -177,9 +266,9 @@ export function MaterialIssueMaster() {
 
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase text-slate-500">To Date</label>
-          <input 
+          <input
             type="date"
-            value={toDate} 
+            value={toDate}
             onChange={(e) => setToDate(e.target.value)}
             className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
           />
@@ -187,29 +276,39 @@ export function MaterialIssueMaster() {
 
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase text-slate-500">Issue Type</label>
-          <select 
-            value={typeFilter} 
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none min-w-[120px]"
-          >
-            <option value="all">All Types</option>
-            <option value="job">Job Specific</option>
-            <option value="general">Without Job</option>
-          </select>
+          <Select compact options={issueTypeOptions} value={typeFilter} onChange={(value) => setTypeFilter(value || "all")} placeholder="All Types" />
         </div>
 
-        <div className="flex-1 min-w-[200px] flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">Material</label>
+          <Select compact options={materialOptions} value={materialFilter} onChange={setMaterialFilter} placeholder="All Materials" />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">Job No</label>
+          <Select compact options={jobOptions} value={jobFilter} onChange={setJobFilter} placeholder="All Jobs" />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">Reel No</label>
+          <Select compact options={reelOptions} value={reelFilter} onChange={setReelFilter} placeholder="All Reels" />
+        </div>
+
+        <div className="flex flex-col gap-1 xl:col-span-1">
           <label className="text-[10px] font-black uppercase text-slate-500">Search</label>
           <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search Job No, Reel No, Material..." />
         </div>
 
-        {(fromDate || toDate || typeFilter !== "all" || searchTerm) && (
-          <button 
+        {(fromDate || toDate || typeFilter !== "all" || searchTerm || materialFilter || jobFilter || reelFilter) && (
+          <button
             onClick={() => {
               setFromDate("");
               setToDate("");
               setTypeFilter("all");
               setSearchTerm("");
+              setMaterialFilter("");
+              setJobFilter("");
+              setReelFilter("");
             }}
             className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
           >
@@ -291,13 +390,14 @@ export function MaterialIssueMaster() {
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Job No</th>
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Material Specs</th>
                   <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Weight (KG)</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Value</th>
                   <th className="px-4 py-3 text-center text-xs font-bold uppercase">Reel Count</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
                 {processedData.reelSummary.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-slate-600 font-medium">No reel issues found.</td>
+                    <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">No reel issues found.</td>
                   </tr>
                 ) : (
                   processedData.reelSummary.map((row, idx) => (
@@ -306,7 +406,8 @@ export function MaterialIssueMaster() {
                       <td className="px-4 py-3 text-sm">{formatDate(row.date)}</td>
                       <td className="px-4 py-3 text-sm font-medium">{row.jobNo || "-"}</td>
                       <td className="px-4 py-3 text-sm">{row.specs}</td>
-                      <td className="px-4 py-3 text-sm text-right font-black text-emerald-600">{Number(row.totalWeight || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-black text-emerald-600">{formatNumber(row.totalWeight)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-black text-cyan-700">{formatNumber(row.totalValue)}</td>
                       <td className="px-4 py-3 text-sm text-center font-bold">{row.reelCount}</td>
                     </tr>
                   ))
@@ -325,12 +426,13 @@ export function MaterialIssueMaster() {
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Material Specs</th>
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Our Reel No</th>
                   <th className="px-4 py-3 text-right text-xs font-bold uppercase">Weight (KG)</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold uppercase">Value</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
                 {processedData.reelDetails.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-slate-600 font-medium">No reel details found.</td>
+                    <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">No reel details found.</td>
                   </tr>
                 ) : (
                   processedData.reelDetails.map((row) => (
@@ -340,7 +442,8 @@ export function MaterialIssueMaster() {
                       <td className="px-4 py-3 text-sm font-medium">{row.jobNo || "-"}</td>
                       <td className="px-4 py-3 text-sm">{row.specs}</td>
                       <td className="px-4 py-3 text-sm font-black text-slate-900">{row.ourReelNo}</td>
-                      <td className="px-4 py-3 text-sm text-right font-bold text-amber-600">{Number(row.weightKg || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-amber-600">{formatNumber(row.weightKg)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-cyan-700">{formatNumber(row.value)}</td>
                     </tr>
                   ))
                 )}
@@ -352,4 +455,3 @@ export function MaterialIssueMaster() {
     </div>
   );
 }
-

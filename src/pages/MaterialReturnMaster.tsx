@@ -2,8 +2,32 @@ import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { MaterialReturn, MaterialReturnLine, MaterialReturnReelLine, Material, Production } from "../types";
 import { TableControls } from "../components/TableControls";
+import { Select } from "../components/Select";
 import { Trash2, Package, Layers, Disc } from "lucide-react";
 import { formatDate } from "../lib/serial";
+
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function resolveLineRate(line: MaterialReturnLine | undefined, material: Material | undefined) {
+  const qty = Number(line?.qty || 0);
+  const amount = Number(line?.amount || 0);
+  if (qty > 0 && amount > 0) return amount / qty;
+
+  const candidates = [line?.rate, line?.lastPurchaseRate, line?.openingRate, material?.openingRate];
+  for (const candidate of candidates) {
+    const rate = Number(candidate || 0);
+    if (rate > 0) return rate;
+  }
+  return 0;
+}
+
+const returnTypeOptions = [
+  { value: "all", label: "All Types" },
+  { value: "job", label: "Job Specific" },
+  { value: "general", label: "General" },
+];
 
 export function MaterialReturnMaster() {
   const [materialReturns, setMaterialReturns] = useData<MaterialReturn>("material-returns", []);
@@ -17,95 +41,158 @@ export function MaterialReturnMaster() {
   const [activeTab, setActiveTab] = useState<"general" | "reel-summary" | "reel-details">("general");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all"); // all, job, general
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [materialFilter, setMaterialFilter] = useState("");
+  const [jobFilter, setJobFilter] = useState("");
+  const [reelFilter, setReelFilter] = useState("");
 
-  const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
+  const materialMap = useMemo(() => new Map(materials.map((m) => [m.id, m])), [materials]);
+  const returnLineMap = useMemo(() => new Map(returnLines.map((line) => [line.id, line])), [returnLines]);
+
+  const materialOptions = useMemo(() => {
+    const optionMap = new Map<string, string>();
+    returnLines.forEach((line) => {
+      const material = materialMap.get(line.materialId);
+      if (material) optionMap.set(material.id, material.name);
+    });
+    reelLines.forEach((line) => {
+      const material = materialMap.get(line.materialId);
+      if (material) optionMap.set(material.id, material.name);
+    });
+    return Array.from(optionMap.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }));
+  }, [returnLines, reelLines, materialMap]);
+
+  const jobOptions = useMemo(() => {
+    const jobs = new Set<string>();
+    materialReturns.forEach((returnEntry) => {
+      if (returnEntry.jobNo) jobs.add(returnEntry.jobNo);
+    });
+    reelLines.forEach((line) => {
+      if (line.jobNo) jobs.add(line.jobNo);
+    });
+    return Array.from(jobs).sort().map((jobNo) => ({ value: jobNo, label: jobNo }));
+  }, [materialReturns, reelLines]);
+
+  const reelOptions = useMemo(() => {
+    return Array.from(new Set(reelLines.map((line) => line.ourReelNo).filter(Boolean)))
+      .sort()
+      .map((reelNo) => ({ value: reelNo, label: reelNo }));
+  }, [reelLines]);
 
   const processedData = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
 
-    // 1. Filter raw returns first
-    const filteredReturns = materialReturns.filter(r => {
-      // Custom Date Range filter
-      const returnDate = r.date?.split("T")[0] || "";
+    const filteredReturns = materialReturns.filter((returnEntry) => {
+      const returnDate = returnEntry.date?.split("T")[0] || "";
       if (fromDate && returnDate < fromDate) return false;
       if (toDate && returnDate > toDate) return false;
 
-      // Type filter
-      const isJob = r.returnType === "Job";
+      const isJob = returnEntry.returnType === "Job";
       if (typeFilter === "job" && !isJob) return false;
       if (typeFilter === "general" && isJob) return false;
 
       return true;
     });
 
-    const returnIds = new Set(filteredReturns.map(r => r.id));
+    const returnIds = new Set(filteredReturns.map((returnEntry) => returnEntry.id));
+    const returnMap = new Map(filteredReturns.map((returnEntry) => [returnEntry.id, returnEntry]));
 
-    // 2. General Material Lines
-    const general = returnLines.filter(l => returnIds.has(l.materialReturnId)).map(line => {
-      const parent = filteredReturns.find(r => r.id === line.materialReturnId);
-      if (!parent) return null;
-      const material = materialMap.get(line.materialId);
-      return {
-        ...line,
-        returnNo: parent.returnNo,
-        date: parent.date,
-        jobNo: parent.jobNo,
-        remarks: parent.remarks,
-        materialName: material?.name || "Unknown Material",
-      };
-    }).filter(Boolean) as any[];
+    const matchesText = (item: any) => {
+      if (!q) return true;
+      return Object.values(item).some((val) => String(val).toLowerCase().includes(q));
+    };
 
-    // 3. Reel Details
-    const reelDetails = reelLines.filter(l => returnIds.has(l.materialReturnId)).map(reel => {
-      const parent = filteredReturns.find(r => r.id === reel.materialReturnId);
-      if (!parent) return null;
-      const material = materialMap.get(reel.materialId);
-      const specs = material ? `${material.gsm || "-"} GSM / ${material.bf || "-"} BF / ${material.size || "-"} ${material.sizeUom || ""}` : "Unknown";
-      return {
-        ...reel,
-        returnNo: parent.returnNo,
-        date: parent.date,
-        jobNo: parent.jobNo,
-        remarks: parent.remarks,
-        specs,
-      };
-    }).filter(Boolean) as any[];
+    const matchesCommonFilters = (item: any) => {
+      if (materialFilter && item.materialId !== materialFilter) return false;
+      if (jobFilter && item.jobNo !== jobFilter) return false;
+      return matchesText(item);
+    };
 
-    // 4. Reel Summary (Grouped)
+    const general = returnLines
+      .filter((line) => returnIds.has(line.materialReturnId))
+      .map((line) => {
+        const parent = returnMap.get(line.materialReturnId);
+        if (!parent) return null;
+        const material = materialMap.get(line.materialId);
+        return {
+          ...line,
+          returnNo: parent.returnNo,
+          date: parent.date,
+          jobNo: parent.jobNo,
+          remarks: parent.remarks,
+          materialName: material?.name || "Unknown Material",
+          returnType: parent.returnType,
+          reelNos: reelLines
+            .filter((reel) => reel.materialReturnLineId === line.id)
+            .map((reel) => reel.ourReelNo)
+            .join(" "),
+        };
+      })
+      .filter(Boolean)
+      .filter((line: any) => {
+        if (reelFilter && !String(line.reelNos || "").split(" ").includes(reelFilter)) return false;
+        return matchesCommonFilters(line);
+      }) as any[];
+
+    const reelDetails = reelLines
+      .filter((line) => returnIds.has(line.materialReturnId))
+      .map((reel) => {
+        const parent = returnMap.get(reel.materialReturnId);
+        if (!parent) return null;
+        const material = materialMap.get(reel.materialId);
+        const line = returnLineMap.get(reel.materialReturnLineId);
+        const rate = resolveLineRate(line, material);
+        const specs = material ? `${material.gsm || "-"} GSM / ${material.bf || "-"} BF / ${material.size || "-"} ${material.uom || ""}` : "Unknown";
+        return {
+          ...reel,
+          returnNo: parent.returnNo,
+          date: parent.date,
+          jobNo: parent.jobNo,
+          remarks: parent.remarks,
+          specs,
+          materialName: material?.name || "Unknown Material",
+          returnType: parent.returnType,
+          rate,
+          value: Number(reel.weightKg || 0) * rate,
+        };
+      })
+      .filter(Boolean)
+      .filter((reel: any) => {
+        if (reelFilter && reel.ourReelNo !== reelFilter) return false;
+        return matchesCommonFilters(reel);
+      }) as any[];
+
     const summaryMap = new Map<string, any>();
-    reelDetails.forEach(reel => {
+    reelDetails.forEach((reel) => {
       const key = `${reel.materialReturnId}_${reel.materialId}`;
       if (!summaryMap.has(key)) {
         summaryMap.set(key, {
           ...reel,
           totalWeight: 0,
+          totalValue: 0,
           reelCount: 0,
         });
       }
       const existing = summaryMap.get(key);
       existing.totalWeight += Number(reel.weightKg || 0);
+      existing.totalValue += Number(reel.value || 0);
       existing.reelCount += 1;
     });
-    const reelSummary = Array.from(summaryMap.values());
 
-    const filterFn = (item: any) => {
-      if (!q) return true;
-      return Object.values(item).some(val => 
-        String(val).toLowerCase().includes(q)
-      );
-    };
+    const finalGeneral = general.sort((a, b) => b.date.localeCompare(a.date));
+    const finalReelSummary = Array.from(summaryMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+    const finalReelDetails = reelDetails.sort((a, b) => b.date.localeCompare(a.date));
+    const visibleReturnIds = new Set([...finalGeneral, ...finalReelDetails].map((row) => row.materialReturnId));
+    const visibleReturns = filteredReturns.filter((returnEntry) => visibleReturnIds.has(returnEntry.id));
 
-    const finalGeneral = general.filter(filterFn).sort((a, b) => b.date.localeCompare(a.date));
-    const finalReelSummary = reelSummary.filter(filterFn).sort((a, b) => b.date.localeCompare(a.date));
-    const finalReelDetails = reelDetails.filter(filterFn).sort((a, b) => b.date.localeCompare(a.date));
-
-    // Calculate Metrics
     const metrics = {
-      totalTransactions: filteredReturns.length,
-      totalWeight: reelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
-      jobReturns: filteredReturns.filter(r => r.returnType === "Job").length,
-      generalReturns: filteredReturns.filter(r => r.returnType !== "Job").length,
+      totalTransactions: visibleReturns.length,
+      totalWeight: finalReelDetails.reduce((sum, row) => sum + Number(row.weightKg || 0), 0),
+      totalValue: finalReelDetails.reduce((sum, row) => sum + Number(row.value || 0), 0),
+      jobReturns: visibleReturns.filter((returnEntry) => returnEntry.returnType === "Job").length,
+      generalReturns: visibleReturns.filter((returnEntry) => returnEntry.returnType !== "Job").length,
     };
 
     return {
@@ -114,7 +201,7 @@ export function MaterialReturnMaster() {
       reelDetails: finalReelDetails,
       metrics,
     };
-    }, [materialReturns, returnLines, reelLines, materialMap, searchTerm, fromDate, toDate, typeFilter]);
+  }, [materialReturns, returnLines, reelLines, materialMap, returnLineMap, searchTerm, fromDate, toDate, typeFilter, materialFilter, jobFilter, reelFilter]);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -138,15 +225,18 @@ export function MaterialReturnMaster() {
         </div>
       </div>
 
-      {/* Colorful Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Transactions</div>
           <div className="text-3xl font-black">{processedData.metrics.totalTransactions.toLocaleString()}</div>
         </div>
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Reel Weight</div>
-          <div className="text-3xl font-black">{processedData.metrics.totalWeight.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs">KG</span></div>
+          <div className="text-3xl font-black">{formatNumber(processedData.metrics.totalWeight)} <span className="text-xs">KG</span></div>
+        </div>
+        <div className="bg-gradient-to-br from-cyan-500 to-cyan-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Reel Value</div>
+          <div className="text-3xl font-black">{formatNumber(processedData.metrics.totalValue)}</div>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Job Returns</div>
@@ -158,13 +248,12 @@ export function MaterialReturnMaster() {
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="flex flex-wrap items-end gap-4 bg-slate-50 p-4 border border-black rounded shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 items-end gap-4 bg-slate-50 p-4 border border-black rounded shadow-sm">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase text-slate-500">From Date</label>
-          <input 
+          <input
             type="date"
-            value={fromDate} 
+            value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
             className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
           />
@@ -172,9 +261,9 @@ export function MaterialReturnMaster() {
 
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase text-slate-500">To Date</label>
-          <input 
+          <input
             type="date"
-            value={toDate} 
+            value={toDate}
             onChange={(e) => setToDate(e.target.value)}
             className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
           />
@@ -182,29 +271,39 @@ export function MaterialReturnMaster() {
 
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase text-slate-500">Return Type</label>
-          <select 
-            value={typeFilter} 
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="border border-black rounded px-2 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none min-w-[120px]"
-          >
-            <option value="all">All Types</option>
-            <option value="job">Job Specific</option>
-            <option value="general">General</option>
-          </select>
+          <Select compact options={returnTypeOptions} value={typeFilter} onChange={(value) => setTypeFilter(value || "all")} placeholder="All Types" />
         </div>
 
-        <div className="flex-1 min-w-[200px] flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">Material</label>
+          <Select compact options={materialOptions} value={materialFilter} onChange={setMaterialFilter} placeholder="All Materials" />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">Job No</label>
+          <Select compact options={jobOptions} value={jobFilter} onChange={setJobFilter} placeholder="All Jobs" />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">Reel No</label>
+          <Select compact options={reelOptions} value={reelFilter} onChange={setReelFilter} placeholder="All Reels" />
+        </div>
+
+        <div className="flex flex-col gap-1 xl:col-span-1">
           <label className="text-[10px] font-black uppercase text-slate-500">Search</label>
           <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} placeholder="Search Job No, Reel No, Material..." />
         </div>
 
-        {(fromDate || toDate || typeFilter !== "all" || searchTerm) && (
-          <button 
+        {(fromDate || toDate || typeFilter !== "all" || searchTerm || materialFilter || jobFilter || reelFilter) && (
+          <button
             onClick={() => {
               setFromDate("");
               setToDate("");
               setTypeFilter("all");
               setSearchTerm("");
+              setMaterialFilter("");
+              setJobFilter("");
+              setReelFilter("");
             }}
             className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
           >
@@ -286,13 +385,14 @@ export function MaterialReturnMaster() {
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Job No</th>
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Material Specs</th>
                   <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Weight (KG)</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Value</th>
                   <th className="px-4 py-3 text-center text-xs font-bold uppercase">Reel Count</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
                 {processedData.reelSummary.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-slate-600 font-medium">No reel returns found.</td>
+                    <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">No reel returns found.</td>
                   </tr>
                 ) : (
                   processedData.reelSummary.map((row, idx) => (
@@ -301,7 +401,8 @@ export function MaterialReturnMaster() {
                       <td className="px-4 py-3 text-sm">{formatDate(row.date)}</td>
                       <td className="px-4 py-3 text-sm font-medium">{row.jobNo || "-"}</td>
                       <td className="px-4 py-3 text-sm">{row.specs}</td>
-                      <td className="px-4 py-3 text-sm text-right font-black text-emerald-600">{Number(row.totalWeight || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-black text-emerald-600">{formatNumber(row.totalWeight)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-black text-cyan-700">{formatNumber(row.totalValue)}</td>
                       <td className="px-4 py-3 text-sm text-center font-bold">{row.reelCount}</td>
                     </tr>
                   ))
@@ -320,12 +421,13 @@ export function MaterialReturnMaster() {
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Material Specs</th>
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Our Reel No</th>
                   <th className="px-4 py-3 text-right text-xs font-bold uppercase">Weight (KG)</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold uppercase">Value</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
                 {processedData.reelDetails.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-slate-600 font-medium">No reel details found.</td>
+                    <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">No reel details found.</td>
                   </tr>
                 ) : (
                   processedData.reelDetails.map((row) => (
@@ -335,7 +437,8 @@ export function MaterialReturnMaster() {
                       <td className="px-4 py-3 text-sm font-medium">{row.jobNo || "-"}</td>
                       <td className="px-4 py-3 text-sm">{row.specs}</td>
                       <td className="px-4 py-3 text-sm font-black text-slate-900">{row.ourReelNo}</td>
-                      <td className="px-4 py-3 text-sm text-right font-bold text-amber-600">{Number(row.weightKg || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-amber-600">{formatNumber(row.weightKg)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-cyan-700">{formatNumber(row.value)}</td>
                     </tr>
                   ))
                 )}
