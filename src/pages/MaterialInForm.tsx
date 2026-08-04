@@ -2280,7 +2280,17 @@ export function MaterialInForm() {
                       </button>
                     </div>
                     <div className="overflow-x-auto rounded border border-slate-700 bg-white">
-                      <table className="min-w-[1020px] border-collapse bg-white text-xs">
+                      <table className="w-full min-w-[1180px] table-fixed border-collapse bg-white text-xs">
+                        <colgroup>
+                          <col className="w-[8%]" />
+                          <col className="w-[24%]" />
+                          <col className="w-[8%]" />
+                          <col className="w-[28%]" />
+                          <col className="w-[10%]" />
+                          <col className="w-[8%]" />
+                          <col className="w-[7%]" />
+                          <col className="w-[7%]" />
+                        </colgroup>
                         <thead className="bg-slate-100">
                           <tr>
                             {["Type", "Group", "UOM", "Color", "Size", "GSM", "BF", "Action"].map((heading) => (
@@ -2307,21 +2317,21 @@ export function MaterialInForm() {
                                     placeholder="Type..."
                                   />
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[190px]">
-                                  {isReelDraft ? (
-                                    <div className="rounded border border-slate-300 bg-slate-100 px-2 py-2 font-bold text-slate-800">
-                                      {reelGroup?.name || "Reel"}
-                                    </div>
-                                  ) : (
-                                    <Select options={materialGroupOptions} value={draft.materialGroupId} onChange={(value) => { updateQuickMaterialDraft(match, { materialGroupId: value }); clearAiRowError(match.index, "materialGroupId"); }} placeholder="Group..." />
-                                  )}
-                                  {errorText("materialGroupId")}
-                                  <div className="mt-2 flex gap-1">
-                                    <input value={groupNameValue} onChange={(e) => setNewAiGroupNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New group" className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs text-black" />
+                                <td className="border border-slate-700 px-2 py-2">
+                                  <div className="grid grid-cols-[minmax(100px,0.9fr)_minmax(100px,1fr)_32px] items-start gap-1">
+                                    {isReelDraft ? (
+                                      <div className="rounded border border-slate-300 bg-slate-100 px-2 py-2 font-bold text-slate-800">
+                                        {reelGroup?.name || "Reel"}
+                                      </div>
+                                    ) : (
+                                      <Select options={materialGroupOptions} value={draft.materialGroupId} onChange={(value) => { updateQuickMaterialDraft(match, { materialGroupId: value }); clearAiRowError(match.index, "materialGroupId"); }} placeholder="Group..." compact />
+                                    )}
+                                    <input value={groupNameValue} onChange={(e) => setNewAiGroupNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New group" className="min-w-0 rounded border border-slate-300 px-2 py-2 text-xs text-black" />
                                     <button type="button" title="Create group" onClick={() => handleCreateAiGroup(match)} disabled={savingAiGroupIndex === match.index || !groupNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50">
                                       {savingAiGroupIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
                                     </button>
                                   </div>
+                                  {errorText("materialGroupId")}
                                 </td>
                                 <td className="border border-slate-700 px-2 py-2 min-w-[130px]">
                                   {isReelDraft ? (
@@ -2331,17 +2341,24 @@ export function MaterialInForm() {
                                   )}
                                   {errorText("uom")}
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[190px]">
-                                  <Select options={colorOptions} value={isReelDraft ? draft.color : ""} onChange={(value) => { updateQuickMaterialDraft(match, { color: value }); clearAiRowError(match.index, "color"); }} placeholder="Color..." disabled={!isReelDraft} />
+                                <td className="border border-slate-700 px-2 py-2">
+                                  <div className="grid grid-cols-[minmax(120px,1fr)_minmax(100px,1fr)_32px] items-start gap-1">
+                                    <Select options={colorOptions} value={isReelDraft ? draft.color : ""} onChange={(value) => { updateQuickMaterialDraft(match, { color: value }); clearAiRowError(match.index, "color"); }} placeholder="Color..." disabled={!isReelDraft} compact />
+                                    {isReelDraft ? (
+                                      <>
+                                        <input value={colorNameValue} onChange={(e) => setNewAiColorNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New color" className="min-w-0 rounded border border-slate-300 px-2 py-2 text-xs text-black" />
+                                        <button type="button" title="Create color" onClick={() => handleCreateAiColor(match)} disabled={savingAiColorIndex === match.index || !colorNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50">
+                                          {savingAiColorIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div />
+                                        <div />
+                                      </>
+                                    )}
+                                  </div>
                                   {isReelDraft ? errorText("color") : null}
-                                  {isReelDraft ? (
-                                    <div className="mt-2 flex gap-1">
-                                      <input value={colorNameValue} onChange={(e) => setNewAiColorNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New color" className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs text-black" />
-                                      <button type="button" title="Create color" onClick={() => handleCreateAiColor(match)} disabled={savingAiColorIndex === match.index || !colorNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50">
-                                        {savingAiColorIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
-                                      </button>
-                                    </div>
-                                  ) : null}
                                 </td>
                                 <td className="border border-slate-700 px-2 py-2 min-w-[90px]">
                                   <input type="number" min="0" step="0.01" value={isReelDraft ? draft.size : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { size: e.target.value }); clearAiRowError(match.index, "size"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
