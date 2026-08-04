@@ -651,8 +651,41 @@ export function MaterialInForm() {
   };
 
   const parseAiPositiveNumber = (value: unknown) => {
-    const numeric = Number(value);
+    const numeric = Number(String(value ?? "").replace(/,/g, ""));
     return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+  };
+
+  const parseAiNumberFromText = (text: string, patterns: RegExp[]) => {
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match) continue;
+      const value = parseAiPositiveNumber(match[1]);
+      if (value) return value;
+    }
+    return 0;
+  };
+
+  const getAiReelSpecs = (line: AiMrrLine) => {
+    const text = [line.itemName, line.erpCode].map((part) => String(part || "")).join(" ");
+    const combined = text.match(/(?:\bsize\s*[:/-]?\s*)?(\d+(?:\.\d+)?)\s*(?:cm)?\s*(?:x|\/|-)\s*gsm\s*[:/-]?\s*(\d+(?:\.\d+)?)\s*(?:x|\/|-)\s*bf\s*[:/-]?\s*(\d+(?:\.\d+)?)/i);
+    const textSize = combined ? parseAiPositiveNumber(combined[1]) : parseAiNumberFromText(text, [/\bsize\s*[:/-]?\s*(\d+(?:\.\d+)?)/i]);
+    const textGsm = combined ? parseAiPositiveNumber(combined[2]) : parseAiNumberFromText(text, [/\bgsm\s*[:/-]?\s*(\d+(?:\.\d+)?)/i]);
+    const textBf = combined ? parseAiPositiveNumber(combined[3]) : parseAiNumberFromText(text, [/\bbf\s*[:/-]?\s*(\d+(?:\.\d+)?)/i]);
+    return {
+      size: textSize || parseAiPositiveNumber(line.size),
+      gsm: textGsm || parseAiPositiveNumber(line.gsm),
+      bf: textBf || parseAiPositiveNumber(line.bf),
+    };
+  };
+
+  const normalizeAiReelLine = (line: AiMrrLine): AiMrrLine => {
+    const specs = getAiReelSpecs(line);
+    return {
+      ...line,
+      size: specs.size || line.size,
+      gsm: specs.gsm || line.gsm,
+      bf: specs.bf || line.bf,
+    };
   };
 
   const numbersMatch = (left: unknown, right: unknown) => {
@@ -661,24 +694,25 @@ export function MaterialInForm() {
     return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.001;
   };
 
-  const hasValidReelSpecs = (line: AiMrrLine) =>
-    parseAiPositiveNumber(line.size) > 0 && parseAiPositiveNumber(line.gsm) > 0 && parseAiPositiveNumber(line.bf) > 0;
+  const hasValidReelSpecs = (line: AiMrrLine) => {
+    const specs = getAiReelSpecs(line);
+    return specs.size > 0 && specs.gsm > 0 && specs.bf > 0;
+  };
 
   const getReelSpecLabel = (line: AiMrrLine) => {
-    const size = parseAiPositiveNumber(line.size);
-    const gsm = parseAiPositiveNumber(line.gsm);
-    const bf = parseAiPositiveNumber(line.bf);
-    return size && gsm && bf ? `Size ${size} / GSM ${gsm} / BF ${bf}` : "Size/GSM/BF incomplete";
+    const specs = getAiReelSpecs(line);
+    return specs.size && specs.gsm && specs.bf ? `Size ${specs.size} / GSM ${specs.gsm} / BF ${specs.bf}` : "Size/GSM/BF incomplete";
   };
 
   const findAiReelMaterialBySpecs = (line: AiMrrLine) => {
-    if (!hasValidReelSpecs(line)) return undefined;
+    const specs = getAiReelSpecs(line);
+    if (!specs.size || !specs.gsm || !specs.bf) return undefined;
     return materials
       .filter((material) => material.active !== "No" && material.type === "Reel")
       .find((material) =>
-        numbersMatch(material.size, line.size) &&
-        numbersMatch(material.gsm, line.gsm) &&
-        numbersMatch(material.bf, line.bf)
+        numbersMatch(material.size, specs.size) &&
+        numbersMatch(material.gsm, specs.gsm) &&
+        numbersMatch(material.bf, specs.bf)
       );
   };
 
@@ -744,23 +778,24 @@ export function MaterialInForm() {
   const aiLineMatches = useMemo<AiLineMatch[]>(() => {
     return (aiDraft?.lines || []).map((line, index) => {
       const expectedType = normalizeAiItemType(line.itemType);
-      if (expectedType === "Reel" && !hasValidReelSpecs(line)) {
-        return { line, index, status: "missing", reason: "Reel Size, GSM, and BF are required before matching." };
+      const lineForMatch = expectedType === "Reel" ? normalizeAiReelLine(line) : line;
+      if (expectedType === "Reel" && !hasValidReelSpecs(lineForMatch)) {
+        return { line: lineForMatch, index, status: "missing", reason: "Reel Size, GSM, and BF are required before matching." };
       }
-      const material = findAiMaterial(line);
+      const material = findAiMaterial(lineForMatch);
       if (!material) {
         return {
-          line,
+          line: lineForMatch,
           index,
           status: "missing",
-          reason: expectedType === "Reel" ? `${getReelSpecLabel(line)} not found in Reel Material Master.` : "Item not found in Material Master.",
+          reason: expectedType === "Reel" ? `${getReelSpecLabel(lineForMatch)} not found in Reel Material Master.` : "Item not found in Material Master.",
         };
       }
-      const po = getResolvedAiPoForMaterial(material.id, String(line.poNo || ""), aiMatchedSupplier?.id);
+      const po = getResolvedAiPoForMaterial(material.id, String(lineForMatch.poNo || ""), aiMatchedSupplier?.id);
       if (material.type !== expectedType) {
-        return { line, index, material, po, status: "warning", reason: `Existing item type is ${material.type}, AI suggests ${expectedType}.` };
+        return { line: lineForMatch, index, material, po, status: "warning", reason: `Existing item type is ${material.type}, AI suggests ${expectedType}.` };
       }
-      return { line, index, material, po, status: "matched", reason: expectedType === "Reel" ? `Matched by ${getReelSpecLabel(line)}.` : "Matched." };
+      return { line: lineForMatch, index, material, po, status: "matched", reason: expectedType === "Reel" ? "Matched by Size/GSM/BF." : "Matched." };
     });
   }, [aiDraft, materials, purchaseOrders, purchaseOrderLines, aiMatchedSupplier?.id]);
 
@@ -2065,7 +2100,7 @@ export function MaterialInForm() {
                     <tbody>
                       {aiLineMatches.map((match) => (
                         <tr key={match.index}>
-                          <td className="border border-black px-3 py-2 font-bold text-black">{normalizeAiItemType(match.line.itemType) === "Reel" ? getReelSpecLabel(match.line) : match.line.itemName || "-"}</td>
+                          <td className="border border-black px-3 py-2 font-bold text-black">{normalizeAiItemType(match.line.itemType) === "Reel" ? match.material?.name || getReelSpecLabel(match.line) : match.line.itemName || "-"}</td>
                           <td className="border border-black px-3 py-2 text-black">{String(match.line.erpCode || "-")}</td>
                           <td className="border border-black px-3 py-2 text-black">{normalizeAiItemType(match.line.itemType)}</td>
                           <td className="border border-black px-3 py-2 text-black">{Number(match.line.qty || 0).toLocaleString()}</td>
