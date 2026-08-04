@@ -1646,6 +1646,7 @@ export function MaterialInForm() {
     };
     try {
       await setMaterials([nextMaterial, ...materials]);
+      updateAiDraftLineFromQuickMaterial(quickMaterial, nextMaterial);
       setQuickMaterial(null);
     } catch (error) {
       console.error("Failed to create material:", error);
@@ -2702,6 +2703,184 @@ export function MaterialInForm() {
             {isSubmitting ? <Spinner size={24} className="text-white" /> : editingEntry ? "Update Form" : "Submit Form"}
           </button>
         </div>
+
+        {quickMaterial ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded border-2 border-black bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-black px-5 py-4">
+                <div>
+                  <h3 className="text-lg font-black uppercase text-black">Review & Edit Material</h3>
+                  <p className="text-xs font-semibold text-slate-600">Confirm missing item details before saving to Material Master.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQuickMaterial(null)}
+                  className="rounded border border-black bg-white p-2 text-black hover:bg-slate-50"
+                  aria-label="Close material review"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid gap-4 p-5 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">Type</label>
+                  <Select
+                    options={[{ value: "Reel", label: "Reel" }, { value: "Other", label: "Other" }]}
+                    value={quickMaterial.type}
+                    onChange={(value) => handleQuickMaterialTypeChange(value === "Reel" ? "Reel" : "Other")}
+                    placeholder="Select type..."
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">ERP Code</label>
+                  <input
+                    value={quickMaterial.erpCode}
+                    onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, erpCode: e.target.value } : prev)}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
+
+                {quickMaterial.type === "Other" ? (
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs font-black uppercase text-black">Item Name</label>
+                    <input
+                      value={quickMaterial.name}
+                      onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 md:col-span-2">
+                    Reel item name will be generated from ERP Code, Size, GSM, BF, and Color after save.
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">Material Group</label>
+                  <Select
+                    options={materialGroupOptions}
+                    value={quickMaterial.materialGroupId}
+                    onChange={(value) => setQuickMaterial((prev) => prev ? { ...prev, materialGroupId: value } : prev)}
+                    placeholder="Select group..."
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">UOM</label>
+                  <Select
+                    options={unitOptions.length ? unitOptions : [{ value: "KGS", label: "KGS" }, { value: "PCS", label: "PCS" }]}
+                    value={quickMaterial.uom}
+                    onChange={(value) => setQuickMaterial((prev) => prev ? { ...prev, uom: value } : prev)}
+                    placeholder="Select UOM..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-xs font-black uppercase text-black">+ Create Group</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={newAiGroupName}
+                      onChange={(e) => setNewAiGroupName(e.target.value)}
+                      placeholder="New material group name"
+                      className="min-w-0 flex-1 rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateAiGroup}
+                      disabled={savingAiGroup || !newAiGroupName.trim()}
+                      className="inline-flex items-center gap-2 rounded bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {savingAiGroup ? <Spinner size={16} className="text-white" /> : <Plus size={16} />} Create Group
+                    </button>
+                  </div>
+                </div>
+
+                {quickMaterial.type === "Reel" ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-xs font-black uppercase text-black">Color</label>
+                      {colorOptions.length ? (
+                        <Select
+                          options={colorOptions}
+                          value={quickMaterial.color}
+                          onChange={(value) => setQuickMaterial((prev) => prev ? { ...prev, color: value } : prev)}
+                          placeholder="Select color..."
+                        />
+                      ) : (
+                        <input
+                          value={quickMaterial.color}
+                          onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, color: e.target.value } : prev)}
+                          className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-black uppercase text-black">Size</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={quickMaterial.size}
+                        onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, size: e.target.value } : prev)}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-black uppercase text-black">GSM</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={quickMaterial.gsm}
+                        onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, gsm: e.target.value } : prev)}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-black uppercase text-black">BF</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={quickMaterial.bf}
+                        onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, bf: e.target.value } : prev)}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">Active</label>
+                  <Select
+                    options={[{ value: "Yes", label: "Yes" }, { value: "No", label: "No" }]}
+                    value={quickMaterial.active}
+                    onChange={(value) => setQuickMaterial((prev) => prev ? { ...prev, active: value === "No" ? "No" : "Yes" } : prev)}
+                    placeholder="Active..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-black px-5 py-4">
+                <button
+                  type="button"
+                  onClick={() => setQuickMaterial(null)}
+                  className="rounded border-2 border-black bg-white px-5 py-2 text-sm font-bold text-black hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateQuickMaterial}
+                  disabled={savingQuickMaterial}
+                  className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded bg-indigo-600 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingQuickMaterial ? <Spinner size={18} className="text-white" /> : <Plus size={18} />} Create Material
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </form>
     </div>
   );
