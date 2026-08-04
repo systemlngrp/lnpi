@@ -557,6 +557,28 @@ export function MaterialInForm() {
     companies.find((company) => company.id === partyId)?.name ||
     "";
 
+  const receivedQtyByPoLineId = useMemo(() => {
+    const map = new Map<string, number>();
+    materialIn.forEach((entry) => {
+      (entry.lines || []).forEach((line) => {
+        const poLineId = String(line.poLineId || "").trim();
+        if (!poLineId) return;
+        const qty = Number(line.actualQty ?? line.qty ?? line.invoiceQty ?? 0);
+        if (!Number.isFinite(qty) || qty <= 0) return;
+        map.set(poLineId, Number(map.get(poLineId) || 0) + qty);
+      });
+    });
+    return map;
+  }, [materialIn]);
+
+  const getPoLinePendingQty = (line: PurchaseOrderLine) =>
+    Math.max(
+      0,
+      Number(line.qty || 0) -
+        Number(receivedQtyByPoLineId.get(line.id) || 0) -
+        Math.max(0, Number(line.cancelledQty || 0))
+    );
+
   const isApprovedOrderForSelectedSupplier = (order: PurchaseOrder) => {
     if (order.status !== "Approved") return false;
     if (!supplierId) return true;
@@ -583,39 +605,43 @@ export function MaterialInForm() {
     return Boolean(materialErpCode && lineErpCode && materialErpCode === lineErpCode);
   };
 
-  const getApprovedPoOptionsForMaterial = (materialId: string) => {
-    const approvedOrders = purchaseOrders.filter(isApprovedOrderForSelectedSupplier);
+  const getEligiblePoLinesForMaterial = (materialId: string, partyId?: string) => {
+    const orderMatchesParty = partyId
+      ? (order: PurchaseOrder) => isApprovedOrderForParty(order, partyId)
+      : isApprovedOrderForSelectedSupplier;
 
-    return approvedOrders
+    return purchaseOrders
+      .filter(orderMatchesParty)
       .flatMap((order) =>
         purchaseOrderLines
-          .filter((line) => line.purchaseOrderId === order.id && poLineMatchesMaterial(line, materialId))
-          .map((line) => ({
-            value: line.id,
-            label: `${order.poNo} | Qty ${Number(line.qty || 0)} @ ${Number(line.rate || 0).toFixed(2)}`,
-          }))
+          .filter(
+            (line) =>
+              line.purchaseOrderId === order.id &&
+              poLineMatchesMaterial(line, materialId) &&
+              getPoLinePendingQty(line) > 0
+          )
+          .map((line) => ({ order, line, pendingQty: getPoLinePendingQty(line) }))
       );
   };
+
+  const getApprovedPoOptionsForMaterial = (materialId: string) =>
+    getEligiblePoLinesForMaterial(materialId).map(({ order, line, pendingQty }) => ({
+      value: line.id,
+      label: `${order.poNo} | Pending ${pendingQty.toLocaleString()} @ ${Number(line.rate || 0).toFixed(2)}`,
+    }));
 
   const getResolvedPoForMaterial = (materialId: string, ourPoNoRaw: string) => {
     const search = String(ourPoNoRaw || "").trim().toLowerCase();
     if (!search) return null;
 
-    const approvedOrders = purchaseOrders.filter(isApprovedOrderForSelectedSupplier);
-
-    for (const order of approvedOrders) {
+    for (const { order, line } of getEligiblePoLinesForMaterial(materialId)) {
       if (!String(order.poNo || "").trim().toLowerCase().includes(search)) continue;
-      const matchingLine = purchaseOrderLines.find(
-        (line) => line.purchaseOrderId === order.id && poLineMatchesMaterial(line, materialId)
-      );
-      if (matchingLine) {
-        return {
-          poId: order.id,
-          poNo: order.poNo || "",
-          poLineId: matchingLine.id,
-          poRate: Number(matchingLine.rate || 0),
-        };
-      }
+      return {
+        poId: order.id,
+        poNo: order.poNo || "",
+        poLineId: line.id,
+        poRate: Number(line.rate || 0),
+      };
     }
 
     return null;
@@ -764,16 +790,16 @@ export function MaterialInForm() {
 
   const getResolvedAiPoForMaterial = (materialId: string, ourPoNoRaw: string, partyId?: string) => {
     const search = String(ourPoNoRaw || "").trim().toLowerCase();
-    if (!search) return null;
-    const approvedOrders = purchaseOrders.filter((order) => isApprovedOrderForParty(order, partyId));
-    for (const order of approvedOrders) {
-      if (!String(order.poNo || "").trim().toLowerCase().includes(search)) continue;
-      const matchingLine = purchaseOrderLines.find(
-        (line) => line.purchaseOrderId === order.id && poLineMatchesMaterial(line, materialId)
-      );
-      if (matchingLine) {
-        return { poId: order.id, poNo: order.poNo || "", poLineId: matchingLine.id, poRate: Number(matchingLine.rate || 0) };
+    const eligibleLines = getEligiblePoLinesForMaterial(materialId, partyId);
+    if (search) {
+      for (const { order, line } of eligibleLines) {
+        if (!String(order.poNo || "").trim().toLowerCase().includes(search)) continue;
+        return { poId: order.id, poNo: order.poNo || "", poLineId: line.id, poRate: Number(line.rate || 0) };
       }
+    }
+    if (eligibleLines.length === 1) {
+      const { order, line } = eligibleLines[0];
+      return { poId: order.id, poNo: order.poNo || "", poLineId: line.id, poRate: Number(line.rate || 0) };
     }
     return null;
   };
@@ -809,7 +835,7 @@ export function MaterialInForm() {
       }
       return { line: lineForMatch, index, material, po, status: "matched", reason: expectedType === "Reel" ? "Matched by Size/GSM/BF." : "Matched." };
     });
-  }, [aiDraft, materials, purchaseOrders, purchaseOrderLines, aiMatchedSupplier?.id]);
+  }, [aiDraft, materials, purchaseOrders, purchaseOrderLines, receivedQtyByPoLineId, aiMatchedSupplier?.id]);
 
   const aiHasMissingSupplier = Boolean(aiDraft && !aiMatchedSupplier);
   const aiBlockingIssues = aiHasMissingSupplier || aiLineMatches.some((entry) => entry.status !== "matched");
