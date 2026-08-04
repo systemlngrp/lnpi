@@ -828,6 +828,18 @@ export function MaterialInForm() {
     [units]
   );
 
+  const getReelMaterialGroup = () => materialGroups.find((group) => normalizeMatchText(group.name) === "reel");
+
+  const normalizeQuickMaterialForm = (form: QuickMaterialForm): QuickMaterialForm => {
+    if (form.type !== "Reel") return form;
+    const reelGroup = getReelMaterialGroup();
+    return {
+      ...form,
+      uom: "KG",
+      materialGroupId: reelGroup?.id || "",
+    };
+  };
+
   const colorOptions = useMemo(
     () => colors.slice().sort((a, b) => a.name.localeCompare(b.name)).map((color) => ({ value: color.name, label: color.name })),
     [colors]
@@ -1537,8 +1549,8 @@ export function MaterialInForm() {
       type,
       erpCode: "",
       name: String(line.itemName || "").trim(),
-      uom: String(line.uom || (type === "Reel" ? "KGS" : "")).trim(),
-      materialGroupId: type === "Reel" ? reelGroup?.id || suggestedGroup?.id || "" : suggestedGroup?.id || "",
+      uom: type === "Reel" ? "KG" : String(line.uom || "").trim(),
+      materialGroupId: type === "Reel" ? reelGroup?.id || "" : suggestedGroup?.id || "",
       color: type === "Reel" ? matchedColor?.name || "" : "",
       size: line.size == null ? "" : String(line.size),
       gsm: line.gsm == null ? "" : String(line.gsm),
@@ -1573,8 +1585,8 @@ export function MaterialInForm() {
         ...current,
         type,
         erpCode: "",
-        uom: type === "Reel" ? "KGS" : current.uom,
-        materialGroupId: type === "Reel" ? reelGroup?.id || current.materialGroupId : current.materialGroupId,
+        uom: type === "Reel" ? "KG" : current.uom,
+        materialGroupId: type === "Reel" ? reelGroup?.id || "" : current.materialGroupId,
         color: type === "Reel" ? current.color : "",
         size: type === "Reel" ? current.size : "",
         gsm: type === "Reel" ? current.gsm : "",
@@ -1599,6 +1611,7 @@ export function MaterialInForm() {
   };
 
   const validateQuickMaterialForm = (form: QuickMaterialForm) => {
+    form = normalizeQuickMaterialForm(form);
     const errors: QuickMaterialValidationErrors = {};
     const size = Number(form.size);
     const gsm = Number(form.gsm);
@@ -1643,6 +1656,7 @@ export function MaterialInForm() {
   };
 
   const buildAiMaterialCreationResult = (form: QuickMaterialForm, materialList: Material[]): MaterialCreationResult => {
+    form = normalizeQuickMaterialForm(form);
     const name = form.name.trim();
     const uom = form.uom.trim();
     const size = Number(form.size);
@@ -1688,7 +1702,8 @@ export function MaterialInForm() {
   };
 
   const handleCreateAiGroup = async (match: AiLineMatch) => {
-    const defaultName = String(match.line.materialGroupName || "").trim();
+    const currentDraft = normalizeQuickMaterialForm(getQuickMaterialDraft(match));
+    const defaultName = currentDraft.type === "Reel" ? "Reel" : String(match.line.materialGroupName || "").trim();
     const normalizedName = String(newAiGroupNames[match.index] ?? defaultName).trim();
     if (!normalizedName) return;
     const existing = materialGroups.find((group) => normalizeMatchText(group.name) === normalizeMatchText(normalizedName));
@@ -1742,23 +1757,24 @@ export function MaterialInForm() {
   };
 
   const handleCreateQuickMaterial = async (form: QuickMaterialForm) => {
-    const validationErrors = validateQuickMaterialForm(form);
+    const normalizedForm = normalizeQuickMaterialForm(form);
+    const validationErrors = validateQuickMaterialForm(normalizedForm);
     if (Object.keys(validationErrors).length > 0) {
-      setAiRowErrors((prev) => ({ ...prev, [form.lineIndex]: validationErrors }));
+      setAiRowErrors((prev) => ({ ...prev, [normalizedForm.lineIndex]: validationErrors }));
       return;
     }
 
-    setSavingQuickMaterialIndex(form.lineIndex);
+    setSavingQuickMaterialIndex(normalizedForm.lineIndex);
     try {
-      const result = buildAiMaterialCreationResult(form, materials);
+      const result = buildAiMaterialCreationResult(normalizedForm, materials);
       if (result.isNew) {
         await setMaterials([result.material, ...materials]);
       }
       updateAiDraftLinesFromCreationResults([result]);
-      clearAiRowError(form.lineIndex);
+      clearAiRowError(normalizedForm.lineIndex);
       setQuickMaterialDrafts((prev) => {
         const next = { ...prev };
-        delete next[form.lineIndex];
+        delete next[normalizedForm.lineIndex];
         return next;
       });
     } catch (error) {
@@ -1772,7 +1788,7 @@ export function MaterialInForm() {
   const handleCreateAllMissingMaterials = async () => {
     if (missingAiLineMatches.length === 0) return;
 
-    const forms = missingAiLineMatches.map((match) => getQuickMaterialDraft(match));
+    const forms = missingAiLineMatches.map((match) => normalizeQuickMaterialForm(getQuickMaterialDraft(match)));
     const nextErrors = forms.reduce<Record<number, QuickMaterialValidationErrors>>((acc, form) => {
       const errors = validateQuickMaterialForm(form);
       if (Object.keys(errors).length > 0) acc[form.lineIndex] = errors;
@@ -2248,96 +2264,42 @@ export function MaterialInForm() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto rounded border border-black">
-                  <table className="min-w-full border-collapse bg-white text-sm">
-                    <thead className="bg-slate-100">
-                      <tr>
-                        {["Item", "Type", "Qty", "UOM", "Rate", "GST", "Match", "Action"].map((heading) => (
-                          <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-black uppercase text-black">{heading}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {aiLineMatches.map((match) => {
-                        return (
-                          <tr key={match.index}>
-                            <td className="border border-black px-3 py-2 font-bold text-black">{normalizeAiItemType(match.line.itemType) === "Reel" ? match.material?.name || getReelSpecLabel(match.line) : match.line.itemName || "-"}</td>
-                            <td className="border border-black px-3 py-2 text-black">{normalizeAiItemType(match.line.itemType)}</td>
-                            <td className="border border-black px-3 py-2 text-black">{Number(match.line.qty || 0).toLocaleString()}</td>
-                            <td className="border border-black px-3 py-2 text-black">{match.line.uom || "-"}</td>
-                            <td className="border border-black px-3 py-2 text-black">{Number(match.line.invoiceRate || 0).toFixed(2)}</td>
-                            <td className="border border-black px-3 py-2 text-black">{Number(match.line.gstRate || 0).toFixed(2)}%</td>
-                            <td className="border border-black px-3 py-2">
-                              <div className={match.status === "matched" ? "font-bold text-emerald-700" : match.status === "warning" ? "font-bold text-amber-700" : "font-bold text-red-700"}>
-                                {match.material?.name || match.reason}
-                              </div>
-                              {match.material ? <div className="text-xs text-slate-500">{match.reason}</div> : null}
-                            </td>
-                            <td className="border border-black px-3 py-2">
-                              {match.status === "missing" ? (
-                                <span className="text-xs font-bold text-amber-700">Review below</span>
-                              ) : match.status === "warning" ? (
-                                <button type="button" onClick={() => navigate("/masters/materials")} className="rounded border border-black bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-slate-50">Edit Master</button>
-                              ) : <span className="text-xs font-bold text-emerald-700">OK</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
                 {missingAiLineMatches.length > 0 ? (
                   <div className="space-y-3 rounded border border-amber-700 bg-amber-50/60 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <div className="text-sm font-black uppercase text-black">Missing Materials</div>
-                        <div className="text-xs font-bold text-slate-600">Edit AI suggestions, then create materials before setting MRR data.</div>
                       </div>
                       <button
                         type="button"
                         onClick={handleCreateAllMissingMaterials}
                         disabled={savingQuickMaterialIndex !== null}
-                        className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-xs font-black uppercase text-white hover:bg-emerald-800 disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded bg-emerald-800 px-4 py-2 text-xs font-black uppercase text-white hover:bg-emerald-900 disabled:opacity-50"
                       >
                         {savingQuickMaterialIndex === -1 ? <Spinner size={14} className="text-white" /> : <Plus size={14} />} Create All Missing
                       </button>
                     </div>
-                    <div className="overflow-x-auto rounded border border-black bg-white">
-                      <table className="min-w-[1250px] border-collapse bg-white text-xs">
+                    <div className="overflow-x-auto rounded border border-slate-700 bg-white">
+                      <table className="min-w-[1020px] border-collapse bg-white text-xs">
                         <thead className="bg-slate-100">
                           <tr>
-                            {["Item / Spec", "Type", "Group", "UOM", "Color", "Size", "GSM", "BF", "Action"].map((heading) => (
-                              <th key={heading} className="border border-black px-2 py-2 text-left text-[10px] font-black uppercase text-black">{heading}</th>
+                            {["Type", "Group", "UOM", "Color", "Size", "GSM", "BF", "Action"].map((heading) => (
+                              <th key={heading} className="border border-slate-700 px-2 py-2 text-left text-[10px] font-black uppercase text-black">{heading}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {missingAiLineMatches.map((match) => {
-                            const draft = getQuickMaterialDraft(match);
+                            const draft = normalizeQuickMaterialForm(getQuickMaterialDraft(match));
                             const errors = aiRowErrors[match.index] || {};
                             const isReelDraft = draft.type === "Reel";
-                            const groupNameValue = newAiGroupNames[match.index] ?? String(match.line.materialGroupName || "").trim();
+                            const reelGroup = getReelMaterialGroup();
+                            const groupNameValue = newAiGroupNames[match.index] ?? (isReelDraft ? "Reel" : String(match.line.materialGroupName || "").trim());
                             const colorNameValue = newAiColorNames[match.index] ?? String(match.line.color || "").trim();
                             const errorText = (field: keyof QuickMaterialValidationErrors) => errors[field] ? <div className="mt-1 text-[10px] font-black uppercase text-red-700">{errors[field]}</div> : null;
                             return (
                               <tr key={`missing-${match.index}`} className="align-top">
-                                <td className="border border-black px-2 py-2 min-w-[230px]">
-                                  {isReelDraft ? (
-                                    <div className="rounded border border-slate-300 bg-slate-50 px-2 py-2 font-bold text-slate-800">
-                                      {getReelSpecLabel({ itemName: draft.name, erpCode: draft.erpCode, size: Number(draft.size), gsm: Number(draft.gsm), bf: Number(draft.bf) })}
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <input
-                                        value={draft.name}
-                                        onChange={(e) => { updateQuickMaterialDraft(match, { name: e.target.value }); clearAiRowError(match.index, "name"); }}
-                                        className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black"
-                                      />
-                                      {errorText("name")}
-                                    </>
-                                  )}
-                                </td>
-                                <td className="border border-black px-2 py-2 min-w-[130px]">
+                                <td className="border border-slate-700 px-2 py-2 min-w-[130px]">
                                   <Select
                                     options={[{ value: "Reel", label: "Reel" }, { value: "Other", label: "Other" }]}
                                     value={draft.type}
@@ -2345,50 +2307,60 @@ export function MaterialInForm() {
                                     placeholder="Type..."
                                   />
                                 </td>
-                                <td className="border border-black px-2 py-2 min-w-[190px]">
-                                  <Select options={materialGroupOptions} value={draft.materialGroupId} onChange={(value) => { updateQuickMaterialDraft(match, { materialGroupId: value }); clearAiRowError(match.index, "materialGroupId"); }} placeholder="Group..." />
+                                <td className="border border-slate-700 px-2 py-2 min-w-[190px]">
+                                  {isReelDraft ? (
+                                    <div className="rounded border border-slate-300 bg-slate-100 px-2 py-2 font-bold text-slate-800">
+                                      {reelGroup?.name || "Reel"}
+                                    </div>
+                                  ) : (
+                                    <Select options={materialGroupOptions} value={draft.materialGroupId} onChange={(value) => { updateQuickMaterialDraft(match, { materialGroupId: value }); clearAiRowError(match.index, "materialGroupId"); }} placeholder="Group..." />
+                                  )}
                                   {errorText("materialGroupId")}
                                   <div className="mt-2 flex gap-1">
                                     <input value={groupNameValue} onChange={(e) => setNewAiGroupNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New group" className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs text-black" />
-                                    <button type="button" title="Create group" onClick={() => handleCreateAiGroup(match)} disabled={savingAiGroupIndex === match.index || !groupNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-600 text-white disabled:opacity-50">
+                                    <button type="button" title="Create group" onClick={() => handleCreateAiGroup(match)} disabled={savingAiGroupIndex === match.index || !groupNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50">
                                       {savingAiGroupIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
                                     </button>
                                   </div>
                                 </td>
-                                <td className="border border-black px-2 py-2 min-w-[130px]">
-                                  <Select options={unitOptions.length ? unitOptions : [{ value: "KGS", label: "KGS" }, { value: "PCS", label: "PCS" }]} value={draft.uom} onChange={(value) => { updateQuickMaterialDraft(match, { uom: value }); clearAiRowError(match.index, "uom"); }} placeholder="UOM..." />
+                                <td className="border border-slate-700 px-2 py-2 min-w-[130px]">
+                                  {isReelDraft ? (
+                                    <div className="rounded border border-slate-300 bg-slate-100 px-2 py-2 font-bold text-slate-800">KG</div>
+                                  ) : (
+                                    <Select options={unitOptions.length ? unitOptions : [{ value: "KG", label: "KG" }, { value: "PCS", label: "PCS" }]} value={draft.uom} onChange={(value) => { updateQuickMaterialDraft(match, { uom: value }); clearAiRowError(match.index, "uom"); }} placeholder="UOM..." />
+                                  )}
                                   {errorText("uom")}
                                 </td>
-                                <td className="border border-black px-2 py-2 min-w-[190px]">
+                                <td className="border border-slate-700 px-2 py-2 min-w-[190px]">
                                   <Select options={colorOptions} value={isReelDraft ? draft.color : ""} onChange={(value) => { updateQuickMaterialDraft(match, { color: value }); clearAiRowError(match.index, "color"); }} placeholder="Color..." disabled={!isReelDraft} />
                                   {isReelDraft ? errorText("color") : null}
                                   {isReelDraft ? (
                                     <div className="mt-2 flex gap-1">
                                       <input value={colorNameValue} onChange={(e) => setNewAiColorNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New color" className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs text-black" />
-                                      <button type="button" title="Create color" onClick={() => handleCreateAiColor(match)} disabled={savingAiColorIndex === match.index || !colorNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-600 text-white disabled:opacity-50">
+                                      <button type="button" title="Create color" onClick={() => handleCreateAiColor(match)} disabled={savingAiColorIndex === match.index || !colorNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50">
                                         {savingAiColorIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
                                       </button>
                                     </div>
                                   ) : null}
                                 </td>
-                                <td className="border border-black px-2 py-2 min-w-[90px]">
+                                <td className="border border-slate-700 px-2 py-2 min-w-[90px]">
                                   <input type="number" min="0" step="0.01" value={isReelDraft ? draft.size : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { size: e.target.value }); clearAiRowError(match.index, "size"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
                                   {isReelDraft ? errorText("size") : null}
                                 </td>
-                                <td className="border border-black px-2 py-2 min-w-[90px]">
+                                <td className="border border-slate-700 px-2 py-2 min-w-[90px]">
                                   <input type="number" min="0" step="0.01" value={isReelDraft ? draft.gsm : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { gsm: e.target.value }); clearAiRowError(match.index, "gsm"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
                                   {isReelDraft ? errorText("gsm") : null}
                                 </td>
-                                <td className="border border-black px-2 py-2 min-w-[90px]">
+                                <td className="border border-slate-700 px-2 py-2 min-w-[90px]">
                                   <input type="number" min="0" step="0.01" value={isReelDraft ? draft.bf : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { bf: e.target.value }); clearAiRowError(match.index, "bf"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
                                   {isReelDraft ? errorText("bf") : null}
                                 </td>
-                                <td className="border border-black px-2 py-2 min-w-[120px]">
+                                <td className="border border-slate-700 px-2 py-2 min-w-[120px]">
                                   <button
                                     type="button"
                                     onClick={() => handleCreateQuickMaterial(draft)}
                                     disabled={savingQuickMaterialIndex !== null}
-                                    className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                    className="inline-flex items-center gap-1 rounded bg-emerald-800 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-900 disabled:opacity-50"
                                   >
                                     {savingQuickMaterialIndex === match.index ? <Spinner size={14} className="text-white" /> : <Plus size={14} />} Create
                                   </button>
