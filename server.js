@@ -769,11 +769,14 @@ Return only valid JSON with this exact shape:
       "gsm": null,
       "bf": null,
       "color": "",
+      "reels": [
+        { "supplierReelNo": "", "weightKg": 0, "supplierPoNo": "" }
+      ],
       "confidence": 0
     }
   ]
 }
-Use Reel only for paper reel/roll items with reel, roll, kraft, paper, GSM, BF, deckle, or size indicators. For Reel lines, if the item text contains patterns like Size 178 / GSM 140 / BF 18 or 99 CM X GSM: 120 X BF: 18, populate numeric size, gsm, and bf exactly from that text. Use Other for consumables, spares, chemicals, packing material, and non-reel goods. Dates must be ISO YYYY-MM-DD when visible. Numbers must be numeric. If unsure, leave fields blank or null and lower confidence.`
+Use Reel only for paper reel/roll items with reel, roll, kraft, paper, GSM, BF, deckle, or size indicators. For Reel lines, if the item text contains patterns like Size 178 / GSM 140 / BF 18 or 99 CM X GSM: 120 X BF: 18, populate numeric size, gsm, and bf exactly from that text. For Reel lines, extract every visible individual reel row under that item/spec into reels with supplierReelNo and weightKg; include supplierPoNo per reel when visible, otherwise blank. Keep qty as the total invoice weight for the item/spec. If individual reel rows are not visible, use reels: []. Use Other for consumables, spares, chemicals, packing material, and non-reel goods. Dates must be ISO YYYY-MM-DD when visible. Numbers must be numeric. If unsure, leave fields blank or null and lower confidence.`
   }];
   for (const photo of photos) {
     const base64Raw = String(photo?.base64 || "");

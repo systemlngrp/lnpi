@@ -60,6 +60,7 @@ type AiMrrLine = {
   gsm?: number | null;
   bf?: number | null;
   color?: string;
+  reels?: Array<{ supplierReelNo?: string; weightKg?: number; supplierPoNo?: string }>;
   confidence?: number;
 };
 
@@ -1797,7 +1798,11 @@ export function MaterialInForm() {
     let nextOurReelNo = getMaxOurReelNoNumber();
     const nextLines = aiLineMatches.map((match) => {
       const material = match.material as Material;
-      const qty = Number(match.line.qty || 0);
+      const extractedReels = Array.isArray(match.line.reels)
+        ? match.line.reels.filter((reel) => Number(reel?.weightKg || 0) > 0 || String(reel?.supplierReelNo || "").trim())
+        : [];
+      const extractedReelWeight = Number(extractedReels.reduce((sum, reel) => sum + Number(reel.weightKg || 0), 0).toFixed(2));
+      const qty = Number(match.line.qty || 0) || extractedReelWeight;
       const invoiceRate = Number(match.line.invoiceRate || match.po?.poRate || 0);
       const baseLine: MaterialLine = {
         id: crypto.randomUUID(),
@@ -1829,19 +1834,23 @@ export function MaterialInForm() {
         exchangeRate: nextCurrency === "USD" ? Number(nextExchangeRate || 0) : undefined,
       });
       if (nextMrrType === "Reel") {
-        nextPackingDrafts[calculatedLine.id] = [
-          {
+        const reelDraftSource = extractedReels.length
+          ? extractedReels
+          : [{ supplierReelNo: "", weightKg: qty, supplierPoNo: String(match.line.poNo || "") }];
+        nextPackingDrafts[calculatedLine.id] = reelDraftSource.map((reel) => {
+          const supplierPoNo = String(reel.supplierPoNo || match.line.poNo || "");
+          return {
             id: crypto.randomUUID(),
             materialLineId: calculatedLine.id,
             materialId: material.id,
-            supplierReelNo: "",
+            supplierReelNo: String(reel.supplierReelNo || ""),
             ourReelNo: formatReelNo(++nextOurReelNo),
-            weightKg: qty > 0 ? String(qty) : "",
-            supplierPoNo: String(match.line.poNo || ""),
+            weightKg: Number(reel.weightKg || 0) > 0 ? String(reel.weightKg) : "",
+            supplierPoNo,
             ourPoId: match.po?.poLineId || "",
             ourPoNo: match.po?.poNo || "",
-          },
-        ];
+          };
+        });
       }
       return calculatedLine;
     });
