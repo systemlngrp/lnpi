@@ -43,6 +43,12 @@ const NPD_SYNC_ALLOWED_TAB = String(process.env.NPD_SYNC_ALLOWED_TAB || "NPD").t
 const NPD_SYNC_LOG_PREFIX = "[NPD_SYNC]";
 const TALLY_SYNC_SECRET = String(process.env.TALLY_SYNC_SECRET || "!Office1@").trim();
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
+const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
+function resolveGeminiModel() {
+  const configuredModel = String(process.env.GEMINI_MODEL || "").trim();
+  if (!configuredModel || configuredModel === "gemini-2.5-flash") return DEFAULT_GEMINI_MODEL;
+  return configuredModel;
+}
 function maskSecret(value) {
   if (!value) return "(empty)";
   if (value.length <= 2) return `${value[0] || ""}*`;
@@ -779,8 +785,10 @@ Use Reel only for paper reel/roll items with reel, roll, kraft, paper, GSM, BF, 
   if (parts.length === 1) return res.status(400).json({ error: "No readable file data was supplied." });
   try {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const geminiModel = resolveGeminiModel();
+    console.info(`[AI MRR] Using Gemini model: ${geminiModel}`);
     const response = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      model: geminiModel,
       contents: [{ role: "user", parts }],
       config: { responseMimeType: "application/json" }
     });
