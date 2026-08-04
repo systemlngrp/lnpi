@@ -650,18 +650,57 @@ export function MaterialInForm() {
     );
   };
 
+  const parseAiPositiveNumber = (value: unknown) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+  };
+
+  const numbersMatch = (left: unknown, right: unknown) => {
+    const a = Number(left);
+    const b = Number(right);
+    return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.001;
+  };
+
+  const hasValidReelSpecs = (line: AiMrrLine) =>
+    parseAiPositiveNumber(line.size) > 0 && parseAiPositiveNumber(line.gsm) > 0 && parseAiPositiveNumber(line.bf) > 0;
+
+  const getReelSpecLabel = (line: AiMrrLine) => {
+    const size = parseAiPositiveNumber(line.size);
+    const gsm = parseAiPositiveNumber(line.gsm);
+    const bf = parseAiPositiveNumber(line.bf);
+    return size && gsm && bf ? `Size ${size} / GSM ${gsm} / BF ${bf}` : "Size/GSM/BF incomplete";
+  };
+
+  const findAiReelMaterialBySpecs = (line: AiMrrLine) => {
+    if (!hasValidReelSpecs(line)) return undefined;
+    return materials
+      .filter((material) => material.active !== "No" && material.type === "Reel")
+      .find((material) =>
+        numbersMatch(material.size, line.size) &&
+        numbersMatch(material.gsm, line.gsm) &&
+        numbersMatch(material.bf, line.bf)
+      );
+  };
+
   const findAiMaterial = (line: AiMrrLine) => {
+    const expectedType = normalizeAiItemType(line.itemType);
+    const activeMaterials = materials.filter((material) => material.active !== "No");
+
+    if (expectedType === "Reel") {
+      return findAiReelMaterialBySpecs(line);
+    }
+
     const erp = normalizeForAiMatch(line.erpCode);
     const name = normalizeForAiMatch(line.itemName);
-    const activeMaterials = materials.filter((material) => material.active !== "No");
     if (erp) {
-      const byErp = activeMaterials.find((material) => normalizeForAiMatch(material.erpCode) === erp);
+      const byErp = activeMaterials.find((material) => material.type !== "Reel" && normalizeForAiMatch(material.erpCode) === erp);
       if (byErp) return byErp;
     }
     if (!name) return undefined;
     return (
-      activeMaterials.find((material) => normalizeForAiMatch(material.name) === name) ||
+      activeMaterials.find((material) => material.type !== "Reel" && normalizeForAiMatch(material.name) === name) ||
       activeMaterials.find((material) => {
+        if (material.type === "Reel") return false;
         const materialName = normalizeForAiMatch(material.name);
         return Boolean(materialName && (materialName.includes(name) || name.includes(materialName)));
       })
@@ -704,14 +743,24 @@ export function MaterialInForm() {
 
   const aiLineMatches = useMemo<AiLineMatch[]>(() => {
     return (aiDraft?.lines || []).map((line, index) => {
-      const material = findAiMaterial(line);
-      if (!material) return { line, index, status: "missing", reason: "Item not found in Material Master." };
       const expectedType = normalizeAiItemType(line.itemType);
+      if (expectedType === "Reel" && !hasValidReelSpecs(line)) {
+        return { line, index, status: "missing", reason: "Reel Size, GSM, and BF are required before matching." };
+      }
+      const material = findAiMaterial(line);
+      if (!material) {
+        return {
+          line,
+          index,
+          status: "missing",
+          reason: expectedType === "Reel" ? `${getReelSpecLabel(line)} not found in Reel Material Master.` : "Item not found in Material Master.",
+        };
+      }
       const po = getResolvedAiPoForMaterial(material.id, String(line.poNo || ""), aiMatchedSupplier?.id);
-      if (expectedType && material.type !== expectedType) {
+      if (material.type !== expectedType) {
         return { line, index, material, po, status: "warning", reason: `Existing item type is ${material.type}, AI suggests ${expectedType}.` };
       }
-      return { line, index, material, po, status: "matched", reason: "Matched." };
+      return { line, index, material, po, status: "matched", reason: expectedType === "Reel" ? `Matched by ${getReelSpecLabel(line)}.` : "Matched." };
     });
   }, [aiDraft, materials, purchaseOrders, purchaseOrderLines, aiMatchedSupplier?.id]);
 
@@ -1489,6 +1538,27 @@ export function MaterialInForm() {
     }
   };
 
+  const updateAiDraftLineFromQuickMaterial = (form: QuickMaterialForm, material?: Material) => {
+    setAiDraft((prev) => {
+      if (!prev) return prev;
+      const nextLines = (prev.lines || []).map((line, index) => {
+        if (index !== form.lineIndex) return line;
+        return {
+          ...line,
+          itemName: material?.name || form.name || line.itemName,
+          erpCode: material?.erpCode || form.erpCode || line.erpCode,
+          itemType: form.type,
+          materialGroupName: materialGroups.find((group) => group.id === form.materialGroupId)?.name || line.materialGroupName,
+          uom: form.uom || line.uom,
+          size: form.type === "Reel" ? Number(form.size) : line.size,
+          gsm: form.type === "Reel" ? Number(form.gsm) : line.gsm,
+          bf: form.type === "Reel" ? Number(form.bf) : line.bf,
+          color: form.type === "Reel" ? form.color : line.color,
+        };
+      });
+      return { ...prev, lines: nextLines };
+    });
+  };
   const handleCreateQuickMaterial = async () => {
     if (!quickMaterial) return;
     const name = quickMaterial.name.trim();
@@ -1498,12 +1568,26 @@ export function MaterialInForm() {
     const gsm = Number(quickMaterial.gsm);
     const bf = Number(quickMaterial.bf);
     const color = quickMaterial.color.trim();
-    if (!name) { alert("Item Name is required."); return; }
+    if (quickMaterial.type === "Other" && !name) { alert("Item Name is required."); return; }
     if (!quickMaterial.materialGroupId) { alert("Material Group is required."); return; }
     if (!uom) { alert("UOM is required."); return; }
     if (quickMaterial.type === "Reel" && (!color || !Number.isFinite(size) || size <= 0 || !Number.isFinite(gsm) || gsm <= 0 || !Number.isFinite(bf) || bf <= 0)) {
       alert("Color, Size, GSM, and BF are required for Reel.");
       return;
+    }
+    if (quickMaterial.type === "Reel") {
+      const existingReel = materials.find((material) =>
+        material.active !== "No" &&
+        material.type === "Reel" &&
+        numbersMatch(material.size, size) &&
+        numbersMatch(material.gsm, gsm) &&
+        numbersMatch(material.bf, bf)
+      );
+      if (existingReel) {
+        updateAiDraftLineFromQuickMaterial(quickMaterial, existingReel);
+        setQuickMaterial(null);
+        return;
+      }
     }
     setSavingQuickMaterial(true);
     const timestamp = new Date().toISOString();
@@ -1981,7 +2065,7 @@ export function MaterialInForm() {
                     <tbody>
                       {aiLineMatches.map((match) => (
                         <tr key={match.index}>
-                          <td className="border border-black px-3 py-2 font-bold text-black">{match.line.itemName || "-"}</td>
+                          <td className="border border-black px-3 py-2 font-bold text-black">{normalizeAiItemType(match.line.itemType) === "Reel" ? getReelSpecLabel(match.line) : match.line.itemName || "-"}</td>
                           <td className="border border-black px-3 py-2 text-black">{String(match.line.erpCode || "-")}</td>
                           <td className="border border-black px-3 py-2 text-black">{normalizeAiItemType(match.line.itemType)}</td>
                           <td className="border border-black px-3 py-2 text-black">{Number(match.line.qty || 0).toLocaleString()}</td>
