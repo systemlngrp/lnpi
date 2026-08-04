@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Upload, Download } from "lucide-react";
+import { AlertCircle, CheckCircle, FileText, Plus, Trash2, Upload, Download, Wand2, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   Company,
@@ -9,6 +9,7 @@ import {
   GstRateMaster,
   Item,
   Material,
+  MaterialGroup,
   MaterialIn,
   MaterialInPackingSlip,
   MaterialLine,
@@ -18,6 +19,8 @@ import {
   Setting,
   Service,
   Supplier,
+  UnitMaster,
+  ColorMaster,
 } from "../types";
 import { generateTransactionNo } from "../lib/serial";
 import { Spinner } from "../components/Spinner";
@@ -41,6 +44,65 @@ type PackingSlipDraft = {
   ourPoNo: string;
 };
 
+type AiMrrItemType = "Reel" | "Other";
+
+type AiMrrLine = {
+  itemName?: string;
+  erpCode?: string | number;
+  itemType?: AiMrrItemType | string;
+  materialGroupName?: string;
+  uom?: string;
+  qty?: number;
+  invoiceRate?: number;
+  gstRate?: number;
+  poNo?: string;
+  size?: number | null;
+  gsm?: number | null;
+  bf?: number | null;
+  color?: string;
+  confidence?: number;
+};
+
+type AiMrrDraft = {
+  supplierName?: string;
+  invoiceNo?: string;
+  invoiceDate?: string;
+  mrrDate?: string;
+  mrrType?: MaterialIn["mrrType"] | string;
+  invoiceCurrency?: InvoiceCurrency | string;
+  exchangeRate?: number | null;
+  lines?: AiMrrLine[];
+};
+
+type AiUploadFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  base64: string;
+};
+
+type AiLineMatch = {
+  line: AiMrrLine;
+  index: number;
+  material?: Material;
+  po?: { poId?: string; poNo?: string; poLineId?: string; poRate?: number } | null;
+  status: "matched" | "missing" | "warning";
+  reason: string;
+};
+
+type QuickMaterialForm = {
+  lineIndex: number;
+  type: AiMrrItemType;
+  erpCode: string;
+  name: string;
+  uom: string;
+  materialGroupId: string;
+  color: string;
+  size: string;
+  gsm: string;
+  bf: string;
+  active: "Yes" | "No";
+};
 type ReelUploadRow = {
   materialId: string;
   materialName: string;
@@ -68,8 +130,11 @@ export function MaterialInForm() {
   const [packingSlips, setPackingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [gateEntries, setGateEntries] = useData<GateEntry>("gate-entries", []);
   const [gatePasses] = useData<GatePass>("gate_passes", []);
-  const [materials] = useData<Material>("materials", []);
+  const [materials, setMaterials] = useData<Material>("materials", []);
   const [services] = useData<Service>("services", []);
+  const [materialGroups, setMaterialGroups] = useData<MaterialGroup>("material-groups", []);
+  const [units] = useData<UnitMaster>("units", []);
+  const [colors] = useData<ColorMaster>("color_masters", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
@@ -104,6 +169,15 @@ export function MaterialInForm() {
   const hasAutoFilledServiceReturnRef = useRef(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [aiFiles, setAiFiles] = useState<AiUploadFile[]>([]);
+  const [aiDraft, setAiDraft] = useState<AiMrrDraft | null>(null);
+  const [isAiFetching, setIsAiFetching] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [quickMaterial, setQuickMaterial] = useState<QuickMaterialForm | null>(null);
+  const [newAiGroupName, setNewAiGroupName] = useState("");
+  const [savingQuickMaterial, setSavingQuickMaterial] = useState(false);
+  const [savingAiGroup, setSavingAiGroup] = useState(false);
+
 
   const gateEntryId = searchParams.get("gateEntryId") || "";
   const editId = searchParams.get("edit") || "";
@@ -484,8 +558,8 @@ export function MaterialInForm() {
   const getMaterialErpCode = (materialId: string) => {
     const item = getMaterial(materialId);
     if (!item) return "";
-    if ("erpCode" in item) return normalizeMatchText(item.erpCode);
-    if ("erp" in item) return normalizeMatchText(item.erp);
+    if ("erpCode" in item) return normalizeMatchText((item as Material).erpCode);
+    if ("erp" in item) return normalizeMatchText((item as Item).erp);
     return "";
   };
 
@@ -535,6 +609,130 @@ export function MaterialInForm() {
     return null;
   };
 
+  const normalizeAiDate = (value?: string) => {
+    const raw = String(value || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+  };
+
+  const normalizeAiItemType = (value?: string): AiMrrItemType =>
+    String(value || "").trim().toLowerCase() === "reel" ? "Reel" : "Other";
+
+  const normalizeForAiMatch = (value?: string | number | null) =>
+    normalizeMatchText(value).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+
+  const getNextAiErpCode = (type: AiMrrItemType) => {
+    const numericValues = materials
+      .filter((material) => material.type === type)
+      .map((material) => Number(material.erpCode))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return String(numericValues.length ? Math.max(...numericValues) + 1 : 1);
+  };
+
+  const getReelDisplayName = (erpCode: string | number, size: number, gsm: number, bf: number, color: string) =>
+    `${erpCode} - Size: ${size} CM X GSM: ${gsm} X BF: ${bf}   Color - ${color}`;
+
+  const findAiSupplier = (supplierName?: string) => {
+    const search = normalizePartyName(supplierName || "");
+    if (!search) return null;
+    const parties = [
+      ...suppliers.filter((entry) => entry.active !== "No").map((entry) => ({ id: entry.id, name: entry.name })),
+      ...companies.map((entry) => ({ id: entry.id, name: entry.name })),
+    ];
+    return (
+      parties.find((entry) => normalizePartyName(entry.name) === search) ||
+      parties.find((entry) => {
+        const name = normalizePartyName(entry.name);
+        return Boolean(name && search && (name.includes(search) || search.includes(name)));
+      }) ||
+      null
+    );
+  };
+
+  const findAiMaterial = (line: AiMrrLine) => {
+    const erp = normalizeForAiMatch(line.erpCode);
+    const name = normalizeForAiMatch(line.itemName);
+    const activeMaterials = materials.filter((material) => material.active !== "No");
+    if (erp) {
+      const byErp = activeMaterials.find((material) => normalizeForAiMatch(material.erpCode) === erp);
+      if (byErp) return byErp;
+    }
+    if (!name) return undefined;
+    return (
+      activeMaterials.find((material) => normalizeForAiMatch(material.name) === name) ||
+      activeMaterials.find((material) => {
+        const materialName = normalizeForAiMatch(material.name);
+        return Boolean(materialName && (materialName.includes(name) || name.includes(materialName)));
+      })
+    );
+  };
+
+  const isApprovedOrderForParty = (order: PurchaseOrder, partyId?: string) => {
+    if (order.status !== "Approved") return false;
+    if (!partyId) return true;
+    if (order.supplierId === partyId) return true;
+    const selectedPartyName = normalizePartyName(getPartyName(partyId));
+    const orderPartyName = normalizePartyName(getPartyName(order.supplierId));
+    return Boolean(selectedPartyName && orderPartyName && selectedPartyName === orderPartyName);
+  };
+
+  const getResolvedAiPoForMaterial = (materialId: string, ourPoNoRaw: string, partyId?: string) => {
+    const search = String(ourPoNoRaw || "").trim().toLowerCase();
+    if (!search) return null;
+    const approvedOrders = purchaseOrders.filter((order) => isApprovedOrderForParty(order, partyId));
+    for (const order of approvedOrders) {
+      if (!String(order.poNo || "").trim().toLowerCase().includes(search)) continue;
+      const matchingLine = purchaseOrderLines.find(
+        (line) => line.purchaseOrderId === order.id && poLineMatchesMaterial(line, materialId)
+      );
+      if (matchingLine) {
+        return { poId: order.id, poNo: order.poNo || "", poLineId: matchingLine.id, poRate: Number(matchingLine.rate || 0) };
+      }
+    }
+    return null;
+  };
+
+  const aiMatchedSupplier = useMemo(() => findAiSupplier(aiDraft?.supplierName), [aiDraft?.supplierName, suppliers, companies]);
+
+  const aiSuggestedMrrType = useMemo<MaterialIn["mrrType"]>(() => {
+    const explicitType = String(aiDraft?.mrrType || "").trim().toLowerCase();
+    if (explicitType === "reel") return "Reel";
+    const hasReelLine = (aiDraft?.lines || []).some((line) => normalizeAiItemType(line.itemType) === "Reel");
+    return hasReelLine ? "Reel" : "Others";
+  }, [aiDraft]);
+
+  const aiLineMatches = useMemo<AiLineMatch[]>(() => {
+    return (aiDraft?.lines || []).map((line, index) => {
+      const material = findAiMaterial(line);
+      if (!material) return { line, index, status: "missing", reason: "Item not found in Material Master." };
+      const expectedType = normalizeAiItemType(line.itemType);
+      const po = getResolvedAiPoForMaterial(material.id, String(line.poNo || ""), aiMatchedSupplier?.id);
+      if (expectedType && material.type !== expectedType) {
+        return { line, index, material, po, status: "warning", reason: `Existing item type is ${material.type}, AI suggests ${expectedType}.` };
+      }
+      return { line, index, material, po, status: "matched", reason: "Matched." };
+    });
+  }, [aiDraft, materials, purchaseOrders, purchaseOrderLines, aiMatchedSupplier?.id]);
+
+  const aiHasMissingSupplier = Boolean(aiDraft && !aiMatchedSupplier);
+  const aiBlockingIssues = aiHasMissingSupplier || aiLineMatches.some((entry) => entry.status !== "matched");
+  const aiCanSetData = Boolean(aiDraft && !aiBlockingIssues && aiLineMatches.length > 0);
+
+  const materialGroupOptions = useMemo(
+    () => materialGroups.slice().sort((a, b) => a.name.localeCompare(b.name)).map((group) => ({ value: group.id, label: group.name })),
+    [materialGroups]
+  );
+
+  const unitOptions = useMemo(
+    () => units.filter((unit) => unit.active !== "No").sort((a, b) => a.name.localeCompare(b.name)).map((unit) => ({ value: unit.name, label: unit.name })),
+    [units]
+  );
+
+  const colorOptions = useMemo(
+    () => colors.slice().sort((a, b) => a.name.localeCompare(b.name)).map((color) => ({ value: color.name, label: color.name })),
+    [colors]
+  );
   const getPurchaseOrderLine = (poLineId: string) =>
     purchaseOrderLines.find((line) => line.id === poLineId);
 
@@ -695,6 +893,8 @@ export function MaterialInForm() {
         invoiceCurrency: normalizedInvoiceCurrency,
         exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
         invoiceQty: qty,
+        rate: invoiceRateInput,
+        value: qty * invoiceRateInput,
         ...(isUsdInvoice
           ? { invoiceRateUsd: invoiceRateInput }
           : { invoiceRate: invoiceRateInput, rate: invoiceRateInput, value: qty * invoiceRateInput }),
@@ -750,6 +950,8 @@ export function MaterialInForm() {
       invoiceCurrency: normalizedInvoiceCurrency,
       exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
       invoiceQty: qty,
+      rate: resolvedInvoiceRateInput,
+      value: qty * resolvedInvoiceRateInput,
       ...(isUsdInvoice
         ? { invoiceRateUsd: resolvedInvoiceRateInput }
         : { invoiceRate: resolvedInvoiceRateInput, rate: resolvedInvoiceRateInput, value: qty * resolvedInvoiceRateInput }),
@@ -1182,6 +1384,217 @@ export function MaterialInForm() {
     });
   };
 
+  const handleAiFileUpload = (files?: FileList | null) => {
+    const selected = Array.from(files || []);
+    if (selected.length === 0) return;
+    selected.slice(0, Math.max(0, 8 - aiFiles.length)).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAiFiles((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), name: file.name, mimeType: file.type || "application/octet-stream", base64: String(reader.result || "") },
+        ].slice(0, 8));
+      };
+      reader.onerror = () => alert(`Failed to read ${file.name}.`);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAiFetch = async () => {
+    if (aiFiles.length === 0) {
+      alert("Please upload at least one invoice photo or PDF.");
+      return;
+    }
+    setIsAiFetching(true);
+    setAiError("");
+    try {
+      const token = window.localStorage.getItem("authToken") || "";
+      const response = await fetch("/api/material-in/ai-fetch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ photos: aiFiles.map(({ name, mimeType, base64 }) => ({ name, mimeType, base64 })) }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Failed to fetch invoice data.");
+      setAiDraft(result.draft || null);
+    } catch (error) {
+      const message = (error as Error).message || "Failed to fetch invoice data.";
+      setAiError(message);
+      alert(message);
+    } finally {
+      setIsAiFetching(false);
+    }
+  };
+
+  const openQuickMaterialModal = (match: AiLineMatch) => {
+    const line = match.line;
+    const type = normalizeAiItemType(line.itemType);
+    const reelGroup = materialGroups.find((group) => normalizeMatchText(group.name) === "reel");
+    const suggestedGroup = materialGroups.find((group) => normalizeForAiMatch(group.name) === normalizeForAiMatch(line.materialGroupName));
+    setNewAiGroupName(String(line.materialGroupName || ""));
+    setQuickMaterial({
+      lineIndex: match.index,
+      type,
+      erpCode: String(line.erpCode || "").trim() || getNextAiErpCode(type),
+      name: String(line.itemName || "").trim(),
+      uom: String(line.uom || (type === "Reel" ? "KGS" : "")).trim(),
+      materialGroupId: type === "Reel" ? reelGroup?.id || suggestedGroup?.id || "" : suggestedGroup?.id || "",
+      color: String(line.color || "").trim(),
+      size: line.size == null ? "" : String(line.size),
+      gsm: line.gsm == null ? "" : String(line.gsm),
+      bf: line.bf == null ? "" : String(line.bf),
+      active: "Yes",
+    });
+  };
+
+  const handleQuickMaterialTypeChange = (type: AiMrrItemType) => {
+    setQuickMaterial((prev) => {
+      if (!prev) return prev;
+      const reelGroup = materialGroups.find((group) => normalizeMatchText(group.name) === "reel");
+      return {
+        ...prev,
+        type,
+        erpCode: getNextAiErpCode(type),
+        uom: type === "Reel" ? "KGS" : prev.uom,
+        materialGroupId: type === "Reel" ? reelGroup?.id || prev.materialGroupId : prev.materialGroupId,
+        color: type === "Reel" ? prev.color : "",
+        size: type === "Reel" ? prev.size : "",
+        gsm: type === "Reel" ? prev.gsm : "",
+        bf: type === "Reel" ? prev.bf : "",
+      };
+    });
+  };
+
+  const handleCreateAiGroup = async () => {
+    const normalizedName = newAiGroupName.trim();
+    if (!normalizedName) return;
+    const existing = materialGroups.find((group) => normalizeMatchText(group.name) === normalizeMatchText(normalizedName));
+    if (existing) {
+      setQuickMaterial((prev) => prev ? { ...prev, materialGroupId: existing.id } : prev);
+      setNewAiGroupName("");
+      return;
+    }
+    setSavingAiGroup(true);
+    const timestamp = new Date().toISOString();
+    const nextGroup: MaterialGroup = { id: crypto.randomUUID(), name: normalizedName, updatedBy: "System User", updateTimestamp: timestamp };
+    try {
+      await setMaterialGroups([...materialGroups, nextGroup]);
+      setQuickMaterial((prev) => prev ? { ...prev, materialGroupId: nextGroup.id } : prev);
+      setNewAiGroupName("");
+    } catch (error) {
+      console.error("Failed to create material group:", error);
+      alert("Failed to create material group.");
+    } finally {
+      setSavingAiGroup(false);
+    }
+  };
+
+  const handleCreateQuickMaterial = async () => {
+    if (!quickMaterial) return;
+    const name = quickMaterial.name.trim();
+    const erpCode = quickMaterial.erpCode.trim() || getNextAiErpCode(quickMaterial.type);
+    const uom = quickMaterial.uom.trim();
+    const size = Number(quickMaterial.size);
+    const gsm = Number(quickMaterial.gsm);
+    const bf = Number(quickMaterial.bf);
+    const color = quickMaterial.color.trim();
+    if (!name) { alert("Item Name is required."); return; }
+    if (!quickMaterial.materialGroupId) { alert("Material Group is required."); return; }
+    if (!uom) { alert("UOM is required."); return; }
+    if (quickMaterial.type === "Reel" && (!color || !Number.isFinite(size) || size <= 0 || !Number.isFinite(gsm) || gsm <= 0 || !Number.isFinite(bf) || bf <= 0)) {
+      alert("Color, Size, GSM, and BF are required for Reel.");
+      return;
+    }
+    setSavingQuickMaterial(true);
+    const timestamp = new Date().toISOString();
+    const nextMaterial: Material = {
+      id: crypto.randomUUID(),
+      type: quickMaterial.type,
+      erpCode,
+      name: quickMaterial.type === "Reel" ? getReelDisplayName(erpCode, size, gsm, bf, color) : name,
+      uom,
+      materialGroupId: quickMaterial.materialGroupId,
+      color: quickMaterial.type === "Reel" ? color : null,
+      size: quickMaterial.type === "Reel" ? size : undefined,
+      gsm: quickMaterial.type === "Reel" ? gsm : undefined,
+      bf: quickMaterial.type === "Reel" ? bf : undefined,
+      openingQty: 0,
+      openingRate: 0,
+      openingValue: 0,
+      active: quickMaterial.active,
+      updatedBy: "System User",
+      updateTimestamp: timestamp,
+    };
+    try {
+      await setMaterials([nextMaterial, ...materials]);
+      setQuickMaterial(null);
+    } catch (error) {
+      console.error("Failed to create material:", error);
+      alert("Failed to create material.");
+    } finally {
+      setSavingQuickMaterial(false);
+    }
+  };
+
+  const handleSetAiData = () => {
+    if (!aiDraft || !aiCanSetData || !aiMatchedSupplier) return;
+    const nextMrrType = aiSuggestedMrrType;
+    const nextCurrency = normalizeInvoiceCurrency(aiDraft.invoiceCurrency);
+    const nextExchangeRate = nextCurrency === "USD" ? Number(aiDraft.exchangeRate || 0) : "";
+    if (nextCurrency === "USD" && (!nextExchangeRate || Number(nextExchangeRate) <= 0)) {
+      alert("Exchange rate is required for USD invoices before Set Data.");
+      return;
+    }
+
+    setSupplierId(aiMatchedSupplier.id);
+    setInvoiceNo(String(aiDraft.invoiceNo || "").trim());
+    setInvDate(normalizeAiDate(aiDraft.invoiceDate));
+    setDate(normalizeAiDate(aiDraft.mrrDate) || new Date().toISOString().slice(0, 10));
+    setMrrType(nextMrrType);
+    setInvoiceCurrency(nextCurrency);
+    setExchangeRate(nextExchangeRate as number | "");
+
+    const nextPackingDrafts: Record<string, PackingSlipDraft[]> = {};
+    const nextLines = aiLineMatches.map((match) => {
+      const material = match.material as Material;
+      const qty = Number(match.line.qty || 0);
+      const invoiceRate = Number(match.line.invoiceRate || match.po?.poRate || 0);
+      const baseLine: MaterialLine = {
+        id: crypto.randomUUID(),
+        itemId: material.id,
+        itemName: material.name,
+        qty,
+        uom: nextMrrType === "Reel" ? "KG" : material.uom || String(match.line.uom || ""),
+        poId: match.po?.poId,
+        poNo: match.po?.poNo,
+        poLineId: match.po?.poLineId,
+        poRate: Number(match.po?.poRate || 0),
+        invoiceCurrency: nextCurrency,
+        exchangeRate: nextCurrency === "USD" ? Number(nextExchangeRate || 0) : undefined,
+        invoiceQty: qty,
+        rate: invoiceRate,
+        value: qty * invoiceRate,
+        ...(nextCurrency === "USD"
+          ? { invoiceRateUsd: invoiceRate }
+          : { invoiceRate, rate: invoiceRate, value: qty * invoiceRate }),
+        actualQty: qty,
+        gstRate: Number(match.line.gstRate || 0),
+        cgstRate: 0,
+        sgstRate: 0,
+        igstRate: 0,
+      };
+      const calculatedLine = applySupplyTypeTaxRates(baseLine, isInterState ? "INTER_STATE" : "INTRA_STATE", {
+        forceFromGstRate: true,
+        invoiceCurrency: nextCurrency,
+        exchangeRate: nextCurrency === "USD" ? Number(nextExchangeRate || 0) : undefined,
+      });
+      if (nextMrrType === "Reel") nextPackingDrafts[calculatedLine.id] = [];
+      return calculatedLine;
+    });
+    setLines(nextLines);
+    setPackingSlipDrafts(nextPackingDrafts);
+    resetLineDrafts();
+  };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date || !invoiceNo || !invDate || !supplierId || lines.length === 0) return;
@@ -1489,6 +1902,125 @@ export function MaterialInForm() {
           </div>
         ) : null}
 
+        {!editingEntry && !isServiceReturn ? (
+          <div className="rounded border-2 border-indigo-700 bg-indigo-50/40 p-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-lg font-black uppercase text-indigo-800"><Wand2 size={20} /> AI Fetch MRR</h3>
+                <div className="text-sm font-semibold text-slate-600">Upload invoice photo/PDF, review matches, then set data into this form.</div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50">
+                  <Upload size={16} /> Upload Invoice
+                  <input type="file" multiple accept="image/*,.pdf" className="hidden" onChange={(e) => handleAiFileUpload(e.target.files)} />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAiFetch}
+                  disabled={isAiFetching || aiFiles.length === 0}
+                  className="inline-flex items-center gap-2 rounded bg-indigo-700 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-800 disabled:opacity-50"
+                >
+                  {isAiFetching ? <Spinner size={18} className="text-white" /> : <Wand2 size={16} />} Fetch From Invoice
+                </button>
+              </div>
+            </div>
+
+            {aiFiles.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {aiFiles.map((file) => (
+                  <div key={file.id} className="inline-flex items-center gap-2 rounded border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">
+                    <FileText size={14} /> {file.name}
+                    <button type="button" onClick={() => setAiFiles((prev) => prev.filter((entry) => entry.id !== file.id))} className="text-slate-500 hover:text-red-600">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {aiError ? <div className="rounded border border-red-400 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{aiError}</div> : null}
+
+            {aiDraft ? (
+              <div className="space-y-4 rounded border border-black bg-white p-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <div className="rounded border border-slate-300 p-3">
+                    <div className="text-xs font-black uppercase text-slate-500">Supplier</div>
+                    <div className="font-bold text-black">{aiDraft.supplierName || "-"}</div>
+                    <div className={aiMatchedSupplier ? "text-xs font-bold text-emerald-700" : "text-xs font-bold text-red-700"}>
+                      {aiMatchedSupplier ? `Matched: ${aiMatchedSupplier.name}` : "Supplier not found"}
+                    </div>
+                  </div>
+                  <div className="rounded border border-slate-300 p-3">
+                    <div className="text-xs font-black uppercase text-slate-500">Invoice</div>
+                    <div className="font-bold text-black">{aiDraft.invoiceNo || "-"}</div>
+                    <div className="text-xs font-bold text-slate-600">{normalizeAiDate(aiDraft.invoiceDate) || "Date not found"}</div>
+                  </div>
+                  <div className="rounded border border-slate-300 p-3">
+                    <div className="text-xs font-black uppercase text-slate-500">MRR Type</div>
+                    <div className="font-bold text-black">{aiSuggestedMrrType}</div>
+                    <div className="text-xs font-bold text-slate-600">{normalizeInvoiceCurrency(aiDraft.invoiceCurrency)}</div>
+                  </div>
+                  <div className="rounded border border-slate-300 p-3">
+                    <div className="text-xs font-black uppercase text-slate-500">Status</div>
+                    <div className={aiCanSetData ? "flex items-center gap-1 font-bold text-emerald-700" : "flex items-center gap-1 font-bold text-amber-700"}>
+                      {aiCanSetData ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                      {aiCanSetData ? "Ready" : "Needs review"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded border border-black">
+                  <table className="min-w-full border-collapse bg-white text-sm">
+                    <thead className="bg-slate-100">
+                      <tr>
+                        {["Item", "ERP", "Type", "Qty", "UOM", "Rate", "GST", "Match", "Action"].map((heading) => (
+                          <th key={heading} className="border border-black px-3 py-2 text-left text-xs font-black uppercase text-black">{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aiLineMatches.map((match) => (
+                        <tr key={match.index}>
+                          <td className="border border-black px-3 py-2 font-bold text-black">{match.line.itemName || "-"}</td>
+                          <td className="border border-black px-3 py-2 text-black">{String(match.line.erpCode || "-")}</td>
+                          <td className="border border-black px-3 py-2 text-black">{normalizeAiItemType(match.line.itemType)}</td>
+                          <td className="border border-black px-3 py-2 text-black">{Number(match.line.qty || 0).toLocaleString()}</td>
+                          <td className="border border-black px-3 py-2 text-black">{match.line.uom || "-"}</td>
+                          <td className="border border-black px-3 py-2 text-black">{Number(match.line.invoiceRate || 0).toFixed(2)}</td>
+                          <td className="border border-black px-3 py-2 text-black">{Number(match.line.gstRate || 0).toFixed(2)}%</td>
+                          <td className="border border-black px-3 py-2">
+                            <div className={match.status === "matched" ? "font-bold text-emerald-700" : match.status === "warning" ? "font-bold text-amber-700" : "font-bold text-red-700"}>
+                              {match.material?.name || match.reason}
+                            </div>
+                            {match.material ? <div className="text-xs text-slate-500">{match.reason}</div> : null}
+                          </td>
+                          <td className="border border-black px-3 py-2">
+                            {match.status === "missing" ? (
+                              <button type="button" onClick={() => openQuickMaterialModal(match)} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Create</button>
+                            ) : match.status === "warning" ? (
+                              <button type="button" onClick={() => navigate("/masters/materials")} className="rounded border border-black bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-slate-50">Edit Master</button>
+                            ) : <span className="text-xs font-bold text-emerald-700">OK</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSetAiData}
+                    disabled={!aiCanSetData}
+                    className="rounded bg-black px-5 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    Next / Set Data
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col space-y-1">
             <label className="font-bold text-black">

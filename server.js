@@ -8,6 +8,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { exec } from "child_process";
 import util from "util";
+import { GoogleGenAI } from "@google/genai";
 const execPromise = util.promisify(exec);
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +42,7 @@ const NPD_SYNC_SECRET = String(process.env.NPD_SYNC_SECRET || "").trim();
 const NPD_SYNC_ALLOWED_TAB = String(process.env.NPD_SYNC_ALLOWED_TAB || "NPD").trim();
 const NPD_SYNC_LOG_PREFIX = "[NPD_SYNC]";
 const TALLY_SYNC_SECRET = String(process.env.TALLY_SYNC_SECRET || "!Office1@").trim();
+const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
 function maskSecret(value) {
   if (!value) return "(empty)";
   if (value.length <= 2) return `${value[0] || ""}*`;
@@ -716,6 +718,78 @@ app.post("/api/upload-artwork", async (req, res) => {
   } catch (error) {
     console.error("Upload failed:", error);
     return res.status(500).json({ error: "Failed to save file" });
+  }
+});
+function extractJsonObject(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return "";
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced?.[1]?.trim() || trimmed;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return candidate;
+  return candidate.slice(start, end + 1);
+}
+app.post("/api/material-in/ai-fetch", async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!GEMINI_API_KEY) return res.status(503).json({ error: "GEMINI_API_KEY is not configured on the server." });
+  const photos = Array.isArray(req.body?.photos) ? req.body.photos : [];
+  if (photos.length === 0) return res.status(400).json({ error: "At least one invoice photo or PDF is required." });
+  if (photos.length > 8) return res.status(400).json({ error: "Upload up to 8 invoice files at a time." });
+  const parts = [{
+    text: `Extract a Material Receipt Report draft from these supplier invoice images/PDFs.
+Return only valid JSON with this exact shape:
+{
+  "supplierName": "",
+  "invoiceNo": "",
+  "invoiceDate": "YYYY-MM-DD or blank",
+  "mrrDate": "YYYY-MM-DD or blank",
+  "mrrType": "Reel or Others",
+  "invoiceCurrency": "INR or USD",
+  "exchangeRate": null,
+  "lines": [
+    {
+      "itemName": "",
+      "erpCode": "",
+      "itemType": "Reel or Other",
+      "materialGroupName": "",
+      "uom": "",
+      "qty": 0,
+      "invoiceRate": 0,
+      "gstRate": 0,
+      "poNo": "",
+      "size": null,
+      "gsm": null,
+      "bf": null,
+      "color": "",
+      "confidence": 0
+    }
+  ]
+}
+Use Reel only for paper reel/roll items with reel, roll, kraft, paper, GSM, BF, deckle, or size indicators. Use Other for consumables, spares, chemicals, packing material, and non-reel goods. Dates must be ISO YYYY-MM-DD when visible. Numbers must be numeric. If unsure, leave fields blank or null and lower confidence.`
+  }];
+  for (const photo of photos) {
+    const base64Raw = String(photo?.base64 || "");
+    const mimeType = String(photo?.mimeType || "image/jpeg");
+    const data = base64Raw.replace(/^data:.*;base64,/, "").trim();
+    if (!data) continue;
+    parts.push({ inlineData: { mimeType, data } });
+  }
+  if (parts.length === 1) return res.status(400).json({ error: "No readable file data was supplied." });
+  try {
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const response = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      contents: [{ role: "user", parts }],
+      config: { responseMimeType: "application/json" }
+    });
+    const jsonText = extractJsonObject(response.text || "");
+    const draft = JSON.parse(jsonText);
+    return res.json({ draft });
+  } catch (error) {
+    console.error("[AI MRR] Failed to extract invoice:", error);
+    return res.status(500).json({ error: error.message || "Failed to extract invoice data." });
   }
 });
 app.post("/api/npd-sync", async (req, res) => {
