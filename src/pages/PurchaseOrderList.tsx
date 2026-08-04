@@ -1227,8 +1227,30 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                         </button>
                       </td>
                       <td className="px-4 py-4 font-bold text-sm text-black uppercase">{order.poNo || "DRAFT"}</td>
-                      <td className="px-4 py-4 text-sm text-black font-medium whitespace-nowrap">{formatDate(order.poDate)}</td>
-                      <td className="px-4 py-4 text-sm text-black font-medium whitespace-nowrap">{formatDate(order.requiredDate)}</td>
+                      <td className="px-4 py-4 text-sm text-black font-medium whitespace-nowrap">
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editingHeader?.poDate || ""}
+                            onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, poDate: e.target.value } : prev))}
+                            className="w-32 rounded border border-black px-2 py-1 text-xs font-bold"
+                          />
+                        ) : (
+                          formatDate(order.poDate)
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-black font-medium whitespace-nowrap">
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editingHeader?.requiredDate || ""}
+                            onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, requiredDate: e.target.value } : prev))}
+                            className="w-32 rounded border border-black px-2 py-1 text-xs font-bold"
+                          />
+                        ) : (
+                          formatDate(order.requiredDate)
+                        )}
+                      </td>
                       <td className="px-4 py-4 text-sm text-black font-medium">{supplierNameMap.get(order.supplierId) || "Unknown"}</td>
                       <td className="px-4 py-4 text-sm text-black text-right font-bold">
                         {qtySummary.totalQty.toLocaleString()}
@@ -1249,22 +1271,120 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                         <td className="px-4 py-4 text-sm text-red-700 italic">{order.rejectedRemarks || ""}</td>
                       ) : null}
                       <td className="px-4 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => void handleRowPdf(order)}
-                          disabled={pdfOrderId === order.id}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition disabled:opacity-50"
-                          title="Download PO PDF"
-                          aria-label="Download PO PDF"
-                        >
-                          {pdfOrderId === order.id ? <Spinner size={12} /> : <FileText size={14} />}
-                        </button>
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleRowPdf(order)}
+                              disabled={pdfOrderId === order.id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition disabled:opacity-50"
+                              title="Download PO PDF"
+                              aria-label="Download PO PDF"
+                            >
+                              {pdfOrderId === order.id ? <Spinner size={12} /> : <FileText size={14} />}
+                            </button>
+                            {mode === "pending-approval" ? (
+                              <>
+                                {isEditing ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleSaveEdit(order, visibleLines)}
+                                      disabled={submittingId === order.id}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded border border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-50"
+                                      title="Save changes"
+                                      aria-label="Save changes"
+                                    >
+                                      <Save size={14} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditing}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-400 bg-white text-slate-700 hover:bg-slate-100 transition"
+                                      title="Cancel edit"
+                                      aria-label="Cancel edit"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditing(order, visibleLines)}
+                                    disabled={isAnotherOrderEditing || submittingId === order.id}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded border border-blue-700 bg-blue-50 text-blue-700 hover:bg-blue-100 transition disabled:cursor-not-allowed disabled:opacity-50"
+                                    title={isAnotherOrderEditing ? "Save or cancel the current edit first" : "Edit PO"}
+                                    aria-label="Edit PO"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => void handleApprove(order)}
+                                  disabled={submittingId === order.id || isAnotherOrderEditing || isEditing}
+                                  className={cn(
+                                    "inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded border px-2 text-[10px] font-black uppercase transition disabled:cursor-not-allowed disabled:opacity-50",
+                                    confirmId === order.id
+                                      ? "border-emerald-800 bg-emerald-700 text-white hover:bg-emerald-800"
+                                      : "border-emerald-700 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                                  )}
+                                  title={confirmId === order.id ? "Confirm approve" : "Approve"}
+                                  aria-label={confirmId === order.id ? "Confirm approve" : "Approve"}
+                                >
+                                  <Check size={14} />
+                                  {confirmId === order.id ? "Confirm" : ""}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleReject(order)}
+                                  disabled={submittingId === order.id || isAnotherOrderEditing || isEditing}
+                                  className={cn(
+                                    "inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded border px-2 text-[10px] font-black uppercase transition disabled:cursor-not-allowed disabled:opacity-50",
+                                    rejectingId === order.id
+                                      ? "border-red-800 bg-red-700 text-white hover:bg-red-800"
+                                      : "border-red-700 bg-red-50 text-red-700 hover:bg-red-100",
+                                  )}
+                                  title={rejectingId === order.id ? "Confirm reject" : "Reject"}
+                                  aria-label={rejectingId === order.id ? "Confirm reject" : "Reject"}
+                                >
+                                  <X size={14} />
+                                  {rejectingId === order.id ? "Reject" : ""}
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                          {rejectingId === order.id ? (
+                            <input
+                              type="text"
+                              value={remarks}
+                              onChange={(e) => setRemarks(e.target.value)}
+                              placeholder="Rejection remarks"
+                              className="w-52 rounded border border-red-700 px-2 py-1 text-xs font-bold text-black placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-red-700"
+                              autoFocus
+                            />
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                     {isExpanded && (
                       <tr className="bg-slate-50/50">
                         <td colSpan={mode === "rejected" ? 12 : 11} className="px-12 py-4">
                           <div className="overflow-hidden rounded border-2 border-black shadow-sm">
+                            {isEditing ? (
+                              <div className="flex flex-wrap items-center gap-3 border-b-2 border-black bg-white p-3">
+                                <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-600">
+                                  Round Off
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={editingHeader?.roundOff || "0"}
+                                    onChange={(e) => setEditingHeader((prev) => (prev ? { ...prev, roundOff: e.target.value } : prev))}
+                                    className="w-28 rounded border border-black px-2 py-1 text-right text-xs font-bold text-black"
+                                  />
+                                </label>
+                              </div>
+                            ) : null}
                             <table className="min-w-full divide-y divide-black">
                               <thead className="sticky top-0 z-30 bg-slate-100">
                                 <tr className="divide-x divide-black text-[9px] font-black uppercase text-slate-500">
@@ -1300,17 +1420,69 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                     <tr key={line.id} className="divide-x divide-black text-[10px] font-bold">
                                       <td className="px-3 py-2 text-black">{line.erpCode || materialMap.get(line.materialId)?.erpCode || ""}</td>
                                       <td className="px-3 py-2 text-black uppercase">{materialMap.get(line.materialId)?.name || "Unknown"}</td>
-                                      <td className="px-3 py-2 text-right">{Number(line.qty || 0).toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-right">
+                                        {isEditing ? (
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={editingLines[line.id]?.qty || ""}
+                                            onChange={(e) =>
+                                              setEditingLines((prev) => ({
+                                                ...prev,
+                                                [line.id]: { ...prev[line.id], qty: e.target.value },
+                                              }))
+                                            }
+                                            className="w-24 rounded border border-black px-2 py-1 text-right text-xs font-bold"
+                                          />
+                                        ) : (
+                                          Number(line.qty || 0).toLocaleString()
+                                        )}
+                                      </td>
                                       <td className="px-3 py-2 text-right text-emerald-700">{receivedQty.toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right text-red-700">{cancelledQty.toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right text-amber-700">{pendingQty.toLocaleString()}</td>
                                       <td className="px-3 py-2 text-center">{line.uom}</td>
-                                      <td className="px-3 py-2 text-right">{formatMoney(Number(line.rate || 0))}</td>
                                       <td className="px-3 py-2 text-right">
-                                        {`${Number(line.gstRate || 0).toLocaleString(undefined, {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })}%`}
+                                        {isEditing ? (
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={editingLines[line.id]?.rate || ""}
+                                            onChange={(e) =>
+                                              setEditingLines((prev) => ({
+                                                ...prev,
+                                                [line.id]: { ...prev[line.id], rate: e.target.value },
+                                              }))
+                                            }
+                                            className="w-24 rounded border border-black px-2 py-1 text-right text-xs font-bold"
+                                          />
+                                        ) : (
+                                          formatMoney(Number(line.rate || 0))
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-right">
+                                        {isEditing ? (
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={editingLines[line.id]?.gstRate || ""}
+                                            onChange={(e) =>
+                                              setEditingLines((prev) => ({
+                                                ...prev,
+                                                [line.id]: { ...prev[line.id], gstRate: e.target.value },
+                                              }))
+                                            }
+                                            className="w-20 rounded border border-black px-2 py-1 text-right text-xs font-bold"
+                                          />
+                                        ) : (
+                                          `${Number(line.gstRate || 0).toLocaleString(undefined, {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                          })}%`
+                                        )}
                                       </td>
                                       {showIntegratedTax ? (
                                         <td className="px-3 py-2 text-right">{formatMoney(Number(activeLine.igst || 0))}</td>
@@ -1324,7 +1496,23 @@ export function PurchaseOrderList({ mode = "all" }: PurchaseOrderListProps) {
                                       <td className="px-3 py-2 text-right">
                                         {formatMoney(Number(activeLine.lineTotal ?? (Number(activeLine.amount || 0) + Number(activeLine.cgst || 0) + Number(activeLine.sgst || 0) + Number(activeLine.igst || 0))))}
                                       </td>
-                                      <td className="px-3 py-2 text-left">{line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-"}</td>
+                                      <td className="px-3 py-2 text-left">
+                                        {isEditing ? (
+                                          <input
+                                            type="date"
+                                            value={editingLines[line.id]?.targetDeliveryDate || ""}
+                                            onChange={(e) =>
+                                              setEditingLines((prev) => ({
+                                                ...prev,
+                                                [line.id]: { ...prev[line.id], targetDeliveryDate: e.target.value },
+                                              }))
+                                            }
+                                            className="w-32 rounded border border-black px-2 py-1 text-xs font-bold"
+                                          />
+                                        ) : (
+                                          line.targetDeliveryDate ? formatDate(line.targetDeliveryDate) : "-"
+                                        )}
+                                      </td>
                                     </tr>
                                   );
                                 })}
