@@ -107,6 +107,14 @@ type QuickMaterialForm = {
   remarks: string;
   active: "Yes" | "No";
 };
+
+type QuickMaterialValidationErrors = Partial<Record<"name" | "materialGroupId" | "uom" | "color" | "size" | "gsm" | "bf", string>>;
+
+type MaterialCreationResult = {
+  form: QuickMaterialForm;
+  material: Material;
+  isNew: boolean;
+};
 type ReelUploadRow = {
   materialId: string;
   materialName: string;
@@ -180,6 +188,7 @@ export function MaterialInForm() {
   const [quickMaterialDrafts, setQuickMaterialDrafts] = useState<Record<number, QuickMaterialForm>>({});
   const [newAiGroupNames, setNewAiGroupNames] = useState<Record<number, string>>({});
   const [newAiColorNames, setNewAiColorNames] = useState<Record<number, string>>({});
+  const [aiRowErrors, setAiRowErrors] = useState<Record<number, QuickMaterialValidationErrors>>({});
   const [savingQuickMaterialIndex, setSavingQuickMaterialIndex] = useState<number | null>(null);
   const [savingAiGroupIndex, setSavingAiGroupIndex] = useState<number | null>(null);
   const [savingAiColorIndex, setSavingAiColorIndex] = useState<number | null>(null);
@@ -628,8 +637,8 @@ export function MaterialInForm() {
   const normalizeForAiMatch = (value?: string | number | null) =>
     normalizeMatchText(value).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 
-  const getNextAiErpCode = (type: AiMrrItemType) => {
-    const numericValues = materials
+  const getNextAiErpCodeFromList = (type: AiMrrItemType, materialList: Material[]) => {
+    const numericValues = materialList
       .filter((material) => material.type === type)
       .map((material) => Number(material.erpCode))
       .filter((value) => Number.isFinite(value) && value > 0);
@@ -1544,6 +1553,11 @@ export function MaterialInForm() {
 
   const getQuickMaterialDraft = (match: AiLineMatch) => quickMaterialDrafts[match.index] || getDefaultQuickMaterialForm(match);
 
+  const missingAiLineMatches = useMemo(
+    () => aiLineMatches.filter((match) => match.status === "missing"),
+    [aiLineMatches]
+  );
+
   const updateQuickMaterialDraft = (match: AiLineMatch, updater: Partial<QuickMaterialForm> | ((draft: QuickMaterialForm) => QuickMaterialForm)) => {
     setQuickMaterialDrafts((prev) => {
       const current = prev[match.index] || getDefaultQuickMaterialForm(match);
@@ -1569,6 +1583,110 @@ export function MaterialInForm() {
     });
   };
 
+  const clearAiRowError = (lineIndex: number, field?: keyof QuickMaterialValidationErrors) => {
+    setAiRowErrors((prev) => {
+      const current = prev[lineIndex];
+      if (!current) return prev;
+      if (!field) {
+        const next = { ...prev };
+        delete next[lineIndex];
+        return next;
+      }
+      const nextErrors = { ...current };
+      delete nextErrors[field];
+      return { ...prev, [lineIndex]: nextErrors };
+    });
+  };
+
+  const validateQuickMaterialForm = (form: QuickMaterialForm) => {
+    const errors: QuickMaterialValidationErrors = {};
+    const size = Number(form.size);
+    const gsm = Number(form.gsm);
+    const bf = Number(form.bf);
+
+    if (form.type === "Other" && !form.name.trim()) errors.name = "Required";
+    if (!form.materialGroupId) errors.materialGroupId = "Required";
+    if (!form.uom.trim()) errors.uom = "Required";
+    if (form.type === "Reel") {
+      if (!form.color.trim()) errors.color = "Required";
+      if (!Number.isFinite(size) || size <= 0) errors.size = "Required";
+      if (!Number.isFinite(gsm) || gsm <= 0) errors.gsm = "Required";
+      if (!Number.isFinite(bf) || bf <= 0) errors.bf = "Required";
+    }
+
+    return errors;
+  };
+
+  const updateAiDraftLinesFromCreationResults = (results: MaterialCreationResult[]) => {
+    setAiDraft((prev) => {
+      if (!prev) return prev;
+      const resultByIndex = new Map(results.map((result) => [result.form.lineIndex, result]));
+      const nextLines = (prev.lines || []).map((line, index) => {
+        const result = resultByIndex.get(index);
+        if (!result) return line;
+        const { form, material } = result;
+        return {
+          ...line,
+          itemName: material.name || form.name || line.itemName,
+          erpCode: material.erpCode || line.erpCode,
+          itemType: form.type,
+          materialGroupName: materialGroups.find((group) => group.id === form.materialGroupId)?.name || line.materialGroupName,
+          uom: form.uom || line.uom,
+          size: form.type === "Reel" ? Number(form.size) : null,
+          gsm: form.type === "Reel" ? Number(form.gsm) : null,
+          bf: form.type === "Reel" ? Number(form.bf) : null,
+          color: form.type === "Reel" ? form.color : "",
+        };
+      });
+      return { ...prev, lines: nextLines };
+    });
+  };
+
+  const buildAiMaterialCreationResult = (form: QuickMaterialForm, materialList: Material[]): MaterialCreationResult => {
+    const name = form.name.trim();
+    const uom = form.uom.trim();
+    const size = Number(form.size);
+    const gsm = Number(form.gsm);
+    const bf = Number(form.bf);
+    const color = form.color.trim();
+
+    if (form.type === "Reel") {
+      const existingReel = materialList.find((material) =>
+        material.active !== "No" &&
+        material.type === "Reel" &&
+        numbersMatch(material.size, size) &&
+        numbersMatch(material.gsm, gsm) &&
+        numbersMatch(material.bf, bf)
+      );
+      if (existingReel) {
+        return { form, material: existingReel, isNew: false };
+      }
+    }
+
+    const erpCode = getNextAiErpCodeFromList(form.type, materialList);
+    const nextMaterial: Material = {
+      id: crypto.randomUUID(),
+      type: form.type,
+      erpCode,
+      name: form.type === "Reel" ? getReelDisplayName(erpCode, size, gsm, bf, color) : name,
+      uom,
+      materialGroupId: form.materialGroupId,
+      color: form.type === "Reel" ? color : null,
+      size: form.type === "Reel" ? size : undefined,
+      gsm: form.type === "Reel" ? gsm : undefined,
+      bf: form.type === "Reel" ? bf : undefined,
+      openingQty: 0,
+      openingRate: 0,
+      openingValue: 0,
+      remarks: "",
+      active: "Yes",
+      updatedBy: "System User",
+      updateTimestamp: new Date().toISOString(),
+    };
+
+    return { form, material: nextMaterial, isNew: true };
+  };
+
   const handleCreateAiGroup = async (match: AiLineMatch) => {
     const defaultName = String(match.line.materialGroupName || "").trim();
     const normalizedName = String(newAiGroupNames[match.index] ?? defaultName).trim();
@@ -1576,6 +1694,7 @@ export function MaterialInForm() {
     const existing = materialGroups.find((group) => normalizeMatchText(group.name) === normalizeMatchText(normalizedName));
     if (existing) {
       updateQuickMaterialDraft(match, { materialGroupId: existing.id });
+      clearAiRowError(match.index, "materialGroupId");
       setNewAiGroupNames((prev) => ({ ...prev, [match.index]: "" }));
       return;
     }
@@ -1585,6 +1704,7 @@ export function MaterialInForm() {
     try {
       await setMaterialGroups([...materialGroups, nextGroup]);
       updateQuickMaterialDraft(match, { materialGroupId: nextGroup.id });
+      clearAiRowError(match.index, "materialGroupId");
       setNewAiGroupNames((prev) => ({ ...prev, [match.index]: "" }));
     } catch (error) {
       console.error("Failed to create material group:", error);
@@ -1601,6 +1721,7 @@ export function MaterialInForm() {
     const existing = colors.find((color) => normalizeMatchText(color.name) === normalizeMatchText(normalizedName));
     if (existing) {
       updateQuickMaterialDraft(match, { color: existing.name });
+      clearAiRowError(match.index, "color");
       setNewAiColorNames((prev) => ({ ...prev, [match.index]: "" }));
       return;
     }
@@ -1610,6 +1731,7 @@ export function MaterialInForm() {
     try {
       await setColors([...colors, nextColor]);
       updateQuickMaterialDraft(match, { color: nextColor.name });
+      clearAiRowError(match.index, "color");
       setNewAiColorNames((prev) => ({ ...prev, [match.index]: "" }));
     } catch (error) {
       console.error("Failed to create color:", error);
@@ -1619,94 +1741,21 @@ export function MaterialInForm() {
     }
   };
 
-  const updateAiDraftLineFromQuickMaterial = (form: QuickMaterialForm, material?: Material) => {
-    setAiDraft((prev) => {
-      if (!prev) return prev;
-      const nextLines = (prev.lines || []).map((line, index) => {
-        if (index !== form.lineIndex) return line;
-        return {
-          ...line,
-          itemName: material?.name || form.name || line.itemName,
-          erpCode: material?.erpCode || line.erpCode,
-          itemType: form.type,
-          materialGroupName: materialGroups.find((group) => group.id === form.materialGroupId)?.name || line.materialGroupName,
-          uom: form.uom || line.uom,
-          size: form.type === "Reel" ? Number(form.size) : line.size,
-          gsm: form.type === "Reel" ? Number(form.gsm) : line.gsm,
-          bf: form.type === "Reel" ? Number(form.bf) : line.bf,
-          color: form.type === "Reel" ? form.color : line.color,
-        };
-      });
-      return { ...prev, lines: nextLines };
-    });
-  };
-
   const handleCreateQuickMaterial = async (form: QuickMaterialForm) => {
-    const name = form.name.trim();
-    const erpCode = getNextAiErpCode(form.type);
-    const uom = form.uom.trim();
-    const size = Number(form.size);
-    const gsm = Number(form.gsm);
-    const bf = Number(form.bf);
-    const color = form.color.trim();
-    const openingQty = Number(form.openingQty || 0);
-    const openingRate = Number(form.openingRate || 0);
-    const openingValueInput = Number(form.openingValue || 0);
-    const openingValue = Number.isFinite(openingValueInput) && openingValueInput > 0 ? openingValueInput : openingQty * openingRate;
-    const remarks = form.remarks.trim();
-    if (form.type === "Other" && !name) { alert("Item Name is required."); return; }
-    if (!form.materialGroupId) { alert("Material Group is required."); return; }
-    if (!uom) { alert("UOM is required."); return; }
-    if (!Number.isFinite(openingQty) || openingQty < 0 || !Number.isFinite(openingRate) || openingRate < 0 || !Number.isFinite(openingValue)) {
-      alert("Opening Qty, Rate, and Value must be valid numbers.");
+    const validationErrors = validateQuickMaterialForm(form);
+    if (Object.keys(validationErrors).length > 0) {
+      setAiRowErrors((prev) => ({ ...prev, [form.lineIndex]: validationErrors }));
       return;
     }
-    if (form.type === "Reel" && (!color || !Number.isFinite(size) || size <= 0 || !Number.isFinite(gsm) || gsm <= 0 || !Number.isFinite(bf) || bf <= 0)) {
-      alert("Color, Size, GSM, and BF are required for Reel.");
-      return;
-    }
-    if (form.type === "Reel") {
-      const existingReel = materials.find((material) =>
-        material.active !== "No" &&
-        material.type === "Reel" &&
-        numbersMatch(material.size, size) &&
-        numbersMatch(material.gsm, gsm) &&
-        numbersMatch(material.bf, bf)
-      );
-      if (existingReel) {
-        updateAiDraftLineFromQuickMaterial(form, existingReel);
-        setQuickMaterialDrafts((prev) => {
-          const next = { ...prev };
-          delete next[form.lineIndex];
-          return next;
-        });
-        return;
-      }
-    }
+
     setSavingQuickMaterialIndex(form.lineIndex);
-    const timestamp = new Date().toISOString();
-    const nextMaterial: Material = {
-      id: crypto.randomUUID(),
-      type: form.type,
-      erpCode,
-      name: form.type === "Reel" ? getReelDisplayName(erpCode, size, gsm, bf, color) : name,
-      uom,
-      materialGroupId: form.materialGroupId,
-      color: form.type === "Reel" ? color : null,
-      size: form.type === "Reel" ? size : undefined,
-      gsm: form.type === "Reel" ? gsm : undefined,
-      bf: form.type === "Reel" ? bf : undefined,
-      openingQty,
-      openingRate,
-      openingValue,
-      remarks,
-      active: form.active,
-      updatedBy: "System User",
-      updateTimestamp: timestamp,
-    };
     try {
-      await setMaterials([nextMaterial, ...materials]);
-      updateAiDraftLineFromQuickMaterial(form, nextMaterial);
+      const result = buildAiMaterialCreationResult(form, materials);
+      if (result.isNew) {
+        await setMaterials([result.material, ...materials]);
+      }
+      updateAiDraftLinesFromCreationResults([result]);
+      clearAiRowError(form.lineIndex);
       setQuickMaterialDrafts((prev) => {
         const next = { ...prev };
         delete next[form.lineIndex];
@@ -1715,6 +1764,53 @@ export function MaterialInForm() {
     } catch (error) {
       console.error("Failed to create material:", error);
       alert("Failed to create material.");
+    } finally {
+      setSavingQuickMaterialIndex(null);
+    }
+  };
+
+  const handleCreateAllMissingMaterials = async () => {
+    if (missingAiLineMatches.length === 0) return;
+
+    const forms = missingAiLineMatches.map((match) => getQuickMaterialDraft(match));
+    const nextErrors = forms.reduce<Record<number, QuickMaterialValidationErrors>>((acc, form) => {
+      const errors = validateQuickMaterialForm(form);
+      if (Object.keys(errors).length > 0) acc[form.lineIndex] = errors;
+      return acc;
+    }, {});
+
+    const validForms = forms.filter((form) => !nextErrors[form.lineIndex]);
+    if (validForms.length === 0) {
+      setAiRowErrors(nextErrors);
+      return;
+    }
+
+    setSavingQuickMaterialIndex(-1);
+    try {
+      const workingMaterials = [...materials];
+      const results = validForms.map((form) => {
+        const result = buildAiMaterialCreationResult(form, workingMaterials);
+        if (result.isNew) workingMaterials.unshift(result.material);
+        return result;
+      });
+      const newMaterials = results.filter((result) => result.isNew).map((result) => result.material);
+
+      if (newMaterials.length > 0) {
+        await setMaterials([...newMaterials, ...materials]);
+      }
+
+      updateAiDraftLinesFromCreationResults(results);
+      setAiRowErrors(nextErrors);
+      setQuickMaterialDrafts((prev) => {
+        const next = { ...prev };
+        validForms.forEach((form) => {
+          delete next[form.lineIndex];
+        });
+        return next;
+      });
+    } catch (error) {
+      console.error("Failed to create missing materials:", error);
+      alert("Failed to create missing materials.");
     } finally {
       setSavingQuickMaterialIndex(null);
     }
@@ -2163,121 +2259,148 @@ export function MaterialInForm() {
                     </thead>
                     <tbody>
                       {aiLineMatches.map((match) => {
-                        const isMissing = match.status === "missing";
-                        const draft = isMissing ? getQuickMaterialDraft(match) : null;
-                        const groupNameValue = newAiGroupNames[match.index] ?? String(match.line.materialGroupName || "").trim();
-                        const colorNameValue = newAiColorNames[match.index] ?? String(match.line.color || "").trim();
                         return (
-                          <React.Fragment key={match.index}>
-                            <tr>
-                              <td className="border border-black px-3 py-2 font-bold text-black">{normalizeAiItemType(match.line.itemType) === "Reel" ? match.material?.name || getReelSpecLabel(match.line) : match.line.itemName || "-"}</td>
-                              <td className="border border-black px-3 py-2 text-black">{normalizeAiItemType(match.line.itemType)}</td>
-                              <td className="border border-black px-3 py-2 text-black">{Number(match.line.qty || 0).toLocaleString()}</td>
-                              <td className="border border-black px-3 py-2 text-black">{match.line.uom || "-"}</td>
-                              <td className="border border-black px-3 py-2 text-black">{Number(match.line.invoiceRate || 0).toFixed(2)}</td>
-                              <td className="border border-black px-3 py-2 text-black">{Number(match.line.gstRate || 0).toFixed(2)}%</td>
-                              <td className="border border-black px-3 py-2">
-                                <div className={match.status === "matched" ? "font-bold text-emerald-700" : match.status === "warning" ? "font-bold text-amber-700" : "font-bold text-red-700"}>
-                                  {match.material?.name || match.reason}
-                                </div>
-                                {match.material ? <div className="text-xs text-slate-500">{match.reason}</div> : null}
-                              </td>
-                              <td className="border border-black px-3 py-2">
-                                {isMissing && draft ? (
-                                  <button type="button" onClick={() => handleCreateQuickMaterial(draft)} disabled={savingQuickMaterialIndex === match.index} className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
-                                    {savingQuickMaterialIndex === match.index ? <Spinner size={14} className="text-white" /> : <Plus size={14} />} Create Material
-                                  </button>
-                                ) : match.status === "warning" ? (
-                                  <button type="button" onClick={() => navigate("/masters/materials")} className="rounded border border-black bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-slate-50">Edit Master</button>
-                                ) : <span className="text-xs font-bold text-emerald-700">OK</span>}
-                              </td>
-                            </tr>
-                            {isMissing && draft ? (
-                              <tr className="bg-amber-50/60">
-                                <td colSpan={8} className="border border-black p-3">
-                                  <div className="grid gap-3 md:grid-cols-4">
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-black uppercase text-black">Type</label>
-                                      <Select
-                                        options={[{ value: "Reel", label: "Reel" }, { value: "Other", label: "Other" }]}
-                                        value={draft.type}
-                                        onChange={(value) => handleQuickMaterialTypeChange(match, value === "Reel" ? "Reel" : "Other")}
-                                        placeholder="Type..."
-                                      />
-                                    </div>
-                                    {draft.type === "Other" ? (
-                                      <div className="md:col-span-2">
-                                        <label className="mb-1 block text-[10px] font-black uppercase text-black">Item Name</label>
-                                        <input value={draft.name} onChange={(e) => updateQuickMaterialDraft(match, { name: e.target.value })} className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black" />
-                                      </div>
-                                    ) : (
-                                      <div className="rounded border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 md:col-span-2">
-                                        ERP auto-generates on create. Reel name comes from Size, GSM, BF, and Color.
-                                      </div>
-                                    )}
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-black uppercase text-black">Active</label>
-                                      <Select
-                                        options={[{ value: "Yes", label: "Yes" }, { value: "No", label: "No" }]}
-                                        value={draft.active}
-                                        onChange={(value) => updateQuickMaterialDraft(match, { active: value === "No" ? "No" : "Yes" })}
-                                        placeholder="Active..."
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-black uppercase text-black">Material Group</label>
-                                      <Select options={materialGroupOptions} value={draft.materialGroupId} onChange={(value) => updateQuickMaterialDraft(match, { materialGroupId: value })} placeholder="Group..." />
-                                    </div>
-                                    <div>
-                                      <label className="mb-1 block text-[10px] font-black uppercase text-black">UOM</label>
-                                      <Select options={unitOptions.length ? unitOptions : [{ value: "KGS", label: "KGS" }, { value: "PCS", label: "PCS" }]} value={draft.uom} onChange={(value) => updateQuickMaterialDraft(match, { uom: value })} placeholder="UOM..." />
-                                    </div>
-                                    <div className="md:col-span-2">
-                                      <label className="mb-1 block text-[10px] font-black uppercase text-black">+ Create Group</label>
-                                      <div className="flex gap-2">
-                                        <input value={groupNameValue} onChange={(e) => setNewAiGroupNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New group" className="min-w-0 flex-1 rounded border border-slate-300 px-3 py-2 text-sm text-black" />
-                                        <button type="button" onClick={() => handleCreateAiGroup(match)} disabled={savingAiGroupIndex === match.index || !groupNameValue.trim()} className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-                                          {savingAiGroupIndex === match.index ? <Spinner size={14} className="text-white" /> : <Plus size={14} />} Group
-                                        </button>
-                                      </div>
-                                    </div>
-                                    {draft.type === "Reel" ? (
-                                      <>
-                                        <div className="md:col-span-2">
-                                          <label className="mb-1 block text-[10px] font-black uppercase text-black">Color</label>
-                                          <Select options={colorOptions} value={draft.color} onChange={(value) => updateQuickMaterialDraft(match, { color: value })} placeholder="Color..." />
-                                        </div>
-                                        <div className="md:col-span-2">
-                                          <label className="mb-1 block text-[10px] font-black uppercase text-black">+ Create Color</label>
-                                          <div className="flex gap-2">
-                                            <input value={colorNameValue} onChange={(e) => setNewAiColorNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New color" className="min-w-0 flex-1 rounded border border-slate-300 px-3 py-2 text-sm text-black" />
-                                            <button type="button" onClick={() => handleCreateAiColor(match)} disabled={savingAiColorIndex === match.index || !colorNameValue.trim()} className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-                                              {savingAiColorIndex === match.index ? <Spinner size={14} className="text-white" /> : <Plus size={14} />} Color
-                                            </button>
-                                          </div>
-                                        </div>
-                                        <div><label className="mb-1 block text-[10px] font-black uppercase text-black">Size</label><input type="number" min="0" step="0.01" value={draft.size} onChange={(e) => updateQuickMaterialDraft(match, { size: e.target.value })} className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black" /></div>
-                                        <div><label className="mb-1 block text-[10px] font-black uppercase text-black">GSM</label><input type="number" min="0" step="0.01" value={draft.gsm} onChange={(e) => updateQuickMaterialDraft(match, { gsm: e.target.value })} className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black" /></div>
-                                        <div><label className="mb-1 block text-[10px] font-black uppercase text-black">BF</label><input type="number" min="0" step="0.01" value={draft.bf} onChange={(e) => updateQuickMaterialDraft(match, { bf: e.target.value })} className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black" /></div>
-                                      </>
-                                    ) : null}
-                                    <div><label className="mb-1 block text-[10px] font-black uppercase text-black">Opening Qty</label><input type="number" min="0" step="0.01" value={draft.openingQty} onChange={(e) => updateQuickMaterialDraft(match, { openingQty: e.target.value })} className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black" /></div>
-                                    <div><label className="mb-1 block text-[10px] font-black uppercase text-black">Opening Rate</label><input type="number" min="0" step="0.01" value={draft.openingRate} onChange={(e) => updateQuickMaterialDraft(match, { openingRate: e.target.value })} className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black" /></div>
-                                    <div><label className="mb-1 block text-[10px] font-black uppercase text-black">Opening Value</label><input type="number" min="0" step="0.01" value={draft.openingValue} onChange={(e) => updateQuickMaterialDraft(match, { openingValue: e.target.value })} className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black" /></div>
-                                    <div className="md:col-span-4">
-                                      <label className="mb-1 block text-[10px] font-black uppercase text-black">Remarks</label>
-                                      <textarea value={draft.remarks} onChange={(e) => updateQuickMaterialDraft(match, { remarks: e.target.value })} rows={2} className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black" />
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            ) : null}
-                          </React.Fragment>
+                          <tr key={match.index}>
+                            <td className="border border-black px-3 py-2 font-bold text-black">{normalizeAiItemType(match.line.itemType) === "Reel" ? match.material?.name || getReelSpecLabel(match.line) : match.line.itemName || "-"}</td>
+                            <td className="border border-black px-3 py-2 text-black">{normalizeAiItemType(match.line.itemType)}</td>
+                            <td className="border border-black px-3 py-2 text-black">{Number(match.line.qty || 0).toLocaleString()}</td>
+                            <td className="border border-black px-3 py-2 text-black">{match.line.uom || "-"}</td>
+                            <td className="border border-black px-3 py-2 text-black">{Number(match.line.invoiceRate || 0).toFixed(2)}</td>
+                            <td className="border border-black px-3 py-2 text-black">{Number(match.line.gstRate || 0).toFixed(2)}%</td>
+                            <td className="border border-black px-3 py-2">
+                              <div className={match.status === "matched" ? "font-bold text-emerald-700" : match.status === "warning" ? "font-bold text-amber-700" : "font-bold text-red-700"}>
+                                {match.material?.name || match.reason}
+                              </div>
+                              {match.material ? <div className="text-xs text-slate-500">{match.reason}</div> : null}
+                            </td>
+                            <td className="border border-black px-3 py-2">
+                              {match.status === "missing" ? (
+                                <span className="text-xs font-bold text-amber-700">Review below</span>
+                              ) : match.status === "warning" ? (
+                                <button type="button" onClick={() => navigate("/masters/materials")} className="rounded border border-black bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-slate-50">Edit Master</button>
+                              ) : <span className="text-xs font-bold text-emerald-700">OK</span>}
+                            </td>
+                          </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+                {missingAiLineMatches.length > 0 ? (
+                  <div className="space-y-3 rounded border border-amber-700 bg-amber-50/60 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-black uppercase text-black">Missing Materials</div>
+                        <div className="text-xs font-bold text-slate-600">Edit AI suggestions, then create materials before setting MRR data.</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCreateAllMissingMaterials}
+                        disabled={savingQuickMaterialIndex !== null}
+                        className="inline-flex items-center gap-2 rounded bg-emerald-700 px-4 py-2 text-xs font-black uppercase text-white hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {savingQuickMaterialIndex === -1 ? <Spinner size={14} className="text-white" /> : <Plus size={14} />} Create All Missing
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto rounded border border-black bg-white">
+                      <table className="min-w-[1250px] border-collapse bg-white text-xs">
+                        <thead className="bg-slate-100">
+                          <tr>
+                            {["Item / Spec", "Type", "Group", "UOM", "Color", "Size", "GSM", "BF", "Action"].map((heading) => (
+                              <th key={heading} className="border border-black px-2 py-2 text-left text-[10px] font-black uppercase text-black">{heading}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {missingAiLineMatches.map((match) => {
+                            const draft = getQuickMaterialDraft(match);
+                            const errors = aiRowErrors[match.index] || {};
+                            const isReelDraft = draft.type === "Reel";
+                            const groupNameValue = newAiGroupNames[match.index] ?? String(match.line.materialGroupName || "").trim();
+                            const colorNameValue = newAiColorNames[match.index] ?? String(match.line.color || "").trim();
+                            const errorText = (field: keyof QuickMaterialValidationErrors) => errors[field] ? <div className="mt-1 text-[10px] font-black uppercase text-red-700">{errors[field]}</div> : null;
+                            return (
+                              <tr key={`missing-${match.index}`} className="align-top">
+                                <td className="border border-black px-2 py-2 min-w-[230px]">
+                                  {isReelDraft ? (
+                                    <div className="rounded border border-slate-300 bg-slate-50 px-2 py-2 font-bold text-slate-800">
+                                      {getReelSpecLabel({ itemName: draft.name, erpCode: draft.erpCode, size: Number(draft.size), gsm: Number(draft.gsm), bf: Number(draft.bf) })}
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <input
+                                        value={draft.name}
+                                        onChange={(e) => { updateQuickMaterialDraft(match, { name: e.target.value }); clearAiRowError(match.index, "name"); }}
+                                        className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black"
+                                      />
+                                      {errorText("name")}
+                                    </>
+                                  )}
+                                </td>
+                                <td className="border border-black px-2 py-2 min-w-[130px]">
+                                  <Select
+                                    options={[{ value: "Reel", label: "Reel" }, { value: "Other", label: "Other" }]}
+                                    value={draft.type}
+                                    onChange={(value) => { handleQuickMaterialTypeChange(match, value === "Reel" ? "Reel" : "Other"); clearAiRowError(match.index); }}
+                                    placeholder="Type..."
+                                  />
+                                </td>
+                                <td className="border border-black px-2 py-2 min-w-[190px]">
+                                  <Select options={materialGroupOptions} value={draft.materialGroupId} onChange={(value) => { updateQuickMaterialDraft(match, { materialGroupId: value }); clearAiRowError(match.index, "materialGroupId"); }} placeholder="Group..." />
+                                  {errorText("materialGroupId")}
+                                  <div className="mt-2 flex gap-1">
+                                    <input value={groupNameValue} onChange={(e) => setNewAiGroupNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New group" className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs text-black" />
+                                    <button type="button" title="Create group" onClick={() => handleCreateAiGroup(match)} disabled={savingAiGroupIndex === match.index || !groupNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-600 text-white disabled:opacity-50">
+                                      {savingAiGroupIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="border border-black px-2 py-2 min-w-[130px]">
+                                  <Select options={unitOptions.length ? unitOptions : [{ value: "KGS", label: "KGS" }, { value: "PCS", label: "PCS" }]} value={draft.uom} onChange={(value) => { updateQuickMaterialDraft(match, { uom: value }); clearAiRowError(match.index, "uom"); }} placeholder="UOM..." />
+                                  {errorText("uom")}
+                                </td>
+                                <td className="border border-black px-2 py-2 min-w-[190px]">
+                                  <Select options={colorOptions} value={isReelDraft ? draft.color : ""} onChange={(value) => { updateQuickMaterialDraft(match, { color: value }); clearAiRowError(match.index, "color"); }} placeholder="Color..." disabled={!isReelDraft} />
+                                  {isReelDraft ? errorText("color") : null}
+                                  {isReelDraft ? (
+                                    <div className="mt-2 flex gap-1">
+                                      <input value={colorNameValue} onChange={(e) => setNewAiColorNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New color" className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs text-black" />
+                                      <button type="button" title="Create color" onClick={() => handleCreateAiColor(match)} disabled={savingAiColorIndex === match.index || !colorNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-600 text-white disabled:opacity-50">
+                                        {savingAiColorIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </td>
+                                <td className="border border-black px-2 py-2 min-w-[90px]">
+                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.size : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { size: e.target.value }); clearAiRowError(match.index, "size"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
+                                  {isReelDraft ? errorText("size") : null}
+                                </td>
+                                <td className="border border-black px-2 py-2 min-w-[90px]">
+                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.gsm : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { gsm: e.target.value }); clearAiRowError(match.index, "gsm"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
+                                  {isReelDraft ? errorText("gsm") : null}
+                                </td>
+                                <td className="border border-black px-2 py-2 min-w-[90px]">
+                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.bf : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { bf: e.target.value }); clearAiRowError(match.index, "bf"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
+                                  {isReelDraft ? errorText("bf") : null}
+                                </td>
+                                <td className="border border-black px-2 py-2 min-w-[120px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCreateQuickMaterial(draft)}
+                                    disabled={savingQuickMaterialIndex !== null}
+                                    className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                  >
+                                    {savingQuickMaterialIndex === match.index ? <Spinner size={14} className="text-white" /> : <Plus size={14} />} Create
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex justify-end">
                   <button
                     type="button"
