@@ -101,6 +101,10 @@ type QuickMaterialForm = {
   size: string;
   gsm: string;
   bf: string;
+  openingQty: string;
+  openingRate: string;
+  openingValue: string;
+  remarks: string;
   active: "Yes" | "No";
 };
 type ReelUploadRow = {
@@ -134,7 +138,7 @@ export function MaterialInForm() {
   const [services] = useData<Service>("services", []);
   const [materialGroups, setMaterialGroups] = useData<MaterialGroup>("material-groups", []);
   const [units] = useData<UnitMaster>("units", []);
-  const [colors] = useData<ColorMaster>("color_masters", []);
+  const [colors, setColors] = useData<ColorMaster>("color_masters", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
@@ -175,8 +179,10 @@ export function MaterialInForm() {
   const [aiError, setAiError] = useState("");
   const [quickMaterial, setQuickMaterial] = useState<QuickMaterialForm | null>(null);
   const [newAiGroupName, setNewAiGroupName] = useState("");
+  const [newAiColorName, setNewAiColorName] = useState("");
   const [savingQuickMaterial, setSavingQuickMaterial] = useState(false);
   const [savingAiGroup, setSavingAiGroup] = useState(false);
+  const [savingAiColor, setSavingAiColor] = useState(false);
 
 
   const gateEntryId = searchParams.get("gateEntryId") || "";
@@ -1515,18 +1521,25 @@ export function MaterialInForm() {
     const type = normalizeAiItemType(line.itemType);
     const reelGroup = materialGroups.find((group) => normalizeMatchText(group.name) === "reel");
     const suggestedGroup = materialGroups.find((group) => normalizeForAiMatch(group.name) === normalizeForAiMatch(line.materialGroupName));
+    const aiColorName = String(line.color || "").trim();
+    const matchedColor = colors.find((color) => normalizeMatchText(color.name) === normalizeMatchText(aiColorName));
     setNewAiGroupName(String(line.materialGroupName || ""));
+    setNewAiColorName(matchedColor ? "" : aiColorName);
     setQuickMaterial({
       lineIndex: match.index,
       type,
-      erpCode: String(line.erpCode || "").trim() || getNextAiErpCode(type),
+      erpCode: getNextAiErpCode(type),
       name: String(line.itemName || "").trim(),
       uom: String(line.uom || (type === "Reel" ? "KGS" : "")).trim(),
       materialGroupId: type === "Reel" ? reelGroup?.id || suggestedGroup?.id || "" : suggestedGroup?.id || "",
-      color: String(line.color || "").trim(),
+      color: type === "Reel" ? matchedColor?.name || "" : "",
       size: line.size == null ? "" : String(line.size),
       gsm: line.gsm == null ? "" : String(line.gsm),
       bf: line.bf == null ? "" : String(line.bf),
+      openingQty: "0",
+      openingRate: "0",
+      openingValue: "0",
+      remarks: "",
       active: "Yes",
     });
   };
@@ -1573,6 +1586,29 @@ export function MaterialInForm() {
     }
   };
 
+  const handleCreateAiColor = async () => {
+    const normalizedName = newAiColorName.trim();
+    if (!normalizedName) return;
+    const existing = colors.find((color) => normalizeMatchText(color.name) === normalizeMatchText(normalizedName));
+    if (existing) {
+      setQuickMaterial((prev) => prev ? { ...prev, color: existing.name } : prev);
+      setNewAiColorName("");
+      return;
+    }
+    setSavingAiColor(true);
+    const timestamp = new Date().toISOString();
+    const nextColor: ColorMaster = { id: crypto.randomUUID(), name: normalizedName, updatedBy: "System User", updateTimestamp: timestamp };
+    try {
+      await setColors([...colors, nextColor]);
+      setQuickMaterial((prev) => prev ? { ...prev, color: nextColor.name } : prev);
+      setNewAiColorName("");
+    } catch (error) {
+      console.error("Failed to create color:", error);
+      alert("Failed to create color.");
+    } finally {
+      setSavingAiColor(false);
+    }
+  };
   const updateAiDraftLineFromQuickMaterial = (form: QuickMaterialForm, material?: Material) => {
     setAiDraft((prev) => {
       if (!prev) return prev;
@@ -1603,9 +1639,19 @@ export function MaterialInForm() {
     const gsm = Number(quickMaterial.gsm);
     const bf = Number(quickMaterial.bf);
     const color = quickMaterial.color.trim();
+    const openingQty = Number(quickMaterial.openingQty || 0);
+    const openingRate = Number(quickMaterial.openingRate || 0);
+    const openingValueInput = Number(quickMaterial.openingValue || 0);
+    const openingValue = Number.isFinite(openingValueInput) && openingValueInput > 0 ? openingValueInput : openingQty * openingRate;
+    const remarks = quickMaterial.remarks.trim();
+    if (!erpCode) { alert("ERP Code is required."); return; }
     if (quickMaterial.type === "Other" && !name) { alert("Item Name is required."); return; }
     if (!quickMaterial.materialGroupId) { alert("Material Group is required."); return; }
     if (!uom) { alert("UOM is required."); return; }
+    if (!Number.isFinite(openingQty) || openingQty < 0 || !Number.isFinite(openingRate) || openingRate < 0 || !Number.isFinite(openingValue)) {
+      alert("Opening Qty, Rate, and Value must be valid numbers.");
+      return;
+    }
     if (quickMaterial.type === "Reel" && (!color || !Number.isFinite(size) || size <= 0 || !Number.isFinite(gsm) || gsm <= 0 || !Number.isFinite(bf) || bf <= 0)) {
       alert("Color, Size, GSM, and BF are required for Reel.");
       return;
@@ -1637,9 +1683,10 @@ export function MaterialInForm() {
       size: quickMaterial.type === "Reel" ? size : undefined,
       gsm: quickMaterial.type === "Reel" ? gsm : undefined,
       bf: quickMaterial.type === "Reel" ? bf : undefined,
-      openingQty: 0,
-      openingRate: 0,
-      openingValue: 0,
+      openingQty,
+      openingRate,
+      openingValue,
+      remarks,
       active: quickMaterial.active,
       updatedBy: "System User",
       updateTimestamp: timestamp,
@@ -2797,22 +2844,30 @@ export function MaterialInForm() {
 
                 {quickMaterial.type === "Reel" ? (
                   <>
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="mb-1 block text-xs font-black uppercase text-black">Color</label>
-                      {colorOptions.length ? (
-                        <Select
-                          options={colorOptions}
-                          value={quickMaterial.color}
-                          onChange={(value) => setQuickMaterial((prev) => prev ? { ...prev, color: value } : prev)}
-                          placeholder="Select color..."
-                        />
-                      ) : (
+                      <Select
+                        options={colorOptions}
+                        value={quickMaterial.color}
+                        onChange={(value) => setQuickMaterial((prev) => prev ? { ...prev, color: value } : prev)}
+                        placeholder="Select color..."
+                      />
+                      <div className="mt-2 flex gap-2">
                         <input
-                          value={quickMaterial.color}
-                          onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, color: e.target.value } : prev)}
-                          className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                          value={newAiColorName}
+                          onChange={(e) => setNewAiColorName(e.target.value)}
+                          placeholder="New color name"
+                          className="min-w-0 flex-1 rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
                         />
-                      )}
+                        <button
+                          type="button"
+                          onClick={handleCreateAiColor}
+                          disabled={savingAiColor || !newAiColorName.trim()}
+                          className="inline-flex items-center gap-2 rounded bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {savingAiColor ? <Spinner size={16} className="text-white" /> : <Plus size={16} />} Create Color
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-black uppercase text-black">Size</label>
@@ -2851,12 +2906,54 @@ export function MaterialInForm() {
                 ) : null}
 
                 <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">Opening Qty</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={quickMaterial.openingQty}
+                    onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, openingQty: e.target.value } : prev)}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">Opening Rate</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={quickMaterial.openingRate}
+                    onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, openingRate: e.target.value } : prev)}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">Opening Value</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={quickMaterial.openingValue}
+                    onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, openingValue: e.target.value } : prev)}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
+                <div>
                   <label className="mb-1 block text-xs font-black uppercase text-black">Active</label>
                   <Select
                     options={[{ value: "Yes", label: "Yes" }, { value: "No", label: "No" }]}
                     value={quickMaterial.active}
                     onChange={(value) => setQuickMaterial((prev) => prev ? { ...prev, active: value === "No" ? "No" : "Yes" } : prev)}
                     placeholder="Active..."
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-xs font-black uppercase text-black">Remarks</label>
+                  <textarea
+                    value={quickMaterial.remarks}
+                    onChange={(e) => setQuickMaterial((prev) => prev ? { ...prev, remarks: e.target.value } : prev)}
+                    rows={2}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
                   />
                 </div>
               </div>
