@@ -144,9 +144,9 @@ export function MaterialInForm() {
   const [gatePasses] = useData<GatePass>("gate_passes", []);
   const [materials, setMaterials] = useData<Material>("materials", []);
   const [services] = useData<Service>("services", []);
-  const [materialGroups, setMaterialGroups] = useData<MaterialGroup>("material-groups", []);
+  const [materialGroups] = useData<MaterialGroup>("material-groups", []);
   const [units] = useData<UnitMaster>("units", []);
-  const [colors, setColors] = useData<ColorMaster>("color_masters", []);
+  const [colors] = useData<ColorMaster>("color_masters", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
@@ -186,12 +186,8 @@ export function MaterialInForm() {
   const [isAiFetching, setIsAiFetching] = useState(false);
   const [aiError, setAiError] = useState("");
   const [quickMaterialDrafts, setQuickMaterialDrafts] = useState<Record<number, QuickMaterialForm>>({});
-  const [newAiGroupNames, setNewAiGroupNames] = useState<Record<number, string>>({});
-  const [newAiColorNames, setNewAiColorNames] = useState<Record<number, string>>({});
   const [aiRowErrors, setAiRowErrors] = useState<Record<number, QuickMaterialValidationErrors>>({});
   const [savingQuickMaterialIndex, setSavingQuickMaterialIndex] = useState<number | null>(null);
-  const [savingAiGroupIndex, setSavingAiGroupIndex] = useState<number | null>(null);
-  const [savingAiColorIndex, setSavingAiColorIndex] = useState<number | null>(null);
 
 
   const gateEntryId = searchParams.get("gateEntryId") || "";
@@ -1701,61 +1697,6 @@ export function MaterialInForm() {
     return { form, material: nextMaterial, isNew: true };
   };
 
-  const handleCreateAiGroup = async (match: AiLineMatch) => {
-    const currentDraft = normalizeQuickMaterialForm(getQuickMaterialDraft(match));
-    const defaultName = currentDraft.type === "Reel" ? "Reel" : String(match.line.materialGroupName || "").trim();
-    const normalizedName = String(newAiGroupNames[match.index] ?? defaultName).trim();
-    if (!normalizedName) return;
-    const existing = materialGroups.find((group) => normalizeMatchText(group.name) === normalizeMatchText(normalizedName));
-    if (existing) {
-      updateQuickMaterialDraft(match, { materialGroupId: existing.id });
-      clearAiRowError(match.index, "materialGroupId");
-      setNewAiGroupNames((prev) => ({ ...prev, [match.index]: "" }));
-      return;
-    }
-    setSavingAiGroupIndex(match.index);
-    const timestamp = new Date().toISOString();
-    const nextGroup: MaterialGroup = { id: crypto.randomUUID(), name: normalizedName, updatedBy: "System User", updateTimestamp: timestamp };
-    try {
-      await setMaterialGroups([...materialGroups, nextGroup]);
-      updateQuickMaterialDraft(match, { materialGroupId: nextGroup.id });
-      clearAiRowError(match.index, "materialGroupId");
-      setNewAiGroupNames((prev) => ({ ...prev, [match.index]: "" }));
-    } catch (error) {
-      console.error("Failed to create material group:", error);
-      alert("Failed to create material group.");
-    } finally {
-      setSavingAiGroupIndex(null);
-    }
-  };
-
-  const handleCreateAiColor = async (match: AiLineMatch) => {
-    const aiColorName = String(match.line.color || "").trim();
-    const normalizedName = String(newAiColorNames[match.index] ?? aiColorName).trim();
-    if (!normalizedName) return;
-    const existing = colors.find((color) => normalizeMatchText(color.name) === normalizeMatchText(normalizedName));
-    if (existing) {
-      updateQuickMaterialDraft(match, { color: existing.name });
-      clearAiRowError(match.index, "color");
-      setNewAiColorNames((prev) => ({ ...prev, [match.index]: "" }));
-      return;
-    }
-    setSavingAiColorIndex(match.index);
-    const timestamp = new Date().toISOString();
-    const nextColor: ColorMaster = { id: crypto.randomUUID(), name: normalizedName, updatedBy: "System User", updateTimestamp: timestamp };
-    try {
-      await setColors([...colors, nextColor]);
-      updateQuickMaterialDraft(match, { color: nextColor.name });
-      clearAiRowError(match.index, "color");
-      setNewAiColorNames((prev) => ({ ...prev, [match.index]: "" }));
-    } catch (error) {
-      console.error("Failed to create color:", error);
-      alert("Failed to create color.");
-    } finally {
-      setSavingAiColorIndex(null);
-    }
-  };
-
   const handleCreateQuickMaterial = async (form: QuickMaterialForm) => {
     const normalizedForm = normalizeQuickMaterialForm(form);
     const validationErrors = validateQuickMaterialForm(normalizedForm);
@@ -2282,14 +2223,14 @@ export function MaterialInForm() {
                     <div className="overflow-x-auto rounded border border-slate-700 bg-white">
                       <table className="w-full min-w-[1180px] table-fixed border-collapse bg-white text-xs">
                         <colgroup>
-                          <col className="w-[8%]" />
-                          <col className="w-[24%]" />
-                          <col className="w-[8%]" />
-                          <col className="w-[28%]" />
                           <col className="w-[10%]" />
-                          <col className="w-[8%]" />
-                          <col className="w-[7%]" />
-                          <col className="w-[7%]" />
+                          <col className="w-[18%]" />
+                          <col className="w-[9%]" />
+                          <col className="w-[22%]" />
+                          <col className="w-[11%]" />
+                          <col className="w-[10%]" />
+                          <col className="w-[9%]" />
+                          <col className="w-[11%]" />
                         </colgroup>
                         <thead className="bg-slate-100">
                           <tr>
@@ -2304,8 +2245,6 @@ export function MaterialInForm() {
                             const errors = aiRowErrors[match.index] || {};
                             const isReelDraft = draft.type === "Reel";
                             const reelGroup = getReelMaterialGroup();
-                            const groupNameValue = newAiGroupNames[match.index] ?? (isReelDraft ? "Reel" : String(match.line.materialGroupName || "").trim());
-                            const colorNameValue = newAiColorNames[match.index] ?? String(match.line.color || "").trim();
                             const errorText = (field: keyof QuickMaterialValidationErrors) => errors[field] ? <div className="mt-1 text-[10px] font-black uppercase text-red-700">{errors[field]}</div> : null;
                             return (
                               <tr key={`missing-${match.index}`} className="align-top">
@@ -2318,19 +2257,13 @@ export function MaterialInForm() {
                                   />
                                 </td>
                                 <td className="border border-slate-700 px-2 py-2">
-                                  <div className="grid grid-cols-[minmax(100px,0.9fr)_minmax(100px,1fr)_32px] items-start gap-1">
-                                    {isReelDraft ? (
-                                      <div className="rounded border border-slate-300 bg-slate-100 px-2 py-2 font-bold text-slate-800">
-                                        {reelGroup?.name || "Reel"}
-                                      </div>
-                                    ) : (
-                                      <Select options={materialGroupOptions} value={draft.materialGroupId} onChange={(value) => { updateQuickMaterialDraft(match, { materialGroupId: value }); clearAiRowError(match.index, "materialGroupId"); }} placeholder="Group..." compact />
-                                    )}
-                                    <input value={groupNameValue} onChange={(e) => setNewAiGroupNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New group" className="min-w-0 rounded border border-slate-300 px-2 py-2 text-xs text-black" />
-                                    <button type="button" title="Create group" onClick={() => handleCreateAiGroup(match)} disabled={savingAiGroupIndex === match.index || !groupNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50">
-                                      {savingAiGroupIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
-                                    </button>
-                                  </div>
+                                  {isReelDraft ? (
+                                    <div className="rounded border border-slate-300 bg-slate-100 px-2 py-2 font-bold text-slate-800">
+                                      {reelGroup?.name || "Reel"}
+                                    </div>
+                                  ) : (
+                                    <Select options={materialGroupOptions} value={draft.materialGroupId} onChange={(value) => { updateQuickMaterialDraft(match, { materialGroupId: value }); clearAiRowError(match.index, "materialGroupId"); }} placeholder="Group..." />
+                                  )}
                                   {errorText("materialGroupId")}
                                 </td>
                                 <td className="border border-slate-700 px-2 py-2 min-w-[130px]">
@@ -2342,22 +2275,7 @@ export function MaterialInForm() {
                                   {errorText("uom")}
                                 </td>
                                 <td className="border border-slate-700 px-2 py-2">
-                                  <div className="grid grid-cols-[minmax(120px,1fr)_minmax(100px,1fr)_32px] items-start gap-1">
-                                    <Select options={colorOptions} value={isReelDraft ? draft.color : ""} onChange={(value) => { updateQuickMaterialDraft(match, { color: value }); clearAiRowError(match.index, "color"); }} placeholder="Color..." disabled={!isReelDraft} compact />
-                                    {isReelDraft ? (
-                                      <>
-                                        <input value={colorNameValue} onChange={(e) => setNewAiColorNames((prev) => ({ ...prev, [match.index]: e.target.value }))} placeholder="New color" className="min-w-0 rounded border border-slate-300 px-2 py-2 text-xs text-black" />
-                                        <button type="button" title="Create color" onClick={() => handleCreateAiColor(match)} disabled={savingAiColorIndex === match.index || !colorNameValue.trim()} className="inline-flex h-8 w-8 items-center justify-center rounded bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50">
-                                          {savingAiColorIndex === match.index ? <Spinner size={13} className="text-white" /> : <Plus size={13} />}
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <div />
-                                        <div />
-                                      </>
-                                    )}
-                                  </div>
+                                  <Select options={colorOptions} value={isReelDraft ? draft.color : ""} onChange={(value) => { updateQuickMaterialDraft(match, { color: value }); clearAiRowError(match.index, "color"); }} placeholder="Color..." disabled={!isReelDraft} />
                                   {isReelDraft ? errorText("color") : null}
                                 </td>
                                 <td className="border border-slate-700 px-2 py-2 min-w-[90px]">
