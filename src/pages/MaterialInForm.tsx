@@ -896,7 +896,7 @@ export function MaterialInForm() {
 
   const getAllDraftSlips = () => Object.values(packingSlipDrafts).flat();
 
-  const getNextOurReelNo = () => {
+  const getMaxOurReelNoNumber = () => {
     const persistedNumbers = packingSlips
       .map((row) => row.ourReelNo)
       .map((value) => Number(String(value).replace(/\D/g, "")))
@@ -904,8 +904,11 @@ export function MaterialInForm() {
     const draftNumbers = getAllDraftSlips()
       .map((row) => Number(String(row.ourReelNo).replace(/\D/g, "")))
       .filter((value) => Number.isFinite(value));
-    const maxValue = Math.max(0, ...persistedNumbers, ...draftNumbers);
-    return formatReelNo(maxValue + 1);
+    return Math.max(0, ...persistedNumbers, ...draftNumbers);
+  };
+
+  const getNextOurReelNo = () => {
+    return formatReelNo(getMaxOurReelNoNumber() + 1);
   };
 
   const syncReelLineTotals = (lineId: string, nextDrafts: PackingSlipDraft[]) => {
@@ -1791,6 +1794,7 @@ export function MaterialInForm() {
     setExchangeRate(nextExchangeRate as number | "");
 
     const nextPackingDrafts: Record<string, PackingSlipDraft[]> = {};
+    let nextOurReelNo = getMaxOurReelNoNumber();
     const nextLines = aiLineMatches.map((match) => {
       const material = match.material as Material;
       const qty = Number(match.line.qty || 0);
@@ -1824,7 +1828,21 @@ export function MaterialInForm() {
         invoiceCurrency: nextCurrency,
         exchangeRate: nextCurrency === "USD" ? Number(nextExchangeRate || 0) : undefined,
       });
-      if (nextMrrType === "Reel") nextPackingDrafts[calculatedLine.id] = [];
+      if (nextMrrType === "Reel") {
+        nextPackingDrafts[calculatedLine.id] = [
+          {
+            id: crypto.randomUUID(),
+            materialLineId: calculatedLine.id,
+            materialId: material.id,
+            supplierReelNo: "",
+            ourReelNo: formatReelNo(++nextOurReelNo),
+            weightKg: qty > 0 ? String(qty) : "",
+            supplierPoNo: String(match.line.poNo || ""),
+            ourPoId: match.po?.poLineId || "",
+            ourPoNo: match.po?.poNo || "",
+          },
+        ];
+      }
       return calculatedLine;
     });
     setLines(nextLines);
