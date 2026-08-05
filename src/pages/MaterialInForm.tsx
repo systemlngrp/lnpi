@@ -888,7 +888,7 @@ export function MaterialInForm() {
       const expectedType = normalizeAiItemType(line.itemType);
       const lineForMatch = expectedType === "Reel" ? normalizeAiReelLine(line) : line;
       if (expectedType === "Reel" && !hasValidReelSpecs(lineForMatch)) {
-        return { line: lineForMatch, index, status: "missing", reason: "Reel Size, GSM, and BF are required before matching." };
+        return { line: lineForMatch, index, status: "missing", reason: "Reel Size, GSM, BF, and Color are required before matching." };
       }
       if (expectedType === "Reel" && !hasValidReelColor(lineForMatch)) {
         return { line: lineForMatch, index, status: "missing", reason: "Original color not found in invoice." };
@@ -1021,14 +1021,8 @@ export function MaterialInForm() {
   };
 
   const colorOptions = useMemo(
-    () => {
-      const available = colors
-        .map((color) => normalizeOriginalReelColor(color.name))
-        .filter((color): color is typeof AI_REEL_COLORS[number] => AI_REEL_COLORS.includes(color as any));
-      const canonical = AI_REEL_COLORS.filter((color) => available.length === 0 || available.includes(color));
-      return canonical.map((color) => ({ value: color, label: color }));
-    },
-    [colors]
+    () => AI_REEL_COLORS.map((color) => ({ value: color, label: color })),
+    []
   );
   const getPurchaseOrderLine = (poLineId: string) =>
     purchaseOrderLines.find((line) => line.id === poLineId);
