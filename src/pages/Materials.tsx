@@ -988,12 +988,27 @@ export function Materials() {
       const timestamp = new Date().toISOString();
       const nextMaterials = materials.map((material) =>
         selectedMaterialIds.includes(material.id)
-          ? {
-              ...material,
-              color: normalizedColor,
-              updatedBy: "System User",
-              updateTimestamp: timestamp,
-            }
+          ? (() => {
+              const erpCode = String(material.erpCode || "").trim();
+              const size = Number(material.size);
+              const gsm = Number(material.gsm);
+              const bf = Number(material.bf);
+              const hasValidReelIdentity =
+                erpCode &&
+                Number.isFinite(size) &&
+                Number.isFinite(gsm) &&
+                Number.isFinite(bf);
+
+              return {
+                ...material,
+                color: normalizedColor,
+                name: hasValidReelIdentity
+                  ? getReelDisplayName(erpCode, size, gsm, bf, normalizedColor)
+                  : material.name,
+                updatedBy: "System User",
+                updateTimestamp: timestamp,
+              };
+            })()
           : material
       );
       await setMaterials(nextMaterials);
