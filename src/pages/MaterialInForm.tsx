@@ -2390,21 +2390,21 @@ export function MaterialInForm() {
                       </button>
                     </div>
                     <div className="overflow-x-auto rounded border border-slate-700 bg-white">
-                      <table className="w-full min-w-[1180px] table-fixed border-collapse bg-white text-xs">
+                      <table className="w-full min-w-[960px] table-fixed border-collapse bg-white text-xs">
                         <colgroup>
-                          <col className="w-[10%]" />
-                          <col className="w-[18%]" />
+                          <col className="w-[8%]" />
+                          <col className="w-[17%]" />
                           <col className="w-[9%]" />
-                          <col className="w-[22%]" />
-                          <col className="w-[11%]" />
+                          <col className="w-[23%]" />
                           <col className="w-[10%]" />
-                          <col className="w-[9%]" />
-                          <col className="w-[11%]" />
+                          <col className="w-[10%]" />
+                          <col className="w-[10%]" />
+                          <col className="w-[13%]" />
                         </colgroup>
                         <thead className="bg-slate-100">
                           <tr>
                             {["Type", "Group", "UOM", "Color", "Size", "GSM", "BF", "Action"].map((heading) => (
-                              <th key={heading} className="border border-slate-700 px-2 py-2 text-left text-[10px] font-black uppercase text-black">{heading}</th>
+                              <th key={heading} className="border border-slate-700 px-2 py-1.5 text-left text-[10px] font-black uppercase text-black">{heading}</th>
                             ))}
                           </tr>
                         </thead>
@@ -2417,7 +2417,7 @@ export function MaterialInForm() {
                             const errorText = (field: keyof QuickMaterialValidationErrors) => errors[field] ? <div className="mt-1 text-[10px] font-black uppercase text-red-700">{errors[field]}</div> : null;
                             return (
                               <tr key={`missing-${match.index}`} className="align-top">
-                                <td className="border border-slate-700 px-2 py-2 min-w-[130px]">
+                                <td className="border border-slate-700 px-2 py-1.5">
                                   <Select
                                     options={[{ value: "Reel", label: "Reel" }, { value: "Other", label: "Other" }]}
                                     value={draft.type}
@@ -2425,9 +2425,9 @@ export function MaterialInForm() {
                                     placeholder="Type..."
                                   />
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2">
+                                <td className="border border-slate-700 px-2 py-1.5">
                                   {isReelDraft ? (
-                                    <div className="rounded border border-slate-300 bg-slate-100 px-2 py-2 font-bold text-slate-800">
+                                    <div className="rounded border border-slate-300 bg-slate-100 px-2 py-1.5 font-bold text-slate-800">
                                       {reelGroup?.name || "Reel"}
                                     </div>
                                   ) : (
@@ -2435,36 +2435,36 @@ export function MaterialInForm() {
                                   )}
                                   {errorText("materialGroupId")}
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[130px]">
+                                <td className="border border-slate-700 px-2 py-1.5">
                                   {isReelDraft ? (
-                                    <div className="rounded border border-slate-300 bg-slate-100 px-2 py-2 font-bold text-slate-800">KG</div>
+                                    <div className="rounded border border-slate-300 bg-slate-100 px-2 py-1.5 font-bold text-slate-800">KG</div>
                                   ) : (
                                     <Select options={unitOptions.length ? unitOptions : [{ value: "KG", label: "KG" }, { value: "PCS", label: "PCS" }]} value={draft.uom} onChange={(value) => { updateQuickMaterialDraft(match, { uom: value }); clearAiRowError(match.index, "uom"); }} placeholder="UOM..." />
                                   )}
                                   {errorText("uom")}
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2">
+                                <td className="border border-slate-700 px-2 py-1.5">
                                   <Select options={colorOptions} value={isReelDraft ? draft.color : ""} onChange={(value) => { updateQuickMaterialDraft(match, { color: value }); clearAiRowError(match.index, "color"); }} placeholder="Color..." disabled={!isReelDraft} />
                                   {isReelDraft ? errorText("color") : null}
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[90px]">
-                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.size : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { size: e.target.value }); clearAiRowError(match.index, "size"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
+                                <td className="border border-slate-700 px-2 py-1.5">
+                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.size : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { size: e.target.value }); clearAiRowError(match.index, "size"); }} className="h-8 w-full rounded border border-slate-300 px-2 py-1 text-xs text-black disabled:bg-slate-100" />
                                   {isReelDraft ? errorText("size") : null}
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[90px]">
-                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.gsm : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { gsm: e.target.value }); clearAiRowError(match.index, "gsm"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
+                                <td className="border border-slate-700 px-2 py-1.5">
+                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.gsm : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { gsm: e.target.value }); clearAiRowError(match.index, "gsm"); }} className="h-8 w-full rounded border border-slate-300 px-2 py-1 text-xs text-black disabled:bg-slate-100" />
                                   {isReelDraft ? errorText("gsm") : null}
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[90px]">
-                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.bf : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { bf: e.target.value }); clearAiRowError(match.index, "bf"); }} className="w-full rounded border border-slate-300 px-2 py-2 text-xs text-black disabled:bg-slate-100" />
+                                <td className="border border-slate-700 px-2 py-1.5">
+                                  <input type="number" min="0" step="0.01" value={isReelDraft ? draft.bf : ""} disabled={!isReelDraft} onChange={(e) => { updateQuickMaterialDraft(match, { bf: e.target.value }); clearAiRowError(match.index, "bf"); }} className="h-8 w-full rounded border border-slate-300 px-2 py-1 text-xs text-black disabled:bg-slate-100" />
                                   {isReelDraft ? errorText("bf") : null}
                                 </td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[120px]">
+                                <td className="border border-slate-700 px-2 py-1.5">
                                   <button
                                     type="button"
                                     onClick={() => handleCreateQuickMaterial(draft)}
                                     disabled={savingQuickMaterialIndex !== null}
-                                    className="inline-flex items-center gap-1 rounded bg-emerald-800 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-900 disabled:opacity-50"
+                                    className="inline-flex h-8 items-center gap-1 rounded bg-emerald-800 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-900 disabled:opacity-50"
                                   >
                                     {savingQuickMaterialIndex === match.index ? <Spinner size={14} className="text-white" /> : <Plus size={14} />} Create
                                   </button>
