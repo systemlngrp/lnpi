@@ -2609,16 +2609,6 @@ export function MaterialInForm() {
                         </tbody>
                       </table>
                     </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={handleUpdateAllSelectedAiPoItems}
-                        disabled={updatingPoLineId !== null || !aiPoItemUpdateCandidates.some((candidate) => getAiPoSelectedRow(candidate.match.index))}
-                        className="inline-flex items-center gap-2 rounded bg-blue-900 px-4 py-2 text-xs font-black uppercase text-white hover:bg-blue-950 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Update All
-                      </button>
-                    </div>
                   </div>
                 ) : null}
                 {aiPoUpdateMessage ? (
@@ -2696,6 +2686,17 @@ export function MaterialInForm() {
                           })}
                         </tbody>
                       </table>
+                    </div>
+                    <div className="flex items-center justify-end gap-3">
+                      <span className="text-xs font-bold text-blue-900">Updates selected rows only</span>
+                      <button
+                        type="button"
+                        onClick={handleUpdateAllSelectedAiPoItems}
+                        disabled={updatingPoLineId !== null || !aiPoItemUpdateCandidates.some((candidate) => getAiPoSelectedRow(candidate.match.index))}
+                        className="inline-flex items-center gap-2 rounded bg-blue-900 px-4 py-2 text-xs font-black uppercase text-white hover:bg-blue-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Update All
+                      </button>
                     </div>
                   </div>
                 ) : null}
