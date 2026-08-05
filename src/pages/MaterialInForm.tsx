@@ -139,7 +139,7 @@ type ReelUploadRow = {
   invoiceRate?: number;
 };
 
-const AI_REEL_COLORS = ["NS", "LG", "Duplex"] as const;
+const AI_REEL_COLORS = ["Natural", "LG", "Duplex"] as const;
 
 function formatReelNo(value: number) {
   return String(value).padStart(5, "0");
@@ -698,7 +698,7 @@ export function MaterialInForm() {
   const normalizeOriginalReelColor = (value?: string | number | null) => {
     const text = String(value ?? "").trim();
     if (!text) return "";
-    if (/(^|[^a-z0-9])ns([^a-z0-9]|$)/i.test(text)) return "NS";
+    if (/(^|[^a-z0-9])ns([^a-z0-9]|$)/i.test(text) || /^natural$/i.test(text)) return "Natural";
     if (/(^|[^a-z0-9])lg([^a-z0-9]|$)/i.test(text)) return "LG";
     if (/(^|[^a-z0-9])duplex([^a-z0-9]|$)/i.test(text)) return "Duplex";
     return "";
@@ -1753,7 +1753,7 @@ export function MaterialInForm() {
     if (!form.materialGroupId) errors.materialGroupId = "Required";
     if (!form.uom.trim()) errors.uom = "Required";
     if (form.type === "Reel") {
-      if (!normalizeOriginalReelColor(form.color)) errors.color = "Use NS, LG or Duplex";
+      if (!normalizeOriginalReelColor(form.color)) errors.color = "Use Natural, LG or Duplex";
       if (!Number.isFinite(size) || size <= 0) errors.size = "Required";
       if (!Number.isFinite(gsm) || gsm <= 0) errors.gsm = "Required";
       if (!Number.isFinite(bf) || bf <= 0) errors.bf = "Required";
