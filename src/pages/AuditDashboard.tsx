@@ -119,6 +119,10 @@ function isDebitNotePostedToTally(entry: MaterialIn) {
   return String(entry.debitTallySync || "").trim() !== "";
 }
 
+function isInvoicePostedToTally(invoice: Invoice) {
+  return String(invoice.tallyTimestamp || "").trim() !== "";
+}
+
 export function AuditDashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
@@ -176,6 +180,7 @@ export function AuditDashboard() {
       (entry) => String(entry.tallyTimestamp || "").trim() && String(entry.transactionNo || "").trim() !== "1"
     );
     const tallyPostedDebitNotes = materialIn.filter(isDebitNotePostedToTally);
+    const tallyPostedInvoices = invoices.filter(isInvoicePostedToTally);
 
     const getIssueLineValue = (issueIds: Set<string>) => materialIssueLines
       .filter((line) => issueIds.has(line.materialIssueId))
@@ -212,9 +217,9 @@ export function AuditDashboard() {
       manufacturingValue: roundMoney(manufacturingValue),
       manufacturingCount: manufacturingProductionIdSet.size,
       saleValue: roundMoney(
-        invoices.reduce((sum, invoice) => sum + getInvoiceGrandTotal(invoice), 0)
+        tallyPostedInvoices.reduce((sum, invoice) => sum + getInvoiceGrandTotal(invoice), 0)
       ),
-      saleCount: invoices.length,
+      saleCount: tallyPostedInvoices.length,
       debitNote: roundMoney(tallyPostedDebitNotes.reduce((sum, entry) => sum + Number(entry.debitNoteAmount || 0), 0)),
       debitNoteCount: tallyPostedDebitNotes.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
     };
