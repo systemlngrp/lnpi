@@ -2610,10 +2610,10 @@ export function MaterialInForm() {
                       </div>
                     </div>
                     <div className="overflow-x-auto rounded border border-slate-700 bg-white">
-                      <table className="w-full min-w-[1420px] border-collapse bg-white text-xs">
+                      <table className="w-full min-w-[1320px] border-collapse bg-white text-xs">
                         <thead className="bg-slate-100">
                           <tr>
-                            {["Invoice Item", "Specs", "Qty", "UOM", "Inv Rate", "PO Item Name", "PO No", "PO Date", "Pending Qty", "PO Rate", "GST", "Target Delivery", "Action"].map((heading) => (
+                            {["Invoice Item", "Qty", "UOM", "Inv Rate", "PO Item Name", "PO No", "PO Date", "Pending Qty", "PO Rate", "GST", "Target Delivery", "Action"].map((heading) => (
                               <th key={heading} className="border border-slate-700 px-2 py-2 text-left text-[10px] font-black uppercase text-black">{heading}</th>
                             ))}
                           </tr>
@@ -2622,18 +2622,16 @@ export function MaterialInForm() {
                           {aiPoItemUpdateCandidates.map((candidate) => {
                             const line = candidate.match.line;
                             const selectedRow = getAiPoSelectedRow(candidate.match.index);
-                            const specs = normalizeAiItemType(line.itemType) === "Reel" ? getReelSpecLabel(line) : "-";
                             const qty = Number(line.qty || 0);
                             const invoiceRate = Number(line.invoiceRate || 0);
                             const isUpdatingSelected = Boolean(selectedRow && updatingPoLineId === selectedRow.line.id);
                             return (
                               <tr key={`po-update-row-${candidate.match.index}`} className="align-top">
                                 <td className="border border-slate-700 px-2 py-2 font-bold text-blue-900">{candidate.material.name}</td>
-                                <td className="border border-slate-700 px-2 py-2 text-black">{specs}</td>
                                 <td className="border border-slate-700 px-2 py-2 text-right font-bold text-black">{qty ? qty.toLocaleString() : "-"}</td>
                                 <td className="border border-slate-700 px-2 py-2 text-black">{line.uom || (candidate.material.type === "Reel" ? "KG" : candidate.material.uom || "-")}</td>
                                 <td className="border border-slate-700 px-2 py-2 text-right text-black">{invoiceRate ? invoiceRate.toFixed(2) : "-"}</td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[280px]">
+                                <td className="border border-slate-700 px-2 py-2 min-w-[380px]">
                                   <Select
                                     options={getAiPoDropdownOptions(candidate.match.index)}
                                     value={selectedAiPoLineIds[candidate.match.index] || ""}
@@ -2647,6 +2645,7 @@ export function MaterialInForm() {
                                     }
                                     placeholder="Select PO item..."
                                     compact
+                                    wrapLabels
                                     disabled={updatingPoLineId !== null}
                                   />
                                 </td>

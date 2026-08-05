@@ -19,9 +19,10 @@ interface SelectProps {
   required?: boolean;
   disabled?: boolean;
   compact?: boolean;
+  wrapLabels?: boolean;
 }
 
-export function Select({ options, value, onChange, onAdd, placeholder = "Select...", id, required, disabled, compact = false }: SelectProps) {
+export function Select({ options, value, onChange, onAdd, placeholder = "Select...", id, required, disabled, compact = false, wrapLabels = false }: SelectProps) {
   const selectedOption = options.find(opt => opt.value === value) || null;
 
   const handleChange = (newValue: SingleValue<OptionType>, actionMeta: ActionMeta<OptionType>) => {
@@ -71,7 +72,15 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
               borderRadius: '0.25rem',
               color: '#000000',
               backgroundColor: '#ffffff',
-              minHeight: compact ? '34px' : '42px'
+              minHeight: compact ? '34px' : '42px',
+              height: wrapLabels ? 'auto' : base.height
+            }),
+            valueContainer: (base) => ({
+              ...base,
+              alignItems: wrapLabels ? 'flex-start' : base.alignItems,
+              flexWrap: wrapLabels ? 'wrap' : base.flexWrap,
+              paddingTop: wrapLabels ? '5px' : base.paddingTop,
+              paddingBottom: wrapLabels ? '5px' : base.paddingBottom
             }),
             option: (base, state) => ({
               ...base,
@@ -80,7 +89,9 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
               fontSize: compact ? '12px' : '14px',
               fontWeight: state.isSelected ? '700' : '500',
               padding: compact ? '7px 9px' : '10px 12px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              whiteSpace: wrapLabels ? 'normal' : base.whiteSpace,
+              overflowWrap: wrapLabels ? 'anywhere' : base.overflowWrap
             }),
             menu: (base) => ({
               ...base,
@@ -96,7 +107,12 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
               ...base,
               color: '#000000',
               fontWeight: '700',
-              fontSize: compact ? '12px' : '14px'
+              fontSize: compact ? '12px' : '14px',
+              whiteSpace: wrapLabels ? 'normal' : base.whiteSpace,
+              overflow: wrapLabels ? 'visible' : base.overflow,
+              textOverflow: wrapLabels ? 'clip' : base.textOverflow,
+              overflowWrap: wrapLabels ? 'anywhere' : base.overflowWrap,
+              lineHeight: wrapLabels ? '1.25' : base.lineHeight
             }),
             placeholder: (base) => ({
               ...base,
