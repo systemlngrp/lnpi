@@ -139,6 +139,8 @@ type ReelUploadRow = {
   invoiceRate?: number;
 };
 
+const AI_REEL_COLORS = ["NS", "LG", "Duplex"] as const;
+
 function formatReelNo(value: number) {
   return String(value).padStart(5, "0");
 }
@@ -693,6 +695,31 @@ export function MaterialInForm() {
   const normalizeForAiMatch = (value?: string | number | null) =>
     normalizeMatchText(value).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 
+  const normalizeOriginalReelColor = (value?: string | number | null) => {
+    const text = String(value ?? "").trim();
+    if (!text) return "";
+    if (/(^|[^a-z0-9])ns([^a-z0-9]|$)/i.test(text)) return "NS";
+    if (/(^|[^a-z0-9])lg([^a-z0-9]|$)/i.test(text)) return "LG";
+    if (/(^|[^a-z0-9])duplex([^a-z0-9]|$)/i.test(text)) return "Duplex";
+    return "";
+  };
+
+  const getOriginalAiReelColor = (line: AiMrrLine) => {
+    const candidates = [
+      line.color,
+      line.itemName,
+      line.erpCode,
+      line.poNo,
+      line.materialGroupName,
+      ...(line.reels || []).flatMap((reel) => [reel.supplierPoNo, reel.supplierReelNo]),
+    ];
+    for (const candidate of candidates) {
+      const color = normalizeOriginalReelColor(candidate);
+      if (color) return color;
+    }
+    return "";
+  };
+
   const getNextAiErpCodeFromList = (type: AiMrrItemType, materialList: Material[]) => {
     const numericValues = materialList
       .filter((material) => material.type === type)
@@ -751,11 +778,13 @@ export function MaterialInForm() {
 
   const normalizeAiReelLine = (line: AiMrrLine): AiMrrLine => {
     const specs = getAiReelSpecs(line);
+    const color = getOriginalAiReelColor(line);
     return {
       ...line,
       size: specs.size || line.size,
       gsm: specs.gsm || line.gsm,
       bf: specs.bf || line.bf,
+      color,
     };
   };
 
@@ -770,20 +799,27 @@ export function MaterialInForm() {
     return specs.size > 0 && specs.gsm > 0 && specs.bf > 0;
   };
 
+  const hasValidReelColor = (line: AiMrrLine) => Boolean(getOriginalAiReelColor(line));
+
   const getReelSpecLabel = (line: AiMrrLine) => {
     const specs = getAiReelSpecs(line);
-    return specs.size && specs.gsm && specs.bf ? `Size ${specs.size} / GSM ${specs.gsm} / BF ${specs.bf}` : "Size/GSM/BF incomplete";
+    const color = getOriginalAiReelColor(line);
+    return specs.size && specs.gsm && specs.bf
+      ? `Size ${specs.size} / GSM ${specs.gsm} / BF ${specs.bf} / Color ${color || "not found"}`
+      : "Size/GSM/BF incomplete";
   };
 
   const findAiReelMaterialBySpecs = (line: AiMrrLine) => {
     const specs = getAiReelSpecs(line);
-    if (!specs.size || !specs.gsm || !specs.bf) return undefined;
+    const color = getOriginalAiReelColor(line);
+    if (!specs.size || !specs.gsm || !specs.bf || !color) return undefined;
     return materials
       .filter((material) => material.active !== "No" && material.type === "Reel")
       .find((material) =>
         numbersMatch(material.size, specs.size) &&
         numbersMatch(material.gsm, specs.gsm) &&
-        numbersMatch(material.bf, specs.bf)
+        numbersMatch(material.bf, specs.bf) &&
+        normalizeOriginalReelColor(material.color) === color
       );
   };
 
@@ -853,6 +889,9 @@ export function MaterialInForm() {
       if (expectedType === "Reel" && !hasValidReelSpecs(lineForMatch)) {
         return { line: lineForMatch, index, status: "missing", reason: "Reel Size, GSM, and BF are required before matching." };
       }
+      if (expectedType === "Reel" && !hasValidReelColor(lineForMatch)) {
+        return { line: lineForMatch, index, status: "missing", reason: "Original color not found in invoice." };
+      }
       const material = findAiMaterial(lineForMatch);
       if (!material) {
         return {
@@ -866,7 +905,7 @@ export function MaterialInForm() {
       if (material.type !== expectedType) {
         return { line: lineForMatch, index, material, po, status: "warning", reason: `Existing item type is ${material.type}, AI suggests ${expectedType}.` };
       }
-      return { line: lineForMatch, index, material, po, status: "matched", reason: expectedType === "Reel" ? "Matched by Size/GSM/BF." : "Matched." };
+      return { line: lineForMatch, index, material, po, status: "matched", reason: expectedType === "Reel" ? "Matched by Size/GSM/BF/Color." : "Matched." };
     });
   }, [aiDraft, materials, purchaseOrders, purchaseOrderLines, receivedQtyByPoLineId, aiMatchedSupplier?.id]);
 
@@ -925,11 +964,18 @@ export function MaterialInForm() {
       ...form,
       uom: "KG",
       materialGroupId: reelGroup?.id || "",
+      color: normalizeOriginalReelColor(form.color) || form.color,
     };
   };
 
   const colorOptions = useMemo(
-    () => colors.slice().sort((a, b) => a.name.localeCompare(b.name)).map((color) => ({ value: color.name, label: color.name })),
+    () => {
+      const available = colors
+        .map((color) => normalizeOriginalReelColor(color.name))
+        .filter((color): color is typeof AI_REEL_COLORS[number] => AI_REEL_COLORS.includes(color as any));
+      const canonical = AI_REEL_COLORS.filter((color) => available.length === 0 || available.includes(color));
+      return canonical.map((color) => ({ value: color, label: color }));
+    },
     [colors]
   );
   const getPurchaseOrderLine = (poLineId: string) =>
@@ -1633,7 +1679,7 @@ export function MaterialInForm() {
     const type = normalizeAiItemType(line.itemType);
     const reelGroup = materialGroups.find((group) => normalizeMatchText(group.name) === "reel");
     const suggestedGroup = materialGroups.find((group) => normalizeForAiMatch(group.name) === normalizeForAiMatch(line.materialGroupName));
-    const aiColorName = String(line.color || "").trim();
+    const aiColorName = getOriginalAiReelColor(line);
     const matchedColor = colors.find((color) => normalizeMatchText(color.name) === normalizeMatchText(aiColorName));
     return {
       lineIndex: match.index,
@@ -1707,7 +1753,7 @@ export function MaterialInForm() {
     if (!form.materialGroupId) errors.materialGroupId = "Required";
     if (!form.uom.trim()) errors.uom = "Required";
     if (form.type === "Reel") {
-      if (!form.color.trim()) errors.color = "Required";
+      if (!normalizeOriginalReelColor(form.color)) errors.color = "Use NS, LG or Duplex";
       if (!Number.isFinite(size) || size <= 0) errors.size = "Required";
       if (!Number.isFinite(gsm) || gsm <= 0) errors.gsm = "Required";
       if (!Number.isFinite(bf) || bf <= 0) errors.bf = "Required";
@@ -1756,7 +1802,8 @@ export function MaterialInForm() {
         material.type === "Reel" &&
         numbersMatch(material.size, size) &&
         numbersMatch(material.gsm, gsm) &&
-        numbersMatch(material.bf, bf)
+        numbersMatch(material.bf, bf) &&
+        normalizeOriginalReelColor(material.color) === normalizeOriginalReelColor(color)
       );
       if (existingReel) {
         return { form, material: existingReel, isNew: false };
@@ -2390,20 +2437,22 @@ export function MaterialInForm() {
                       </button>
                     </div>
                     <div className="overflow-x-auto rounded border border-slate-700 bg-white">
-                      <table className="w-full min-w-[960px] table-fixed border-collapse bg-white text-xs">
+                      <table className="w-full min-w-[1280px] table-fixed border-collapse bg-white text-xs">
                         <colgroup>
-                          <col className="w-[8%]" />
+                          <col className="w-[18%]" />
                           <col className="w-[17%]" />
-                          <col className="w-[9%]" />
-                          <col className="w-[23%]" />
-                          <col className="w-[10%]" />
-                          <col className="w-[10%]" />
-                          <col className="w-[10%]" />
+                          <col className="w-[7%]" />
                           <col className="w-[13%]" />
+                          <col className="w-[7%]" />
+                          <col className="w-[11%]" />
+                          <col className="w-[8%]" />
+                          <col className="w-[7%]" />
+                          <col className="w-[6%]" />
+                          <col className="w-[6%]" />
                         </colgroup>
                         <thead className="bg-slate-100">
                           <tr>
-                            {["Type", "Group", "UOM", "Color", "Size", "GSM", "BF", "Action"].map((heading) => (
+                            {["Invoice Item", "Reason", "Type", "Group", "UOM", "Original Color", "Size", "GSM", "BF", "Action"].map((heading) => (
                               <th key={heading} className="border border-slate-700 px-2 py-1.5 text-left text-[10px] font-black uppercase text-black">{heading}</th>
                             ))}
                           </tr>
@@ -2417,6 +2466,13 @@ export function MaterialInForm() {
                             const errorText = (field: keyof QuickMaterialValidationErrors) => errors[field] ? <div className="mt-1 text-[10px] font-black uppercase text-red-700">{errors[field]}</div> : null;
                             return (
                               <tr key={`missing-${match.index}`} className="align-top">
+                                <td className="border border-slate-700 px-2 py-1.5">
+                                  <div className="font-bold text-black">{match.line.itemName || "-"}</div>
+                                  {match.line.poNo ? <div className="mt-1 text-[10px] font-semibold text-slate-600">PO: {match.line.poNo}</div> : null}
+                                </td>
+                                <td className="border border-slate-700 px-2 py-1.5 font-bold text-amber-900">
+                                  {match.reason}
+                                </td>
                                 <td className="border border-slate-700 px-2 py-1.5">
                                   <Select
                                     options={[{ value: "Reel", label: "Reel" }, { value: "Other", label: "Other" }]}
