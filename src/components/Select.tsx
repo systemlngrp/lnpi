@@ -79,8 +79,8 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
               ...base,
               alignItems: wrapLabels ? 'flex-start' : base.alignItems,
               flexWrap: wrapLabels ? 'wrap' : base.flexWrap,
-              paddingTop: wrapLabels ? '5px' : base.paddingTop,
-              paddingBottom: wrapLabels ? '5px' : base.paddingBottom
+              paddingTop: wrapLabels ? '3px' : base.paddingTop,
+              paddingBottom: wrapLabels ? '3px' : base.paddingBottom
             }),
             option: (base, state) => ({
               ...base,
@@ -112,7 +112,7 @@ export function Select({ options, value, onChange, onAdd, placeholder = "Select.
               overflow: wrapLabels ? 'visible' : base.overflow,
               textOverflow: wrapLabels ? 'clip' : base.textOverflow,
               overflowWrap: wrapLabels ? 'anywhere' : base.overflowWrap,
-              lineHeight: wrapLabels ? '1.25' : base.lineHeight
+              lineHeight: wrapLabels ? '1.15' : base.lineHeight
             }),
             placeholder: (base) => ({
               ...base,

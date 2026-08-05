@@ -2610,7 +2610,7 @@ export function MaterialInForm() {
                       </div>
                     </div>
                     <div className="overflow-x-auto rounded border border-slate-700 bg-white">
-                      <table className="w-full min-w-[1320px] border-collapse bg-white text-xs">
+                      <table className="w-full min-w-[1120px] border-collapse bg-white text-xs">
                         <thead className="bg-slate-100">
                           <tr>
                             {["Invoice Item", "Qty", "UOM", "Inv Rate", "PO Item Name", "PO No", "PO Date", "Pending Qty", "PO Rate", "GST", "Target Delivery", "Action"].map((heading) => (
@@ -2631,7 +2631,7 @@ export function MaterialInForm() {
                                 <td className="border border-slate-700 px-2 py-2 text-right font-bold text-black">{qty ? qty.toLocaleString() : "-"}</td>
                                 <td className="border border-slate-700 px-2 py-2 text-black">{line.uom || (candidate.material.type === "Reel" ? "KG" : candidate.material.uom || "-")}</td>
                                 <td className="border border-slate-700 px-2 py-2 text-right text-black">{invoiceRate ? invoiceRate.toFixed(2) : "-"}</td>
-                                <td className="border border-slate-700 px-2 py-2 min-w-[380px]">
+                                <td className="border border-slate-700 px-2 py-2 min-w-[260px] max-w-[300px]">
                                   <Select
                                     options={getAiPoDropdownOptions(candidate.match.index)}
                                     value={selectedAiPoLineIds[candidate.match.index] || ""}
@@ -2660,10 +2660,10 @@ export function MaterialInForm() {
                                     type="button"
                                     onClick={() => handleUpdateSelectedAiPoItem(candidate)}
                                     disabled={updatingPoLineId !== null || !selectedRow}
-                                    className="inline-flex items-center gap-1 rounded bg-blue-800 px-3 py-2 text-xs font-bold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex items-center gap-1 rounded bg-blue-800 px-2 py-1.5 text-[10px] font-bold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     {isUpdatingSelected ? <Spinner size={14} className="text-white" /> : null}
-                                    Update PO Item
+                                    Update
                                   </button>
                                 </td>
                               </tr>
