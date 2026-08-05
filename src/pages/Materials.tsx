@@ -103,7 +103,7 @@ function createInitialFormState(materials: Material[], reelGroupId = "") {
 
 export function Materials() {
   const navigate = useNavigate();
-  const [materials, setMaterials] = useData<Material>("materials", []);
+  const [materials, setMaterials, isMaterialsLoading] = useData<Material>("materials", []);
   const [materialGroups, setMaterialGroups] = useData<MaterialGroup>("material-groups", []);
   const [colors] = useData<ColorMaster>("color_masters", []);
   const [units, setUnits] = useData<UnitMaster>("units", []);
@@ -668,7 +668,6 @@ export function Materials() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const normalizedType = formData.type;
-    const erpCode = String(formData.erpCode || "").trim() || (normalizedType === "Reel" ? getNextNumericErpCode(materials) : getNextOtherErpCode(materials));
     const uom = normalizedType === "Reel" ? "KGS" : String(formData.uom || "").trim() || "CM";
     const timestamp = new Date().toISOString();
     const size = parseNumericInput(formData.size);
@@ -691,6 +690,28 @@ export function Materials() {
       alert("Item Name is required for Other items.");
       return;
     }
+    if (!editingId && isMaterialsLoading) {
+      alert("Material list is still loading. Please try again in a moment.");
+      return;
+    }
+    const existing = editingId ? materials.find(m => m.id === editingId) : null;
+    const erpCode = normalizedType === "Reel"
+      ? editingId
+        ? String(existing?.erpCode ?? formData.erpCode ?? "").trim()
+        : getNextNumericErpCode(materials)
+      : editingId
+        ? String(formData.erpCode || "").trim() || String(existing?.erpCode || "").trim()
+        : String(formData.erpCode || "").trim() || getNextOtherErpCode(materials);
+    const duplicateErp = materials.find(
+      (material) =>
+        material.id !== editingId &&
+        material.type === normalizedType &&
+        normalizeText(material.erpCode) === normalizeText(erpCode)
+    );
+    if (duplicateErp) {
+      alert(`ERP Code ${erpCode} already exists for another ${normalizedType} item.`);
+      return;
+    }
     setIsSubmitting(true);
     try {
       let reelGroupId = reelGroup?.id || "";
@@ -699,7 +720,6 @@ export function Materials() {
         await setMaterialGroups([...materialGroups, nextReelGroup]);
         reelGroupId = nextReelGroup.id;
       }
-      const existing = editingId ? materials.find(m => m.id === editingId) : null;
       const nextMaterial: Material = {
         ...existing,
         id: editingId || crypto.randomUUID(),
