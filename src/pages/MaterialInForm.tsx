@@ -870,6 +870,11 @@ export function MaterialInForm() {
     });
   }, [aiDraft, materials, purchaseOrders, purchaseOrderLines, receivedQtyByPoLineId, aiMatchedSupplier?.id]);
 
+  const missingAiLineMatches = useMemo(
+    () => aiLineMatches.filter((match) => match.status === "missing"),
+    [aiLineMatches]
+  );
+
   const aiHasMissingSupplier = Boolean(aiDraft && !aiMatchedSupplier);
   const aiBlockingIssues = aiHasMissingSupplier || aiLineMatches.some((entry) => entry.status !== "matched");
   const aiBaseCanSetData = Boolean(aiDraft && !aiBlockingIssues && aiLineMatches.length > 0);
@@ -1650,11 +1655,6 @@ export function MaterialInForm() {
   };
 
   const getQuickMaterialDraft = (match: AiLineMatch) => quickMaterialDrafts[match.index] || getDefaultQuickMaterialForm(match);
-
-  const missingAiLineMatches = useMemo(
-    () => aiLineMatches.filter((match) => match.status === "missing"),
-    [aiLineMatches]
-  );
 
   const updateQuickMaterialDraft = (match: AiLineMatch, updater: Partial<QuickMaterialForm> | ((draft: QuickMaterialForm) => QuickMaterialForm)) => {
     setQuickMaterialDrafts((prev) => {
