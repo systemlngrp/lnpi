@@ -206,6 +206,7 @@ export function MaterialInForm() {
   const [savingQuickMaterialIndex, setSavingQuickMaterialIndex] = useState<number | null>(null);
   const [updatingPoLineId, setUpdatingPoLineId] = useState<string | null>(null);
   const [aiPoUpdateMessage, setAiPoUpdateMessage] = useState("");
+  const [selectedAiPoLineIds, setSelectedAiPoLineIds] = useState<Record<number, string>>({});
 
 
   const gateEntryId = searchParams.get("gateEntryId") || "";
@@ -655,7 +656,7 @@ export function MaterialInForm() {
             pendingQty: getPoLinePendingQty(line),
             receivedQty: Number(receivedQtyByPoLineId.get(line.id) || 0),
           }))
-          .filter((row) => row.pendingQty > 0)
+          .filter((row) => row.pendingQty > 0 && row.receivedQty <= 0)
       );
   };
 
@@ -917,6 +918,22 @@ export function MaterialInForm() {
   const aiHasMissingSupplier = Boolean(aiDraft && !aiMatchedSupplier);
   const aiBlockingIssues = aiHasMissingSupplier || aiLineMatches.some((entry) => entry.status !== "matched");
   const aiBaseCanSetData = Boolean(aiDraft && !aiBlockingIssues && aiLineMatches.length > 0);
+  const aiMatchedMaterialIds = useMemo(
+    () =>
+      new Set(
+        aiLineMatches
+          .filter((match) => match.status === "matched" && match.material)
+          .map((match) => String((match.material as Material).id))
+      ),
+    [aiLineMatches]
+  );
+  const aiPoSelectableRows = useMemo(
+    () =>
+      aiMatchedSupplier
+        ? getSameSupplierPoNotReceivedLines(aiMatchedSupplier.id).filter((row) => !aiMatchedMaterialIds.has(String(row.line.materialId || "")))
+        : [],
+    [aiMatchedSupplier?.id, aiMatchedMaterialIds, purchaseOrders, purchaseOrderLines, materials, receivedQtyByPoLineId]
+  );
   const aiPoItemUpdateCandidates = useMemo<AiPoItemUpdateCandidate[]>(() => {
     if (!aiDraft || !aiMatchedSupplier || missingAiLineMatches.length > 0) return [];
     return aiLineMatches
@@ -925,10 +942,10 @@ export function MaterialInForm() {
       .map((match) => ({
         match,
         material: match.material as Material,
-        rows: getSameSupplierPoNotReceivedLines(aiMatchedSupplier.id),
+        rows: aiPoSelectableRows,
       }))
       .filter((candidate) => candidate.rows.length > 0);
-  }, [aiDraft, aiLineMatches, aiMatchedSupplier, missingAiLineMatches.length, purchaseOrders, purchaseOrderLines, materials, receivedQtyByPoLineId]);
+  }, [aiDraft, aiLineMatches, aiMatchedSupplier, missingAiLineMatches.length, purchaseOrders, purchaseOrderLines, materials, receivedQtyByPoLineId, aiPoSelectableRows]);
   const aiHasPoItemUpdateCandidates = aiPoItemUpdateCandidates.length > 0;
   const aiCanSetData = aiBaseCanSetData && !aiHasPoItemUpdateCandidates;
   const aiHasNoSameSupplierPoNotReceived = Boolean(
@@ -944,6 +961,41 @@ export function MaterialInForm() {
     ) &&
     !aiHasPoItemUpdateCandidates
   );
+
+  useEffect(() => {
+    setSelectedAiPoLineIds((prev) => {
+      const validLineIds = new Set(aiPoSelectableRows.map((row) => row.line.id));
+      const validCandidateIndexes = new Set(aiPoItemUpdateCandidates.map((candidate) => candidate.match.index));
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([rawIndex, poLineId]) =>
+          validCandidateIndexes.has(Number(rawIndex)) && validLineIds.has(poLineId)
+        )
+      );
+      return Object.keys(next).length === Object.keys(prev).length &&
+        Object.entries(next).every(([key, value]) => prev[Number(key)] === value)
+        ? prev
+        : next;
+    });
+  }, [aiPoSelectableRows, aiPoItemUpdateCandidates]);
+
+  const getAiPoSelectedRow = (lineIndex: number) =>
+    aiPoSelectableRows.find((row) => row.line.id === selectedAiPoLineIds[lineIndex]);
+
+  const getAiPoDropdownOptions = (lineIndex: number) => {
+    const selectedForCurrentRow = selectedAiPoLineIds[lineIndex] || "";
+    const selectedInOtherRows = new Set(
+      Object.entries(selectedAiPoLineIds)
+        .filter(([rawIndex, poLineId]) => Number(rawIndex) !== lineIndex && poLineId)
+        .map(([, poLineId]) => poLineId)
+    );
+    return aiPoSelectableRows
+      .filter((row) => row.line.id === selectedForCurrentRow || !selectedInOtherRows.has(row.line.id))
+      .map(({ order, line, currentMaterial, pendingQty }) => ({
+        value: line.id,
+        label: `${currentMaterial?.name || "Unknown"} | ${order.poNo || "-"} | Pending ${pendingQty.toLocaleString()} | Rate ${Number(line.rate || 0).toFixed(2)}`,
+        searchText: `${currentMaterial?.name || "Unknown"} ${order.poNo || ""} ${line.erpCode || ""}`,
+      }));
+  };
 
   const materialGroupOptions = useMemo(
     () => materialGroups.slice().sort((a, b) => a.name.localeCompare(b.name)).map((group) => ({ value: group.id, label: group.name })),
@@ -1919,7 +1971,7 @@ export function MaterialInForm() {
     const receivedQty = Number(receivedQtyByPoLineId.get(poLine.id) || 0);
     if (receivedQty > 0) {
       alert("This PO item is already partially received. Item cannot be changed.");
-      return;
+      return false;
     }
 
     const nextUom = newMaterial.type === "Reel" ? "KG" : String(newMaterial.uom || poLine.uom || "");
@@ -1958,12 +2010,29 @@ export function MaterialInForm() {
       }
       setAiPoUpdateMessage("PO item and linked indent item updated. You can now select Our PO No.");
       alert("PO item and linked indent item updated. You can now select Our PO No.");
+      return true;
     } catch (error) {
       console.error("Failed to update PO item:", error);
       alert("Failed to update PO item.");
+      return false;
     } finally {
       setUpdatingPoLineId(null);
     }
+  };
+
+  const handleUpdateSelectedAiPoItem = async (candidate: AiPoItemUpdateCandidate) => {
+    const selectedRow = getAiPoSelectedRow(candidate.match.index);
+    if (!selectedRow) {
+      alert("Please select a PO item first.");
+      return;
+    }
+    const updated = await handleUpdateExistingPoItem(candidate, selectedRow.line);
+    if (!updated) return;
+    setSelectedAiPoLineIds((prev) => {
+      const next = { ...prev };
+      delete next[candidate.match.index];
+      return next;
+    });
   };
   const handleSetAiData = () => {
     if (!aiDraft || !aiCanSetData || !aiMatchedSupplier) return;
@@ -2541,63 +2610,75 @@ export function MaterialInForm() {
                 {aiHasPoItemUpdateCandidates ? (
                   <div className="space-y-3 rounded border border-blue-800 bg-blue-50/60 p-3">
                     <div>
-                      <div className="text-sm font-black uppercase text-black">Update Existing PO Item</div>
+                      <div className="text-sm font-black uppercase text-black">Update Existing PO Items</div>
                       <div className="mt-1 text-xs font-bold text-blue-900">
-                        No exact PO item match found. Update existing PO item if this invoice belongs to an approved PO.
+                        Select one approved PO Not Received item for each invoice item. A selected PO item is hidden from the other rows.
                       </div>
                     </div>
-                    {aiPoItemUpdateCandidates.map((candidate) => (
-                      <div key={`po-update-${candidate.match.index}`} className="space-y-2 rounded border border-blue-900 bg-white p-3">
-                        <div className="text-xs font-black uppercase text-black">
-                          Invoice Item: <span className="text-blue-800">{candidate.material.name}</span>
-                        </div>
-                        <div className="overflow-x-auto rounded border border-slate-700 bg-white">
-                          <table className="w-full min-w-[980px] border-collapse bg-white text-xs">
-                            <thead className="bg-slate-100">
-                              <tr>
-                                {["PO No", "PO Date", "Current PO Item", "Pending Qty", "UOM", "Rate", "GST", "Target Delivery Date", "Action"].map((heading) => (
-                                  <th key={heading} className="border border-slate-700 px-2 py-2 text-left text-[10px] font-black uppercase text-black">{heading}</th>
-                                ))}
+                    <div className="overflow-x-auto rounded border border-slate-700 bg-white">
+                      <table className="w-full min-w-[1420px] border-collapse bg-white text-xs">
+                        <thead className="bg-slate-100">
+                          <tr>
+                            {["Invoice Item", "Specs", "Qty", "UOM", "Inv Rate", "PO Item Name", "PO No", "PO Date", "Pending Qty", "PO Rate", "GST", "Target Delivery", "Action"].map((heading) => (
+                              <th key={heading} className="border border-slate-700 px-2 py-2 text-left text-[10px] font-black uppercase text-black">{heading}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {aiPoItemUpdateCandidates.map((candidate) => {
+                            const line = candidate.match.line;
+                            const selectedRow = getAiPoSelectedRow(candidate.match.index);
+                            const specs = normalizeAiItemType(line.itemType) === "Reel" ? getReelSpecLabel(line) : "-";
+                            const qty = Number(line.qty || 0);
+                            const invoiceRate = Number(line.invoiceRate || 0);
+                            const isUpdatingSelected = Boolean(selectedRow && updatingPoLineId === selectedRow.line.id);
+                            return (
+                              <tr key={`po-update-row-${candidate.match.index}`} className="align-top">
+                                <td className="border border-slate-700 px-2 py-2 font-bold text-blue-900">{candidate.material.name}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-black">{specs}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-right font-bold text-black">{qty ? qty.toLocaleString() : "-"}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-black">{line.uom || (candidate.material.type === "Reel" ? "KG" : candidate.material.uom || "-")}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-right text-black">{invoiceRate ? invoiceRate.toFixed(2) : "-"}</td>
+                                <td className="border border-slate-700 px-2 py-2 min-w-[280px]">
+                                  <Select
+                                    options={getAiPoDropdownOptions(candidate.match.index)}
+                                    value={selectedAiPoLineIds[candidate.match.index] || ""}
+                                    onChange={(value) =>
+                                      setSelectedAiPoLineIds((prev) => {
+                                        const next = { ...prev };
+                                        if (value) next[candidate.match.index] = value;
+                                        else delete next[candidate.match.index];
+                                        return next;
+                                      })
+                                    }
+                                    placeholder="Select PO item..."
+                                    compact
+                                    disabled={updatingPoLineId !== null}
+                                  />
+                                </td>
+                                <td className="border border-slate-700 px-2 py-2 font-bold text-black">{selectedRow?.order.poNo || "-"}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-black">{selectedRow?.order.poDate || "-"}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-right font-bold text-black">{selectedRow ? selectedRow.pendingQty.toLocaleString() : "-"}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-right text-black">{selectedRow ? Number(selectedRow.line.rate || 0).toFixed(2) : "-"}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-right text-black">{selectedRow ? Number(selectedRow.line.gstRate || 0).toFixed(2) : "-"}</td>
+                                <td className="border border-slate-700 px-2 py-2 text-black">{selectedRow?.line.targetDeliveryDate || "-"}</td>
+                                <td className="border border-slate-700 px-2 py-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateSelectedAiPoItem(candidate)}
+                                    disabled={updatingPoLineId !== null || !selectedRow}
+                                    className="inline-flex items-center gap-1 rounded bg-blue-800 px-3 py-2 text-xs font-bold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isUpdatingSelected ? <Spinner size={14} className="text-white" /> : null}
+                                    Update PO Item
+                                  </button>
+                                </td>
                               </tr>
-                            </thead>
-                            <tbody>
-                              {candidate.rows.map(({ order, line, currentMaterial, pendingQty, receivedQty }) => {
-                                const isReceived = receivedQty > 0;
-                                return (
-                                  <tr key={line.id} className="align-top">
-                                    <td className="border border-slate-700 px-2 py-2 font-bold text-black">{order.poNo || "-"}</td>
-                                    <td className="border border-slate-700 px-2 py-2 text-black">{order.poDate || "-"}</td>
-                                    <td className="border border-slate-700 px-2 py-2 text-black">{currentMaterial?.name || "Unknown"}</td>
-                                    <td className="border border-slate-700 px-2 py-2 text-right font-bold text-black">{pendingQty.toLocaleString()}</td>
-                                    <td className="border border-slate-700 px-2 py-2 text-black">{line.uom || "-"}</td>
-                                    <td className="border border-slate-700 px-2 py-2 text-right text-black">{Number(line.rate || 0).toFixed(2)}</td>
-                                    <td className="border border-slate-700 px-2 py-2 text-right text-black">{Number(line.gstRate || 0).toFixed(2)}</td>
-                                    <td className="border border-slate-700 px-2 py-2 text-black">{line.targetDeliveryDate || "-"}</td>
-                                    <td className="border border-slate-700 px-2 py-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateExistingPoItem(candidate, line)}
-                                        disabled={updatingPoLineId !== null || isReceived}
-                                        title={isReceived ? "This PO item is already partially received. Item cannot be changed." : "Update PO Item"}
-                                        className="inline-flex items-center gap-1 rounded bg-blue-800 px-3 py-2 text-xs font-bold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        {updatingPoLineId === line.id ? <Spinner size={14} className="text-white" /> : null}
-                                        Update PO Item
-                                      </button>
-                                      {isReceived ? (
-                                        <div className="mt-1 text-[10px] font-black uppercase text-red-700">
-                                          This PO item is already partially received. Item cannot be changed.
-                                        </div>
-                                      ) : null}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 ) : null}
                 {aiHasNoSameSupplierPoNotReceived ? (
