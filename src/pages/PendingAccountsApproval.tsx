@@ -174,7 +174,10 @@ export function PendingAccountsApproval() {
 
   const editFormIsInterState = (editForm ? getGstSupplyType(editForm.supplierId) : "INTRA_STATE") === "INTER_STATE";
 
-  const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || id;
+  const getSupplierName = (id: string) =>
+    suppliers.find((supplier) => supplier.id === id)?.name ||
+    companies.find((company) => company.id === id)?.name ||
+    id;
 
   return (
     <div className="space-y-6">
