@@ -2028,6 +2028,21 @@ export function MaterialInForm() {
       return next;
     });
   };
+
+  const handleUpdateAllSelectedAiPoItems = async () => {
+    const selectedCandidates = aiPoItemUpdateCandidates.filter((candidate) =>
+      Boolean(getAiPoSelectedRow(candidate.match.index))
+    );
+    if (selectedCandidates.length === 0) {
+      alert("Please select at least one PO item first.");
+      return;
+    }
+    if (!window.confirm(`Update ${selectedCandidates.length} selected PO item${selectedCandidates.length === 1 ? "" : "s"}?`)) return;
+
+    for (const candidate of selectedCandidates) {
+      await handleUpdateSelectedAiPoItem(candidate);
+    }
+  };
   const handleSetAiData = () => {
     if (!aiDraft || !aiCanSetData || !aiMatchedSupplier) return;
     const nextMrrType = aiSuggestedMrrType;
@@ -2593,6 +2608,16 @@ export function MaterialInForm() {
                           })}
                         </tbody>
                       </table>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleUpdateAllSelectedAiPoItems}
+                        disabled={updatingPoLineId !== null || !aiPoItemUpdateCandidates.some((candidate) => getAiPoSelectedRow(candidate.match.index))}
+                        className="inline-flex items-center gap-2 rounded bg-blue-900 px-4 py-2 text-xs font-black uppercase text-white hover:bg-blue-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Update All
+                      </button>
                     </div>
                   </div>
                 ) : null}
