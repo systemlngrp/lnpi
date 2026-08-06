@@ -264,17 +264,18 @@ export async function downloadMrrReelLabelsPdf({
     drawGridPair(contentX, row2Y, "Weight", formatWeight(row.weightKg), groupW - gridLabelW - 2);
     drawGridPair(contentX + groupW, row2Y, "Supp-Reel", firstNonEmpty(row.suppReel), groupW - gridLabelW - 2);
 
-    const frameW = Math.min(130, cardW * 0.9);
-    const frameH = lowerH * 0.9;
+    const frameW = Math.min(145, cardW * 0.94);
+    const frameH = lowerH * 0.92;
     const frameX = cardX + (cardW - frameW) / 2;
     const frameY = lowerY + (lowerH - frameH) / 2;
-    const pad = 2.65;
+    const pad = 2;
     const captionSize = 12;
     const captionH = lh(captionSize, 1.04);
     const availW = frameW - pad * 2;
     const availH = frameH - pad * 2;
-    const qrZoneH = availH - captionH - 1;
-    const qrSize = Math.max(10, Math.min(availW * 0.78, availW, qrZoneH));
+    const qrZoneH = availH - captionH - 0.5;
+    const qrMax = Math.min(availW, qrZoneH);
+    const qrSize = Math.max(10, qrMax * 0.92);
     const qrX = frameX + pad + (availW - qrSize) / 2;
     const qrY = frameY + pad + Math.max(0, (qrZoneH - qrSize) / 2);
     const captionY = frameY + frameH - pad;
