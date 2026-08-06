@@ -181,11 +181,29 @@ export async function downloadMrrReelLabelsPdf({
       yTop += logoH + 4;
     }
 
+    const orgTitle = toTitleCase(organizationName);
+    let titleFontSize = titleSize;
+    let titleCharSpace = orgTitle.length > 24 ? 0.2 : 0.5;
+    const titleMaxWidth = contentW - 4;
+
+    const titleWidth = (fontSize: number, charSpace: number) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(fontSize);
+      const baseWidth = doc.getTextWidth(orgTitle);
+      const spacingWidth = Math.max(0, orgTitle.length - 1) * charSpace * 0.3528;
+      return baseWidth + spacingWidth;
+    };
+
+    while (titleFontSize > 18 && titleWidth(titleFontSize, titleCharSpace) > titleMaxWidth) {
+      titleFontSize -= 1;
+      if (titleFontSize <= 24) titleCharSpace = 0;
+    }
+
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(titleSize);
+    doc.setFontSize(titleFontSize);
     doc.setTextColor(0);
-    doc.setCharSpace(0.5);
-    doc.text(toTitleCase(organizationName), cardX + cardW / 2, yTop + lh(titleSize, 0.9), { align: "center" });
+    doc.setCharSpace(titleCharSpace);
+    doc.text(orgTitle, cardX + cardW / 2, yTop + lh(titleFontSize, 0.9), { align: "center" });
     doc.setCharSpace(0);
     yTop += lh(titleSize) + 4;
 
