@@ -32,6 +32,7 @@ import { applySupplyTypeTaxRates, normalizeInvoiceCurrency, recalculateMaterialL
 import { getGatePassLinesWithReturns } from "../lib/gatePassState";
 import { canCreateMrrForGateEntry, isGateEntryCancelled } from "../lib/gateEntryState";
 import { parsePoMandatoryMrrTypes, supportsPoMandatorySetting } from "../lib/materialInPoMandatory";
+import { downloadMaterialInPdf } from "../lib/materialInPdf";
 
 type PackingSlipDraft = {
   id: string;
@@ -2269,6 +2270,7 @@ export function MaterialInForm() {
       let transactionNo = editingEntry?.transactionNo || "";
       const materialInId = editingEntry?.id || crypto.randomUUID();
       const timestamp = new Date().toISOString();
+      let savedEntry: MaterialIn | null = null;
 
       await setMaterialIn((prev) => {
         if (!editingEntry) {
@@ -2324,6 +2326,7 @@ export function MaterialInForm() {
           md_approval_remark: editingEntry?.md_approval_remark,
           tallyTimestamp: editingEntry?.tallyTimestamp,
         };
+        savedEntry = nextEntry;
 
         return editingEntry
           ? prev.map((entry) => (entry.id === editingEntry.id ? nextEntry : entry))
@@ -2394,6 +2397,29 @@ export function MaterialInForm() {
           ? `MRR updated: ${transactionNo}`
           : `MRR created with MRR No: ${transactionNo}`
       );
+
+      if (!editingEntry && savedEntry) {
+        const shouldDownloadPdf = window.confirm(
+          `MRR created with MRR No: ${transactionNo}. Do you want to download the MRR PDF now?`
+        );
+        if (shouldDownloadPdf) {
+          try {
+            await downloadMaterialInPdf({
+              mrr: savedEntry,
+              materials,
+              npdItems,
+              services,
+              suppliers,
+              companies,
+              setting: settings[0] || null,
+            });
+          } catch (pdfError) {
+            console.error("Failed to download MRR PDF after create:", pdfError);
+            alert("MRR saved, but PDF download failed.");
+          }
+        }
+      }
+
       navigate("/material-receipt/approvals");
     } catch (err) {
       console.error("Failed to save Material In:", err);
