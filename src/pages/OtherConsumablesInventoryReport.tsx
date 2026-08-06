@@ -219,7 +219,7 @@ export function OtherConsumablesInventoryReport() {
           <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {["ERP", "Item Name", "Group", "UOM", "Opening", "Receipt", "Issue", "Return", "Available Qty", "Rate", "Valuation"].map((heading) => (
+                  {["ERP", "Item Name", "Group", "UOM", "Opening", "Receipt", "Issue", "Available Qty", "Rate", "Valuation"].map((heading) => (
                   <th key={heading} className="bg-indigo-700 px-3 py-3 text-left text-xs font-black border-2 border-black whitespace-nowrap uppercase">
                     {heading}
                   </th>
@@ -231,7 +231,6 @@ export function OtherConsumablesInventoryReport() {
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.openingQty)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.receiptQty)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.issuedQty)}</th>
-                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.returnedQty)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-emerald-100 text-emerald-900">{formatQty(totals.availableQty)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">-</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(totals.valuation)}</th>
@@ -241,7 +240,7 @@ export function OtherConsumablesInventoryReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                  <td colSpan={10} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No other consumable inventory rows found.
                   </td>
                 </tr>
@@ -255,7 +254,6 @@ export function OtherConsumablesInventoryReport() {
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{formatQty(row.openingQty)}</td>
                     <td className="px-3 py-3 text-blue-900 text-sm border-2 border-black bg-blue-50/50">{formatQty(row.receiptQty)}</td>
                     <td className="px-3 py-3 text-red-800 text-sm border-2 border-black bg-red-50/40">{formatQty(row.issuedQty)}</td>
-                    <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50">{formatQty(row.returnedQty)}</td>
                     <td className="px-3 py-3 text-emerald-900 text-sm font-bold border-2 border-black bg-emerald-50">{formatQty(row.availableQty)}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{formatQty(row.rate)}</td>
                     <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50">{formatQty(row.valuation)}</td>
