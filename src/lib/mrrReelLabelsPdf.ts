@@ -385,44 +385,41 @@ export async function downloadMrrReelLabelsPdf({
     y += specLines.length * 5.8 + 6;
 
     const bodyTopY = y;
-    const qrAreaW = contentW * 0.39;
-    const leftAreaW = contentW - qrAreaW - 8;
-    const qrAreaX = contentX + leftAreaW + 8;
-    const qrAreaH = Math.max(80, cardY + cardH - bodyTopY - 16);
+    const qrAreaW = contentW * 0.45;
+    const leftAreaW = contentW - qrAreaW - 10;
+    const qrAreaX = contentX + leftAreaW + 10;
+    const qrAreaH = Math.max(100, cardY + cardH - bodyTopY - 14);
 
-    const detailFont = 14;
-    const rowGap = 9;
-    const labelW = 26;
-    const drawDetail = (label: string, value: string, rowIndex: number, rightCol = false) => {
-      const baseX = contentX + (rightCol ? leftAreaW / 2 : 0);
-      const textY = bodyTopY + rowIndex * rowGap;
+    const detailFont = 16;
+    const rowGap = 11;
+    const labelW = 36;
+    const detailStartY = bodyTopY + 2;
+
+    const drawDetail = (label: string, value: string, rowIndex: number) => {
+      const textY = detailStartY + rowIndex * rowGap;
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(detailFont);
-      doc.setTextColor(70);
-      doc.text(`${label}:`, baseX, textY);
+      doc.setTextColor(45);
+      doc.text(`${label}:`, contentX, textY);
 
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0);
-      const maxW = leftAreaW / 2 - labelW - 2;
+      const maxW = leftAreaW - labelW - 2;
       const clipped = clipSingleLine(doc, value, maxW);
-      doc.text(clipped, baseX + labelW, textY);
+      doc.text(clipped, contentX + labelW, textY);
     };
 
-    drawDetail("GSM", firstNonEmpty(row.gsm), 0, false);
-    drawDetail("R/No", row.reelNo, 0, true);
-    drawDetail("Weight", formatWeight(row.weightKg), 1, false);
-    drawDetail("Supp-Reel", firstNonEmpty(row.suppReel), 1, true);
+    drawDetail("GSM.", firstNonEmpty(row.gsm), 0);
+    drawDetail("R/NO.", row.reelNo, 1);
+    drawDetail("Weight.", formatWeight(row.weightKg), 2);
+    drawDetail("Supp-Reel.", firstNonEmpty(row.suppReel), 3);
 
-    const captionSize = 12;
-    const captionGap = 5;
-    const captionH = captionSize * 0.3528 * 1.1;
     const qrAvailW = qrAreaW;
-    const qrAvailH = qrAreaH - captionH - captionGap;
-    const qrSize = Math.max(30, Math.min(qrAvailW, qrAvailH));
+    const qrAvailH = qrAreaH;
+    const qrSize = Math.max(36, Math.min(qrAvailW, qrAvailH));
     const qrX = qrAreaX + (qrAreaW - qrSize) / 2;
-    const qrY = bodyTopY + (qrAvailH - qrSize) / 2;
-    const captionY = qrY + qrSize + captionGap + captionH * 0.6;
+    const qrY = bodyTopY + (qrAreaH - qrSize) / 2;
 
     try {
       const qrDataUrl = await QRCode.toDataURL(row.qrPayload, {
@@ -436,10 +433,6 @@ export async function downloadMrrReelLabelsPdf({
       });
       doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize, undefined, "FAST");
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(captionSize);
-      doc.setTextColor(90);
-      doc.text("Scan for Reel", qrAreaX + qrAreaW / 2, captionY, { align: "center" });
     } catch (error) {
       console.warn("QR generation failed", error);
       doc.setFont("helvetica", "bold");
