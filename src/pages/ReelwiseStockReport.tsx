@@ -280,6 +280,11 @@ export function ReelwiseStockReport() {
     }
 
     try {
+      const qrPayload = JSON.stringify({
+        reelNo: row.ourReelNo,
+        weight: Number(row.availableWeight || 0).toFixed(2),
+      });
+
       await downloadMrrReelLabelsPdf({
         mrr,
         packingSlips: [slip],
@@ -288,6 +293,12 @@ export function ReelwiseStockReport() {
         companies,
         setting: settings[0] || null,
         paperSize: "A4",
+        qrPayloadByPackingSlipId: {
+          [slip.id]: qrPayload,
+        },
+        weightKgByPackingSlipId: {
+          [slip.id]: Number(row.availableWeight || 0),
+        },
       });
     } catch (error) {
       console.error("Failed to generate reel QR label PDF", error);

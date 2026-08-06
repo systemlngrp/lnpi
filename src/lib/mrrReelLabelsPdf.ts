@@ -11,6 +11,8 @@ type DownloadMrrReelLabelsPdfArgs = {
   companies?: Company[];
   setting?: Setting | null;
   paperSize?: "A4" | "A3";
+  qrPayloadByPackingSlipId?: Record<string, string>;
+  weightKgByPackingSlipId?: Record<string, number>;
 };
 
 export type DownloadMrrReelLabelsPdfResult = {
@@ -90,6 +92,8 @@ export async function downloadMrrReelLabelsPdf({
   companies = [],
   setting = null,
   paperSize = "A4",
+  qrPayloadByPackingSlipId = {},
+  weightKgByPackingSlipId = {},
 }: DownloadMrrReelLabelsPdfArgs): Promise<DownloadMrrReelLabelsPdfResult> {
   const { labels, warnings } = buildMrrReelLabelData({
     mrr,
@@ -97,6 +101,8 @@ export async function downloadMrrReelLabelsPdf({
     materials,
     suppliers,
     companies,
+    qrPayloadByPackingSlipId,
+    weightKgByPackingSlipId,
   });
 
   if (labels.length === 0) {

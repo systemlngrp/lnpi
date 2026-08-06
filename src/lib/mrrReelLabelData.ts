@@ -23,6 +23,8 @@ export type BuildMrrReelLabelDataArgs = {
   materials: Material[];
   suppliers: Supplier[];
   companies?: Company[];
+  qrPayloadByPackingSlipId?: Record<string, string>;
+  weightKgByPackingSlipId?: Record<string, number>;
 };
 
 export type BuildMrrReelLabelDataResult = {
@@ -57,6 +59,8 @@ export function buildMrrReelLabelData({
   materials,
   suppliers,
   companies = [],
+  qrPayloadByPackingSlipId = {},
+  weightKgByPackingSlipId = {},
 }: BuildMrrReelLabelDataArgs): BuildMrrReelLabelDataResult {
   const warnings: string[] = [];
   const supplierName = findSupplierName(mrr.supplierId, suppliers, companies);
@@ -72,7 +76,8 @@ export function buildMrrReelLabelData({
 
   slipsForMrr.forEach((slip) => {
     const reelNo = normalizeReelNo(slip.ourReelNo);
-    const weightKg = asPositiveNumber(slip.weightKg);
+    const overrideWeightKg = asPositiveNumber(weightKgByPackingSlipId[slip.id]);
+    const weightKg = overrideWeightKg || asPositiveNumber(slip.weightKg);
 
     if (!reelNo) {
       warnings.push(`Skipped packing slip ${slip.id}: reel number is missing.`);
@@ -105,7 +110,7 @@ export function buildMrrReelLabelData({
 
     labels.push({
       ...baseRow,
-      qrPayload: reelNo,
+      qrPayload: toText(qrPayloadByPackingSlipId[slip.id]) || reelNo,
     });
   });
 
