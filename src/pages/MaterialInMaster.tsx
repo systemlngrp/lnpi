@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Company, Material, MaterialIn, Setting, Supplier } from "../types";
+import { Company, Material, MaterialIn, MaterialInPackingSlip, Service, Setting, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
-import { ChevronDown, ChevronRight, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, Trash2, Download, QrCode } from "lucide-react";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { normalizeMaterialInRecord, recalculateMaterialLine } from "../lib/materialInTaxes";
+import { downloadMaterialInPdf } from "../lib/materialInPdf";
+import { downloadMrrReelLabelsPdf } from "../lib/mrrReelLabelsPdf";
 
 export function MaterialInMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
@@ -12,6 +14,8 @@ export function MaterialInMaster() {
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
+  const [services] = useData<Service>("services", []);
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [settings] = useData<Setting>("settings", []);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedItemRows, setExpandedItemRows] = useState<Set<string>>(new Set());
@@ -19,9 +23,6 @@ export function MaterialInMaster() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-
-  const setting = settings[0];
-  void setting;
 
   const statusOptions = ["All", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally", "Completed"];
 
@@ -33,6 +34,42 @@ export function MaterialInMaster() {
     }
     setMaterialIn(materialIn.filter((entry) => entry.id !== id));
     setDeletingId(null);
+  };
+
+  const downloadPdf = async (mrr: MaterialIn) => {
+    await downloadMaterialInPdf({
+      mrr,
+      materials,
+      npdItems,
+      services,
+      suppliers,
+      companies,
+      setting: settings[0] || null,
+    });
+  };
+
+  const downloadReelLabelsPdf = async (mrr: MaterialIn) => {
+    if (mrr.mrrType !== "Reel") {
+      alert("Reel Labels PDF is available only for Reel MRR.");
+      return;
+    }
+
+    try {
+      const result = await downloadMrrReelLabelsPdf({
+        mrr,
+        packingSlips,
+        materials,
+        suppliers,
+        companies,
+        setting: settings[0] || null,
+      });
+      if (result.warnings.length > 0) {
+        alert(`Generated ${result.count} labels with ${result.warnings.length} warning(s).`);
+      }
+    } catch (error) {
+      console.error("Failed to generate reel labels PDF", error);
+      alert(error instanceof Error ? error.message : "Failed to generate reel labels PDF.");
+    }
   };
 
   const getSupplierName = (id: string) =>
@@ -260,6 +297,17 @@ export function MaterialInMaster() {
                   <div className="font-bold text-lg text-indigo-700">Final Total: {Number(entry.totalAmount || 0).toLocaleString()}</div>
                 </div>
                 <div className="flex gap-2">
+                  <button onClick={() => downloadPdf(entry)} className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center">
+                    <Download size={16} className="mr-1" /> PDF
+                  </button>
+                  <button
+                    onClick={() => downloadReelLabelsPdf(entry)}
+                    disabled={entry.mrrType !== "Reel"}
+                    className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center disabled:cursor-not-allowed disabled:opacity-40"
+                    title={entry.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
+                  >
+                    <QrCode size={16} className="mr-1" /> Reel Labels
+                  </button>
                   <button onClick={() => handleDelete(entry.id)} className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}>
                     <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
                   </button>
@@ -352,6 +400,17 @@ export function MaterialInMaster() {
                     <td className="px-4 py-3 text-xs text-black border border-black whitespace-nowrap">{entry.updateTimestamp ? formatDate(entry.updateTimestamp) : "-"}</td>
                     <td className="px-4 py-3 text-right text-sm font-medium border border-black whitespace-nowrap">
                       <div className="flex justify-end gap-2">
+                        <button onClick={() => downloadPdf(entry)} className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center min-w-[80px] justify-end">
+                          <Download size={16} className="mr-1" /> PDF
+                        </button>
+                        <button
+                          onClick={() => downloadReelLabelsPdf(entry)}
+                          disabled={entry.mrrType !== "Reel"}
+                          className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center min-w-[118px] justify-end disabled:cursor-not-allowed disabled:opacity-40"
+                          title={entry.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
+                        >
+                          <QrCode size={16} className="mr-1" /> Reel Labels
+                        </button>
                         <button onClick={() => handleDelete(entry.id)} className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}>
                           <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
                         </button>

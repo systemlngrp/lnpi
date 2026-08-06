@@ -1,12 +1,13 @@
 import { Fragment, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Company, Material, MaterialIn, Service, Supplier, Setting } from "../types";
+import { Company, Material, MaterialIn, MaterialInPackingSlip, Service, Supplier, Setting } from "../types";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
-import { Search, ChevronRight, ChevronDown, ArrowLeft, Download, ArrowUp, ArrowDown, ThumbsUp, ThumbsDown, MessageSquareText, X } from "lucide-react";
+import { Search, ChevronRight, ChevronDown, ArrowLeft, Download, QrCode, ArrowUp, ArrowDown, ThumbsUp, ThumbsDown, MessageSquareText, X } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { downloadMaterialInPdf } from "../lib/materialInPdf";
+import { downloadMrrReelLabelsPdf } from "../lib/mrrReelLabelsPdf";
 import { useNavigate } from "react-router-dom";
 
 type Stage = "All MRR" | "Pending PH" | "Pending Accounts" | "Pending MD";
@@ -21,6 +22,7 @@ export function MrrApprovals() {
   const [suppliers] = useData<Supplier>("suppliers", []);
   const [companies] = useData<Company>("companies", []);
   const [services] = useData<Service>("services", []);
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [settings] = useData<Setting>("settings", []);
   
   const [activeStage, setActiveStage] = useState<Stage>("All MRR");
@@ -232,6 +234,30 @@ export function MrrApprovals() {
     });
   };
 
+  const downloadReelLabelsPdf = async (mrr: MaterialIn) => {
+    if (mrr.mrrType !== "Reel") {
+      alert("Reel Labels PDF is available only for Reel MRR.");
+      return;
+    }
+
+    try {
+      const result = await downloadMrrReelLabelsPdf({
+        mrr,
+        packingSlips,
+        materials,
+        suppliers,
+        companies,
+        setting: settings[0] || null,
+      });
+      if (result.warnings.length > 0) {
+        alert(`Generated ${result.count} labels with ${result.warnings.length} warning(s).`);
+      }
+    } catch (error) {
+      console.error("Failed to generate reel labels PDF", error);
+      alert(error instanceof Error ? error.message : "Failed to generate reel labels PDF.");
+    }
+  };
+
   const getMaterialSpecs = (material: Material) => {
     const specs = [];
     if (material.size) specs.push(`Size: ${material.size} CM`);
@@ -414,6 +440,16 @@ export function MrrApprovals() {
                                 aria-label="Download PDF"
                               >
                                 <Download size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadReelLabelsPdf(m)}
+                                disabled={m.mrrType !== "Reel"}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded border border-black text-black hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                title={m.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
+                                aria-label="Reel Labels PDF"
+                              >
+                                <QrCode size={14} />
                               </button>
                               <button
                                 type="button"
