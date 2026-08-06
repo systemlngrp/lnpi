@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { Search, FileText } from "lucide-react";
+import { Search, FileText, Download } from "lucide-react";
 import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import {
@@ -35,6 +35,7 @@ const tableColumns = [
   "Rate",
   "Valuation",
   "Age(D days)",
+  "Download",
 ];
 
 function formatReportDate(dateStr?: string) {
@@ -255,6 +256,50 @@ export function ReelwiseStockReport() {
     doc.save(`${safeFileName(`Reelwise_Stock_Report_${fileDate}`)}.pdf`);
   };
 
+  const handleExportRowPdf = (row: ReelwiseStockRow, rowIndex: number) => {
+    const doc = new jsPDF("p", "mm", "a4");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Reelwise Stock Row", 14, 14);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString("en-GB")}`, 14, 20);
+
+    autoTable(doc, {
+      startY: 26,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2.2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [67, 56, 202] },
+      columnStyles: {
+        0: { cellWidth: 52, fontStyle: "bold" },
+        1: { cellWidth: 120 },
+      },
+      head: [["Column", "Value"]],
+      body: [
+        ["SL No", String(rowIndex + 1)],
+        ["MRR No.", row.mrrNo],
+        ["Our Reel No.", row.ourReelNo],
+        ["ERP", row.erp],
+        ["Suppliers Name", row.supplierName || "-"],
+        ["GSM", String(row.gsm || "")],
+        ["Size", String(row.size || "")],
+        ["BF", String(row.bf || "")],
+        ["MRR Qty", formatQty(row.mrrQty)],
+        ["Issued", formatQty(row.issuedWeight)],
+        ["Return", formatQty(row.returnedWeight)],
+        ["Net Issued", formatQty(row.netIssuedWeight)],
+        ["Available Weight", formatQty(row.availableWeight)],
+        ["Rate", formatQty(row.rate)],
+        ["Valuation", formatQty(row.valuation)],
+        ["Age(D days)", String(row.ageDays)],
+      ],
+    });
+
+    doc.save(safeFileName(`Reel_${row.ourReelNo || row.slipId}_Stock_Row`) + ".pdf");
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
@@ -422,6 +467,17 @@ export function ReelwiseStockReport() {
                     <td className="px-3 py-3 text-black text-sm border-2 border-black text-right">{formatQty(row.rate)}</td>
                     <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.valuation)}</td>
                     <td className="px-3 py-3 text-amber-900 text-sm border-2 border-black bg-amber-50 text-right">{row.ageDays}</td>
+                    <td className="px-2 py-2 text-center border-2 border-black bg-white">
+                      <button
+                        type="button"
+                        onClick={() => handleExportRowPdf(row, index)}
+                        className="inline-flex items-center gap-1 rounded border border-indigo-700 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-800 hover:bg-indigo-100"
+                        title="Download this row as PDF"
+                      >
+                        <Download size={12} />
+                        PDF
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
