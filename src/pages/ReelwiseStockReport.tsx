@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { Search, FileText } from "lucide-react";
 import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
 import {
@@ -54,6 +56,12 @@ function makeOptions(values: Array<string | number>) {
 
 function formatQty(value: number) {
   return Number(value || 0).toFixed(2);
+}
+
+function safeFileName(value: string) {
+  return String(value || "Reelwise_Stock_Report")
+    .replace(/[^a-z0-9_-]+/gi, "_")
+    .replace(/^_+|_+$/g, "") || "Reelwise_Stock_Report";
 }
 
 export function ReelwiseStockReport() {
@@ -177,6 +185,76 @@ export function ReelwiseStockReport() {
     setBfFilter("");
   };
 
+  const handleExportPdf = () => {
+    const doc = new jsPDF("l", "mm", "a4");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Reelwise Stock Report", 14, 14);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString("en-GB")}`, 14, 20);
+    doc.text(`Rows: ${rows.length}`, 270, 20, { align: "right" });
+
+    autoTable(doc, {
+      startY: 24,
+      theme: "grid",
+      headStyles: { fillColor: [67, 56, 202] },
+      styles: { fontSize: 7.4, cellPadding: 1.6, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      head: [[
+        "SL No",
+        "MRR No.",
+        "Our Reel No.",
+        "ERP",
+        "Supplier",
+        "GSM",
+        "Size",
+        "BF",
+        "MRR Qty",
+        "Issued",
+        "Return",
+        "Net Issued",
+        "Available Weight",
+        "Rate",
+        "Valuation",
+        "Age(D days)",
+      ]],
+      body: rows.map((row, index) => [
+        String(index + 1),
+        row.mrrNo,
+        row.ourReelNo,
+        row.erp,
+        row.supplierName || "-",
+        String(row.gsm || ""),
+        String(row.size || ""),
+        String(row.bf || ""),
+        formatQty(row.mrrQty),
+        formatQty(row.issuedWeight),
+        formatQty(row.returnedWeight),
+        formatQty(row.netIssuedWeight),
+        formatQty(row.availableWeight),
+        formatQty(row.rate),
+        formatQty(row.valuation),
+        String(row.ageDays),
+      ]),
+      columnStyles: {
+        0: { halign: "right" },
+        8: { halign: "right" },
+        9: { halign: "right" },
+        10: { halign: "right" },
+        11: { halign: "right" },
+        12: { halign: "right" },
+        13: { halign: "right" },
+        14: { halign: "right" },
+        15: { halign: "right" },
+      },
+    });
+
+    const fileDate = new Date().toISOString().slice(0, 10);
+    doc.save(`${safeFileName(`Reelwise_Stock_Report_${fileDate}`)}.pdf`);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
@@ -282,17 +360,27 @@ export function ReelwiseStockReport() {
               />
               <span className="truncate">Exclude 0 Available</span>
             </label>
-            {hasActiveFilters ? (
+            <div className="flex items-center gap-2">
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="h-[34px] rounded border border-black bg-white px-2 text-[11px] font-bold text-black hover:bg-slate-50"
+                >
+                  Clear
+                </button>
+              ) : (
+                <div className="hidden xl:block" />
+              )}
               <button
                 type="button"
-                onClick={handleClearFilters}
-                className="h-[34px] rounded border border-black bg-white px-2 text-[11px] font-bold text-black hover:bg-slate-50"
+                onClick={handleExportPdf}
+                className="inline-flex h-[34px] items-center gap-1.5 rounded border border-rose-700 bg-rose-50 px-2.5 text-[11px] font-bold text-rose-800 hover:bg-rose-100"
               >
-                Clear
+                <FileText size={13} />
+                PDF
               </button>
-            ) : (
-              <div className="hidden xl:block" />
-            )}
+            </div>
           </div>
         </div>
       </div>
