@@ -1,22 +1,6 @@
 import type { Company, Material, MaterialIn, MaterialInPackingSlip, Supplier } from "../types";
 import { formatDate } from "./serial";
 
-export type ReelLabelPayload = {
-  v: 1;
-  mrrId: string;
-  packingSlipId: string;
-  docNo: string;
-  docDate: string;
-  code: string;
-  supplierName: string;
-  sizeCm: string;
-  gsm: string;
-  bf: string;
-  reelNo: string;
-  suppReel: string;
-  weightKg: string;
-};
-
 export type MrrReelLabelRow = {
   mrrId: string;
   packingSlipId: string;
@@ -65,28 +49,6 @@ function findSupplierName(supplierId: string, suppliers: Supplier[], companies: 
 
 function normalizeReelNo(value: unknown) {
   return toText(value);
-}
-
-function formatWeight(weightKg: number) {
-  return Number(weightKg || 0).toFixed(2);
-}
-
-function buildPayload(row: Omit<MrrReelLabelRow, "qrPayload">): ReelLabelPayload {
-  return {
-    v: 1,
-    mrrId: row.mrrId,
-    packingSlipId: row.packingSlipId,
-    docNo: row.docNo,
-    docDate: row.docDate,
-    code: row.code,
-    supplierName: row.supplierName,
-    sizeCm: row.sizeCm,
-    gsm: row.gsm,
-    bf: row.bf,
-    reelNo: row.reelNo,
-    suppReel: row.suppReel,
-    weightKg: formatWeight(row.weightKg),
-  };
 }
 
 export function buildMrrReelLabelData({
@@ -141,10 +103,9 @@ export function buildMrrReelLabelData({
       weightKg,
     };
 
-    const payload = buildPayload(baseRow);
     labels.push({
       ...baseRow,
-      qrPayload: JSON.stringify(payload),
+      qrPayload: reelNo,
     });
   });
 
