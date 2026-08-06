@@ -135,7 +135,7 @@ export function ReelStockTakerReport() {
           <div className="mt-1 text-2xl font-black text-blue-900">{stats.total}</div>
         </div>
         <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
-          <div className="text-xs font-black uppercase text-emerald-700">Matched (<= 0.50 KG)</div>
+          <div className="text-xs font-black uppercase text-emerald-700">{"Matched (<= 0.50 KG)"}</div>
           <div className="mt-1 text-2xl font-black text-emerald-900">{stats.matched}</div>
         </div>
         <div className="rounded border border-rose-300 bg-rose-50 p-4">
