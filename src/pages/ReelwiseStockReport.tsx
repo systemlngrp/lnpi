@@ -4,12 +4,15 @@ import autoTable from "jspdf-autotable";
 import { Search, FileText, Download } from "lucide-react";
 import { Select } from "../components/Select";
 import { useData } from "../hooks/useData";
+import { downloadMrrReelLabelsPdf } from "../lib/mrrReelLabelsPdf";
 import {
+  Company,
   Material,
   MaterialIn,
   MaterialInPackingSlip,
   MaterialIssueReelLine,
   MaterialReturnReelLine,
+  Setting,
   Supplier,
 } from "../types";
 import { buildReelStockRows, type ReelStockCalculationRow } from "../lib/reelStock";
@@ -72,6 +75,8 @@ export function ReelwiseStockReport() {
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", [], { cacheToLocalStorage: false });
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", [], { cacheToLocalStorage: false });
   const [suppliers] = useData<Supplier>("suppliers", [], { cacheToLocalStorage: false });
+  const [companies] = useData<Company>("companies", [], { cacheToLocalStorage: false });
+  const [settings] = useData<Setting>("settings", [], { cacheToLocalStorage: false });
 
   const [searchTerm, setSearchTerm] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>("all");
@@ -256,48 +261,38 @@ export function ReelwiseStockReport() {
     doc.save(`${safeFileName(`Reelwise_Stock_Report_${fileDate}`)}.pdf`);
   };
 
-  const handleExportRowPdf = (row: ReelwiseStockRow, rowIndex: number) => {
-    const doc = new jsPDF("p", "mm", "a4");
+  const handleExportRowPdf = async (row: ReelwiseStockRow) => {
+    if (row.isOpening) {
+      alert("QR label PDF is available only for MRR reel rows.");
+      return;
+    }
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Reelwise Stock Row", 14, 14);
+    const slip = packingSlips.find((entry) => entry.id === row.slipId);
+    if (!slip) {
+      alert("Packing slip not found for this reel.");
+      return;
+    }
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`Generated: ${new Date().toLocaleString("en-GB")}`, 14, 20);
+    const mrr = materialIn.find((entry) => entry.id === slip.materialInId);
+    if (!mrr) {
+      alert("MRR not found for this reel.");
+      return;
+    }
 
-    autoTable(doc, {
-      startY: 26,
-      theme: "grid",
-      styles: { fontSize: 9, cellPadding: 2.2, lineColor: [0, 0, 0], lineWidth: 0.1 },
-      headStyles: { fillColor: [67, 56, 202] },
-      columnStyles: {
-        0: { cellWidth: 52, fontStyle: "bold" },
-        1: { cellWidth: 120 },
-      },
-      head: [["Column", "Value"]],
-      body: [
-        ["SL No", String(rowIndex + 1)],
-        ["MRR No.", row.mrrNo],
-        ["Our Reel No.", row.ourReelNo],
-        ["ERP", row.erp],
-        ["Suppliers Name", row.supplierName || "-"],
-        ["GSM", String(row.gsm || "")],
-        ["Size", String(row.size || "")],
-        ["BF", String(row.bf || "")],
-        ["MRR Qty", formatQty(row.mrrQty)],
-        ["Issued", formatQty(row.issuedWeight)],
-        ["Return", formatQty(row.returnedWeight)],
-        ["Net Issued", formatQty(row.netIssuedWeight)],
-        ["Available Weight", formatQty(row.availableWeight)],
-        ["Rate", formatQty(row.rate)],
-        ["Valuation", formatQty(row.valuation)],
-        ["Age(D days)", String(row.ageDays)],
-      ],
-    });
-
-    doc.save(safeFileName(`Reel_${row.ourReelNo || row.slipId}_Stock_Row`) + ".pdf");
+    try {
+      await downloadMrrReelLabelsPdf({
+        mrr,
+        packingSlips: [slip],
+        materials,
+        suppliers,
+        companies,
+        setting: settings[0] || null,
+        paperSize: "A4",
+      });
+    } catch (error) {
+      console.error("Failed to generate reel QR label PDF", error);
+      alert(error instanceof Error ? error.message : "Failed to generate reel QR label PDF.");
+    }
   };
 
   return (
@@ -470,12 +465,12 @@ export function ReelwiseStockReport() {
                     <td className="px-2 py-2 text-center border-2 border-black bg-white">
                       <button
                         type="button"
-                        onClick={() => handleExportRowPdf(row, index)}
+                        onClick={() => handleExportRowPdf(row)}
                         className="inline-flex items-center gap-1 rounded border border-indigo-700 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-800 hover:bg-indigo-100"
-                        title="Download this row as PDF"
+                        title="Download reel QR label PDF"
                       >
                         <Download size={12} />
-                        PDF
+                        QR PDF
                       </button>
                     </td>
                   </tr>
