@@ -45,9 +45,12 @@ export function ReelStockTakerReport() {
   const [matchedReelNo, setMatchedReelNo] = useState("");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
+  const [scannerStatus, setScannerStatus] = useState("");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimerRef = useRef<number | null>(null);
+  const lastScannedCodeRef = useRef("");
+  const lastScannedAtRef = useRef(0);
 
   const availableRows = useMemo(() => {
     return buildReelStockRows({
@@ -101,6 +104,9 @@ export function ReelStockTakerReport() {
     stopScanner();
     setIsScannerOpen(false);
     setScannerError("");
+    setScannerStatus("");
+    lastScannedCodeRef.current = "";
+    lastScannedAtRef.current = 0;
   };
 
   const saveScanEntry = async (row: (typeof availableRows)[number], physicalWeight: number) => {
@@ -127,12 +133,11 @@ export function ReelStockTakerReport() {
 
   const applyScannedReel = async (rawReelNo: string, autoSave: boolean) => {
     const reelNo = String(rawReelNo || "").trim();
-    if (!reelNo) return false;
+    if (!reelNo) return "";
 
     const row = rowByReelNo.get(reelNo);
     if (!row) {
-      alert("Reel not found in Reelwise Stock with Available > 0.");
-      return false;
+      return "Reel not found in Reelwise Stock with Available > 0.";
     }
 
     setScanValue(reelNo);
@@ -142,15 +147,21 @@ export function ReelStockTakerReport() {
       const physicalWeight = Number(physicalWeightInput || 0);
       if (Number.isFinite(physicalWeight) && physicalWeight > 0) {
         await saveScanEntry(row, physicalWeight);
-        return true;
+        return `Scanned ${reelNo}. Saved successfully.`;
       }
+      return `Scanned ${reelNo}. Enter physical weight and click Compare & Save.`;
     }
 
-    return false;
+    return `Scanned ${reelNo}. Reel fetched.`;
   };
 
   const handleScan = () => {
-    void applyScannedReel(scanValue, false);
+    void (async () => {
+      const message = await applyScannedReel(scanValue, false);
+      if (message && message.includes("not found")) {
+        alert(message);
+      }
+    })();
   };
 
   const handleSave = async () => {
@@ -175,6 +186,7 @@ export function ReelStockTakerReport() {
 
     setIsScannerOpen(true);
     setScannerError("");
+    setScannerStatus("Point camera at QR code...");
 
     const BarcodeDetectorCtor = (window as Window & { BarcodeDetector?: new (options?: { formats?: string[] }) => { detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>> } }).BarcodeDetector;
     if (!BarcodeDetectorCtor) {
@@ -204,10 +216,18 @@ export function ReelStockTakerReport() {
           const scanned = codes?.[0]?.rawValue;
           if (!scanned) return;
 
-          const autoSaved = await applyScannedReel(scanned, true);
-          closeScanner();
-          if (!autoSaved) {
-            alert("QR scanned and reel fetched. Enter physical weight, then click Compare & Save.");
+          const reelNo = String(scanned || "").trim();
+          const now = Date.now();
+          // Prevent repeat-trigger from same QR across nearby frames.
+          if (reelNo === lastScannedCodeRef.current && now - lastScannedAtRef.current < 1500) {
+            return;
+          }
+          lastScannedCodeRef.current = reelNo;
+          lastScannedAtRef.current = now;
+
+          const message = await applyScannedReel(reelNo, true);
+          if (message) {
+            setScannerStatus(message);
           }
         } catch {
           // Keep scanning if one frame fails to decode.
@@ -338,8 +358,11 @@ export function ReelStockTakerReport() {
             ) : (
               <>
                 <video ref={videoRef} className="h-[320px] w-full rounded border border-black object-cover" autoPlay muted playsInline />
+                <div className="mt-2 rounded border border-emerald-300 bg-emerald-50 p-2 text-xs font-bold text-emerald-800">
+                  {scannerStatus || "Point camera at QR code..."}
+                </div>
                 <div className="mt-2 text-xs font-semibold text-slate-700">
-                  Point camera at reel QR. If physical weight is already filled, scan will auto-save.
+                  Scanner stays open after each scan. You can scan next reel immediately.
                 </div>
               </>
             )}
