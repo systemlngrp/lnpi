@@ -135,6 +135,7 @@ export function OtherConsumablesInventoryReport() {
   const rows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     return allRows.filter((row) => {
+      if (row.availableQty <= 0) return false;
       if (groupFilter && row.groupName !== groupFilter) return false;
       if (itemFilter && row.itemName !== itemFilter) return false;
       if (!query) return true;
