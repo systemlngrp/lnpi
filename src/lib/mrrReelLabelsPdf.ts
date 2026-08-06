@@ -129,9 +129,9 @@ export async function downloadMrrReelLabelsPdf({
     const cardH = slotH - pageMargin * 2;
 
     const upperY = cardY;
-    const upperH = cardH / 2;
+    const upperH = cardH * 0.4;
     const lowerY = upperY + upperH;
-    const lowerH = upperH;
+    const lowerH = cardH - upperH;
 
     doc.setDrawColor(0);
     doc.setLineWidth(0.25);
@@ -264,18 +264,18 @@ export async function downloadMrrReelLabelsPdf({
     drawGridPair(contentX, row2Y, "Weight", formatWeight(row.weightKg), groupW - gridLabelW - 2);
     drawGridPair(contentX + groupW, row2Y, "Supp-Reel", firstNonEmpty(row.suppReel), groupW - gridLabelW - 2);
 
-    const frameW = Math.min(160, cardW * 0.96);
-    const frameH = lowerH * 0.94;
+    const frameW = cardW * 0.985;
+    const frameH = lowerH * 0.965;
     const frameX = cardX + (cardW - frameW) / 2;
     const frameY = lowerY + (lowerH - frameH) / 2;
-    const pad = 1.5;
-    const captionSize = 11;
+    const pad = 1;
+    const captionSize = 10;
     const captionH = lh(captionSize, 1.04);
     const availW = frameW - pad * 2;
     const availH = frameH - pad * 2;
-    const qrZoneH = availH - captionH - 0.2;
+    const qrZoneH = availH - captionH - 0.1;
     const qrMax = Math.min(availW, qrZoneH);
-    const qrSize = Math.max(10, qrMax * 0.98);
+    const qrSize = Math.max(10, qrMax * 0.995);
     const qrX = frameX + pad + (availW - qrSize) / 2;
     const qrY = frameY + pad + Math.max(0, (qrZoneH - qrSize) / 2);
     const captionY = frameY + frameH - pad;
