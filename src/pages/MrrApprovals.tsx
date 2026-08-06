@@ -30,6 +30,7 @@ export function MrrApprovals() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
+  const [reelLabelMenuId, setReelLabelMenuId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [openRemarkId, setOpenRemarkId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("transactionNo");
@@ -234,7 +235,7 @@ export function MrrApprovals() {
     });
   };
 
-  const downloadReelLabelsPdf = async (mrr: MaterialIn) => {
+  const downloadReelLabelsPdf = async (mrr: MaterialIn, paperSize: "A4" | "A3" = "A4") => {
     if (mrr.mrrType !== "Reel") {
       alert("Reel Labels PDF is available only for Reel MRR.");
       return;
@@ -248,6 +249,7 @@ export function MrrApprovals() {
         suppliers,
         companies,
         setting: settings[0] || null,
+        paperSize,
       });
       if (result.warnings.length > 0) {
         alert(`Generated ${result.count} labels with ${result.warnings.length} warning(s).`);
@@ -441,16 +443,42 @@ export function MrrApprovals() {
                               >
                                 <Download size={14} />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => downloadReelLabelsPdf(m)}
-                                disabled={m.mrrType !== "Reel"}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded border border-black text-black hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                title={m.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
-                                aria-label="Reel Labels PDF"
-                              >
-                                <QrCode size={14} />
-                              </button>
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => setReelLabelMenuId((current) => (current === m.id ? null : m.id))}
+                                  disabled={m.mrrType !== "Reel"}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded border border-black text-black hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                  title={m.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
+                                  aria-label="Reel Labels PDF"
+                                >
+                                  <QrCode size={14} />
+                                </button>
+                                {reelLabelMenuId === m.id ? (
+                                  <div className="absolute right-0 top-9 z-40 w-28 rounded border border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        setReelLabelMenuId(null);
+                                        await downloadReelLabelsPdf(m, "A4");
+                                      }}
+                                      className="block w-full border-b border-black px-3 py-2 text-left text-xs font-bold uppercase hover:bg-slate-100"
+                                    >
+                                      A4
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        setReelLabelMenuId(null);
+                                        await downloadReelLabelsPdf(m, "A3");
+                                      }}
+                                      className="block w-full px-3 py-2 text-left text-xs font-bold uppercase hover:bg-slate-100"
+                                    >
+                                      A3
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
                               <button
                                 type="button"
                                 disabled={!!isSubmitting || !["Pending PH", "Pending Accounts", "Pending MD"].includes(m.status || "")}

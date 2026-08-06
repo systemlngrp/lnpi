@@ -10,6 +10,7 @@ type DownloadMrrReelLabelsPdfArgs = {
   suppliers: Supplier[];
   companies?: Company[];
   setting?: Setting | null;
+  paperSize?: "A4" | "A3";
 };
 
 export type DownloadMrrReelLabelsPdfResult = {
@@ -77,6 +78,7 @@ export async function downloadMrrReelLabelsPdf({
   suppliers,
   companies = [],
   setting = null,
+  paperSize = "A4",
 }: DownloadMrrReelLabelsPdfArgs): Promise<DownloadMrrReelLabelsPdfResult> {
   const { labels, warnings } = buildMrrReelLabelData({
     mrr,
@@ -90,9 +92,11 @@ export async function downloadMrrReelLabelsPdf({
     throw new Error(`No printable reel labels found for ${mrr.transactionNo}.`);
   }
 
-  const doc = new jsPDF("p", "mm", "a4");
+  const isA3 = paperSize === "A3";
+  const doc = isA3 ? new jsPDF("l", "mm", "a3") : new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
+  const slotsPerPage = isA3 ? 2 : 1;
 
   let logoDataUrl = "";
   const logoUrl = getLogoUrl(setting);
@@ -106,15 +110,12 @@ export async function downloadMrrReelLabelsPdf({
 
   const organizationName = firstNonEmpty(setting?.organizationName, "LAXMI NARAYAN GROUP");
 
-  for (let index = 0; index < labels.length; index += 1) {
-    const row = labels[index];
-    if (index > 0) doc.addPage();
-
-    const margin = 10;
-    const cardX = margin;
-    const cardY = margin;
-    const cardW = pageWidth - margin * 2;
-    const cardH = pageHeight - margin * 2;
+  const drawLabel = async (row: (typeof labels)[number], slotX: number, slotY: number, slotW: number, slotH: number) => {
+    const margin = Math.min(10, Math.max(6, slotW * 0.045));
+    const cardX = slotX + margin;
+    const cardY = slotY + margin;
+    const cardW = slotW - margin * 2;
+    const cardH = slotH - margin * 2;
 
     doc.setDrawColor(100);
     doc.setLineWidth(0.25);
@@ -122,8 +123,8 @@ export async function downloadMrrReelLabelsPdf({
 
     let y = cardY + 10;
     if (logoDataUrl) {
-      const logoW = 34;
-      const logoH = 18;
+      const logoW = Math.min(34, cardW * 0.16);
+      const logoH = logoW * 0.53;
       const logoX = cardX + cardW / 2 - logoW / 2;
       doc.addImage(logoDataUrl, "PNG", logoX, y, logoW, logoH, undefined, "FAST");
       y += logoH + 8;
@@ -185,8 +186,23 @@ export async function downloadMrrReelLabelsPdf({
     doc.setFontSize(10.5);
     doc.setTextColor(50);
     doc.text("Scan for Reel", cardX + cardW / 2, cardY + cardH - 8, { align: "center" });
+  };
+
+  for (let index = 0; index < labels.length; index += 1) {
+    const row = labels[index];
+    if (isA3) {
+      if (index % slotsPerPage === 0 && index > 0) doc.addPage();
+      const slotIndex = index % slotsPerPage;
+      const slotW = pageWidth / 2;
+      const slotH = pageHeight;
+      await drawLabel(row, slotIndex * slotW, 0, slotW, slotH);
+    } else {
+      if (index > 0) doc.addPage();
+      await drawLabel(row, 0, 0, pageWidth, pageHeight);
+    }
   }
 
-  doc.save(`${safeFileName(`MRR_Reel_Labels_${mrr.transactionNo}`)}.pdf`);
+  const suffix = isA3 ? "A3" : "A4";
+  doc.save(`${safeFileName(`MRR_Reel_Labels_${mrr.transactionNo}_${suffix}`)}.pdf`);
   return { count: labels.length, warnings };
 }

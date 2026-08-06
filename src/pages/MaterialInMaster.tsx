@@ -18,6 +18,7 @@ export function MaterialInMaster() {
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [settings] = useData<Setting>("settings", []);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [reelLabelMenuId, setReelLabelMenuId] = useState<string | null>(null);
   const [expandedItemRows, setExpandedItemRows] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -48,7 +49,7 @@ export function MaterialInMaster() {
     });
   };
 
-  const downloadReelLabelsPdf = async (mrr: MaterialIn) => {
+  const downloadReelLabelsPdf = async (mrr: MaterialIn, paperSize: "A4" | "A3" = "A4") => {
     if (mrr.mrrType !== "Reel") {
       alert("Reel Labels PDF is available only for Reel MRR.");
       return;
@@ -62,6 +63,7 @@ export function MaterialInMaster() {
         suppliers,
         companies,
         setting: settings[0] || null,
+        paperSize,
       });
       if (result.warnings.length > 0) {
         alert(`Generated ${result.count} labels with ${result.warnings.length} warning(s).`);
@@ -300,14 +302,40 @@ export function MaterialInMaster() {
                   <button onClick={() => downloadPdf(entry)} className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center">
                     <Download size={16} className="mr-1" /> PDF
                   </button>
-                  <button
-                    onClick={() => downloadReelLabelsPdf(entry)}
-                    disabled={entry.mrrType !== "Reel"}
-                    className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center disabled:cursor-not-allowed disabled:opacity-40"
-                    title={entry.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
-                  >
-                    <QrCode size={16} className="mr-1" /> Reel Labels
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setReelLabelMenuId((current) => (current === entry.id ? null : entry.id))}
+                      disabled={entry.mrrType !== "Reel"}
+                      className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center disabled:cursor-not-allowed disabled:opacity-40"
+                      title={entry.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
+                    >
+                      <QrCode size={16} className="mr-1" /> Reel Labels
+                    </button>
+                    {reelLabelMenuId === entry.id ? (
+                      <div className="absolute left-0 top-full z-20 mt-2 w-28 rounded border border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setReelLabelMenuId(null);
+                            await downloadReelLabelsPdf(entry, "A4");
+                          }}
+                          className="block w-full border-b border-black px-3 py-2 text-left text-xs font-bold uppercase hover:bg-slate-100"
+                        >
+                          A4
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setReelLabelMenuId(null);
+                            await downloadReelLabelsPdf(entry, "A3");
+                          }}
+                          className="block w-full px-3 py-2 text-left text-xs font-bold uppercase hover:bg-slate-100"
+                        >
+                          A3
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <button onClick={() => handleDelete(entry.id)} className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}>
                     <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
                   </button>
@@ -403,14 +431,40 @@ export function MaterialInMaster() {
                         <button onClick={() => downloadPdf(entry)} className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center min-w-[80px] justify-end">
                           <Download size={16} className="mr-1" /> PDF
                         </button>
-                        <button
-                          onClick={() => downloadReelLabelsPdf(entry)}
-                          disabled={entry.mrrType !== "Reel"}
-                          className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center min-w-[118px] justify-end disabled:cursor-not-allowed disabled:opacity-40"
-                          title={entry.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
-                        >
-                          <QrCode size={16} className="mr-1" /> Reel Labels
-                        </button>
+                        <div className="relative">
+                          <button
+                            onClick={() => setReelLabelMenuId((current) => (current === entry.id ? null : entry.id))}
+                            disabled={entry.mrrType !== "Reel"}
+                            className="text-indigo-700 hover:text-indigo-900 font-bold inline-flex items-center min-w-[118px] justify-end disabled:cursor-not-allowed disabled:opacity-40"
+                            title={entry.mrrType === "Reel" ? "Reel Labels PDF" : "Reel Labels PDF (Reel MRR only)"}
+                          >
+                            <QrCode size={16} className="mr-1" /> Reel Labels
+                          </button>
+                          {reelLabelMenuId === entry.id ? (
+                            <div className="absolute right-0 top-full z-20 mt-2 w-28 rounded border border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setReelLabelMenuId(null);
+                                  await downloadReelLabelsPdf(entry, "A4");
+                                }}
+                                className="block w-full border-b border-black px-3 py-2 text-left text-xs font-bold uppercase hover:bg-slate-100"
+                              >
+                                A4
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setReelLabelMenuId(null);
+                                  await downloadReelLabelsPdf(entry, "A3");
+                                }}
+                                className="block w-full px-3 py-2 text-left text-xs font-bold uppercase hover:bg-slate-100"
+                              >
+                                A3
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                         <button onClick={() => handleDelete(entry.id)} className={`${deletingId === entry.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900 font-bold inline-flex items-center min-w-[80px] justify-end`}>
                           <Trash2 size={16} className="mr-1" /> {deletingId === entry.id ? "Confirm?" : "Delete"}
                         </button>
