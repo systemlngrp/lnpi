@@ -31,6 +31,63 @@ function formatQty(value: number) {
   return round2(value).toFixed(2);
 }
 
+type ParsedQrPayload = {
+  reelNo: string;
+  weight: number | null;
+};
+
+function parsePositiveWeight(value: unknown): number | null {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return round2(num);
+}
+
+function parseQrPayload(rawValue: string): ParsedQrPayload {
+  const text = String(rawValue || "").trim();
+  if (!text) return { reelNo: "", weight: null };
+
+  const reelKeys = ["reelNo", "reel", "ourReelNo", "reel_no", "reelno"];
+  const weightKeys = ["weight", "physicalWeight", "wt", "kg"];
+
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      const reelNo = String(
+        reelKeys.map((key) => parsed?.[key]).find((v) => typeof v === "string" && String(v).trim()) || "",
+      ).trim();
+      const weight = parsePositiveWeight(weightKeys.map((key) => parsed?.[key]).find((v) => v !== undefined));
+      if (reelNo) {
+        return { reelNo, weight };
+      }
+    } catch {
+      // Fallback to text parsing.
+    }
+  }
+
+  const reelByLabel = text.match(/(?:reel\s*no|our\s*reel\s*no|reel_no|reelno)\s*[:=]\s*([^|,;\n]+)/i);
+  const weightByLabel = text.match(/(?:weight|physical\s*weight|wt|kg)\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)/i);
+  if (reelByLabel?.[1]) {
+    return {
+      reelNo: reelByLabel[1].trim(),
+      weight: parsePositiveWeight(weightByLabel?.[1]),
+    };
+  }
+
+  const delimited = text.match(/^\s*([^|,;\n]+)\s*[|,;]\s*([0-9]+(?:\.[0-9]+)?)(?:\s*kg)?\s*$/i);
+  if (delimited?.[1]) {
+    return {
+      reelNo: delimited[1].trim(),
+      weight: parsePositiveWeight(delimited[2]),
+    };
+  }
+
+  const weightByKgSuffix = text.match(/([0-9]+(?:\.[0-9]+)?)\s*kg/i);
+  return {
+    reelNo: text,
+    weight: parsePositiveWeight(weightByKgSuffix?.[1]),
+  };
+}
+
 export function ReelStockTakerReport() {
   const [materials] = useData<Material>("materials", [], { cacheToLocalStorage: false });
   const [materialIn] = useData<MaterialIn>("material-in", [], { cacheToLocalStorage: false });
@@ -131,8 +188,9 @@ export function ReelStockTakerReport() {
     setMatchedReelNo("");
   };
 
-  const applyScannedReel = async (rawReelNo: string, autoSave: boolean) => {
-    const reelNo = String(rawReelNo || "").trim();
+  const applyScannedReel = async (rawQrValue: string, autoSave: boolean) => {
+    const parsed = parseQrPayload(rawQrValue);
+    const reelNo = String(parsed.reelNo || "").trim();
     if (!reelNo) return "";
 
     const row = rowByReelNo.get(reelNo);
@@ -143,15 +201,22 @@ export function ReelStockTakerReport() {
     setScanValue(reelNo);
     setMatchedReelNo(reelNo);
 
+    if (parsed.weight !== null) {
+      setPhysicalWeightInput(String(parsed.weight));
+    }
+
     if (autoSave) {
-      const physicalWeight = Number(physicalWeightInput || 0);
+      const physicalWeight = parsed.weight ?? Number(physicalWeightInput || 0);
       if (Number.isFinite(physicalWeight) && physicalWeight > 0) {
         await saveScanEntry(row, physicalWeight);
-        return `Scanned ${reelNo}. Saved successfully.`;
+        return `Scanned ${reelNo}. Saved successfully (${formatQty(physicalWeight)} KG).`;
       }
       return `Scanned ${reelNo}. Enter physical weight and click Compare & Save.`;
     }
 
+    if (parsed.weight !== null) {
+      return `Scanned ${reelNo}. Weight ${formatQty(parsed.weight)} KG captured from QR.`;
+    }
     return `Scanned ${reelNo}. Reel fetched.`;
   };
 
@@ -362,7 +427,7 @@ export function ReelStockTakerReport() {
                   {scannerStatus || "Point camera at QR code..."}
                 </div>
                 <div className="mt-2 text-xs font-semibold text-slate-700">
-                  Scanner stays open after each scan. You can scan next reel immediately.
+                  Scanner stays open after each scan. QR can contain reel only or reel + weight.
                 </div>
               </>
             )}
