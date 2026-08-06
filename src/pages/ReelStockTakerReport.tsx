@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Search, Scale, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, Search, Scale, Trash2, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { buildReelStockRows } from "../lib/reelStock";
 import type {
@@ -43,6 +43,11 @@ export function ReelStockTakerReport() {
   const [scanValue, setScanValue] = useState("");
   const [physicalWeightInput, setPhysicalWeightInput] = useState("");
   const [matchedReelNo, setMatchedReelNo] = useState("");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState("");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanTimerRef = useRef<number | null>(null);
 
   const availableRows = useMemo(() => {
     return buildReelStockRows({
@@ -74,15 +79,78 @@ export function ReelStockTakerReport() {
     return { total, matched, mismatch };
   }, [logs]);
 
-  const handleScan = () => {
-    const reelNo = String(scanValue || "").trim();
-    if (!reelNo) return;
+  const stopScanner = () => {
+    if (scanTimerRef.current !== null) {
+      window.clearInterval(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopScanner();
+    };
+  }, []);
+
+  const closeScanner = () => {
+    stopScanner();
+    setIsScannerOpen(false);
+    setScannerError("");
+  };
+
+  const saveScanEntry = async (row: (typeof availableRows)[number], physicalWeight: number) => {
+    const systemWeight = round2(row.availableWeight);
+    const variance = round2(physicalWeight - systemWeight);
+
+    const payload: StockTakerLog = {
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      reelNo: row.ourReelNo,
+      mrrNo: row.mrrNo,
+      erp: row.erp,
+      supplierName: row.supplierName,
+      systemAvailableWeight: systemWeight,
+      physicalWeight: round2(physicalWeight),
+      variance,
+    };
+
+    await setLogs((prev) => [payload, ...prev]);
+    setPhysicalWeightInput("");
+    setScanValue("");
+    setMatchedReelNo("");
+  };
+
+  const applyScannedReel = async (rawReelNo: string, autoSave: boolean) => {
+    const reelNo = String(rawReelNo || "").trim();
+    if (!reelNo) return false;
+
     const row = rowByReelNo.get(reelNo);
     if (!row) {
       alert("Reel not found in Reelwise Stock with Available > 0.");
-      return;
+      return false;
     }
+
+    setScanValue(reelNo);
     setMatchedReelNo(reelNo);
+
+    if (autoSave) {
+      const physicalWeight = Number(physicalWeightInput || 0);
+      if (Number.isFinite(physicalWeight) && physicalWeight > 0) {
+        await saveScanEntry(row, physicalWeight);
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const handleScan = () => {
+    void applyScannedReel(scanValue, false);
   };
 
   const handleSave = async () => {
@@ -96,25 +164,60 @@ export function ReelStockTakerReport() {
       return;
     }
 
-    const systemWeight = round2(matchedRow.availableWeight);
-    const variance = round2(physicalWeight - systemWeight);
+    await saveScanEntry(matchedRow, physicalWeight);
+  };
 
-    const payload: StockTakerLog = {
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
-      reelNo: matchedRow.ourReelNo,
-      mrrNo: matchedRow.mrrNo,
-      erp: matchedRow.erp,
-      supplierName: matchedRow.supplierName,
-      systemAvailableWeight: systemWeight,
-      physicalWeight: round2(physicalWeight),
-      variance,
-    };
+  const handleOpenScanner = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      alert("Camera access is not supported on this browser/device.");
+      return;
+    }
 
-    await setLogs((prev) => [payload, ...prev]);
-    setPhysicalWeightInput("");
-    setScanValue("");
-    setMatchedReelNo("");
+    setIsScannerOpen(true);
+    setScannerError("");
+
+    const BarcodeDetectorCtor = (window as Window & { BarcodeDetector?: new (options?: { formats?: string[] }) => { detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>> } }).BarcodeDetector;
+    if (!BarcodeDetectorCtor) {
+      setScannerError("QR scanner is not supported on this browser. Please use Chrome on mobile or paste reel number manually.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] });
+
+      scanTimerRef.current = window.setInterval(async () => {
+        if (!videoRef.current) return;
+        try {
+          const codes = await detector.detect(videoRef.current);
+          const scanned = codes?.[0]?.rawValue;
+          if (!scanned) return;
+
+          const autoSaved = await applyScannedReel(scanned, true);
+          closeScanner();
+          if (!autoSaved) {
+            alert("QR scanned and reel fetched. Enter physical weight, then click Compare & Save.");
+          }
+        } catch {
+          // Keep scanning if one frame fails to decode.
+        }
+      }, 350);
+    } catch (error) {
+      console.error(error);
+      setScannerError("Unable to open camera. Please allow camera permission and try again.");
+      stopScanner();
+    }
   };
 
   const clearLogs = async () => {
@@ -185,6 +288,17 @@ export function ReelStockTakerReport() {
 
           <button
             type="button"
+            onClick={() => {
+              void handleOpenScanner();
+            }}
+            className="inline-flex h-[42px] items-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+          >
+            <Camera size={15} />
+            Open QR Scan
+          </button>
+
+          <button
+            type="button"
             onClick={handleSave}
             className="inline-flex h-[42px] items-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100"
           >
@@ -201,6 +315,37 @@ export function ReelStockTakerReport() {
           </div>
         ) : null}
       </div>
+
+      {isScannerOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg rounded border-2 border-black bg-white p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-black uppercase text-black">Scan Reel QR</div>
+              <button
+                type="button"
+                onClick={closeScanner}
+                className="inline-flex items-center justify-center rounded border border-black bg-white p-1.5 text-black hover:bg-slate-50"
+                aria-label="Close scanner"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {scannerError ? (
+              <div className="rounded border border-rose-300 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
+                {scannerError}
+              </div>
+            ) : (
+              <>
+                <video ref={videoRef} className="h-[320px] w-full rounded border border-black object-cover" autoPlay muted playsInline />
+                <div className="mt-2 text-xs font-semibold text-slate-700">
+                  Point camera at reel QR. If physical weight is already filled, scan will auto-save.
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <div className="bg-white rounded shadow-sm border-2 border-black overflow-hidden">
         <div className="flex items-center justify-between border-b-2 border-black px-3 py-2.5">
