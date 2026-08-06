@@ -311,156 +311,124 @@ export async function downloadMrrReelLabelsPdf({
     const cardW = slotW - pageMargin * 2;
     const cardH = slotH - pageMargin * 2;
 
-    const upperY = cardY;
-    const upperH = cardH / 2;
-    const lowerY = upperY + upperH;
-    const lowerH = upperH;
-
     doc.setDrawColor(0);
     doc.setLineWidth(0.25);
     doc.rect(cardX, cardY, cardW, cardH);
-    doc.line(cardX, lowerY, cardX + cardW, lowerY);
 
+    const contentX = cardX + 10;
+    const contentY = cardY + 10;
     const contentW = cardW - 20;
-    const contentX = cardX + (cardW - contentW) / 2;
 
-    const logoW = Math.min(84, contentW * 0.66);
-    const logoH = logoW * 0.34;
+    const logoW = Math.min(42, contentW * 0.2);
+    const logoH = logoW * 0.53;
+    const titleX = contentX + logoW + 8;
+    const titleW = contentW - logoW - 8;
 
-    const titleSize = 46;
-    const docInfoSize = 22;
-    const supplierSize = 34;
-    const specSize = 24;
-    const gridSize = 26;
-    const captionSize = 19;
-    const qrFallbackSize = 22;
-
-    const lineH = (pt: number, ratio = 1.16) => pt * 0.3528 * ratio;
-
-    const supplierText = toTitleCase(row.supplierName);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(supplierSize);
-    const supplierLines = doc.splitTextToSize(supplierText, contentW - 8).slice(0, 3);
-
-    const specText = `Size: ${firstNonEmpty(row.sizeCm)} CM X GSM: ${firstNonEmpty(row.gsm)} X BF: ${firstNonEmpty(row.bf)}`;
-    const hasSpec = Boolean(String(firstNonEmpty(row.sizeCm, row.gsm, row.bf)).trim() && firstNonEmpty(row.sizeCm, row.gsm, row.bf) !== "-");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(specSize);
-    const specLines = hasSpec ? doc.splitTextToSize(specText, contentW - 8).slice(0, 2) : [];
-
-    const detailRowGap = 3;
-    const blockH =
-      (logoDataUrl ? logoH + 6 : 0) +
-      lineH(titleSize) +
-      6 +
-      lineH(docInfoSize) +
-      6 +
-      supplierLines.length * lineH(supplierSize, 1.06) +
-      (specLines.length > 0 ? 5 + specLines.length * lineH(specSize, 1.06) : 0) +
-      7 +
-      lineH(gridSize, 1.06) +
-      detailRowGap +
-      lineH(gridSize, 1.06);
-
-    let yTop = upperY + (upperH - blockH) / 2;
-    yTop = Math.max(upperY + 6, yTop);
+    let y = contentY;
 
     if (logoDataUrl) {
-      const logoX = cardX + cardW / 2 - logoW / 2;
-      doc.addImage(logoDataUrl, "PNG", logoX, yTop, logoW, logoH, undefined, "FAST");
-      yTop += logoH + 6;
+      doc.addImage(logoDataUrl, "PNG", contentX, y, logoW, logoH, undefined, "FAST");
     }
 
+    const orgTitle = toTitleCase(organizationName);
+    let titleFontSize = 22;
+    const titleMaxWidth = titleW;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(titleSize);
+    while (titleFontSize > 13) {
+      doc.setFontSize(titleFontSize);
+      if (doc.getTextWidth(orgTitle) <= titleMaxWidth) break;
+      titleFontSize -= 1;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(titleFontSize);
     doc.setTextColor(0);
-    doc.setCharSpace(0.8);
-    doc.text(toTitleCase(organizationName), cardX + cardW / 2, yTop + lineH(titleSize, 0.88), { align: "center" });
-    doc.setCharSpace(0);
-    yTop += lineH(titleSize) + 6;
+    doc.text(orgTitle, titleX + titleW / 2, y + logoH * 0.62, { align: "center" });
 
-    const detailsY = yTop + lineH(docInfoSize, 0.84);
-    const colW = contentW / 3;
-    const labelW = 20;
+    y += Math.max(logoH, 12) + 7;
+
+    const infoSize = 12;
+    const infoCols = 3;
+    const infoColW = contentW / infoCols;
+    const infoLabelW = 10;
+    const infoY = y;
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(docInfoSize);
-    doc.setTextColor(85);
+    doc.setFontSize(infoSize);
+    doc.setTextColor(70);
     ["Doc", "Date", "Code"].forEach((label, i) => {
-      const baseX = contentX + i * colW;
-      doc.text(label, baseX + labelW, detailsY, { align: "right" });
+      const colX = contentX + i * infoColW;
+      doc.text(`${label}:`, colX, infoY);
     });
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0);
-    const detailsValues = [row.docNo, row.docDate, firstNonEmpty(row.code)];
-    detailsValues.forEach((value, i) => {
-      const baseX = contentX + i * colW;
-      const valueText = clipSingleLine(doc, value, colW - labelW - 3);
-      doc.text(valueText, baseX + labelW + 3, detailsY, { align: "left" });
+    const infoVals = [row.docNo, row.docDate, firstNonEmpty(row.code)];
+    infoVals.forEach((value, i) => {
+      const colX = contentX + i * infoColW;
+      const clipped = clipSingleLine(doc, value, infoColW - infoLabelW - 1);
+      doc.text(clipped, colX + infoLabelW, infoY);
     });
-    yTop += lineH(docInfoSize) + 6;
+
+    y += 9;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(supplierSize);
-    doc.setTextColor(0);
-    const supplierY = yTop + lineH(supplierSize, 0.82);
-    doc.text(supplierLines, cardX + cardW / 2, supplierY, { align: "center" });
-    yTop += supplierLines.length * lineH(supplierSize, 1.06);
+    doc.setFontSize(17);
+    const supplierLines = doc.splitTextToSize(toTitleCase(row.supplierName), contentW - 6).slice(0, 2);
+    doc.text(supplierLines, cardX + cardW / 2, y, { align: "center" });
+    y += supplierLines.length * 7.2;
 
-    if (specLines.length > 0) {
-      yTop += 5;
+    const specText = `Size: ${firstNonEmpty(row.sizeCm)} CM X GSM: ${firstNonEmpty(row.gsm)} X BF: ${firstNonEmpty(row.bf)}`;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(13);
+    const specLines = doc.splitTextToSize(specText, contentW - 6).slice(0, 2);
+    doc.text(specLines, cardX + cardW / 2, y, { align: "center" });
+    y += specLines.length * 5.8 + 6;
+
+    const bodyTopY = y;
+    const qrAreaW = contentW * 0.39;
+    const leftAreaW = contentW - qrAreaW - 8;
+    const qrAreaX = contentX + leftAreaW + 8;
+    const qrAreaH = Math.max(80, cardY + cardH - bodyTopY - 16);
+
+    const detailFont = 14;
+    const rowGap = 9;
+    const labelW = 26;
+    const drawDetail = (label: string, value: string, rowIndex: number, rightCol = false) => {
+      const baseX = contentX + (rightCol ? leftAreaW / 2 : 0);
+      const textY = bodyTopY + rowIndex * rowGap;
+
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(specSize);
-      doc.setTextColor(0);
-      const specY = yTop + lineH(specSize, 0.84);
-      doc.text(specLines, cardX + cardW / 2, specY, { align: "center" });
-      yTop += specLines.length * lineH(specSize, 1.06);
-    }
-
-    yTop += 7;
-    const groupW = contentW / 2;
-    const gridLabelW = groupW * 0.36;
-    const row1Y = yTop + lineH(gridSize, 0.84);
-    const row2Y = row1Y + lineH(gridSize, 1.06) + detailRowGap;
-
-    const drawGridPair = (x: number, y: number, label: string, value: string) => {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(gridSize);
-      doc.setTextColor(85);
-      doc.text(label, x + gridLabelW, y, { align: "right" });
+      doc.setFontSize(detailFont);
+      doc.setTextColor(70);
+      doc.text(`${label}:`, baseX, textY);
 
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0);
-      const clipped = clipSingleLine(doc, value, groupW - gridLabelW - 4);
-      doc.text(clipped, x + gridLabelW + 2, y, { align: "left" });
+      const maxW = leftAreaW / 2 - labelW - 2;
+      const clipped = clipSingleLine(doc, value, maxW);
+      doc.text(clipped, baseX + labelW, textY);
     };
 
-    drawGridPair(contentX, row1Y, "GSM", firstNonEmpty(row.gsm));
-    drawGridPair(contentX + groupW, row1Y, "R/No.", row.reelNo);
-    drawGridPair(contentX, row2Y, "Weight", formatWeight(row.weightKg));
-    drawGridPair(contentX + groupW, row2Y, "Supp-Reel", firstNonEmpty(row.suppReel));
+    drawDetail("GSM", firstNonEmpty(row.gsm), 0, false);
+    drawDetail("R/No", row.reelNo, 0, true);
+    drawDetail("Weight", formatWeight(row.weightKg), 1, false);
+    drawDetail("Supp-Reel", firstNonEmpty(row.suppReel), 1, true);
 
-    const qrFrameW = Math.min(210, cardW * 0.88);
-    const qrFrameH = Math.min(180, lowerH * 0.86);
-    const qrFrameX = cardX + (cardW - qrFrameW) / 2;
-    const qrFrameY = lowerY + (lowerH - qrFrameH) / 2;
-    const framePad = 4.2;
-    const captionGap = 4;
-    const captionH = lineH(captionSize, 1.04);
-    const availW = qrFrameW - framePad * 2;
-    const availH = qrFrameH - framePad * 2;
-    const qrZoneH = availH - captionH - captionGap;
-    const qrSize = Math.max(12, Math.min(availW, qrZoneH, lowerH * 0.76));
-    const qrX = qrFrameX + framePad + (availW - qrSize) / 2;
-    const qrY = qrFrameY + framePad + Math.max(0, (qrZoneH - qrSize) / 2);
-    const captionY = qrFrameY + qrFrameH - framePad;
+    const captionSize = 12;
+    const captionGap = 5;
+    const captionH = captionSize * 0.3528 * 1.1;
+    const qrAvailW = qrAreaW;
+    const qrAvailH = qrAreaH - captionH - captionGap;
+    const qrSize = Math.max(30, Math.min(qrAvailW, qrAvailH));
+    const qrX = qrAreaX + (qrAreaW - qrSize) / 2;
+    const qrY = bodyTopY + (qrAvailH - qrSize) / 2;
+    const captionY = qrY + qrSize + captionGap + captionH * 0.6;
 
     try {
       const qrDataUrl = await QRCode.toDataURL(row.qrPayload, {
         errorCorrectionLevel: "M",
         margin: 1,
-        width: 1200,
+        width: 1000,
         color: {
           dark: "#000000",
           light: "#ffffff",
@@ -471,13 +439,13 @@ export async function downloadMrrReelLabelsPdf({
       doc.setFont("helvetica", "normal");
       doc.setFontSize(captionSize);
       doc.setTextColor(90);
-      doc.text("Scan for Reel", cardX + cardW / 2, captionY, { align: "center" });
+      doc.text("Scan for Reel", qrAreaX + qrAreaW / 2, captionY, { align: "center" });
     } catch (error) {
       console.warn("QR generation failed", error);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(qrFallbackSize);
+      doc.setFontSize(14);
       doc.setTextColor(120, 0, 0);
-      doc.text("QR Not Available", cardX + cardW / 2, lowerY + lowerH / 2, { align: "center" });
+      doc.text("QR Not Available", qrAreaX + qrAreaW / 2, bodyTopY + qrAreaH / 2, { align: "center" });
     }
   };
 
