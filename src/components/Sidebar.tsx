@@ -22,7 +22,8 @@ import {
   X,
   Search,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Camera
 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
@@ -128,6 +129,7 @@ const materialReceiptItems: NavItem[] = [
 
 const materialIssueItems: NavItem[] = [
   { name: "Material Issue Form", href: "/material-movement/issue", icon: ClipboardList },
+  { name: "Reel Issue/Return QR Scan", href: "/material-movement/reel-issue-return-scan", icon: Camera },
   { name: "Material Issue Master", href: "/material-movement/issue-master", icon: Database },
   { name: "Pending Daily Consumables Entry", href: "/material-movement/pending-non-job-issue", icon: FileText, countKey: "/material-movement/pending-non-job-issue" },
   { name: "Pending Daily Consumables Tally Posting", href: "/material-movement/pending-consumption-tally", icon: FileText, countKey: "/material-movement/pending-consumption-tally" },

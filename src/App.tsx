@@ -37,6 +37,7 @@ import { PendingNonJobMaterialIssue } from "./pages/PendingNonJobMaterialIssue";
 import { NonJobIssueMaster } from "./pages/NonJobIssueMaster";
 import { PendingConsumptionTallyPosting } from "./pages/PendingConsumptionTallyPosting";
 import { ReelIssueReturnForm } from "./pages/ReelIssueReturnForm";
+import { ReelIssueReturnScan } from "./pages/ReelIssueReturnScan";
 import { DailyConsumptionIssueForm } from "./pages/DailyConsumptionIssueForm";
 import { DailyConsumptionMaster } from "./pages/DailyConsumptionMaster";
 import { Suppliers } from "./pages/Suppliers";
@@ -252,6 +253,7 @@ export default function App() {
 
           {/* Material Movement */}
           <Route path="material-movement/reel-issue-return" element={<ReelIssueReturnForm />} />
+          <Route path="material-movement/reel-issue-return-scan" element={<ReelIssueReturnScan />} />
           <Route path="material-movement/daily-consumption" element={<DailyConsumptionIssueForm />} />
           <Route path="material-movement/daily-consumption-master" element={<DailyConsumptionMaster />} />
           <Route path="material-movement/issue" element={<MaterialIssueForm />} />
