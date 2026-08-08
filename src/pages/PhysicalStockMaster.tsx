@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 
 type ScanStatusFilter = "all" | "matched" | "mismatch";
@@ -21,31 +21,11 @@ function formatQty(value: number) {
 }
 
 export function PhysicalStockMaster() {
-  const [stockTakerLogs] = useData<StockTakerLog>("reel_stock_taker_logs", [], { cacheToLocalStorage: false });
+  const [stockTakerLogs, setStockTakerLogs] = useData<StockTakerLog>("reel_stock_taker_logs", [], { cacheToLocalStorage: false });
   const [scanSearchTerm, setScanSearchTerm] = useState("");
   const [scanDateFrom, setScanDateFrom] = useState("");
   const [scanDateTo, setScanDateTo] = useState("");
   const [scanStatusFilter, setScanStatusFilter] = useState<ScanStatusFilter>("all");
-
-  const scanSummary = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return stockTakerLogs.reduce(
-      (acc, entry) => {
-        const isMatched = Math.abs(Number(entry.variance || 0)) <= 0.5;
-        const scanDate = entry.timestamp ? new Date(entry.timestamp) : null;
-        if (isMatched) acc.matched += 1;
-        else acc.mismatch += 1;
-        if (scanDate && !Number.isNaN(scanDate.getTime())) {
-          scanDate.setHours(0, 0, 0, 0);
-          if (scanDate.getTime() === today.getTime()) acc.today += 1;
-        }
-        return acc;
-      },
-      { total: stockTakerLogs.length, matched: 0, mismatch: 0, today: 0 },
-    );
-  }, [stockTakerLogs]);
 
   const filteredScanLogs = useMemo(() => {
     const loweredSearch = scanSearchTerm.trim().toLowerCase();
@@ -80,30 +60,18 @@ export function PhysicalStockMaster() {
       .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
   }, [scanDateFrom, scanDateTo, scanSearchTerm, scanStatusFilter, stockTakerLogs]);
 
+  const handleClearData = async () => {
+    if (stockTakerLogs.length === 0) return;
+    const confirmed = window.confirm("Clear all physical stock scan records?");
+    if (!confirmed) return;
+    await setStockTakerLogs([]);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 border-b border-black pb-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-xl font-bold uppercase tracking-tight text-black">Physical Stock Master</h2>
         <div className="text-xs font-bold text-slate-700">Rows: {filteredScanLogs.length}</div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded border border-blue-300 bg-blue-50 p-4">
-          <div className="text-xs font-black uppercase text-blue-700">Total Scans</div>
-          <div className="mt-1 text-2xl font-black text-blue-900">{scanSummary.total}</div>
-        </div>
-        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
-          <div className="text-xs font-black uppercase text-emerald-700">Matched</div>
-          <div className="mt-1 text-2xl font-black text-emerald-900">{scanSummary.matched}</div>
-        </div>
-        <div className="rounded border border-rose-300 bg-rose-50 p-4">
-          <div className="text-xs font-black uppercase text-rose-700">Mismatched</div>
-          <div className="mt-1 text-2xl font-black text-rose-900">{scanSummary.mismatch}</div>
-        </div>
-        <div className="rounded border border-amber-300 bg-amber-50 p-4">
-          <div className="text-xs font-black uppercase text-amber-700">Today</div>
-          <div className="mt-1 text-2xl font-black text-amber-900">{scanSummary.today}</div>
-        </div>
       </div>
 
       <div className="rounded border border-black bg-white p-2">
@@ -175,6 +143,18 @@ export function PhysicalStockMaster() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="flex justify-end border-t border-black pt-3">
+        <button
+          type="button"
+          onClick={handleClearData}
+          disabled={stockTakerLogs.length === 0}
+          className="inline-flex h-[38px] items-center gap-2 rounded border border-rose-700 bg-rose-50 px-3 text-xs font-black uppercase text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Trash2 size={14} />
+          Clear Data
+        </button>
       </div>
     </div>
   );
