@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { MaterialReturn, MaterialReturnLine, MaterialReturnReelLine, Material, Production } from "../types";
+import { MaterialReturn, MaterialReturnLine, MaterialReturnReelLine, Material, Production, Setting } from "../types";
 import { Select } from "../components/Select";
-import { Trash2, Package, Layers, Disc, Search } from "lucide-react";
+import { Trash2, Package, Layers, Disc, Search, Download } from "lucide-react";
 import { formatDate } from "../lib/serial";
 import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
+import { downloadReturnReelQrPdf } from "../lib/returnReelQrPdf";
 
 function formatNumber(value: number) {
   return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,6 +37,7 @@ export function MaterialReturnMaster() {
   const [reelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [materials] = useData<Material>("materials", []);
   const [productions] = useData<Production>("productions", []);
+  const [settings] = useData<Setting>("settings", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -154,6 +156,7 @@ export function MaterialReturnMaster() {
           remarks: parent.remarks,
           specs,
           materialName: material?.name || "Unknown Material",
+          materialCode: material?.erpCode || "",
           returnType: parent.returnType,
           rate,
           value: Number(reel.weightKg || 0) * rate,
@@ -203,6 +206,25 @@ export function MaterialReturnMaster() {
       metrics,
     };
   }, [materialReturns, returnLines, reelLines, materialMap, returnLineMap, searchTerm, fromDate, toDate, typeFilter, materialFilter, jobFilter, reelFilter]);
+
+  const handleDownloadReturnQrPdf = async (row: any) => {
+    try {
+      await downloadReturnReelQrPdf({
+        returnNo: row.returnNo || "",
+        date: row.date || "",
+        jobNo: row.jobNo || "",
+        materialName: row.materialName || "",
+        materialCode: row.materialCode || "",
+        specs: row.specs || "",
+        reelNo: row.ourReelNo || "",
+        weight: Number(row.weightKg || 0),
+        setting: settings[0] || null,
+      });
+    } catch (error) {
+      console.error("Failed to generate return reel QR PDF", error);
+      alert(error instanceof Error ? error.message : "Failed to generate return reel QR PDF.");
+    }
+  };
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -422,12 +444,13 @@ export function MaterialReturnMaster() {
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase">Our Reel No</th>
                   <th className="px-4 py-3 text-right text-xs font-bold uppercase">Weight (KG)</th>
                   <th className="px-4 py-3 text-right text-xs font-bold uppercase">Value</th>
+                  <th className="px-4 py-3 text-center text-xs font-bold uppercase">QR PDF</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black">
                 {activeRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-slate-600 font-medium">No reel details found.</td>
+                    <td colSpan={8} className="px-6 py-8 text-center text-slate-600 font-medium">No reel details found.</td>
                   </tr>
                 ) : (
                   paginatedItems.map((row: any) => (
@@ -439,6 +462,17 @@ export function MaterialReturnMaster() {
                       <td className="px-4 py-3 text-sm font-black text-slate-900">{row.ourReelNo}</td>
                       <td className="px-4 py-3 text-sm text-right font-bold text-amber-600">{formatNumber(row.weightKg)}</td>
                       <td className="px-4 py-3 text-sm text-right font-bold text-cyan-700">{formatNumber(row.value)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadReturnQrPdf(row)}
+                          className="inline-flex items-center gap-1 rounded border border-indigo-700 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-800 hover:bg-indigo-100"
+                          title="Download return reel QR PDF"
+                        >
+                          <Download size={12} />
+                          QR PDF
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
