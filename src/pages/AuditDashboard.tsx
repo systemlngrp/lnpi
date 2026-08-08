@@ -123,6 +123,10 @@ function isInvoicePostedToTally(invoice: Invoice) {
   return String(invoice.tallyTimestamp || "").trim() !== "";
 }
 
+function isProductionPostedToTally(production: Production) {
+  return String(production.tallyTimestamp || "").trim() !== "";
+}
+
 export function AuditDashboard() {
   const [materialIn] = useData<MaterialIn>("material-in", []);
   const [materialIssues] = useData<MaterialIssue>("material-issues", []);
@@ -160,6 +164,7 @@ export function AuditDashboard() {
       (production) =>
         !production.cancelTimestamp &&
         production.status !== "Cancelled" &&
+        isProductionPostedToTally(production) &&
         Number(production.prodFromFFG || 0) > 0
     );
     const manufacturingProductionIdSet = new Set(manufacturingProductions.map((production) => production.id));
