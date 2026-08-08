@@ -168,19 +168,20 @@ export function ReelStockTakerReport() {
     lastScannedAtRef.current = 0;
   };
 
-  const saveScanEntry = async (row: (typeof availableRows)[number], physicalWeight: number) => {
-    const systemWeight = round2(row.availableWeight);
+  const saveScanEntry = async (args: { row?: (typeof availableRows)[number]; reelNo: string; physicalWeight: number }) => {
+    const systemWeight = round2(args.row?.availableWeight || 0);
+    const physicalWeight = round2(args.physicalWeight);
     const variance = round2(physicalWeight - systemWeight);
 
     const payload: StockTakerLog = {
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
-      reelNo: row.ourReelNo,
-      mrrNo: row.mrrNo,
-      erp: row.erp,
-      supplierName: row.supplierName,
+      reelNo: args.row?.ourReelNo || args.reelNo,
+      mrrNo: args.row?.mrrNo || "",
+      erp: args.row?.erp || "",
+      supplierName: args.row?.supplierName || "",
       systemAvailableWeight: systemWeight,
-      physicalWeight: round2(physicalWeight),
+      physicalWeight,
       variance,
     };
 
@@ -206,12 +207,15 @@ export function ReelStockTakerReport() {
     if (!reelNo) throw new Error("Reel number is required.");
 
     const row = rowByReelNo.get(reelNo.toLowerCase());
-    if (!row) throw new Error("Reel not found in Reelwise Stock with Available > 0.");
-    if (parsed.weight === null) {
-      throw new Error(source === "qr" ? "Physical weight was not found in the QR." : "Physical weight is required.");
+    if (parsed.weight === null && source === "manual") {
+      throw new Error("Physical weight is required.");
     }
 
-    await saveScanEntry(row, parsed.weight);
+    await saveScanEntry({
+      row,
+      reelNo,
+      physicalWeight: parsed.weight ?? 0,
+    });
   };
 
   const handleOpenScanner = async () => {
