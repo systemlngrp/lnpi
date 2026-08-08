@@ -129,6 +129,7 @@ import { ConversionCostMonthWiseReport } from "./pages/ConversionCostMonthWiseRe
 import { TruckStatusReport } from "./pages/TruckStatusReport";
 import { WastageReport } from "./pages/WastageReport";
 import { ReelStockTakerReport } from "./pages/ReelStockTakerReport";
+import { PhysicalStockMaster } from "./pages/PhysicalStockMaster";
 import { TruckStatusUpdate } from "./pages/TruckStatusUpdate";
 import { TruckLogs } from "./pages/TruckLogs";
 import { PublicDriverStatus } from "./pages/PublicDriverStatus";
@@ -341,6 +342,7 @@ export default function App() {
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
           <Route path="reports/reelwise-stock" element={<ReelwiseStockReport />} />
           <Route path="reports/reel-stock-taker" element={<ReelStockTakerReport />} />
+          <Route path="reports/physical-stock-master" element={<PhysicalStockMaster />} />
           <Route path="reports/jobwise-reel-consumption" element={<JobwiseReelConsumptionReport />} />
           <Route path="reports/jobs-in-progress" element={<JobsInProgressReport />} />
           <Route path="reports/efficiency" element={<EfficiencyReport />} />
