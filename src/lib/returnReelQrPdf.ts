@@ -82,13 +82,15 @@ export async function downloadReturnReelQrPdf({
 }: ReturnReelQrPdfArgs) {
   const doc = new jsPDF("p", "mm", "a4");
   const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const cardW = 160;
-  const cardH = 160;
+
+  const cardW = 82;
+  const cardH = 84;
   const cardX = (pageW - cardW) / 2;
-  const cardY = 18;
-  const contentX = cardX + 8;
-  const contentW = cardW - 16;
+  const cardY = 12;
+  const pad = 3.2;
+  const innerX = cardX + pad;
+  const innerW = cardW - pad * 2;
+  const rightX = cardX + cardW - pad;
 
   let logoDataUrl = "";
   const logoUrl = getLogoUrl(setting);
@@ -114,61 +116,100 @@ export async function downloadReturnReelQrPdf({
   });
 
   doc.setDrawColor(0);
-  doc.setLineWidth(0.35);
-  doc.rect(cardX, cardY, cardW, cardH);
+  doc.setTextColor(0);
+  doc.setLineWidth(0.55);
+  doc.roundedRect(cardX, cardY, cardW, cardH, 1.2, 1.2);
 
-  let y = cardY + 10;
+  const headerY = cardY + pad;
+  const headerH = 13.5;
+  const logoW = 14;
+  const logoH = 10;
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, "PNG", contentX, y, 28, 20, undefined, "FAST");
+    doc.addImage(logoDataUrl, "PNG", innerX, headerY + 1.4, logoW, logoH, undefined, "FAST");
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("LN", innerX + logoW / 2, headerY + 7, { align: "center" });
   }
 
+  const badgeW = 18;
+  const badgeH = 6.5;
+  const badgeX = rightX - badgeW;
+  const titleX = innerX + logoW + 2.5;
+  const titleW = badgeX - titleX - 2;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(19);
-  doc.setTextColor(0);
-  doc.text(clipSingleLine(doc, organizationName, 105), contentX + 42, y + 9);
+  doc.setFontSize(11);
+  doc.text(clipSingleLine(doc, organizationName, titleW), titleX, headerY + 6.8);
+  doc.setLineWidth(0.35);
+  doc.rect(badgeX, headerY + 3.1, badgeW, badgeH);
+  doc.setFontSize(7.7);
+  doc.text("RETURN", badgeX + badgeW / 2, headerY + 7.8, { align: "center" });
 
-  doc.setFontSize(15);
-  doc.rect(contentX + 42, y + 14, 34, 10);
-  doc.text("RETURN", contentX + 45, y + 21.2);
-  y += 36;
+  let y = headerY + headerH;
+  doc.setLineWidth(0.28);
+  doc.line(cardX, y, cardX + cardW, y);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10.5);
-  doc.text(`Return: ${firstNonEmpty(returnNo)}`, contentX, y);
-  doc.text(`Date: ${formatDate(date)}`, contentX + 60, y);
-  doc.text(`Code: ${firstNonEmpty(materialCode)}`, contentX + 112, y);
-  y += 8;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12.5);
-  const materialLines = doc.splitTextToSize(firstNonEmpty(materialName).toUpperCase(), contentW).slice(0, 2);
-  doc.text(materialLines, contentX, y);
-  y += materialLines.length * 6 + 2;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11.5);
-  const specLines = doc.splitTextToSize(firstNonEmpty(specs), contentW).slice(0, 2);
-  doc.text(specLines, contentX, y);
-  y += specLines.length * 6 + 5;
-
-  const qrSize = 68;
-  const qrX = cardX + cardW - qrSize - 9;
-  const qrY = y - 2;
-  const leftW = qrX - contentX - 5;
-
-  const drawDetail = (label: string, value: string, row: number) => {
-    const textY = y + row * 8;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(13);
-    doc.text(`${label}:`, contentX, textY);
+  const infoY = y + 4.8;
+  const infoFont = 6.7;
+  doc.setFontSize(infoFont);
+  const colW = innerW / 3;
+  const infoPairs = [
+    ["Doc", firstNonEmpty(returnNo)],
+    ["Date", formatDate(date)],
+    ["Code", firstNonEmpty(materialCode)],
+  ];
+  infoPairs.forEach(([label, value], index) => {
+    const x = innerX + index * colW;
     doc.setFont("helvetica", "bold");
-    doc.text(clipSingleLine(doc, value, leftW - 33), contentX + 33, textY);
+    doc.text(`${label}:`, x, infoY);
+    doc.setFont("helvetica", "normal");
+    doc.text(clipSingleLine(doc, value, colW - 9), x + 7.5, infoY);
+  });
+  y += 7.3;
+  doc.line(cardX, y, cardX + cardW, y);
+
+  y += 5.2;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.8);
+  const supplierLines = doc.splitTextToSize(firstNonEmpty(materialName).toUpperCase(), innerW).slice(0, 2);
+  doc.text(supplierLines, innerX, y);
+  y += supplierLines.length * 4.2 + 1.7;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.6);
+  const specLines = doc.splitTextToSize(firstNonEmpty(specs), innerW).slice(0, 2);
+  doc.text(specLines, innerX, y);
+  y += specLines.length * 3.8 + 2.2;
+  doc.line(cardX, y, cardX + cardW, y);
+  y += 4.5;
+
+  const qrBoxSize = 35;
+  const qrBoxX = rightX - qrBoxSize;
+  const qrBoxY = y - 1.5;
+  const detailX = innerX;
+  const labelW = 18;
+  const valueX = detailX + labelW;
+  const valueW = qrBoxX - valueX - 2.5;
+
+  const drawDetail = (label: string, value: string, row: number, important = false) => {
+    const textY = y + row * 6.1;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(important ? 8.8 : 7.8);
+    doc.text(`${label}:`, detailX, textY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(important ? 9.2 : 8.3);
+    doc.text(clipSingleLine(doc, value, valueW), valueX, textY);
   };
 
-  drawDetail("Job", firstNonEmpty(jobNo), 0);
-  drawDetail("R/No.", firstNonEmpty(reelNo), 1);
-  drawDetail("Kgs", formatWeight(Number(weight || 0)), 2);
+  drawDetail("GSM.", firstNonEmpty(String(specs || "").match(/(\d+(?:\.\d+)?)\s*GSM/i)?.[1]), 0);
+  drawDetail("R/NO.", firstNonEmpty(reelNo), 1, true);
+  drawDetail("Kgs.", formatWeight(Number(weight || 0)), 2, true);
+  drawDetail("Job", firstNonEmpty(jobNo), 3);
 
+  doc.setLineWidth(0.35);
+  doc.rect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize);
+  const qrPad = 1.4;
+  const qrSize = qrBoxSize - qrPad * 2;
   try {
     const qrDataUrl = await QRCode.toDataURL(qrPayload, {
       errorCorrectionLevel: "M",
@@ -176,23 +217,18 @@ export async function downloadReturnReelQrPdf({
       width: 900,
       color: { dark: "#000000", light: "#ffffff" },
     });
-    doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize, undefined, "FAST");
+    doc.addImage(qrDataUrl, "PNG", qrBoxX + qrPad, qrBoxY + qrPad, qrSize, qrSize, undefined, "FAST");
   } catch (error) {
     console.warn("Return reel QR generation failed", error);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.setTextColor(120, 0, 0);
-    doc.text("QR Not Available", qrX + qrSize / 2, qrY + qrSize / 2, { align: "center" });
+    doc.setFontSize(7);
+    doc.text("QR N/A", qrBoxX + qrBoxSize / 2, qrBoxY + qrBoxSize / 2, { align: "center" });
   }
 
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.2);
-  doc.rect(qrX - 2, qrY - 2, qrSize + 4, qrSize + 4);
-
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(90);
-  doc.text("Scan for Return Reel", pageW / 2, Math.min(cardY + cardH - 8, pageH - 10), { align: "center" });
+  doc.setFontSize(5.8);
+  doc.setTextColor(80);
+  doc.text("Scan for Return Reel", cardX + cardW / 2, cardY + cardH - 3.2, { align: "center" });
 
   doc.save(`${safeFileName(`${reelNo}_return`)}.pdf`);
 }
