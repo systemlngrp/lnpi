@@ -37,6 +37,17 @@ type ParsedQrPayload = {
 };
 
 function parsePositiveWeight(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+
+  if (typeof value === "string") {
+    const cleaned = value.trim();
+    const match = cleaned.match(/([0-9]+(?:\.[0-9]+)?)/);
+    if (!match) return null;
+    const num = Number(match[1]);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    return round2(num);
+  }
+
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return null;
   return round2(num);
@@ -47,15 +58,21 @@ function parseQrPayload(rawValue: string): ParsedQrPayload {
   if (!text) return { reelNo: "", weight: null };
 
   const reelKeys = ["reelNo", "reel", "ourReelNo", "reel_no", "reelno"];
-  const weightKeys = ["weight", "physicalWeight", "wt", "kg"];
+  const weightKeys = ["weight", "physicalWeight", "availableWeight", "availableWeightKg", "wt", "kg"];
 
   if (text.startsWith("{") || text.startsWith("[")) {
     try {
       const parsed = JSON.parse(text) as Record<string, unknown>;
       const reelNo = String(
-        reelKeys.map((key) => parsed?.[key]).find((v) => typeof v === "string" && String(v).trim()) || "",
+        reelKeys
+          .map((key) => parsed?.[key])
+          .find((v) => typeof v === "string" && String(v).trim()) || "",
       ).trim();
-      const weight = parsePositiveWeight(weightKeys.map((key) => parsed?.[key]).find((v) => v !== undefined));
+      const weight = parsePositiveWeight(
+        weightKeys
+          .map((key) => parsed?.[key])
+          .find((v) => v !== undefined && v !== null && String(v).trim() !== ""),
+      );
       if (reelNo) {
         return { reelNo, weight };
       }
@@ -65,7 +82,7 @@ function parseQrPayload(rawValue: string): ParsedQrPayload {
   }
 
   const reelByLabel = text.match(/(?:reel\s*no|our\s*reel\s*no|reel_no|reelno)\s*[:=]\s*([^|,;\n]+)/i);
-  const weightByLabel = text.match(/(?:weight|physical\s*weight|wt|kg)\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)/i);
+  const weightByLabel = text.match(/(?:weight|physical\s*weight|available\s*weight|wt|kg)\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)/i);
   if (reelByLabel?.[1]) {
     return {
       reelNo: reelByLabel[1].trim(),
