@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Search, Scale, Trash2, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { buildReelStockRows } from "../lib/reelStock";
+import { shouldBlockDuplicateReelScan } from "../lib/reelStockTakerDuplicate";
 import type {
   Material,
   MaterialIn,
@@ -113,7 +114,7 @@ export function ReelStockTakerReport() {
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", [], { cacheToLocalStorage: false });
   const [suppliers] = useData<Supplier>("suppliers", [], { cacheToLocalStorage: false });
 
-  const [logs, setLogs] = useData<StockTakerLog>("reel-stock-taker-logs", []);
+  const [logs, setLogs] = useData<StockTakerLog>("reel_stock_taker_logs", []);
   const [scanValue, setScanValue] = useState("");
   const [physicalWeightInput, setPhysicalWeightInput] = useState("");
   const [matchedReelNo, setMatchedReelNo] = useState("");
@@ -199,7 +200,13 @@ export function ReelStockTakerReport() {
       variance,
     };
 
-    await setLogs((prev) => [payload, ...prev]);
+    const duplicateBlocked = shouldBlockDuplicateReelScan(logs, payload.reelNo, new Date());
+    if (duplicateBlocked) {
+      throw new Error(`Reel ${payload.reelNo} was already scanned recently. Please wait before scanning it again.`);
+    }
+
+    const nextLogs = [payload, ...logs];
+    await setLogs(nextLogs);
     setPhysicalWeightInput("");
     setScanValue("");
     setMatchedReelNo("");
@@ -225,8 +232,12 @@ export function ReelStockTakerReport() {
     if (autoSave) {
       const physicalWeight = parsed.weight ?? Number(physicalWeightInput || 0);
       if (Number.isFinite(physicalWeight) && physicalWeight > 0) {
-        await saveScanEntry(row, physicalWeight);
-        return `Scanned ${reelNo}. Saved successfully (${formatQty(physicalWeight)} KG).`;
+        try {
+          await saveScanEntry(row, physicalWeight);
+          return `Scanned ${reelNo}. Saved successfully (${formatQty(physicalWeight)} KG).`;
+        } catch (error) {
+          return error instanceof Error ? error.message : `Scanned ${reelNo}. Could not save record.`;
+        }
       }
       return `Scanned ${reelNo}. Enter physical weight and click Compare & Save.`;
     }
@@ -257,7 +268,12 @@ export function ReelStockTakerReport() {
       return;
     }
 
-    await saveScanEntry(matchedRow, physicalWeight);
+    try {
+      await saveScanEntry(matchedRow, physicalWeight);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to save stock-taker entry.");
+      return;
+    }
   };
 
   const handleOpenScanner = async () => {

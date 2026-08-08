@@ -2766,6 +2766,8 @@ function entityPermissionKey(entity) {
     case "material_in":
     case "material_in_packing_slips":
       return "/material-in";
+    case "reel_stock_taker_logs":
+      return "/material-in";
     case "indent_lines":
     case "indents":
       return "/indent";
@@ -4258,6 +4260,21 @@ async function initDb(retries = 5) {
           \`updateTimestamp\` VARCHAR(255)
         )
       `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`reel_stock_taker_logs\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`timestamp\` VARCHAR(255) NOT NULL,
+          \`reelNo\` VARCHAR(100) NOT NULL,
+          \`mrrNo\` VARCHAR(100),
+          \`erp\` VARCHAR(100),
+          \`supplierName\` VARCHAR(255),
+          \`systemAvailableWeight\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`physicalWeight\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`variance\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
       console.log("[DB] Database tables initialized successfully.");
       const migrations = [
         { table: "items", column: "groupId", type: "VARCHAR(36) NOT NULL" },
@@ -5471,6 +5488,25 @@ const createHandlers = (tableName) => {
           }
           data.machineName = normalizeMachineName(String(data.machineName || ""));
         }
+        if (tableName === "reel_stock_taker_logs") {
+          const reelNo = String(data.reelNo || "").trim();
+          if (!reelNo) {
+            return res.status(400).json({ error: "Reel number is required." });
+          }
+          const cooldownWindowMs = 5 * 60 * 1e3;
+          const [recentRows] = await db.query(
+            "SELECT `id`, `timestamp` FROM `reel_stock_taker_logs` WHERE LOWER(TRIM(`reelNo`)) = LOWER(TRIM(?)) ORDER BY `timestamp` DESC LIMIT 20",
+            [reelNo]
+          );
+          const now = Date.now();
+          const duplicate = recentRows.some((row) => {
+            const timestamp = row?.timestamp ? new Date(String(row.timestamp)).getTime() : Number.NaN;
+            return Number.isFinite(timestamp) && now - timestamp <= cooldownWindowMs;
+          });
+          if (duplicate) {
+            return res.status(409).json({ error: `Reel ${reelNo} was already scanned recently.` });
+          }
+        }
         if (tableName === "orders") {
           try {
             const orderQty = Number(data.qty || 0);
@@ -6363,7 +6399,7 @@ app.get("/api/truck-status-logs", async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "audit_dashboard_snapshots"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "audit_dashboard_snapshots", "reel_stock_taker_logs"];
 app.get("/api/tally-sync-debug", (req, res) => {
   const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();
   return res.json({
