@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, CheckCircle2, Keyboard, Save, Search, X } from "lucide-react";
+import { Camera, Keyboard, Save, Search, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { buildReelStockRows } from "../lib/reelStock";
 import { shouldBlockDuplicateReelScan } from "../lib/reelStockTakerDuplicate";
@@ -29,9 +29,6 @@ type ParsedQrPayload = {
   weight: number | null;
 };
 
-type ProcessedScan = StockTakerLog & {
-  status: "Matched" | "Mismatch";
-};
 
 function round2(value: number) {
   return Number(Number(value || 0).toFixed(2));
@@ -123,7 +120,7 @@ export function ReelStockTakerReport() {
   const [scannerError, setScannerError] = useState("");
   const [manualEntryAvailable, setManualEntryAvailable] = useState(false);
   const [showManualFields, setShowManualFields] = useState(false);
-  const [processedScan, setProcessedScan] = useState<ProcessedScan | null>(null);
+  const [processedScan, setProcessedScan] = useState<StockTakerLog | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimerRef = useRef<number | null>(null);
@@ -190,10 +187,7 @@ export function ReelStockTakerReport() {
     }
 
     await setLogs([payload, ...logs]);
-    setProcessedScan({
-      ...payload,
-      status: Math.abs(payload.variance) <= 0.5 ? "Matched" : "Mismatch",
-    });
+    setProcessedScan(payload);
     setManualReelNo("");
     setManualPhysicalWeight("");
     setManualEntryAvailable(false);
@@ -335,20 +329,12 @@ export function ReelStockTakerReport() {
 
       {processedScan ? (
         <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-black pb-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 text-sm font-black uppercase text-emerald-800">
-                <CheckCircle2 size={17} />
-                {processedScan.status}
-              </div>
-              <div className="mt-1 text-2xl font-black text-black">{processedScan.reelNo}</div>
-            </div>
-            <div className={`rounded border px-3 py-2 text-sm font-black ${processedScan.status === "Matched" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-rose-600 bg-rose-50 text-rose-800"}`}>
-              Variance: {formatQty(processedScan.variance)} KG
-            </div>
+          <div className="border-b border-black pb-3">
+            <div className="text-[10px] font-black uppercase text-slate-600">Reel No</div>
+            <div className="mt-1 text-2xl font-black text-black">{processedScan.reelNo}</div>
           </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded border border-black bg-slate-50 p-3">
               <div className="text-[10px] font-black uppercase text-slate-600">MRR</div>
               <div className="mt-1 text-sm font-bold text-black">{processedScan.mrrNo || "-"}</div>
@@ -360,10 +346,6 @@ export function ReelStockTakerReport() {
             <div className="rounded border border-black bg-slate-50 p-3">
               <div className="text-[10px] font-black uppercase text-slate-600">Supplier</div>
               <div className="mt-1 text-sm font-bold text-black">{processedScan.supplierName || "-"}</div>
-            </div>
-            <div className="rounded border border-emerald-700 bg-emerald-50 p-3">
-              <div className="text-[10px] font-black uppercase text-emerald-700">Book Weight</div>
-              <div className="mt-1 text-lg font-black text-emerald-900">{formatQty(processedScan.systemAvailableWeight)} KG</div>
             </div>
             <div className="rounded border border-blue-700 bg-blue-50 p-3">
               <div className="text-[10px] font-black uppercase text-blue-700">Physical Weight</div>
