@@ -5493,18 +5493,20 @@ const createHandlers = (tableName) => {
           if (!reelNo) {
             return res.status(400).json({ error: "Reel number is required." });
           }
-          const cooldownWindowMs = 5 * 60 * 1e3;
           const [recentRows] = await db.query(
-            "SELECT `id`, `timestamp` FROM `reel_stock_taker_logs` WHERE LOWER(TRIM(`reelNo`)) = LOWER(TRIM(?)) ORDER BY `timestamp` DESC LIMIT 20",
+            "SELECT `id`, `timestamp` FROM `reel_stock_taker_logs` WHERE LOWER(TRIM(`reelNo`)) = LOWER(TRIM(?)) ORDER BY `timestamp` DESC LIMIT 50",
             [reelNo]
           );
-          const now = Date.now();
+          const today = /* @__PURE__ */ new Date();
+          today.setHours(0, 0, 0, 0);
           const duplicate = recentRows.some((row) => {
-            const timestamp = row?.timestamp ? new Date(String(row.timestamp)).getTime() : Number.NaN;
-            return Number.isFinite(timestamp) && now - timestamp <= cooldownWindowMs;
+            const timestamp = row?.timestamp ? new Date(String(row.timestamp)) : null;
+            if (!timestamp || Number.isNaN(timestamp.getTime())) return false;
+            timestamp.setHours(0, 0, 0, 0);
+            return timestamp.getTime() === today.getTime();
           });
           if (duplicate) {
-            return res.status(409).json({ error: `Reel ${reelNo} was already scanned recently.` });
+            return res.status(409).json({ error: `Reel ${reelNo} was already scanned today.` });
           }
         }
         if (tableName === "orders") {

@@ -7,19 +7,23 @@ export function shouldBlockDuplicateReelScan(
   existingLogs: ReelScanLike[],
   reelNo: string,
   now: Date = new Date(),
-  cooldownMs = 5 * 60 * 1000,
 ): boolean {
   const normalizedReelNo = String(reelNo || "").trim().toLowerCase();
   if (!normalizedReelNo) return false;
 
-  const nowTs = now.getTime();
+  const nowDate = new Date(now);
+  nowDate.setHours(0, 0, 0, 0);
+
   return existingLogs.some((entry) => {
     const entryReelNo = String(entry?.reelNo || "").trim().toLowerCase();
     if (entryReelNo !== normalizedReelNo) return false;
 
-    const entryTimestamp = entry?.timestamp ? new Date(entry.timestamp).getTime() : Number.NaN;
-    if (!Number.isFinite(entryTimestamp)) return false;
+    const entryTimestamp = entry?.timestamp ? new Date(entry.timestamp) : null;
+    if (!entryTimestamp || Number.isNaN(entryTimestamp.getTime())) return false;
 
-    return nowTs - entryTimestamp <= cooldownMs;
+    const entryDate = new Date(entryTimestamp);
+    entryDate.setHours(0, 0, 0, 0);
+
+    return entryDate.getTime() === nowDate.getTime();
   });
 }

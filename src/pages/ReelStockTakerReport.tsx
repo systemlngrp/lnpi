@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Search, Scale, Trash2, X } from "lucide-react";
+import { Camera, CheckCircle2, Keyboard, Save, Search, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { buildReelStockRows } from "../lib/reelStock";
 import { shouldBlockDuplicateReelScan } from "../lib/reelStockTakerDuplicate";
@@ -24,6 +24,15 @@ type StockTakerLog = {
   variance: number;
 };
 
+type ParsedQrPayload = {
+  reelNo: string;
+  weight: number | null;
+};
+
+type ProcessedScan = StockTakerLog & {
+  status: "Matched" | "Mismatch";
+};
+
 function round2(value: number) {
   return Number(Number(value || 0).toFixed(2));
 }
@@ -31,11 +40,6 @@ function round2(value: number) {
 function formatQty(value: number) {
   return round2(value).toFixed(2);
 }
-
-type ParsedQrPayload = {
-  reelNo: string;
-  weight: number | null;
-};
 
 function parsePositiveWeight(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -74,9 +78,7 @@ function parseQrPayload(rawValue: string): ParsedQrPayload {
           .map((key) => parsed?.[key])
           .find((v) => v !== undefined && v !== null && String(v).trim() !== ""),
       );
-      if (reelNo) {
-        return { reelNo, weight };
-      }
+      if (reelNo) return { reelNo, weight };
     } catch {
       // Fallback to text parsing.
     }
@@ -113,14 +115,15 @@ export function ReelStockTakerReport() {
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", [], { cacheToLocalStorage: false });
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", [], { cacheToLocalStorage: false });
   const [suppliers] = useData<Supplier>("suppliers", [], { cacheToLocalStorage: false });
-
   const [logs, setLogs] = useData<StockTakerLog>("reel_stock_taker_logs", []);
-  const [scanValue, setScanValue] = useState("");
-  const [physicalWeightInput, setPhysicalWeightInput] = useState("");
-  const [matchedReelNo, setMatchedReelNo] = useState("");
+
+  const [manualReelNo, setManualReelNo] = useState("");
+  const [manualPhysicalWeight, setManualPhysicalWeight] = useState("");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
-  const [scannerStatus, setScannerStatus] = useState("");
+  const [manualEntryAvailable, setManualEntryAvailable] = useState(false);
+  const [showManualFields, setShowManualFields] = useState(false);
+  const [processedScan, setProcessedScan] = useState<ProcessedScan | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimerRef = useRef<number | null>(null);
@@ -141,21 +144,10 @@ export function ReelStockTakerReport() {
   const rowByReelNo = useMemo(() => {
     const map = new Map<string, (typeof availableRows)[number]>();
     availableRows.forEach((row) => {
-      map.set(String(row.ourReelNo || "").trim(), row);
+      map.set(String(row.ourReelNo || "").trim().toLowerCase(), row);
     });
     return map;
   }, [availableRows]);
-
-  const matchedRow = useMemo(() => {
-    return rowByReelNo.get(matchedReelNo);
-  }, [matchedReelNo, rowByReelNo]);
-
-  const stats = useMemo(() => {
-    const total = logs.length;
-    const matched = logs.filter((entry) => Math.abs(entry.variance) <= 0.5).length;
-    const mismatch = total - matched;
-    return { total, matched, mismatch };
-  }, [logs]);
 
   const stopScanner = () => {
     if (scanTimerRef.current !== null) {
@@ -169,17 +161,9 @@ export function ReelStockTakerReport() {
     }
   };
 
-  useEffect(() => {
-    return () => {
-      stopScanner();
-    };
-  }, []);
-
   const closeScanner = () => {
     stopScanner();
     setIsScannerOpen(false);
-    setScannerError("");
-    setScannerStatus("");
     lastScannedCodeRef.current = "";
     lastScannedAtRef.current = 0;
   };
@@ -200,97 +184,58 @@ export function ReelStockTakerReport() {
       variance,
     };
 
-    const duplicateBlocked = shouldBlockDuplicateReelScan(logs, payload.reelNo, new Date());
-    if (duplicateBlocked) {
-      throw new Error(`Reel ${payload.reelNo} was already scanned recently. Please wait before scanning it again.`);
+    if (shouldBlockDuplicateReelScan(logs, payload.reelNo, new Date())) {
+      throw new Error(`Reel ${payload.reelNo} was already scanned today.`);
     }
 
-    const nextLogs = [payload, ...logs];
-    await setLogs(nextLogs);
-    setPhysicalWeightInput("");
-    setScanValue("");
-    setMatchedReelNo("");
+    await setLogs([payload, ...logs]);
+    setProcessedScan({
+      ...payload,
+      status: Math.abs(payload.variance) <= 0.5 ? "Matched" : "Mismatch",
+    });
+    setManualReelNo("");
+    setManualPhysicalWeight("");
+    setManualEntryAvailable(false);
+    setShowManualFields(false);
+    setScannerError("");
   };
 
-  const applyScannedReel = async (rawQrValue: string, autoSave: boolean) => {
+  const handleScanValue = async (rawQrValue: string, source: "qr" | "manual") => {
     const parsed = parseQrPayload(rawQrValue);
     const reelNo = String(parsed.reelNo || "").trim();
-    if (!reelNo) return "";
+    if (!reelNo) throw new Error("Reel number is required.");
 
-    const row = rowByReelNo.get(reelNo);
-    if (!row) {
-      return "Reel not found in Reelwise Stock with Available > 0.";
+    const row = rowByReelNo.get(reelNo.toLowerCase());
+    if (!row) throw new Error("Reel not found in Reelwise Stock with Available > 0.");
+    if (parsed.weight === null) {
+      throw new Error(source === "qr" ? "Physical weight was not found in the QR." : "Physical weight is required.");
     }
 
-    setScanValue(reelNo);
-    setMatchedReelNo(reelNo);
-
-    if (parsed.weight !== null) {
-      setPhysicalWeightInput(String(parsed.weight));
-    }
-
-    if (autoSave) {
-      const physicalWeight = parsed.weight ?? Number(physicalWeightInput || 0);
-      if (Number.isFinite(physicalWeight) && physicalWeight > 0) {
-        try {
-          await saveScanEntry(row, physicalWeight);
-          return `Scanned ${reelNo}. Saved successfully (${formatQty(physicalWeight)} KG).`;
-        } catch (error) {
-          return error instanceof Error ? error.message : `Scanned ${reelNo}. Could not save record.`;
-        }
-      }
-      return `Scanned ${reelNo}. Enter physical weight and click Compare & Save.`;
-    }
-
-    if (parsed.weight !== null) {
-      return `Scanned ${reelNo}. Weight ${formatQty(parsed.weight)} KG captured from QR.`;
-    }
-    return `Scanned ${reelNo}. Reel fetched.`;
-  };
-
-  const handleScan = () => {
-    void (async () => {
-      const message = await applyScannedReel(scanValue, false);
-      if (message && message.includes("not found")) {
-        alert(message);
-      }
-    })();
-  };
-
-  const handleSave = async () => {
-    if (!matchedRow) {
-      alert("Please scan a valid reel QR first.");
-      return;
-    }
-    const physicalWeight = Number(physicalWeightInput || 0);
-    if (!Number.isFinite(physicalWeight) || physicalWeight <= 0) {
-      alert("Please enter valid physical weight.");
-      return;
-    }
-
-    try {
-      await saveScanEntry(matchedRow, physicalWeight);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Unable to save stock-taker entry.");
-      return;
-    }
+    await saveScanEntry(row, parsed.weight);
   };
 
   const handleOpenScanner = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      alert("Camera access is not supported on this browser/device.");
+      closeScanner();
+      setScannerError("Camera access is not supported on this browser/device.");
+      setManualEntryAvailable(true);
       return;
     }
-
-    setIsScannerOpen(true);
-    setScannerError("");
-    setScannerStatus("Point camera at QR code...");
 
     const BarcodeDetectorCtor = (window as Window & { BarcodeDetector?: new (options?: { formats?: string[] }) => { detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>> } }).BarcodeDetector;
     if (!BarcodeDetectorCtor) {
-      setScannerError("QR scanner is not supported on this browser. Please use Chrome on mobile or paste reel number manually.");
+      closeScanner();
+      setScannerError("QR scanner is not supported on this browser.");
+      setManualEntryAvailable(true);
       return;
     }
+
+    stopScanner();
+    setProcessedScan(null);
+    setScannerError("");
+    setManualEntryAvailable(false);
+    setShowManualFields(false);
+    setIsScannerOpen(true);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -314,18 +259,18 @@ export function ReelStockTakerReport() {
           const scanned = codes?.[0]?.rawValue;
           if (!scanned) return;
 
-          const reelNo = String(scanned || "").trim();
           const now = Date.now();
-          // Prevent repeat-trigger from same QR across nearby frames.
-          if (reelNo === lastScannedCodeRef.current && now - lastScannedAtRef.current < 1500) {
-            return;
-          }
-          lastScannedCodeRef.current = reelNo;
+          if (scanned === lastScannedCodeRef.current && now - lastScannedAtRef.current < 1500) return;
+          lastScannedCodeRef.current = scanned;
           lastScannedAtRef.current = now;
 
-          const message = await applyScannedReel(reelNo, true);
-          if (message) {
-            setScannerStatus(message);
+          try {
+            await handleScanValue(scanned, "qr");
+            closeScanner();
+          } catch (error) {
+            closeScanner();
+            setScannerError(error instanceof Error ? error.message : "Unable to process scanned reel.");
+            setManualEntryAvailable(true);
           }
         } catch {
           // Keep scanning if one frame fails to decode.
@@ -333,106 +278,160 @@ export function ReelStockTakerReport() {
       }, 350);
     } catch (error) {
       console.error(error);
+      closeScanner();
       setScannerError("Unable to open camera. Please allow camera permission and try again.");
-      stopScanner();
+      setManualEntryAvailable(true);
     }
   };
 
-  const clearLogs = async () => {
-    const confirmed = window.confirm("Clear all stock taker records?");
-    if (!confirmed) return;
-    await setLogs(() => []);
+  useEffect(() => {
+    void handleOpenScanner();
+    return () => {
+      stopScanner();
+    };
+    // Open once on page load; rows/logs continue to update through useData for actual saves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleManualSave = async () => {
+    const physicalWeight = parsePositiveWeight(manualPhysicalWeight);
+    if (physicalWeight === null) {
+      alert("Please enter valid physical weight.");
+      return;
+    }
+
+    try {
+      await handleScanValue(JSON.stringify({ reelNo: manualReelNo, weight: physicalWeight }), "manual");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to save stock-taker entry.");
+    }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-black pb-3">
-        <h2 className="text-xl font-bold text-black uppercase tracking-tight">Reel Stock Taker</h2>
+      <div className="flex flex-col gap-3 border-b border-black pb-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-xl font-bold uppercase tracking-tight text-black">Reel Stock Taker</h2>
+        <button
+          type="button"
+          onClick={() => {
+            void handleOpenScanner();
+          }}
+          className="inline-flex h-[38px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+        >
+          <Camera size={16} />
+          Scan QR
+        </button>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded border border-blue-300 bg-blue-50 p-4">
-          <div className="text-xs font-black uppercase text-blue-700">Total Scans</div>
-          <div className="mt-1 text-2xl font-black text-blue-900">{stats.total}</div>
+      {scannerError ? (
+        <div className="rounded border border-rose-300 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
+          {scannerError}
         </div>
-        <div className="rounded border border-emerald-300 bg-emerald-50 p-4">
-          <div className="text-xs font-black uppercase text-emerald-700">{"Matched (<= 0.50 KG)"}</div>
-          <div className="mt-1 text-2xl font-black text-emerald-900">{stats.matched}</div>
-        </div>
-        <div className="rounded border border-rose-300 bg-rose-50 p-4">
-          <div className="text-xs font-black uppercase text-rose-700">Mismatch</div>
-          <div className="mt-1 text-2xl font-black text-rose-900">{stats.mismatch}</div>
-        </div>
-      </div>
+      ) : null}
 
-      <div className="rounded border border-black bg-white p-3 space-y-3">
-        <div className="grid gap-3 md:grid-cols-[1.5fr_1fr_auto_auto] items-end">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              value={scanValue}
-              onChange={(e) => setScanValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleScan();
-                }
-              }}
-              placeholder="Scan reel QR here (reel number)"
-              className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-            />
+      {processedScan ? (
+        <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-black pb-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 text-sm font-black uppercase text-emerald-800">
+                <CheckCircle2 size={17} />
+                {processedScan.status}
+              </div>
+              <div className="mt-1 text-2xl font-black text-black">{processedScan.reelNo}</div>
+            </div>
+            <div className={`rounded border px-3 py-2 text-sm font-black ${processedScan.status === "Matched" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-rose-600 bg-rose-50 text-rose-800"}`}>
+              Variance: {formatQty(processedScan.variance)} KG
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-black uppercase text-black mb-1">Physical Weight (KG)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={physicalWeightInput}
-              onChange={(e) => setPhysicalWeightInput(e.target.value)}
-              className="w-full rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-            />
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded border border-black bg-slate-50 p-3">
+              <div className="text-[10px] font-black uppercase text-slate-600">MRR</div>
+              <div className="mt-1 text-sm font-bold text-black">{processedScan.mrrNo || "-"}</div>
+            </div>
+            <div className="rounded border border-black bg-slate-50 p-3">
+              <div className="text-[10px] font-black uppercase text-slate-600">ERP</div>
+              <div className="mt-1 text-sm font-bold text-black">{processedScan.erp || "-"}</div>
+            </div>
+            <div className="rounded border border-black bg-slate-50 p-3">
+              <div className="text-[10px] font-black uppercase text-slate-600">Supplier</div>
+              <div className="mt-1 text-sm font-bold text-black">{processedScan.supplierName || "-"}</div>
+            </div>
+            <div className="rounded border border-emerald-700 bg-emerald-50 p-3">
+              <div className="text-[10px] font-black uppercase text-emerald-700">Book Weight</div>
+              <div className="mt-1 text-lg font-black text-emerald-900">{formatQty(processedScan.systemAvailableWeight)} KG</div>
+            </div>
+            <div className="rounded border border-blue-700 bg-blue-50 p-3">
+              <div className="text-[10px] font-black uppercase text-blue-700">Physical Weight</div>
+              <div className="mt-1 text-lg font-black text-blue-900">{formatQty(processedScan.physicalWeight)} KG</div>
+            </div>
           </div>
-
-          <button
-            type="button"
-            onClick={handleScan}
-            className="h-[42px] rounded border border-black bg-white px-3 text-sm font-bold text-black hover:bg-slate-50"
-          >
-            Fetch Reel
-          </button>
 
           <button
             type="button"
             onClick={() => {
               void handleOpenScanner();
             }}
-            className="inline-flex h-[42px] items-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+            className="mt-4 inline-flex h-[42px] w-full items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
           >
-            <Camera size={15} />
-            Open QR Scan
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            className="inline-flex h-[42px] items-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100"
-          >
-            <Scale size={15} />
-            Compare & Save
+            <Camera size={16} />
+            Scan QR
           </button>
         </div>
+      ) : (
+        <div className="rounded border-2 border-black bg-white p-6 text-center shadow-sm">
+          <Camera className="mx-auto text-slate-700" size={42} />
+        </div>
+      )}
 
-        {matchedRow ? (
-          <div className="rounded border border-emerald-500 bg-emerald-50 p-3 text-sm">
-            <div className="font-black text-emerald-900">Scanned Reel: {matchedRow.ourReelNo}</div>
-            <div className="mt-1 text-black">MRR: {matchedRow.mrrNo} | ERP: {matchedRow.erp} | Supplier: {matchedRow.supplierName || "-"}</div>
-            <div className="mt-1 text-black font-bold">System Available Weight: {formatQty(matchedRow.availableWeight)} KG</div>
-          </div>
-        ) : null}
-      </div>
+      {manualEntryAvailable ? (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setShowManualFields((value) => !value)}
+            className="inline-flex h-[38px] items-center gap-2 rounded border border-black bg-white px-3 text-sm font-bold text-black hover:bg-slate-50"
+          >
+            <Keyboard size={16} />
+            Manual Entry
+          </button>
+
+          {showManualFields ? (
+            <div className="rounded border border-black bg-white p-3">
+              <div className="grid gap-3 md:grid-cols-[1.5fr_1fr_auto] md:items-end">
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    value={manualReelNo}
+                    onChange={(e) => setManualReelNo(e.target.value)}
+                    placeholder="Reel Number"
+                    className="w-full rounded border-2 border-black py-2.5 pl-9 pr-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase text-black">Physical Weight</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={manualPhysicalWeight}
+                    onChange={(e) => setManualPhysicalWeight(e.target.value)}
+                    className="w-full rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualSave}
+                  className="inline-flex h-[42px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100"
+                >
+                  <Save size={15} />
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {isScannerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -448,93 +447,10 @@ export function ReelStockTakerReport() {
                 <X size={14} />
               </button>
             </div>
-
-            {scannerError ? (
-              <div className="rounded border border-rose-300 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
-                {scannerError}
-              </div>
-            ) : (
-              <>
-                <video ref={videoRef} className="h-[320px] w-full rounded border border-black object-cover" autoPlay muted playsInline />
-                <div className="mt-2 rounded border border-emerald-300 bg-emerald-50 p-2 text-xs font-bold text-emerald-800">
-                  {scannerStatus || "Point camera at QR code..."}
-                </div>
-                <div className="mt-2 text-xs font-semibold text-slate-700">
-                  Scanner stays open after each scan. QR can contain reel only or reel + weight.
-                </div>
-              </>
-            )}
+            <video ref={videoRef} className="h-[320px] w-full rounded border border-black object-cover" autoPlay muted playsInline />
           </div>
         </div>
       ) : null}
-
-      <div className="bg-white rounded shadow-sm border-2 border-black overflow-hidden">
-        <div className="flex items-center justify-between border-b-2 border-black px-3 py-2.5">
-          <h3 className="text-sm font-black uppercase text-black">Stock Taker Log</h3>
-          <button
-            type="button"
-            onClick={clearLogs}
-            className="inline-flex items-center gap-1.5 rounded border border-rose-700 bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100"
-          >
-            <Trash2 size={13} />
-            Clear Log
-          </button>
-        </div>
-
-        <div className="max-h-[calc(100vh-320px)] w-full overflow-auto">
-          <table className="w-full min-w-max border-collapse">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-indigo-700 text-white">
-                {[
-                  "Time",
-                  "Reel No",
-                  "MRR No",
-                  "ERP",
-                  "Supplier",
-                  "System Weight",
-                  "Physical Weight",
-                  "Variance",
-                  "Status",
-                ].map((heading) => (
-                  <th key={heading} className="bg-indigo-700 px-3 py-3 text-left text-xs font-black border-2 border-black whitespace-nowrap uppercase">
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
-                    No stock taker scans yet.
-                  </td>
-                </tr>
-              ) : (
-                logs.map((entry) => {
-                  const isMatch = Math.abs(entry.variance) <= 0.5;
-                  return (
-                    <tr key={entry.id} className={isMatch ? "hover:bg-emerald-50/40" : "bg-rose-50/50 hover:bg-rose-50"}>
-                      <td className="px-3 py-3 text-black text-sm border-2 border-black whitespace-nowrap">{new Date(entry.timestamp).toLocaleString("en-GB")}</td>
-                      <td className="px-3 py-3 text-black text-sm font-bold border-2 border-black">{entry.reelNo}</td>
-                      <td className="px-3 py-3 text-black text-sm border-2 border-black">{entry.mrrNo}</td>
-                      <td className="px-3 py-3 text-black text-sm border-2 border-black">{entry.erp}</td>
-                      <td className="px-3 py-3 text-black text-sm border-2 border-black min-w-[180px]">{entry.supplierName || "-"}</td>
-                      <td className="px-3 py-3 text-emerald-900 text-sm font-bold border-2 border-black bg-emerald-50 text-right">{formatQty(entry.systemAvailableWeight)}</td>
-                      <td className="px-3 py-3 text-blue-900 text-sm font-bold border-2 border-black bg-blue-50 text-right">{formatQty(entry.physicalWeight)}</td>
-                      <td className={`px-3 py-3 text-sm font-bold border-2 border-black text-right ${entry.variance >= 0 ? "text-amber-900 bg-amber-50" : "text-red-800 bg-red-50"}`}>
-                        {formatQty(entry.variance)}
-                      </td>
-                      <td className={`px-3 py-3 text-xs font-black border-2 border-black uppercase ${isMatch ? "text-emerald-800 bg-emerald-50" : "text-rose-800 bg-rose-50"}`}>
-                        {isMatch ? "Matched" : "Mismatch"}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
