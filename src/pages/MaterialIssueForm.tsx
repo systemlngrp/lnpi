@@ -95,6 +95,10 @@ function normalizeDate(value?: string | null) {
   return String(value || "").slice(0, 10);
 }
 
+function normalizeText(value?: string | number | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function isWithoutJobIssue(issueType?: string) {
   const t = String(issueType || "").trim().toLowerCase();
   return t === "general" || t === "without job" || t === "withoutjob" || t === "without_job";
@@ -739,13 +743,15 @@ export function MaterialIssueForm() {
 
   return (
     <>
-      <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+      <div className={issueType === "Job" ? "hidden md:block" : ""}>
+        <TableControls searchTerm={searchTerm} onSearchChange={setSearchTerm} />
+      </div>
 
-      <div className="bg-white p-6 rounded shadow-sm border border-black text-black">
-      <h2 className="text-xl font-bold text-black mb-6 uppercase tracking-tight border-b border-black pb-2">Material Issue Form</h2>
+      <div className="bg-white p-3 md:p-6 rounded shadow-sm border border-black text-black">
+      <h2 className="text-lg md:text-xl font-bold text-black mb-4 md:mb-6 uppercase tracking-tight border-b border-black pb-2">Material Issue Form</h2>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Date" required>
+          <Field label="Date" required className={issueType === "Job" ? "hidden md:block" : ""}>
             <input
               type="date"
               value={date}
@@ -755,7 +761,7 @@ export function MaterialIssueForm() {
               className="w-full border-2 border-black rounded p-2 disabled:bg-slate-50 disabled:opacity-80"
             />
           </Field>
-          <Field label="Issue No (Auto)">
+          <Field label="Issue No (Auto)" className={issueType === "Job" ? "hidden md:block" : ""}>
             <input type="text" value="Generated on Submit" disabled className="w-full border-2 border-black rounded p-2 bg-slate-50 opacity-70" />
           </Field>
           <Field label="Issue Type" required>
@@ -768,7 +774,7 @@ export function MaterialIssueForm() {
             />
           </Field>
           {!(lockIssueType && issueType === "Without Job") && (
-            <div className="md:col-span-2 rounded border border-black bg-slate-50 p-3">
+            <div className={`${issueType === "Job" ? "hidden md:block" : ""} md:col-span-2 rounded border border-black bg-slate-50 p-3`}>
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div className="text-sm font-bold text-black">
                   Without Job issues on {date}: {generalIssuesForDate.length}
@@ -829,14 +835,15 @@ export function MaterialIssueForm() {
               {scannerMessage}
             </div>
           ) : null}
-          <Field label="Remarks" required={isWithoutJobIssue(issueType)} className="md:col-span-2">
+          <Field label="Remarks" required={isWithoutJobIssue(issueType)} className={issueType === "Job" ? "hidden md:block md:col-span-2" : "md:col-span-2"}>
             <input value={remarks} onChange={(e) => setRemarks(e.target.value)} required={isWithoutJobIssue(issueType)} className="w-full border-2 border-black rounded p-2" />
           </Field>
         </div>
 
         <div className="border-t border-black pt-4 space-y-4">
-          <h3 className="text-lg font-bold uppercase">Items</h3>
-          <div className="flex flex-wrap gap-4 items-end bg-slate-50 p-4 rounded border border-black">
+          <h3 className="hidden text-lg font-bold uppercase md:block">Items</h3>
+          {issueType === "Job" ? <h3 className="text-base font-black uppercase md:hidden">Scanned Reels</h3> : null}
+          <div className={`${issueType === "Job" ? "hidden md:flex" : "flex"} flex-wrap gap-4 items-end bg-slate-50 p-4 rounded border border-black`}>
             <div className="w-full md:w-80 space-y-1">
               <label className="text-sm font-bold">Material</label>
               <Select options={materialOptions} value={currentMaterialId} onChange={setCurrentMaterialId} placeholder={isCorrugatedSheetOnly ? "Select Corrugated Sheet..." : "Select Material..."} />
@@ -853,11 +860,57 @@ export function MaterialIssueForm() {
           </div>
 
           {lines.length === 0 ? (
-            <div className="p-4 bg-slate-50 border border-dashed border-black text-center text-sm font-bold text-slate-600 uppercase">
+            <div className={`${issueType === "Job" ? "hidden md:block" : ""} p-4 bg-slate-50 border border-dashed border-black text-center text-sm font-bold text-slate-600 uppercase`}>
               No issue lines added yet.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {issueType === "Job" ? (
+                <div className="space-y-3 md:hidden">
+                  {lines.flatMap((line) => {
+                    const material = getMaterial(line.materialId);
+                    const selectedIds = selectedReels[line.id] || [];
+                    return selectedIds.map((slipId) => {
+                      const slip = packingSlips.find((entry) => entry.id === slipId);
+                      return (
+                        <div key={`${line.id}-${slipId}`} className="rounded border-2 border-black bg-white p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-3 border-b border-black pb-2">
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-black uppercase text-slate-500">Reel No</div>
+                              <div className="break-words text-xl font-black text-black">{slip?.ourReelNo || "-"}</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => updateSelectedReels(line.id, line.materialId, slipId, false)}
+                              className="shrink-0 rounded border border-red-200 bg-red-50 p-2 text-red-700"
+                              title="Remove Reel"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          <div className="mt-3 grid gap-2">
+                            <div className="rounded border border-slate-300 p-2">
+                              <div className="text-[10px] font-black uppercase text-slate-500">Material</div>
+                              <div className="break-words text-sm font-black text-black">{material?.name || "Unknown Material"}</div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="rounded border border-slate-300 p-2">
+                                <div className="text-[10px] font-black uppercase text-slate-500">ERP/Code</div>
+                                <div className="break-words text-sm font-black text-black">{material?.erpCode || "-"}</div>
+                              </div>
+                              <div className="rounded border border-emerald-300 bg-emerald-50 p-2 text-right">
+                                <div className="text-[10px] font-black uppercase text-emerald-700">Issue Weight</div>
+                                <div className="text-sm font-black text-emerald-900">{Number(slip?.weightKg || 0).toFixed(2)} KG</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })}
+                </div>
+              ) : null}
+            <div className={`${issueType === "Job" ? "hidden md:block" : ""} overflow-x-auto`}>
               <table className="min-w-full border-collapse border border-black">
                 <thead className="sticky top-0 z-30 bg-slate-100">
                   <tr className="divide-x divide-black border-b border-black">
@@ -976,6 +1029,7 @@ export function MaterialIssueForm() {
                 </div>
               ) : null}
             </div>
+            </>
           )}
         </div>
 
@@ -983,7 +1037,7 @@ export function MaterialIssueForm() {
           <button
             type="submit"
             disabled={isSubmitting || lines.length === 0}
-            className="min-w-[160px] bg-black text-white px-8 py-3 rounded font-black uppercase tracking-widest text-sm hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed shadow-md transition-all active:scale-95"
+            className="w-full bg-black text-white px-8 py-3 rounded font-black uppercase tracking-widest text-sm hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed shadow-md transition-all active:scale-95 md:w-auto md:min-w-[160px]"
           >
             {isSubmitting ? (
               <div className="flex items-center gap-2">
