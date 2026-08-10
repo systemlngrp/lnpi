@@ -215,7 +215,6 @@ export function ReelStockTakerReport() {
     setProcessedScan(payload);
     setManualReelNo("");
     setManualPhysicalWeight("");
-    setManualEntryAvailable(false);
     setShowManualFields(false);
     setScannerError("");
   };
@@ -241,14 +240,12 @@ export function ReelStockTakerReport() {
     if (!activeSession) {
       closeScanner();
       setScannerError("Start a physical stock session before scanning reels.");
-      setManualEntryAvailable(true);
       return;
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
       closeScanner();
       setScannerError("Camera access is not supported on this browser/device.");
-      setManualEntryAvailable(true);
       return;
     }
 
@@ -256,14 +253,12 @@ export function ReelStockTakerReport() {
     if (!BarcodeDetectorCtor) {
       closeScanner();
       setScannerError("QR scanner is not supported on this browser.");
-      setManualEntryAvailable(true);
       return;
     }
 
     stopScanner();
     setProcessedScan(null);
     setScannerError("");
-    setManualEntryAvailable(false);
     setShowManualFields(false);
     setIsScannerOpen(true);
 
@@ -300,7 +295,6 @@ export function ReelStockTakerReport() {
           } catch (error) {
             closeScanner();
             setScannerError(error instanceof Error ? error.message : "Unable to process scanned reel.");
-            setManualEntryAvailable(true);
           }
         } catch {
           // Keep scanning if one frame fails to decode.
@@ -310,7 +304,6 @@ export function ReelStockTakerReport() {
       console.error(error);
       closeScanner();
       setScannerError("Unable to open camera. Please allow camera permission and try again.");
-      setManualEntryAvailable(true);
     }
   };
 
@@ -380,40 +373,50 @@ export function ReelStockTakerReport() {
         </div>
       ) : null}
 
-      <div className="rounded border border-black bg-white p-3">
-        <div className="grid gap-2 md:grid-cols-[minmax(180px,1fr)_150px_auto] md:items-end">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              value={manualReelNo}
-              onChange={(e) => setManualReelNo(e.target.value)}
-              placeholder="Reel Number"
-              className="h-[40px] w-full rounded border-2 border-black pl-9 pr-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-            />
+      <button
+        type="button"
+        onClick={() => setShowManualFields((value) => !value)}
+        className="inline-flex h-[38px] w-full items-center justify-center gap-2 rounded border border-black bg-white px-3 text-sm font-black uppercase text-black hover:bg-slate-50"
+      >
+        {showManualFields ? "Hide Manual Entry" : "Manual Entry"}
+      </button>
+
+      {showManualFields ? (
+        <div className="rounded border border-black bg-white p-3">
+          <div className="grid gap-2 md:grid-cols-[minmax(180px,1fr)_150px_auto] md:items-end">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                value={manualReelNo}
+                onChange={(e) => setManualReelNo(e.target.value)}
+                placeholder="Reel Number"
+                className="h-[40px] w-full rounded border-2 border-black pl-9 pr-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-black uppercase text-black">Physical Weight</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={manualPhysicalWeight}
+                onChange={(e) => setManualPhysicalWeight(e.target.value)}
+                className="h-[40px] w-full rounded border-2 border-black px-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleManualSave}
+              disabled={!activeSession}
+              className="inline-flex h-[40px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-black uppercase text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save size={15} />
+              Save
+            </button>
           </div>
-          <div>
-            <label className="mb-1 block text-[10px] font-black uppercase text-black">Physical Weight</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={manualPhysicalWeight}
-              onChange={(e) => setManualPhysicalWeight(e.target.value)}
-              className="h-[40px] w-full rounded border-2 border-black px-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={handleManualSave}
-            disabled={!activeSession}
-            className="inline-flex h-[40px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-black uppercase text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Save size={15} />
-            Save
-          </button>
         </div>
-      </div>
+      ) : null}
 
       {isScannerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
