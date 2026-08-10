@@ -60,6 +60,8 @@ env/
 *~
 .idea/
 *.txt
+*.doc
+
 
 *.yml
 pythoncode/Log/invoice_sync_logs.xlsx
