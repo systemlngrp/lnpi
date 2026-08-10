@@ -535,7 +535,6 @@ export function ReelIssueReturnScan() {
     <div className="space-y-5">
       <div className="border-b border-black pb-3">
         <h2 className="text-xl font-bold uppercase tracking-tight text-black">Reel Issue/Return QR Scan</h2>
-        <div className="text-xs font-semibold text-slate-600">Select job, scan reels, then save.</div>
       </div>
 
       <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
@@ -562,9 +561,6 @@ export function ReelIssueReturnScan() {
       <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
         <div>
           <h3 className="text-lg font-black uppercase text-black">Scanned Reels</h3>
-          <div className="text-xs font-semibold text-slate-600">
-            Issue Total: {formatQty(totalIssueDraftWeight)} KG | Return Total: {formatQty(totalReturnDraftWeight)} KG
-          </div>
         </div>
 
         <div className="mt-4 space-y-3 md:hidden">
@@ -665,11 +661,15 @@ export function ReelIssueReturnScan() {
           </table>
         </div>
 
+        <div className="mt-4 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-black text-slate-800">
+          Issue Total: {formatQty(totalIssueDraftWeight)} KG | Return Total: {formatQty(totalReturnDraftWeight)} KG
+        </div>
+
         <button
           type="button"
           onClick={handleSubmit}
           disabled={isSubmitting || reelDrafts.length === 0}
-          className="mt-4 inline-flex h-[44px] w-full items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-4 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-3 inline-flex h-[44px] w-full items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-4 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting ? <Spinner size={18} /> : <Save size={16} />}
           Save
