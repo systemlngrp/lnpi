@@ -1,29 +1,20 @@
 export type ReelScanLike = {
   reelNo?: string;
-  timestamp?: string;
+  sessionId?: string;
 };
 
 export function shouldBlockDuplicateReelScan(
   existingLogs: ReelScanLike[],
   reelNo: string,
-  now: Date = new Date(),
+  sessionId?: string,
 ): boolean {
   const normalizedReelNo = String(reelNo || "").trim().toLowerCase();
-  if (!normalizedReelNo) return false;
-
-  const nowDate = new Date(now);
-  nowDate.setHours(0, 0, 0, 0);
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedReelNo || !normalizedSessionId) return false;
 
   return existingLogs.some((entry) => {
     const entryReelNo = String(entry?.reelNo || "").trim().toLowerCase();
-    if (entryReelNo !== normalizedReelNo) return false;
-
-    const entryTimestamp = entry?.timestamp ? new Date(entry.timestamp) : null;
-    if (!entryTimestamp || Number.isNaN(entryTimestamp.getTime())) return false;
-
-    const entryDate = new Date(entryTimestamp);
-    entryDate.setHours(0, 0, 0, 0);
-
-    return entryDate.getTime() === nowDate.getTime();
+    const entrySessionId = String(entry?.sessionId || "").trim();
+    return entryReelNo === normalizedReelNo && entrySessionId === normalizedSessionId;
   });
 }

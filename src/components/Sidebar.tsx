@@ -213,11 +213,16 @@ const billingItems: NavItem[] = [
   { name: "Billing Master", href: "/billing/master", icon: FileText },
 ];
 
+const physicalStockItems: NavItem[] = [
+  { name: "Start / Close Session", href: "/physical-stock/sessions", icon: ClipboardList },
+  { name: "Stock Entry Scan", href: "/physical-stock/entry", icon: Camera },
+  { name: "Excess Stock Report", href: "/physical-stock/excess", icon: BarChart3 },
+  { name: "Shortage Stock Report", href: "/physical-stock/shortage", icon: TrendingDown },
+  { name: "Physical Stock Master", href: "/physical-stock/master", icon: Database },
+];
 const reportStockItems: NavItem[] = [
   { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
   { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
-  { name: "Reel Stock Taker", href: "/reports/reel-stock-taker", icon: BarChart3 },
-  { name: "Physical Stock Master", href: "/reports/physical-stock-master", icon: Database },
   { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
 ];
 
@@ -258,8 +263,6 @@ const storeReportItems: NavItem[] = [
   { name: "Other Consumables Inventory", href: "/reports/other-consumables-inventory", icon: BarChart3 },
   { name: "ERP Wise Reel Stock", href: "/reports/erp-wise-reel-stock", icon: BarChart3 },
   { name: "Reelwise Stock", href: "/reports/reelwise-stock", icon: BarChart3 },
-  { name: "Reel Stock Taker", href: "/reports/reel-stock-taker", icon: BarChart3 },
-  { name: "Physical Stock Master", href: "/reports/physical-stock-master", icon: Database },
   { name: "Jobwise Reel Consumption", href: "/reports/jobwise-reel-consumption", icon: BarChart3 },
 ];
 
@@ -299,6 +302,11 @@ export const NAVIGATION: NavGroup[] = [
       { section: "Gate Entry", items: storeGateEntryItems },
       { section: "Report", items: storeReportItems },
     ],
+  },
+  {
+    section: "Physical Stock",
+    color: "bg-teal-700",
+    items: physicalStockItems,
   },
   {
     section: "NPD",

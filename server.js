@@ -2766,8 +2766,9 @@ function entityPermissionKey(entity) {
     case "material_in":
     case "material_in_packing_slips":
       return "/material-in";
+    case "physical_stock_sessions":
     case "reel_stock_taker_logs":
-      return "/material-in";
+      return "/physical-stock";
     case "indent_lines":
     case "indents":
       return "/indent";
@@ -4261,8 +4262,27 @@ async function initDb(retries = 5) {
         )
       `);
       await db.query(`
+        CREATE TABLE IF NOT EXISTS \`physical_stock_sessions\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`sessionNo\` VARCHAR(100) NOT NULL,
+          \`sessionName\` VARCHAR(255) NOT NULL,
+          \`fy\` VARCHAR(20) NOT NULL,
+          \`status\` VARCHAR(20) NOT NULL DEFAULT 'Open',
+          \`startedAt\` VARCHAR(255) NOT NULL,
+          \`startedBy\` VARCHAR(255),
+          \`closedAt\` VARCHAR(255),
+          \`closedBy\` VARCHAR(255),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255),
+          UNIQUE KEY \`uk_physical_stock_session_no\` (\`sessionNo\`)
+        )
+      `);
+      await db.query(`
         CREATE TABLE IF NOT EXISTS \`reel_stock_taker_logs\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
+          \`sessionId\` VARCHAR(36),
+          \`sessionNo\` VARCHAR(100),
+          \`sessionName\` VARCHAR(255),
           \`timestamp\` VARCHAR(255) NOT NULL,
           \`reelNo\` VARCHAR(100) NOT NULL,
           \`mrrNo\` VARCHAR(100),
@@ -4277,6 +4297,17 @@ async function initDb(retries = 5) {
       `);
       console.log("[DB] Database tables initialized successfully.");
       const migrations = [
+        { table: "physical_stock_sessions", column: "sessionNo", type: "VARCHAR(100) NOT NULL" },
+        { table: "physical_stock_sessions", column: "sessionName", type: "VARCHAR(255) NOT NULL" },
+        { table: "physical_stock_sessions", column: "fy", type: "VARCHAR(20) NOT NULL" },
+        { table: "physical_stock_sessions", column: "status", type: "VARCHAR(20) NOT NULL DEFAULT 'Open'" },
+        { table: "physical_stock_sessions", column: "startedAt", type: "VARCHAR(255) NOT NULL" },
+        { table: "physical_stock_sessions", column: "startedBy", type: "VARCHAR(255)" },
+        { table: "physical_stock_sessions", column: "closedAt", type: "VARCHAR(255)" },
+        { table: "physical_stock_sessions", column: "closedBy", type: "VARCHAR(255)" },
+        { table: "reel_stock_taker_logs", column: "sessionId", type: "VARCHAR(36)" },
+        { table: "reel_stock_taker_logs", column: "sessionNo", type: "VARCHAR(100)" },
+        { table: "reel_stock_taker_logs", column: "sessionName", type: "VARCHAR(255)" },
         { table: "items", column: "groupId", type: "VARCHAR(36) NOT NULL" },
         { table: "items", column: "uom", type: "VARCHAR(50) NOT NULL" },
         { table: "items", column: "erp", type: "INT" },
@@ -5233,6 +5264,126 @@ async function initDb(retries = 5) {
     }
   }
 }
+function getPhysicalStockFinancialYear(date = /* @__PURE__ */ new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const fyStart = month >= 4 ? year : year - 1;
+  return `${fyStart}-${String(fyStart + 1).slice(2)}`;
+}
+async function fetchOpenPhysicalStockSession(db) {
+  const [rows] = await db.query(
+    "SELECT * FROM `physical_stock_sessions` WHERE LOWER(TRIM(`status`)) = 'open' ORDER BY `startedAt` DESC LIMIT 1"
+  );
+  return rows[0] || null;
+}
+async function generatePhysicalStockSessionNo(db, fy) {
+  const prefix = `PS/${fy}/`;
+  const [rows] = await db.query(
+    "SELECT `sessionNo` FROM `physical_stock_sessions` WHERE `fy` = ? AND `sessionNo` LIKE ? ORDER BY CAST(SUBSTRING_INDEX(`sessionNo`,'/',-1) AS UNSIGNED) DESC LIMIT 1",
+    [fy, `${prefix}%`]
+  );
+  const lastNo = String(rows[0]?.sessionNo || "");
+  const lastSerial = Number(lastNo.split("/").pop() || 0);
+  const nextSerial = Number.isFinite(lastSerial) ? lastSerial + 1 : 1;
+  return `${prefix}${String(nextSerial).padStart(5, "0")}`;
+}
+async function requirePhysicalStockAccess(req, res, next) {
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    if (user.role === "TruckDriver") return res.status(403).json({ error: "Forbidden" });
+    if (!hasPermission(user, "/physical-stock")) return res.status(403).json({ error: "Forbidden" });
+    return next();
+  } catch (error) {
+    console.error("[PHYSICAL_STOCK] guard failed:", error);
+    return res.status(500).json({ error: "Authorization failed" });
+  }
+}
+app.get("/api/physical-stock/current-session", requireAuth, requirePhysicalStockAccess, async (_req, res) => {
+  try {
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+    const session = await fetchOpenPhysicalStockSession(db);
+    return res.json(session ? normalizeFetchedRow("physical_stock_sessions", session) : null);
+  } catch (error) {
+    console.error("[PHYSICAL_STOCK] current-session failed:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+app.post("/api/physical-stock/start-session", requireAuth, requirePhysicalStockAccess, async (req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  const user = await getRequestUser(req);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const updatedBy = String(user?.name || user?.email || user?.userId || "System").trim() || "System";
+  const fy = getPhysicalStockFinancialYear(/* @__PURE__ */ new Date());
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const openSession = await fetchOpenPhysicalStockSession(conn);
+    if (openSession?.id) {
+      await conn.rollback();
+      return res.status(409).json({ error: `Session ${openSession.sessionNo} is already open.` });
+    }
+    const sessionNo = await generatePhysicalStockSessionNo(conn, fy);
+    const session = {
+      id: crypto.randomUUID(),
+      sessionNo,
+      sessionName: sessionNo,
+      fy,
+      status: "Open",
+      startedAt: now,
+      startedBy: updatedBy,
+      updatedBy,
+      updateTimestamp: now
+    };
+    await conn.query(
+      "INSERT INTO `physical_stock_sessions` (`id`, `sessionNo`, `sessionName`, `fy`, `status`, `startedAt`, `startedBy`, `updatedBy`, `updateTimestamp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [session.id, session.sessionNo, session.sessionName, session.fy, session.status, session.startedAt, session.startedBy, session.updatedBy, session.updateTimestamp]
+    );
+    await conn.commit();
+    return res.json(normalizeFetchedRow("physical_stock_sessions", session));
+  } catch (error) {
+    try {
+      await conn.rollback();
+    } catch {
+    }
+    console.error("[PHYSICAL_STOCK] start-session failed:", error);
+    return res.status(500).json({ error: error.message });
+  } finally {
+    conn.release();
+  }
+});
+app.post("/api/physical-stock/close-session", requireAuth, requirePhysicalStockAccess, async (req, res) => {
+  try {
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+    const user = await getRequestUser(req);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const updatedBy = String(user?.name || user?.email || user?.userId || "System").trim() || "System";
+    const sessionId = String(req.body?.sessionId || "").trim();
+    const openSession = await fetchOpenPhysicalStockSession(db);
+    if (!openSession?.id) return res.status(404).json({ error: "No physical stock session is open." });
+    if (sessionId && sessionId !== openSession.id) {
+      return res.status(409).json({ error: `Session ${openSession.sessionNo} is the active session.` });
+    }
+    await db.query(
+      "UPDATE `physical_stock_sessions` SET `status` = 'Closed', `closedAt` = ?, `closedBy` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE `id` = ?",
+      [now, updatedBy, updatedBy, now, openSession.id]
+    );
+    return res.json(normalizeFetchedRow("physical_stock_sessions", {
+      ...openSession,
+      status: "Closed",
+      closedAt: now,
+      closedBy: updatedBy,
+      updatedBy,
+      updateTimestamp: now
+    }));
+  } catch (error) {
+    console.error("[PHYSICAL_STOCK] close-session failed:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
 const createHandlers = (tableName) => {
   return {
     getAll: async (req, res) => {
@@ -5493,21 +5644,27 @@ const createHandlers = (tableName) => {
           if (!reelNo) {
             return res.status(400).json({ error: "Reel number is required." });
           }
-          const [recentRows] = await db.query(
-            "SELECT `id`, `timestamp` FROM `reel_stock_taker_logs` WHERE LOWER(TRIM(`reelNo`)) = LOWER(TRIM(?)) ORDER BY `timestamp` DESC LIMIT 50",
-            [reelNo]
-          );
-          const today = /* @__PURE__ */ new Date();
-          today.setHours(0, 0, 0, 0);
-          const duplicate = recentRows.some((row) => {
-            const timestamp = row?.timestamp ? new Date(String(row.timestamp)) : null;
-            if (!timestamp || Number.isNaN(timestamp.getTime())) return false;
-            timestamp.setHours(0, 0, 0, 0);
-            return timestamp.getTime() === today.getTime();
-          });
-          if (duplicate) {
-            return res.status(409).json({ error: `Reel ${reelNo} was already scanned today.` });
+          const openSession = await fetchOpenPhysicalStockSession(db);
+          if (!openSession?.id) {
+            return res.status(409).json({ error: "Start a physical stock session before scanning reels." });
           }
+          const [duplicateRows] = await db.query(
+            "SELECT `id` FROM `reel_stock_taker_logs` WHERE `sessionId` = ? AND LOWER(TRIM(`reelNo`)) = LOWER(TRIM(?)) AND `id` <> ? LIMIT 1",
+            [openSession.id, reelNo, String(data.id || "")]
+          );
+          if (duplicateRows[0]?.id) {
+            return res.status(409).json({ error: `Reel ${reelNo} was already scanned in session ${openSession.sessionNo}.` });
+          }
+          const systemAvailableWeight = Number(data.systemAvailableWeight || 0);
+          const physicalWeight = Number(data.physicalWeight || 0);
+          data.reelNo = reelNo;
+          data.sessionId = openSession.id;
+          data.sessionNo = openSession.sessionNo;
+          data.sessionName = openSession.sessionName;
+          data.timestamp = String(data.timestamp || (/* @__PURE__ */ new Date()).toISOString());
+          data.systemAvailableWeight = Number.isFinite(systemAvailableWeight) ? Number(systemAvailableWeight.toFixed(2)) : 0;
+          data.physicalWeight = Number.isFinite(physicalWeight) ? Number(physicalWeight.toFixed(2)) : 0;
+          data.variance = Number((data.physicalWeight - data.systemAvailableWeight).toFixed(2));
         }
         if (tableName === "orders") {
           try {
@@ -6401,7 +6558,7 @@ app.get("/api/truck-status-logs", async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "audit_dashboard_snapshots", "reel_stock_taker_logs"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "audit_dashboard_snapshots", "physical_stock_sessions", "reel_stock_taker_logs"];
 app.get("/api/tally-sync-debug", (req, res) => {
   const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();
   return res.json({

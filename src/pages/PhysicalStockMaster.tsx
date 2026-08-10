@@ -1,25 +1,21 @@
-import React, { useMemo, useState } from "react";
-import { Search, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import { useData } from "../hooks/useData";
-
-type StockTakerLog = {
-  id: string;
-  timestamp: string;
-  reelNo: string;
-  mrrNo: string;
-  erp: string;
-  supplierName: string;
-  systemAvailableWeight: number;
-  physicalWeight: number;
-  variance: number;
-};
+import type { StockTakerLog } from "../types";
 
 function formatQty(value: number) {
   return Number(value || 0).toFixed(2);
 }
 
+function formatDateTime(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("en-GB");
+}
+
 export function PhysicalStockMaster() {
-  const [stockTakerLogs, setStockTakerLogs] = useData<StockTakerLog>("reel_stock_taker_logs", [], { cacheToLocalStorage: false });
+  const [stockTakerLogs] = useData<StockTakerLog>("reel_stock_taker_logs", [], { cacheToLocalStorage: false });
   const [scanSearchTerm, setScanSearchTerm] = useState("");
   const [scanDateFrom, setScanDateFrom] = useState("");
   const [scanDateTo, setScanDateTo] = useState("");
@@ -37,7 +33,7 @@ export function PhysicalStockMaster() {
         if (toMs != null && timestamp > toMs) return false;
         if (
           loweredSearch &&
-          ![entry.reelNo, entry.mrrNo, entry.erp, entry.supplierName].some((value) =>
+          ![entry.sessionNo, entry.sessionName, entry.reelNo, entry.mrrNo, entry.erp, entry.supplierName].some((value) =>
             String(value || "").toLowerCase().includes(loweredSearch),
           )
         ) {
@@ -48,13 +44,6 @@ export function PhysicalStockMaster() {
       })
       .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
   }, [scanDateFrom, scanDateTo, scanSearchTerm, stockTakerLogs]);
-
-  const handleClearData = async () => {
-    if (stockTakerLogs.length === 0) return;
-    const confirmed = window.confirm("Clear all physical stock scan records?");
-    if (!confirmed) return;
-    await setStockTakerLogs([]);
-  };
 
   return (
     <div className="space-y-4">
@@ -71,12 +60,12 @@ export function PhysicalStockMaster() {
               type="text"
               value={scanSearchTerm}
               onChange={(e) => setScanSearchTerm(e.target.value)}
-              placeholder="Search reel / MRR / ERP / supplier"
-              className="h-[34px] w-full rounded border-2 border-black pl-8 pr-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
+              placeholder="Search session / reel / MRR / ERP / supplier"
+              className="h-[34px] w-full rounded border-2 border-black pl-8 pr-2 text-xs font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
             />
           </div>
-          <input type="date" value={scanDateFrom} onChange={(e) => setScanDateFrom(e.target.value)} title="Scan Date From" className="h-[34px] w-full rounded border-2 border-black px-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
-          <input type="date" value={scanDateTo} onChange={(e) => setScanDateTo(e.target.value)} title="Scan Date To" className="h-[34px] w-full rounded border-2 border-black px-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600" />
+          <input type="date" value={scanDateFrom} onChange={(e) => setScanDateFrom(e.target.value)} title="Scan Date From" className="h-[34px] w-full rounded border-2 border-black px-2 text-xs font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600" />
+          <input type="date" value={scanDateTo} onChange={(e) => setScanDateTo(e.target.value)} title="Scan Date To" className="h-[34px] w-full rounded border-2 border-black px-2 text-xs font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600" />
           {scanSearchTerm || scanDateFrom || scanDateTo ? (
             <button type="button" onClick={() => { setScanSearchTerm(""); setScanDateFrom(""); setScanDateTo(""); }} className="h-[34px] rounded border border-black bg-white px-2 text-[11px] font-bold text-black hover:bg-slate-50">
               Clear
@@ -85,12 +74,12 @@ export function PhysicalStockMaster() {
         </div>
       </div>
 
-      <div className="bg-white rounded shadow-sm border-2 border-black overflow-hidden">
+      <div className="overflow-hidden rounded border-2 border-black bg-white shadow-sm">
         <div className="max-h-[calc(100vh-260px)] w-full overflow-auto">
           <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {["Time", "Reel No", "MRR No", "ERP", "Supplier", "Physical Weight"].map((heading) => (
+                {["Session No", "Time", "Reel No", "MRR No", "ERP", "Supplier", "Book Stock", "Physical Weight", "Variance"].map((heading) => (
                   <th key={heading} className="whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase">{heading}</th>
                 ))}
               </tr>
@@ -98,35 +87,26 @@ export function PhysicalStockMaster() {
             <tbody>
               {filteredScanLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="border-2 border-black px-6 py-10 text-center font-medium text-black">No physical stock scans found.</td>
+                  <td colSpan={9} className="border-2 border-black px-6 py-10 text-center font-medium text-black">No physical stock scans found.</td>
                 </tr>
               ) : (
                 filteredScanLogs.map((entry) => (
                   <tr key={entry.id} className="hover:bg-slate-50">
-                    <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-sm text-black">{new Date(entry.timestamp).toLocaleString("en-GB")}</td>
+                    <td className="border-2 border-black px-3 py-3 text-sm font-black text-black">{entry.sessionNo || "-"}</td>
+                    <td className="whitespace-nowrap border-2 border-black px-3 py-3 text-sm text-black">{formatDateTime(entry.timestamp)}</td>
                     <td className="border-2 border-black px-3 py-3 text-sm font-bold text-black">{entry.reelNo}</td>
                     <td className="border-2 border-black px-3 py-3 text-sm text-black">{entry.mrrNo || "-"}</td>
                     <td className="border-2 border-black px-3 py-3 text-sm text-black">{entry.erp || "-"}</td>
                     <td className="min-w-[180px] border-2 border-black px-3 py-3 text-sm text-black">{entry.supplierName || "-"}</td>
+                    <td className="border-2 border-black bg-slate-50 px-3 py-3 text-right text-sm font-bold text-black">{formatQty(Number(entry.systemAvailableWeight || 0))}</td>
                     <td className="border-2 border-black bg-blue-50 px-3 py-3 text-right text-sm font-bold text-blue-900">{formatQty(Number(entry.physicalWeight || 0))}</td>
+                    <td className="border-2 border-black px-3 py-3 text-right text-sm font-black text-black">{formatQty(Number(entry.variance || 0))}</td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="flex justify-end border-t border-black pt-3">
-        <button
-          type="button"
-          onClick={handleClearData}
-          disabled={stockTakerLogs.length === 0}
-          className="inline-flex h-[38px] items-center gap-2 rounded border border-rose-700 bg-rose-50 px-3 text-xs font-black uppercase text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Trash2 size={14} />
-          Clear Data
-        </button>
       </div>
     </div>
   );

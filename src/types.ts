@@ -252,6 +252,36 @@ export interface MaterialReturnReelLine {
   updateTimestamp?: string;
 }
 
+export interface PhysicalStockSession {
+  id: string;
+  sessionNo: string;
+  sessionName: string;
+  fy: string;
+  status: "Open" | "Closed" | string;
+  startedAt: string;
+  startedBy?: string;
+  closedAt?: string;
+  closedBy?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
+export interface StockTakerLog {
+  id: string;
+  sessionId?: string;
+  sessionNo?: string;
+  sessionName?: string;
+  timestamp: string;
+  reelNo: string;
+  mrrNo: string;
+  erp: string;
+  supplierName: string;
+  systemAvailableWeight: number;
+  physicalWeight: number;
+  variance: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
 export interface Indent {
   id: string;
   indentNo?: string;

@@ -9,26 +9,15 @@ import type {
   MaterialInPackingSlip,
   MaterialIssueReelLine,
   MaterialReturnReelLine,
+  PhysicalStockSession,
+  StockTakerLog,
   Supplier,
 } from "../types";
-
-type StockTakerLog = {
-  id: string;
-  timestamp: string;
-  reelNo: string;
-  mrrNo: string;
-  erp: string;
-  supplierName: string;
-  systemAvailableWeight: number;
-  physicalWeight: number;
-  variance: number;
-};
 
 type ParsedQrPayload = {
   reelNo: string;
   weight: number | null;
 };
-
 
 function round2(value: number) {
   return Number(Number(value || 0).toFixed(2));
@@ -36,6 +25,13 @@ function round2(value: number) {
 
 function formatQty(value: number) {
   return round2(value).toFixed(2);
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("en-GB");
 }
 
 function parsePositiveWeight(value: unknown): number | null {
@@ -105,6 +101,20 @@ function parseQrPayload(rawValue: string): ParsedQrPayload {
   };
 }
 
+async function postStockTakerLog(payload: StockTakerLog) {
+  const token = window.localStorage.getItem("authToken") || "";
+  const response = await fetch("/api/reel-stock-taker-logs", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Unable to save stock-taker entry.");
+}
+
 export function ReelStockTakerReport() {
   const [materials] = useData<Material>("materials", [], { cacheToLocalStorage: false });
   const [materialIn] = useData<MaterialIn>("material-in", [], { cacheToLocalStorage: false });
@@ -112,7 +122,8 @@ export function ReelStockTakerReport() {
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", [], { cacheToLocalStorage: false });
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", [], { cacheToLocalStorage: false });
   const [suppliers] = useData<Supplier>("suppliers", [], { cacheToLocalStorage: false });
-  const [logs, setLogs] = useData<StockTakerLog>("reel_stock_taker_logs", []);
+  const [sessions] = useData<PhysicalStockSession>("physical_stock_sessions", [], { cacheToLocalStorage: false });
+  const [logs, , , logsApi] = useData<StockTakerLog>("reel_stock_taker_logs", [], { cacheToLocalStorage: false });
 
   const [manualReelNo, setManualReelNo] = useState("");
   const [manualPhysicalWeight, setManualPhysicalWeight] = useState("");
@@ -126,6 +137,12 @@ export function ReelStockTakerReport() {
   const scanTimerRef = useRef<number | null>(null);
   const lastScannedCodeRef = useRef("");
   const lastScannedAtRef = useRef(0);
+  const autoOpenedSessionRef = useRef("");
+
+  const activeSession = useMemo(
+    () => sessions.find((session) => String(session.status || "").toLowerCase() === "open") || null,
+    [sessions],
+  );
 
   const availableRows = useMemo(() => {
     return buildReelStockRows({
@@ -166,12 +183,19 @@ export function ReelStockTakerReport() {
   };
 
   const saveScanEntry = async (args: { row?: (typeof availableRows)[number]; reelNo: string; physicalWeight: number }) => {
+    if (!activeSession) {
+      throw new Error("Start a physical stock session before scanning reels.");
+    }
+
     const systemWeight = round2(args.row?.availableWeight || 0);
     const physicalWeight = round2(args.physicalWeight);
     const variance = round2(physicalWeight - systemWeight);
 
     const payload: StockTakerLog = {
       id: crypto.randomUUID(),
+      sessionId: activeSession.id,
+      sessionNo: activeSession.sessionNo,
+      sessionName: activeSession.sessionName,
       timestamp: new Date().toISOString(),
       reelNo: args.row?.ourReelNo || args.reelNo,
       mrrNo: args.row?.mrrNo || "",
@@ -182,11 +206,12 @@ export function ReelStockTakerReport() {
       variance,
     };
 
-    if (shouldBlockDuplicateReelScan(logs, payload.reelNo, new Date())) {
-      throw new Error(`Reel ${payload.reelNo} was already scanned today.`);
+    if (shouldBlockDuplicateReelScan(logs, payload.reelNo, activeSession.id)) {
+      throw new Error(`Reel ${payload.reelNo} was already scanned in session ${activeSession.sessionNo}.`);
     }
 
-    await setLogs([payload, ...logs]);
+    await postStockTakerLog(payload);
+    await logsApi.refresh({ force: true });
     setProcessedScan(payload);
     setManualReelNo("");
     setManualPhysicalWeight("");
@@ -213,6 +238,13 @@ export function ReelStockTakerReport() {
   };
 
   const handleOpenScanner = async () => {
+    if (!activeSession) {
+      closeScanner();
+      setScannerError("Start a physical stock session before scanning reels.");
+      setManualEntryAvailable(true);
+      return;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
       closeScanner();
       setScannerError("Camera access is not supported on this browser/device.");
@@ -283,13 +315,15 @@ export function ReelStockTakerReport() {
   };
 
   useEffect(() => {
+    if (!activeSession?.id || autoOpenedSessionRef.current === activeSession.id) return;
+    autoOpenedSessionRef.current = activeSession.id;
     void handleOpenScanner();
     return () => {
       stopScanner();
     };
-    // Open once on page load; rows/logs continue to update through useData for actual saves.
+    // Open once for the active session; live data continues through useData.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeSession?.id]);
 
   const handleManualSave = async () => {
     const physicalWeight = parsePositiveWeight(manualPhysicalWeight);
@@ -308,18 +342,30 @@ export function ReelStockTakerReport() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 border-b border-black pb-3 md:flex-row md:items-center md:justify-between">
-        <h2 className="text-xl font-bold uppercase tracking-tight text-black">Reel Stock Taker</h2>
+        <div>
+          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Physical Stock Entry Scan</h2>
+          <div className="mt-1 text-xs font-bold text-slate-700">
+            Session: {activeSession ? `${activeSession.sessionNo} started ${formatDateTime(activeSession.startedAt)}` : "No active session"}
+          </div>
+        </div>
         <button
           type="button"
           onClick={() => {
             void handleOpenScanner();
           }}
-          className="inline-flex h-[38px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+          disabled={!activeSession}
+          className="inline-flex h-[38px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Camera size={16} />
           Scan QR
         </button>
       </div>
+
+      {!activeSession ? (
+        <div className="rounded border border-amber-600 bg-amber-50 p-3 text-sm font-bold text-amber-900">
+          Start a physical stock session from Start / Close Session before scanning reels.
+        </div>
+      ) : null}
 
       {scannerError ? (
         <div className="rounded border border-rose-300 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
@@ -332,6 +378,7 @@ export function ReelStockTakerReport() {
           <div className="border-b border-black pb-3">
             <div className="text-[10px] font-black uppercase text-slate-600">Reel No</div>
             <div className="mt-1 text-2xl font-black text-black">{processedScan.reelNo}</div>
+            <div className="mt-1 text-xs font-bold text-slate-700">Session {processedScan.sessionNo || activeSession?.sessionNo || "-"}</div>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -358,7 +405,8 @@ export function ReelStockTakerReport() {
             onClick={() => {
               void handleOpenScanner();
             }}
-            className="mt-4 inline-flex h-[42px] w-full items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+            disabled={!activeSession}
+            className="mt-4 inline-flex h-[42px] w-full items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Camera size={16} />
             Scan QR
@@ -408,7 +456,8 @@ export function ReelStockTakerReport() {
                 <button
                   type="button"
                   onClick={handleManualSave}
-                  className="inline-flex h-[42px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100"
+                  disabled={!activeSession}
+                  className="inline-flex h-[42px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Save size={15} />
                   Save

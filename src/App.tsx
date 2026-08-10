@@ -131,6 +131,8 @@ import { TruckStatusReport } from "./pages/TruckStatusReport";
 import { WastageReport } from "./pages/WastageReport";
 import { ReelStockTakerReport } from "./pages/ReelStockTakerReport";
 import { PhysicalStockMaster } from "./pages/PhysicalStockMaster";
+import { PhysicalStockSessions } from "./pages/PhysicalStockSessions";
+import { PhysicalStockExcessReport, PhysicalStockShortageReport } from "./pages/PhysicalStockVarianceReports";
 import { TruckStatusUpdate } from "./pages/TruckStatusUpdate";
 import { TruckLogs } from "./pages/TruckLogs";
 import { PublicDriverStatus } from "./pages/PublicDriverStatus";
@@ -343,8 +345,13 @@ export default function App() {
           <Route path="reports/other-consumables-inventory" element={<OtherConsumablesInventoryReport />} />
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
           <Route path="reports/reelwise-stock" element={<ReelwiseStockReport />} />
-          <Route path="reports/reel-stock-taker" element={<ReelStockTakerReport />} />
-          <Route path="reports/physical-stock-master" element={<PhysicalStockMaster />} />
+          <Route path="reports/reel-stock-taker" element={<Navigate to="/physical-stock/entry" replace />} />
+          <Route path="reports/physical-stock-master" element={<Navigate to="/physical-stock/master" replace />} />
+          <Route path="physical-stock/sessions" element={<PhysicalStockSessions />} />
+          <Route path="physical-stock/entry" element={<ReelStockTakerReport />} />
+          <Route path="physical-stock/excess" element={<PhysicalStockExcessReport />} />
+          <Route path="physical-stock/shortage" element={<PhysicalStockShortageReport />} />
+          <Route path="physical-stock/master" element={<PhysicalStockMaster />} />
           <Route path="reports/jobwise-reel-consumption" element={<JobwiseReelConsumptionReport />} />
           <Route path="reports/jobs-in-progress" element={<JobsInProgressReport />} />
           <Route path="reports/efficiency" element={<EfficiencyReport />} />
