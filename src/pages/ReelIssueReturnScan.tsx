@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, PackageCheck, Save, X } from "lucide-react";
+import { Camera, Save, X } from "lucide-react";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 import { useData } from "../hooks/useData";
@@ -38,15 +38,6 @@ type ReelDraft = {
   jobNo: string;
   materialName: string;
   materialCode: string;
-  qrWeight: number | null;
-};
-
-type LatestScan = {
-  reelNo: string;
-  jobNo: string;
-  materialName: string;
-  materialCode: string;
-  issueWeight: number;
   qrWeight: number | null;
 };
 
@@ -123,14 +114,12 @@ export function ReelIssueReturnScan() {
   const [materialReturnLines, setMaterialReturnLines] = useData<MaterialReturnLine>("material-return-lines", []);
   const [materialReturnReelLines, setMaterialReturnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
 
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [date] = useState(() => new Date().toISOString().split("T")[0]);
   const [productionId, setProductionId] = useState("");
-  const [remarks, setRemarks] = useState("");
   const [scannerError, setScannerError] = useState("");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isProcessingScan, setIsProcessingScan] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [latestScan, setLatestScan] = useState<LatestScan | null>(null);
   const [reelDrafts, setReelDrafts] = useState<ReelDraft[]>([]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -271,14 +260,6 @@ export function ReelIssueReturnScan() {
     };
 
     setReelDrafts((prev) => [draft, ...prev]);
-    setLatestScan({
-      reelNo: draft.ourReelNo,
-      jobNo: draft.jobNo,
-      materialName: draft.materialName,
-      materialCode: draft.materialCode,
-      issueWeight: draft.issueWeight,
-      qrWeight: draft.qrWeight,
-    });
     setScannerError("");
   };
 
@@ -388,7 +369,6 @@ export function ReelIssueReturnScan() {
         issueType: "Job",
         productionId,
         jobNo: selectedProduction.transactionNo || "",
-        remarks: remarks.trim() || undefined,
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
@@ -458,7 +438,6 @@ export function ReelIssueReturnScan() {
           returnType: "Job",
           productionId,
           jobNo: selectedProduction.transactionNo || "",
-          remarks: remarks.trim() || undefined,
           updatedBy: "System User",
           updateTimestamp: timestamp,
         };
@@ -540,8 +519,6 @@ export function ReelIssueReturnScan() {
       });
 
       setReelDrafts([]);
-      setLatestScan(null);
-      setRemarks("");
       alert(returnEntry ? `Saved ${issueNo} and ${returnEntry.returnNo}.` : `Saved ${issueNo}.`);
     } catch (error) {
       console.error("Failed to submit reel issue/return scan:", error);
@@ -556,87 +533,38 @@ export function ReelIssueReturnScan() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 border-b border-black pb-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Reel Issue/Return QR Scan</h2>
-          <div className="text-xs font-semibold text-slate-600">Scan reels, review draft, then save.</div>
-        </div>
-        <button
-          type="button"
-          onClick={() => void handleOpenScanner()}
-          disabled={!productionId || isProcessingScan || isSubmitting}
-          className="inline-flex h-[40px] w-full items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
-        >
-          <Camera size={16} />
-          Scan QR
-        </button>
+      <div className="border-b border-black pb-3">
+        <h2 className="text-xl font-bold uppercase tracking-tight text-black">Reel Issue/Return QR Scan</h2>
+        <div className="text-xs font-semibold text-slate-600">Select job, scan reels, then save.</div>
       </div>
 
       <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-[1fr_1.4fr_1.4fr]">
-          <div>
-            <label className="mb-1 block text-[11px] font-black uppercase text-black">Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="h-[42px] w-full rounded border-2 border-black px-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none"
-            />
-          </div>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
           <div>
             <label className="mb-1 block text-[11px] font-black uppercase text-black">Job No.</label>
             <Select options={jobOptions} value={productionId} onChange={setProductionId} placeholder="Select Job..." />
           </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-black uppercase text-black">Remarks</label>
-            <input
-              value={remarks}
-              onChange={(event) => setRemarks(event.target.value)}
-              placeholder="Optional notes"
-              className="h-[42px] w-full rounded border-2 border-black px-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none"
-            />
-          </div>
+          {productionId ? (
+            <button
+              type="button"
+              onClick={() => void handleOpenScanner()}
+              disabled={isProcessingScan || isSubmitting}
+              className="inline-flex h-[42px] w-full items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
+            >
+              <Camera size={16} />
+              Scan QR
+            </button>
+          ) : null}
         </div>
       </div>
-
       {scannerError ? <div className="rounded border border-rose-300 bg-rose-50 p-3 text-sm font-bold text-rose-800">{scannerError}</div> : null}
 
-      {latestScan ? (
-        <div className="rounded border-2 border-emerald-700 bg-emerald-50 p-4 shadow-sm">
-          <div className="flex items-start gap-3 border-b border-emerald-700 pb-3">
-            <PackageCheck className="mt-1 text-emerald-800" size={24} />
-            <div>
-              <div className="text-[10px] font-black uppercase text-emerald-800">Draft Added</div>
-              <div className="text-2xl font-black text-black">{latestScan.reelNo}</div>
-              <div className="text-xs font-bold text-slate-700">{latestScan.jobNo}</div>
-            </div>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-4">
-            <Info label="Material" value={latestScan.materialName} />
-            <Info label="ERP/Code" value={latestScan.materialCode || "-"} />
-            <Info label="Issue Weight" value={`${formatQty(latestScan.issueWeight)} KG`} />
-            <Info label="QR Weight" value={latestScan.qrWeight === null ? "-" : `${formatQty(latestScan.qrWeight)} KG`} />
-          </div>
-        </div>
-      ) : null}
-
       <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h3 className="text-lg font-black uppercase text-black">Scanned Reels</h3>
-            <div className="text-xs font-semibold text-slate-600">
-              Issue Total: {formatQty(totalIssueDraftWeight)} KG | Return Total: {formatQty(totalReturnDraftWeight)} KG
-            </div>
+        <div>
+          <h3 className="text-lg font-black uppercase text-black">Scanned Reels</h3>
+          <div className="text-xs font-semibold text-slate-600">
+            Issue Total: {formatQty(totalIssueDraftWeight)} KG | Return Total: {formatQty(totalReturnDraftWeight)} KG
           </div>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting || reelDrafts.length === 0}
-            className="inline-flex h-[40px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-4 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? <Spinner size={18} /> : <Save size={16} />}
-            Save
-          </button>
         </div>
 
         <div className="mt-4 space-y-3 md:hidden">
@@ -736,6 +664,16 @@ export function ReelIssueReturnScan() {
             </tbody>
           </table>
         </div>
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isSubmitting || reelDrafts.length === 0}
+          className="mt-4 inline-flex h-[44px] w-full items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-4 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isSubmitting ? <Spinner size={18} /> : <Save size={16} />}
+          Save
+        </button>
       </div>
 
       {isScannerOpen ? (
@@ -761,14 +699,6 @@ export function ReelIssueReturnScan() {
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-emerald-700 bg-white p-3">
-      <div className="text-[10px] font-black uppercase text-slate-600">{label}</div>
-      <div className="mt-1 break-words text-sm font-black text-black">{value}</div>
-    </div>
-  );
-}
 
 function MobileField({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
