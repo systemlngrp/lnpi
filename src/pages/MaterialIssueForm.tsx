@@ -1,6 +1,6 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { Camera, Plus, Trash2, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import {
   Material,
@@ -29,6 +29,56 @@ import {
 import { useNpdItems } from "../hooks/useNpdItems";
 
 type IssueMaterialOption = Material & { isFgPurchaseItem?: boolean; isNpdConsumableItem?: boolean; npdSourceId?: string; rate?: number };
+
+type ParsedQrPayload = {
+  reelNo: string;
+  weight: number | null;
+};
+
+function parsePositiveWeight(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string") {
+    const match = value.trim().match(/([0-9]+(?:\.[0-9]+)?)/);
+    if (!match) return null;
+    const num = Number(match[1]);
+    return Number.isFinite(num) && num > 0 ? round2(num) : null;
+  }
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? round2(num) : null;
+}
+
+function parseQrPayload(rawValue: string): ParsedQrPayload {
+  const text = String(rawValue || "").trim();
+  if (!text) return { reelNo: "", weight: null };
+
+  const reelKeys = ["reelNo", "reel", "ourReelNo", "reel_no", "reelno"];
+  const weightKeys = ["weight", "physicalWeight", "availableWeight", "availableWeightKg", "weightKg", "wt", "kg"];
+
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      const reelNo = String(
+        reelKeys.map((key) => parsed?.[key]).find((value) => typeof value === "string" && String(value).trim()) || ""
+      ).trim();
+      const weight = parsePositiveWeight(
+        weightKeys.map((key) => parsed?.[key]).find((value) => value !== undefined && value !== null && String(value).trim() !== "")
+      );
+      if (reelNo) return { reelNo, weight };
+    } catch {
+      // Fall through to loose text parsing.
+    }
+  }
+
+  const reelByLabel = text.match(/(?:reel\s*no|our\s*reel\s*no|reel_no|reelno)\s*[:=]\s*([^|,;\n]+)/i);
+  const weightByLabel = text.match(/(?:weight|physical\s*weight|available\s*weight|weightkg|wt|kg)\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)/i);
+  if (reelByLabel?.[1]) return { reelNo: reelByLabel[1].trim(), weight: parsePositiveWeight(weightByLabel?.[1]) };
+
+  const delimited = text.match(/^\s*([^|,;\n]+)\s*[|,;]\s*([0-9]+(?:\.[0-9]+)?)(?:\s*kg)?\s*$/i);
+  if (delimited?.[1]) return { reelNo: delimited[1].trim(), weight: parsePositiveWeight(delimited[2]) };
+
+  const weightByKgSuffix = text.match(/([0-9]+(?:\.[0-9]+)?)\s*kg/i);
+  return { reelNo: text, weight: parsePositiveWeight(weightByKgSuffix?.[1]) };
+}
 type IssueLineDraft = {
   id: string;
   materialId: string;
@@ -80,6 +130,25 @@ export function MaterialIssueForm() {
       (row as HTMLElement).style.display = q && !txt.includes(q) ? 'none' : '';
     });
   }, [searchTerm]);
+  const stopScanner = () => {
+    if (scanTimerRef.current !== null) {
+      window.clearInterval(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const closeScanner = () => {
+    stopScanner();
+    setIsScannerOpen(false);
+    lastScannedCodeRef.current = "";
+    lastScannedAtRef.current = 0;
+  };
+
+  useEffect(() => stopScanner, []);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -116,6 +185,15 @@ export function MaterialIssueForm() {
   const [lines, setLines] = useState<IssueLineDraft[]>([]);
   const [selectedReels, setSelectedReels] = useState<Record<string, string[]>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
+  const [scannerMessage, setScannerMessage] = useState("");
+  const [scannerMessageType, setScannerMessageType] = useState<"success" | "error">("success");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanTimerRef = useRef<number | null>(null);
+  const lastScannedCodeRef = useRef("");
+  const lastScannedAtRef = useRef(0);
 
   const generalIssuesForDate = useMemo(() => {
     const selected = String(date || "").trim();
@@ -358,6 +436,127 @@ export function MaterialIssueForm() {
     });
   };
 
+
+  const addReelFromQr = async (rawQrValue: string) => {
+    if (issueType !== "Job" || !productionId) throw new Error("Select Against Job and Job No. before scanning.");
+
+    const parsed = parseQrPayload(rawQrValue);
+    const reelNo = String(parsed.reelNo || "").trim();
+    if (!reelNo) throw new Error("Reel number is required in QR.");
+
+    const originalSlip = packingSlips.find((slip) => normalizeText(slip.ourReelNo) === normalizeText(reelNo));
+    if (!originalSlip) throw new Error(`Reel ${reelNo} was not found in reel stock.`);
+
+    const material = getMaterial(originalSlip.materialId);
+    if (!material || material.type !== "Reel") throw new Error(`Reel material was not found for ${originalSlip.ourReelNo}.`);
+
+    const selectedIdsAcrossDraft = new Set(Object.values(selectedReels).flat());
+    if (selectedIdsAcrossDraft.has(originalSlip.id)) throw new Error(`Reel ${originalSlip.ourReelNo} is already selected.`);
+
+    const availableSlip = getAvailableReelPackingSlips(
+      originalSlip.materialId,
+      packingSlips,
+      materialIssueReelLines,
+      materialReturnReelLines
+    ).find((slip) => slip.id === originalSlip.id);
+    if (!availableSlip || Number(availableSlip.weightKg || 0) <= 0) {
+      throw new Error(`Reel ${originalSlip.ourReelNo} is not available for issue.`);
+    }
+
+    const existingLine = lines.find((line) => line.isReel && line.materialId === originalSlip.materialId);
+    const lineId = existingLine?.id || crypto.randomUUID();
+    const nextSelectedForLine = Array.from(new Set([...(existingLine ? selectedReels[existingLine.id] || [] : []), originalSlip.id]));
+    const availableForMaterial = getAvailableReelPackingSlips(
+      originalSlip.materialId,
+      packingSlips,
+      materialIssueReelLines,
+      materialReturnReelLines
+    );
+    const totalWeight = availableForMaterial
+      .filter((slip) => nextSelectedForLine.includes(slip.id))
+      .reduce((sum, slip) => sum + Number(slip.weightKg || 0), 0);
+
+    if (existingLine) {
+      setSelectedReels((prev) => ({ ...prev, [existingLine.id]: nextSelectedForLine }));
+      setLines((prev) => prev.map((line) => (line.id === existingLine.id ? { ...line, qty: totalWeight } : line)));
+    } else {
+      setLines((prev) => [
+        ...prev,
+        { id: lineId, materialId: originalSlip.materialId, qty: Number(availableSlip.weightKg || 0), uom: "KG", isReel: true },
+      ]);
+      setSelectedReels((prev) => ({ ...prev, [lineId]: [originalSlip.id] }));
+    }
+
+    setScannerMessageType("success");
+    setScannerMessage(`Added reel ${originalSlip.ourReelNo} (${Number(availableSlip.weightKg || 0).toFixed(2)} KG).`);
+  };
+
+  const handleOpenScanner = async () => {
+    if (issueType !== "Job" || !productionId) {
+      setScannerMessageType("error");
+      setScannerMessage("Select Against Job and Job No. before scanning.");
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScannerMessageType("error");
+      setScannerMessage("Camera access is not supported on this browser/device.");
+      return;
+    }
+    const BarcodeDetectorCtor = (window as Window & {
+      BarcodeDetector?: new (options?: { formats?: string[] }) => {
+        detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+      };
+    }).BarcodeDetector;
+    if (!BarcodeDetectorCtor) {
+      setScannerMessageType("error");
+      setScannerMessage("QR scanner is not supported on this browser.");
+      return;
+    }
+
+    stopScanner();
+    setScannerMessage("");
+    setIsScannerOpen(true);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] });
+      scanTimerRef.current = window.setInterval(async () => {
+        if (!videoRef.current || isProcessingScan) return;
+        try {
+          const codes = await detector.detect(videoRef.current);
+          const scanned = codes?.[0]?.rawValue;
+          if (!scanned) return;
+          const now = Date.now();
+          if (scanned === lastScannedCodeRef.current && now - lastScannedAtRef.current < 1500) return;
+          lastScannedCodeRef.current = scanned;
+          lastScannedAtRef.current = now;
+          setIsProcessingScan(true);
+          try {
+            await addReelFromQr(scanned);
+            closeScanner();
+          } catch (error) {
+            closeScanner();
+            setScannerMessageType("error");
+            setScannerMessage(error instanceof Error ? error.message : "Unable to process scanned reel.");
+          } finally {
+            setIsProcessingScan(false);
+          }
+        } catch {
+          // Keep scanning if one frame fails to decode.
+        }
+      }, 350);
+    } catch (error) {
+      console.error(error);
+      closeScanner();
+      setScannerMessageType("error");
+      setScannerMessage("Unable to open camera. Please allow camera permission and try again.");
+    }
+  };
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!date || lines.length === 0) return;
@@ -612,6 +811,24 @@ export function MaterialIssueForm() {
               <Select options={jobOptions} value={productionId} onChange={setProductionId} required placeholder="Select Job..." />
             </Field>
           ) : null}
+          {issueType === "Job" && productionId ? (
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={() => void handleOpenScanner()}
+                disabled={isProcessingScan || isSubmitting}
+                className="inline-flex h-[42px] w-full items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
+              >
+                <Camera size={16} />
+                Scan Reel QR
+              </button>
+            </div>
+          ) : null}
+          {scannerMessage ? (
+            <div className={`md:col-span-2 rounded border p-3 text-sm font-bold ${scannerMessageType === "success" ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-rose-300 bg-rose-50 text-rose-800"}`}>
+              {scannerMessage}
+            </div>
+          ) : null}
           <Field label="Remarks" required={isWithoutJobIssue(issueType)} className="md:col-span-2">
             <input value={remarks} onChange={(e) => setRemarks(e.target.value)} required={isWithoutJobIssue(issueType)} className="w-full border-2 border-black rounded p-2" />
           </Field>
@@ -777,6 +994,25 @@ export function MaterialIssueForm() {
           </button>
         </div>
       </form>
+      {isScannerOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg rounded border-2 border-black bg-white p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-black uppercase text-black">Scan Reel QR</div>
+              <button
+                type="button"
+                onClick={closeScanner}
+                className="inline-flex items-center justify-center rounded border border-black bg-white p-1.5 text-black hover:bg-slate-50"
+                aria-label="Close scanner"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <video ref={videoRef} className="h-[320px] w-full rounded border border-black object-cover" autoPlay muted playsInline />
+            {isProcessingScan ? <div className="mt-2 text-center text-sm font-black text-emerald-800">Adding scanned reel...</div> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
     </>
   );
