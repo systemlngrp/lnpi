@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Keyboard, Save, Search, X } from "lucide-react";
+import { Camera, Save, Search, X } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { buildReelStockRows } from "../lib/reelStock";
 import { shouldBlockDuplicateReelScan } from "../lib/reelStockTakerDuplicate";
@@ -340,12 +340,12 @@ export function ReelStockTakerReport() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-col gap-3 border-b border-black pb-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Physical Stock Entry Scan</h2>
+          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Physical Stock Entry</h2>
           <div className="mt-1 text-xs font-bold text-slate-700">
-            Session: {activeSession ? `${activeSession.sessionNo} started ${formatDateTime(activeSession.startedAt)}` : "No active session"}
+            {activeSession ? `${activeSession.sessionNo} | ${logs.filter((log) => log.sessionId === activeSession.id).length} scanned | Started ${formatDateTime(activeSession.startedAt)}` : "No active session"}
           </div>
         </div>
         <button
@@ -354,7 +354,7 @@ export function ReelStockTakerReport() {
             void handleOpenScanner();
           }}
           disabled={!activeSession}
-          className="inline-flex h-[38px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-[42px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-4 text-sm font-black uppercase text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Camera size={16} />
           Scan QR
@@ -363,7 +363,7 @@ export function ReelStockTakerReport() {
 
       {!activeSession ? (
         <div className="rounded border border-amber-600 bg-amber-50 p-3 text-sm font-bold text-amber-900">
-          Start a physical stock session from Start / Close Session before scanning reels.
+          Start or restart a physical stock session before scanning reels.
         </div>
       ) : null}
 
@@ -374,105 +374,52 @@ export function ReelStockTakerReport() {
       ) : null}
 
       {processedScan ? (
-        <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
-          <div className="border-b border-black pb-3">
-            <div className="text-[10px] font-black uppercase text-slate-600">Reel No</div>
-            <div className="mt-1 text-2xl font-black text-black">{processedScan.reelNo}</div>
-            <div className="mt-1 text-xs font-bold text-slate-700">Session {processedScan.sessionNo || activeSession?.sessionNo || "-"}</div>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="rounded border border-black bg-slate-50 p-3">
-              <div className="text-[10px] font-black uppercase text-slate-600">MRR</div>
-              <div className="mt-1 text-sm font-bold text-black">{processedScan.mrrNo || "-"}</div>
-            </div>
-            <div className="rounded border border-black bg-slate-50 p-3">
-              <div className="text-[10px] font-black uppercase text-slate-600">ERP</div>
-              <div className="mt-1 text-sm font-bold text-black">{processedScan.erp || "-"}</div>
-            </div>
-            <div className="rounded border border-black bg-slate-50 p-3">
-              <div className="text-[10px] font-black uppercase text-slate-600">Supplier</div>
-              <div className="mt-1 text-sm font-bold text-black">{processedScan.supplierName || "-"}</div>
-            </div>
-            <div className="rounded border border-blue-700 bg-blue-50 p-3">
-              <div className="text-[10px] font-black uppercase text-blue-700">Physical Weight</div>
-              <div className="mt-1 text-lg font-black text-blue-900">{formatQty(processedScan.physicalWeight)} KG</div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              void handleOpenScanner();
-            }}
-            disabled={!activeSession}
-            className="mt-4 inline-flex h-[42px] w-full items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Camera size={16} />
-            Scan QR
-          </button>
-        </div>
-      ) : (
-        <div className="rounded border-2 border-black bg-white p-6 text-center shadow-sm">
-          <Camera className="mx-auto text-slate-700" size={42} />
-        </div>
-      )}
-
-      {manualEntryAvailable ? (
-        <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => setShowManualFields((value) => !value)}
-            className="inline-flex h-[38px] items-center gap-2 rounded border border-black bg-white px-3 text-sm font-bold text-black hover:bg-slate-50"
-          >
-            <Keyboard size={16} />
-            Manual Entry
-          </button>
-
-          {showManualFields ? (
-            <div className="rounded border border-black bg-white p-3">
-              <div className="grid gap-3 md:grid-cols-[1.5fr_1fr_auto] md:items-end">
-                <div className="relative w-full">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input
-                    type="text"
-                    value={manualReelNo}
-                    onChange={(e) => setManualReelNo(e.target.value)}
-                    placeholder="Reel Number"
-                    className="w-full rounded border-2 border-black py-2.5 pl-9 pr-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-black uppercase text-black">Physical Weight</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={manualPhysicalWeight}
-                    onChange={(e) => setManualPhysicalWeight(e.target.value)}
-                    className="w-full rounded border-2 border-black px-3 py-2.5 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleManualSave}
-                  disabled={!activeSession}
-                  className="inline-flex h-[42px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Save size={15} />
-                  Save
-                </button>
-              </div>
-            </div>
-          ) : null}
+        <div className="flex flex-col gap-1 rounded border border-emerald-700 bg-emerald-50 p-3 text-sm font-bold text-emerald-900 md:flex-row md:items-center md:justify-between">
+          <span>Saved reel {processedScan.reelNo} in {processedScan.sessionNo || activeSession?.sessionNo || "-"}</span>
+          <span>{formatQty(processedScan.physicalWeight)} KG</span>
         </div>
       ) : null}
+
+      <div className="rounded border border-black bg-white p-3">
+        <div className="grid gap-2 md:grid-cols-[minmax(180px,1fr)_150px_auto] md:items-end">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              value={manualReelNo}
+              onChange={(e) => setManualReelNo(e.target.value)}
+              placeholder="Reel Number"
+              className="h-[40px] w-full rounded border-2 border-black pl-9 pr-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-black uppercase text-black">Physical Weight</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={manualPhysicalWeight}
+              onChange={(e) => setManualPhysicalWeight(e.target.value)}
+              className="h-[40px] w-full rounded border-2 border-black px-3 text-sm font-semibold focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleManualSave}
+            disabled={!activeSession}
+            className="inline-flex h-[40px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-3 text-sm font-black uppercase text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Save size={15} />
+            Save
+          </button>
+        </div>
+      </div>
 
       {isScannerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg rounded border-2 border-black bg-white p-3">
             <div className="mb-2 flex items-center justify-between">
-              <div className="text-sm font-black uppercase text-black">Scan Reel QR</div>
+              <div className="text-sm font-black uppercase text-black">Scan QR</div>
               <button
                 type="button"
                 onClick={closeScanner}

@@ -5354,6 +5354,71 @@ app.post("/api/physical-stock/start-session", requireAuth, requirePhysicalStockA
     conn.release();
   }
 });
+app.post("/api/physical-stock/restart-session", requireAuth, requirePhysicalStockAccess, async (req, res) => {
+  try {
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+    const user = await getRequestUser(req);
+    const sessionId = String(req.body?.sessionId || "").trim();
+    if (!sessionId) return res.status(400).json({ error: "Session ID is required." });
+    const openSession = await fetchOpenPhysicalStockSession(db);
+    if (openSession?.id && openSession.id !== sessionId) {
+      return res.status(409).json({ error: `Close session ${openSession.sessionNo} before restarting another session.` });
+    }
+    const [sessionRows] = await db.query("SELECT * FROM `physical_stock_sessions` WHERE `id` = ? LIMIT 1", [sessionId]);
+    const session = sessionRows[0];
+    if (!session?.id) return res.status(404).json({ error: "Physical stock session not found." });
+    if (String(session.status || "").toLowerCase() === "open") {
+      return res.json(normalizeFetchedRow("physical_stock_sessions", session));
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const updatedBy = String(user?.name || user?.email || user?.userId || "System").trim() || "System";
+    await db.query(
+      "UPDATE `physical_stock_sessions` SET `status` = 'Open', `closedAt` = NULL, `closedBy` = NULL, `updatedBy` = ?, `updateTimestamp` = ? WHERE `id` = ?",
+      [updatedBy, now, session.id]
+    );
+    return res.json(normalizeFetchedRow("physical_stock_sessions", {
+      ...session,
+      status: "Open",
+      closedAt: null,
+      closedBy: null,
+      updatedBy,
+      updateTimestamp: now
+    }));
+  } catch (error) {
+    console.error("[PHYSICAL_STOCK] restart-session failed:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+app.delete("/api/physical-stock/sessions/:id", requireAuth, requirePhysicalStockAccess, async (req, res) => {
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  const sessionId = String(req.params.id || "").trim();
+  if (!sessionId) return res.status(400).json({ error: "Session ID is required." });
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [sessionRows] = await conn.query("SELECT `id`, `sessionNo` FROM `physical_stock_sessions` WHERE `id` = ? LIMIT 1", [sessionId]);
+    const session = sessionRows[0];
+    if (!session?.id) {
+      await conn.rollback();
+      return res.status(404).json({ error: "Physical stock session not found." });
+    }
+    await conn.query("DELETE FROM `reel_stock_taker_logs` WHERE `sessionId` = ?", [sessionId]);
+    await conn.query("DELETE FROM `physical_stock_sessions` WHERE `id` = ?", [sessionId]);
+    await conn.commit();
+    return res.json({ success: true, sessionId, sessionNo: session.sessionNo });
+  } catch (error) {
+    try {
+      await conn.rollback();
+    } catch {
+    }
+    console.error("[PHYSICAL_STOCK] delete-session failed:", error);
+    return res.status(500).json({ error: error.message });
+  } finally {
+    conn.release();
+  }
+});
 app.post("/api/physical-stock/close-session", requireAuth, requirePhysicalStockAccess, async (req, res) => {
   try {
     const db = await getPool();

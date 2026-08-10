@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Play, Square, RefreshCw } from "lucide-react";
+import { Play, Square, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type { PhysicalStockSession, StockTakerLog } from "../types";
 
@@ -10,15 +10,15 @@ function formatDateTime(value?: string) {
   return date.toLocaleString("en-GB");
 }
 
-async function postSessionAction(endpoint: string, body?: Record<string, unknown>) {
+async function sessionRequest(endpoint: string, options?: { method?: "POST" | "DELETE"; body?: Record<string, unknown> }) {
   const token = window.localStorage.getItem("authToken") || "";
   const response = await fetch(endpoint, {
-    method: "POST",
+    method: options?.method || "POST",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(body || {}),
+    body: options?.method === "DELETE" ? undefined : JSON.stringify(options?.body || {}),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Session action failed.");
@@ -27,8 +27,8 @@ async function postSessionAction(endpoint: string, body?: Record<string, unknown
 
 export function PhysicalStockSessions() {
   const [sessions, , , sessionsApi] = useData<PhysicalStockSession>("physical_stock_sessions", [], { cacheToLocalStorage: false });
-  const [logs] = useData<StockTakerLog>("reel_stock_taker_logs", [], { cacheToLocalStorage: false });
-  const [busy, setBusy] = useState(false);
+  const [logs, , , logsApi] = useData<StockTakerLog>("reel_stock_taker_logs", [], { cacheToLocalStorage: false });
+  const [busySessionId, setBusySessionId] = useState("");
   const [message, setMessage] = useState("");
 
   const activeSession = useMemo(
@@ -51,39 +51,73 @@ export function PhysicalStockSessions() {
     [sessions],
   );
 
-  const refreshSessions = async () => {
-    await sessionsApi.refresh({ force: true });
+  const refreshAll = async () => {
+    await Promise.all([sessionsApi.refresh({ force: true }), logsApi.refresh({ force: true })]);
   };
 
   const handleStartSession = async () => {
-    setBusy(true);
+    setBusySessionId("new");
     setMessage("");
     try {
-      const session = await postSessionAction("/api/physical-stock/start-session");
+      const session = await sessionRequest("/api/physical-stock/start-session");
       setMessage(`Session ${session.sessionNo || ""} started.`);
-      await refreshSessions();
+      await refreshAll();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to start session.");
     } finally {
-      setBusy(false);
+      setBusySessionId("");
     }
   };
 
-  const handleCloseSession = async () => {
-    if (!activeSession) return;
-    const confirmed = window.confirm(`Close physical stock session ${activeSession.sessionNo}?`);
+  const handleCloseSession = async (session: PhysicalStockSession) => {
+    const confirmed = window.confirm(`Close physical stock session ${session.sessionNo}?`);
     if (!confirmed) return;
 
-    setBusy(true);
+    setBusySessionId(session.id);
     setMessage("");
     try {
-      await postSessionAction("/api/physical-stock/close-session", { sessionId: activeSession.id });
-      setMessage(`Session ${activeSession.sessionNo} closed.`);
-      await refreshSessions();
+      await sessionRequest("/api/physical-stock/close-session", { body: { sessionId: session.id } });
+      setMessage(`Session ${session.sessionNo} closed.`);
+      await refreshAll();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to close session.");
     } finally {
-      setBusy(false);
+      setBusySessionId("");
+    }
+  };
+
+  const handleRestartSession = async (session: PhysicalStockSession) => {
+    const confirmed = window.confirm(`Restart session ${session.sessionNo} and continue scanning in the same session? Existing scans will remain.`);
+    if (!confirmed) return;
+
+    setBusySessionId(session.id);
+    setMessage("");
+    try {
+      await sessionRequest("/api/physical-stock/restart-session", { body: { sessionId: session.id } });
+      setMessage(`Session ${session.sessionNo} restarted.`);
+      await refreshAll();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to restart session.");
+    } finally {
+      setBusySessionId("");
+    }
+  };
+
+  const handleDeleteSession = async (session: PhysicalStockSession) => {
+    const scannedCount = scanCounts.get(session.id) || 0;
+    const confirmed = window.confirm(`Delete session ${session.sessionNo}? This will permanently delete ${scannedCount} scanned reel record${scannedCount === 1 ? "" : "s"} for this session.`);
+    if (!confirmed) return;
+
+    setBusySessionId(session.id);
+    setMessage("");
+    try {
+      await sessionRequest(`/api/physical-stock/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
+      setMessage(`Session ${session.sessionNo} deleted.`);
+      await refreshAll();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to delete session.");
+    } finally {
+      setBusySessionId("");
     }
   };
 
@@ -93,7 +127,7 @@ export function PhysicalStockSessions() {
         <h2 className="text-xl font-bold uppercase tracking-tight text-black">Physical Stock Sessions</h2>
         <button
           type="button"
-          onClick={refreshSessions}
+          onClick={refreshAll}
           className="inline-flex h-[38px] items-center justify-center gap-2 rounded border border-black bg-white px-3 text-xs font-black uppercase text-black hover:bg-slate-50"
         >
           <RefreshCw size={14} />
@@ -114,8 +148,8 @@ export function PhysicalStockSessions() {
             </div>
             <button
               type="button"
-              onClick={handleCloseSession}
-              disabled={busy}
+              onClick={() => handleCloseSession(activeSession)}
+              disabled={Boolean(busySessionId)}
               className="inline-flex h-[42px] items-center justify-center gap-2 rounded border border-rose-700 bg-rose-50 px-4 text-sm font-black uppercase text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Square size={15} />
@@ -126,12 +160,12 @@ export function PhysicalStockSessions() {
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div>
               <div className="text-[10px] font-black uppercase text-slate-600">No Active Session</div>
-              <div className="mt-1 text-lg font-black text-black">Start a session before physical stock scanning begins.</div>
+              <div className="mt-1 text-lg font-black text-black">Start a new session or restart a closed session before scanning.</div>
             </div>
             <button
               type="button"
               onClick={handleStartSession}
-              disabled={busy}
+              disabled={Boolean(busySessionId)}
               className="inline-flex h-[42px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-4 text-sm font-black uppercase text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Play size={15} />
@@ -146,7 +180,7 @@ export function PhysicalStockSessions() {
           <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {["Session No", "Status", "Started", "Closed", "Scanned Reels", "Started By", "Closed By"].map((heading) => (
+                {["Session No", "Status", "Started", "Closed", "Scanned Reels", "Started By", "Closed By", "Actions"].map((heading) => (
                   <th key={heading} className="whitespace-nowrap border-2 border-black bg-indigo-700 px-3 py-3 text-left text-xs font-black uppercase">{heading}</th>
                 ))}
               </tr>
@@ -154,11 +188,12 @@ export function PhysicalStockSessions() {
             <tbody>
               {sortedSessions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="border-2 border-black px-6 py-10 text-center font-medium text-black">No physical stock sessions found.</td>
+                  <td colSpan={8} className="border-2 border-black px-6 py-10 text-center font-medium text-black">No physical stock sessions found.</td>
                 </tr>
               ) : (
                 sortedSessions.map((session) => {
                   const isOpen = String(session.status || "").toLowerCase() === "open";
+                  const isBusy = Boolean(busySessionId) && busySessionId === session.id;
                   return (
                     <tr key={session.id} className={isOpen ? "bg-emerald-50" : "hover:bg-slate-50"}>
                       <td className="border-2 border-black px-3 py-3 text-sm font-black text-black">{session.sessionNo}</td>
@@ -168,6 +203,41 @@ export function PhysicalStockSessions() {
                       <td className="border-2 border-black px-3 py-3 text-right text-sm font-bold text-black">{scanCounts.get(session.id) || 0}</td>
                       <td className="border-2 border-black px-3 py-3 text-sm text-black">{session.startedBy || "-"}</td>
                       <td className="border-2 border-black px-3 py-3 text-sm text-black">{session.closedBy || "-"}</td>
+                      <td className="border-2 border-black px-3 py-2 text-sm text-black">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isOpen ? (
+                            <button
+                              type="button"
+                              onClick={() => handleCloseSession(session)}
+                              disabled={Boolean(busySessionId)}
+                              className="inline-flex h-[30px] items-center gap-1 rounded border border-rose-700 bg-rose-50 px-2 text-[11px] font-black uppercase text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Square size={12} />
+                              Close
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleRestartSession(session)}
+                              disabled={Boolean(busySessionId)}
+                              className="inline-flex h-[30px] items-center gap-1 rounded border border-emerald-700 bg-emerald-50 px-2 text-[11px] font-black uppercase text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <RotateCcw size={12} />
+                              Restart
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSession(session)}
+                            disabled={Boolean(busySessionId)}
+                            className="inline-flex h-[30px] items-center gap-1 rounded border border-black bg-white px-2 text-[11px] font-black uppercase text-black hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Trash2 size={12} />
+                            Delete
+                          </button>
+                          {isBusy ? <span className="text-[11px] font-bold text-slate-600">Working...</span> : null}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
