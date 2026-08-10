@@ -107,10 +107,20 @@ export function buildMrrReelLabelData({
       suppReel: toText(slip.supplierReelNo),
       weightKg,
     };
+    const defaultQrPayload = JSON.stringify({
+      source: "MRR",
+      reelNo,
+      ourReelNo: reelNo,
+      weight: weightKg,
+      weightKg,
+      mrrNo: toText(mrr.transactionNo),
+      date: toText(mrr.date),
+      materialCode: toText(material?.erpCode),
+    });
 
     labels.push({
       ...baseRow,
-      qrPayload: toText(qrPayloadByPackingSlipId[slip.id]) || reelNo,
+      qrPayload: toText(qrPayloadByPackingSlipId[slip.id]) || defaultQrPayload,
     });
   });
 
