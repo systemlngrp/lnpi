@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, PackageCheck, Save, X } from "lucide-react";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
@@ -559,28 +559,17 @@ export function ReelIssueReturnScan() {
       <div className="flex flex-col gap-3 border-b border-black pb-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-xl font-bold uppercase tracking-tight text-black">Reel Issue/Return QR Scan</h2>
-          <div className="text-xs font-semibold text-slate-600">Scan reels into draft. Database save happens only on Submit.</div>
+          <div className="text-xs font-semibold text-slate-600">Scan reels, review draft, then save.</div>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => void handleOpenScanner()}
-            disabled={!productionId || isProcessingScan || isSubmitting}
-            className="inline-flex h-[40px] items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Camera size={16} />
-            Scan QR
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting || reelDrafts.length === 0}
-            className="inline-flex h-[40px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-4 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? <Spinner size={18} /> : <Save size={16} />}
-            Submit
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => void handleOpenScanner()}
+          disabled={!productionId || isProcessingScan || isSubmitting}
+          className="inline-flex h-[40px] w-full items-center justify-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
+        >
+          <Camera size={16} />
+          Scan QR
+        </button>
       </div>
 
       <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
@@ -634,7 +623,7 @@ export function ReelIssueReturnScan() {
       <div className="rounded border-2 border-black bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h3 className="text-lg font-black uppercase text-black">Draft Issue / Return Reels</h3>
+            <h3 className="text-lg font-black uppercase text-black">Scanned Reels</h3>
             <div className="text-xs font-semibold text-slate-600">
               Issue Total: {formatQty(totalIssueDraftWeight)} KG | Return Total: {formatQty(totalReturnDraftWeight)} KG
             </div>
@@ -646,12 +635,57 @@ export function ReelIssueReturnScan() {
             className="inline-flex h-[40px] items-center justify-center gap-2 rounded border border-indigo-700 bg-indigo-50 px-4 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? <Spinner size={18} /> : <Save size={16} />}
-            Submit To DB
+            Save
           </button>
         </div>
 
-        <div className="mt-4 overflow-x-auto rounded border border-black">
-          <table className="min-w-full border-collapse text-sm">
+        <div className="mt-4 space-y-3 md:hidden">
+          {reelDrafts.length === 0 ? (
+            <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center text-sm font-semibold text-slate-500">
+              No scanned reels in draft yet.
+            </div>
+          ) : (
+            reelDrafts.map((draft) => (
+              <div key={draft.id} className="rounded border-2 border-black bg-white p-3 shadow-sm">
+                <div className="flex items-start justify-between gap-3 border-b border-black pb-2">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-black uppercase text-slate-500">Reel No</div>
+                    <div className="break-words text-xl font-black text-black">{draft.ourReelNo}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeDraft(draft.id)}
+                    className="shrink-0 rounded border border-rose-700 bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100"
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
+                  <MobileField label="Job No" value={draft.jobNo || "-"} />
+                  <MobileField label="Material" value={draft.materialName} />
+                  <MobileField label="ERP/Code" value={draft.materialCode || "-"} />
+                  <MobileField label="Issue Weight" value={`${formatQty(draft.issueWeight)} KG`} accent />
+                  <div className="rounded border border-slate-300 bg-slate-50 p-2">
+                    <label className="mb-1 block text-[10px] font-black uppercase text-slate-500">Return Qty KG</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={draft.issueWeight}
+                      step="0.01"
+                      value={draft.returnQty}
+                      onChange={(event) => updateReturnQty(draft.id, event.target.value)}
+                      className="h-10 w-full rounded border border-black px-2 text-right text-base font-black focus:border-indigo-600 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="mt-4 hidden rounded border border-black md:block">
+          <table className="min-w-full table-fixed border-collapse text-sm">
             <thead className="bg-slate-900 text-white">
               <tr>
                 {["Reel No", "Job No", "Material", "ERP/Code", "Issue Weight", "Return Qty KG", "Action"].map((heading) => (
@@ -671,10 +705,10 @@ export function ReelIssueReturnScan() {
               ) : (
                 reelDrafts.map((draft) => (
                   <tr key={draft.id} className="odd:bg-white even:bg-slate-50">
-                    <td className="border border-black px-3 py-2 font-black text-black">{draft.ourReelNo}</td>
-                    <td className="border border-black px-3 py-2 font-semibold">{draft.jobNo || "-"}</td>
-                    <td className="border border-black px-3 py-2 font-semibold">{draft.materialName}</td>
-                    <td className="border border-black px-3 py-2 font-semibold">{draft.materialCode || "-"}</td>
+                    <td className="break-words border border-black px-3 py-2 font-black text-black">{draft.ourReelNo}</td>
+                    <td className="break-words border border-black px-3 py-2 font-semibold">{draft.jobNo || "-"}</td>
+                    <td className="break-words border border-black px-3 py-2 font-semibold">{draft.materialName}</td>
+                    <td className="break-words border border-black px-3 py-2 font-semibold">{draft.materialCode || "-"}</td>
                     <td className="border border-black px-3 py-2 font-black text-emerald-700">{formatQty(draft.issueWeight)}</td>
                     <td className="border border-black px-3 py-2">
                       <input
@@ -684,7 +718,7 @@ export function ReelIssueReturnScan() {
                         step="0.01"
                         value={draft.returnQty}
                         onChange={(event) => updateReturnQty(draft.id, event.target.value)}
-                        className="w-28 rounded border border-black px-2 py-1.5 text-right font-bold focus:border-indigo-600 focus:outline-none"
+                        className="w-full max-w-28 rounded border border-black px-2 py-1.5 text-right font-bold focus:border-indigo-600 focus:outline-none"
                       />
                     </td>
                     <td className="border border-black px-3 py-2">
@@ -731,7 +765,16 @@ function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-emerald-700 bg-white p-3">
       <div className="text-[10px] font-black uppercase text-slate-600">{label}</div>
-      <div className="mt-1 text-sm font-black text-black">{value}</div>
+      <div className="mt-1 break-words text-sm font-black text-black">{value}</div>
+    </div>
+  );
+}
+
+function MobileField({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="rounded border border-slate-300 bg-slate-50 p-2">
+      <div className="text-[10px] font-black uppercase text-slate-500">{label}</div>
+      <div className={`mt-1 break-words text-sm font-black ${accent ? "text-emerald-700" : "text-black"}`}>{value}</div>
     </div>
   );
 }
