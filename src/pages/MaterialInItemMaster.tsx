@@ -15,6 +15,11 @@ function makeOptions(values: Array<string | number>) {
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
     .map((value) => ({ value, label: value }));
 }
+
+function isOpeningMrrNo(value?: string | number | null) {
+  return String(value ?? "").trim() === "1";
+}
+
 export function MaterialInItemMaster() {
   const navigate = useNavigate();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
@@ -115,7 +120,8 @@ export function MaterialInItemMaster() {
           parentGateEntryNo: m.gateEntryNo || gateEntry?.gateEntryNo || "-",
           parentVehicleNo: gateEntry?.truckNo || "-",
           timestamp: m.timestamp,
-          mrrType: m.mrrType || "Others"
+          mrrType: m.mrrType || "Others",
+          isOpeningMrr: isOpeningMrrNo(m.transactionNo)
         };
       }).filter((l): l is NonNullable<typeof l> => l !== null);
     });
@@ -143,7 +149,8 @@ export function MaterialInItemMaster() {
         parentGateEntryNo: parent.gateEntryNo || gateEntry?.gateEntryNo || "-",
         parentVehicleNo: gateEntry?.truckNo || "-",
         timestamp: parent.timestamp,
-        specs
+        specs,
+        isOpeningMrr: isOpeningMrrNo(parent.transactionNo)
       };
     }).filter((l): l is NonNullable<typeof l> => l !== null);
 
@@ -167,15 +174,21 @@ export function MaterialInItemMaster() {
     const reelSummary = allLineItems.filter(l => l.mrrType === "Reel").filter(filterFn);
     const filteredReelDetails = reelDetails.filter(filterFn);
 
+    const visibleLines = [...others, ...reelSummary];
+    const openingLines = visibleLines.filter(l => l.isOpeningMrr);
+    const receiptLines = visibleLines.filter(l => !l.isOpeningMrr);
+    const openingReelDetails = filteredReelDetails.filter(r => r.isOpeningMrr);
+    const receiptReelDetails = filteredReelDetails.filter(r => !r.isOpeningMrr);
+
     // Calculate Metrics
     const metrics = {
-      totalReceipts: materialIn.filter(m => {
-        if (fromDate && m.date < fromDate) return false;
-        if (toDate && m.date > toDate) return false;
-        if (mrrFilter && m.transactionNo !== mrrFilter) return false;
-        return true;
-      }).length,
-      totalReelWeight: reelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
+      openingQty: openingLines.reduce((sum, l) => sum + Number(l.actualQty ?? l.qty ?? 0), 0),
+      receiptQty: receiptLines.reduce((sum, l) => sum + Number(l.actualQty ?? l.qty ?? 0), 0),
+      openingValue: openingLines.reduce((sum, l) => sum + Number(l.actualValue ?? l.value ?? 0), 0),
+      receiptValue: receiptLines.reduce((sum, l) => sum + Number(l.actualValue ?? l.value ?? 0), 0),
+      openingReelWeight: openingReelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
+      receiptReelWeight: receiptReelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
+      totalReceipts: new Set(receiptLines.map(l => l.parentId)).size,
       othersValue: others.reduce((sum, l) => sum + Number(l.value || 0), 0),
       reelValue: reelSummary.reduce((sum, l) => sum + Number(l.value || 0), 0)
     };
@@ -380,12 +393,14 @@ export function MaterialInItemMaster() {
       {/* Colorful Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
-          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Receipts</div>
-          <div className="text-3xl font-black">{processedData.metrics.totalReceipts.toLocaleString()}</div>
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Opening</div>
+          <div className="text-3xl font-black">{processedData.metrics.openingReelWeight.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs">KG</span></div>
+          <div className="text-[10px] font-bold mt-1 opacity-90">Value {processedData.metrics.openingValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
         </div>
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
-          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Total Reel Weight</div>
-          <div className="text-3xl font-black">{processedData.metrics.totalReelWeight.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs">KG</span></div>
+          <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Receipts</div>
+          <div className="text-3xl font-black">{processedData.metrics.receiptReelWeight.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-xs">KG</span></div>
+          <div className="text-[10px] font-bold mt-1 opacity-90">{processedData.metrics.totalReceipts.toLocaleString()} MRR | Value {processedData.metrics.receiptValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transition-transform hover:scale-[1.02]">
           <div className="text-[10px] font-black uppercase opacity-80 tracking-widest mb-1">Others Value</div>
