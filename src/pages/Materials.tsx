@@ -928,6 +928,39 @@ export function Materials() {
     reader.readAsBinaryString(file);
   }
 
+
+  function downloadMaterialMasterExcel() {
+    const exportRows = filteredMaterials.map((material, index) => {
+      const values = getMaterialStockValues(material);
+      const isVirtualReceiptItem = Boolean((material as MaterialDisplayRow).isVirtualReceiptItem);
+      return {
+        SL: index + 1,
+        Type: isVirtualReceiptItem ? "FG" : material.type,
+        "ERP Code": material.erpCode || "",
+        "Item Name": material.name || "",
+        Size: material.size ?? "-",
+        GSM: material.gsm ?? "-",
+        BF: material.bf ?? "-",
+        Color: material.type === "Reel" ? material.color || "-" : "-",
+        Opening: Number(values.openingQty || 0),
+        "Opening Value": Number(values.openingValue || 0),
+        Receipts: Number(values.receiptQty || 0),
+        "Receipt Value": Number(values.receiptValue || 0),
+        Issues: Number(values.issueQty || 0),
+        "Issue Value": Number(values.issueValue || 0),
+        Returns: Number(values.returnQty || 0),
+        Balance: Number(values.balance || 0),
+        "Closing Value": Number(values.closingValue || 0),
+        UOM: material.uom || "-",
+        Active: material.active || "Yes",
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Material Master");
+    XLSX.writeFile(wb, "Material_Master_Export.xlsx");
+  }
   function clearFilters() {
     setSearchTerm("");
     setTypeFilter("All");
@@ -1393,6 +1426,13 @@ export function Materials() {
                 <FilterSelect compact label="Color Filter" value={colorFilter} onChange={setColorFilter} options={["All", ...colorFilterOptions]} />
 
                 <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={downloadMaterialMasterExcel}
+                    className="inline-flex items-center gap-2 rounded border border-emerald-700 bg-emerald-50 px-4 py-2 text-xs font-bold uppercase text-emerald-800 transition hover:bg-emerald-100"
+                  >
+                    <Download size={14} /> Excel
+                  </button>
                   <button
                     type="button"
                     onClick={clearFilters}
