@@ -3,11 +3,18 @@ import { useData } from "../hooks/useData";
 import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip, GateEntry, Company } from "../types";
 import { Edit2, Check, X, Search, Package, Layers, Disc, ExternalLink } from "lucide-react";
 import { Spinner } from "../components/Spinner";
+import { Select } from "../components/Select";
+import { ExcelExport } from "../components/ExcelExport";
 import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useNavigate } from "react-router-dom";
 
+function makeOptions(values: Array<string | number>) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+    .map((value) => ({ value, label: value }));
+}
 export function MaterialInItemMaster() {
   const navigate = useNavigate();
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
@@ -23,10 +30,12 @@ export function MaterialInItemMaster() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"others" | "reel-summary" | "reel-details">("others");
+  const [mrrFilter, setMrrFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
   const materialMap = useMemo(() => new Map(materials.map(m => [m.id, m])), [materials]);
+  const mrrOptions = useMemo(() => makeOptions(materialIn.map((entry) => entry.transactionNo)), [materialIn]);
   const gateEntryMap = useMemo(() => new Map(gateEntries.map(ge => [ge.id, ge])), [gateEntries]);
 
   const handleEditClick = (lineId: string, currentQty: number) => {
@@ -94,6 +103,7 @@ export function MaterialInItemMaster() {
         const entryDate = m.date || "";
         if (fromDate && entryDate < fromDate) return null;
         if (toDate && entryDate > toDate) return null;
+        if (mrrFilter && m.transactionNo !== mrrFilter) return null;
         return {
           ...line,
           parentStatus: m.status,
@@ -119,6 +129,7 @@ export function MaterialInItemMaster() {
       const entryDate = parent.date || "";
       if (fromDate && entryDate < fromDate) return null;
       if (toDate && entryDate > toDate) return null;
+      if (mrrFilter && parent.transactionNo !== mrrFilter) return null;
       const gateEntry = parent.gateEntryId ? gateEntryMap.get(parent.gateEntryId) : null;
       const material = materialMap.get(slip.materialId);
       const specs = material ? `${material.gsm || "-"} GSM / ${material.bf || "-"} BF / ${material.size || "-"} ${(material as any).sizeUom || ""}` : "Unknown";
@@ -161,6 +172,7 @@ export function MaterialInItemMaster() {
       totalReceipts: materialIn.filter(m => {
         if (fromDate && m.date < fromDate) return false;
         if (toDate && m.date > toDate) return false;
+        if (mrrFilter && m.transactionNo !== mrrFilter) return false;
         return true;
       }).length,
       totalReelWeight: reelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
@@ -174,9 +186,43 @@ export function MaterialInItemMaster() {
       reelDetails: filteredReelDetails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
       metrics
     };
-  }, [materialIn, packingSlips, materials, npdItems, suppliers, searchTerm, fromDate, toDate, materialMap, gateEntryMap]);
+  }, [materialIn, packingSlips, materials, npdItems, suppliers, searchTerm, fromDate, toDate, mrrFilter, materialMap, gateEntryMap]);
 
 
+
+  const excelRows = useMemo(() => {
+    if (activeTab === "reel-details") {
+      return processedData.reelDetails.map((reel: any) => ({
+        "GE No": reel.parentGateEntryNo,
+        "MRR No": reel.parentTransactionNo,
+        Date: formatDate(reel.parentDate),
+        "Vehicle No": reel.parentVehicleNo,
+        Supplier: getSupplierName(reel.parentSupplierId),
+        "Material Specs": reel.specs,
+        "Our Reel No": reel.ourReelNo,
+        "Supplier Reel No": reel.supplierReelNo || "-",
+        "Weight (KG)": Number(reel.weightKg || 0),
+      }));
+    }
+
+    const data = activeTab === "others" ? processedData.others : processedData.reelSummary;
+    return data.map((line: any) => {
+      const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
+      return {
+        "GE No": line.parentGateEntryNo,
+        "MRR No": line.parentTransactionNo,
+        Date: formatDate(line.parentDate),
+        "Vehicle No": line.parentVehicleNo,
+        "Supplier / Customer": getSupplierName(line.parentSupplierId),
+        "Item Name": itemName,
+        "Invoice No": line.parentInvoiceNo || "-",
+        Qty: Number(line.qty || 0),
+        UOM: line.uom || "",
+        Rate: Number(line.rate || 0),
+        Value: Number(line.value || 0),
+      };
+    });
+  }, [activeTab, processedData, materials, npdItems, suppliers, companies]);
   const renderTable = () => {
     const data = activeTab === "others" ? processedData.others : 
                  activeTab === "reel-summary" ? processedData.reelSummary : 
@@ -373,6 +419,11 @@ export function MaterialInItemMaster() {
           />
         </div>
 
+        <div className="w-[180px] flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase text-slate-500">MRR No</label>
+          <Select compact value={mrrFilter} onChange={setMrrFilter} options={mrrOptions} placeholder="All MRR" />
+        </div>
+
         <div className="flex-1 min-w-[200px] flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase text-slate-500">Search</label>
           <div className="relative">
@@ -387,11 +438,12 @@ export function MaterialInItemMaster() {
           </div>
         </div>
 
-        {(fromDate || toDate || searchTerm) && (
+        {(fromDate || toDate || mrrFilter || searchTerm) && (
           <button 
             onClick={() => {
               setFromDate("");
               setToDate("");
+              setMrrFilter("");
               setSearchTerm("");
             }}
             className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
@@ -432,6 +484,9 @@ export function MaterialInItemMaster() {
         <div className="overflow-x-auto">
           {renderTable()}
         </div>
+      </div>
+      <div className="flex justify-end">
+        <ExcelExport data={excelRows} fileName={`Material_Receipt_Item_Master_${activeTab}`} sheetName="MR Item Master" />
       </div>
     </div>
   );

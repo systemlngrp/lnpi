@@ -3,11 +3,18 @@ import { useData } from "../hooks/useData";
 import { Company, Material, MaterialIn, MaterialInPackingSlip, Service, Setting, Supplier } from "../types";
 import { formatDate } from "../lib/serial";
 import { ChevronDown, ChevronRight, Search, Trash2, Download, QrCode } from "lucide-react";
+import { Select } from "../components/Select";
+import { ExcelExport } from "../components/ExcelExport";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { normalizeMaterialInRecord, recalculateMaterialLine } from "../lib/materialInTaxes";
 import { downloadMaterialInPdf } from "../lib/materialInPdf";
 import { downloadMrrReelLabelsPdf } from "../lib/mrrReelLabelsPdf";
 
+function makeOptions(values: Array<string | number>) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+    .map((value) => ({ value, label: value }));
+}
 export function MaterialInMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [materials] = useData<Material>("materials", []);
@@ -22,10 +29,12 @@ export function MaterialInMaster() {
   const [expandedItemRows, setExpandedItemRows] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [mrrFilter, setMrrFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
   const statusOptions = ["All", "Pending PH", "Pending Accounts", "Pending MD", "Pending Tally", "Completed"];
+  const mrrOptions = useMemo(() => makeOptions(materialIn.map((entry) => entry.transactionNo)), [materialIn]);
 
   const handleDelete = (id: string) => {
     if (deletingId !== id) {
@@ -109,7 +118,7 @@ export function MaterialInMaster() {
 
   const getMrrNoElement = (entry: MaterialIn, showInlineDetails = false) => {
     const isExpanded = expandedItemRows.has(entry.id);
-    return (
+  return (
       <div className="space-y-2">
         <button
           type="button"
@@ -127,13 +136,13 @@ export function MaterialInMaster() {
   };
   const getLineItemsElement = (lines: MaterialIn["lines"] = []) => {
     const safeLines = Array.isArray(lines) ? lines : [];
-    return (
+  return (
       <ul className="list-none space-y-1">
         {safeLines.map((rawLine, idx) => {
           if (!rawLine) return null;
           const line = recalculateMaterialLine({ ...rawLine });
           const itemName = materials.find((item) => item.id === line.itemId)?.name || npdItems.find((item) => item.id === line.itemId)?.name;
-          return (
+  return (
             <li key={idx} className="border-b border-black pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
               <div className="font-medium text-black">{itemName || "Unknown"}</div>
               <div className="text-xs text-black">
@@ -179,12 +188,13 @@ export function MaterialInMaster() {
 
       const matchesSearch = searchableParentText.includes(searchTerm.toLowerCase());
 
+      const matchesMrr = !mrrFilter || entry.transactionNo === mrrFilter;
       const matchesStatus = statusFilter === "All" || entry.status === statusFilter;
       const receiptDate = entry.date || "";
       const matchesFromDate = !fromDate || receiptDate >= fromDate;
       const matchesToDate = !toDate || receiptDate <= toDate;
 
-      return matchesSearch && matchesStatus && matchesFromDate && matchesToDate;
+      return matchesSearch && matchesMrr && matchesStatus && matchesFromDate && matchesToDate;
     })
     .sort((a, b) => {
       const timeA = new Date(a.updateTimestamp || a.timestamp || 0).getTime();
@@ -203,6 +213,34 @@ export function MaterialInMaster() {
     [filteredMaterialIn]
   );
 
+  const excelRows = useMemo(() => filteredMaterialIn.map((entry) => ({
+    "MRR No": entry.transactionNo,
+    "MRR Type": formatText(entry.mrrType),
+    Date: formatDate(entry.date),
+    "Gate Entry No": formatText(entry.gateEntryNo),
+    Supplier: getSupplierName(entry.supplierId),
+    "Invoice No": formatText(entry.invoiceNo),
+    "Invoice Date": entry.invDate ? formatDate(entry.invDate) : "-",
+    Status: entry.status || "-",
+    PH: getApprovalText(entry.phTimestamp, entry.phEmailId),
+    Accounts: getApprovalText(entry.accTimestamp, entry.accEmailId),
+    MD: getApprovalText(entry.mdTimestamp, entry.mdEmailId),
+    Tally: entry.tallyTimestamp ? formatDate(entry.tallyTimestamp) : "-",
+    "Invoice Value": Number(entry.totalInvoiceValue || 0),
+    GST: Number(getGstTotal(entry) || 0),
+    "Invoice After GST": Number(entry.totalInvoiceValueAfterGst || 0),
+    "Actual Value": Number(entry.totalActualValue || entry.totalAmount || 0),
+    Insurance: Number(entry.insurance || 0),
+    "Other Charges": Number(entry.otherCharges || 0),
+    "Expense GST": Number(getExpenseGstTotal(entry) || 0),
+    "Round Off": Number(entry.roundOff || 0),
+    "Total Amount": Number(entry.totalAmount || 0),
+    "Debit Note No": formatText(entry.debitNote),
+    "Debit Note Date": entry.debitNoteDate ? formatDate(entry.debitNoteDate) : "-",
+    "Debit Amount": Number(entry.debitNoteAmount || 0),
+    "Updated By": formatText(entry.updatedBy),
+    "Updated At": entry.updateTimestamp ? formatDate(entry.updateTimestamp) : "-",
+  })), [filteredMaterialIn, suppliers, companies]);
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black pb-4">
@@ -250,6 +288,10 @@ export function MaterialInMaster() {
               {statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </div>
+          <div className="flex flex-col gap-1 min-w-[180px]">
+            <label className="text-[10px] font-black uppercase text-slate-500">MRR No</label>
+            <Select compact value={mrrFilter} onChange={setMrrFilter} options={mrrOptions} placeholder="All MRR" />
+          </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
             <label className="text-[10px] font-black uppercase text-slate-500">Search</label>
             <div className="relative">
@@ -257,12 +299,13 @@ export function MaterialInMaster() {
               <input type="text" placeholder="Search transaction, supplier..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-1.5 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-xs font-bold" />
             </div>
           </div>
-          {(fromDate || toDate || statusFilter !== "All" || searchTerm) && (
+          {(fromDate || toDate || statusFilter !== "All" || mrrFilter || searchTerm) && (
             <button
               onClick={() => {
                 setFromDate("");
                 setToDate("");
                 setStatusFilter("All");
+                setMrrFilter("");
                 setSearchTerm("");
               }}
               className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline ml-2 mt-4"
@@ -486,6 +529,9 @@ export function MaterialInMaster() {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="flex justify-end">
+        <ExcelExport data={excelRows} fileName="Material_Receipt_Master" sheetName="MR Master" />
       </div>
     </div>
   );

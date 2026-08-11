@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Select } from "../components/Select";
+import { ExcelExport } from "../components/ExcelExport";
 import { useData } from "../hooks/useData";
 import {
   Material,
@@ -46,37 +47,34 @@ export function ErpWiseReelStockReport() {
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", [], { cacheToLocalStorage: false });
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", [], { cacheToLocalStorage: false });
   const [searchTerm, setSearchTerm] = useState("");
+  const [mrrFilter, setMrrFilter] = useState("");
   const [erpFilter, setErpFilter] = useState("");
   const [sizeFilter, setSizeFilter] = useState("");
   const [gsmFilter, setGsmFilter] = useState("");
   const [bfFilter, setBfFilter] = useState("");
 
+  const allReelRows = useMemo(() => buildReelStockRows({
+    materials,
+    materialIn,
+    packingSlips,
+    issueReelLines,
+    returnReelLines,
+  }), [issueReelLines, materialIn, materials, packingSlips, returnReelLines]);
+
   const allRows = useMemo<ReelStockRow[]>(() => {
-    const reelRows = buildReelStockRows({
-      materials,
-      materialIn,
-      packingSlips,
-      issueReelLines,
-      returnReelLines,
-    });
+    const sourceReelRows = mrrFilter
+      ? allReelRows.filter((row) => !row.isOpening && row.mrrNo === mrrFilter)
+      : allReelRows;
 
     return materials
       .filter((material) => material.type === "Reel")
       .map((material) => {
-        const openingStock = Number(material.openingQty || 0);
-        const issued = issueReelLines
-          .filter((line) => line.materialId === material.id)
-          .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-        const returned = returnReelLines
-          .filter((line) => line.materialId === material.id)
-          .reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-        const received = materialIn.reduce((sum, entry) => {
-          const line = entry.lines.find((row) => row.itemId === material.id);
-          if (!line) return sum;
-          return sum + Number(line.actualQty ?? line.qty ?? 0);
-        }, 0);
+        const materialReelRows = sourceReelRows.filter((row) => row.materialId === material.id);
+        const openingStock = mrrFilter ? 0 : Number(material.openingQty || 0);
+        const receipts = materialReelRows.reduce((sum, row) => sum + Number(row.mrrQty || 0), 0);
+        const issued = materialReelRows.reduce((sum, row) => sum + Number(row.issuedWeight || 0), 0);
+        const returned = materialReelRows.reduce((sum, row) => sum + Number(row.returnedWeight || 0), 0);
         const netIssued = Number((issued - returned).toFixed(2));
-        const materialReelRows = reelRows.filter((row) => row.materialId === material.id);
         const availableWeight = Number(materialReelRows.reduce((sum, row) => sum + row.availableWeight, 0).toFixed(2));
         const valuation = Number(materialReelRows.reduce((sum, row) => sum + row.valuation, 0).toFixed(2));
         const noOfReels = materialReelRows.filter((row) => row.availableWeight > 0).length;
@@ -90,7 +88,7 @@ export function ErpWiseReelStockReport() {
           gsm: Number(material.gsm || 0),
           bf: Number(material.bf || 0),
           openingStock,
-          receipts: Number(received.toFixed(2)),
+          receipts: Number(receipts.toFixed(2)),
           issued: Number(issued.toFixed(2)),
           returned: Number(returned.toFixed(2)),
           netIssued,
@@ -100,9 +98,10 @@ export function ErpWiseReelStockReport() {
           noOfReels,
         };
       })
+      .filter((row) => !mrrFilter || row.receipts > 0 || row.issued > 0 || row.returned > 0 || row.availableWeight > 0)
       .sort((a, b) => a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf);
-  }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines]);
-
+  }, [allReelRows, materials, mrrFilter]);
+  const mrrOptions = useMemo(() => makeOptions(allReelRows.filter((row) => !row.isOpening).map((row) => row.mrrNo)), [allReelRows]);
   const erpOptions = useMemo(() => makeOptions(allRows.map((row) => row.erp)), [allRows]);
   const sizeOptions = useMemo(() => makeOptions(allRows.map((row) => row.size || "")), [allRows]);
   const gsmOptions = useMemo(() => makeOptions(allRows.map((row) => row.gsm || "")), [allRows]);
@@ -150,10 +149,49 @@ export function ErpWiseReelStockReport() {
     [rows]
   );
 
-  const hasActiveFilters = Boolean(searchTerm || erpFilter || sizeFilter || gsmFilter || bfFilter);
+  const hasActiveFilters = Boolean(searchTerm || mrrFilter || erpFilter || sizeFilter || gsmFilter || bfFilter);
 
+
+  const excelRows = useMemo(
+    () => [
+      ...(rows.length > 0 ? [{
+        ERP: "TOTAL",
+        "Item Name": "",
+        SIZE: "",
+        GSM: "",
+        BF: "",
+        "Opening Stock": Number(formatQty(totals.openingStock)),
+        Receipt: Number(formatQty(totals.receipts)),
+        Issued: Number(formatQty(totals.issued)),
+        Return: Number(formatQty(totals.returned)),
+        "Net Issued": Number(formatQty(totals.netIssued)),
+        "Available Weight": Number(formatQty(totals.availableWeight)),
+        Rate: "-",
+        VALUATION: Number(formatQty(totals.valuation)),
+        "NO OF REELS": totals.noOfReels,
+      }] : []),
+      ...rows.map((row) => ({
+        ERP: row.erp,
+        "Item Name": row.itemName || "-",
+        SIZE: row.size || "",
+        GSM: row.gsm || "",
+        BF: row.bf || "",
+        "Opening Stock": Number(formatQty(row.openingStock)),
+        Receipt: Number(formatQty(row.receipts)),
+        Issued: Number(formatQty(row.issued)),
+        Return: Number(formatQty(row.returned)),
+        "Net Issued": Number(formatQty(row.netIssued)),
+        "Available Weight": Number(formatQty(row.availableWeight)),
+        Rate: Number(formatQty(row.rate)),
+        VALUATION: Number(formatQty(row.valuation)),
+        "NO OF REELS": row.noOfReels,
+      })),
+    ],
+    [rows, totals]
+  );
   const clearFilters = () => {
     setSearchTerm("");
+    setMrrFilter("");
     setErpFilter("");
     setSizeFilter("");
     setGsmFilter("");
@@ -184,7 +222,7 @@ export function ErpWiseReelStockReport() {
       </div>
 
       <div className="rounded border border-black bg-white p-3">
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(4,minmax(150px,1fr))_auto] xl:items-center">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(140px,1fr))_auto] xl:items-center">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
@@ -195,6 +233,7 @@ export function ErpWiseReelStockReport() {
               className="w-full rounded border-2 border-black pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
             />
           </div>
+          <Select value={mrrFilter} onChange={setMrrFilter} options={mrrOptions} placeholder="All MRR" />
           <Select value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" />
           <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
           <Select value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" />
@@ -267,6 +306,9 @@ export function ErpWiseReelStockReport() {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="flex justify-end">
+        <ExcelExport data={excelRows} fileName="ERP_Wise_Reel_Stock" sheetName="ERP Wise Stock" />
       </div>
     </div>
   );

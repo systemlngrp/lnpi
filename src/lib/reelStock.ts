@@ -24,6 +24,7 @@ export type ReelStockCalculationRow = {
   netIssuedWeight: number;
   availableWeight: number;
   mrrQty: number;
+  openingQty: number;
   rate: number;
   valuation: number;
   ageDays: number;
@@ -102,7 +103,8 @@ export function buildReelStockRows({
         returnedWeight: 0,
         netIssuedWeight: 0,
         availableWeight: openingQty,
-        mrrQty: openingQty,
+        mrrQty: 0,
+        openingQty,
         rate: openingRate,
         valuation: round2(openingQty * openingRate),
         ageDays: 0,
@@ -145,6 +147,7 @@ export function buildReelStockRows({
         netIssuedWeight,
         availableWeight,
         mrrQty,
+        openingQty: 0,
         rate,
         valuation: availableWeight > 0 ? round2(availableWeight * rate) : 0,
         ageDays: getAgeDays(receipt?.date),

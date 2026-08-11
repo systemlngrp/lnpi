@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { useData } from "../hooks/useData";
+import { ExcelExport } from "../components/ExcelExport";
 import {
   Material,
   MaterialIn,
@@ -164,6 +165,38 @@ export function JobwiseReelConsumptionReport() {
   const averageGpPercent =
     summary.jobValue > 0 ? Number(((summary.gp / summary.jobValue) * 100).toFixed(2)) : 0;
 
+
+  const excelRows = useMemo(
+    () => [
+      ...(rows.length > 0 ? [{
+        "Job No.": "TOTAL",
+        "Corrugation Date": "",
+        "Job FFG": "",
+        "Job Rate": "",
+        "Job Value": Number(summary.jobValue.toFixed(2)),
+        "Reel Issued": "",
+        "Reel Returned": "",
+        "Reel Consumed": Number(summary.reelConsumed.toFixed(2)),
+        "Actual Consumed Value": Number(summary.consumedValue.toFixed(2)),
+        GP: Number(summary.gp.toFixed(2)),
+        "GP%": Number(averageGpPercent.toFixed(2)),
+      }] : []),
+      ...rows.map((row) => ({
+        "Job No.": row.jobNo,
+        "Corrugation Date": formatDate(row.corrugationDate),
+        "Job FFG": Number(row.jobFfg || 0),
+        "Job Rate": Number(row.jobRate || 0),
+        "Job Value": Number(row.jobValue || 0),
+        "Reel Issued": Number(row.reelIssued || 0),
+        "Reel Returned": Number(row.reelReturned || 0),
+        "Reel Consumed": Number(row.reelConsumed || 0),
+        "Actual Consumed Value": Number(row.consumedValue || 0),
+        GP: Number(row.gp || 0),
+        "GP%": Number(row.gpPercent || 0),
+      })),
+    ],
+    [averageGpPercent, rows, summary]
+  );
   const handleClear = () => {
     setSearchTerm("");
     setDateFrom("");
@@ -297,6 +330,9 @@ export function JobwiseReelConsumptionReport() {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="flex justify-end">
+        <ExcelExport data={excelRows} fileName="Jobwise_Reel_Consumption_Report" sheetName="Jobwise Consumption" />
       </div>
     </div>
   );

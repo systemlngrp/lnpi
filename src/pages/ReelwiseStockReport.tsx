@@ -3,6 +3,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Search, FileText, Download } from "lucide-react";
 import { Select } from "../components/Select";
+import { ExcelExport } from "../components/ExcelExport";
 import { useData } from "../hooks/useData";
 import { downloadMrrReelLabelsPdf } from "../lib/mrrReelLabelsPdf";
 import {
@@ -85,6 +86,7 @@ export function ReelwiseStockReport() {
   const [mrrDateFrom, setMrrDateFrom] = useState("");
   const [mrrDateTo, setMrrDateTo] = useState("");
   const [excludeZeroAvailable, setExcludeZeroAvailable] = useState(false);
+  const [mrrFilter, setMrrFilter] = useState("");
   const [erpFilter, setErpFilter] = useState("");
   const [gsmFilter, setGsmFilter] = useState("");
   const [sizeFilter, setSizeFilter] = useState("");
@@ -101,6 +103,7 @@ export function ReelwiseStockReport() {
     });
   }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines, suppliers]);
 
+  const mrrOptions = useMemo(() => makeOptions(allRows.filter((row) => !row.isOpening).map((row) => row.mrrNo)), [allRows]);
   const erpOptions = useMemo(() => makeOptions(allRows.map((row) => row.erp)), [allRows]);
   const gsmOptions = useMemo(() => makeOptions(allRows.map((row) => row.gsm || "")), [allRows]);
   const sizeOptions = useMemo(() => makeOptions(allRows.map((row) => row.size || "")), [allRows]);
@@ -129,6 +132,7 @@ export function ReelwiseStockReport() {
         return false;
       }
 
+      if (mrrFilter && (row.isOpening || row.mrrNo !== mrrFilter)) return false;
       if (availabilityFilter === "gt500" && row.availableWeight <= 500) return false;
       if (availabilityFilter === "lt500" && row.availableWeight >= 500) return false;
       if (stockYetToIssueOnly && !(row.issuedWeight === 0 && row.availableWeight > 0)) return false;
@@ -150,13 +154,18 @@ export function ReelwiseStockReport() {
       if (dateDiff !== 0) return dateDiff;
       return a.ourReelNo.localeCompare(b.ourReelNo);
     });
-  }, [allRows, availabilityFilter, bfFilter, erpFilter, excludeZeroAvailable, gsmFilter, maxAge, minAge, mrrDateFrom, mrrDateTo, searchTerm, sizeFilter, stockYetToIssueOnly]);
+  }, [allRows, availabilityFilter, bfFilter, erpFilter, excludeZeroAvailable, gsmFilter, maxAge, minAge, mrrDateFrom, mrrDateTo, mrrFilter, searchTerm, sizeFilter, stockYetToIssueOnly]);
 
   const summary = useMemo(() => {
     return {
       totalAvailableStock: rows.reduce((sum, row) => sum + row.availableWeight, 0),
       totalReels: rows.filter((row) => row.availableWeight > 0).length,
       totalValuation: rows.reduce((sum, row) => sum + row.valuation, 0),
+      totalMrrQty: rows.reduce((sum, row) => sum + row.mrrQty, 0),
+      totalOpeningQty: rows.reduce((sum, row) => sum + row.openingQty, 0),
+      totalIssued: rows.reduce((sum, row) => sum + row.issuedWeight, 0),
+      totalReturned: rows.reduce((sum, row) => sum + row.returnedWeight, 0),
+      totalNetIssued: rows.reduce((sum, row) => sum + row.netIssuedWeight, 0),
     };
   }, [rows]);
 
@@ -169,6 +178,7 @@ export function ReelwiseStockReport() {
     maxAge ||
     mrrDateFrom ||
     mrrDateTo ||
+    mrrFilter ||
     excludeZeroAvailable ||
     erpFilter ||
     gsmFilter ||
@@ -184,6 +194,7 @@ export function ReelwiseStockReport() {
     setMaxAge("");
     setMrrDateFrom("");
     setMrrDateTo("");
+    setMrrFilter("");
     setExcludeZeroAvailable(false);
     setErpFilter("");
     setGsmFilter("");
@@ -191,6 +202,29 @@ export function ReelwiseStockReport() {
     setBfFilter("");
   };
 
+
+  const excelRows = useMemo(
+    () => rows.map((row, index) => ({
+      "SL No": index + 1,
+      "MRR No.": row.mrrNo,
+      "Our Reel No.": row.ourReelNo,
+      ERP: row.erp,
+      "Suppliers Name": row.supplierName || "-",
+      GSM: row.gsm || "",
+      Size: row.size || "",
+      BF: row.bf || "",
+      "MRR Qty": Number(formatQty(row.mrrQty)),
+      "Opening Qty": Number(formatQty(row.openingQty)),
+      Issued: Number(formatQty(row.issuedWeight)),
+      Return: Number(formatQty(row.returnedWeight)),
+      "Net Issued": Number(formatQty(row.netIssuedWeight)),
+      "Available Weight": Number(formatQty(row.availableWeight)),
+      Rate: Number(formatQty(row.rate)),
+      Valuation: Number(formatQty(row.valuation)),
+      "Age(D days)": row.ageDays,
+    })),
+    [rows]
+  );
   const handleExportPdf = () => {
     const doc = new jsPDF("l", "mm", "a4");
 
@@ -254,6 +288,7 @@ export function ReelwiseStockReport() {
         13: { halign: "right" },
         14: { halign: "right" },
         15: { halign: "right" },
+        16: { halign: "right" },
       },
     });
 
@@ -331,7 +366,7 @@ export function ReelwiseStockReport() {
 
       <div className="rounded border border-black bg-white p-2">
         <div className="grid gap-2">
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_170px_105px_130px_105px]">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_150px_170px_105px_130px_105px]">
             <div className="relative w-full min-w-0">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
               <input
@@ -342,6 +377,7 @@ export function ReelwiseStockReport() {
                 className="h-[34px] w-full rounded border-2 border-black pl-8 pr-2 text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
               />
             </div>
+            <div className="min-w-0"><Select compact value={mrrFilter} onChange={setMrrFilter} options={mrrOptions} placeholder="All MRR" /></div>
             <div className="min-w-0"><Select compact value={erpFilter} onChange={setErpFilter} options={erpOptions} placeholder="All ERP" /></div>
             <div className="min-w-0"><Select compact value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" /></div>
             <div className="min-w-0"><Select compact value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" /></div>
@@ -446,6 +482,21 @@ export function ReelwiseStockReport() {
                   </th>
                 ))}
               </tr>
+              {rows.length > 0 ? (
+                <tr className="bg-slate-100 text-black">
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100" colSpan={8}>TOTAL ({rows.length})</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(summary.totalMrrQty)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-blue-100 text-blue-900">{formatQty(summary.totalOpeningQty)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-red-100 text-red-900">{formatQty(summary.totalIssued)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-cyan-100 text-cyan-900">{formatQty(summary.totalReturned)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-slate-100">{formatQty(summary.totalNetIssued)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-emerald-100 text-emerald-900">{formatQty(summary.totalAvailableStock)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-slate-100">-</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(summary.totalValuation)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-slate-100">-</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-slate-100">-</th>
+                </tr>
+              ) : null}
             </thead>
             <tbody>
               {rows.length === 0 ? (
@@ -466,6 +517,7 @@ export function ReelwiseStockReport() {
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.size || ""}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.bf || ""}</td>
                     <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.mrrQty)}</td>
+                    <td className="px-3 py-3 text-blue-900 text-sm font-bold border-2 border-black bg-blue-50 text-right">{formatQty(row.openingQty)}</td>
                     <td className="px-3 py-3 text-red-800 text-sm border-2 border-black bg-red-50/40 text-right">{formatQty(row.issuedWeight)}</td>
                     <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50 text-right">{formatQty(row.returnedWeight)}</td>
                     <td className="px-3 py-3 text-slate-900 text-sm font-bold border-2 border-black bg-slate-50 text-right">{formatQty(row.netIssuedWeight)}</td>
@@ -490,6 +542,9 @@ export function ReelwiseStockReport() {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="flex justify-end">
+        <ExcelExport data={excelRows} fileName="Reelwise_Stock_Report" sheetName="Reelwise Stock" />
       </div>
     </div>
   );
