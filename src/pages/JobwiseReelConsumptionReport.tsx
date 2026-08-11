@@ -266,13 +266,16 @@ export function JobwiseReelConsumptionReport() {
             className="w-full rounded border-2 border-black px-3 py-2.5 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
           />
 
-          <button
-            type="button"
-            onClick={handleClear}
-            className="min-h-[42px] rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
-          >
-            Clear Filters
-          </button>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="min-h-[42px] rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+            >
+              Clear Filters
+            </button>
+            <ExcelExport data={excelRows} fileName="Jobwise_Reel_Consumption_Report" sheetName="Jobwise Consumption" />
+          </div>
         </div>
       </div>
 
@@ -330,9 +333,6 @@ export function JobwiseReelConsumptionReport() {
             </tbody>
           </table>
         </div>
-      </div>
-      <div className="flex justify-end">
-        <ExcelExport data={excelRows} fileName="Jobwise_Reel_Consumption_Report" sheetName="Jobwise Consumption" />
       </div>
     </div>
   );

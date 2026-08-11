@@ -467,6 +467,7 @@ export function ReelwiseStockReport() {
                 <FileText size={13} />
                 PDF
               </button>
+              <ExcelExport data={excelRows} fileName="Reelwise_Stock_Report" sheetName="Reelwise Stock" className="h-[34px] px-2.5 py-0 text-[11px]" />
             </div>
           </div>
         </div>
@@ -542,9 +543,6 @@ export function ReelwiseStockReport() {
             </tbody>
           </table>
         </div>
-      </div>
-      <div className="flex justify-end">
-        <ExcelExport data={excelRows} fileName="Reelwise_Stock_Report" sheetName="Reelwise Stock" />
       </div>
     </div>
   );

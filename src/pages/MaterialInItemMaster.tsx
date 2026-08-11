@@ -321,14 +321,14 @@ export function MaterialInItemMaster() {
                 <td className="px-4 py-3 text-right border border-black whitespace-nowrap">
                   {isEditing ? (
                     <div className="flex items-center justify-end gap-2">
-                      <button 
+                      <button
                         onClick={() => handleSaveQty(line.parentId, line.id)}
                         disabled={isSubmitting}
                         className="p-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition disabled:opacity-50 border border-emerald-700"
                       >
                         {isSubmitting ? <Spinner size={16} /> : <Check size={18} />}
                       </button>
-                      <button 
+                      <button
                         onClick={handleCancelEdit}
                         disabled={isSubmitting}
                         className="p-1 rounded bg-red-100 text-red-700 hover:bg-red-200 transition disabled:opacity-50 border border-red-700"
@@ -338,7 +338,7 @@ export function MaterialInItemMaster() {
                     </div>
                   ) : (
                     <div className="flex items-center justify-end gap-2">
-                       <button 
+                       <button
                           onClick={() => navigate(`/material-in/form?edit=${line.parentId}`)}
                           className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-xs"
                           title="Edit MRR Entry"
@@ -347,7 +347,7 @@ export function MaterialInItemMaster() {
                        </button>
 
                        {canEditInline ? (
-                        <button 
+                        <button
                            onClick={() => handleEditClick(line.id, line.qty)}
                            className="inline-flex items-center text-indigo-600 hover:text-indigo-800 font-bold text-xs"
                            title="Edit Qty Inline"
@@ -438,19 +438,22 @@ export function MaterialInItemMaster() {
           </div>
         </div>
 
-        {(fromDate || toDate || mrrFilter || searchTerm) && (
-          <button 
-            onClick={() => {
-              setFromDate("");
-              setToDate("");
-              setMrrFilter("");
-              setSearchTerm("");
-            }}
-            className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline pb-2"
-          >
-            Reset Filters
-          </button>
-        )}
+        <div className="flex items-center gap-2 pb-1">
+          {(fromDate || toDate || mrrFilter || searchTerm) && (
+            <button
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+                setMrrFilter("");
+                setSearchTerm("");
+              }}
+              className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline"
+            >
+              Reset Filters
+            </button>
+          )}
+          <ExcelExport data={excelRows} fileName={`Material_Receipt_Item_Master_${activeTab}`} sheetName="MR Item Master" />
+        </div>
       </div>
 
       <div className="flex border-b border-black mt-2">
@@ -484,9 +487,6 @@ export function MaterialInItemMaster() {
         <div className="overflow-x-auto">
           {renderTable()}
         </div>
-      </div>
-      <div className="flex justify-end">
-        <ExcelExport data={excelRows} fileName={`Material_Receipt_Item_Master_${activeTab}`} sheetName="MR Item Master" />
       </div>
     </div>
   );

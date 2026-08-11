@@ -238,15 +238,18 @@ export function ErpWiseReelStockReport() {
           <Select value={sizeFilter} onChange={setSizeFilter} options={sizeOptions} placeholder="All Size" />
           <Select value={gsmFilter} onChange={setGsmFilter} options={gsmOptions} placeholder="All GSM" />
           <Select value={bfFilter} onChange={setBfFilter} options={bfOptions} placeholder="All BF" />
-          {hasActiveFilters ? (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
-            >
-              Clear Filters
-            </button>
-          ) : null}
+          <div className="flex items-center justify-end gap-2">
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="min-h-[42px] rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black hover:bg-slate-50"
+              >
+                Clear Filters
+              </button>
+            ) : null}
+            <ExcelExport data={excelRows} fileName="ERP_Wise_Reel_Stock" sheetName="ERP Wise Stock" />
+          </div>
         </div>
       </div>
 
@@ -306,9 +309,6 @@ export function ErpWiseReelStockReport() {
             </tbody>
           </table>
         </div>
-      </div>
-      <div className="flex justify-end">
-        <ExcelExport data={excelRows} fileName="ERP_Wise_Reel_Stock" sheetName="ERP Wise Stock" />
       </div>
     </div>
   );

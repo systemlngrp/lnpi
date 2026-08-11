@@ -299,20 +299,23 @@ export function MaterialInMaster() {
               <input type="text" placeholder="Search transaction, supplier..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-1.5 border border-black rounded focus:outline-none focus:ring-1 focus:ring-black text-xs font-bold" />
             </div>
           </div>
-          {(fromDate || toDate || statusFilter !== "All" || mrrFilter || searchTerm) && (
-            <button
-              onClick={() => {
-                setFromDate("");
-                setToDate("");
-                setStatusFilter("All");
-                setMrrFilter("");
-                setSearchTerm("");
-              }}
-              className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline ml-2 mt-4"
-            >
-              Reset
-            </button>
-          )}
+          <div className="mt-4 flex items-center gap-2">
+            {(fromDate || toDate || statusFilter !== "All" || mrrFilter || searchTerm) && (
+              <button
+                onClick={() => {
+                  setFromDate("");
+                  setToDate("");
+                  setStatusFilter("All");
+                  setMrrFilter("");
+                  setSearchTerm("");
+                }}
+                className="text-[10px] font-black uppercase text-red-600 hover:text-red-800 underline"
+              >
+                Reset
+              </button>
+            )}
+            <ExcelExport data={excelRows} fileName="Material_Receipt_Master" sheetName="MR Master" />
+          </div>
         </div>
       </div>
 
@@ -529,9 +532,6 @@ export function MaterialInMaster() {
             </tbody>
           </table>
         </div>
-      </div>
-      <div className="flex justify-end">
-        <ExcelExport data={excelRows} fileName="Material_Receipt_Master" sheetName="MR Master" />
       </div>
     </div>
   );
