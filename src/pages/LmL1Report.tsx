@@ -180,7 +180,7 @@ export function LmL1Report() {
         const l2 = toNumber(raw.l2);
         const f2 = toNumber(raw.f2);
         const l3 = toNumber(raw.l3);
-        const gsm = round(l1 + f1 * takeUpFactor + l2 + f2 * takeUpFactor + l3, 2);
+        const gsm = firstPositiveNumber(raw.size);
 
         if (!item || !orderDate || orderQty <= 0 || rapc <= 0 || ups <= 0 || cuttingWithTrimming <= 0) return null;
         if (![l1, f1, l2, f2, l3].some((value) => value > 0)) return null;
