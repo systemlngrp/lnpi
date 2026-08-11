@@ -18,6 +18,7 @@ type LmL1Row = {
   cuttingWithTrimming: number;
   flute: string;
   takeUpFactor: number;
+  gsm: number;
   year: number;
   month: string;
   orderDate: string;
@@ -50,6 +51,7 @@ const REPORT_COLUMNS = [
   "CUTTING with TRIMMING",
   "FLUTE",
   "Take up Factor",
+  "GSM",
   "Year",
   "Month",
   "L1",
@@ -128,6 +130,7 @@ function getRowExport(row: LmL1Row) {
     "CUTTING with TRIMMING": row.cuttingWithTrimming,
     FLUTE: row.flute,
     "Take up Factor": row.takeUpFactor,
+    GSM: row.gsm,
     Year: row.year,
     Month: row.month,
     L1: row.l1,
@@ -177,6 +180,7 @@ export function LmL1Report() {
         const l2 = toNumber(raw.l2);
         const f2 = toNumber(raw.f2);
         const l3 = toNumber(raw.l3);
+        const gsm = round(l1 + f1 * takeUpFactor + l2 + f2 * takeUpFactor + l3, 2);
 
         if (!item || !orderDate || orderQty <= 0 || rapc <= 0 || ups <= 0 || cuttingWithTrimming <= 0) return null;
         if (![l1, f1, l2, f2, l3].some((value) => value > 0)) return null;
@@ -201,6 +205,7 @@ export function LmL1Report() {
           cuttingWithTrimming,
           flute: String(raw.flute || "").trim(),
           takeUpFactor,
+          gsm,
           year: orderDate.getFullYear(),
           month: MONTHS[orderDate.getMonth()],
           orderDate: order.orderDate,
@@ -441,7 +446,7 @@ export function LmL1Report() {
                   <tr key={row.id} className="text-black hover:bg-slate-50">
                     {Object.values(getRowExport(row)).map((value, index) => (
                       <td key={`${row.id}-${REPORT_COLUMNS[index]}`} className={`border-2 border-black px-3 py-3 ${typeof value === "number" ? "text-right" : "whitespace-normal break-words"}`}>
-                        {typeof value === "number" ? (index === 10 || index === 13 || index === 16 || index === 19 || index === 22 ? formatNumber(value, index === 16 ? 4 : 3) : formatNumber(value, 2).replace(/\.00$/, "")) : value}
+                        {typeof value === "number" ? (index === 11 || index === 14 || index === 17 || index === 20 || index === 23 ? formatNumber(value, index === 17 ? 4 : 3) : formatNumber(value, 2).replace(/\.00$/, "")) : value}
                       </td>
                     ))}
                   </tr>
@@ -453,7 +458,7 @@ export function LmL1Report() {
                 <tr>
                   <td className="border-2 border-black px-3 py-3 text-sm font-black text-black" colSpan={1}>Grand Total</td>
                   <td className="border-2 border-black px-3 py-3 text-right text-sm font-black text-black">{summary.totalOrderQty.toLocaleString()}</td>
-                  <td className="border-2 border-black px-3 py-3" colSpan={22}></td>
+                  <td className="border-2 border-black px-3 py-3" colSpan={23}></td>
                   <td className="border-2 border-black px-3 py-3 text-right text-sm font-black text-black">{formatNumber(summary.totalPaperWeight)}</td>
                   <td className="border-2 border-black px-3 py-3"></td>
                 </tr>
