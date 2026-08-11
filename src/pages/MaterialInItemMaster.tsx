@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip, GateEntry, Company } from "../types";
+import { Material, MaterialIn, Item, Supplier, MaterialInPackingSlip, GateEntry, Company, MaterialIssueReelLine, MaterialReturnReelLine } from "../types";
 import { Edit2, Check, X, Search, Package, Layers, Disc, ExternalLink } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { Select } from "../components/Select";
@@ -9,6 +9,7 @@ import { formatDate } from "../lib/serial";
 import { cn } from "../lib/utils";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useNavigate } from "react-router-dom";
+import { buildReelStockRows } from "../lib/reelStock";
 
 function makeOptions(values: Array<string | number>) {
   return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)))
@@ -25,6 +26,8 @@ export function MaterialInItemMaster() {
   const [materialIn, setMaterialIn] = useData<MaterialIn>("material-in", []);
   const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
   const [materials] = useData<Material>("materials", []);
+  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", [], { cacheToLocalStorage: false });
+  const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", [], { cacheToLocalStorage: false });
   const [gateEntries] = useData<GateEntry>("gate-entries", []);
   const npdItems = useNpdItems();
   const [suppliers] = useData<Supplier>("suppliers", []);
@@ -173,21 +176,43 @@ export function MaterialInItemMaster() {
     const others = allLineItems.filter(l => l.mrrType !== "Reel").filter(filterFn);
     const reelSummary = allLineItems.filter(l => l.mrrType === "Reel").filter(filterFn);
     const filteredReelDetails = reelDetails.filter(filterFn);
+    const reelStockRows = buildReelStockRows({
+      materials,
+      materialIn,
+      packingSlips,
+      issueReelLines,
+      returnReelLines,
+      suppliers,
+    }).filter(row => {
+      if (fromDate && row.mrrDate < fromDate) return false;
+      if (toDate && row.mrrDate > toDate) return false;
+      if (mrrFilter && row.mrrNo !== mrrFilter) return false;
+      if (!q) return true;
+
+      return [
+        row.mrrNo,
+        row.ourReelNo,
+        row.erp,
+        row.itemName,
+        row.supplierName,
+        row.gsm,
+        row.size,
+        row.bf,
+      ].some(value => String(value || "").toLowerCase().includes(q));
+    });
 
     const visibleLines = [...others, ...reelSummary];
     const openingLines = visibleLines.filter(l => l.isOpeningMrr);
     const receiptLines = visibleLines.filter(l => !l.isOpeningMrr);
-    const openingReelDetails = filteredReelDetails.filter(r => r.isOpeningMrr);
-    const receiptReelDetails = filteredReelDetails.filter(r => !r.isOpeningMrr);
 
     // Calculate Metrics
     const metrics = {
       openingQty: openingLines.reduce((sum, l) => sum + Number(l.actualQty ?? l.qty ?? 0), 0),
       receiptQty: receiptLines.reduce((sum, l) => sum + Number(l.actualQty ?? l.qty ?? 0), 0),
-      openingValue: openingLines.reduce((sum, l) => sum + Number(l.actualValue ?? l.value ?? 0), 0),
-      receiptValue: receiptLines.reduce((sum, l) => sum + Number(l.actualValue ?? l.value ?? 0), 0),
-      openingReelWeight: openingReelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
-      receiptReelWeight: receiptReelDetails.reduce((sum, r) => sum + Number(r.weightKg || 0), 0),
+      openingValue: reelStockRows.reduce((sum, row) => sum + (Number(row.openingQty || 0) * Number(row.rate || 0)), 0),
+      receiptValue: reelStockRows.reduce((sum, row) => sum + (Number(row.mrrQty || 0) * Number(row.rate || 0)), 0),
+      openingReelWeight: reelStockRows.reduce((sum, row) => sum + Number(row.openingQty || 0), 0),
+      receiptReelWeight: reelStockRows.reduce((sum, row) => sum + Number(row.mrrQty || 0), 0),
       totalReceipts: new Set(receiptLines.map(l => l.parentId)).size,
       othersValue: others.reduce((sum, l) => sum + Number(l.value || 0), 0),
       reelValue: reelSummary.reduce((sum, l) => sum + Number(l.value || 0), 0)
@@ -199,7 +224,7 @@ export function MaterialInItemMaster() {
       reelDetails: filteredReelDetails.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
       metrics
     };
-  }, [materialIn, packingSlips, materials, npdItems, suppliers, searchTerm, fromDate, toDate, mrrFilter, materialMap, gateEntryMap]);
+  }, [materialIn, packingSlips, materials, issueReelLines, returnReelLines, npdItems, suppliers, searchTerm, fromDate, toDate, mrrFilter, materialMap, gateEntryMap]);
 
 
 
