@@ -61,6 +61,10 @@ function getLineRate(line: MaterialIn["lines"][number] | undefined, material?: M
   return Number(line?.invoiceRate ?? line?.poRate ?? line?.rate ?? material?.openingRate ?? 0);
 }
 
+function isOpeningMrrNo(value?: string | number | null) {
+  return String(value ?? "").trim() === "1";
+}
+
 export function buildReelStockRows({
   materials,
   materialIn,
@@ -125,16 +129,18 @@ export function buildReelStockRows({
       const relatedReturnLines = filteredReturnLines.filter((line) => line.packingSlipId === slip.id);
       const issuedWeight = relatedIssueLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
       const returnedWeight = relatedReturnLines.reduce((sum, line) => sum + Number(line.weightKg || 0), 0);
-      const mrrQty = round2(Number(slip.weightKg || 0));
+      const reelQty = round2(Number(slip.weightKg || 0));
       const netIssuedWeight = round2(issuedWeight - returnedWeight);
-      const availableWeight = round2(Math.max(0, mrrQty + returnedWeight - issuedWeight));
+      const availableWeight = round2(Math.max(0, reelQty + returnedWeight - issuedWeight));
       const rate = availableWeight > 0 ? round2(getLineRate(receiptLine, material)) : 0;
+      const mrrNo = receipt?.transactionNo || "";
+      const isOpening = isOpeningMrrNo(mrrNo);
 
       return {
         slipId: slip.id,
         materialId: slip.materialId,
         mrrDate: receipt?.date || "",
-        mrrNo: receipt?.transactionNo || "",
+        mrrNo,
         ourReelNo: slip.ourReelNo || "",
         erp: String(material?.erpCode || ""),
         itemName: String(material?.name || ""),
@@ -146,12 +152,12 @@ export function buildReelStockRows({
         returnedWeight: round2(returnedWeight),
         netIssuedWeight,
         availableWeight,
-        mrrQty,
-        openingQty: 0,
+        mrrQty: isOpening ? 0 : reelQty,
+        openingQty: isOpening ? reelQty : 0,
         rate,
         valuation: availableWeight > 0 ? round2(availableWeight * rate) : 0,
         ageDays: getAgeDays(receipt?.date),
-        isOpening: false,
+        isOpening,
       };
     })
     .sort((a, b) => {

@@ -30,6 +30,7 @@ const tableColumns = [
   "GSM",
   "Size",
   "BF",
+  "Opening Qty",
   "MRR Qty",
   "Issued",
   "Return",
@@ -103,7 +104,7 @@ export function ReelwiseStockReport() {
     });
   }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines, suppliers]);
 
-  const mrrOptions = useMemo(() => makeOptions(allRows.filter((row) => !row.isOpening).map((row) => row.mrrNo)), [allRows]);
+  const mrrOptions = useMemo(() => makeOptions(allRows.map((row) => row.mrrNo)), [allRows]);
   const erpOptions = useMemo(() => makeOptions(allRows.map((row) => row.erp)), [allRows]);
   const gsmOptions = useMemo(() => makeOptions(allRows.map((row) => row.gsm || "")), [allRows]);
   const sizeOptions = useMemo(() => makeOptions(allRows.map((row) => row.size || "")), [allRows]);
@@ -132,7 +133,7 @@ export function ReelwiseStockReport() {
         return false;
       }
 
-      if (mrrFilter && (row.isOpening || row.mrrNo !== mrrFilter)) return false;
+      if (mrrFilter && row.mrrNo !== mrrFilter) return false;
       if (availabilityFilter === "gt500" && row.availableWeight <= 500) return false;
       if (availabilityFilter === "lt500" && row.availableWeight >= 500) return false;
       if (stockYetToIssueOnly && !(row.issuedWeight === 0 && row.availableWeight > 0)) return false;
@@ -213,8 +214,8 @@ export function ReelwiseStockReport() {
       GSM: row.gsm || "",
       Size: row.size || "",
       BF: row.bf || "",
-      "MRR Qty": Number(formatQty(row.mrrQty)),
       "Opening Qty": Number(formatQty(row.openingQty)),
+      "MRR Qty": Number(formatQty(row.mrrQty)),
       Issued: Number(formatQty(row.issuedWeight)),
       Return: Number(formatQty(row.returnedWeight)),
       "Net Issued": Number(formatQty(row.netIssuedWeight)),
@@ -251,6 +252,7 @@ export function ReelwiseStockReport() {
         "GSM",
         "Size",
         "BF",
+        "Opening Qty",
         "MRR Qty",
         "Issued",
         "Return",
@@ -269,6 +271,7 @@ export function ReelwiseStockReport() {
         String(row.gsm || ""),
         String(row.size || ""),
         String(row.bf || ""),
+        formatQty(row.openingQty),
         formatQty(row.mrrQty),
         formatQty(row.issuedWeight),
         formatQty(row.returnedWeight),
@@ -486,8 +489,8 @@ export function ReelwiseStockReport() {
               {rows.length > 0 ? (
                 <tr className="bg-slate-100 text-black">
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100" colSpan={8}>TOTAL ({rows.length})</th>
-                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(summary.totalMrrQty)}</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-blue-100 text-blue-900">{formatQty(summary.totalOpeningQty)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(summary.totalMrrQty)}</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-red-100 text-red-900">{formatQty(summary.totalIssued)}</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-cyan-100 text-cyan-900">{formatQty(summary.totalReturned)}</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-slate-100">{formatQty(summary.totalNetIssued)}</th>
@@ -517,8 +520,8 @@ export function ReelwiseStockReport() {
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.gsm || ""}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.size || ""}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{row.bf || ""}</td>
-                    <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.mrrQty)}</td>
                     <td className="px-3 py-3 text-blue-900 text-sm font-bold border-2 border-black bg-blue-50 text-right">{formatQty(row.openingQty)}</td>
+                    <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50 text-right">{formatQty(row.mrrQty)}</td>
                     <td className="px-3 py-3 text-red-800 text-sm border-2 border-black bg-red-50/40 text-right">{formatQty(row.issuedWeight)}</td>
                     <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50 text-right">{formatQty(row.returnedWeight)}</td>
                     <td className="px-3 py-3 text-slate-900 text-sm font-bold border-2 border-black bg-slate-50 text-right">{formatQty(row.netIssuedWeight)}</td>

@@ -63,14 +63,14 @@ export function ErpWiseReelStockReport() {
 
   const allRows = useMemo<ReelStockRow[]>(() => {
     const sourceReelRows = mrrFilter
-      ? allReelRows.filter((row) => !row.isOpening && row.mrrNo === mrrFilter)
+      ? allReelRows.filter((row) => row.mrrNo === mrrFilter)
       : allReelRows;
 
     return materials
       .filter((material) => material.type === "Reel")
       .map((material) => {
         const materialReelRows = sourceReelRows.filter((row) => row.materialId === material.id);
-        const openingStock = mrrFilter ? 0 : Number(material.openingQty || 0);
+        const openingStock = materialReelRows.reduce((sum, row) => sum + Number(row.openingQty || 0), 0);
         const receipts = materialReelRows.reduce((sum, row) => sum + Number(row.mrrQty || 0), 0);
         const issued = materialReelRows.reduce((sum, row) => sum + Number(row.issuedWeight || 0), 0);
         const returned = materialReelRows.reduce((sum, row) => sum + Number(row.returnedWeight || 0), 0);
@@ -98,10 +98,10 @@ export function ErpWiseReelStockReport() {
           noOfReels,
         };
       })
-      .filter((row) => !mrrFilter || row.receipts > 0 || row.issued > 0 || row.returned > 0 || row.availableWeight > 0)
+      .filter((row) => !mrrFilter || row.openingStock > 0 || row.receipts > 0 || row.issued > 0 || row.returned > 0 || row.availableWeight > 0)
       .sort((a, b) => a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf);
   }, [allReelRows, materials, mrrFilter]);
-  const mrrOptions = useMemo(() => makeOptions(allReelRows.filter((row) => !row.isOpening).map((row) => row.mrrNo)), [allReelRows]);
+  const mrrOptions = useMemo(() => makeOptions(allReelRows.map((row) => row.mrrNo)), [allReelRows]);
   const erpOptions = useMemo(() => makeOptions(allRows.map((row) => row.erp)), [allRows]);
   const sizeOptions = useMemo(() => makeOptions(allRows.map((row) => row.size || "")), [allRows]);
   const gsmOptions = useMemo(() => makeOptions(allRows.map((row) => row.gsm || "")), [allRows]);
