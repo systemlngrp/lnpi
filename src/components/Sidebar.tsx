@@ -236,6 +236,7 @@ const reportProductionItems: NavItem[] = [
 
 const reportSalesItems: NavItem[] = [
   { name: "Realization Report", href: "/reports/realization", icon: BarChart3 },
+  { name: "LM-L1", href: "/reports/lm-l1", icon: BarChart3 },
   { name: "Wastage Report", href: "/reports/wastage", icon: BarChart3 },
 ];
 
