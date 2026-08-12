@@ -206,7 +206,7 @@ export function Dashboard() {
     const alreadyPlanned = dispatchPlans
       .filter((plan) => plan.scheduleId === s.id)
       .reduce((sum, plan) => sum + Number(plan.plannedQty || 0), 0);
-    const balance = Number(s.qty || 0) - alreadyPlanned;
+    const balance = Number(s.qty || 0) - Number(s.canceledQty || 0) - alreadyPlanned;
     return !Number.isNaN(schedDate.getTime()) && schedDate <= tomorrow && balance > 0;
   }).length;
   const pendingLoading = dispatchPlans.filter((plan) => Number(plan.plannedQty || 0) - Number(plan.loadedQty || 0) - Number(plan.canceledQty || 0) > 0).length;

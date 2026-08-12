@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { 
   OrderSchedule, 
@@ -35,13 +35,13 @@ type ScheduledOrdersMasterProps = {
 };
 
 export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMasterProps = {}) {
-  const [schedules, setSchedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [schedules, setSchedules, schedulesLoading] = useData<OrderSchedule>("orders_schedule", []);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const { resolveOrderItem, itemsBySource } = useOrderItemCatalog();
   const [productions] = useData<Production>("productions", []);
-  const [plans] = useData<DispatchPlan>("dispatch_plans", []);
-  const [loadingSlips] = useData<LoadingSlip>("loading_slips", []);
+  const [plans, , plansLoading] = useData<DispatchPlan>("dispatch_plans", []);
+  const [loadingSlips, , loadingSlipsLoading] = useData<LoadingSlip>("loading_slips", []);
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -76,7 +76,7 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
     [itemsBySource]
   );
 
-  const detailedSchedules = useMemo(() => {
+  const scheduleDispatchDetails = useMemo(() => {
     return schedules.map(s => {
       const order = orders.find(o => o.id === s.orderId);
       const company = companies.find(c => c.id === order?.companyId);
@@ -135,32 +135,66 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
         pendingInvoice: Math.max(loaded - invoiced, 0),
         pendingOrderQty: Math.max((Number(s.qty) || 0) - (Number(s.canceledQty) || 0) - invoiced, 0)
       };
-    })
-    .filter((s) => !pendingOnly || s.pendingOrderQty > 0)
-    .filter(s => {
-      const normalizedSearch = searchTerm.trim().toLowerCase();
-      const matchSearch = !normalizedSearch || [
-        s.orderNo,
-        s.orderErp,
-        s.companyName,
-        s.itemName,
-        s.itemErp,
-      ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
-      const matchCompany = !companyFilter || s.companyId === companyFilter;
-      const matchItem = !itemFilter || s.itemId === itemFilter;
-      const matchFromDate = !fromDate || s.scheduledDate >= fromDate;
-      const matchToDate = !toDate || s.scheduledDate <= toDate;
-
-      return matchSearch && matchCompany && matchItem && matchFromDate && matchToDate;
-    })
-    .sort((a, b) => {
-      const aScheduleNo = a.scheduleNo === "-" ? "" : a.scheduleNo;
-      const bScheduleNo = b.scheduleNo === "-" ? "" : b.scheduleNo;
-      const comparison = aScheduleNo.localeCompare(bScheduleNo, undefined, { numeric: true, sensitivity: "base" });
-      if (comparison !== 0) return scheduleNoSortDirection === "asc" ? comparison : -comparison;
-      return b.scheduledDate.localeCompare(a.scheduledDate);
     });
-  }, [schedules, orders, companies, resolveOrderItem, productions, plans, loadingSlips, pendingOnly, searchTerm, companyFilter, itemFilter, fromDate, toDate, scheduleNoSortDirection]);
+  }, [schedules, orders, companies, resolveOrderItem, productions, plans, loadingSlips]);
+
+  useEffect(() => {
+    if (!pendingOnly || schedulesLoading || plansLoading || loadingSlipsLoading) return;
+
+    const candidates = scheduleDispatchDetails.filter((schedule) => {
+      const scheduleQty = Number(schedule.qty || 0);
+      const pendingDispatch = Number(schedule.pendingOrderQty || 0);
+      return scheduleQty > 0 && pendingDispatch > 0 && pendingDispatch <= scheduleQty * 0.1;
+    });
+
+    if (candidates.length === 0) return;
+
+    const cancelQtyByScheduleId = new Map(candidates.map((schedule) => [schedule.id, Number(schedule.pendingOrderQty || 0)]));
+    const timestamp = new Date().toISOString();
+
+    void setSchedules((prev) =>
+      prev.map((schedule) => {
+        const autoCancelQty = cancelQtyByScheduleId.get(schedule.id);
+        if (!autoCancelQty) return schedule;
+        return {
+          ...schedule,
+          canceledQty: Number(schedule.canceledQty || 0) + autoCancelQty,
+          updatedBy: "System User",
+          updateTimestamp: timestamp,
+        };
+      }),
+    ).catch((error) => {
+      console.error("Failed to auto-cancel small pending dispatch quantities:", error);
+    });
+  }, [pendingOnly, scheduleDispatchDetails, schedulesLoading, plansLoading, loadingSlipsLoading, setSchedules]);
+
+  const detailedSchedules = useMemo(() => {
+    return scheduleDispatchDetails
+      .filter((s) => !pendingOnly || s.pendingOrderQty > 0)
+      .filter(s => {
+        const normalizedSearch = searchTerm.trim().toLowerCase();
+        const matchSearch = !normalizedSearch || [
+          s.orderNo,
+          s.orderErp,
+          s.companyName,
+          s.itemName,
+          s.itemErp,
+        ].some((value) => String(value || "").toLowerCase().includes(normalizedSearch));
+        const matchCompany = !companyFilter || s.companyId === companyFilter;
+        const matchItem = !itemFilter || s.itemId === itemFilter;
+        const matchFromDate = !fromDate || s.scheduledDate >= fromDate;
+        const matchToDate = !toDate || s.scheduledDate <= toDate;
+
+        return matchSearch && matchCompany && matchItem && matchFromDate && matchToDate;
+      })
+      .sort((a, b) => {
+        const aScheduleNo = a.scheduleNo === "-" ? "" : a.scheduleNo;
+        const bScheduleNo = b.scheduleNo === "-" ? "" : b.scheduleNo;
+        const comparison = aScheduleNo.localeCompare(bScheduleNo, undefined, { numeric: true, sensitivity: "base" });
+        if (comparison !== 0) return scheduleNoSortDirection === "asc" ? comparison : -comparison;
+        return b.scheduledDate.localeCompare(a.scheduledDate);
+      });
+  }, [scheduleDispatchDetails, pendingOnly, searchTerm, companyFilter, itemFilter, fromDate, toDate, scheduleNoSortDirection]);
   const {
     page,
     setPage,
