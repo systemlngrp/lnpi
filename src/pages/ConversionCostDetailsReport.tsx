@@ -45,14 +45,14 @@ const factoryBuckets: FactoryBucket[] = [
   { key: "strapping", label: "Strapping Roll", keywords: ["strapping", "sutli", "plastic sutli"], source: "material" },
   { key: "fevicol", label: "Fevicol", keywords: ["fevicol"], source: "material" },
   { key: "stitchingWire", label: "Stitching Wire", keywords: ["stitching wire"], source: "material" },
-  { key: "unit1Electricity", label: "Unit 1 - Electricity Consumed", keywords: ["unit 1", "unit-1", "electricity unit 1"], source: "fixed" },
-  { key: "unit2Electricity", label: "Unit 2 - Electricity Consumed", keywords: ["unit 2", "unit-2", "electricity unit 2", "electricity exp"], source: "fixed" },
+  { key: "unit1Electricity", label: "Unit 1 - Electricity Consumed", keywords: ["unit 1", "unit-1", "electricity unit 1"], source: "both" },
+  { key: "unit2Electricity", label: "Unit 2 - Electricity Consumed", keywords: ["unit 2", "unit-2", "electricity unit 2", "electricity exp"], source: "both" },
   { key: "diesel", label: "Diesel", keywords: ["diesel"], source: "both" },
   { key: "firewood", label: "Firewood", keywords: ["firewood", "fire wood"], source: "both" },
   { key: "briquettes", label: "Briquettes", keywords: ["briquette"], source: "both" },
   { key: "woodChips", label: "Wood Chips", keywords: ["wood chip"], source: "both" },
-  { key: "salary", label: "Total Salary", keywords: ["salary", "wages", "contractual work"], source: "fixed" },
-  { key: "dailyCash", label: "Daily Cash Expenses", keywords: ["daily cash", "cash expense", "petty cash"], source: "fixed" },
+  { key: "salary", label: "Total Salary", keywords: ["salary", "wages", "contractual work"], source: "both" },
+  { key: "dailyCash", label: "Daily Cash Expenses", keywords: ["daily cash", "cash expense", "petty cash"], source: "both" },
 ];
 
 const defaultInputs: MisInputs = {
@@ -81,11 +81,18 @@ function normalizeExpenseLines(value: FixedMonthlyExpense["lines"] | string | un
   return [];
 }
 
-function toDateOnly(value?: string | null) {
+function toDateOnly(value?: string | Date | null) {
   if (!value) return "";
-  const parsed = new Date(value);
+  const trimmed = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const ddmmyyyy = /^(\d{2})[-/](\d{2})[-/](\d{4})$/.exec(trimmed);
+  if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+  const parsed = new Date(trimmed);
   if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toISOString().slice(0, 10);
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function parseDate(value?: string | null) {
@@ -115,7 +122,7 @@ function getCurrentMonthRange() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
   const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { from: toDateOnly(from.toISOString()), to: toDateOnly(to.toISOString()) };
+  return { from: toDateOnly(from), to: toDateOnly(to) };
 }
 
 function round2(value: number) {
@@ -132,6 +139,10 @@ function formatDecimal(value: number) {
 
 function normalizeText(value?: string | null) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeLoose(value?: string | null) {
+  return normalizeText(value).replace(/[^a-z0-9]+/g, "");
 }
 
 function getBucketForText(text: string, source: "material" | "fixed") {
@@ -199,11 +210,11 @@ export function ConversionCostDetailsReport() {
 
     issueLines.forEach((line) => {
       const issue = issueMap.get(line.materialIssueId);
-      const issueType = normalizeText(issue?.issueType);
-      if (issueType !== "without job" && issueType !== "general") return;
+      const issueType = normalizeLoose(issue?.issueType);
+      if (issueType !== "withoutjob" && issueType !== "general") return;
       if (!isWithinRange(issue?.date, fromDate, toDate)) return;
       const material = materialMap.get(line.materialId);
-      if (String(material?.type || "").trim() !== "Other") return;
+      if (normalizeText(material?.type) !== "other") return;
       const amount = getLineAmount(line, materials, materialIn);
       const bucket = getBucketForText(material?.name, "material");
       if (bucket) bucketTotals.set(bucket.key, (bucketTotals.get(bucket.key) || 0) + amount);
