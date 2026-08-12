@@ -377,7 +377,9 @@ export function MaterialIssueForm() {
           return;
         }
       }
-      const baseValuation = resolveMaterialIssueRate(currentMaterialId, materials, materialIn, qty);
+      const baseValuation = resolveMaterialIssueRate(currentMaterialId, materials, materialIn, qty, {
+        useLatestRateAsOpeningRate: isWithoutJobIssue(issueType),
+      });
       const npdRate = isNpdConsumable ? round2(Number(material.rate || 0)) : 0;
       const valuation = baseValuation.rate > 0 || npdRate <= 0
         ? baseValuation

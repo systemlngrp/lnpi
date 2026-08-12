@@ -135,7 +135,9 @@ export function NonJobIssueMaster() {
     const selectedLines = issueLines
       .filter((line) => line.materialIssueId === row.id)
       .map((line) => {
-        const fallback = resolveMaterialIssueRate(line.materialId, materials, materialIn, Number(line.qty || 0));
+        const fallback = resolveMaterialIssueRate(line.materialId, materials, materialIn, Number(line.qty || 0), {
+          useLatestRateAsOpeningRate: true,
+        });
         const savedRate = Number(line.rate || 0);
         const rate = savedRate > 0 ? savedRate : fallback.rate;
         return {

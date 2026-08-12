@@ -128,6 +128,7 @@ import { PaperRequirementReport } from "./pages/PaperRequirementReport";
 import { LmL1Report } from "./pages/LmL1Report";
 import { FixedMonthlyExpenses } from "./pages/FixedMonthlyExpenses";
 import { ConversionCostMonthWiseReport } from "./pages/ConversionCostMonthWiseReport";
+import { ConversionCostDetailsReport } from "./pages/ConversionCostDetailsReport";
 import { TruckStatusReport } from "./pages/TruckStatusReport";
 import { WastageReport } from "./pages/WastageReport";
 import { ReelStockTakerReport } from "./pages/ReelStockTakerReport";
@@ -362,6 +363,7 @@ export default function App() {
           <Route path="reports/paper-requirement" element={<PaperRequirementReport />} />
           <Route path="reports/fixed-monthly-expenses" element={<FixedMonthlyExpenses />} />
           <Route path="reports/conversion-cost-month-wise" element={<ConversionCostMonthWiseReport />} />
+          <Route path="reports/conversion-cost-details" element={<ConversionCostDetailsReport />} />
           <Route path="reports/truck-status" element={<TruckStatusReport />} />
           <Route path="reports/wastage" element={<WastageReport />} />
 

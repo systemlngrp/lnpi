@@ -230,6 +230,7 @@ const reportProductionItems: NavItem[] = [
   { name: "Jobs in Progress", href: "/reports/jobs-in-progress", icon: BarChart3 },
   { name: "Fixed Monthly Expenses", href: "/reports/fixed-monthly-expenses", icon: Database },
   { name: "Conversion Cost Month Wise", href: "/reports/conversion-cost-month-wise", icon: BarChart3 },
+  { name: "Conversion Cost Details", href: "/reports/conversion-cost-details", icon: BarChart3 },
   { name: "Efficiency Report", href: "/reports/efficiency", icon: BarChart3 },
   { name: "Hit Vs Miss", href: "/reports/hit-vs-miss", icon: BarChart3 },
 ];

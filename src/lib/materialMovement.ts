@@ -32,7 +32,8 @@ export function resolveMaterialIssueRate(
   materialId: string,
   materials: Pick<Material, "id" | "openingRate">[],
   materialIn: MaterialIn[],
-  qty: number
+  qty: number,
+  options?: { useLatestRateAsOpeningRate?: boolean }
 ) {
   const material = materials.find((entry) => entry.id === materialId);
   const openingRate = round2(Number(material?.openingRate || 0));
@@ -47,12 +48,14 @@ export function resolveMaterialIssueRate(
     )
     .sort((a, b) => b.time - a.time)[0]?.line;
   const lastPurchaseRate = latestPurchaseLine ? round2(getMaterialInLineRate(latestPurchaseLine)) : 0;
+  const effectiveOpeningRate = options?.useLatestRateAsOpeningRate && lastPurchaseRate > 0 ? lastPurchaseRate : openingRate;
   const rate = lastPurchaseRate > 0 ? lastPurchaseRate : openingRate;
+  const effectiveRate = options?.useLatestRateAsOpeningRate ? effectiveOpeningRate : rate;
   return {
     lastPurchaseRate,
-    openingRate,
-    rate,
-    amount: calculateMaterialIssueAmount(qty, rate),
+    openingRate: effectiveOpeningRate,
+    rate: effectiveRate,
+    amount: calculateMaterialIssueAmount(qty, effectiveRate),
   };
 }
 

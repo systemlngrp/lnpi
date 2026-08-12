@@ -2417,10 +2417,12 @@ async function backfillNonJobMaterialIssueValuation(db: mysql.Pool) {
   }
 
   const [lineRows] = await db.query(`
-    SELECT mil.id, mil.materialId, mil.qty, mil.lastPurchaseRate, mil.openingRate, mil.rate, mil.amount
+    SELECT mil.id, mil.materialId, mil.qty, mil.lastPurchaseRate, mil.openingRate, mil.rate, mil.amount, m.openingRate AS materialOpeningRate
     FROM \`material_issue_lines\` mil
     JOIN \`material_issues\` mi ON mi.id = mil.materialIssueId
+    JOIN \`materials\` m ON m.id = mil.materialId
     WHERE LOWER(TRIM(COALESCE(mi.issueType, ''))) IN ('without job', 'general', 'withoutjob', 'without_job')
+      AND m.type = 'Other'
   `);
 
   let updatedCount = 0;
@@ -2428,10 +2430,10 @@ async function backfillNonJobMaterialIssueValuation(db: mysql.Pool) {
     const materialId = String(line.materialId || "").trim();
     const qty = roundCurrency(Number(line.qty || 0));
     const latestPurchaseRate = latestPurchaseByMaterial.get(materialId)?.rate || 0;
-    const materialOpeningRate = openingRateByMaterial.get(materialId) || 0;
-    const lastPurchaseRate = roundCurrency(Number(line.lastPurchaseRate || 0)) || latestPurchaseRate;
-    const openingRate = roundCurrency(Number(line.openingRate || 0)) || materialOpeningRate;
-    const rate = roundCurrency(Number(line.rate || 0)) || (lastPurchaseRate > 0 ? lastPurchaseRate : openingRate);
+    const materialOpeningRate = openingRateByMaterial.get(materialId) || roundCurrency(Number(line.materialOpeningRate || 0));
+    const lastPurchaseRate = roundCurrency(latestPurchaseRate);
+    const openingRate = lastPurchaseRate > 0 ? lastPurchaseRate : materialOpeningRate;
+    const rate = openingRate;
     const amount = roundCurrency(qty * roundCurrency(rate));
     if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
     if (
