@@ -207,6 +207,7 @@ export function ConversionCostDetailsReport() {
     const bucketTotals = new Map(factoryBuckets.map((bucket) => [bucket.key, 0]));
     let unmappedConsumables = 0;
     let unmappedFixed = 0;
+    let matchingConsumableIssueLines = 0;
 
     issueLines.forEach((line) => {
       const issue = issueMap.get(line.materialIssueId);
@@ -215,6 +216,7 @@ export function ConversionCostDetailsReport() {
       if (!isWithinRange(issue?.date, fromDate, toDate)) return;
       const material = materialMap.get(line.materialId);
       if (normalizeText(material?.type) !== "other") return;
+      matchingConsumableIssueLines += 1;
       const amount = getLineAmount(line, materials, materialIn);
       const bucket = getBucketForText(material?.name, "material");
       if (bucket) bucketTotals.set(bucket.key, (bucketTotals.get(bucket.key) || 0) + amount);
@@ -284,6 +286,7 @@ export function ConversionCostDetailsReport() {
       factoryRows,
       unmappedConsumables: round2(unmappedConsumables),
       unmappedFixed: round2(unmappedFixed),
+      matchingConsumableIssueLines,
       totalPayable,
       totalProduction,
       totalWastageSold: round2(scrapSummary.totalQty),
@@ -419,6 +422,11 @@ export function ConversionCostDetailsReport() {
               </tr>
             </tfoot>
           </table>
+          {report.totalProduction > 0 && report.matchingConsumableIssueLines === 0 ? (
+            <div className="border-t border-gray-900 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+              No Without Job / General material issue lines for Other materials were found in this date range, so factory payable is zero unless fixed monthly expenses exist.
+            </div>
+          ) : null}
         </div>
 
         <div className="overflow-x-auto border border-gray-900 bg-white">
