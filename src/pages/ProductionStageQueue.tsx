@@ -33,7 +33,7 @@ import {
   hasProductionCorrugatedSheetUsage,
 } from "../lib/productionMaterialUsage";
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
-import { normalizeMachineName } from "../lib/productionMachineNames";
+import { MANDATORY_BEFORE_FFG_MACHINES, normalizeMachineName } from "../lib/productionMachineNames";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 
 type QueueMode = "consumption" | "ffg";
@@ -294,28 +294,21 @@ export function ProductionStageQueue({
     const target = productions.find((production) => production.id === productionId);
     if (!target) return;
 
-    const mandatoryMap = parseMandatoryMachinesByType(settings[0]);
-    const schedule = schedules.find((row) => row.id === target.scheduleId);
-    const order = orders.find((row) => row.id === schedule?.orderId);
-    const item =
-      findItemAcrossSources(
-        String(target.itemId || order?.itemId || "").trim(),
-        target.itemSource || order?.itemSource,
-        target.erpCode || target.masterErp || order?.erpCode
-      ) || resolveOrderItem(order);
-    const requiresPrinting = getRequiredMachinesForProduction(target, item, mandatoryMap, machines)
+    const missingMachines = MANDATORY_BEFORE_FFG_MACHINES
       .map((machineName) => normalizeMachineName(machineName))
-      .includes("Printing");
-    const printingReportedQty = processing
-      .filter(
-        (entry) =>
-          entry.productionId === productionId &&
-          normalizeMachineName(entry.machineName) === "Printing"
-      )
-      .reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
+      .filter((machineName) => {
+        const reportedQty = processing
+          .filter(
+            (entry) =>
+              entry.productionId === productionId &&
+              normalizeMachineName(entry.machineName) === machineName
+          )
+          .reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
+        return reportedQty <= 0;
+      });
 
-    if (requiresPrinting && printingReportedQty <= 0) {
-      alert("Printing reporting is mandatory before FG entry for this job.");
+    if (missingMachines.length > 0) {
+      alert(`Machine reporting is mandatory before FFG: ${missingMachines.join(", ")}`);
       return;
     }
 

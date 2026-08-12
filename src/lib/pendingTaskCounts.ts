@@ -30,7 +30,7 @@ import { canCreateMrrForGateEntry } from "./gateEntryState";
 import { parseMandatoryMachinesByType } from "./mandatoryMachines";
 import { buildProductionCorrugatedSheetUsageMap, buildProductionMaterialUsageMap, getProductionActualPaperUsed, hasProductionCorrugatedSheetUsage } from "./productionMaterialUsage";
 import { getRequiredMachinesForProduction } from "./productionType";
-import { normalizeMachineName } from "./productionMachineNames";
+import { MANDATORY_BEFORE_FFG_MACHINES, normalizeMachineName } from "./productionMachineNames";
 import { buildScheduleConsumptionByScheduleId } from "./productionScheduleQty";
 import { isProductionPendingConsumption, isProductionPendingFFG, isProductionPendingPH, isProductionReadyForTally } from "./productionStageFilters";
 import { withIndentTotals } from "./indentTotals";
@@ -315,7 +315,12 @@ function getPendingMachineProcessingCount(
     .filter((p) => p.status !== "Completed" && p.status !== "Cancelled" && !p.cancelTimestamp && !p.tallyTimestamp)
     .reduce((count, production) => {
       const item = findItemAcrossSources?.(String(production.itemId || "").trim(), production.itemSource, production.erpCode);
-      const requiredMachines = getRequiredMachinesForProduction(production, item, mandatoryMachinesMapping, machines);
+      const requiredMachines = Array.from(
+        new Set([
+          ...getRequiredMachinesForProduction(production, item, mandatoryMachinesMapping, machines),
+          ...MANDATORY_BEFORE_FFG_MACHINES,
+        ].map((machineName) => normalizeMachineName(machineName)).filter(Boolean))
+      );
       const pendingForProduction = requiredMachines.filter((machineName) => {
         const normalizedRequiredMachine = normalizeMachineName(machineName);
         if (normalizedMachineNameFilter && normalizedRequiredMachine !== normalizedMachineNameFilter) return false;

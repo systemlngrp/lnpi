@@ -2594,6 +2594,7 @@ function normalizeMachineName(name) {
   const trimmed = String(name || "").trim();
   if (trimmed === "Corrugation Finger") return "Corrugation Paper";
   if (trimmed === "Corrugation Linear") return "Corrugation Liner";
+  if (trimmed === "Stithing") return "Stitching";
   return trimmed;
 }
 function parseMandatoryMachinesByType(setting) {

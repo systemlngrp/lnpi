@@ -14,6 +14,7 @@ const DEFAULT_MACHINES = [
   "Pasting",
   "Rotary",
   "Stitching",
+  "Diecuting",
   "Punching",
   "Gluing"
 ];

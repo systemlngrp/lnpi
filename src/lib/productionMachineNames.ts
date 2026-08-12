@@ -3,7 +3,10 @@ const MACHINE_NAME_MAP: Record<string, string> = {
   "Corrugation Linear": "Corrugation Liner",
   "Sloting": "Slotting",
   "Slotter": "Slotting",
+  "Stithing": "Stitching",
 };
+
+export const MANDATORY_BEFORE_FFG_MACHINES = ["Pasting", "Stitching", "Gluing", "Diecuting"] as const;
 
 export function normalizeMachineName(name?: string | null) {
   const trimmed = String(name || "").trim();
