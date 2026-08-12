@@ -202,10 +202,6 @@ export function ConversionCostDetailsReport() {
   const [toDate, setToDate] = useState(currentRange.to);
   const [inputs, setInputs] = useState<MisInputs>(defaultInputs);
 
-  const updateInput = (key: keyof MisInputs, value: string) => {
-    setInputs((current) => ({ ...current, [key]: Number(value || 0) }));
-  };
-
   const report = useMemo(() => {
     const issueMap = new Map(materialIssues.map((issue) => [issue.id, issue]));
     const materialMap = new Map(materials.map((material) => [material.id, material]));
@@ -343,19 +339,6 @@ export function ConversionCostDetailsReport() {
     { slNo: report.factoryRows.length + 2, label: "Unmapped Fixed Expenses", amount: report.unmappedFixed },
   ];
 
-  const inputFields: Array<{ key: keyof MisInputs; label: string }> = [
-    { key: "paperRate", label: "Paper Rate" },
-    { key: "salesReturnBasic", label: "Sales Return (Basic)" },
-    { key: "fgWipOpening", label: "FG/WIP Opening" },
-    { key: "fgWipClosing", label: "FG/WIP Closing" },
-    { key: "lnpiOpening", label: "LNPI Sale-Purchase Opening" },
-    { key: "lnpiClosing", label: "LNPI Sale-Purchase Closing" },
-    { key: "hoSalary", label: "HO Salary" },
-    { key: "managementSalary", label: "Management Salary" },
-    { key: "allEmi", label: "All EMI" },
-    { key: "miscExpense", label: "Donation, Fastags, Misc. Exp" },
-  ];
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-900 pb-3">
@@ -366,7 +349,7 @@ export function ConversionCostDetailsReport() {
       </div>
 
       <div className="border border-gray-900 bg-white p-3">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div className="grid gap-3 md:grid-cols-2 xl:max-w-xl">
           <label className="text-xs font-black uppercase text-slate-700">
             From Date
             <input className="mt-1 h-9 w-full border border-gray-900 px-2 text-sm font-bold" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
@@ -375,18 +358,6 @@ export function ConversionCostDetailsReport() {
             To Date
             <input className="mt-1 h-9 w-full border border-gray-900 px-2 text-sm font-bold" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
           </label>
-          {inputFields.map((field) => (
-            <label key={field.key} className="text-xs font-black uppercase text-slate-700">
-              {field.label}
-              <input
-                className="mt-1 h-9 w-full border border-gray-900 px-2 text-right text-sm font-bold"
-                type="number"
-                step="0.01"
-                value={inputs[field.key]}
-                onChange={(event) => updateInput(field.key, event.target.value)}
-              />
-            </label>
-          ))}
         </div>
       </div>
 
