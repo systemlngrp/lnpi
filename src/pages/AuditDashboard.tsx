@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Mail, MessageCircle } from "lucide-react";
 import { useData } from "../hooks/useData";
 import { getInvoiceGrandTotal } from "../lib/gatePasses";
 import type {
@@ -14,7 +13,6 @@ import type {
 } from "../types";
 import { cn } from "../lib/utils";
 
-const ALERT_EMAILS = ["cfo@lngrp.in", "vivekagarwal@lngrp.in", "pankaj@bizskilledu.com"];
 const ALL_DATA_DATE_RANGE = { from: "", to: "" };
 const ALL_DATA_RANGE_LABEL = "All Dates";
 
@@ -245,23 +243,6 @@ export function AuditDashboard() {
   const differenceMetrics = metrics.filter((metric) => roundMoney(metric.difference) !== 0);
   const hasDifference = differenceMetrics.length > 0;
 
-  const alertMessage = useMemo(() => {
-    const lines = [
-      `Audit Dashboard Difference Found`,
-      `Date Range: ${ALL_DATA_RANGE_LABEL}`,
-      "Tally Source: Last saved values",
-      "",
-      ...differenceMetrics.map(
-        (metric) =>
-          `${metric.label}: Tally Count ${formatCount(metric.tallyCount)} | App Count ${formatCount(metric.appCount)} | Tally ${formatMoney(metric.tallyValue)} | App ${formatMoney(metric.appValue)} | Difference ${formatMoney(metric.difference)}`
-      ),
-    ];
-    return lines.join("\n");
-  }, [differenceMetrics]);
-
-  const emailHref = `mailto:${ALERT_EMAILS.join(",")}?subject=${encodeURIComponent("Audit Dashboard Difference Found")}&body=${encodeURIComponent(alertMessage)}`;
-  const whatsappHref = `https://wa.me/?text=${encodeURIComponent(alertMessage)}`;
-
   return (
     <div className="space-y-4">
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
@@ -282,31 +263,13 @@ export function AuditDashboard() {
           <div className="border-b-2 border-red-900 bg-red-700 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-white">
             Difference Found
           </div>
-          <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="p-4">
             <div className="space-y-1 text-sm font-bold text-red-950">
               {differenceMetrics.map((metric) => (
                 <div key={metric.key}>
                   {metric.label}: {formatMoney(metric.difference)}
                 </div>
               ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={emailHref}
-                className="inline-flex min-h-[38px] items-center gap-2 rounded-md border-2 border-red-900 bg-white px-4 py-1 text-xs font-black uppercase text-red-700 shadow-[3px_3px_0px_0px_rgba(127,29,29,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
-              >
-                <Mail size={15} />
-                Email
-              </a>
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-[38px] items-center gap-2 rounded-md border-2 border-red-900 bg-white px-4 py-1 text-xs font-black uppercase text-red-700 shadow-[3px_3px_0px_0px_rgba(127,29,29,1)] transition hover:translate-x-px hover:translate-y-px hover:shadow-none"
-              >
-                <MessageCircle size={15} />
-                WhatsApp
-              </a>
             </div>
           </div>
         </section>
