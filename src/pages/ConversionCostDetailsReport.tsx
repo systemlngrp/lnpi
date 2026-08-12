@@ -1,9 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useData } from "../hooks/useData";
-import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import type {
-  Company,
   FixedMonthlyExpense,
   Invoice,
   InvoiceLineItem,
@@ -15,7 +13,6 @@ import type {
 } from "../types";
 import { getCurrentFinancialYear } from "../lib/financialYear";
 import { resolveMaterialIssueRate } from "../lib/materialMovement";
-import { buildScrapInvoiceRows, summarizeScrapInvoiceRows } from "../lib/wastageReport";
 
 type FactoryBucket = {
   key: string;
@@ -85,6 +82,8 @@ function toDateOnly(value?: string | Date | null) {
   if (!value) return "";
   const trimmed = String(value).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const isoDatePrefix = /^(\d{4}-\d{2}-\d{2})[T\s]/.exec(trimmed);
+  if (isoDatePrefix) return isoDatePrefix[1];
   const ddmmyyyy = /^(\d{2})[-/](\d{2})[-/](\d{4})$/.exec(trimmed);
   if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
   const parsed = new Date(trimmed);
@@ -162,6 +161,14 @@ function getLineAmount(line: MaterialIssueLine, materials: Material[], materialI
   return resolveMaterialIssueRate(line.materialId, materials, materialIn, qty, { useLatestRateAsOpeningRate: true }).amount;
 }
 
+function getProductionFfg(production: Production) {
+  return Number(production.prodFromFFG || 0);
+}
+
+function getProductionUsefulWeight(production: Production) {
+  return getProductionFfg(production) * Number(production.sheetWeight || 0);
+}
+
 function getExpenseMonthDate(record: FixedMonthlyExpense) {
   const [startYearText] = String(record.fy || getCurrentFinancialYear()).split("-");
   const startYear = 2000 + Number(startYearText || 0);
@@ -189,8 +196,6 @@ export function ConversionCostDetailsReport() {
   const [productions] = useData<Production>("productions", []);
   const [invoices] = useData<Invoice>("invoices", []);
   const [invoiceLines] = useData<InvoiceLineItem>("invoice_line_items", []);
-  const [companies] = useData<Company>("companies", []);
-  const { findItem, findItemAcrossSources } = useOrderItemCatalog();
 
   const currentRange = useMemo(getCurrentMonthRange, []);
   const [fromDate, setFromDate] = useState(currentRange.from);
@@ -242,21 +247,23 @@ export function ConversionCostDetailsReport() {
       };
     });
 
-    const totalProduction = round2(
-      productions
-        .filter((production) => production.status !== "Cancelled" && !production.cancelTimestamp && isWithinRange(production.date, fromDate, toDate))
-        .reduce((sum, production) => sum + Number(production.prodFromFFG || 0), 0)
+    const productionRows = productions.filter(
+      (production) => production.status !== "Cancelled" && !production.cancelTimestamp && isWithinRange(production.date, fromDate, toDate)
     );
+    const totalProduction = round2(
+      productionRows.reduce((sum, production) => sum + getProductionFfg(production), 0)
+    );
+    const totalActualPaperUsed = round2(productionRows.reduce((sum, production) => sum + Number(production.actualPaperUsed || 0), 0));
+    const totalUsefulWeight = round2(productionRows.reduce((sum, production) => sum + getProductionUsefulWeight(production), 0));
     const totalPayable = round2(factoryRows.reduce((sum, row) => sum + row.amount, 0) + unmappedConsumables + unmappedFixed);
-    const scrapRows = buildScrapInvoiceRows({
-      invoices,
-      lineItems: invoiceLines,
-      companies,
-      filters: { fromDate, toDate },
-      findItem,
-      findItemAcrossSources,
-    });
-    const scrapSummary = summarizeScrapInvoiceRows(scrapRows);
+    const invoiceMap = new Map(invoices.map((invoice) => [invoice.id, invoice]));
+    const totalSold = round2(
+      invoiceLines.reduce((sum, line) => {
+        const invoice = invoiceMap.get(line.invoiceId);
+        if (!isWithinRange(invoice?.date, fromDate, toDate)) return sum;
+        return sum + Number(line.qty || 0);
+      }, 0)
+    );
     const totalSaleBasic = round2(
       invoices.filter((invoice) => isWithinRange(invoice.date, fromDate, toDate)).reduce((sum, invoice) => sum + Number(invoice.totalBeforeGst || 0), 0)
     );
@@ -269,7 +276,7 @@ export function ConversionCostDetailsReport() {
         inputs.lnpiClosing
     );
     const paperCost = round2(totalProduction * inputs.paperRate);
-    const expensePerKg = (value: number) => (totalProduction > 0 ? round2(value / totalProduction) : 0);
+    const expensePerKg = (payableAmount: number) => (totalProduction > 0 ? round2(payableAmount / totalProduction) : 0);
     const spPerKg = totalProduction > 0 ? round2(adjustedSales / totalProduction) : 0;
     const factoryConversionPerKg = expensePerKg(totalPayable);
     const result = round2(
@@ -289,8 +296,8 @@ export function ConversionCostDetailsReport() {
       matchingConsumableIssueLines,
       totalPayable,
       totalProduction,
-      totalWastageSold: round2(scrapSummary.totalQty),
-      wastagePercent: totalProduction > 0 ? round2((scrapSummary.totalQty / totalProduction) * 100) : 0,
+      totalSold,
+      wastagePercent: totalActualPaperUsed > 0 && totalUsefulWeight > 0 ? round2(100 - (totalUsefulWeight / totalActualPaperUsed) * 100) : 0,
       totalSaleBasic,
       adjustedSales,
       paperCost,
@@ -302,9 +309,6 @@ export function ConversionCostDetailsReport() {
       expensePerKg,
     };
   }, [
-    companies,
-    findItem,
-    findItemAcrossSources,
     fixedExpenses,
     fromDate,
     inputs.allEmi,
@@ -440,14 +444,14 @@ export function ConversionCostDetailsReport() {
             </thead>
             <tbody>
               <tr className="bg-rose-200 font-black">
-                <td className="border border-gray-900 p-2">Total Production</td>
+                <td className="border border-gray-900 p-2">Total Production (FFG)</td>
                 <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalProduction)}</td>
                 <td className="border border-gray-900 p-2 text-center">Kg</td>
                 <td className="border border-gray-900 p-2" />
               </tr>
               <tr className="bg-rose-200 font-black">
-                <td className="border border-gray-900 p-2">Total Wastage Sold</td>
-                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalWastageSold)}</td>
+                <td className="border border-gray-900 p-2">Total Sold (Invoiced)</td>
+                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalSold)}</td>
                 <td className="border border-gray-900 p-2 text-center">Kg</td>
                 <td className="border border-gray-900 p-2" />
               </tr>

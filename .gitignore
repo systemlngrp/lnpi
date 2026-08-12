@@ -61,7 +61,7 @@ env/
 .idea/
 *.txt
 *.doc
-
+ch
 
 *.yml
 pythoncode/Log/invoice_sync_logs.xlsx
