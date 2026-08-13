@@ -59,7 +59,9 @@ export function FixedMonthlyExpenses() {
     };
 
     DEFAULT_EXPENSE_NAMES.forEach(addName);
-    expenseMasters.forEach((expense) => addName(expense.name));
+    expenseMasters
+      .filter((expense) => (expense.type || "Monthly") === "Monthly")
+      .forEach((expense) => addName(expense.name));
     normalizedRecords.forEach((record) => normalizeLines(record.lines).forEach((line) => addName(line.expenseName)));
     lines.forEach((line) => addName(line.expenseName));
 

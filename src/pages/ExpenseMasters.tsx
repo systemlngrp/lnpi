@@ -1,15 +1,18 @@
-﻿import React, { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Edit, Plus, Trash2 } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { TableControls } from "../components/TableControls";
 import { useData } from "../hooks/useData";
 import type { ExpenseMaster } from "../types";
 
+
+const EXPENSE_TYPES: NonNullable<ExpenseMaster["type"]>[] = ["Monthly", "Daily"];
 export function ExpenseMasters() {
   const [expenses, setExpenses] = useData<ExpenseMaster>("expense_masters", []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [type, setType] = useState<NonNullable<ExpenseMaster["type"]>>("Monthly");
   const [searchTerm, setSearchTerm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -29,6 +32,7 @@ export function ExpenseMasters() {
   const resetForm = () => {
     setEditingId(null);
     setName("");
+    setType("Monthly");
   };
 
   const openCreate = () => {
@@ -39,6 +43,7 @@ export function ExpenseMasters() {
   const openEdit = (expense: ExpenseMaster) => {
     setEditingId(expense.id);
     setName(expense.name);
+    setType(expense.type === "Daily" ? "Daily" : "Monthly");
     setIsFormOpen(true);
   };
 
@@ -66,6 +71,7 @@ export function ExpenseMasters() {
       const nextRow: ExpenseMaster = {
         id: editingId || crypto.randomUUID(),
         name: normalizedName,
+        type,
         updatedBy: "System User",
         updateTimestamp: timestamp,
       };
@@ -120,6 +126,20 @@ export function ExpenseMasters() {
                 className="rounded border-2 border-black p-2 text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
               />
             </label>
+            <label className="flex flex-col gap-1 font-bold text-black">
+              Type *
+              <select
+                value={type}
+                onChange={(event) => setType(event.target.value as NonNullable<ExpenseMaster["type"]>)}
+                className="rounded border-2 border-black bg-white p-2 text-black focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              >
+                {EXPENSE_TYPES.map((expenseType) => (
+                  <option key={expenseType} value={expenseType}>
+                    {expenseType}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="flex items-center gap-3 pt-2">
               <button type="submit" disabled={isSubmitting} className="min-w-[100px] rounded border border-black bg-emerald-600 px-6 py-2 font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">
                 {isSubmitting ? <Spinner size={20} className="text-white" /> : "Submit"}
@@ -138,18 +158,20 @@ export function ExpenseMasters() {
               <thead className="sticky top-0 z-30 divide-x divide-black bg-slate-100">
                 <tr className="divide-x divide-black">
                   <th className="border border-black px-6 py-3 text-left text-sm font-bold uppercase text-black">Expense Name</th>
+                  <th className="border border-black px-6 py-3 text-left text-sm font-bold uppercase text-black">Type</th>
                   <th className="border border-black px-6 py-3 text-right text-sm font-bold uppercase text-black">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black bg-white">
                 {filteredExpenses.length === 0 ? (
                   <tr>
-                    <td colSpan={2} className="px-6 py-8 text-center font-medium text-black">No expenses found.</td>
+                    <td colSpan={3} className="px-6 py-8 text-center font-medium text-black">No expenses found.</td>
                   </tr>
                 ) : (
                   filteredExpenses.map((expense) => (
                     <tr key={expense.id} className="divide-x divide-black hover:bg-slate-50">
                       <td className="border border-black px-6 py-4 text-sm text-black">{expense.name}</td>
+                      <td className="border border-black px-6 py-4 text-sm text-black">{expense.type || "Monthly"}</td>
                       <td className="whitespace-nowrap border border-black px-6 py-4 text-right text-sm font-medium">
                         <button onClick={() => openEdit(expense)} className="mr-4 inline-flex items-center font-bold text-indigo-600 hover:text-indigo-900">
                           <Edit size={16} className="mr-1" /> Edit

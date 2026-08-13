@@ -453,6 +453,7 @@ export interface GstRateMaster {
 export interface ExpenseMaster {
   id: string;
   name: string;
+  type?: "Monthly" | "Daily";
   updatedBy?: string;
   updateTimestamp?: string;
 }
