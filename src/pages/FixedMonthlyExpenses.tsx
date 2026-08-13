@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Edit, Eye, Plus, RotateCcw, Save } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Edit, Eye, RotateCcw, Save } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type { ExpenseMaster, FixedMonthlyExpense, FixedMonthlyExpenseLine } from "../types";
 import { FY_MONTHS, getCurrentFinancialYear, getFinancialYearOptions, getMonthName } from "../lib/financialYear";
@@ -25,16 +25,12 @@ function formatMoney(value: number) {
   return Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function defaultLines() {
-  return [newLine()];
-}
-
 export function FixedMonthlyExpenses() {
   const [records, setRecords] = useData<FixedMonthlyExpense>("fixed_monthly_expenses", []);
   const [expenseMasters] = useData<ExpenseMaster>("expense_masters", []);
   const [fy, setFy] = useState(getCurrentFinancialYear());
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
-  const [lines, setLines] = useState<FixedMonthlyExpenseLine[]>(defaultLines);
+  const [lines, setLines] = useState<FixedMonthlyExpenseLine[]>([]);
   const [viewRecord, setViewRecord] = useState<(FixedMonthlyExpense & { lines: FixedMonthlyExpenseLine[] }) | null>(null);
 
   const normalizedRecords = useMemo(
@@ -75,18 +71,26 @@ export function FixedMonthlyExpenses() {
 
   const viewLines = viewRecord ? normalizeLines(viewRecord.lines) : [];
   const viewTotalAmount = viewLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const buildMonthlyLines = (sourceLines: FixedMonthlyExpenseLine[] = []) => {
+    const amountByExpense = new Map(sourceLines.map((line) => [line.expenseName.trim().toLowerCase(), Number(line.amount || 0)]));
+    return expenseOptions.map((expenseName) => newLine(expenseName, amountByExpense.get(expenseName.toLowerCase()) || 0));
+  };
+
+  useEffect(() => {
+    const existing = normalizedRecords.find((record) => record.fy === fy && Number(record.month) === Number(month));
+    setLines((current) => buildMonthlyLines(existing ? normalizeLines(existing.lines) : current));
+  }, [expenseOptions, fy, month, normalizedRecords]);
 
   const resetForm = () => {
     setFy(getCurrentFinancialYear());
     setMonth(String(new Date().getMonth() + 1));
-    setLines(defaultLines());
+    setLines(buildMonthlyLines());
   };
 
   const loadRecord = (record: FixedMonthlyExpense) => {
     setFy(record.fy);
     setMonth(String(record.month));
-    const loadedLines = normalizeLines(record.lines);
-    setLines(loadedLines.length ? loadedLines : defaultLines());
+    setLines(buildMonthlyLines(normalizeLines(record.lines)));
   };
 
   const updateLine = (id: string, patch: Partial<FixedMonthlyExpenseLine>) => {
@@ -213,9 +217,6 @@ export function FixedMonthlyExpenses() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <button className="inline-flex items-center gap-2 rounded bg-slate-900 px-4 py-2 text-sm font-bold text-white" type="button" onClick={() => setLines((current) => [...current, newLine()])}>
-            <Plus size={16} /> Add Row
-          </button>
           <button className="inline-flex items-center gap-2 rounded bg-emerald-600 px-4 py-2 text-sm font-bold text-white" type="button" onClick={handleSave}>
             <Save size={16} /> Save
           </button>
