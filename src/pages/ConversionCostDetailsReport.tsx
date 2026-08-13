@@ -42,8 +42,6 @@ const factoryBuckets: FactoryBucket[] = [
   { key: "strapping", label: "Strapping Roll", keywords: ["strapping", "sutli", "plastic sutli"], source: "material" },
   { key: "fevicol", label: "Fevicol", keywords: ["fevicol"], source: "material" },
   { key: "stitchingWire", label: "Stitching Wire", keywords: ["stitching wire"], source: "material" },
-  { key: "unit1Electricity", label: "Unit 1 - Electricity Consumed", keywords: ["unit 1", "unit-1", "electricity unit 1"], source: "both" },
-  { key: "unit2Electricity", label: "Unit 2 - Electricity Consumed", keywords: ["unit 2", "unit-2", "electricity unit 2", "electricity exp"], source: "both" },
   { key: "diesel", label: "Diesel", keywords: ["diesel"], source: "both" },
   { key: "firewood", label: "Firewood", keywords: ["firewood", "fire wood"], source: "both" },
   { key: "briquettes", label: "Briquettes", keywords: ["briquette"], source: "both" },
@@ -271,8 +269,8 @@ export function ConversionCostDetailsReport() {
         inputs.lnpiOpening +
         inputs.lnpiClosing
     );
-    const paperCost = round2(totalProduction * inputs.paperRate);
-    const expensePerKg = (payableAmount: number) => (totalProduction > 0 ? round2(payableAmount / totalProduction) : 0);
+    const paperCost = round2(totalActualPaperUsed * inputs.paperRate);
+    const expensePerKg = (payableAmount: number) => (totalActualPaperUsed > 0 ? round2(payableAmount / totalActualPaperUsed) : 0);
     const spPerKg = totalProduction > 0 ? round2(adjustedSales / totalProduction) : 0;
     const factoryConversionPerKg = expensePerKg(totalPayable);
     const result = round2(
@@ -292,6 +290,7 @@ export function ConversionCostDetailsReport() {
       matchingConsumableIssueLines,
       totalPayable,
       totalProduction,
+      totalActualPaperUsed,
       totalSold,
       wastagePercent: totalActualPaperUsed > 0 && totalUsefulWeight > 0 ? round2(100 - (totalUsefulWeight / totalActualPaperUsed) * 100) : 0,
       totalSaleBasic,
@@ -417,6 +416,12 @@ export function ConversionCostDetailsReport() {
               <tr className="bg-rose-200 font-black">
                 <td className="border border-gray-900 p-2">Total Production (FFG)</td>
                 <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalProduction)}</td>
+                <td className="border border-gray-900 p-2 text-center">Kg</td>
+                <td className="border border-gray-900 p-2" />
+              </tr>
+              <tr className="bg-rose-200 font-black">
+                <td className="border border-gray-900 p-2">Actual Paper Used</td>
+                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalActualPaperUsed)}</td>
                 <td className="border border-gray-900 p-2 text-center">Kg</td>
                 <td className="border border-gray-900 p-2" />
               </tr>
