@@ -7,8 +7,11 @@ import type {
   InvoiceLineItem,
   Material,
   MaterialIn,
+  MaterialInPackingSlip,
   MaterialIssue,
   MaterialIssueLine,
+  MaterialIssueReelLine,
+  MaterialReturnReelLine,
   Production,
 } from "../types";
 import { getCurrentFinancialYear } from "../lib/financialYear";
@@ -159,6 +162,22 @@ function getLineAmount(line: MaterialIssueLine, materials: Material[], materialI
   return resolveMaterialIssueRate(line.materialId, materials, materialIn, qty, { useLatestRateAsOpeningRate: true }).amount;
 }
 
+function getReelRateForSlip({
+  slip,
+  materialInMap,
+  materialMap,
+}: {
+  slip?: MaterialInPackingSlip;
+  materialInMap: Map<string, MaterialIn>;
+  materialMap: Map<string, Material>;
+}) {
+  if (!slip) return 0;
+  const receipt = materialInMap.get(slip.materialInId);
+  const line = receipt?.lines.find((entry) => entry.id === slip.materialLineId);
+  const material = materialMap.get(slip.materialId);
+  return Number(line?.invoiceRate ?? line?.poRate ?? line?.rate ?? material?.openingRate ?? 0);
+}
+
 function getProductionFfg(production: Production) {
   return Number(production.prodFromFFG || 0);
 }
@@ -190,6 +209,9 @@ export function ConversionCostDetailsReport() {
   const [issueLines] = useData<MaterialIssueLine>("material-issue-lines", []);
   const [materials] = useData<Material>("materials", []);
   const [materialIn] = useData<MaterialIn>("material-in", []);
+  const [packingSlips] = useData<MaterialInPackingSlip>("material-in-packing-slips", []);
+  const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
+  const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [fixedExpenses] = useData<FixedMonthlyExpense>("fixed_monthly_expenses", []);
   const [productions] = useData<Production>("productions", []);
   const [invoices] = useData<Invoice>("invoices", []);
@@ -203,6 +225,8 @@ export function ConversionCostDetailsReport() {
   const report = useMemo(() => {
     const issueMap = new Map(materialIssues.map((issue) => [issue.id, issue]));
     const materialMap = new Map(materials.map((material) => [material.id, material]));
+    const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
+    const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
     const bucketTotals = new Map(factoryBuckets.map((bucket) => [bucket.key, 0]));
     let unmappedConsumables = 0;
     let unmappedFixed = 0;
@@ -244,11 +268,25 @@ export function ConversionCostDetailsReport() {
     const productionRows = productions.filter(
       (production) => production.status !== "Cancelled" && !production.cancelTimestamp && isWithinRange(production.date, fromDate, toDate)
     );
+    const productionIds = new Set(productionRows.map((production) => production.id));
     const totalProduction = round2(
       productionRows.reduce((sum, production) => sum + getProductionFfg(production), 0)
     );
     const totalActualPaperUsed = round2(productionRows.reduce((sum, production) => sum + Number(production.actualPaperUsed || 0), 0));
     const totalUsefulWeight = round2(productionRows.reduce((sum, production) => sum + getProductionUsefulWeight(production), 0));
+    const issuedPaperCost = issueReelLines.reduce((sum, line) => {
+      if (!productionIds.has(line.productionId)) return sum;
+      const slip = packingSlipMap.get(line.packingSlipId);
+      const rate = getReelRateForSlip({ slip, materialInMap, materialMap });
+      return sum + Number(line.weightKg || 0) * rate;
+    }, 0);
+    const returnedPaperCost = returnReelLines.reduce((sum, line) => {
+      if (!productionIds.has(line.productionId)) return sum;
+      const slip = packingSlipMap.get(line.packingSlipId);
+      const rate = getReelRateForSlip({ slip, materialInMap, materialMap });
+      return sum + Number(line.weightKg || 0) * rate;
+    }, 0);
+    const actualPaperUsedCost = round2(issuedPaperCost - returnedPaperCost);
     const totalPayable = round2(factoryRows.reduce((sum, row) => sum + row.amount, 0) + unmappedConsumables + unmappedFixed);
     const invoiceMap = new Map(invoices.map((invoice) => [invoice.id, invoice]));
     const totalSold = round2(
@@ -269,13 +307,14 @@ export function ConversionCostDetailsReport() {
         inputs.lnpiOpening +
         inputs.lnpiClosing
     );
-    const paperCost = round2(totalActualPaperUsed * inputs.paperRate);
+    const paperCost = actualPaperUsedCost;
+    const paperCostPerKg = totalActualPaperUsed > 0 ? round2(paperCost / totalActualPaperUsed) : 0;
     const expensePerKg = (payableAmount: number) => (totalActualPaperUsed > 0 ? round2(payableAmount / totalActualPaperUsed) : 0);
     const spPerKg = totalProduction > 0 ? round2(adjustedSales / totalProduction) : 0;
     const factoryConversionPerKg = expensePerKg(totalPayable);
     const result = round2(
       spPerKg -
-        inputs.paperRate -
+        paperCostPerKg -
         factoryConversionPerKg -
         expensePerKg(inputs.hoSalary) -
         expensePerKg(inputs.managementSalary) -
@@ -295,7 +334,9 @@ export function ConversionCostDetailsReport() {
       wastagePercent: totalActualPaperUsed > 0 && totalUsefulWeight > 0 ? round2(100 - (totalUsefulWeight / totalActualPaperUsed) * 100) : 0,
       totalSaleBasic,
       adjustedSales,
+      actualPaperUsedCost,
       paperCost,
+      paperCostPerKg,
       paperPercent: adjustedSales > 0 ? round2((paperCost / adjustedSales) * 100) : 0,
       spPerKg,
       factoryConversionPerKg,
@@ -337,6 +378,22 @@ export function ConversionCostDetailsReport() {
     { slNo: report.factoryRows.length + 1, label: "Unmapped Consumables", amount: report.unmappedConsumables },
     { slNo: report.factoryRows.length + 2, label: "Unmapped Fixed Expenses", amount: report.unmappedFixed },
   ];
+
+  const renderInputCell = (key: keyof MisInputs) => (
+    <input
+      type="number"
+      step="any"
+      value={inputs[key] || ""}
+      onChange={(event) => {
+        const value = event.target.value;
+        setInputs((prev) => ({
+          ...prev,
+          [key]: value === "" ? 0 : Number(value),
+        }));
+      }}
+      className="w-full border-0 bg-transparent text-right font-black outline-none focus:bg-white focus:ring-1 focus:ring-gray-900"
+    />
+  );
 
   return (
     <div className="space-y-4">
@@ -396,11 +453,6 @@ export function ConversionCostDetailsReport() {
               </tr>
             </tfoot>
           </table>
-          {report.totalProduction > 0 && report.matchingConsumableIssueLines === 0 ? (
-            <div className="border-t border-gray-900 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
-              No Without Job / General material issue lines for Other materials were found in this date range, so factory payable is zero unless fixed monthly expenses exist.
-            </div>
-          ) : null}
         </div>
 
         <div className="overflow-x-auto border border-gray-900 bg-white">
@@ -414,22 +466,19 @@ export function ConversionCostDetailsReport() {
             </thead>
             <tbody>
               <tr className="bg-rose-200 font-black">
-                <td className="border border-gray-900 p-2">Total Production (FFG)</td>
-                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalProduction)}</td>
-                <td className="border border-gray-900 p-2 text-center">Kg</td>
-                <td className="border border-gray-900 p-2" />
+                <td className="border border-gray-900 p-2">FFG Value</td>
+                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.adjustedSales)}</td>
+                <td className="border border-gray-900 p-2" colSpan={2} />
               </tr>
               <tr className="bg-rose-200 font-black">
                 <td className="border border-gray-900 p-2">Actual Paper Used</td>
-                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalActualPaperUsed)}</td>
-                <td className="border border-gray-900 p-2 text-center">Kg</td>
-                <td className="border border-gray-900 p-2" />
+                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.actualPaperUsedCost)}</td>
+                <td className="border border-gray-900 p-2" colSpan={2} />
               </tr>
               <tr className="bg-rose-200 font-black">
-                <td className="border border-gray-900 p-2">Total Sold (Invoiced)</td>
-                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalSold)}</td>
-                <td className="border border-gray-900 p-2 text-center">Kg</td>
-                <td className="border border-gray-900 p-2" />
+                <td className="border border-gray-900 p-2">Total Sold Value (Invoiced)</td>
+                <td className="border border-gray-900 p-2 text-right">{formatMoney(report.totalSaleBasic)}</td>
+                <td className="border border-gray-900 p-2" colSpan={2} />
               </tr>
               <tr className="bg-rose-200 font-black">
                 <td className="border border-gray-900 p-2">Wastage Percent</td>
@@ -451,15 +500,15 @@ export function ConversionCostDetailsReport() {
               </tr>
               <tr className="bg-cyan-100 font-black">
                 <td className="border border-gray-900 p-2">FG - WIP Opening Valuation</td>
-                <td className="border border-gray-900 p-2 text-right">{formatMoney(inputs.fgWipOpening)}</td>
+                <td className="border border-gray-900 p-1 text-right">{renderInputCell("fgWipOpening")}</td>
                 <td className="border border-gray-900 p-2 text-center">LNPI SALE -Purchase</td>
-                <td className="border border-gray-900 p-2 text-right">{formatMoney(inputs.lnpiOpening)}</td>
+                <td className="border border-gray-900 p-1 text-right">{renderInputCell("lnpiOpening")}</td>
               </tr>
               <tr className="bg-cyan-100 font-black">
                 <td className="border border-gray-900 p-2">FG - WIP Closing Valuation</td>
-                <td className="border border-gray-900 p-2 text-right">{formatMoney(inputs.fgWipClosing)}</td>
+                <td className="border border-gray-900 p-1 text-right">{renderInputCell("fgWipClosing")}</td>
                 <td className="border border-gray-900 p-2" />
-                <td className="border border-gray-900 p-2 text-right">{formatMoney(inputs.lnpiClosing)}</td>
+                <td className="border border-gray-900 p-1 text-right">{renderInputCell("lnpiClosing")}</td>
               </tr>
               <tr className="bg-cyan-200 font-black">
                 <td className="border border-gray-900 p-2">SP/Kg</td>
