@@ -491,8 +491,8 @@ export function ReelwiseStockReport() {
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100" colSpan={8}>TOTAL ({rows.length})</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-blue-100 text-blue-900">{formatQty(summary.totalOpeningQty)}</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(summary.totalMrrQty)}</th>
-                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-red-100 text-red-900">{formatQty(summary.totalIssued)}</th>
-                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-cyan-100 text-cyan-900">{formatQty(summary.totalReturned)}</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-red-100 text-red-900">-</th>
+                  <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-cyan-100 text-cyan-900">-</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-slate-100">{formatQty(summary.totalNetIssued)}</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-emerald-100 text-emerald-900">{formatQty(summary.totalAvailableStock)}</th>
                   <th className="px-3 py-3 text-right text-sm font-black border-2 border-black bg-slate-100">-</th>
