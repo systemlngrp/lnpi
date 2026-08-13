@@ -9,7 +9,7 @@ import { formatDate } from "../lib/serial";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getRequiredMachinesForProduction } from "../lib/productionType";
-import { MANDATORY_BEFORE_FFG_MACHINES, normalizeMachineName } from "../lib/productionMachineNames";
+import { normalizeMachineName } from "../lib/productionMachineNames";
 
 interface PendingMachineJob {
   production: Production;
@@ -80,10 +80,11 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
     activeProductions.forEach(p => {
       const item = findItemAcrossSources(String(p.itemId || "").trim(), p.itemSource, p.erpCode);
       const requiredMachines = Array.from(
-        new Set([
-          ...getRequiredMachinesForProduction(p, item, mandatoryMachinesMapping, machines),
-          ...MANDATORY_BEFORE_FFG_MACHINES,
-        ].map((machineName) => normalizeMachineName(machineName)).filter(Boolean))
+        new Set(
+          getRequiredMachinesForProduction(p, item, mandatoryMachinesMapping, machines)
+            .map((machineName) => normalizeMachineName(machineName))
+            .filter(Boolean)
+        )
       );
       
       requiredMachines.forEach(machineName => {

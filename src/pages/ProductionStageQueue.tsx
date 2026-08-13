@@ -33,7 +33,7 @@ import {
   hasProductionCorrugatedSheetUsage,
 } from "../lib/productionMaterialUsage";
 import { isProductionPendingConsumption, isProductionPendingFFG } from "../lib/productionStageFilters";
-import { MANDATORY_BEFORE_FFG_MACHINES, normalizeMachineName } from "../lib/productionMachineNames";
+import { normalizeMachineName } from "../lib/productionMachineNames";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 
 type QueueMode = "consumption" | "ffg";
@@ -294,8 +294,14 @@ export function ProductionStageQueue({
     const target = productions.find((production) => production.id === productionId);
     if (!target) return;
 
-    const missingMachines = MANDATORY_BEFORE_FFG_MACHINES
-      .map((machineName) => normalizeMachineName(machineName))
+    const targetRow = rows.find((row) => row.production.id === productionId);
+    const missingMachines = Array.from(
+      new Set(
+        (targetRow?.requiredMachines || [])
+          .map((machineName) => normalizeMachineName(machineName))
+          .filter(Boolean)
+      )
+    )
       .filter((machineName) => {
         const reportedQty = processing
           .filter(
