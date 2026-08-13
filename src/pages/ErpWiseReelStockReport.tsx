@@ -162,8 +162,8 @@ export function ErpWiseReelStockReport() {
         BF: "",
         "Opening Stock": Number(formatQty(totals.openingStock)),
         Receipt: Number(formatQty(totals.receipts)),
-        Issued: Number(formatQty(totals.issued)),
-        Return: Number(formatQty(totals.returned)),
+        Issued: "-",
+        Return: "-",
         "Net Issued": Number(formatQty(totals.netIssued)),
         "Available Weight": Number(formatQty(totals.availableWeight)),
         Rate: "-",
@@ -269,8 +269,8 @@ export function ErpWiseReelStockReport() {
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100" colSpan={5}>TOTAL</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.openingStock)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.receipts)}</th>
-                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.issued)}</th>
-                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.returned)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">-</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">-</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.netIssued)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-emerald-100 text-emerald-900">{formatQty(totals.availableWeight)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">-</th>
