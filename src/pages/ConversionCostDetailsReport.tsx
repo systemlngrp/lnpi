@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type {
+  FixedDailyExpense,
   FixedMonthlyExpense,
   Invoice,
   InvoiceLineItem,
@@ -49,8 +50,8 @@ const factoryBuckets: FactoryBucket[] = [
   { key: "firewood", label: "Firewood", keywords: ["firewood", "fire wood"], source: "both" },
   { key: "briquettes", label: "Briquettes", keywords: ["briquette"], source: "both" },
   { key: "woodChips", label: "Wood Chips", keywords: ["wood chip"], source: "both" },
-  { key: "salary", label: "Total Salary", keywords: ["salary", "wages", "contractual work"], source: "both" },
-  { key: "dailyCash", label: "Daily Cash Expenses", keywords: ["daily cash", "cash expense", "petty cash"], source: "both" },
+  { key: "salary", label: "Total Salary", keywords: ["salary", "wages", "contractual work"], source: "fixed" },
+  { key: "dailyCash", label: "Daily Cash Expenses", keywords: ["daily cash", "cash expense", "petty cash"], source: "fixed" },
 ];
 
 const defaultInputs: MisInputs = {
@@ -66,7 +67,7 @@ const defaultInputs: MisInputs = {
   miscExpense: 0,
 };
 
-function normalizeExpenseLines(value: FixedMonthlyExpense["lines"] | string | undefined) {
+function normalizeExpenseLines(value: FixedMonthlyExpense["lines"] | FixedDailyExpense["lines"] | string | undefined) {
   if (Array.isArray(value)) return value;
   if (typeof value === "string") {
     try {
@@ -213,6 +214,7 @@ export function ConversionCostDetailsReport() {
   const [issueReelLines] = useData<MaterialIssueReelLine>("material-issue-reel-lines", []);
   const [returnReelLines] = useData<MaterialReturnReelLine>("material-return-reel-lines", []);
   const [fixedExpenses] = useData<FixedMonthlyExpense>("fixed_monthly_expenses", []);
+  const [fixedDailyExpenses] = useData<FixedDailyExpense>("fixed_daily_expenses", []);
   const [productions] = useData<Production>("productions", []);
   const [invoices] = useData<Invoice>("invoices", []);
   const [invoiceLines] = useData<InvoiceLineItem>("invoice_line_items", []);
@@ -228,8 +230,6 @@ export function ConversionCostDetailsReport() {
     const materialInMap = new Map(materialIn.map((entry) => [entry.id, entry]));
     const packingSlipMap = new Map(packingSlips.map((slip) => [slip.id, slip]));
     const bucketTotals = new Map(factoryBuckets.map((bucket) => [bucket.key, 0]));
-    let unmappedConsumables = 0;
-    let unmappedFixed = 0;
     let matchingConsumableIssueLines = 0;
 
     issueLines.forEach((line) => {
@@ -243,7 +243,6 @@ export function ConversionCostDetailsReport() {
       const amount = getLineAmount(line, materials, materialIn);
       const bucket = getBucketForText(material?.name, "material");
       if (bucket) bucketTotals.set(bucket.key, (bucketTotals.get(bucket.key) || 0) + amount);
-      else unmappedConsumables += amount;
     });
 
     fixedExpenses.forEach((record) => {
@@ -251,11 +250,17 @@ export function ConversionCostDetailsReport() {
       normalizeExpenseLines(record.lines).forEach((line) => {
         const amount = Number(line.amount || 0);
         const bucket = getBucketForText(line.expenseName, "fixed");
-        if (bucket) bucketTotals.set(bucket.key, (bucketTotals.get(bucket.key) || 0) + amount);
-        else unmappedFixed += amount;
+        if (bucket && bucket.key !== "dailyCash") bucketTotals.set(bucket.key, (bucketTotals.get(bucket.key) || 0) + amount);
       });
     });
 
+
+    fixedDailyExpenses.forEach((record) => {
+      if (!isWithinRange(record.date, fromDate, toDate)) return;
+      normalizeExpenseLines(record.lines).forEach((line) => {
+        bucketTotals.set("dailyCash", (bucketTotals.get("dailyCash") || 0) + Number(line.amount || 0));
+      });
+    });
     const factoryRows = factoryBuckets.map((bucket, index) => {
       const amount = round2(bucketTotals.get(bucket.key) || 0);
       return {
@@ -287,7 +292,7 @@ export function ConversionCostDetailsReport() {
       return sum + Number(line.weightKg || 0) * rate;
     }, 0);
     const actualPaperUsedCost = round2(issuedPaperCost - returnedPaperCost);
-    const totalPayable = round2(factoryRows.reduce((sum, row) => sum + row.amount, 0) + unmappedConsumables + unmappedFixed);
+    const totalPayable = round2(factoryRows.reduce((sum, row) => sum + row.amount, 0));
     const invoiceMap = new Map(invoices.map((invoice) => [invoice.id, invoice]));
     const totalSold = round2(
       invoiceLines.reduce((sum, line) => {
@@ -324,8 +329,6 @@ export function ConversionCostDetailsReport() {
 
     return {
       factoryRows,
-      unmappedConsumables: round2(unmappedConsumables),
-      unmappedFixed: round2(unmappedFixed),
       matchingConsumableIssueLines,
       totalPayable,
       totalProduction,
@@ -345,6 +348,7 @@ export function ConversionCostDetailsReport() {
       expensePerKg,
     };
   }, [
+    fixedDailyExpenses,
     fixedExpenses,
     fromDate,
     inputs.allEmi,
@@ -372,12 +376,7 @@ export function ConversionCostDetailsReport() {
     setToDate(currentRange.to);
     setInputs(defaultInputs);
   };
-
-  const factoryDisplayRows = [
-    ...report.factoryRows,
-    { slNo: report.factoryRows.length + 1, label: "Unmapped Consumables", amount: report.unmappedConsumables },
-    { slNo: report.factoryRows.length + 2, label: "Unmapped Fixed Expenses", amount: report.unmappedFixed },
-  ];
+  const factoryDisplayRows = report.factoryRows;
 
   const renderInputCell = (key: keyof MisInputs) => (
     <input
