@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { Edit, Eye, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useData } from "../hooks/useData";
-import type { FixedMonthlyExpense, FixedMonthlyExpenseLine } from "../types";
+import type { ExpenseMaster, FixedMonthlyExpense, FixedMonthlyExpenseLine } from "../types";
 import { FY_MONTHS, getCurrentFinancialYear, getFinancialYearOptions, getMonthName } from "../lib/financialYear";
+
+const DEFAULT_EXPENSE_NAMES = ["Salary", "Rent"];
 
 function newLine(expenseName = "", amount = 0): FixedMonthlyExpenseLine {
   return { id: crypto.randomUUID(), expenseName, amount };
@@ -26,11 +28,12 @@ function formatMoney(value: number) {
 }
 
 function defaultLines() {
-  return [newLine("Salary"), newLine("Rent")];
+  return DEFAULT_EXPENSE_NAMES.map((name) => newLine(name));
 }
 
 export function FixedMonthlyExpenses() {
   const [records, setRecords] = useData<FixedMonthlyExpense>("fixed_monthly_expenses", []);
+  const [expenseMasters] = useData<ExpenseMaster>("expense_masters", []);
   const [fy, setFy] = useState(getCurrentFinancialYear());
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
   const [lines, setLines] = useState<FixedMonthlyExpenseLine[]>(defaultLines);
@@ -45,6 +48,23 @@ export function FixedMonthlyExpenses() {
     () => getFinancialYearOptions(normalizedRecords.map((record) => record.fy)),
     [normalizedRecords]
   );
+
+  const expenseOptions = useMemo(() => {
+    const names = new Map<string, string>();
+    const addName = (value?: string | null) => {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!names.has(key)) names.set(key, trimmed);
+    };
+
+    DEFAULT_EXPENSE_NAMES.forEach(addName);
+    expenseMasters.forEach((expense) => addName(expense.name));
+    normalizedRecords.forEach((record) => normalizeLines(record.lines).forEach((line) => addName(line.expenseName)));
+    lines.forEach((line) => addName(line.expenseName));
+
+    return Array.from(names.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [expenseMasters, lines, normalizedRecords]);
 
   const totalAmount = useMemo(
     () => lines.reduce((sum, line) => sum + Number(line.amount || 0), 0),
@@ -167,12 +187,18 @@ export function FixedMonthlyExpenses() {
               {lines.map((line) => (
                 <tr key={line.id}>
                   <td className="border border-gray-900 p-2">
-                    <input
-                      className="w-full rounded border border-slate-300 p-2"
+                    <select
+                      className="w-full rounded border border-slate-300 bg-white p-2"
                       value={line.expenseName}
                       onChange={(event) => updateLine(line.id, { expenseName: event.target.value })}
-                      placeholder="Expense name"
-                    />
+                    >
+                      <option value="">Select expense</option>
+                      {expenseOptions.map((expenseName) => (
+                        <option key={expenseName} value={expenseName}>
+                          {expenseName}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="border border-gray-900 p-2">
                     <input

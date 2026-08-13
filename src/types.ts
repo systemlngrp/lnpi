@@ -450,6 +450,12 @@ export interface GstRateMaster {
   updateTimestamp?: string;
 }
 
+export interface ExpenseMaster {
+  id: string;
+  name: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
 export interface Machine {
   id: string;
   name: string;
