@@ -1,10 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { Edit, Eye, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Edit, Eye, Plus, RotateCcw, Save } from "lucide-react";
 import { useData } from "../hooks/useData";
 import type { ExpenseMaster, FixedMonthlyExpense, FixedMonthlyExpenseLine } from "../types";
 import { FY_MONTHS, getCurrentFinancialYear, getFinancialYearOptions, getMonthName } from "../lib/financialYear";
-
-const DEFAULT_EXPENSE_NAMES = ["Salary", "Rent"];
 
 function newLine(expenseName = "", amount = 0): FixedMonthlyExpenseLine {
   return { id: crypto.randomUUID(), expenseName, amount };
@@ -28,7 +26,7 @@ function formatMoney(value: number) {
 }
 
 function defaultLines() {
-  return DEFAULT_EXPENSE_NAMES.map((name) => newLine(name));
+  return [newLine()];
 }
 
 export function FixedMonthlyExpenses() {
@@ -51,22 +49,17 @@ export function FixedMonthlyExpenses() {
 
   const expenseOptions = useMemo(() => {
     const names = new Map<string, string>();
-    const addName = (value?: string | null) => {
-      const trimmed = String(value || "").trim();
-      if (!trimmed) return;
-      const key = trimmed.toLowerCase();
-      if (!names.has(key)) names.set(key, trimmed);
-    };
-
-    DEFAULT_EXPENSE_NAMES.forEach(addName);
     expenseMasters
       .filter((expense) => (expense.type || "Monthly") === "Monthly")
-      .forEach((expense) => addName(expense.name));
-    normalizedRecords.forEach((record) => normalizeLines(record.lines).forEach((line) => addName(line.expenseName)));
-    lines.forEach((line) => addName(line.expenseName));
+      .forEach((expense) => {
+        const name = String(expense.name || "").trim();
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (!names.has(key)) names.set(key, name);
+      });
 
     return Array.from(names.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  }, [expenseMasters, lines, normalizedRecords]);
+  }, [expenseMasters]);
 
   const totalAmount = useMemo(
     () => lines.reduce((sum, line) => sum + Number(line.amount || 0), 0),
@@ -98,10 +91,6 @@ export function FixedMonthlyExpenses() {
 
   const updateLine = (id: string, patch: Partial<FixedMonthlyExpenseLine>) => {
     setLines((current) => current.map((line) => (line.id === id ? { ...line, ...patch } : line)));
-  };
-
-  const removeLine = (id: string) => {
-    setLines((current) => (current.length > 1 ? current.filter((line) => line.id !== id) : current));
   };
 
   const handleSave = async () => {
@@ -177,12 +166,11 @@ export function FixedMonthlyExpenses() {
         </div>
 
         <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[620px] border-collapse text-sm">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100">
                 <th className="border border-gray-900 p-2 text-left">Expenses</th>
                 <th className="border border-gray-900 p-2 text-right">Amount</th>
-                <th className="w-20 border border-gray-900 p-2 text-center">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -212,11 +200,6 @@ export function FixedMonthlyExpenses() {
                       onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })}
                     />
                   </td>
-                  <td className="border border-gray-900 p-2 text-center">
-                    <button className="rounded border border-red-500 p-2 text-red-600" type="button" onClick={() => removeLine(line.id)} title="Remove">
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -224,7 +207,6 @@ export function FixedMonthlyExpenses() {
               <tr className="bg-slate-50 font-black">
                 <td className="border border-gray-900 p-2 text-right">Total</td>
                 <td className="border border-gray-900 p-2 text-right">{formatMoney(totalAmount)}</td>
-                <td className="border border-gray-900 p-2" />
               </tr>
             </tfoot>
           </table>
