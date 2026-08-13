@@ -180,20 +180,7 @@ export function FixedMonthlyExpenses() {
             <tbody>
               {lines.map((line) => (
                 <tr key={line.id}>
-                  <td className="border border-gray-900 p-2">
-                    <select
-                      className="w-full rounded border border-slate-300 bg-white p-2"
-                      value={line.expenseName}
-                      onChange={(event) => updateLine(line.id, { expenseName: event.target.value })}
-                    >
-                      <option value="">Select expense</option>
-                      {expenseOptions.map((expenseName) => (
-                        <option key={expenseName} value={expenseName}>
-                          {expenseName}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+                  <td className="border border-gray-900 p-2 font-bold text-black">{line.expenseName || "-"}</td>
                   <td className="border border-gray-900 p-2">
                     <input
                       className="w-full rounded border border-slate-300 p-2 text-right"
