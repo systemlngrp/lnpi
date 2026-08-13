@@ -1042,6 +1042,14 @@ export interface FixedMonthlyExpenseLine {
   amount: number;
 }
 
+export interface FixedDailyExpense {
+  id: string;
+  date: string;
+  lines: FixedMonthlyExpenseLine[];
+  totalAmount: number;
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
 export interface FixedMonthlyExpense {
   id: string;
   fy: string;
