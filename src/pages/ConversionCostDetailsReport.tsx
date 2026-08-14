@@ -183,6 +183,10 @@ function getProductionFfg(production: Production) {
   return Number(production.prodFromFFG || 0);
 }
 
+function getProductionFfgDate(production: Production) {
+  return production.ffgTimestamp || production.date;
+}
+
 function getProductionUsefulWeight(production: Production) {
   return getProductionFfg(production) * Number(production.sheetWeight || 0);
 }
@@ -271,7 +275,7 @@ export function ConversionCostDetailsReport() {
     });
 
     const productionRows = productions.filter(
-      (production) => production.status !== "Cancelled" && !production.cancelTimestamp && isWithinRange(production.date, fromDate, toDate)
+      (production) => production.status !== "Cancelled" && !production.cancelTimestamp && isWithinRange(getProductionFfgDate(production), fromDate, toDate)
     );
     const productionIds = new Set(productionRows.map((production) => production.id));
     const totalProduction = round2(

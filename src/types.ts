@@ -711,6 +711,7 @@ export interface Production {
 
 	  phTimestamp?: string;
 	  phEmailId?: string;
+  ffgTimestamp?: string;
 	  tallyTimestamp?: string;
   tallyPostingStatus?: string;
   tallyVoucherNo?: string;

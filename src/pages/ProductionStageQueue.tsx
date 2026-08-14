@@ -327,6 +327,7 @@ export function ProductionStageQueue({
             ? {
                 ...production,
                 prodFromFFG: nextValue,
+                ffgTimestamp: production.ffgTimestamp || timestamp,
                 status: "Pending Tally",
                 updatedBy: "System User",
                 updateTimestamp: timestamp,

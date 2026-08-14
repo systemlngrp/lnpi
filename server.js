@@ -3701,6 +3701,7 @@ async function initDb(retries = 5) {
           \`avgWeight\` DECIMAL(15,5),
           \`prodFromSheetPlant\` DECIMAL(15,2),
           \`prodFromFFG\` DECIMAL(15,2),
+          \`ffgTimestamp\` VARCHAR(255),
           \`phpScheduledJobId\` VARCHAR(36),
           \`plateScheduledJobId\` VARCHAR(36),
           \`wastage\` DECIMAL(15,2),
@@ -4612,6 +4613,7 @@ async function initDb(retries = 5) {
         { table: "productions", column: "uom", type: "VARCHAR(50) NOT NULL" },
         { table: "productions", column: "remarks", type: "TEXT" },
         { table: "productions", column: "status", type: "VARCHAR(50) NOT NULL DEFAULT 'Pending PH'" },
+        { table: "productions", column: "ffgTimestamp", type: "VARCHAR(255)" },
         { table: "productions", column: "tallyTimestamp", type: "VARCHAR(255)" },
         { table: "productions", column: "tallyPostingStatus", type: "VARCHAR(50)" },
         { table: "productions", column: "tallyVoucherNo", type: "VARCHAR(255)" },
@@ -4702,6 +4704,7 @@ async function initDb(retries = 5) {
         { table: "productions", column: "avgWeight", type: "DECIMAL(15,5)" },
         { table: "productions", column: "prodFromSheetPlant", type: "DECIMAL(15,2)" },
         { table: "productions", column: "prodFromFFG", type: "DECIMAL(15,2)" },
+        { table: "productions", column: "ffgTimestamp", type: "VARCHAR(255)" },
         { table: "productions", column: "wastage", type: "DECIMAL(15,2)" },
         { table: "productions", column: "productionInMeter", type: "DECIMAL(15,2)" },
         { table: "productions", column: "plannedProductionInMeter", type: "DECIMAL(15,2)" },
@@ -5127,6 +5130,31 @@ async function initDb(retries = 5) {
         } catch (err) {
           console.warn(`[DB] Could not ensure column ${m.column} in ${m.table}:`, err.message);
         }
+      }
+      try {
+        const [result] = await db.query(`
+          UPDATE \`productions\` p
+          INNER JOIN (
+            SELECT
+              \`productionId\`,
+              MIN(NULLIF(TRIM(\`date\`), '')) AS \`issueDate\`
+            FROM \`material_issues\`
+            WHERE COALESCE(NULLIF(TRIM(\`productionId\`), ''), '') <> ''
+              AND COALESCE(NULLIF(TRIM(\`date\`), ''), '') <> ''
+              AND LOWER(COALESCE(NULLIF(TRIM(\`issueType\`), ''), 'job')) = 'job'
+            GROUP BY \`productionId\`
+          ) mi ON mi.\`productionId\` = p.\`id\`
+          SET p.\`ffgTimestamp\` = mi.\`issueDate\`
+          WHERE COALESCE(p.\`prodFromFFG\`, 0) <> 0
+            AND COALESCE(NULLIF(TRIM(p.\`ffgTimestamp\`), ''), '') = ''
+            AND COALESCE(NULLIF(TRIM(mi.\`issueDate\`), ''), '') <> ''
+        `);
+        const affectedRows = Number(result?.affectedRows || 0);
+        if (affectedRows > 0) {
+          console.log(`[DB] Backfilled FFG timestamp for ${affectedRows} production row(s).`);
+        }
+      } catch (err) {
+        console.warn("[DB] Could not backfill productions.ffgTimestamp:", err.message);
       }
       try {
         await db.query("ALTER TABLE `material_in` MODIFY COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'Pending PH'");
