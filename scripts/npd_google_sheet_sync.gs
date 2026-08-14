@@ -70,6 +70,7 @@ function performFullSync_(config, skipAlreadySynced) {
 
     const mapped = {};
     headers.forEach((header, index) => {
+      if (!shouldIncludeHeaderForSync_(header, config)) return;
       mapped[header] = row[index] ?? '';
     });
 
@@ -537,6 +538,17 @@ function getHeaderIndexByCandidates_(headers, candidates) {
   return -1;
 }
 
+function shouldIncludeHeaderForSync_(header, config) {
+  const normalizedHeader = String(header || '').trim();
+  if (!normalizedHeader) return false;
+  if (!config || !Array.isArray(config.syncHeaders) || config.syncHeaders.length === 0) return true;
+
+  const normalized = normalizedHeader.toLowerCase().replace(/\s+/g, '');
+  return config.syncHeaders.some((allowedHeader) => {
+    return String(allowedHeader || '').trim().toLowerCase().replace(/\s+/g, '') === normalized;
+  });
+}
+
 function getSyncIdValue_(row, config) {
   return getRowValueByCandidates_(row, getSyncIdCandidates_(config));
 }
@@ -665,7 +677,7 @@ function buildRowPayload_(sheet, rowIndex, config, skipIfSynced) {
 
   headerRow.forEach((header, index) => {
     const normalizedHeader = String(header || '').trim();
-    if (!normalizedHeader) return;
+    if (!shouldIncludeHeaderForSync_(normalizedHeader, config)) return;
     payload[normalizedHeader] = dataRow[index] ?? '';
   });
 

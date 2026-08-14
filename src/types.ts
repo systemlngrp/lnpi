@@ -504,6 +504,15 @@ export interface Company {
   salesPerson?: string;
   gstType?: string;
   panNo?: string;
+  paymentTerms?: string;
+  openingBalance?: number;
+  overdues?: number;
+  target?: number;
+  reffPerson?: string;
+  priority?: string;
+  followupFrequency?: string;
+  autoEmail?: string;
+  followupApproval?: string;
   active?: "Yes" | "No";
   updatedBy?: string;
   updateTimestamp?: string;

@@ -201,7 +201,16 @@ const COMPANY_SYNC_HEADER_MAP = {
   "NPD Hostinger Sync": "npdHostingerSync",
   "Sales Person": "salesPerson",
   "GST Type": "gstType",
-  "PAN No": "panNo"
+  "PAN No": "panNo",
+  "PAYMENT TERMS": "paymentTerms",
+  "OPENING BALANCE": "openingBalance",
+  "OVERDUES": "overdues",
+  "TARGET": "target",
+  "REFF. PERSON": "reffPerson",
+  "Priority": "priority",
+  "Followup Frequency": "followupFrequency",
+  "Auto Email": "autoEmail",
+  "Followup Approval": "followupApproval"
 };
 const COMPANY_SYNC_REQUIRED_HEADERS = ["Id", "Company"];
 const PHP_ITEM_MASTER_HEADER_MAP = {
@@ -393,7 +402,10 @@ const NPD_SYNC_NUMERIC_KEYS = /* @__PURE__ */ new Set([
   "noOfParts",
   "noOfUps",
   "deviationAllowed",
-  "toleranceAllowed"
+  "toleranceAllowed",
+  "openingBalance",
+  "overdues",
+  "target"
 ]);
 const NPD_SCHEMA_COLUMNS = [
   ...[...new Set(Object.values(NPD_SYNC_HEADER_MAP))].map((column) => ({
@@ -3506,6 +3518,15 @@ async function initDb(retries = 5) {
           \`pin\` VARCHAR(20),
           \`npdHostingerSync\` VARCHAR(255),
           \`salesPerson\` VARCHAR(255),
+          \`paymentTerms\` VARCHAR(255),
+          \`openingBalance\` DECIMAL(15,2),
+          \`overdues\` DECIMAL(15,2),
+          \`target\` DECIMAL(15,2),
+          \`reffPerson\` VARCHAR(255),
+          \`priority\` VARCHAR(255),
+          \`followupFrequency\` VARCHAR(255),
+          \`autoEmail\` VARCHAR(255),
+          \`followupApproval\` VARCHAR(255),
           \`active\` VARCHAR(10) DEFAULT 'Yes'
         )
       `);
@@ -3534,6 +3555,42 @@ async function initDb(retries = 5) {
         if (!existingColumns.includes("salesPerson")) {
           console.log("[DB] Adding salesPerson to companies...");
           await db.query("ALTER TABLE `companies` ADD COLUMN `salesPerson` VARCHAR(255)");
+        }
+        if (!existingColumns.includes("paymentTerms")) {
+          console.log("[DB] Adding paymentTerms to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `paymentTerms` VARCHAR(255)");
+        }
+        if (!existingColumns.includes("openingBalance")) {
+          console.log("[DB] Adding openingBalance to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `openingBalance` DECIMAL(15,2)");
+        }
+        if (!existingColumns.includes("overdues")) {
+          console.log("[DB] Adding overdues to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `overdues` DECIMAL(15,2)");
+        }
+        if (!existingColumns.includes("target")) {
+          console.log("[DB] Adding target to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `target` DECIMAL(15,2)");
+        }
+        if (!existingColumns.includes("reffPerson")) {
+          console.log("[DB] Adding reffPerson to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `reffPerson` VARCHAR(255)");
+        }
+        if (!existingColumns.includes("priority")) {
+          console.log("[DB] Adding priority to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `priority` VARCHAR(255)");
+        }
+        if (!existingColumns.includes("followupFrequency")) {
+          console.log("[DB] Adding followupFrequency to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `followupFrequency` VARCHAR(255)");
+        }
+        if (!existingColumns.includes("autoEmail")) {
+          console.log("[DB] Adding autoEmail to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `autoEmail` VARCHAR(255)");
+        }
+        if (!existingColumns.includes("followupApproval")) {
+          console.log("[DB] Adding followupApproval to companies...");
+          await db.query("ALTER TABLE `companies` ADD COLUMN `followupApproval` VARCHAR(255)");
         }
       } catch (err) {
         console.warn("[DB] Could not alter companies table:", err.message);
@@ -4741,6 +4798,15 @@ async function initDb(retries = 5) {
         { table: "companies", column: "district", type: "VARCHAR(255)" },
         { table: "companies", column: "state", type: "VARCHAR(255)" },
         { table: "companies", column: "gstNo", type: "VARCHAR(100)" },
+        { table: "companies", column: "paymentTerms", type: "VARCHAR(255)" },
+        { table: "companies", column: "openingBalance", type: "DECIMAL(15,2)" },
+        { table: "companies", column: "overdues", type: "DECIMAL(15,2)" },
+        { table: "companies", column: "target", type: "DECIMAL(15,2)" },
+        { table: "companies", column: "reffPerson", type: "VARCHAR(255)" },
+        { table: "companies", column: "priority", type: "VARCHAR(255)" },
+        { table: "companies", column: "followupFrequency", type: "VARCHAR(255)" },
+        { table: "companies", column: "autoEmail", type: "VARCHAR(255)" },
+        { table: "companies", column: "followupApproval", type: "VARCHAR(255)" },
         { table: "companies", column: "syncSource", type: "VARCHAR(50)" },
         { table: "companies", column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
         { table: "machines", column: "name", type: "VARCHAR(255) NOT NULL" },
