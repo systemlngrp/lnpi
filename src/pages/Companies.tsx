@@ -34,6 +34,15 @@ export function Companies() {
   const [salesPerson, setSalesPerson] = useState("");
   const [gstType, setGstType] = useState("");
   const [panNo, setPanNo] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState("");
+  const [openingBalance, setOpeningBalance] = useState<number | "">("");
+  const [overdues, setOverdues] = useState<number | "">("");
+  const [target, setTarget] = useState<number | "">("");
+  const [reffPerson, setReffPerson] = useState("");
+  const [priority, setPriority] = useState("");
+  const [followupFrequency, setFollowupFrequency] = useState("");
+  const [autoEmail, setAutoEmail] = useState("");
+  const [followupApproval, setFollowupApproval] = useState("");
   const [active, setActive] = useState<"Yes" | "No">("Yes");
 
   const resetForm = () => {
@@ -52,6 +61,15 @@ export function Companies() {
     setSalesPerson("");
     setGstType("");
     setPanNo("");
+    setPaymentTerms("");
+    setOpeningBalance("");
+    setOverdues("");
+    setTarget("");
+    setReffPerson("");
+    setPriority("");
+    setFollowupFrequency("");
+    setAutoEmail("");
+    setFollowupApproval("");
     setActive("Yes");
     setEditingId(null);
   };
@@ -74,6 +92,15 @@ export function Companies() {
         "Sales Person": "Jane Smith",
         "GST Type": "Regular",
         "PAN No": "ABCDE1234F",
+        "PAYMENT TERMS": "30 Days",
+        "OPENING BALANCE": 0,
+        "OVERDUES": 0,
+        "TARGET": 100000,
+        "REFF. PERSON": "Reference Person",
+        "Priority": "High",
+        "Followup Frequency": "Weekly",
+        "Auto Email": "Yes",
+        "Followup Approval": "Pending",
         "Active": "Yes"
       }
     ];
@@ -106,7 +133,7 @@ export function Companies() {
         const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() };
         const newCompanies: Company[] = data.map((row: any) => ({
           id: crypto.randomUUID(),
-          name: String(row["Company Name"] || "").trim(),
+          name: String(row["Company Name"] || row["Company"] || "").trim(),
           contactPerson: String(row["Contact Person"] || "").trim() || undefined,
           contactNumber: String(row["Contact Number"] || "").trim() || undefined,
           email: String(row["Email Id"] || "").trim() || undefined,
@@ -121,6 +148,15 @@ export function Companies() {
           salesPerson: String(row["Sales Person"] || "").trim() || undefined,
           gstType: String(row["GST Type"] || "").trim() || undefined,
           panNo: String(row["PAN No"] || "").trim() || undefined,
+          paymentTerms: String(row["PAYMENT TERMS"] || "").trim() || undefined,
+          openingBalance: row["OPENING BALANCE"] ? Number(row["OPENING BALANCE"]) : undefined,
+          overdues: row["OVERDUES"] ? Number(row["OVERDUES"]) : undefined,
+          target: row["TARGET"] ? Number(row["TARGET"]) : undefined,
+          reffPerson: String(row["REFF. PERSON"] || "").trim() || undefined,
+          priority: String(row["Priority"] || "").trim() || undefined,
+          followupFrequency: String(row["Followup Frequency"] || "").trim() || undefined,
+          autoEmail: String(row["Auto Email"] || "").trim() || undefined,
+          followupApproval: String(row["Followup Approval"] || "").trim() || undefined,
           active: (String(row["Active"] || "Yes").trim().toLowerCase() === "no" ? "No" : "Yes") as Company["active"],
           ...audit,
         })).filter(c => c.name);
@@ -170,6 +206,15 @@ export function Companies() {
       "Sales Person": c.salesPerson || "",
       "GST Type": c.gstType || "",
       "PAN No": c.panNo || "",
+      "PAYMENT TERMS": c.paymentTerms || "",
+      "OPENING BALANCE": c.openingBalance ?? "",
+      "OVERDUES": c.overdues ?? "",
+      "TARGET": c.target ?? "",
+      "REFF. PERSON": c.reffPerson || "",
+      "Priority": c.priority || "",
+      "Followup Frequency": c.followupFrequency || "",
+      "Auto Email": c.autoEmail || "",
+      "Followup Approval": c.followupApproval || "",
       "Active": c.active === "No" ? "No" : "Yes"
     }));
 
@@ -215,6 +260,15 @@ export function Companies() {
         salesPerson: salesPerson.trim() || undefined,
         gstType: gstType.trim() || undefined,
         panNo: panNo.trim() || undefined,
+        paymentTerms: paymentTerms.trim() || undefined,
+        openingBalance: openingBalance === "" ? undefined : Number(openingBalance),
+        overdues: overdues === "" ? undefined : Number(overdues),
+        target: target === "" ? undefined : Number(target),
+        reffPerson: reffPerson.trim() || undefined,
+        priority: priority.trim() || undefined,
+        followupFrequency: followupFrequency.trim() || undefined,
+        autoEmail: autoEmail.trim() || undefined,
+        followupApproval: followupApproval.trim() || undefined,
         active,
         ...audit,
       };
@@ -269,6 +323,15 @@ export function Companies() {
     setSalesPerson(company.salesPerson || "");
     setGstType(company.gstType || "");
     setPanNo(company.panNo || "");
+    setPaymentTerms(company.paymentTerms || "");
+    setOpeningBalance(company.openingBalance ?? "");
+    setOverdues(company.overdues ?? "");
+    setTarget(company.target ?? "");
+    setReffPerson(company.reffPerson || "");
+    setPriority(company.priority || "");
+    setFollowupFrequency(company.followupFrequency || "");
+    setAutoEmail(company.autoEmail || "");
+    setFollowupApproval(company.followupApproval || "");
     setActive(company.active === "No" ? "No" : "Yes");
     setEditingId(company.id);
     setIsFormOpen(true);
@@ -294,6 +357,12 @@ export function Companies() {
         (c.state || "").toLowerCase().includes(q) ||
         (c.salesPerson || "").toLowerCase().includes(q) ||
         (c.panNo || "").toLowerCase().includes(q) ||
+        (c.paymentTerms || "").toLowerCase().includes(q) ||
+        (c.reffPerson || "").toLowerCase().includes(q) ||
+        (c.priority || "").toLowerCase().includes(q) ||
+        (c.followupFrequency || "").toLowerCase().includes(q) ||
+        (c.autoEmail || "").toLowerCase().includes(q) ||
+        (c.followupApproval || "").toLowerCase().includes(q) ||
         (c.active === "No" ? "inactive no" : "active yes").includes(q)
       );
     });
@@ -395,6 +464,51 @@ export function Companies() {
             </div>
 
             <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">PAYMENT TERMS</label>
+              <input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">OPENING BALANCE</label>
+              <input type="number" step="any" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value === "" ? "" : Number(e.target.value))} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">OVERDUES</label>
+              <input type="number" step="any" value={overdues} onChange={(e) => setOverdues(e.target.value === "" ? "" : Number(e.target.value))} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">TARGET</label>
+              <input type="number" step="any" value={target} onChange={(e) => setTarget(e.target.value === "" ? "" : Number(e.target.value))} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">REFF. PERSON</label>
+              <input value={reffPerson} onChange={(e) => setReffPerson(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Priority</label>
+              <input value={priority} onChange={(e) => setPriority(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Followup Frequency</label>
+              <input value={followupFrequency} onChange={(e) => setFollowupFrequency(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Auto Email</label>
+              <input value={autoEmail} onChange={(e) => setAutoEmail(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">Followup Approval</label>
+              <input value={followupApproval} onChange={(e) => setFollowupApproval(e.target.value)} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors" />
+            </div>
+
+            <div className="flex flex-col space-y-1">
               <label className="font-bold text-black">Active</label>
               <select value={active} onChange={(e) => setActive(e.target.value === "No" ? "No" : "Yes")} className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors">
                 <option value="Yes">Yes</option>
@@ -471,6 +585,10 @@ export function Companies() {
                   <div className="text-xs text-slate-700">{c.district} {c.state ? `| ${c.state}` : ""} {c.pin ? `| ${c.pin}` : ""}</div>
                   <div className="text-xs text-slate-700">GST Supply Type: {c.gstSupplyType || "INTRA_STATE"} {c.gstType ? `| Type: ${c.gstType}` : ""}</div>
                   <div className="text-xs text-slate-700">PAN: {c.panNo || "-"} | Sales Person: {c.salesPerson || "-"}</div>
+                  <div className="text-xs text-slate-700">Terms: {c.paymentTerms || "-"} | Priority: {c.priority || "-"}</div>
+                  <div className="text-xs text-slate-700">Opening: {c.openingBalance ?? "-"} | Overdues: {c.overdues ?? "-"} | Target: {c.target ?? "-"}</div>
+                  <div className="text-xs text-slate-700">Followup: {c.followupFrequency || "-"} | Auto Email: {c.autoEmail || "-"} | Approval: {c.followupApproval || "-"}</div>
+                  <div className="text-xs text-slate-700">REFF. PERSON: {c.reffPerson || "-"}</div>
                   <div className="text-xs font-bold text-slate-700">Active: {c.active === "No" ? "No" : "Yes"}</div>
                   <div className="text-xs text-slate-700">Deviation Allowed: {c.deviationAllowed ?? "-"}%</div>
                   <div className="text-xs text-slate-700">Tolerance Allowed: {c.toleranceAllowed ?? "-"}%</div>
@@ -503,6 +621,15 @@ export function Companies() {
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">GST Supply Type</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">PAN No</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Sales Person</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">PAYMENT TERMS</th>
+                <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">OPENING BALANCE</th>
+                <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">OVERDUES</th>
+                <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">TARGET</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">REFF. PERSON</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Priority</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Followup Frequency</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Auto Email</th>
+                <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Followup Approval</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Deviation Allowed</th>
                 <th className="px-4 py-2 text-right text-sm font-bold text-black uppercase border border-black">Tolerance Allowed</th>
                 <th className="px-4 py-2 text-left text-sm font-bold text-black uppercase border border-black">Active</th>
@@ -512,7 +639,7 @@ export function Companies() {
             <tbody className="divide-y divide-black bg-white">
               {filteredCompanies.length === 0 ? (
                 <tr>
-                  <td colSpan={18} className="px-6 py-8 text-center text-black font-medium tracking-wide">
+                  <td colSpan={27} className="px-6 py-8 text-center text-black font-medium tracking-wide">
                     {isLoading ? <div className="flex justify-center"><Spinner /></div> : 'No companies found.'}
                   </td>
                 </tr>
@@ -537,6 +664,15 @@ export function Companies() {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.gstSupplyType || "INTRA_STATE"}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.panNo}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.salesPerson}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.paymentTerms}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.openingBalance ?? "-"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.overdues ?? "-"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.target ?? "-"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.reffPerson}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.priority}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.followupFrequency}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.autoEmail}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-black border border-black">{c.followupApproval}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.deviationAllowed ?? "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-black text-right border border-black">{c.toleranceAllowed ?? "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-black border border-black">{c.active === "No" ? "No" : "Yes"}</td>
