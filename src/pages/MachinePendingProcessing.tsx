@@ -18,6 +18,7 @@ interface PendingMachineJob {
   erpCode: string;
   itemName: string;
   requiredQty: number;
+  ffgQty: number;
   reportedQty: number;
   pendingQty: number;
 }
@@ -110,6 +111,7 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
               erpCode: String(item?.erp || p.erpCode || ""),
               itemName: item?.name || "",
               requiredQty: Number(p.qty || 0),
+              ffgQty: Number(p.prodFromFFG || 0),
               reportedQty: reportedForThisMachine,
               pendingQty: pending
             });
@@ -245,6 +247,7 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
                           <th className="px-3 py-2 text-left">Company</th>
                           <th className="px-3 py-2 text-left">Item</th>
                           <th className="px-3 py-2 text-right">Plan Qty</th>
+                          <th className="px-3 py-2 text-right">FFG</th>
                           <th className="px-3 py-2 text-right">Reported</th>
                           <th className="px-3 py-2 text-right text-indigo-700">Pending</th>
                           <th className="px-3 py-2 text-center">Action</th>
@@ -259,6 +262,7 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
                             <td className="px-3 py-2 max-w-[220px] truncate" title={job.companyName}>{job.companyName || "-"}</td>
                             <td className="px-3 py-2 max-w-[280px] truncate text-slate-600" title={job.itemName}>{job.itemName || "-"}</td>
                             <td className="px-3 py-2 text-right">{job.requiredQty.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right">{job.ffgQty.toLocaleString()}</td>
                             <td className="px-3 py-2 text-right text-emerald-700">{job.reportedQty.toLocaleString()}</td>
                             <td className="px-3 py-2 text-right text-indigo-700 bg-indigo-50/30 font-black">{job.pendingQty.toLocaleString()}</td>
                             <td className="px-3 py-2 text-center">
