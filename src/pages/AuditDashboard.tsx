@@ -53,6 +53,26 @@ function formatCount(value: number) {
   return Number(value || 0).toLocaleString("en-IN");
 }
 
+function formatLastSync(value: string) {
+  const parsed = new Date(value);
+  if (!value || Number.isNaN(parsed.getTime())) return "Last Sync : -";
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(parsed);
+  const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+  const time = `${getPart("hour")}:${getPart("minute")} ${getPart("dayPeriod").toUpperCase()}`;
+  const date = `${getPart("day")}-${getPart("month")}-${getPart("year")}`;
+
+  return `Last Sync : ${time} | ${date}`;
+}
+
 function getMaterialInPurchaseAuditValue(entry: MaterialIn) {
   const lineGst = roundMoney(
     (entry.lines || []).reduce(
@@ -249,12 +269,10 @@ export function AuditDashboard() {
         <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-xl font-black uppercase tracking-tight text-slate-950 md:text-2xl">Audit Dashboard</h2>
-            <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">Tally vs app value comparison</p>
           </div>
         </div>
         <div className="border-t border-slate-200 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-600">
-          Tally source: last saved values
-          {fetchedAt ? ` | Fetched: ${fetchedAt}` : ""}
+          {formatLastSync(fetchedAt)}
         </div>
       </section>
 
