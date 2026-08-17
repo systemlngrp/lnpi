@@ -346,7 +346,7 @@ export const NAVIGATION: NavGroup[] = [
     ],
   },
   {
-    section: "Quality",
+    section: "QC",
     color: "bg-cyan-700",
     items: qualityItems,
   },
