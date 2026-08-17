@@ -375,9 +375,10 @@ export function PaperRequirementReport() {
         const totalPendingPo = round2(pendingPoByKey.get(key) || 0);
         const consumption = round2(Math.max(0, consumptionByKey.get(key) || 0));
         const mil = round2((consumption * 7) / 90);
-        const netPaperToOrder = totalClosingStock > mil
+        const calculatedNetPaperToOrder = totalClosingStock > mil
           ? round2(totalPaperRequirement - totalClosingStock - totalPendingPo)
           : round2((mil - totalClosingStock) + (totalPaperRequirement - totalClosingStock - totalPendingPo));
+        const netPaperToOrder = Math.max(0, calculatedNetPaperToOrder);
         return { rapcRange, gsm, totalPaperRequirement, totalClosingStock, totalPendingPo, mil, netPaperToOrder, consumption };
       })
       .filter((row) => row.gsm > 0)
