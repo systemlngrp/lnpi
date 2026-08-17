@@ -187,6 +187,11 @@ const sampleItems: NavItem[] = [
   { name: "Sample Master", href: "/samples/master", icon: Database },
 ];
 
+const qualityItems: NavItem[] = [
+  { name: "Board Line QC Form", href: "/quality/boardline-qc/form", icon: ClipboardList },
+  { name: "Board Line QC Master", href: "/quality/boardline-qc/master", icon: Database },
+];
+
 const dispatchItems: NavItem[] = [
   { name: "Pending Dispatch Planning", href: "/dispatch/pending-planning", icon: ClipboardList, countKey: "/dispatch/pending-planning" },
   { name: "Dispatch Plans Master", href: "/dispatch/master", icon: Database },
@@ -339,6 +344,11 @@ export const NAVIGATION: NavGroup[] = [
       { section: "PHP & Plate Production", items: phpPlateProcessItems },
       { section: "Samples", items: sampleItems },
     ],
+  },
+  {
+    section: "Quality",
+    color: "bg-cyan-700",
+    items: qualityItems,
   },
   {
     section: "Dispatch",

@@ -777,6 +777,57 @@ export interface SampleRequest {
   updateTimestamp?: string;
 }
 
+export interface BoardLineQcCheck {
+  id: string;
+  timestamp: string;
+  jobNo: string | number;
+  partyName: string;
+  itemName: string;
+  checkNo: string | number;
+  standard?: string;
+  flapHeightFlapOperatorSide?: string;
+  flapHeightFlapDriveSide?: string;
+  cuttingSizeRequired?: number | "";
+  cuttingSizeMm?: number | "";
+  column19?: string;
+  boardGsm?: number | "";
+  typeOfFlute?: string;
+  boardThickness?: number | "";
+  moisture?: number | "";
+  sheetWeightGrams?: number | "";
+  column20?: string;
+  boardlineRemarks?: string;
+  qcPerson: string;
+  whatsapp?: string;
+  erp?: string | number;
+  heightOd?: number | "";
+  flap?: number | "";
+  ply?: number | "";
+  width?: number | "";
+  length?: number | "";
+  part?: string;
+  flapMinDs?: number | "";
+  flapMaxDs?: number | "";
+  systemAutoCorrection1?: string;
+  systemAutoCorrection2?: string;
+  systemAutoCorrection3?: string;
+  systemAutoCorrection4?: string;
+  systemAutoCorrection5?: string;
+  flapAchievedOs?: number | "";
+  heightAchievedOs?: number | "";
+  flapLAchievedOs?: number | "";
+  flapAchievedDs?: number | "";
+  heightAchievedDs?: number | "";
+  flapLAchievedDs?: number | "";
+  previousCustomerComplaintWarning?: string;
+  photo?: string;
+  printingArtwork?: string;
+  planQty?: number | "";
+  samplingPlanQty?: number | "";
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export type TruckLiveStatus = "EMPTY" | "LOADING" | "IN-TRANSIT" | "REPORTED TO PARTY" | "UNLOADING" | "RETURNING" | "BILL PENDING" | "NOT UNLOADED" | "REJECTED";
 
 export interface Truck {
