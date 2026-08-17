@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 import { useAuth } from "../auth/AuthContext";
 import { useData } from "../hooks/useData";
-import { BoardLineQcCheck } from "../types";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { BoardLineQcCheck, Production } from "../types";
 
 type FieldType = "text" | "number" | "textarea" | "datetime-local";
 
@@ -153,9 +155,23 @@ function formatTimestamp(value?: string) {
   });
 }
 
+function toOptionalNumber(...values: unknown[]) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return "";
+}
+
 function displayValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
   return String(value);
+}
+
+function buildFlapHeightValue(flap: number | "", height: number | "") {
+  if (flap === "" || height === "") return "";
+  return `${flap}-${height}-${flap}`;
 }
 
 function buildPayload(form: Partial<BoardLineQcCheck>, updatedBy: string): BoardLineQcCheck {
@@ -230,12 +246,101 @@ function FieldInput({
 
 export function BoardLineQcForm() {
   const [, setChecks] = useData<BoardLineQcCheck>("boardline_qc_checks", []);
+  const [productions] = useData<Production>("productions", []);
+  const { findItemAcrossSources } = useOrderItemCatalog();
   const { user } = useAuth();
   const [form, setForm] = useState<Partial<BoardLineQcCheck>>(createInitialForm);
+  const [selectedProductionId, setSelectedProductionId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const productionById = useMemo(() => {
+    const map = new Map<string, Production>();
+    productions.forEach((production) => {
+      if (production.id) map.set(String(production.id), production);
+    });
+    return map;
+  }, [productions]);
+
+  const jobOptions = useMemo(
+    () =>
+      [...productions]
+        .sort((a, b) =>
+          String(b.date || b.updateTimestamp || b.transactionNo || "").localeCompare(
+            String(a.date || a.updateTimestamp || a.transactionNo || "")
+          )
+        )
+        .map((production) => {
+          const item = findItemAcrossSources(
+            String(production.itemId || production.npdId || ""),
+            production.itemSource,
+            production.erpCode || production.masterErp
+          );
+          const jobNo = String(production.transactionNo || production.jobCardNo || production.id || "").trim();
+          const itemName = String((production as any).itemName || item?.name || production.itemId || "").trim();
+          const partyName = String(production.companyName || item?.companyName || "").trim();
+          const erp = String(production.erpCode || production.masterErp || item?.erp || "").trim();
+          const labelParts = [jobNo, partyName, itemName, erp].filter(Boolean);
+          return {
+            value: String(production.id),
+            label: labelParts.join(" | "),
+            searchText: labelParts.join(" "),
+          };
+        }),
+    [findItemAcrossSources, productions]
+  );
 
   const setField = (key: keyof BoardLineQcCheck, value: string | number | "") => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleJobSelect = (productionId: string) => {
+    setSelectedProductionId(productionId);
+    const production = productionById.get(productionId);
+    if (!production) {
+      setForm((prev) => ({ ...prev, jobNo: "" }));
+      return;
+    }
+
+    const item = findItemAcrossSources(
+      String(production.itemId || production.npdId || ""),
+      production.itemSource,
+      production.erpCode || production.masterErp
+    );
+    const rawItem = item?.raw || {};
+    const jobNo = String(production.transactionNo || production.jobCardNo || "").trim();
+    const partyName = String(production.companyName || item?.companyName || rawItem.customerName || rawItem.customer || "").trim();
+    const itemName = String((production as any).itemName || item?.name || rawItem.itemName || rawItem.name || "").trim();
+    const erp = String(production.erpCode || production.masterErp || item?.erp || rawItem.erp || rawItem.erpCode || "").trim();
+    const height = toOptionalNumber(production.height, rawItem.hOd, rawItem.height);
+    const width = toOptionalNumber(production.breadth, rawItem.wOd, rawItem.width, rawItem.breadth);
+    const length = toOptionalNumber(production.length, rawItem.lOd, rawItem.length);
+    const flap = toOptionalNumber((production as any).flap, rawItem.flap);
+    const cuttingSize = toOptionalNumber(production.cuttingWithTrimming, rawItem.cuttingSize);
+    const boardGsm = toOptionalNumber(production.boardGsmReq, production.gsm, rawItem.boardGsmReq, rawItem.gsm);
+
+    setForm((prev) => ({
+      ...prev,
+      jobNo,
+      partyName,
+      itemName,
+      erp,
+      heightOd: height,
+      width,
+      length,
+      flap,
+      ply: toOptionalNumber(production.ply, rawItem.ply),
+      part: String(rawItem.part || prev.part || "").trim(),
+      typeOfFlute: String(production.flute || production.fluteType || rawItem.flute || "").trim(),
+      boardGsm,
+      cuttingSizeRequired: cuttingSize,
+      cuttingSizeMm: cuttingSize,
+      sheetWeightGrams: toOptionalNumber(production.sheetWeight),
+      planQty: toOptionalNumber(production.plannedQty, production.qty),
+      standard: String(prev.standard || rawItem.spec || "").trim(),
+      flapHeightFlapOperatorSide: buildFlapHeightValue(flap, height) || prev.flapHeightFlapOperatorSide,
+      flapHeightFlapDriveSide: buildFlapHeightValue(flap, height) || prev.flapHeightFlapDriveSide,
+      printingArtwork: String(prev.printingArtwork || rawItem.artwork || "").trim(),
+    }));
   };
 
   const canSubmit = Boolean(
@@ -279,9 +384,25 @@ export function BoardLineQcForm() {
               {section.title}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {section.fields.map((field) => (
-                <FieldInput key={String(field.key)} field={field} value={form[field.key]} onChange={setField} />
-              ))}
+              {section.fields.map((field) =>
+                field.key === "jobNo" ? (
+                  <div key={String(field.key)} className="flex flex-col space-y-1">
+                    <label className="font-bold text-black text-sm">
+                      {field.label} <span className="text-red-600">*</span>
+                    </label>
+                    <Select
+                      options={jobOptions}
+                      value={selectedProductionId}
+                      onChange={handleJobSelect}
+                      required
+                      placeholder="Search and select job no..."
+                      wrapLabels
+                    />
+                  </div>
+                ) : (
+                  <FieldInput key={String(field.key)} field={field} value={form[field.key]} onChange={setField} />
+                )
+              )}
             </div>
           </section>
         ))}
