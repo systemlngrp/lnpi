@@ -38,7 +38,8 @@ type NetFilter =
   | "All Positive"
   | "All Negative"
   | "Below 100 Absolute"
-  | "Above 100 Absolute";
+  | "Above 100 Absolute"
+  | "Zero Inputs + Net > 0";
 type GroupTypeFilter = "All" | "Positive" | "Negative";
 type ChartLimit = "All" | "Top 15" | "Top 30" | "Top 50";
 type RapcGroup = number | "Unmapped";
@@ -57,7 +58,7 @@ type ReportRow = GroupKey & {
 type Summary = Omit<ReportRow, "rapcRange" | "gsm">;
 type RangeGsmOption = { value: string; label: string };
 
-const NET_FILTER_OPTIONS: NetFilter[] = ["All", "Positive (>100)", "Negative (< -100)", "All Positive", "All Negative", "Below 100 Absolute", "Above 100 Absolute"];
+const NET_FILTER_OPTIONS: NetFilter[] = ["All", "Positive (>100)", "Negative (< -100)", "All Positive", "All Negative", "Below 100 Absolute", "Above 100 Absolute", "Zero Inputs + Net > 0"];
 const GROUP_TYPE_OPTIONS: GroupTypeFilter[] = ["All", "Positive", "Negative"];
 const CHART_LIMIT_OPTIONS: ChartLimit[] = ["All", "Top 15", "Top 30", "Top 50"];
 const KG_CONVERSION_FACTOR = 1000000000;
@@ -180,6 +181,9 @@ function passesNetFilter(row: ReportRow, filter: NetFilter) {
   if (filter === "All Negative") return net < 0;
   if (filter === "Below 100 Absolute") return absoluteNet < 100;
   if (filter === "Above 100 Absolute") return absoluteNet > 100;
+  if (filter === "Zero Inputs + Net > 0") {
+    return net > 0 && [row.totalPaperRequirement, row.totalClosingStock, row.totalPendingPo, row.mil].some((value) => round2(value) === 0);
+  }
   return true;
 }
 
