@@ -600,17 +600,17 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
 
   y = section(doc, x, y, w, "OFFICIAL DATA");
   cell(doc, x, y, 66, 7, "Target Paper Weight", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 66, y, 38, 7, targetPaper ? num(targetPaper, 0) : "", { bold: true });
+  cell(doc, x + 66, y, 38, 7, "", { bold: true });
   cell(doc, x + 104, y, 45, 7, "Actual Paper weight", { fill: LIGHT_ORANGE, bold: true });
   cell(doc, x + 149, y, 47, 7, production.actualPaperUsed ? num(production.actualPaperUsed, 2) : "");
   y += 7;
   cell(doc, x, y, 66, 7, "Target Liner Weight", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 66, y, 38, 7, targetLiner ? num(targetLiner, 0) : "", { bold: true });
+  cell(doc, x + 66, y, 38, 7, "", { bold: true });
   cell(doc, x + 104, y, 45, 7, "Actual Liner weight", { fill: LIGHT_ORANGE, bold: true });
   cell(doc, x + 149, y, 47, 7, "");
   y += 7;
   cell(doc, x, y, 66, 12, "Total Target weight", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 66, y, 38, 12, totalTarget ? num(totalTarget, 0) : "", { bold: true });
+  cell(doc, x + 66, y, 38, 12, "", { bold: true });
   cell(doc, x + 104, y, 45, 12, "Actual Consumed\nweight", { fill: LIGHT_ORANGE, bold: true });
   cell(doc, x + 149, y, 47, 12, production.actualPaperUsed ? num(production.actualPaperUsed, 2) : "");
   y += 17;

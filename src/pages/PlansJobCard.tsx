@@ -267,19 +267,19 @@ const jobCardMappings: JobCardMapping[] = [
     field: "Target Paper Weight",
     source: "productions",
     key: "productions.topPaperWeightKg, productions.totalPaperWeight",
-    notes: "Uses topPaperWeightKg first; totalPaperWeight is fallback.",
+    notes: "Source remains topPaperWeightKg first, with totalPaperWeight as fallback, but the Job Card PDF intentionally prints this value blank.",
   },
   {
     field: "Target Liner Weight",
     source: "productions",
     key: "productions.linerWeightKg",
-    notes: "Uses saved production liner weight.",
+    notes: "Source remains saved production liner weight, but the Job Card PDF intentionally prints this value blank.",
   },
   {
     field: "Total Target weight",
     source: "productions",
     key: "productions.totalJobWeight, productions.topPaperWeightKg + productions.linerWeightKg",
-    notes: "Uses totalJobWeight; if blank, adds target paper and liner weights.",
+    notes: "Source remains totalJobWeight, falling back to target paper plus liner weights, but the Job Card PDF intentionally prints this value blank.",
   },
   {
     field: "Actual Paper weight",
