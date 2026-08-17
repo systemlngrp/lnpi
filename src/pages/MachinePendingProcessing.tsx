@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { useData } from "../hooks/useData";
-import { Production, Machine, ProductionProcessing, Setting } from "../types";
+import { Company, Order, OrderSchedule, Production, Machine, ProductionProcessing, Setting } from "../types";
 import { Hammer, Search, ChevronRight, ChevronDown, ClipboardList, ArrowLeft } from "lucide-react";
 import { parseMandatoryMachinesByType } from "../lib/mandatoryMachines";
 import { Spinner } from "../components/Spinner";
@@ -40,6 +40,9 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
   const [machines] = useData<Machine>("machines", []);
   const [processing] = useData<ProductionProcessing>("production_processing", []);
   const [settings] = useData<Setting>("settings", []);
+  const [schedules] = useData<OrderSchedule>("orders_schedule", []);
+  const [orders] = useData<Order>("orders", []);
+  const [companies] = useData<Company>("companies", []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
@@ -59,6 +62,21 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
   }, [fixedNormalizedMachineName, machines]);
 
   const mandatoryMachinesMapping = useMemo(() => parseMandatoryMachinesByType(settings[0]), [settings]);
+  const scheduleById = useMemo(() => new Map(schedules.map((schedule) => [schedule.id, schedule])), [schedules]);
+  const orderById = useMemo(() => new Map(orders.map((order) => [order.id, order])), [orders]);
+  const companyNameById = useMemo(() => new Map(companies.map((company) => [company.id, company.name || ""])), [companies]);
+
+  const resolveCompanyName = useCallback((production: Production, item?: any) => {
+    const productionCompany = String(production.companyName || "").trim();
+    if (productionCompany) return productionCompany;
+
+    const schedule = scheduleById.get(String(production.scheduleId || ""));
+    const order = schedule ? orderById.get(String(schedule.orderId || "")) : undefined;
+    const orderCompany = order ? String(companyNameById.get(String(order.companyId || "")) || "").trim() : "";
+    if (orderCompany) return orderCompany;
+
+    return String(item?.companyName || item?.raw?.customer || item?.raw?.customerName || "").trim();
+  }, [scheduleById, orderById, companyNameById]);
 
   const machineGroups = useMemo(() => {
     const groups: Map<string, MachineGroup> = new Map();
@@ -107,7 +125,7 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
             group.jobs.push({
               production: p,
               item,
-              companyName: String(item?.companyName || item?.raw?.customer || item?.raw?.customerName || ""),
+              companyName: resolveCompanyName(p, item),
               erpCode: String(item?.erp || p.erpCode || ""),
               itemName: item?.name || "",
               requiredQty: Number(p.qty || 0),
@@ -135,7 +153,7 @@ export function MachinePendingProcessing({ fixedMachineName, title }: { fixedMac
       }))
       .filter(g => g.jobs.length > 0)
       .sort((a, b) => a.machineName.localeCompare(b.machineName));
-  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, companyFilter, itemFilter, filterMachineId, fixedNormalizedMachineName]);
+  }, [productions, findItemAcrossSources, machines, processing, mandatoryMachinesMapping, searchTerm, companyFilter, itemFilter, filterMachineId, fixedNormalizedMachineName, resolveCompanyName]);
 
   const companyOptions = useMemo(() => {
     const names = new Set<string>();
