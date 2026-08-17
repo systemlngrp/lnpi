@@ -69,6 +69,13 @@ function fixedNum(value: unknown, decimals = 2) {
   return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+function mmToInch(value: unknown) {
+  if (!hasValue(value)) return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return fixedNum(n / 25.4, 2);
+}
+
 function rawOf(item?: OrderCatalogItem | null) {
   return item?.raw || {};
 }
@@ -159,7 +166,7 @@ function layerRow(doc: jsPDF, x: number, y: number, label: string, gsm: unknown,
   cell(doc, x, y, 38, 6, label, { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 28, 6, num(gsm, 0), { bold: true });
   cell(doc, x + 66, y, 24, 6, firstValue(bf), { bold: true });
-  cell(doc, x + 90, y, 28, 6, num(size), { bold: true });
+  cell(doc, x + 90, y, 28, 6, mmToInch(size), { bold: true });
   cell(doc, x + 118, y, 45, 6, cutterLabel || "", { fill: LIGHT_ORANGE, bold: true });
   cell(doc, x + 163, y, 33, 6, "");
 }
@@ -506,12 +513,12 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x, y, 42, 6, "Target Box", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 42, y, 50, 6, targetSize(production, item), { bold: true });
   cell(doc, x + 111, y, 45, 6, "Deckle", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 156, y, 40, 6, num(firstValue(production.reelAsPerCalc, raw.deckleSize, raw.reelSize)), { bold: true });
+  cell(doc, x + 156, y, 40, 6, mmToInch(firstValue(production.reelAsPerCalc, raw.deckleSize, raw.reelSize)), { bold: true });
   y += 6;
   cell(doc, x, y, 42, 6, "Flute Type", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 42, y, 50, 6, firstValue(production.fluteType, production.flute, raw.fluteType), { bold: true });
   cell(doc, x + 111, y, 45, 6, "Cutting", { fill: LIGHT_ORANGE, bold: true });
-  cell(doc, x + 156, y, 40, 6, num(firstValue(production.cuttingWithTrimming, raw.cuttingSize, raw.cuttingWithTrimming)), { bold: true });
+  cell(doc, x + 156, y, 40, 6, mmToInch(firstValue(production.cuttingWithTrimming, raw.cuttingSize, raw.cuttingWithTrimming)), { bold: true });
   y += 6;
   cell(doc, x, y, 42, 6, "Flute %", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 42, y, 50, 6, fixedNum(firstValue(production.takeUpFactor, raw.takeUpFactor, raw.takeUp), 2), { bold: true });
