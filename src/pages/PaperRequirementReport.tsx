@@ -235,7 +235,7 @@ export function PaperRequirementReport() {
 
   const [selectedRangeGsm, setSelectedRangeGsm] = useState<RangeGsmOption | null>(null);
   const [uptoDate, setUptoDate] = useState(() => toDateInput(new Date()));
-  const [netFilter, setNetFilter] = useState<NetFilter>("All");
+  const [netFilter, setNetFilter] = useState<NetFilter>("All Positive");
   const [groupType, setGroupType] = useState<GroupTypeFilter>("All");
   const [chartLimit, setChartLimit] = useState<ChartLimit>("Top 30");
   const [detailRow, setDetailRow] = useState<ReportRow | null>(null);
@@ -437,7 +437,7 @@ export function PaperRequirementReport() {
   const handleClear = () => {
     setSelectedRangeGsm(null);
     setUptoDate(toDateInput(new Date()));
-    setNetFilter("All");
+    setNetFilter("All Positive");
     setGroupType("All");
     setChartLimit("Top 30");
   };
