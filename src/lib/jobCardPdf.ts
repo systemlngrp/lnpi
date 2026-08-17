@@ -55,6 +55,20 @@ function num(value: unknown, decimals = 2) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals });
 }
 
+function wholeNum(value: unknown) {
+  if (!hasValue(value)) return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+function fixedNum(value: unknown, decimals = 2) {
+  if (!hasValue(value)) return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
 function rawOf(item?: OrderCatalogItem | null) {
   return item?.raw || {};
 }
@@ -454,7 +468,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, c1, y, 38, 6, "Lot No.", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, c1 + 38, y, 28, 6, firstValue((production as any).lotNo));
   cell(doc, c1 + 66, y, 28, 6, "PO QTY", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, c1 + 94, y, 38, 6, poQty, { bold: true });
+  cell(doc, c1 + 94, y, 38, 6, wholeNum(poQty), { bold: true });
   cell(doc, c1 + 132, y, 64, 6, "");
   y += 8;
 
@@ -466,7 +480,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x, y, 38, 6, "Item Name", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 66, 6, itemName, { bold: true });
   cell(doc, x + 104, y, 45, 6, "Target BS", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 149, y, 47, 6, firstValue(production.boardGsmReq, raw.boardGsmReq));
+  cell(doc, x + 149, y, 47, 6, wholeNum(firstValue(production.boardGsmReq, raw.boardGsmReq)));
   y += 6;
   cell(doc, x, y, 38, 6, "Item ERP", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 38, y, 66, 6, displayItemErp, { bold: true });
@@ -500,7 +514,7 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   cell(doc, x + 156, y, 40, 6, num(firstValue(production.cuttingWithTrimming, raw.cuttingSize, raw.cuttingWithTrimming)), { bold: true });
   y += 6;
   cell(doc, x, y, 42, 6, "Flute %", { fill: LIGHT_ORANGE, bold: true, align: "left" });
-  cell(doc, x + 42, y, 50, 6, firstValue(production.takeUpFactor, raw.takeUpFactor, raw.takeUp), { bold: true });
+  cell(doc, x + 42, y, 50, 6, fixedNum(firstValue(production.takeUpFactor, raw.takeUpFactor, raw.takeUp), 2), { bold: true });
   cell(doc, x + 111, y, 45, 6, "Papers", { fill: LIGHT_ORANGE, bold: true });
   cell(doc, x + 156, y, 40, 6, num(firstValue(production.paperRequiredNos, production.lineRequiredNos)), { bold: true });
   y += 6;
@@ -528,8 +542,6 @@ export async function downloadJobCardPdf({ production, schedule, order, company,
   layerRow(doc, x, y, "Backing 2", production.l2, raw.psL2Bf, "");
   y += 6;
   layerRow(doc, x, y, "Fluting 3", "", "", "");
-  y += 6;
-  layerRow(doc, x, y, "Backing 3", production.l3, raw.psL3Bf || raw.rsl3Bf, "");
   cell(doc, x + 118, y - 6, 45, 6, "Overall GSM Target", { fill: LIGHT_ORANGE, bold: true, align: "left" });
   cell(doc, x + 163, y - 6, 33, 6, num(raw.standardBGsm, 0), { bold: true });
   cell(doc, x + 118, y, 45, 6, "Overall GSM Achieved", { fill: LIGHT_ORANGE, bold: true, align: "left" });

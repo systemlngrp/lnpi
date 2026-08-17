@@ -45,7 +45,7 @@ const jobCardMappings: JobCardMapping[] = [
     field: "PO Qty",
     source: "orders, orders_schedule, productions",
     key: "orders.qty, orders_schedule.qty, productions.plannedQty, productions.qty",
-    notes: "Uses the first non-blank value in this order.",
+    notes: "Uses the first non-blank value in this order and prints as a whole number with no decimals.",
   },
   {
     field: "Party Name",
@@ -69,7 +69,7 @@ const jobCardMappings: JobCardMapping[] = [
     field: "Target BS",
     source: "productions, npd",
     key: "productions.boardGsmReq, npd.boardGsmReq",
-    notes: "Production board GSM requirement is preferred, then NPD boardGsmReq.",
+    notes: "Production board GSM requirement is preferred, then NPD boardGsmReq. Prints as a whole number with no decimals.",
   },
   {
     field: "Item ERP",
@@ -141,7 +141,7 @@ const jobCardMappings: JobCardMapping[] = [
     field: "Flute %",
     source: "productions, npd",
     key: "productions.takeUpFactor, npd.takeUpFactor, npd.takeUp",
-    notes: "Uses the first available take-up/flute factor.",
+    notes: "Uses the first available take-up/flute factor and prints with exactly 2 decimals.",
   },
   {
     field: "Papers",
@@ -190,12 +190,6 @@ const jobCardMappings: JobCardMapping[] = [
     source: "productions, npd",
     key: "productions.l2, npd.psL2Bf",
     notes: "GSM uses productions.l2. BF uses psL2Bf.",
-  },
-  {
-    field: "Combination Row - Backing 3",
-    source: "productions, npd",
-    key: "productions.l3, npd.psL3Bf, npd.rsl3Bf",
-    notes: "GSM uses productions.l3. BF uses psL3Bf or rsl3Bf.",
   },
   {
     field: "Overall GSM Target",
