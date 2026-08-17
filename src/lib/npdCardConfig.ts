@@ -45,6 +45,7 @@ export const NPD_COLUMNS: NpdColumn[] = [
   { key: "bsKgCm2Calculated", label: "BS (kg/cm2) Calculated" },
   { key: "takeUpFactor", label: "Take up Factor" },
   { key: "ups", label: "UPS" },
+  { key: "internalUps", label: "Internal UPS" },
   { key: "rapc", label: "RAPC" },
   { key: "gstRate", label: "GST Rate" },
   { key: "part", label: "Part" },

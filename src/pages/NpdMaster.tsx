@@ -52,6 +52,12 @@ function formatStockValue(rate: NpdRecord[string], balance: NpdRecord[string]) {
   return (rateNumber * balanceNumber).toFixed(2);
 }
 
+function calculateInternalUps(rapcForSingleBox: NpdRecord[string]) {
+  const rapcValue = Number(rapcForSingleBox);
+  if (!Number.isFinite(rapcValue) || rapcValue <= 0) return "";
+  return Math.floor(1320 / rapcValue);
+}
+
 export function NpdMaster() {
   const [rows, setRows] = useState<NpdRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -363,6 +369,8 @@ export function NpdMaster() {
                         const rawValue =
                           column.key === "stockValue"
                             ? formatStockValue(row.rate, row.balance)
+                            : column.key === "internalUps"
+                              ? calculateInternalUps(row.rapcForSingleBox)
                             : column.key === "consumable"
                               ? isConsumableValue(consumableDrafts[row.id])
                               : row[column.key];
