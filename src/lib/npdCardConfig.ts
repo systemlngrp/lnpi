@@ -46,6 +46,7 @@ export const NPD_COLUMNS: NpdColumn[] = [
   { key: "takeUpFactor", label: "Take up Factor" },
   { key: "ups", label: "UPS" },
   { key: "internalUps", label: "Internal UPS" },
+  { key: "internalRapc", label: "Internal RAPC" },
   { key: "rapc", label: "RAPC" },
   { key: "gstRate", label: "GST Rate" },
   { key: "part", label: "Part" },

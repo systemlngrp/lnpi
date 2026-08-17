@@ -23,11 +23,13 @@ import {
   PurchaseOrder,
   PurchaseOrderLine,
   RapcRange,
+  Setting,
 } from "../types";
 import { formatDate } from "../lib/serial";
 import { getEffectiveRapcRanges } from "../lib/rapcRanges";
 import { buildReelStockRows } from "../lib/reelStock";
 import type { OrderCatalogItem } from "../lib/orderItems";
+import { calculateInternalRapc, calculateInternalUps } from "../lib/internalUps";
 
 type NetFilter =
   | "All"
@@ -137,6 +139,18 @@ function getRawValue(item: OrderCatalogItem | undefined, key: string) {
 function getItemNumber(item: OrderCatalogItem | undefined, ...keys: string[]) {
   return firstPositiveNumber(...keys.map((key) => getRawValue(item, key)));
 }
+
+function getFgInternalRapc(item: OrderCatalogItem | undefined, formulaMode?: string) {
+  if (item?.source !== "FG") return 0;
+  const raw = item.raw || {};
+  return firstPositiveNumber(getItemNumber(item, "internalRapc"), calculateInternalRapc(raw, formulaMode));
+}
+
+function getFgInternalUps(item: OrderCatalogItem | undefined) {
+  if (item?.source !== "FG") return 0;
+  return firstPositiveNumber(getItemNumber(item, "internalUps"), calculateInternalUps(getRawValue(item, "rapcForSingleBox")));
+}
+
 function buildLeastCostByErp(productions: Production[]) {
   const map = new Map<string, Production>();
   productions.forEach((production) => {
@@ -212,6 +226,7 @@ export function PaperRequirementReport() {
   const [purchaseOrders] = useData<PurchaseOrder>("purchase-orders", []);
   const [purchaseOrderLines] = useData<PurchaseOrderLine>("purchase-order-lines", []);
   const [rapcRanges] = useData<RapcRange>("rapc-ranges", []);
+  const [settings] = useData<Setting>("settings", []);
   const { resolveOrderItem } = useOrderItemCatalog();
 
   const [selectedRangeGsm, setSelectedRangeGsm] = useState<RangeGsmOption | null>(null);
@@ -233,6 +248,7 @@ export function PaperRequirementReport() {
     const issueMap = new Map(issueEntries.map((entry) => [entry.id, entry]));
     const returnMap = new Map(returnEntries.map((entry) => [entry.id, entry]));
     const leastCostByErp = buildLeastCostByErp(productions);
+    const reelFormulaMode = settings[0]?.reelAsPerCalculation;
 
     const invoicedQtyBySchedule = new Map<string, number>();
     const plansById = new Map(dispatchPlans.map((plan) => [plan.id, plan]));
@@ -258,10 +274,10 @@ export function PaperRequirementReport() {
       const item = resolveOrderItem(order);
       const erp = String(order.erpCode || item?.erp || "").trim().toLowerCase();
       const leastCost = erp ? leastCostByErp.get(erp) : undefined;
-      const rapc = getItemNumber(item, "rapc", "rapcForSingleBox");
+      const rapc = firstPositiveNumber(getFgInternalRapc(item, reelFormulaMode), getItemNumber(item, "rapc", "rapcForSingleBox"));
       const rapcRange = resolveRapcValue(rapc, effectiveRanges);
       const cuttingSize = firstPositiveNumber(getItemNumber(item, "cuttingSize", "cuttingWithTrimming", "cuttingSizeLengthPiece"), leastCost?.cuttingWithTrimming);
-      const ups = getItemNumber(item, "ups", "noOfUps", "noOfUpsForRapc");
+      const ups = firstPositiveNumber(getFgInternalUps(item), getItemNumber(item, "ups", "noOfUps", "noOfUpsForRapc"));
       const takeUpFactor = firstPositiveNumber(getItemNumber(item, "takeUpFactor", "takeUp"), leastCost?.takeUpFactor) || 1;
       const layers = [
         { gsm: firstPositiveNumber(leastCost?.l1, getItemNumber(item, "l1", "top")), isFlute: false },
@@ -388,6 +404,7 @@ export function PaperRequirementReport() {
     returnEntries,
     returnReelLines,
     schedules,
+    settings,
   ]);
 
   const rangeOptions = useMemo<RangeGsmOption[]>(() => reportData.map((row) => {

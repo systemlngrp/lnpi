@@ -8,7 +8,7 @@ import { findLinkedItemByErp } from "../lib/linkedLoading";
 import { NPD_COLUMNS } from "../lib/npdCardConfig";
 import { downloadNpdCardPdf } from "../lib/npdCardPdf";
 import { normalizeOrderCatalogItem } from "../lib/orderItems";
-import { calculateInternalUps } from "../lib/internalUps";
+import { calculateInternalRapc, calculateInternalUps } from "../lib/internalUps";
 import type { Setting } from "../types";
 
 type NpdRecord = {
@@ -365,7 +365,9 @@ export function NpdMaster() {
                           column.key === "stockValue"
                             ? formatStockValue(row.rate, row.balance)
                             : column.key === "internalUps"
-                              ? calculateInternalUps(row.rapcForSingleBox)
+                              ? row.internalUps ?? calculateInternalUps(row.rapcForSingleBox)
+                            : column.key === "internalRapc"
+                              ? row.internalRapc ?? calculateInternalRapc(row as any)
                             : column.key === "consumable"
                               ? isConsumableValue(consumableDrafts[row.id])
                               : row[column.key];

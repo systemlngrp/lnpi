@@ -63,6 +63,8 @@ export interface Item {
   balance?: number;
   gstRate?: number;
   rapc?: number;
+  internalUps?: number;
+  internalRapc?: number;
   
   // Technical Specifications
   noOfParts?: number;
