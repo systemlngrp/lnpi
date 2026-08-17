@@ -12,6 +12,12 @@ type JobCardMapping = {
 
 const jobCardMappings: JobCardMapping[] = [
   {
+    field: "PDF cell text fit",
+    source: "job-card PDF renderer",
+    key: "cell text wrapping / min font size",
+    notes: "Values wrap inside their boxes and shrink only when needed; if content still cannot fit, it is truncated with an ellipsis to prevent overlap.",
+  },
+  {
     field: "Date",
     source: "productions",
     key: "productions.date",
@@ -393,7 +399,7 @@ export function PlansJobCard() {
     y += 8;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    addText("Job Card PDF field mapping with exact app table/data names, source keys, and fallback logic.");
+    addText("Job Card PDF field mapping with exact app table/data names, source keys, fallback logic, and PDF fit behavior.");
 
     const widths = [38, 40, 58, 56];
     const headers = ["Job Card Field", "Source Table/Data", "Source Column/Key", "Logic / Notes"];
@@ -440,7 +446,7 @@ export function PlansJobCard() {
         <div>
           <h2 className="text-xl font-bold text-black uppercase tracking-tight">Documentation - Job Card</h2>
           <p className="mt-2 text-sm text-slate-700 font-medium">
-            This page maps Job Card PDF fields to exact app table/data names, source keys, and fallback logic.
+            This page maps Job Card PDF fields to exact app table/data names, source keys, fallback logic, and PDF fit behavior.
           </p>
         </div>
         <button

@@ -28,6 +28,7 @@ type CellOptions = {
   bold?: boolean;
   align?: "left" | "center" | "right";
   fontSize?: number;
+  minFontSize?: number;
   textColor?: Color;
 };
 
@@ -82,6 +83,34 @@ function safeFileName(value: string) {
   return String(value || "JobCard").replace(/[^a-z0-9_-]+/gi, "_").replace(/^_+|_+$/g, "") || "JobCard";
 }
 
+function fittedCellText(doc: jsPDF, content: string, maxWidth: number, maxHeight: number, fontSize: number, minFontSize: number) {
+  let size = fontSize;
+  let lineHeight = size * 0.35;
+  let maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+  let lines = doc.splitTextToSize(content, maxWidth) as string[];
+
+  while ((lines.length > maxLines || lines.some((line) => doc.getTextWidth(line) > maxWidth)) && size > minFontSize) {
+    size = Math.max(minFontSize, size - 0.5);
+    doc.setFontSize(size);
+    lineHeight = size * 0.35;
+    maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+    lines = doc.splitTextToSize(content, maxWidth) as string[];
+  }
+
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    const lastIndex = lines.length - 1;
+    if (lastIndex >= 0 && content.trim()) {
+      let lastLine = lines[lastIndex];
+      while (lastLine.length > 1 && doc.getTextWidth(`${lastLine}...`) > maxWidth) {
+        lastLine = lastLine.slice(0, -1);
+      }
+      lines[lastIndex] = `${lastLine}...`;
+    }
+  }
+
+  return { lines, fontSize: size, lineHeight };
+}
 function cell(doc: jsPDF, x: number, y: number, w: number, h: number, text: unknown, options: CellOptions = {}) {
   const fill = options.fill || WHITE;
   const textColor = options.textColor || BLACK;
@@ -91,18 +120,20 @@ function cell(doc: jsPDF, x: number, y: number, w: number, h: number, text: unkn
   doc.rect(x, y, w, h, "FD");
   doc.setTextColor(textColor[0], textColor[1], textColor[2]);
   doc.setFont("helvetica", options.bold ? "bold" : "normal");
-  doc.setFontSize(options.fontSize || 8);
+  const fontSize = options.fontSize || 8;
+  doc.setFontSize(fontSize);
   const content = String(text ?? "");
   const padding = 1.1;
   const maxWidth = Math.max(2, w - padding * 2);
-  const lines = doc.splitTextToSize(content, maxWidth).slice(0, Math.max(1, Math.floor(h / 3.2)));
-  const lineHeight = (options.fontSize || 8) * 0.35;
+  const maxHeight = Math.max(2, h - padding * 1.4);
+  const fitted = fittedCellText(doc, content, maxWidth, maxHeight, fontSize, options.minFontSize || 5);
+  doc.setFontSize(fitted.fontSize);
   const align = options.align || "center";
   let tx = x + w / 2;
   if (align === "left") tx = x + padding;
   if (align === "right") tx = x + w - padding;
-  const ty = y + h / 2 - ((lines.length - 1) * lineHeight) / 2 + lineHeight * 0.35;
-  doc.text(lines, tx, ty, { align });
+  const ty = y + h / 2 - ((fitted.lines.length - 1) * fitted.lineHeight) / 2 + fitted.lineHeight * 0.35;
+  doc.text(fitted.lines, tx, ty, { align });
 }
 
 function section(doc: jsPDF, x: number, y: number, w: number, title: string) {
