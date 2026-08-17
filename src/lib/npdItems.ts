@@ -1,4 +1,5 @@
 import { Item } from "../types";
+import { calculateInternalUps } from "./internalUps";
 
 
 export function normalizeConsumableValue(raw: unknown) {
@@ -34,6 +35,7 @@ export async function fetchNpdItems(pageSize = 10000): Promise<Item[]> {
       ...row,
       id: resolvedId,
       consumable: normalizeConsumableValue(row?.consumable),
+      internalUps: calculateInternalUps(row?.rapcForSingleBox),
       itemId: resolvedId,
       npdId: resolvedId,
       name: getNpdItemDisplayName(row),

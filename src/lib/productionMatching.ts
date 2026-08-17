@@ -1,4 +1,5 @@
 import type { Production } from "../types";
+import { calculateInternalUps } from "./internalUps";
 
 function hasValue(value: unknown) {
   return !(value === null || value === undefined || (typeof value === "string" && value.trim() === ""));
@@ -45,6 +46,8 @@ type MatchingProductionItem = {
   companyName?: string;
   rate?: number;
   boxType?: string;
+  internalUps?: number;
+  rapcForSingleBox?: string | number;
 };
 
 export function getProductionMatchingFields(
@@ -69,6 +72,10 @@ export function getProductionMatchingFields(
     noOfParts: firstOptionalNumber(production.noOfParts, raw.noOfParts),
     ups: firstOptionalNumber(
       production.ups,
+      item?.internalUps,
+      calculateInternalUps(item?.rapcForSingleBox),
+      raw.internalUps,
+      calculateInternalUps(raw.rapcForSingleBox),
       raw.ups,
       raw.noOfUpsForRapc,
       raw.noOfUpsForCutting,

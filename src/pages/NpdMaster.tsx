@@ -8,6 +8,7 @@ import { findLinkedItemByErp } from "../lib/linkedLoading";
 import { NPD_COLUMNS } from "../lib/npdCardConfig";
 import { downloadNpdCardPdf } from "../lib/npdCardPdf";
 import { normalizeOrderCatalogItem } from "../lib/orderItems";
+import { calculateInternalUps } from "../lib/internalUps";
 import type { Setting } from "../types";
 
 type NpdRecord = {
@@ -50,12 +51,6 @@ function formatStockValue(rate: NpdRecord[string], balance: NpdRecord[string]) {
   const balanceNumber = Number(balance);
   if (!Number.isFinite(rateNumber) || !Number.isFinite(balanceNumber)) return "-";
   return (rateNumber * balanceNumber).toFixed(2);
-}
-
-function calculateInternalUps(rapcForSingleBox: NpdRecord[string]) {
-  const rapcValue = Number(rapcForSingleBox);
-  if (!Number.isFinite(rapcValue) || rapcValue <= 0) return "";
-  return Math.floor(1320 / rapcValue);
 }
 
 export function NpdMaster() {

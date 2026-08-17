@@ -25,6 +25,7 @@ import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { getProductionMatchingFields } from "../lib/productionMatching";
 import { buildScheduleConsumptionByScheduleId } from "../lib/productionScheduleQty";
 import { findRealizationTargetForDate, parseRealizationTargets } from "../lib/realizationTargets";
+import { calculateInternalUps } from "../lib/internalUps";
 
 const getJobMasterEntityName = (source: "PHP" | "PLATE") =>
   source === "PHP" ? "php_job_master" : "plate_job_master";
@@ -298,6 +299,7 @@ export function ProductionForm() {
   const selectedSchedule = pendingSchedules.find((schedule) => schedule.id === selectedScheduleId);
   const selectedOrder = orders.find((order) => order.id === selectedSchedule?.orderId);
   const selectedItem = npdItems.find((item) => item.id === String(selectedOrder?.itemId || "").trim());
+  const selectedInternalUps = calculateInternalUps((selectedItem as any)?.rapcForSingleBox);
   const selectedCompany = companies.find((company) => company.id === selectedOrder?.companyId);
   const selectedErp = String(selectedOrder?.erpCode || "").trim();
   const selectedScheduleConsumedQty = selectedSchedule
@@ -462,7 +464,7 @@ export function ProductionForm() {
         rate: selectedOrder?.rate ?? "",
         erpCode: String(selectedOrder?.erpCode || ""),
         noOfParts: selectedItem.noOfParts ?? "",
-        ups: selectedItem.ups ?? "",
+        ups: selectedInternalUps ?? selectedItem.ups ?? "",
         length: selectedItem.length ?? "",
         breadth: selectedItem.breadth ?? "",
         height: selectedItem.height ?? "",
@@ -481,7 +483,7 @@ export function ProductionForm() {
         printingColor: joinPrintingColors(selectedItem.printingColour1, selectedItem.printingColour2),
       }));
     }
-  }, [selectedItem, selectedCompany, selectedOrder, selectedLowestGsmProduction]);
+  }, [selectedItem, selectedCompany, selectedOrder, selectedLowestGsmProduction, selectedInternalUps]);
 
   useEffect(() => {
     if (!selectedScheduleId) {
