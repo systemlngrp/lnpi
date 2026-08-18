@@ -125,6 +125,34 @@ const sections: FieldSection[] = [
 ];
 
 const allFields = sections.flatMap((section) => section.fields);
+const formSections: FieldSection[] = [
+  {
+    title: "Job Details",
+    fields: [
+      { key: "jobNo", label: "Job No.", required: true },
+      { key: "checkNo", label: "Check No.", required: true },
+      { key: "qcPerson", label: "QC Person", required: true, readOnly: true },
+    ],
+  },
+  {
+    title: "Specification",
+    fields: [
+      { key: "flapHeightFlapOperatorSide", label: "Flap - Height - Flap (Operator Side)", required: true },
+      { key: "flapHeightFlapDriveSide", label: "Flap - Height - Flap (Drive Side)", required: true },
+      { key: "cuttingSizeMm", label: "Cutting Size (mm)", type: "number", required: true },
+      { key: "boardGsm", label: "B.GSM", type: "number", required: true },
+      { key: "typeOfFlute", label: "Type of Flute", required: true },
+      { key: "boardThickness", label: "Board Thickness", type: "number", required: true },
+      { key: "moisture", label: "Moisture", type: "number", required: true },
+      { key: "sheetWeightGrams", label: "Sheet Weight (Grams)", type: "number", required: true },
+    ],
+  },
+  {
+    title: "Remarks And References",
+    fields: [{ key: "boardlineRemarks", label: "BOARDLINE REMARKS", type: "textarea", wide: true }],
+  },
+];
+
 
 const CHECK_NO_OPTIONS = ["1", "2", "3", "4"].map((value) => ({ value, label: value }));
 const FLUTE_OPTIONS = ["A", "C", "B", "E", "B+A", "B+C", "B+B"].map((value) => ({ value, label: value }));
@@ -519,7 +547,7 @@ export function BoardLineQcForm() {
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {sections.map((section) => (
+        {formSections.map((section) => (
           <section key={section.title} className="space-y-3">
             <h3 className="text-sm font-black uppercase tracking-wide text-black border-b border-black pb-1">
               {section.title}
