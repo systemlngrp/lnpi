@@ -53,7 +53,7 @@ const sections: FieldSection[] = [
       { key: "jobNo", label: "Job No.", required: true },
       { key: "partyName", label: "Party Name", required: true },
       { key: "itemName", label: "Item Name", required: true, wide: true },
-      { key: "erp", label: "ERP" },
+      { key: "erp", label: "ERP", readOnly: true },
       { key: "checkNo", label: "Check No.", required: true },
       { key: "qcPerson", label: "QC Person", required: true },
       { key: "whatsapp", label: "Whatsapp" },
@@ -64,12 +64,12 @@ const sections: FieldSection[] = [
     fields: [
       { key: "standardBoxSize", label: "Standard Box Size (L x W x H)", readOnly: true },
       { key: "boxSizeAchieved", label: "Box Size Achieved (L x W x H)" },
-      { key: "lengthId", label: "LENGTH (ID)", type: "number", readOnly: true },
-      { key: "widthId", label: "WIDTH (ID)", type: "number", readOnly: true },
-      { key: "heightId", label: "HEIGHT (ID)", type: "number", readOnly: true },
-      { key: "lengthSpec", label: "LENGTH (spec)", type: "number" },
-      { key: "widthSpec", label: "WIDTH (spec)", type: "number" },
-      { key: "heightSpec", label: "HEIGHT (spec)", type: "number" },
+      { key: "lengthId", label: "LENGTH (ID)", type: "number" },
+      { key: "widthId", label: "WIDTH (ID)", type: "number" },
+      { key: "heightId", label: "HEIGHT (ID)", type: "number" },
+      { key: "lengthSpec", label: "LENGTH (spec)", type: "number", readOnly: true },
+      { key: "widthSpec", label: "WIDTH (spec)", type: "number", readOnly: true },
+      { key: "heightSpec", label: "HEIGHT (spec)", type: "number", readOnly: true },
     ],
   },
   {
@@ -117,8 +117,9 @@ const sections: FieldSection[] = [
       { key: "column41", label: "Column 41" },
       { key: "column42", label: "Column 42" },
       { key: "column43", label: "Column 43" },
-      { key: "planQty", label: "Plan Qty", type: "number" },
-      { key: "samplingPlanQty", label: "Sampling Plan Qty", type: "number" },
+      { key: "planQty", label: "Plan Qty", type: "number", readOnly: true },
+      { key: "samplingPlanQty", label: "Sampling Plan Qty", type: "number", readOnly: true },
+      { key: "samplingCheckNo", label: "Check No", readOnly: true },
     ],
   },
 ];
@@ -205,7 +206,10 @@ function displayValue(value: unknown) {
 
 function calculatePrintingQcForm(form: Partial<PrintingQcCheck>): Partial<PrintingQcCheck> {
   const qcPerson = String(form.qcPerson || "").trim();
-  const [lengthId, widthId, heightId] = parseBoxSize(form.boxSizeAchieved);
+  const lengthId = toFiniteNumber(form.lengthId);
+  const widthId = toFiniteNumber(form.widthId);
+  const heightId = toFiniteNumber(form.heightId);
+  const [lengthAchieved, widthAchieved, heightAchieved] = parseBoxSize(form.boxSizeAchieved);
   const lengthSpec = toFiniteNumber(form.lengthSpec);
   const widthSpec = toFiniteNumber(form.widthSpec);
   const heightSpec = toFiniteNumber(form.heightSpec);
@@ -213,12 +217,21 @@ function calculatePrintingQcForm(form: Partial<PrintingQcCheck>): Partial<Printi
   const bsAchieved = toFiniteNumber(form.bsAchieved);
   const csStandard = toFiniteNumber(form.csStandard);
   const bsStandard = toFiniteNumber(form.bsStandard);
+  const planQty = toFiniteNumber(form.planQty);
+  const samplingPlanQty = isNumber(planQty) ? (planQty / 2000 < 2 ? 2 : planQty / 2000 > 4 ? 4 : 3) : "";
+  const samplingCheckNo = String(form.checkNo || "").trim() && samplingPlanQty !== "" ? `${String(form.checkNo).trim()} / ${samplingPlanQty}` : "";
   const colour1Expected = normalizeText(form.printingColor1Standard);
   const colour1Actual = normalizeText(form.colour1Actual);
   const colour2Expected = normalizeText(form.printingColour2Standard);
   const colour2Actual = normalizeText(form.colour2Actual);
   const hasBoxInputs =
-    qcPerson !== "" && isNumber(lengthId) && isNumber(widthId) && isNumber(heightId) && isNumber(lengthSpec) && isNumber(widthSpec) && isNumber(heightSpec);
+    qcPerson !== "" &&
+    isNumber(lengthAchieved) &&
+    isNumber(widthAchieved) &&
+    isNumber(heightAchieved) &&
+    isNumber(lengthSpec) &&
+    isNumber(widthSpec) &&
+    isNumber(heightSpec);
   const hasStrengthInputs = qcPerson !== "" && isNumber(csAchieved) && isNumber(bsAchieved) && isNumber(csStandard) && isNumber(bsStandard);
   const colourWarnings = [
     qcPerson !== "" && colour1Expected !== "" && colour1Actual !== "" && colour1Expected !== colour1Actual ? `${qcPerson} - Wrong Printing Colour 1` : "",
@@ -230,14 +243,17 @@ function calculatePrintingQcForm(form: Partial<PrintingQcCheck>): Partial<Printi
     lengthId,
     widthId,
     heightId,
+    standardBoxSize: buildBoxSize(lengthId, widthId, heightId),
+    samplingPlanQty,
+    samplingCheckNo,
     systemAutoCorrection1:
       !hasBoxInputs ||
-      (lengthId >= lengthSpec - 2 &&
-        lengthId <= lengthSpec + 2 &&
-        widthId >= widthSpec - 2 &&
-        widthId <= widthSpec + 2 &&
-        heightId >= heightSpec - 2 &&
-        heightId <= heightSpec + 2)
+      (lengthAchieved >= lengthSpec - 2 &&
+        lengthAchieved <= lengthSpec + 2 &&
+        widthAchieved >= widthSpec - 2 &&
+        widthAchieved <= widthSpec + 2 &&
+        heightAchieved >= heightSpec - 2 &&
+        heightAchieved <= heightSpec + 2)
         ? ""
         : `${qcPerson} - Wrong Box Size Achieved. Please Check`,
     systemAutoCorrection2:
@@ -504,7 +520,7 @@ const masterColumns: FieldConfig[] = [
   { key: "jobNo", label: "Job No." },
   { key: "partyName", label: "Party Name" },
   { key: "itemName", label: "Item Name" },
-  { key: "erp", label: "ERP" },
+  { key: "erp", label: "ERP", readOnly: true },
   { key: "checkNo", label: "Check No." },
   ...allFields.filter((field) => !["timestamp", "jobNo", "partyName", "itemName", "erp", "checkNo"].includes(String(field.key))),
 ];

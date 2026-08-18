@@ -876,6 +876,7 @@ export interface PrintingQcCheck {
   column43?: string;
   planQty?: number | "";
   samplingPlanQty?: number | "";
+  samplingCheckNo?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }
