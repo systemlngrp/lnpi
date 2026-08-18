@@ -55,7 +55,7 @@ const sections: FieldSection[] = [
       { key: "partyName", label: "Party Name", required: true },
       { key: "itemName", label: "Item Name", required: true, wide: true },
       { key: "erp", label: "ERP", readOnly: true },
-      { key: "checkNo", label: "Check No.", required: true },
+      { key: "checkNo", label: "Check No.", required: true, readOnly: true },
       { key: "qcPerson", label: "QC Person", required: true, readOnly: true },
     ],
   },
@@ -126,7 +126,7 @@ const formSections: FieldSection[] = [
     title: "Job Details",
     fields: [
       { key: "jobNo", label: "Job No.", required: true },
-      { key: "checkNo", label: "Check No.", required: true },
+      { key: "checkNo", label: "Check No.", required: true, readOnly: true },
       { key: "qcPerson", label: "QC Person", required: true, readOnly: true },
     ],
   },
@@ -152,8 +152,6 @@ const formSections: FieldSection[] = [
     ],
   },
 ];
-
-const CHECK_NO_OPTIONS = ["1", "2", "3", "4"].map((value) => ({ value, label: value }));
 
 function hasFormValue(value: unknown) {
   return value !== null && value !== undefined && String(value).trim() !== "";
@@ -187,6 +185,17 @@ function nextQcNo<T extends object>(rows: T[], key: keyof T, prefix: string) {
     return match ? Math.max(max, Number(match[1]) || 0) : max;
   }, 0);
   return `${prefix}-${String(highest + 1).padStart(6, "0")}`;
+}
+
+function nextJobCheckNo(rows: PrintingQcCheck[], jobNo: string) {
+  const selectedJobNo = jobNo.trim();
+  if (!selectedJobNo) return "";
+  const highest = rows.reduce((max, row) => {
+    if (String(row.jobNo || "").trim() !== selectedJobNo) return max;
+    const parsed = Number(String(row.checkNo || "").trim());
+    return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+  }, 0);
+  return String(highest + 1);
 }
 
 function hasAnyWarning(values: Array<unknown>) {
@@ -421,6 +430,16 @@ export function PrintingQcForm() {
     setForm((prev) => calculatePrintingQcForm({ ...prev, qcPerson: qcPersonName, pqcNo: nextPqcNo }));
   }, [qcPersonName, nextPqcNo]);
 
+  useEffect(() => {
+    setForm((prev) => {
+      const jobNo = String(prev.jobNo || "").trim();
+      if (!jobNo) return prev;
+      const checkNo = nextJobCheckNo(checks, jobNo);
+      if (String(prev.checkNo || "") === checkNo) return prev;
+      return calculatePrintingQcForm({ ...prev, checkNo });
+    });
+  }, [checks]);
+
   const productionById = useMemo(() => {
     const map = new Map<string, Production>();
     productions.forEach((production) => {
@@ -463,7 +482,7 @@ export function PrintingQcForm() {
     setSelectedProductionId(productionId);
     const production = productionById.get(productionId);
     if (!production) {
-      setForm((prev) => ({ ...prev, jobNo: "" }));
+      setForm((prev) => ({ ...prev, jobNo: "", checkNo: "" }));
       return;
     }
 
@@ -489,6 +508,7 @@ export function PrintingQcForm() {
       calculatePrintingQcForm({
         ...prev,
         jobNo,
+        checkNo: nextJobCheckNo(checks, jobNo),
         partyName,
         itemName,
         erp,
@@ -530,7 +550,7 @@ export function PrintingQcForm() {
       hasFormValue(form.jobNo) &&
       hasFormValue(form.partyName) &&
       hasFormValue(form.itemName) &&
-      CHECK_NO_OPTIONS.some((option) => option.value === String(form.checkNo || "")) &&
+      hasFormValue(form.checkNo) &&
       requiredInputFields.every((key) => hasFormValue(form[key])) &&
       qcPersonName
   );
@@ -581,19 +601,6 @@ export function PrintingQcForm() {
                       required
                       placeholder="Search and select job no..."
                       wrapLabels
-                    />
-                  </div>
-                ) : field.key === "checkNo" ? (
-                  <div key={String(field.key)} className={`flex flex-col space-y-1 ${field.wide ? "md:col-span-2 xl:col-span-3" : ""}`}>
-                    <label className="font-bold text-black text-sm">
-                      {field.label} {field.required ? <span className="text-red-600">*</span> : null}
-                    </label>
-                    <Select
-                      options={CHECK_NO_OPTIONS}
-                      value={String(form.checkNo || "")}
-                      onChange={(value) => setField("checkNo", value)}
-                      required={field.required}
-                      placeholder="Choose"
                     />
                   </div>
                 ) : field.key === "colour1Actual" || field.key === "colour2Actual" ? (
@@ -672,6 +679,44 @@ const masterColumns: FieldConfig[] = [
       ].includes(String(field.key))
   ),
 ];
+const compactMasterColumnKeys = new Set<keyof PrintingQcCheck>([
+  "timestamp",
+  "pqcNo",
+  "jobNo",
+  "erp",
+  "checkNo",
+  "qcPerson",
+]);
+
+const wideMasterColumnKeys = new Set<keyof PrintingQcCheck>([
+  "partyName",
+  "itemName",
+  "standardBoxSize",
+  "boxSizeAchieved",
+  "printingColor1Standard",
+  "printingColour2Standard",
+  "standardArtwork",
+  "lotNoPrinted",
+  "previousCustomerComplaintWarning",
+  "photo",
+  "systemAutoCorrection1",
+  "systemAutoCorrection2",
+  "systemAutoCorrection3",
+]);
+
+function masterHeaderClass(key: keyof PrintingQcCheck) {
+  const base = "border border-black px-3 py-2 text-left text-xs font-bold uppercase text-black align-top";
+  if (compactMasterColumnKeys.has(key)) return `${base} min-w-[96px] whitespace-nowrap`;
+  if (wideMasterColumnKeys.has(key)) return `${base} min-w-[220px] max-w-[360px] whitespace-normal break-words leading-snug`;
+  return `${base} min-w-[120px] whitespace-nowrap`;
+}
+
+function masterCellClass(key: keyof PrintingQcCheck) {
+  const base = "border border-black px-3 py-2 text-sm text-black align-top";
+  if (compactMasterColumnKeys.has(key)) return `${base} min-w-[96px] whitespace-nowrap`;
+  if (wideMasterColumnKeys.has(key)) return `${base} min-w-[220px] max-w-[360px] whitespace-normal break-words leading-snug`;
+  return `${base} min-w-[120px] whitespace-nowrap`;
+}
 
 export function PrintingQcMaster() {
   const [checks, , loading] = useData<PrintingQcCheck>("printing_qc_checks", []);
@@ -783,7 +828,7 @@ export function PrintingQcMaster() {
             <thead className="sticky top-0 z-30 bg-slate-100">
               <tr>
                 {masterColumns.map((column) => (
-                  <th key={String(column.key)} className="whitespace-nowrap border border-black px-4 py-3 text-left text-xs font-bold uppercase text-black">
+                  <th key={String(column.key)} className={masterHeaderClass(column.key)}>
                     {column.label}
                   </th>
                 ))}
@@ -798,7 +843,7 @@ export function PrintingQcMaster() {
                 pagedRows.map((row) => (
                   <tr key={row.id} className="divide-x divide-black transition-colors hover:bg-slate-50">
                     {masterColumns.map((column) => (
-                      <td key={String(column.key)} className="max-w-[320px] whitespace-nowrap border border-black px-4 py-3 text-sm text-black">
+                      <td key={String(column.key)} className={masterCellClass(column.key)}>
                         {column.key === "timestamp" ? formatTimestamp(row.timestamp) : displayValue(row[column.key])}
                       </td>
                     ))}
