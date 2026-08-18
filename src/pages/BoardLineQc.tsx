@@ -65,15 +65,15 @@ const sections: FieldSection[] = [
   {
     title: "Specification",
     fields: [
-      { key: "flapHeightFlapOperatorSide", label: "Flap - Height - Flap (Operator Side)" },
-      { key: "flapHeightFlapDriveSide", label: "Flap - Height - Flap (Drive Side)" },
+      { key: "flapHeightFlapOperatorSide", label: "Flap - Height - Flap (Operator Side)", required: true },
+      { key: "flapHeightFlapDriveSide", label: "Flap - Height - Flap (Drive Side)", required: true },
       { key: "cuttingSizeRequired", label: "Cutting Size (Req.)", type: "number", readOnly: true },
-      { key: "cuttingSizeMm", label: "Cutting Size (mm)", type: "number" },
-      { key: "boardGsm", label: "B.GSM", type: "number" },
-      { key: "typeOfFlute", label: "Type of Flute" },
-      { key: "boardThickness", label: "Board Thickness", type: "number" },
-      { key: "moisture", label: "Moisture", type: "number" },
-      { key: "sheetWeightGrams", label: "Sheet Weight (Grams)", type: "number" },
+      { key: "cuttingSizeMm", label: "Cutting Size (mm)", type: "number", required: true },
+      { key: "boardGsm", label: "B.GSM", type: "number", required: true },
+      { key: "typeOfFlute", label: "Type of Flute", required: true },
+      { key: "boardThickness", label: "Board Thickness", type: "number", required: true },
+      { key: "moisture", label: "Moisture", type: "number", required: true },
+      { key: "sheetWeightGrams", label: "Sheet Weight (Grams)", type: "number", required: true },
     ],
   },
   {
@@ -125,6 +125,14 @@ const sections: FieldSection[] = [
 ];
 
 const allFields = sections.flatMap((section) => section.fields);
+
+const CHECK_NO_OPTIONS = ["1", "2", "3", "4"].map((value) => ({ value, label: value }));
+const FLUTE_OPTIONS = ["A", "C", "B", "E", "B+A", "B+C", "B+B"].map((value) => ({ value, label: value }));
+
+function hasFormValue(value: unknown) {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
 
 function toLocalDatetimeInput(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -463,12 +471,25 @@ export function BoardLineQcForm() {
     );
   };
 
+  const requiredInputFields: Array<keyof BoardLineQcCheck> = [
+    "flapHeightFlapOperatorSide",
+    "flapHeightFlapDriveSide",
+    "cuttingSizeMm",
+    "boardGsm",
+    "typeOfFlute",
+    "boardThickness",
+    "moisture",
+    "sheetWeightGrams",
+  ];
+
   const canSubmit = Boolean(
-    String(form.timestamp || "").trim() &&
-      String(form.jobNo || "").trim() &&
-      String(form.partyName || "").trim() &&
-      String(form.itemName || "").trim() &&
-      String(form.checkNo || "").trim() &&
+    hasFormValue(form.timestamp) &&
+      hasFormValue(form.jobNo) &&
+      hasFormValue(form.partyName) &&
+      hasFormValue(form.itemName) &&
+      CHECK_NO_OPTIONS.some((option) => option.value === String(form.checkNo || "")) &&
+      FLUTE_OPTIONS.some((option) => option.value === String(form.typeOfFlute || "")) &&
+      requiredInputFields.every((key) => hasFormValue(form[key])) &&
       qcPersonName
   );
 
@@ -517,6 +538,19 @@ export function BoardLineQcForm() {
                       required
                       placeholder="Search and select job no..."
                       wrapLabels
+                    />
+                  </div>
+                ) : field.key === "checkNo" || field.key === "typeOfFlute" ? (
+                  <div key={String(field.key)} className={`flex flex-col space-y-1 ${field.wide ? "md:col-span-2 xl:col-span-3" : ""}`}>
+                    <label className="font-bold text-black text-sm">
+                      {field.label} {field.required ? <span className="text-red-600">*</span> : null}
+                    </label>
+                    <Select
+                      options={field.key === "checkNo" ? CHECK_NO_OPTIONS : FLUTE_OPTIONS}
+                      value={String(form[field.key] || "")}
+                      onChange={(value) => setField(field.key, value)}
+                      required={field.required}
+                      placeholder="Choose"
                     />
                   </div>
                 ) : (
