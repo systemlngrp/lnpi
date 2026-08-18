@@ -828,6 +828,57 @@ export interface BoardLineQcCheck {
   updateTimestamp?: string;
 }
 
+export interface PrintingQcCheck {
+  id: string;
+  timestamp: string;
+  jobNo: string | number;
+  partyName: string;
+  itemName: string;
+  erp?: string | number;
+  checkNo: string | number;
+  standardBoxSize?: string;
+  boxSizeAchieved?: string;
+  lengthId?: number | "";
+  widthId?: number | "";
+  heightId?: number | "";
+  boardThicknessBefore?: number | "";
+  boardThickness?: number | "";
+  csStandard?: number | "";
+  csAchieved?: number | "";
+  bsStandard?: number | "";
+  bsAchieved?: number | "";
+  boxWeightGrams?: number | "";
+  operatorName?: string;
+  printingColor1Standard?: string;
+  colour1Actual?: string;
+  printingColour2Standard?: string;
+  colour2Actual?: string;
+  qcPerson: string;
+  whatsapp?: string;
+  lengthSpec?: number | "";
+  widthSpec?: number | "";
+  heightSpec?: number | "";
+  qcMasterCsSpec?: number | "";
+  npdSheetCsSpec?: number | "";
+  qcMasterBsSpec?: number | "";
+  npdSheetBsSpec?: number | "";
+  systemAutoCorrection1?: string;
+  standardArtwork?: string;
+  systemAutoCorrection2?: string;
+  systemAutoCorrection3?: string;
+  lotNoPrinted?: string;
+  previousCustomerComplaintWarning?: string;
+  photo?: string;
+  column40?: string;
+  column41?: string;
+  column42?: string;
+  column43?: string;
+  planQty?: number | "";
+  samplingPlanQty?: number | "";
+  updatedBy?: string;
+  updateTimestamp?: string;
+}
+
 export type TruckLiveStatus = "EMPTY" | "LOADING" | "IN-TRANSIT" | "REPORTED TO PARTY" | "UNLOADING" | "RETURNING" | "BILL PENDING" | "NOT UNLOADED" | "REJECTED";
 
 export interface Truck {

@@ -190,6 +190,8 @@ const sampleItems: NavItem[] = [
 const qualityItems: NavItem[] = [
   { name: "Board Line QC Form", href: "/quality/boardline-qc/form", icon: ClipboardList },
   { name: "Board Line QC Master", href: "/quality/boardline-qc/master", icon: Database },
+  { name: "Printing QC Form", href: "/quality/printing-qc/form", icon: ClipboardList },
+  { name: "Printing QC Master", href: "/quality/printing-qc/master", icon: Database },
 ];
 
 const dispatchItems: NavItem[] = [

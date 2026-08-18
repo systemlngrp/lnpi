@@ -88,6 +88,7 @@ import { PendingSamples } from "./pages/PendingSamples";
 import { SamplesProduced } from "./pages/SamplesProduced";
 import { SampleMaster } from "./pages/SampleMaster";
 import { BoardLineQcForm, BoardLineQcMaster } from "./pages/BoardLineQc";
+import { PrintingQcForm, PrintingQcMaster } from "./pages/PrintingQc";
 import { Users } from "./pages/Users";
 import { Services } from "./pages/Services";
 import { PlantHeadUnified } from "./pages/PlantHeadUnified";
@@ -328,6 +329,8 @@ export default function App() {
           {/* Quality */}
           <Route path="quality/boardline-qc/form" element={<BoardLineQcForm />} />
           <Route path="quality/boardline-qc/master" element={<BoardLineQcMaster />} />
+          <Route path="quality/printing-qc/form" element={<PrintingQcForm />} />
+          <Route path="quality/printing-qc/master" element={<PrintingQcMaster />} />
           
           {/* Dispatch */}
           <Route path="dispatch/pending-planning" element={<PendingDispatchPlanning />} />
