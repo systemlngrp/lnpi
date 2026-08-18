@@ -121,6 +121,7 @@ import { PlansJobCard } from "./pages/PlansJobCard";
 import { SettingsPage } from "./pages/Settings";
 import { OtherConsumablesInventoryReport } from "./pages/OtherConsumablesInventoryReport";
 import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
+import { FGStockReport } from "./pages/FGStockReport";
 import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
 import { JobwiseReelConsumptionReport } from "./pages/JobwiseReelConsumptionReport";
 import { JobsInProgressReport } from "./pages/JobsInProgressReport";
@@ -357,6 +358,7 @@ export default function App() {
           {/* Reports */}
           <Route path="reports/other-consumables-inventory" element={<OtherConsumablesInventoryReport />} />
           <Route path="reports/erp-wise-reel-stock" element={<ErpWiseReelStockReport />} />
+          <Route path="reports/fg-stock" element={<FGStockReport />} />
           <Route path="reports/reelwise-stock" element={<ReelwiseStockReport />} />
           <Route path="reports/reel-stock-taker" element={<Navigate to="/physical-stock/entry" replace />} />
           <Route path="reports/physical-stock-master" element={<Navigate to="/physical-stock/master" replace />} />
