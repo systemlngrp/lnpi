@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Select } from "../components/Select";
 import { Spinner } from "../components/Spinner";
 import { useAuth } from "../auth/AuthContext";
 import { useData } from "../hooks/useData";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
-import { PrintingQcCheck, Production } from "../types";
+import { ColorMaster, PrintingQcCheck, Production } from "../types";
 
 type FieldType = "text" | "number" | "textarea" | "datetime-local";
 
@@ -50,13 +50,13 @@ const sections: FieldSection[] = [
     title: "Job Details",
     fields: [
       { key: "timestamp", label: "Timestamp", type: "datetime-local", required: true },
+      { key: "pqcNo", label: "PQC No", readOnly: true },
       { key: "jobNo", label: "Job No.", required: true },
       { key: "partyName", label: "Party Name", required: true },
       { key: "itemName", label: "Item Name", required: true, wide: true },
       { key: "erp", label: "ERP", readOnly: true },
       { key: "checkNo", label: "Check No.", required: true },
-      { key: "qcPerson", label: "QC Person", required: true },
-      { key: "whatsapp", label: "Whatsapp" },
+      { key: "qcPerson", label: "QC Person", required: true, readOnly: true },
     ],
   },
   {
@@ -113,10 +113,6 @@ const sections: FieldSection[] = [
     fields: [
       { key: "previousCustomerComplaintWarning", label: "WARNING - (Previous Customer Complained)", type: "textarea", wide: true },
       { key: "photo", label: "PHOTO", type: "textarea", wide: true },
-      { key: "column40", label: "Column 40" },
-      { key: "column41", label: "Column 41" },
-      { key: "column42", label: "Column 42" },
-      { key: "column43", label: "Column 43" },
       { key: "planQty", label: "Plan Qty", type: "number", readOnly: true },
       { key: "samplingPlanQty", label: "Sampling Plan Qty", type: "number", readOnly: true },
       { key: "samplingCheckNo", label: "Check No", readOnly: true },
@@ -139,7 +135,28 @@ function createInitialForm(): Partial<PrintingQcCheck> {
     itemName: "",
     checkNo: "",
     qcPerson: "",
+    pqcNo: "",
   };
+}
+
+function currentUserDisplayName(user: { name?: string; email?: string; userId?: string } | null | undefined) {
+  return String(user?.name || user?.email || user?.userId || "System User").trim();
+}
+
+function nextQcNo<T extends object>(rows: T[], key: keyof T, prefix: string) {
+  const highest = rows.reduce((max, row) => {
+    const match = String(row[key] || "").match(new RegExp(`^${prefix}-(\\d+)$`, "i"));
+    return match ? Math.max(max, Number(match[1]) || 0) : max;
+  }, 0);
+  return `${prefix}-${String(highest + 1).padStart(6, "0")}`;
+}
+
+function hasAnyWarning(values: Array<unknown>) {
+  return values.some((value) => String(value ?? "").trim() !== "");
+}
+
+function uniqueOptions(values: Array<unknown>) {
+  return [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
 function toFiniteNumber(value: unknown): number | "" {
@@ -338,13 +355,24 @@ function FieldInput({
 }
 
 export function PrintingQcForm() {
-  const [, setChecks] = useData<PrintingQcCheck>("printing_qc_checks", []);
+  const [checks, setChecks] = useData<PrintingQcCheck>("printing_qc_checks", []);
   const [productions] = useData<Production>("productions", []);
+  const [colors] = useData<ColorMaster>("color_masters", []);
   const { findItemAcrossSources } = useOrderItemCatalog();
   const { user } = useAuth();
   const [form, setForm] = useState<Partial<PrintingQcCheck>>(createInitialForm);
   const [selectedProductionId, setSelectedProductionId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const qcPersonName = currentUserDisplayName(user);
+  const nextPqcNo = useMemo(() => nextQcNo(checks, "pqcNo", "PQC"), [checks]);
+  const colorOptions = useMemo(
+    () => uniqueOptions(colors.map((color) => color.name)).map((name) => ({ value: name, label: name })),
+    [colors]
+  );
+
+  useEffect(() => {
+    setForm((prev) => calculatePrintingQcForm({ ...prev, qcPerson: qcPersonName, pqcNo: nextPqcNo }));
+  }, [qcPersonName, nextPqcNo]);
 
   const productionById = useMemo(() => {
     const map = new Map<string, Production>();
@@ -442,7 +470,7 @@ export function PrintingQcForm() {
       String(form.partyName || "").trim() &&
       String(form.itemName || "").trim() &&
       String(form.checkNo || "").trim() &&
-      String(form.qcPerson || "").trim()
+      qcPersonName
   );
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -451,8 +479,8 @@ export function PrintingQcForm() {
 
     setIsSubmitting(true);
     try {
-      const updatedBy = user?.name || user?.email || user?.userId || "System User";
-      const payload = buildPayload(form, updatedBy);
+      const updatedBy = qcPersonName;
+      const payload = buildPayload({ ...form, qcPerson: qcPersonName, pqcNo: nextPqcNo }, updatedBy);
       await setChecks((prev) => [...prev, payload]);
       setSelectedProductionId("");
       setForm(createInitialForm());
@@ -494,7 +522,20 @@ export function PrintingQcForm() {
                     />
                   </div>
                 ) : (
-                  <FieldInput key={String(field.key)} field={field} value={form[field.key]} onChange={setField} />
+                  field.key === "colour1Actual" || field.key === "colour2Actual" ? (
+                  <div key={String(field.key)} className={`flex flex-col space-y-1 ${field.wide ? "md:col-span-2 xl:col-span-3" : ""}`}>
+                    <label className="font-bold text-black text-sm">{field.label}</label>
+                    <Select
+                      options={colorOptions}
+                      value={String(form[field.key] || "")}
+                      onChange={(value) => setField(field.key, value)}
+                      placeholder="Select colour..."
+                      wrapLabels
+                    />
+                  </div>
+                ) : (
+                  <FieldInput key={String(field.key)} field={field} value={field.key === "pqcNo" ? nextPqcNo : form[field.key]} onChange={setField} />
+                )
                 )
               )}
             </div>
@@ -517,60 +558,132 @@ export function PrintingQcForm() {
 
 const masterColumns: FieldConfig[] = [
   { key: "timestamp", label: "Timestamp" },
+  { key: "pqcNo", label: "PQC No" },
   { key: "jobNo", label: "Job No." },
   { key: "partyName", label: "Party Name" },
   { key: "itemName", label: "Item Name" },
   { key: "erp", label: "ERP", readOnly: true },
   { key: "checkNo", label: "Check No." },
-  ...allFields.filter((field) => !["timestamp", "jobNo", "partyName", "itemName", "erp", "checkNo"].includes(String(field.key))),
+  ...allFields.filter(
+    (field) =>
+      ![
+        "timestamp",
+        "pqcNo",
+        "jobNo",
+        "partyName",
+        "itemName",
+        "erp",
+        "checkNo",
+        "whatsapp",
+        "column40",
+        "column41",
+        "column42",
+        "column43",
+      ].includes(String(field.key))
+  ),
 ];
 
 export function PrintingQcMaster() {
   const [checks, , loading] = useData<PrintingQcCheck>("printing_qc_checks", []);
   const [searchTerm, setSearchTerm] = useState("");
+  const [jobFilter, setJobFilter] = useState("");
+  const [partyFilter, setPartyFilter] = useState("");
+  const [qcPersonFilter, setQcPersonFilter] = useState("");
+  const [warningFilter, setWarningFilter] = useState("All");
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, jobFilter, partyFilter, qcPersonFilter, warningFilter, pageSize]);
+
+  const filterOptions = useMemo(
+    () => ({
+      jobs: uniqueOptions(checks.map((row) => row.jobNo)),
+      parties: uniqueOptions(checks.map((row) => row.partyName)),
+      qcPeople: uniqueOptions(checks.map((row) => row.qcPerson)),
+    }),
+    [checks]
+  );
 
   const rows = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
-    const sorted = [...checks].sort((a, b) => {
-      const timeA = new Date(a.timestamp || "").getTime() || 0;
-      const timeB = new Date(b.timestamp || "").getTime() || 0;
-      return timeB - timeA;
-    });
+    return [...checks]
+      .sort((a, b) => {
+        const timeA = new Date(a.timestamp || "").getTime() || 0;
+        const timeB = new Date(b.timestamp || "").getTime() || 0;
+        return timeB - timeA;
+      })
+      .filter((row) => {
+        const warning = hasAnyWarning([row.systemAutoCorrection1, row.systemAutoCorrection2, row.systemAutoCorrection3]);
+        if (jobFilter && String(row.jobNo) !== jobFilter) return false;
+        if (partyFilter && String(row.partyName) !== partyFilter) return false;
+        if (qcPersonFilter && String(row.qcPerson) !== qcPersonFilter) return false;
+        if (warningFilter === "With Warning" && !warning) return false;
+        if (warningFilter === "No Warning" && warning) return false;
+        if (!search) return true;
+        return [
+          row.pqcNo,
+          row.jobNo,
+          row.partyName,
+          row.itemName,
+          row.erp,
+          row.checkNo,
+          row.samplingCheckNo,
+          row.qcPerson,
+          row.operatorName,
+          row.lotNoPrinted,
+          row.systemAutoCorrection1,
+          row.systemAutoCorrection2,
+          row.systemAutoCorrection3,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(search);
+      });
+  }, [checks, jobFilter, partyFilter, qcPersonFilter, searchTerm, warningFilter]);
 
-    if (!search) return sorted;
-    return sorted.filter((row) =>
-      [
-        row.jobNo,
-        row.partyName,
-        row.itemName,
-        row.erp,
-        row.checkNo,
-        row.qcPerson,
-        row.operatorName,
-        row.lotNoPrinted,
-        row.systemAutoCorrection1,
-        row.systemAutoCorrection2,
-        row.systemAutoCorrection3,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(search)
-    );
-  }, [checks, searchTerm]);
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <div className="space-y-6 text-black">
-      <div className="flex flex-col gap-4 border-b border-black pb-4 md:flex-row md:items-center md:justify-between">
-        <h2 className="text-xl font-bold uppercase tracking-tight text-black">Printing QC Master</h2>
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-          <input
-            type="text"
-            placeholder="Search job, party, item, ERP..."
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            className="w-full rounded border border-black py-2 pl-10 pr-4 text-sm text-black focus:outline-none focus:ring-1 focus:ring-black"
-          />
+      <div className="space-y-4 border-b border-black pb-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Printing QC Master</h2>
+          <div className="relative w-full md:w-96">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+            <input
+              type="text"
+              placeholder="Search PQC, job, party, item, ERP..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="w-full rounded border border-black py-2 pl-10 pr-4 text-sm text-black focus:outline-none focus:ring-1 focus:ring-black"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+          <select value={jobFilter} onChange={(event) => setJobFilter(event.target.value)} className="rounded border border-black p-2 text-sm">
+            <option value="">All Job No.</option>
+            {filterOptions.jobs.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={partyFilter} onChange={(event) => setPartyFilter(event.target.value)} className="rounded border border-black p-2 text-sm">
+            <option value="">All Party Name</option>
+            {filterOptions.parties.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={qcPersonFilter} onChange={(event) => setQcPersonFilter(event.target.value)} className="rounded border border-black p-2 text-sm">
+            <option value="">All QC Person</option>
+            {filterOptions.qcPeople.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={warningFilter} onChange={(event) => setWarningFilter(event.target.value)} className="rounded border border-black p-2 text-sm">
+            <option>All</option>
+            <option>With Warning</option>
+            <option>No Warning</option>
+          </select>
+          <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded border border-black p-2 text-sm">
+            {[10, 25, 50, 100].map((value) => <option key={value} value={value}>{value} / page</option>)}
+          </select>
         </div>
       </div>
 
@@ -588,19 +701,11 @@ export function PrintingQcMaster() {
             </thead>
             <tbody className="divide-y divide-black bg-white">
               {loading ? (
-                <tr>
-                  <td colSpan={masterColumns.length} className="px-6 py-8 text-center text-black">
-                    Loading Printing QC checks...
-                  </td>
-                </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={masterColumns.length} className="px-6 py-8 text-center font-medium italic text-black">
-                    No Printing QC checks found.
-                  </td>
-                </tr>
+                <tr><td colSpan={masterColumns.length} className="px-6 py-8 text-center text-black">Loading Printing QC checks...</td></tr>
+              ) : pagedRows.length === 0 ? (
+                <tr><td colSpan={masterColumns.length} className="px-6 py-8 text-center font-medium italic text-black">No Printing QC checks found.</td></tr>
               ) : (
-                rows.map((row) => (
+                pagedRows.map((row) => (
                   <tr key={row.id} className="divide-x divide-black transition-colors hover:bg-slate-50">
                     {masterColumns.map((column) => (
                       <td key={String(column.key)} className="max-w-[320px] whitespace-nowrap border border-black px-4 py-3 text-sm text-black">
@@ -612,6 +717,14 @@ export function PrintingQcMaster() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-col gap-3 border-t border-black p-3 text-sm md:flex-row md:items-center md:justify-between">
+          <span>Showing {rows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, rows.length)} of {rows.length}</span>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage <= 1} className="rounded border border-black px-3 py-1 font-bold disabled:opacity-50">Previous</button>
+            <span>Page {currentPage} / {totalPages}</span>
+            <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage >= totalPages} className="rounded border border-black px-3 py-1 font-bold disabled:opacity-50">Next</button>
+          </div>
         </div>
       </div>
     </div>

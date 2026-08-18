@@ -3545,6 +3545,7 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`boardline_qc_checks\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`timestamp\` VARCHAR(255) NOT NULL,
+          \`bqcNo\` VARCHAR(50),
           \`jobNo\` VARCHAR(100) NOT NULL,
           \`partyName\` VARCHAR(255) NOT NULL,
           \`itemName\` TEXT NOT NULL,
@@ -3598,6 +3599,7 @@ async function initDb(retries = 5) {
         CREATE TABLE IF NOT EXISTS \`printing_qc_checks\` (
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`timestamp\` VARCHAR(255) NOT NULL,
+          \`pqcNo\` VARCHAR(50),
           \`jobNo\` VARCHAR(100) NOT NULL,
           \`partyName\` VARCHAR(255) NOT NULL,
           \`itemName\` TEXT NOT NULL,
@@ -5276,7 +5278,9 @@ async function initDb(retries = 5) {
         { table: "users", column: "status", type: "VARCHAR(20) NOT NULL DEFAULT 'Active'" },
         { table: "users", column: "menuAccess", type: "JSON" },
         { table: "boardline_qc_checks", column: "samplingCheckNo", type: "VARCHAR(255)" },
+        { table: "boardline_qc_checks", column: "bqcNo", type: "VARCHAR(50)" },
         { table: "printing_qc_checks", column: "samplingCheckNo", type: "VARCHAR(255)" },
+        { table: "printing_qc_checks", column: "pqcNo", type: "VARCHAR(50)" },
         { table: "material_in", column: "phTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "phEmailId", type: "VARCHAR(255)" },
         { table: "material_in", column: "plant_head_remark", type: "TEXT" },

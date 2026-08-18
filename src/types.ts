@@ -780,6 +780,7 @@ export interface SampleRequest {
 export interface BoardLineQcCheck {
   id: string;
   timestamp: string;
+  bqcNo?: string;
   jobNo: string | number;
   partyName: string;
   itemName: string;
@@ -832,6 +833,7 @@ export interface BoardLineQcCheck {
 export interface PrintingQcCheck {
   id: string;
   timestamp: string;
+  pqcNo?: string;
   jobNo: string | number;
   partyName: string;
   itemName: string;
