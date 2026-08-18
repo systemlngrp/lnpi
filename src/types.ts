@@ -824,6 +824,7 @@ export interface BoardLineQcCheck {
   printingArtwork?: string;
   planQty?: number | "";
   samplingPlanQty?: number | "";
+  samplingCheckNo?: string;
   updatedBy?: string;
   updateTimestamp?: string;
 }

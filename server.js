@@ -3589,6 +3589,7 @@ async function initDb(retries = 5) {
           \`printingArtwork\` TEXT,
           \`planQty\` DECIMAL(15,2),
           \`samplingPlanQty\` DECIMAL(15,2),
+          \`samplingCheckNo\` VARCHAR(255),
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -5273,6 +5274,7 @@ async function initDb(retries = 5) {
         { table: "users", column: "role", type: "VARCHAR(20) NOT NULL DEFAULT 'Employee'" },
         { table: "users", column: "status", type: "VARCHAR(20) NOT NULL DEFAULT 'Active'" },
         { table: "users", column: "menuAccess", type: "JSON" },
+        { table: "boardline_qc_checks", column: "samplingCheckNo", type: "VARCHAR(255)" },
         { table: "material_in", column: "phTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "phEmailId", type: "VARCHAR(255)" },
         { table: "material_in", column: "plant_head_remark", type: "TEXT" },
