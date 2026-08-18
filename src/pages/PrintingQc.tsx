@@ -5,7 +5,7 @@ import { Spinner } from "../components/Spinner";
 import { useAuth } from "../auth/AuthContext";
 import { useData } from "../hooks/useData";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
-import { ColorMaster, PrintingQcCheck, Production } from "../types";
+import { ColorMaster, PrintingQcCheck, Production, User } from "../types";
 
 type FieldType = "text" | "number" | "textarea" | "datetime-local";
 
@@ -121,6 +121,44 @@ const sections: FieldSection[] = [
 ];
 
 const allFields = sections.flatMap((section) => section.fields);
+const formSections: FieldSection[] = [
+  {
+    title: "Job Details",
+    fields: [
+      { key: "jobNo", label: "Job No.", required: true },
+      { key: "checkNo", label: "Check No.", required: true },
+      { key: "qcPerson", label: "QC Person", required: true, readOnly: true },
+    ],
+  },
+  {
+    title: "Box Size",
+    fields: [
+      { key: "lengthId", label: "LENGTH (ID)", type: "number", required: true },
+      { key: "widthId", label: "WIDTH (ID)", type: "number", required: true },
+      { key: "heightId", label: "HEIGHT (ID)", type: "number", required: true },
+    ],
+  },
+  {
+    title: "Printing Details",
+    fields: [
+      { key: "lotNoPrinted", label: "LOT No. Printed", required: true },
+      { key: "boardThickness", label: "Board Thickness", type: "number", required: true },
+      { key: "csAchieved", label: "CS Achieved", type: "number", required: true },
+      { key: "bsAchieved", label: "BS Achieved", type: "number", required: true },
+      { key: "boxWeightGrams", label: "Box weight (Grams)", type: "number", required: true },
+      { key: "colour1Actual", label: "Colour 1 (Actual)", required: true },
+      { key: "colour2Actual", label: "Colour 2 (Actual)", required: true },
+      { key: "operatorName", label: "Operator Name", required: true },
+    ],
+  },
+];
+
+const CHECK_NO_OPTIONS = ["1", "2", "3", "4"].map((value) => ({ value, label: value }));
+
+function hasFormValue(value: unknown) {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
 
 function toLocalDatetimeInput(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -226,7 +264,6 @@ function calculatePrintingQcForm(form: Partial<PrintingQcCheck>): Partial<Printi
   const lengthId = toFiniteNumber(form.lengthId);
   const widthId = toFiniteNumber(form.widthId);
   const heightId = toFiniteNumber(form.heightId);
-  const [lengthAchieved, widthAchieved, heightAchieved] = parseBoxSize(form.boxSizeAchieved);
   const lengthSpec = toFiniteNumber(form.lengthSpec);
   const widthSpec = toFiniteNumber(form.widthSpec);
   const heightSpec = toFiniteNumber(form.heightSpec);
@@ -243,9 +280,9 @@ function calculatePrintingQcForm(form: Partial<PrintingQcCheck>): Partial<Printi
   const colour2Actual = normalizeText(form.colour2Actual);
   const hasBoxInputs =
     qcPerson !== "" &&
-    isNumber(lengthAchieved) &&
-    isNumber(widthAchieved) &&
-    isNumber(heightAchieved) &&
+    isNumber(lengthId) &&
+    isNumber(widthId) &&
+    isNumber(heightId) &&
     isNumber(lengthSpec) &&
     isNumber(widthSpec) &&
     isNumber(heightSpec);
@@ -261,16 +298,17 @@ function calculatePrintingQcForm(form: Partial<PrintingQcCheck>): Partial<Printi
     widthId,
     heightId,
     standardBoxSize: buildBoxSize(lengthId, widthId, heightId),
+    boxSizeAchieved: buildBoxSize(lengthId, widthId, heightId),
     samplingPlanQty,
     samplingCheckNo,
     systemAutoCorrection1:
       !hasBoxInputs ||
-      (lengthAchieved >= lengthSpec - 2 &&
-        lengthAchieved <= lengthSpec + 2 &&
-        widthAchieved >= widthSpec - 2 &&
-        widthAchieved <= widthSpec + 2 &&
-        heightAchieved >= heightSpec - 2 &&
-        heightAchieved <= heightSpec + 2)
+      (lengthId >= lengthSpec - 2 &&
+        lengthId <= lengthSpec + 2 &&
+        widthId >= widthSpec - 2 &&
+        widthId <= widthSpec + 2 &&
+        heightId >= heightSpec - 2 &&
+        heightId <= heightSpec + 2)
         ? ""
         : `${qcPerson} - Wrong Box Size Achieved. Please Check`,
     systemAutoCorrection2:
@@ -358,6 +396,7 @@ export function PrintingQcForm() {
   const [checks, setChecks] = useData<PrintingQcCheck>("printing_qc_checks", []);
   const [productions] = useData<Production>("productions", []);
   const [colors] = useData<ColorMaster>("color_masters", []);
+  const [users] = useData<User>("users", []);
   const { findItemAcrossSources } = useOrderItemCatalog();
   const { user } = useAuth();
   const [form, setForm] = useState<Partial<PrintingQcCheck>>(createInitialForm);
@@ -368,6 +407,14 @@ export function PrintingQcForm() {
   const colorOptions = useMemo(
     () => uniqueOptions(colors.map((color) => color.name)).map((name) => ({ value: name, label: name })),
     [colors]
+  );
+  const operatorOptions = useMemo(
+    () =>
+      users
+        .filter((row) => row.status !== "Inactive")
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((row) => ({ value: row.name, label: row.name })),
+    [users]
   );
 
   useEffect(() => {
@@ -464,12 +511,27 @@ export function PrintingQcForm() {
     );
   };
 
+  const requiredInputFields: Array<keyof PrintingQcCheck> = [
+    "lengthId",
+    "widthId",
+    "heightId",
+    "lotNoPrinted",
+    "boardThickness",
+    "csAchieved",
+    "bsAchieved",
+    "boxWeightGrams",
+    "colour1Actual",
+    "colour2Actual",
+    "operatorName",
+  ];
+
   const canSubmit = Boolean(
-    String(form.timestamp || "").trim() &&
-      String(form.jobNo || "").trim() &&
-      String(form.partyName || "").trim() &&
-      String(form.itemName || "").trim() &&
-      String(form.checkNo || "").trim() &&
+    hasFormValue(form.timestamp) &&
+      hasFormValue(form.jobNo) &&
+      hasFormValue(form.partyName) &&
+      hasFormValue(form.itemName) &&
+      CHECK_NO_OPTIONS.some((option) => option.value === String(form.checkNo || "")) &&
+      requiredInputFields.every((key) => hasFormValue(form[key])) &&
       qcPersonName
   );
 
@@ -500,7 +562,7 @@ export function PrintingQcForm() {
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {sections.map((section) => (
+        {formSections.map((section) => (
           <section key={section.title} className="space-y-3">
             <h3 className="text-sm font-black uppercase tracking-wide text-black border-b border-black pb-1">
               {section.title}
@@ -521,21 +583,49 @@ export function PrintingQcForm() {
                       wrapLabels
                     />
                   </div>
-                ) : (
-                  field.key === "colour1Actual" || field.key === "colour2Actual" ? (
+                ) : field.key === "checkNo" ? (
                   <div key={String(field.key)} className={`flex flex-col space-y-1 ${field.wide ? "md:col-span-2 xl:col-span-3" : ""}`}>
-                    <label className="font-bold text-black text-sm">{field.label}</label>
+                    <label className="font-bold text-black text-sm">
+                      {field.label} {field.required ? <span className="text-red-600">*</span> : null}
+                    </label>
+                    <Select
+                      options={CHECK_NO_OPTIONS}
+                      value={String(form.checkNo || "")}
+                      onChange={(value) => setField("checkNo", value)}
+                      required={field.required}
+                      placeholder="Choose"
+                    />
+                  </div>
+                ) : field.key === "colour1Actual" || field.key === "colour2Actual" ? (
+                  <div key={String(field.key)} className={`flex flex-col space-y-1 ${field.wide ? "md:col-span-2 xl:col-span-3" : ""}`}>
+                    <label className="font-bold text-black text-sm">
+                      {field.label} {field.required ? <span className="text-red-600">*</span> : null}
+                    </label>
                     <Select
                       options={colorOptions}
                       value={String(form[field.key] || "")}
                       onChange={(value) => setField(field.key, value)}
-                      placeholder="Select colour..."
+                      required={field.required}
+                      placeholder="Choose"
+                      wrapLabels
+                    />
+                  </div>
+                ) : field.key === "operatorName" ? (
+                  <div key={String(field.key)} className={`flex flex-col space-y-1 ${field.wide ? "md:col-span-2 xl:col-span-3" : ""}`}>
+                    <label className="font-bold text-black text-sm">
+                      {field.label} {field.required ? <span className="text-red-600">*</span> : null}
+                    </label>
+                    <Select
+                      options={operatorOptions}
+                      value={String(form.operatorName || "")}
+                      onChange={(value) => setField("operatorName", value)}
+                      required={field.required}
+                      placeholder="Choose"
                       wrapLabels
                     />
                   </div>
                 ) : (
                   <FieldInput key={String(field.key)} field={field} value={field.key === "pqcNo" ? nextPqcNo : form[field.key]} onChange={setField} />
-                )
                 )
               )}
             </div>
