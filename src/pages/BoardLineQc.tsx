@@ -15,6 +15,7 @@ type FieldConfig = {
   type?: FieldType;
   required?: boolean;
   wide?: boolean;
+  readOnly?: boolean;
 };
 
 type FieldSection = {
@@ -55,7 +56,7 @@ const sections: FieldSection[] = [
       { key: "partyName", label: "Party Name", required: true },
       { key: "itemName", label: "Item Name", required: true, wide: true },
       { key: "checkNo", label: "Check No.", required: true },
-      { key: "standard", label: "Standard" },
+      { key: "standard", label: "Standard", readOnly: true },
       { key: "qcPerson", label: "QC Person", required: true },
       { key: "whatsapp", label: "Whatsapp" },
       { key: "erp", label: "ERP" },
@@ -66,7 +67,7 @@ const sections: FieldSection[] = [
     fields: [
       { key: "flapHeightFlapOperatorSide", label: "Flap - Height - Flap (Operator Side)" },
       { key: "flapHeightFlapDriveSide", label: "Flap - Height - Flap (Drive Side)" },
-      { key: "cuttingSizeRequired", label: "Cutting Size (Req.)", type: "number" },
+      { key: "cuttingSizeRequired", label: "Cutting Size (Req.)", type: "number", readOnly: true },
       { key: "cuttingSizeMm", label: "Cutting Size (mm)", type: "number" },
       { key: "column19", label: "Column 19" },
       { key: "boardGsm", label: "B.GSM", type: "number" },
@@ -81,34 +82,34 @@ const sections: FieldSection[] = [
     title: "Size Details",
     fields: [
       { key: "heightOd", label: "HEIGHT (OD)", type: "number" },
-      { key: "flap", label: "FLAP", type: "number" },
+      { key: "flap", label: "FLAP", type: "number", readOnly: true },
       { key: "ply", label: "PLY", type: "number" },
       { key: "width", label: "WIDTH", type: "number" },
       { key: "length", label: "LENGTH", type: "number" },
       { key: "part", label: "PART" },
-      { key: "flapMinDs", label: "Flap MIN (ds)", type: "number" },
-      { key: "flapMaxDs", label: "Flap Max (ds)", type: "number" },
+      { key: "flapMinDs", label: "Flap MIN (ds)", type: "number", readOnly: true },
+      { key: "flapMaxDs", label: "Flap Max (ds)", type: "number", readOnly: true },
     ],
   },
   {
     title: "System Auto-Correction",
     fields: [
-      { key: "systemAutoCorrection1", label: "System Auto-Correction:" },
-      { key: "systemAutoCorrection2", label: "System Auto-Correction :" },
-      { key: "systemAutoCorrection3", label: "System Auto-Correction:-" },
-      { key: "systemAutoCorrection4", label: "System Auto-Correction:--" },
-      { key: "systemAutoCorrection5", label: "System Auto-Correction -" },
+      { key: "systemAutoCorrection1", label: "System Auto-Correction:", readOnly: true },
+      { key: "systemAutoCorrection2", label: "System Auto-Correction :", readOnly: true },
+      { key: "systemAutoCorrection3", label: "System Auto-Correction:-", readOnly: true },
+      { key: "systemAutoCorrection4", label: "System Auto-Correction:--", readOnly: true },
+      { key: "systemAutoCorrection5", label: "System Auto-Correction -", readOnly: true },
     ],
   },
   {
     title: "Achieved Values",
     fields: [
-      { key: "flapAchievedOs", label: "Flap (Achieved) OS", type: "number" },
-      { key: "heightAchievedOs", label: "Height (Achieved) OS", type: "number" },
-      { key: "flapLAchievedOs", label: "Flap L (Achieved) OS", type: "number" },
-      { key: "flapAchievedDs", label: "Flap (Achieved) DS", type: "number" },
-      { key: "heightAchievedDs", label: "Height (Achieved) DS", type: "number" },
-      { key: "flapLAchievedDs", label: "Flap L (Achieved) DS", type: "number" },
+      { key: "flapAchievedOs", label: "Flap (Achieved) OS", type: "number", readOnly: true },
+      { key: "heightAchievedOs", label: "Height (Achieved) OS", type: "number", readOnly: true },
+      { key: "flapLAchievedOs", label: "Flap L (Achieved) OS", type: "number", readOnly: true },
+      { key: "flapAchievedDs", label: "Flap (Achieved) DS", type: "number", readOnly: true },
+      { key: "heightAchievedDs", label: "Height (Achieved) DS", type: "number", readOnly: true },
+      { key: "flapLAchievedDs", label: "Flap L (Achieved) DS", type: "number", readOnly: true },
     ],
   },
   {
@@ -164,6 +165,85 @@ function toOptionalNumber(...values: unknown[]) {
   return "";
 }
 
+function toFiniteNumber(value: unknown): number | "" {
+  if (value === null || value === undefined || value === "") return "";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : "";
+}
+
+function parseFlapHeightFlap(value: unknown): [number | "", number | "", number | ""] {
+  const parts = String(value || "")
+    .split("-")
+    .map((part) => toFiniteNumber(part.trim()));
+  return [parts[0] ?? "", parts[1] ?? "", parts[2] ?? ""];
+}
+
+function blankIfMissing(...values: unknown[]) {
+  return values.some((value) => value === "" || value === null || value === undefined);
+}
+
+function isNumber(value: number | ""): value is number {
+  return typeof value === "number";
+}
+
+function calculateBoardLineForm(form: Partial<BoardLineQcCheck>): Partial<BoardLineQcCheck> {
+  const heightOd = toFiniteNumber(form.heightOd);
+  const ply = toFiniteNumber(form.ply);
+  const width = toFiniteNumber(form.width);
+  const length = toFiniteNumber(form.length);
+  const part = toFiniteNumber(form.part);
+  const cuttingSizeMm = toFiniteNumber(form.cuttingSizeMm);
+  const qcPerson = String(form.qcPerson || "").trim();
+  const [flapAchievedOs, heightAchievedOs, flapLAchievedOs] = parseFlapHeightFlap(form.flapHeightFlapOperatorSide);
+  const [flapAchievedDs, heightAchievedDs, flapLAchievedDs] = parseFlapHeightFlap(form.flapHeightFlapDriveSide);
+  const flap = isNumber(ply) && isNumber(width) ? (ply === 3 ? width / 2 : width / 2 + 1) : "";
+  const flapMinDs = flap === "" ? "" : flap - 1;
+  const flapMaxDs = flap === "" ? "" : flap + 1;
+  const cuttingSizeRequired =
+    isNumber(part) && isNumber(width) && isNumber(length) ? (part === 1 ? (length + width) * 2 + 30 : length + width + 30) : "";
+  const standard = blankIfMissing(heightOd, flap) ? "" : `${flap} - ${heightOd} - ${flap}`;
+  const hasOsFlapInputs = isNumber(flapAchievedOs) && isNumber(flapMinDs) && isNumber(flapMaxDs) && qcPerson !== "";
+  const hasOsHeightInputs = isNumber(heightAchievedOs) && isNumber(heightOd) && qcPerson !== "";
+  const hasDsFlapInputs = isNumber(flapAchievedDs) && isNumber(flapMinDs) && isNumber(flapMaxDs) && qcPerson !== "";
+  const hasDsHeightInputs = isNumber(heightAchievedDs) && isNumber(heightOd) && qcPerson !== "";
+  const hasCuttingSizeInputs = isNumber(cuttingSizeMm) && isNumber(cuttingSizeRequired) && qcPerson !== "";
+
+  return {
+    ...form,
+    standard,
+    cuttingSizeRequired,
+    flap,
+    flapMinDs,
+    flapMaxDs,
+    flapAchievedOs,
+    heightAchievedOs,
+    flapLAchievedOs,
+    flapAchievedDs,
+    heightAchievedDs,
+    flapLAchievedDs,
+    systemAutoCorrection1:
+      !hasOsFlapInputs || (flapAchievedOs >= flapMinDs && flapAchievedOs <= flapMaxDs)
+        ? ""
+        : `${qcPerson} - Wrong FLAP Size Achieved on Operator Side`,
+    systemAutoCorrection2:
+      !hasOsHeightInputs || (heightAchievedOs >= heightOd - 2 && heightAchievedOs <= heightOd + 2)
+        ? ""
+        : `${qcPerson} - Wrong HEIGHT Achieved on Operator Side`,
+    systemAutoCorrection3:
+      !hasDsFlapInputs || (flapAchievedDs >= flapMinDs && flapAchievedDs <= flapMaxDs)
+        ? ""
+        : `${qcPerson} - Wrong FLAP Size Achieved on Drive Side`,
+    systemAutoCorrection4:
+      !hasDsHeightInputs || (heightAchievedDs >= heightOd - 2 && heightAchievedDs <= heightOd + 2)
+        ? ""
+        : `${qcPerson} - Wrong HEIGHT Achieved on Drive Side`,
+    systemAutoCorrection5:
+      !hasCuttingSizeInputs || (cuttingSizeMm >= cuttingSizeRequired - 5 && cuttingSizeMm <= cuttingSizeRequired + 5)
+        ? ""
+        : `${qcPerson} - Wrong Cutting Size. Please Check`,
+  };
+}
+
 function displayValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
   return String(value);
@@ -175,23 +255,24 @@ function buildFlapHeightValue(flap: number | "", height: number | "") {
 }
 
 function buildPayload(form: Partial<BoardLineQcCheck>, updatedBy: string): BoardLineQcCheck {
+  const calculatedForm = calculateBoardLineForm(form);
   const timestampInput = String(form.timestamp || "").trim();
   const timestamp = timestampInput ? new Date(timestampInput).toISOString() : new Date().toISOString();
   const payload: Record<string, unknown> = {
     id: crypto.randomUUID(),
     timestamp,
-    jobNo: String(form.jobNo || "").trim(),
-    partyName: String(form.partyName || "").trim(),
-    itemName: String(form.itemName || "").trim(),
-    checkNo: String(form.checkNo || "").trim(),
-    qcPerson: String(form.qcPerson || "").trim(),
+    jobNo: String(calculatedForm.jobNo || "").trim(),
+    partyName: String(calculatedForm.partyName || "").trim(),
+    itemName: String(calculatedForm.itemName || "").trim(),
+    checkNo: String(calculatedForm.checkNo || "").trim(),
+    qcPerson: String(calculatedForm.qcPerson || "").trim(),
     updatedBy,
     updateTimestamp: new Date().toISOString(),
   };
 
   allFields.forEach((field) => {
     if (["timestamp", "jobNo", "partyName", "itemName", "checkNo", "qcPerson"].includes(String(field.key))) return;
-    const raw = form[field.key];
+    const raw = calculatedForm[field.key];
     if (raw === undefined || raw === null || raw === "") return;
     if (numberFields.has(field.key)) {
       const value = Number(raw);
@@ -214,7 +295,7 @@ function FieldInput({
   onChange: (key: keyof BoardLineQcCheck, value: string | number | "") => void;
 }) {
   const commonClass =
-    "border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full";
+    "border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full read-only:bg-slate-100 read-only:text-slate-700";
   const stringValue = value === undefined || value === null ? "" : String(value);
 
   return (
@@ -235,6 +316,7 @@ function FieldInput({
           type={field.type || "text"}
           value={stringValue}
           onChange={(event) => onChange(field.key, field.type === "number" && event.target.value !== "" ? Number(event.target.value) : event.target.value)}
+          readOnly={field.readOnly}
           required={field.required}
           step={field.type === "number" ? "any" : undefined}
           className={commonClass}
@@ -290,7 +372,7 @@ export function BoardLineQcForm() {
   );
 
   const setField = (key: keyof BoardLineQcCheck, value: string | number | "") => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => calculateBoardLineForm({ ...prev, [key]: value }));
   };
 
   const handleJobSelect = (productionId: string) => {
@@ -318,29 +400,31 @@ export function BoardLineQcForm() {
     const cuttingSize = toOptionalNumber(production.cuttingWithTrimming, rawItem.cuttingSize);
     const boardGsm = toOptionalNumber(production.boardGsmReq, production.gsm, rawItem.boardGsmReq, rawItem.gsm);
 
-    setForm((prev) => ({
-      ...prev,
-      jobNo,
-      partyName,
-      itemName,
-      erp,
-      heightOd: height,
-      width,
-      length,
-      flap,
-      ply: toOptionalNumber(production.ply, rawItem.ply),
-      part: String(rawItem.part || prev.part || "").trim(),
-      typeOfFlute: String(production.flute || production.fluteType || rawItem.flute || "").trim(),
-      boardGsm,
-      cuttingSizeRequired: cuttingSize,
-      cuttingSizeMm: cuttingSize,
-      sheetWeightGrams: toOptionalNumber(production.sheetWeight),
-      planQty: toOptionalNumber(production.plannedQty, production.qty),
-      standard: String(prev.standard || rawItem.spec || "").trim(),
-      flapHeightFlapOperatorSide: buildFlapHeightValue(flap, height) || prev.flapHeightFlapOperatorSide,
-      flapHeightFlapDriveSide: buildFlapHeightValue(flap, height) || prev.flapHeightFlapDriveSide,
-      printingArtwork: String(prev.printingArtwork || rawItem.artwork || "").trim(),
-    }));
+    setForm((prev) =>
+      calculateBoardLineForm({
+        ...prev,
+        jobNo,
+        partyName,
+        itemName,
+        erp,
+        heightOd: height,
+        width,
+        length,
+        flap,
+        ply: toOptionalNumber(production.ply, rawItem.ply),
+        part: String(rawItem.part || prev.part || "").trim(),
+        typeOfFlute: String(production.flute || production.fluteType || rawItem.flute || "").trim(),
+        boardGsm,
+        cuttingSizeRequired: cuttingSize,
+        cuttingSizeMm: cuttingSize,
+        sheetWeightGrams: toOptionalNumber(production.sheetWeight),
+        planQty: toOptionalNumber(production.plannedQty, production.qty),
+        standard: String(prev.standard || rawItem.spec || "").trim(),
+        flapHeightFlapOperatorSide: buildFlapHeightValue(flap, height) || prev.flapHeightFlapOperatorSide,
+        flapHeightFlapDriveSide: buildFlapHeightValue(flap, height) || prev.flapHeightFlapDriveSide,
+        printingArtwork: String(prev.printingArtwork || rawItem.artwork || "").trim(),
+      })
+    );
   };
 
   const canSubmit = Boolean(

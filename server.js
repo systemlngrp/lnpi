@@ -2819,6 +2819,8 @@ function entityPermissionKey(entity) {
       return "/production-processing";
     case "sample_requests":
       return "/samples";
+    case "boardline_qc_checks":
+      return "/quality/boardline-qc";
     case "dispatch_plans":
       return "/dispatch";
     case "loading_slips":
@@ -3535,6 +3537,58 @@ async function initDb(retries = 5) {
           \`autoEmail\` VARCHAR(255),
           \`followupApproval\` VARCHAR(255),
           \`active\` VARCHAR(10) DEFAULT 'Yes'
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`boardline_qc_checks\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`timestamp\` VARCHAR(255) NOT NULL,
+          \`jobNo\` VARCHAR(100) NOT NULL,
+          \`partyName\` VARCHAR(255) NOT NULL,
+          \`itemName\` TEXT NOT NULL,
+          \`checkNo\` VARCHAR(100) NOT NULL,
+          \`standard\` VARCHAR(255),
+          \`flapHeightFlapOperatorSide\` VARCHAR(255),
+          \`flapHeightFlapDriveSide\` VARCHAR(255),
+          \`cuttingSizeRequired\` DECIMAL(15,2),
+          \`cuttingSizeMm\` DECIMAL(15,2),
+          \`column19\` VARCHAR(255),
+          \`boardGsm\` DECIMAL(15,2),
+          \`typeOfFlute\` VARCHAR(100),
+          \`boardThickness\` DECIMAL(15,2),
+          \`moisture\` DECIMAL(15,2),
+          \`sheetWeightGrams\` DECIMAL(15,2),
+          \`column20\` VARCHAR(255),
+          \`boardlineRemarks\` TEXT,
+          \`qcPerson\` VARCHAR(255) NOT NULL,
+          \`whatsapp\` VARCHAR(50),
+          \`erp\` VARCHAR(100),
+          \`heightOd\` DECIMAL(15,2),
+          \`flap\` DECIMAL(15,2),
+          \`ply\` DECIMAL(15,2),
+          \`width\` DECIMAL(15,2),
+          \`length\` DECIMAL(15,2),
+          \`part\` VARCHAR(255),
+          \`flapMinDs\` DECIMAL(15,2),
+          \`flapMaxDs\` DECIMAL(15,2),
+          \`systemAutoCorrection1\` TEXT,
+          \`systemAutoCorrection2\` TEXT,
+          \`systemAutoCorrection3\` TEXT,
+          \`systemAutoCorrection4\` TEXT,
+          \`systemAutoCorrection5\` TEXT,
+          \`flapAchievedOs\` DECIMAL(15,2),
+          \`heightAchievedOs\` DECIMAL(15,2),
+          \`flapLAchievedOs\` DECIMAL(15,2),
+          \`flapAchievedDs\` DECIMAL(15,2),
+          \`heightAchievedDs\` DECIMAL(15,2),
+          \`flapLAchievedDs\` DECIMAL(15,2),
+          \`previousCustomerComplaintWarning\` TEXT,
+          \`photo\` TEXT,
+          \`printingArtwork\` TEXT,
+          \`planQty\` DECIMAL(15,2),
+          \`samplingPlanQty\` DECIMAL(15,2),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255)
         )
       `);
       try {
@@ -6759,7 +6813,7 @@ app.get("/api/truck-status-logs", async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "expense_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "fixed_daily_expenses", "audit_dashboard_snapshots", "physical_stock_sessions", "reel_stock_taker_logs"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "expense_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "boardline_qc_checks", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "fixed_daily_expenses", "audit_dashboard_snapshots", "physical_stock_sessions", "reel_stock_taker_logs"];
 app.get("/api/tally-sync-debug", (req, res) => {
   const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();
   return res.json({
