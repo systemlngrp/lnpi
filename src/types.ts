@@ -1188,11 +1188,15 @@ export interface AuditDashboardSnapshot {
   manufacturingValueTally?: number;
   saleValueTally: number;
   debitNoteTally: number;
+  npdStockValueTally?: number;
+  reelStockValueTally?: number;
   invoiceCountTally?: number;
   consumptionCountTally?: number;
   manufacturingCountTally?: number;
   saleCountTally?: number;
   debitNoteCountTally?: number;
+  npdStockCountTally?: number;
+  reelStockCountTally?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

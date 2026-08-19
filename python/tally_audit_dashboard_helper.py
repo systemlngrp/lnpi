@@ -138,18 +138,22 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
         round_money(float(values.get("manufacturingValueTally") or 0)),
         round_money(float(values.get("saleValueTally") or 0)),
         round_money(float(values.get("debitNoteTally") or 0)),
+        round_money(float(values.get("npdStockValueTally") or 0)),
+        round_money(float(values.get("reelStockValueTally") or 0)),
         get_voucher_count(values, "Purchase"),
         get_voucher_count(values, "Consumption Journal"),
         get_voucher_count(values, "Manufacturing Journal"),
         get_voucher_count(values, "Sales"),
         get_voucher_count(values, "Debit Note"),
+        int(values.get("npdStockCountTally") or 0),
+        int(values.get("reelStockCountTally") or 0),
         "Tally Audit Helper",
         timestamp,
     )
     sql = """
         INSERT INTO audit_dashboard_snapshots
-          (id, dateFrom, dateTo, invoiceValueTally, consumptionValueTally, manufacturingValueTally, saleValueTally, debitNoteTally, invoiceCountTally, consumptionCountTally, manufacturingCountTally, saleCountTally, debitNoteCountTally, updatedBy, updateTimestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          (id, dateFrom, dateTo, invoiceValueTally, consumptionValueTally, manufacturingValueTally, saleValueTally, debitNoteTally, npdStockValueTally, reelStockValueTally, invoiceCountTally, consumptionCountTally, manufacturingCountTally, saleCountTally, debitNoteCountTally, npdStockCountTally, reelStockCountTally, updatedBy, updateTimestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
           dateFrom = VALUES(dateFrom),
           dateTo = VALUES(dateTo),
@@ -158,11 +162,15 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
           manufacturingValueTally = VALUES(manufacturingValueTally),
           saleValueTally = VALUES(saleValueTally),
           debitNoteTally = VALUES(debitNoteTally),
+          npdStockValueTally = VALUES(npdStockValueTally),
+          reelStockValueTally = VALUES(reelStockValueTally),
           invoiceCountTally = VALUES(invoiceCountTally),
           consumptionCountTally = VALUES(consumptionCountTally),
           manufacturingCountTally = VALUES(manufacturingCountTally),
           saleCountTally = VALUES(saleCountTally),
           debitNoteCountTally = VALUES(debitNoteCountTally),
+          npdStockCountTally = VALUES(npdStockCountTally),
+          reelStockCountTally = VALUES(reelStockCountTally),
           updatedBy = VALUES(updatedBy),
           updateTimestamp = VALUES(updateTimestamp)
     """
