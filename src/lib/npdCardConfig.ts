@@ -9,6 +9,8 @@ export const NPD_COLUMNS: NpdColumn[] = [
   { key: "production", label: "Production" },
   { key: "invoiced", label: "Invoiced" },
   { key: "balance", label: "Balance" },
+  { key: "tallyStock", label: "Tally Stock" },
+  { key: "tallyTimestamp", label: "Tally Timestamp" },
   { key: "stockValue", label: "Value" },
   { key: "erp", label: "ERP" },
   { key: "rate", label: "Last Approved Order Rate" },

@@ -458,6 +458,8 @@ const NPD_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
   { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" },
+  { column: "tallyStock", type: "DECIMAL(15,2) NULL" },
+  { column: "tallyTimestamp", type: "VARCHAR(255) NULL" },
 ];
 
 const PHP_ITEM_MASTER_SCHEMA_COLUMNS: Array<{ column: string; type: string }> = [
