@@ -100,6 +100,10 @@ export interface Item {
   artwork?: string;
   spec?: string;
 
+  // Tally sync fields (populated by tally_npd_stock_sync.py)
+  tallyStock?: number | null;
+  tallyTimestamp?: string | null;
+
   updatedBy?: string;
   updateTimestamp?: string;
 }

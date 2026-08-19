@@ -30,6 +30,7 @@ type AuditMetricKey =
   | "saleValue"
   | "debitNote"
   | "npdStockValue"
+  | "npdStockQty"
   | "reelStockValue";
 
 type AuditMetric = {
@@ -49,6 +50,7 @@ type TallyValues = {
   saleValueTally: number;
   debitNoteTally: number;
   npdStockValueTally: number;
+  npdStockQtyTally: number;
   reelStockValueTally: number;
   invoiceCountTally: number;
   consumptionCountTally: number;
@@ -56,6 +58,7 @@ type TallyValues = {
   saleCountTally: number;
   debitNoteCountTally: number;
   npdStockCountTally: number;
+  npdStockQtyCountTally: number;
   reelStockCountTally: number;
 };
 
@@ -126,6 +129,8 @@ function getSnapshotValues(snapshot?: AuditDashboardSnapshot): TallyValues {
     saleValueTally: roundMoney(Number(snapshot?.saleValueTally || 0)),
     debitNoteTally: roundMoney(Number(snapshot?.debitNoteTally || 0)),
     npdStockValueTally: roundMoney(Number(snapshot?.npdStockValueTally || 0)),
+    // npdStockQty is computed live from npdItems, not from snapshot
+    npdStockQtyTally: 0,
     reelStockValueTally: roundMoney(Number(snapshot?.reelStockValueTally || 0)),
     invoiceCountTally: Number(snapshot?.invoiceCountTally || 0),
     consumptionCountTally: Number(snapshot?.consumptionCountTally || 0),
@@ -133,6 +138,7 @@ function getSnapshotValues(snapshot?: AuditDashboardSnapshot): TallyValues {
     saleCountTally: Number(snapshot?.saleCountTally || 0),
     debitNoteCountTally: Number(snapshot?.debitNoteCountTally || 0),
     npdStockCountTally: Number(snapshot?.npdStockCountTally || 0),
+    npdStockQtyCountTally: 0,
     reelStockCountTally: Number(snapshot?.reelStockCountTally || 0),
   };
 }
@@ -262,6 +268,17 @@ export function AuditDashboard() {
     );
     const npdStockCount = activeNpdItems.length;
 
+    // NPD Stock Qty: compare Tally stock qty vs App balance qty per item
+    const npdItemsWithTallyStock = npdItems.filter((item) => item.tallyStock != null);
+    const npdStockQtyTally = roundMoney(
+      npdItemsWithTallyStock.reduce((sum, item) => sum + Number(item.tallyStock || 0), 0)
+    );
+    const npdStockQtyCountTally = npdItemsWithTallyStock.length;
+    const npdStockQtyApp = roundMoney(
+      npdItems.reduce((sum, item) => sum + Number(item.balance || 0), 0)
+    );
+    const npdStockQtyCountApp = npdItems.filter((item) => Number(item.balance || 0) > 0).length;
+
     const reelStockRows = buildReelStockRows({
       materials,
       materialIn,
@@ -295,6 +312,10 @@ export function AuditDashboard() {
       debitNoteCount: tallyPostedDebitNotes.filter((entry) => roundMoney(Number(entry.debitNoteAmount || 0)) !== 0).length,
       npdStockValue,
       npdStockCount,
+      npdStockQtyTally,
+      npdStockQtyCountTally,
+      npdStockQtyApp,
+      npdStockQtyCountApp,
       reelStockValue,
       reelStockCount,
     };
@@ -308,6 +329,7 @@ export function AuditDashboard() {
       { key: "saleValue", label: "Sale Value", appValue: appValues.saleValue, tallyValue: tallyValues.saleValueTally, appCount: appValues.saleCount, tallyCount: tallyValues.saleCountTally },
       { key: "debitNote", label: "Debit Note", appValue: appValues.debitNote, tallyValue: tallyValues.debitNoteTally, appCount: appValues.debitNoteCount, tallyCount: tallyValues.debitNoteCountTally },
       { key: "npdStockValue", label: "NPD Stock Valuation", appValue: appValues.npdStockValue, tallyValue: tallyValues.npdStockValueTally, appCount: appValues.npdStockCount, tallyCount: tallyValues.npdStockCountTally },
+      { key: "npdStockQty", label: "NPD Stock (Qty)", appValue: appValues.npdStockQtyApp, tallyValue: appValues.npdStockQtyTally, appCount: appValues.npdStockQtyCountApp, tallyCount: appValues.npdStockQtyCountTally },
       { key: "reelStockValue", label: "Reel Stock Valuation", appValue: appValues.reelStockValue, tallyValue: tallyValues.reelStockValueTally, appCount: appValues.reelStockCount, tallyCount: tallyValues.reelStockCountTally },
     ];
 
