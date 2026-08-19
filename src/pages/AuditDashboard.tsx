@@ -413,7 +413,9 @@ export function AuditDashboard() {
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
           <span>NPD Item Stock Breakdown (Tally Stock vs App Balance)</span>
-          <span className="text-[10px] text-slate-300 font-normal">Total Items: {npdItems.length}</span>
+          <span className="text-[10px] text-slate-300 font-normal">
+            Showing Active Stock Items ({npdItems.filter((i) => Number(i.tallyStock || 0) > 0 || Number(i.balance || 0) > 0).length})
+          </span>
         </div>
         <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
@@ -427,39 +429,41 @@ export function AuditDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-900 bg-white">
-              {npdItems.map((item, index) => {
-                const appStock = roundMoney(Number(item.balance || 0));
-                const tallyStock = item.tallyStock != null ? roundMoney(Number(item.tallyStock)) : null;
-                const diff = tallyStock !== null ? roundMoney(tallyStock - appStock) : null;
-                const isMismatch = diff !== null && roundMoney(diff) !== 0;
+              {npdItems
+                .filter((item) => Number(item.tallyStock || 0) > 0 || Number(item.balance || 0) > 0)
+                .map((item, index) => {
+                  const appStock = roundMoney(Number(item.balance || 0));
+                  const tallyStock = item.tallyStock != null ? roundMoney(Number(item.tallyStock)) : null;
+                  const diff = tallyStock !== null ? roundMoney(tallyStock - appStock) : null;
+                  const isMismatch = diff !== null && roundMoney(diff) !== 0;
 
-                let statusLabel = "MATCHED";
-                let statusStyle = "border-emerald-800 bg-emerald-50 text-emerald-700";
+                  let statusLabel = "MATCHED";
+                  let statusStyle = "border-emerald-800 bg-emerald-50 text-emerald-700";
 
-                if (tallyStock === null) {
-                  statusLabel = "NOT IN TALLY";
-                  statusStyle = "border-slate-400 bg-slate-100 text-slate-600";
-                } else if (isMismatch) {
-                  statusLabel = "DIFFERENCE";
-                  statusStyle = "border-red-800 bg-red-50 text-red-700";
-                }
+                  if (tallyStock === null) {
+                    statusLabel = "NOT IN TALLY";
+                    statusStyle = "border-slate-400 bg-slate-100 text-slate-600";
+                  } else if (isMismatch) {
+                    statusLabel = "DIFFERENCE";
+                    statusStyle = "border-red-800 bg-red-50 text-red-700";
+                  }
 
-                return (
-                  <tr key={item.id || index} className={cn("divide-x divide-slate-900", isMismatch ? "bg-red-50/50" : index % 2 === 0 ? "bg-white" : "bg-slate-50")}>
-                    <td className="px-3 py-2 text-xs font-bold text-slate-900">{item.name}</td>
-                    <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(appStock)}</td>
-                    <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{tallyStock !== null ? formatMoney(tallyStock) : "-"}</td>
-                    <td className={cn("px-3 py-2 text-right text-xs font-black", isMismatch ? "text-red-700" : "text-emerald-700")}>
-                      {diff !== null ? formatMoney(diff) : "-"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase", statusStyle)}>
-                        {statusLabel}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr key={item.id || index} className={cn("divide-x divide-slate-900", isMismatch ? "bg-red-50/50" : index % 2 === 0 ? "bg-white" : "bg-slate-50")}>
+                      <td className="px-3 py-2 text-xs font-bold text-slate-900">{item.name}</td>
+                      <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(appStock)}</td>
+                      <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{tallyStock !== null ? formatMoney(tallyStock) : "-"}</td>
+                      <td className={cn("px-3 py-2 text-right text-xs font-black", isMismatch ? "text-red-700" : "text-emerald-700")}>
+                        {diff !== null ? formatMoney(diff) : "-"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase", statusStyle)}>
+                          {statusLabel}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
