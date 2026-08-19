@@ -180,8 +180,8 @@ def sync_and_compare(stocks: dict):
     print(f"  {'ITEM NAME':<{col_w}} {'APP QTY (Balance)':>18} {'TALLY STOCK':>13} {'DIFFERENCE':>12} {'STATUS':>12}")
     print("-" * (col_w + 60))
 
-    matched_rows = [r for r in comparison_rows if r[4] != "NOT IN TALLY" and ((r[2] or 0) > 0 or (r[1] or 0) > 0)]
-    unmatched_rows = [r for r in comparison_rows if r[4] == "NOT IN TALLY" and (r[1] or 0) > 0]
+    matched_rows = [r for r in comparison_rows if r[4] != "NOT IN TALLY" and r[2] is not None and float(r[2]) > 0]
+    unmatched_rows = []
 
     # Sort: DIFF items first, then MATCH, then NOT IN TALLY
     matched_rows.sort(key=lambda r: (r[4] == "MATCH", r[0]))

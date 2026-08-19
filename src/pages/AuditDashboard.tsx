@@ -414,7 +414,7 @@ export function AuditDashboard() {
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
           <span>NPD Item Stock Breakdown (Tally Stock vs App Balance)</span>
           <span className="text-[10px] text-slate-300 font-normal">
-            Showing Active Stock Items ({npdItems.filter((i) => Number(i.tallyStock || 0) > 0 || Number(i.balance || 0) > 0).length})
+            Showing Items with Tally Stock ({npdItems.filter((i) => i.tallyStock != null && Number(i.tallyStock) > 0).length})
           </span>
         </div>
         <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
@@ -430,7 +430,7 @@ export function AuditDashboard() {
             </thead>
             <tbody className="divide-y divide-slate-900 bg-white">
               {npdItems
-                .filter((item) => Number(item.tallyStock || 0) > 0 || Number(item.balance || 0) > 0)
+                .filter((item) => item.tallyStock != null && Number(item.tallyStock) > 0)
                 .map((item, index) => {
                   const appStock = roundMoney(Number(item.balance || 0));
                   const tallyStock = item.tallyStock != null ? roundMoney(Number(item.tallyStock)) : null;
