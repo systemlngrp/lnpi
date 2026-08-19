@@ -120,10 +120,10 @@ def sync_and_compare(stocks: dict):
         print(f"  ERROR: Cannot connect to database: {e}")
         return
 
-    # Fetch itemName + balance (app qty) for all active NPD items
+    # Fetch itemName + balance (app qty) for all NPD items
     try:
         cursor.execute(
-            "SELECT id, itemName, COALESCE(balance, 0) as balance FROM npd WHERE syncStatus = 'active'"
+            "SELECT id, itemName, COALESCE(balance, 0) as balance FROM npd"
         )
         npd_items = cursor.fetchall()
     except Exception as e:
@@ -138,9 +138,9 @@ def sync_and_compare(stocks: dict):
     matched_count = 0
     unmatched_count = 0
 
-    # Build comparison rows
+    # Batch update database using executemany (batches of 100)
+    update_data = []
     comparison_rows = []
-
     for npd_id, item_name, app_balance in npd_items:
         normalized_name = (item_name or "").strip().lower()
         app_qty = float(app_balance or 0)
@@ -148,23 +148,26 @@ def sync_and_compare(stocks: dict):
         if normalized_name in stocks:
             tally_qty = stocks[normalized_name]
             matched_count += 1
-            # Update DB
-            try:
-                cursor.execute(
-                    "UPDATE npd SET tallyStock = %s, tallyTimestamp = %s WHERE id = %s",
-                    (tally_qty, now_str, npd_id)
-                )
-                updated_count += 1
-            except Exception as e:
-                print(f"  WARN: Could not update {item_name}: {e}")
-
+            update_data.append((tally_qty, now_str, npd_id))
             diff = tally_qty - app_qty
             status = "MATCH" if abs(diff) < 0.01 else "DIFF"
             comparison_rows.append((item_name, app_qty, tally_qty, diff, status))
         else:
             unmatched_count += 1
-            # Not found in Tally — still include in report
             comparison_rows.append((item_name, app_qty, None, None, "NOT IN TALLY"))
+
+    # Execute bulk update in batches of 100
+    batch_size = 100
+    for i in range(0, len(update_data), batch_size):
+        batch = update_data[i:i + batch_size]
+        try:
+            cursor.executemany(
+                "UPDATE npd SET tallyStock = %s, tallyTimestamp = %s WHERE id = %s",
+                batch
+            )
+            updated_count += len(batch)
+        except Exception as e:
+            print(f"  WARN: Batch update error from index {i}: {e}")
 
     conn.commit()
     cursor.close()

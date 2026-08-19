@@ -47,6 +47,7 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.xml
 
 # Python virtual environments
 venv/

@@ -412,9 +412,14 @@ export function AuditDashboard() {
 
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
-          <span>NPD Item Stock Breakdown (Tally Stock vs App Balance)</span>
+          <span>NPD Item Stock Mismatch Breakdown (Tally Stock vs App Balance)</span>
           <span className="text-[10px] text-slate-300 font-normal">
-            Showing Items with Tally Stock ({npdItems.filter((i) => i.tallyStock != null && Number(i.tallyStock) > 0).length})
+            Showing Mismatched Items ({npdItems.filter((item) => {
+              if (item.tallyStock == null) return false;
+              const appStock = roundMoney(Number(item.balance || 0));
+              const tallyStock = roundMoney(Number(item.tallyStock));
+              return roundMoney(tallyStock - appStock) !== 0;
+            }).length})
           </span>
         </div>
         <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
@@ -430,35 +435,26 @@ export function AuditDashboard() {
             </thead>
             <tbody className="divide-y divide-slate-900 bg-white">
               {npdItems
-                .filter((item) => item.tallyStock != null && Number(item.tallyStock) > 0)
+                .filter((item) => {
+                  if (item.tallyStock == null) return false;
+                  const appStock = roundMoney(Number(item.balance || 0));
+                  const tallyStock = roundMoney(Number(item.tallyStock));
+                  return roundMoney(tallyStock - appStock) !== 0;
+                })
                 .map((item, index) => {
                   const appStock = roundMoney(Number(item.balance || 0));
-                  const tallyStock = item.tallyStock != null ? roundMoney(Number(item.tallyStock)) : null;
-                  const diff = tallyStock !== null ? roundMoney(tallyStock - appStock) : null;
-                  const isMismatch = diff !== null && roundMoney(diff) !== 0;
-
-                  let statusLabel = "MATCHED";
-                  let statusStyle = "border-emerald-800 bg-emerald-50 text-emerald-700";
-
-                  if (tallyStock === null) {
-                    statusLabel = "NOT IN TALLY";
-                    statusStyle = "border-slate-400 bg-slate-100 text-slate-600";
-                  } else if (isMismatch) {
-                    statusLabel = "DIFFERENCE";
-                    statusStyle = "border-red-800 bg-red-50 text-red-700";
-                  }
+                  const tallyStock = roundMoney(Number(item.tallyStock));
+                  const diff = roundMoney(tallyStock - appStock);
 
                   return (
-                    <tr key={item.id || index} className={cn("divide-x divide-slate-900", isMismatch ? "bg-red-50/50" : index % 2 === 0 ? "bg-white" : "bg-slate-50")}>
+                    <tr key={item.id || index} className="divide-x divide-slate-900 bg-red-50/50">
                       <td className="px-3 py-2 text-xs font-bold text-slate-900">{item.name}</td>
                       <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(appStock)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{tallyStock !== null ? formatMoney(tallyStock) : "-"}</td>
-                      <td className={cn("px-3 py-2 text-right text-xs font-black", isMismatch ? "text-red-700" : "text-emerald-700")}>
-                        {diff !== null ? formatMoney(diff) : "-"}
-                      </td>
+                      <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{formatMoney(tallyStock)}</td>
+                      <td className="px-3 py-2 text-right text-xs font-black text-red-700">{formatMoney(diff)}</td>
                       <td className="px-3 py-2">
-                        <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase", statusStyle)}>
-                          {statusLabel}
+                        <span className="inline-flex rounded-full border border-red-800 bg-red-50 px-2 py-0.5 text-[9px] font-black uppercase text-red-700">
+                          DIFFERENCE
                         </span>
                       </td>
                     </tr>
