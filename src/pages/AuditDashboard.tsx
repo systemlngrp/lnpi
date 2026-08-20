@@ -64,6 +64,19 @@ type TallyValues = {
   reelStockQtyCountTally: number;
   reelStockCountTally: number;
 };
+type ReelMaterialMismatchRow = {
+  materialId: string;
+  erp: string;
+  itemName: string;
+  size: number;
+  gsm: number;
+  bf: number;
+  color: string;
+  appStock: number;
+  tallyStock: number | null;
+  difference: number | null;
+  status: "DIFFERENCE" | "NO TALLY STOCK";
+};
 
 function roundMoney(value: number) {
   return Number(Number(value || 0).toFixed(2));
@@ -356,6 +369,46 @@ export function AuditDashboard() {
   const differenceMetrics = metrics.filter((metric) => roundMoney(metric.difference) !== 0);
   const hasDifference = differenceMetrics.length > 0;
 
+  const reelMaterialMismatchRows = useMemo<ReelMaterialMismatchRow[]>(() => {
+    const reelStockRows = buildReelStockRows({
+      materials,
+      materialIn,
+      packingSlips,
+      issueReelLines,
+      returnReelLines,
+      suppliers,
+    });
+
+    return materials
+      .filter((material) => material.type === "Reel")
+      .map((material) => {
+        const materialRows = reelStockRows.filter((row) => row.materialId === material.id);
+        const appStock = roundMoney(materialRows.reduce((sum, row) => sum + Number(row.availableWeight || 0), 0));
+        const hasTallyStock = material.tallyStock != null;
+        const tallyStock = hasTallyStock ? roundMoney(Number(material.tallyStock || 0)) : null;
+        const difference = tallyStock == null ? null : roundMoney(tallyStock - appStock);
+
+        return {
+          materialId: material.id,
+          erp: String(material.erpCode || ""),
+          itemName: String(material.name || ""),
+          size: Number(material.size || 0),
+          gsm: Number(material.gsm || 0),
+          bf: Number(material.bf || 0),
+          color: String(material.color || ""),
+          appStock,
+          tallyStock,
+          difference,
+          status: tallyStock == null ? "NO TALLY STOCK" as const : "DIFFERENCE" as const,
+        };
+      })
+      .filter((row) => {
+        if (row.tallyStock == null) return row.appStock > 0;
+        return roundMoney(row.difference || 0) !== 0;
+      })
+      .sort((a, b) => a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf);
+  }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines, suppliers]);
+
   return (
     <div className="space-y-4">
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
@@ -477,6 +530,60 @@ export function AuditDashboard() {
                     </tr>
                   );
                 })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
+          <span>Reel Material Stock Mismatch Breakdown (Tally Stock vs App Available Weight)</span>
+          <span className="text-[10px] text-slate-300 font-normal">
+            Showing Mismatched Materials ({reelMaterialMismatchRows.length})
+          </span>
+        </div>
+        <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+          <table className="min-w-full border-collapse text-xs">
+            <thead className="bg-slate-100 sticky top-0 z-10">
+              <tr className="divide-x divide-slate-900 border-b-2 border-slate-900">
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">ERP</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Material Name</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Size</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">GSM</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">BF</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Color</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">App Stock</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Tally Stock</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Difference</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-900 bg-white">
+              {reelMaterialMismatchRows.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-6 py-8 text-center text-xs font-black uppercase tracking-wide text-emerald-700">
+                    No reel stock mismatch found.
+                  </td>
+                </tr>
+              ) : (
+                reelMaterialMismatchRows.map((row) => (
+                  <tr key={row.materialId} className="divide-x divide-slate-900 bg-red-50/50">
+                    <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.erp || "-"}</td>
+                    <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.itemName || "-"}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{row.size || "-"}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{row.gsm || "-"}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{row.bf || "-"}</td>
+                    <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.color || "-"}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(row.appStock)}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{row.tallyStock == null ? "-" : formatMoney(row.tallyStock)}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-red-700">{row.difference == null ? "-" : formatMoney(row.difference)}</td>
+                    <td className="px-3 py-2">
+                      <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase", row.status === "NO TALLY STOCK" ? "border-amber-800 bg-amber-50 text-amber-700" : "border-red-800 bg-red-50 text-red-700")}>
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
