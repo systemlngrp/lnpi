@@ -25,6 +25,8 @@ type ReelStockRow = {
   returned: number;
   netIssued: number;
   availableWeight: number;
+  tallyStock: number | null;
+  stockDifference: number | null;
   rate: number;
   valuation: number;
   noOfReels: number;
@@ -78,6 +80,8 @@ export function ErpWiseReelStockReport() {
         const availableWeight = Number(materialReelRows.reduce((sum, row) => sum + row.availableWeight, 0).toFixed(2));
         const valuation = Number(materialReelRows.reduce((sum, row) => sum + row.valuation, 0).toFixed(2));
         const noOfReels = materialReelRows.filter((row) => row.availableWeight > 0).length;
+        const tallyStock = material.tallyStock == null ? null : Number(Number(material.tallyStock || 0).toFixed(2));
+        const stockDifference = tallyStock == null ? null : Number((tallyStock - availableWeight).toFixed(2));
         const rate = availableWeight > 0 ? Number((valuation / availableWeight).toFixed(2)) : 0;
 
         return {
@@ -93,6 +97,8 @@ export function ErpWiseReelStockReport() {
           returned: Number(returned.toFixed(2)),
           netIssued,
           availableWeight,
+          tallyStock,
+          stockDifference,
           rate,
           valuation,
           noOfReels,
@@ -136,10 +142,12 @@ export function ErpWiseReelStockReport() {
           returned: acc.returned + row.returned,
           netIssued: acc.netIssued + row.netIssued,
           availableWeight: acc.availableWeight + row.availableWeight,
+          tallyStock: acc.tallyStock + Number(row.tallyStock || 0),
+          stockDifference: acc.stockDifference + Number(row.stockDifference || 0),
           valuation: acc.valuation + row.valuation,
           noOfReels: acc.noOfReels + row.noOfReels,
         }),
-        { openingStock: 0, receipts: 0, issued: 0, returned: 0, netIssued: 0, availableWeight: 0, valuation: 0, noOfReels: 0 }
+        { openingStock: 0, receipts: 0, issued: 0, returned: 0, netIssued: 0, availableWeight: 0, tallyStock: 0, stockDifference: 0, valuation: 0, noOfReels: 0 }
       ),
     [rows]
   );
@@ -166,6 +174,8 @@ export function ErpWiseReelStockReport() {
         Return: "-",
         "Net Issued": Number(formatQty(totals.netIssued)),
         "Available Weight": Number(formatQty(totals.availableWeight)),
+        "Tally Stock": Number(formatQty(totals.tallyStock)),
+        Difference: Number(formatQty(totals.stockDifference)),
         Rate: "-",
         VALUATION: Number(formatQty(totals.valuation)),
         "NO OF REELS": totals.noOfReels,
@@ -182,6 +192,8 @@ export function ErpWiseReelStockReport() {
         Return: Number(formatQty(row.returned)),
         "Net Issued": Number(formatQty(row.netIssued)),
         "Available Weight": Number(formatQty(row.availableWeight)),
+        "Tally Stock": row.tallyStock == null ? "" : Number(formatQty(row.tallyStock)),
+        Difference: row.stockDifference == null ? "" : Number(formatQty(row.stockDifference)),
         Rate: Number(formatQty(row.rate)),
         VALUATION: Number(formatQty(row.valuation)),
         "NO OF REELS": row.noOfReels,
@@ -258,7 +270,7 @@ export function ErpWiseReelStockReport() {
           <table className="w-full min-w-max border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-indigo-700 text-white">
-                {["ERP", "Item Name", "SIZE", "GSM", "BF", "Opening Stock", "Receipt", "Issued", "Return", "Net Issued", "Available Weight", "Rate", "VALUATION", "NO OF REELS"].map((heading) => (
+                {["ERP", "Item Name", "SIZE", "GSM", "BF", "Opening Stock", "Receipt", "Issued", "Return", "Net Issued", "Available Weight", "Tally Stock", "Difference", "Rate", "VALUATION", "NO OF REELS"].map((heading) => (
                   <th key={heading} className="bg-indigo-700 px-3 py-3 text-left text-xs font-black border-2 border-black whitespace-nowrap uppercase">
                     {heading}
                   </th>
@@ -273,6 +285,8 @@ export function ErpWiseReelStockReport() {
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">-</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">{formatQty(totals.netIssued)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-emerald-100 text-emerald-900">{formatQty(totals.availableWeight)}</th>
+                  <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-cyan-100 text-cyan-900">{formatQty(totals.tallyStock)}</th>
+                  <th className={`px-3 py-3 text-left text-sm font-black border-2 border-black ${Math.abs(totals.stockDifference) > 0.01 ? "bg-red-100 text-red-900" : "bg-emerald-100 text-emerald-900"}`}>{formatQty(totals.stockDifference)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-slate-100">-</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-purple-100 text-purple-900">{formatQty(totals.valuation)}</th>
                   <th className="px-3 py-3 text-left text-sm font-black border-2 border-black bg-amber-100 text-amber-900">{totals.noOfReels}</th>
@@ -282,7 +296,7 @@ export function ErpWiseReelStockReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
+                  <td colSpan={16} className="px-6 py-10 text-center text-black font-medium border-2 border-black">
                     No reel stock rows found.
                   </td>
                 </tr>
@@ -300,6 +314,8 @@ export function ErpWiseReelStockReport() {
                     <td className="px-3 py-3 text-cyan-900 text-sm border-2 border-black bg-cyan-50/50">{formatQty(row.returned)}</td>
                     <td className="px-3 py-3 text-slate-900 text-sm font-bold border-2 border-black bg-slate-50">{formatQty(row.netIssued)}</td>
                     <td className="px-3 py-3 text-emerald-900 text-sm font-bold border-2 border-black bg-emerald-50">{formatQty(row.availableWeight)}</td>
+                    <td className="px-3 py-3 text-cyan-900 text-sm font-bold border-2 border-black bg-cyan-50">{row.tallyStock == null ? "-" : formatQty(row.tallyStock)}</td>
+                    <td className={`px-3 py-3 text-sm font-bold border-2 border-black ${row.stockDifference == null ? "text-slate-500 bg-slate-50" : Math.abs(row.stockDifference) > 0.01 ? "text-red-800 bg-red-50" : "text-emerald-800 bg-emerald-50"}`}>{row.stockDifference == null ? "-" : formatQty(row.stockDifference)}</td>
                     <td className="px-3 py-3 text-black text-sm border-2 border-black">{formatQty(row.rate)}</td>
                     <td className="px-3 py-3 text-purple-900 text-sm font-bold border-2 border-black bg-purple-50">{formatQty(row.valuation)}</td>
                     <td className="px-3 py-3 text-amber-900 text-sm font-bold border-2 border-black bg-amber-50">{row.noOfReels}</td>

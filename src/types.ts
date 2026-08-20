@@ -28,6 +28,7 @@ export interface Material {
   openingValue?: number;
   remarks?: string;
   active?: "Yes" | "No";
+  tallyStock?: number | null;
   tallyTimestamp?: string;
   tallyMaterialId?: string;
   tallySyncRemark?: string;
@@ -1194,6 +1195,7 @@ export interface AuditDashboardSnapshot {
   debitNoteTally: number;
   npdStockValueTally?: number;
   reelStockValueTally?: number;
+  reelStockQtyTally?: number;
   invoiceCountTally?: number;
   consumptionCountTally?: number;
   manufacturingCountTally?: number;
@@ -1201,6 +1203,7 @@ export interface AuditDashboardSnapshot {
   debitNoteCountTally?: number;
   npdStockCountTally?: number;
   reelStockCountTally?: number;
+  reelStockQtyCountTally?: number;
   updatedBy?: string;
   updateTimestamp?: string;
 }

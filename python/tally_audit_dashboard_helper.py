@@ -118,6 +118,176 @@ def get_snapshot_id(date_from: str, date_to: str) -> str:
     return f"audit-{date_from or 'all'}-{date_to or 'all'}"
 
 
+
+
+def ensure_helper_columns(cursor: Any) -> None:
+    required_columns = {
+        "materials": {
+            "tallyStock": "DECIMAL(15,2) NULL",
+            "tallyTimestamp": "VARCHAR(255) NULL",
+            "tallySyncRemark": "TEXT",
+        },
+        "audit_dashboard_snapshots": {
+            "reelStockQtyTally": "DECIMAL(15,2) NOT NULL DEFAULT 0",
+            "reelStockQtyCountTally": "INT NOT NULL DEFAULT 0",
+        },
+    }
+    for table_name, columns in required_columns.items():
+        cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
+        existing = {str(row[0]) for row in cursor.fetchall()}
+        for column_name, column_type in columns.items():
+            if column_name not in existing:
+                cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` {column_type}")
+
+
+def normalize_stock_key(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+
+def parse_stock_quantity(value: Any) -> float:
+    text = str(value or "").strip()
+    if not text:
+        return 0.0
+    qty = parse_amount(text)
+    return -abs(qty) if "cr" in text.casefold() else qty
+
+
+def build_stock_item_collection_xml() -> str:
+    return """
+<ENVELOPE>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>LNPIReelStockItems</ID></HEADER>
+  <BODY><DESC>
+    <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
+    <TDL><TDLMESSAGE>
+      <COLLECTION NAME="LNPIReelStockItems">
+        <TYPE>StockItem</TYPE>
+        <FETCH>Name</FETCH>
+        <FETCH>PartNo</FETCH>
+        <FETCH>PartNumber</FETCH>
+        <FETCH>ClosingBalance</FETCH>
+        <FETCH>ClosingValue</FETCH>
+      </COLLECTION>
+    </TDLMESSAGE></TDL>
+  </DESC></BODY>
+</ENVELOPE>
+"""
+
+
+def parse_tally_stock_items(xml_text: str) -> list[dict[str, Any]]:
+    cleaned = clean_tally_xml(xml_text)
+    if not cleaned:
+        return []
+    tally_error = tally_response_error(cleaned)
+    if tally_error:
+        raise ValueError(f"Tally returned an error while fetching stock items: {tally_error}")
+    try:
+        root = ET.fromstring(cleaned)
+    except ET.ParseError as error:
+        preview = re.sub(r"\s+", " ", cleaned[:300]).strip()
+        raise ValueError(f"Unable to parse Tally stock-item XML: {error}. Response preview: {preview}") from error
+
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in root.iter():
+        tag = item.tag.split("}", 1)[-1].upper()
+        if tag != "STOCKITEM":
+            continue
+        name = str(item.get("NAME") or child_text(item, ("NAME",)) or "").strip()
+        if not name:
+            continue
+        part_no = child_text(item, ("PARTNO", "PARTNUMBER"))
+        closing_balance = child_text(item, ("CLOSINGBALANCE",))
+        closing_value = child_text(item, ("CLOSINGVALUE",))
+        key = normalize_stock_key(name)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            {
+                "name": name,
+                "partNo": part_no,
+                "closingBalance": parse_stock_quantity(closing_balance),
+                "closingValue": abs(parse_amount(closing_value)),
+            }
+        )
+    return rows
+
+
+def fetch_tally_stock_items(url: str) -> list[dict[str, Any]]:
+    with requests.Session() as session:
+        response_text = post_xml_to_url(session, url, build_stock_item_collection_xml())
+    rows = parse_tally_stock_items(response_text)
+    LOGGER.info("Fetched %s Tally stock item(s) from %s", len(rows), url)
+    return rows
+
+
+def match_tally_stock_item(material: dict[str, Any], tally_rows: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+    erp_code = str(material.get("erpCode") or "").strip()
+    material_name = str(material.get("name") or "").strip()
+    erp_key = normalize_stock_key(erp_code)
+    name_key = normalize_stock_key(material_name)
+
+    if erp_key:
+        for row in tally_rows:
+            if normalize_stock_key(row.get("partNo")) == erp_key:
+                return row, "part_no_equals_erp"
+        for row in tally_rows:
+            if normalize_stock_key(row.get("name")) == erp_key:
+                return row, "name_equals_erp"
+        for row in tally_rows:
+            if normalize_stock_key(row.get("name")).startswith(erp_key):
+                return row, "name_starts_with_erp"
+    if name_key:
+        for row in tally_rows:
+            if normalize_stock_key(row.get("name")) == name_key:
+                return row, "name_exact"
+    return None, "unmatched"
+
+
+def sync_reel_material_tally_stock(cursor: Any, tally_rows: list[dict[str, Any]], timestamp: str) -> dict[str, Any]:
+    cursor.execute("SELECT id, erpCode, name FROM materials WHERE type = 'Reel'")
+    materials = [
+        {"id": row[0], "erpCode": row[1], "name": row[2]}
+        for row in cursor.fetchall()
+    ]
+    matched_count = 0
+    total_qty = 0.0
+    total_value = 0.0
+    updates: list[tuple[Any, str, str, str]] = []
+
+    for material in materials:
+        match, match_rule = match_tally_stock_item(material, tally_rows)
+        if not match:
+            continue
+        qty = round_money(float(match.get("closingBalance") or 0))
+        value = round_money(float(match.get("closingValue") or 0))
+        matched_count += 1
+        total_qty += qty
+        total_value += value
+        remark = f"Matched Tally stock item '{match.get('name')}' by {match_rule}."
+        updates.append((qty, timestamp, remark, material["id"]))
+
+    if updates:
+        cursor.executemany(
+            "UPDATE materials SET tallyStock = %s, tallyTimestamp = %s, tallySyncRemark = %s WHERE id = %s",
+            updates,
+        )
+
+    LOGGER.info(
+        "Matched %s of %s reel material(s) to Tally stock items; qty=%.2f value=%.2f",
+        matched_count,
+        len(materials),
+        total_qty,
+        total_value,
+    )
+    return {
+        "reelStockQtyTally": round_money(total_qty),
+        "reelStockValueTally": round_money(total_value),
+        "reelStockQtyCountTally": matched_count,
+        "reelStockCountTally": matched_count,
+        "reelStockMaterialCountApp": len(materials),
+    }
+
 def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any]) -> dict[str, Any]:
     snapshot_id = get_snapshot_id(date_from, date_to)
     config, missing = get_db_config()
@@ -140,6 +310,7 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
         round_money(float(values.get("debitNoteTally") or 0)),
         round_money(float(values.get("npdStockValueTally") or 0)),
         round_money(float(values.get("reelStockValueTally") or 0)),
+        round_money(float(values.get("reelStockQtyTally") or 0)),
         get_voucher_count(values, "Purchase"),
         get_voucher_count(values, "Consumption Journal"),
         get_voucher_count(values, "Manufacturing Journal"),
@@ -147,13 +318,14 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
         get_voucher_count(values, "Debit Note"),
         int(values.get("npdStockCountTally") or 0),
         int(values.get("reelStockCountTally") or 0),
+        int(values.get("reelStockQtyCountTally") or 0),
         "Tally Audit Helper",
         timestamp,
     )
     sql = """
         INSERT INTO audit_dashboard_snapshots
-          (id, dateFrom, dateTo, invoiceValueTally, consumptionValueTally, manufacturingValueTally, saleValueTally, debitNoteTally, npdStockValueTally, reelStockValueTally, invoiceCountTally, consumptionCountTally, manufacturingCountTally, saleCountTally, debitNoteCountTally, npdStockCountTally, reelStockCountTally, updatedBy, updateTimestamp)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          (id, dateFrom, dateTo, invoiceValueTally, consumptionValueTally, manufacturingValueTally, saleValueTally, debitNoteTally, npdStockValueTally, reelStockValueTally, reelStockQtyTally, invoiceCountTally, consumptionCountTally, manufacturingCountTally, saleCountTally, debitNoteCountTally, npdStockCountTally, reelStockCountTally, reelStockQtyCountTally, updatedBy, updateTimestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
           dateFrom = VALUES(dateFrom),
           dateTo = VALUES(dateTo),
@@ -164,6 +336,7 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
           debitNoteTally = VALUES(debitNoteTally),
           npdStockValueTally = VALUES(npdStockValueTally),
           reelStockValueTally = VALUES(reelStockValueTally),
+          reelStockQtyTally = VALUES(reelStockQtyTally),
           invoiceCountTally = VALUES(invoiceCountTally),
           consumptionCountTally = VALUES(consumptionCountTally),
           manufacturingCountTally = VALUES(manufacturingCountTally),
@@ -171,6 +344,7 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
           debitNoteCountTally = VALUES(debitNoteCountTally),
           npdStockCountTally = VALUES(npdStockCountTally),
           reelStockCountTally = VALUES(reelStockCountTally),
+          reelStockQtyCountTally = VALUES(reelStockQtyCountTally),
           updatedBy = VALUES(updatedBy),
           updateTimestamp = VALUES(updateTimestamp)
     """
@@ -181,6 +355,33 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
         LOGGER.info("Persisting audit snapshot %s to MySQL %s", snapshot_id, safe_config)
         connection = mysql.connector.connect(**config)
         cursor = connection.cursor()
+        ensure_helper_columns(cursor)
+        tally_stock_items = values.get("_reelStockItems")
+        if isinstance(tally_stock_items, list):
+            values.update(sync_reel_material_tally_stock(cursor, tally_stock_items, timestamp))
+            params = (
+                snapshot_id,
+                date_from,
+                date_to,
+                round_money(float(values.get("invoiceValueTally") or 0)),
+                round_money(float(values.get("consumptionValueTally") or 0)),
+                round_money(float(values.get("manufacturingValueTally") or 0)),
+                round_money(float(values.get("saleValueTally") or 0)),
+                round_money(float(values.get("debitNoteTally") or 0)),
+                round_money(float(values.get("npdStockValueTally") or 0)),
+                round_money(float(values.get("reelStockValueTally") or 0)),
+                round_money(float(values.get("reelStockQtyTally") or 0)),
+                get_voucher_count(values, "Purchase"),
+                get_voucher_count(values, "Consumption Journal"),
+                get_voucher_count(values, "Manufacturing Journal"),
+                get_voucher_count(values, "Sales"),
+                get_voucher_count(values, "Debit Note"),
+                int(values.get("npdStockCountTally") or 0),
+                int(values.get("reelStockCountTally") or 0),
+                int(values.get("reelStockQtyCountTally") or 0),
+                "Tally Audit Helper",
+                timestamp,
+            )
         cursor.execute(sql, params)
         connection.commit()
         cursor.close()
@@ -442,6 +643,7 @@ def fetch_tally_values(date_from: str, date_to: str) -> dict[str, Any]:
                 "sourceUrl": url,
                 "fetchedAt": datetime.now().isoformat(timespec="seconds"),
                 "counts": counts,
+                "_reelStockItems": fetch_tally_stock_items(url),
             }
         except Exception as error:
             LOGGER.warning("Tally XML URL %s failed: %s", url, error)
@@ -547,7 +749,8 @@ class Handler(BaseHTTPRequestHandler):
                 LOGGER.info("Audit dashboard GET fetch request from %s for %s to %s", self.client_address[0], date_from, date_to)
                 result = fetch_tally_values(date_from, date_to)
                 db_result = persist_audit_snapshot(date_from, date_to, result)
-                self._send_json(200, {"ok": True, **result, **db_result})
+                public_result = {key: value for key, value in result.items() if not key.startswith("_")}
+                self._send_json(200, {"ok": True, **public_result, **db_result})
             except Exception as error:
                 LOGGER.exception("Audit dashboard GET fetch failed: %s", error)
                 self._send_json(status_for_error(error), {"ok": False, "error": public_error_message(error)})
@@ -564,7 +767,8 @@ class Handler(BaseHTTPRequestHandler):
             LOGGER.info("Audit dashboard fetch request from %s for %s to %s", self.client_address[0], date_from, date_to)
             result = fetch_tally_values(date_from, date_to)
             db_result = persist_audit_snapshot(date_from, date_to, result)
-            self._send_json(200, {"ok": True, **result, **db_result})
+            public_result = {key: value for key, value in result.items() if not key.startswith("_")}
+            self._send_json(200, {"ok": True, **public_result, **db_result})
         except Exception as error:
             LOGGER.exception("Audit dashboard fetch failed: %s", error)
             self._send_json(status_for_error(error), {"ok": False, "error": public_error_message(error)})

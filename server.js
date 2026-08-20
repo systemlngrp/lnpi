@@ -422,7 +422,9 @@ const NPD_SCHEMA_COLUMNS = [
   { column: "consumable", type: "VARCHAR(10) NULL" },
   { column: "syncSource", type: "VARCHAR(50) NULL" },
   { column: "syncStatus", type: "VARCHAR(20) DEFAULT 'active'" },
-  { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" }
+  { column: "openingQty", type: "DECIMAL(15,2) DEFAULT 0" },
+  { column: "tallyStock", type: "DECIMAL(15,2) NULL" },
+  { column: "tallyTimestamp", type: "VARCHAR(255) NULL" }
 ];
 const PHP_ITEM_MASTER_SCHEMA_COLUMNS = [
   ...[...new Set(Object.values(PHP_ITEM_MASTER_HEADER_MAP))].map((column) => ({
@@ -3139,6 +3141,7 @@ async function initDb(retries = 5) {
           \`openingValue\` DECIMAL(15,2),
           \`remarks\` TEXT,
           \`active\` VARCHAR(10) DEFAULT 'Yes',
+          \`tallyStock\` DECIMAL(15,2),
           \`tallyTimestamp\` VARCHAR(255),
           \`tallyMaterialId\` VARCHAR(255),
           \`tallySyncRemark\` TEXT,
@@ -4409,11 +4412,17 @@ async function initDb(retries = 5) {
           \`manufacturingValueTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`saleValueTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`debitNoteTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`npdStockValueTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`reelStockValueTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`reelStockQtyTally\` DECIMAL(15,2) NOT NULL DEFAULT 0,
           \`invoiceCountTally\` INT NOT NULL DEFAULT 0,
           \`consumptionCountTally\` INT NOT NULL DEFAULT 0,
           \`manufacturingCountTally\` INT NOT NULL DEFAULT 0,
           \`saleCountTally\` INT NOT NULL DEFAULT 0,
           \`debitNoteCountTally\` INT NOT NULL DEFAULT 0,
+          \`npdStockCountTally\` INT NOT NULL DEFAULT 0,
+          \`reelStockCountTally\` INT NOT NULL DEFAULT 0,
+          \`reelStockQtyCountTally\` INT NOT NULL DEFAULT 0,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
         )
@@ -4536,6 +4545,7 @@ async function initDb(retries = 5) {
         { table: "materials", column: "openingValue", type: "DECIMAL(15,2)" },
         { table: "materials", column: "remarks", type: "TEXT" },
         { table: "materials", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
+        { table: "materials", column: "tallyStock", type: "DECIMAL(15,2)" },
         { table: "materials", column: "tallyTimestamp", type: "VARCHAR(255)" },
         { table: "materials", column: "tallyMaterialId", type: "VARCHAR(255)" },
         { table: "materials", column: "tallySyncRemark", type: "TEXT" },
@@ -5267,11 +5277,17 @@ async function initDb(retries = 5) {
         { table: "audit_dashboard_snapshots", column: "manufacturingValueTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "saleValueTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "debitNoteTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "npdStockValueTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "reelStockValueTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "reelStockQtyTally", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "invoiceCountTally", type: "INT NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "consumptionCountTally", type: "INT NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "manufacturingCountTally", type: "INT NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "saleCountTally", type: "INT NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "debitNoteCountTally", type: "INT NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "npdStockCountTally", type: "INT NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "reelStockCountTally", type: "INT NOT NULL DEFAULT 0" },
+        { table: "audit_dashboard_snapshots", column: "reelStockQtyCountTally", type: "INT NOT NULL DEFAULT 0" },
         { table: "audit_dashboard_snapshots", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "audit_dashboard_snapshots", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "users", column: "role", type: "VARCHAR(20) NOT NULL DEFAULT 'Employee'" },
