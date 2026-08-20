@@ -127,6 +127,11 @@ def ensure_helper_columns(cursor: Any) -> None:
             "tallyTimestamp": "VARCHAR(255) NULL",
             "tallySyncRemark": "TEXT",
         },
+        "npd": {
+            "openingQty": "DECIMAL(15,2) DEFAULT 0",
+            "tallyStock": "DECIMAL(15,2) NULL",
+            "tallyTimestamp": "VARCHAR(255) NULL",
+        },
         "audit_dashboard_snapshots": {
             "reelStockQtyTally": "DECIMAL(15,2) NOT NULL DEFAULT 0",
             "reelStockQtyCountTally": "INT NOT NULL DEFAULT 0",
@@ -244,6 +249,67 @@ def match_tally_stock_item(material: dict[str, Any], tally_rows: list[dict[str, 
     return None, "unmatched"
 
 
+
+def match_tally_npd_item(npd_item: dict[str, Any], tally_rows: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+    erp_code = str(npd_item.get("erp") or "").strip()
+    item_name = str(npd_item.get("itemName") or "").strip()
+    erp_key = normalize_stock_key(erp_code)
+    name_key = normalize_stock_key(item_name)
+
+    if erp_key:
+        for row in tally_rows:
+            if normalize_stock_key(row.get("partNo")) == erp_key:
+                return row, "part_no_equals_erp"
+        for row in tally_rows:
+            if normalize_stock_key(row.get("name")) == erp_key:
+                return row, "name_equals_erp"
+
+    if name_key:
+        for row in tally_rows:
+            if normalize_stock_key(row.get("name")) == name_key:
+                return row, "name_exact"
+
+    return None, "unmatched"
+
+
+def sync_npd_tally_stock(cursor: Any, tally_rows: list[dict[str, Any]], timestamp: str) -> dict[str, Any]:
+    cursor.execute("SELECT id, erp, itemName FROM npd")
+    npd_items = [
+        {"id": row[0], "erp": row[1], "itemName": row[2]}
+        for row in cursor.fetchall()
+    ]
+    matched_count = 0
+    total_qty = 0.0
+    updates: list[tuple[Any, Any, str, str]] = []
+
+    for npd_item in npd_items:
+        match, _match_rule = match_tally_npd_item(npd_item, tally_rows)
+        if not match:
+            continue
+        qty = round_money(float(match.get("closingBalance") or 0))
+        matched_count += 1
+        total_qty += qty
+        updates.append((qty, qty, timestamp, npd_item["id"]))
+
+    if updates:
+        cursor.executemany(
+            "UPDATE npd SET tallyStock = %s, openingQty = %s, tallyTimestamp = %s WHERE id = %s",
+            updates,
+        )
+
+    LOGGER.info(
+        "Matched %s of %s NPD item(s) to Tally stock items; openingQty/tallyStock qty=%.2f",
+        matched_count,
+        len(npd_items),
+        total_qty,
+    )
+    return {
+        "npdStockQtyTally": round_money(total_qty),
+        "npdStockQtyCountTally": matched_count,
+        "npdStockMaterialCountApp": len(npd_items),
+    }
+
+
 def sync_reel_material_tally_stock(cursor: Any, tally_rows: list[dict[str, Any]], timestamp: str) -> dict[str, Any]:
     cursor.execute("SELECT id, erpCode, name FROM materials WHERE type = 'Reel'")
     materials = [
@@ -358,6 +424,7 @@ def persist_audit_snapshot(date_from: str, date_to: str, values: dict[str, Any])
         ensure_helper_columns(cursor)
         tally_stock_items = values.get("_reelStockItems")
         if isinstance(tally_stock_items, list):
+            values.update(sync_npd_tally_stock(cursor, tally_stock_items, timestamp))
             values.update(sync_reel_material_tally_stock(cursor, tally_stock_items, timestamp))
             params = (
                 snapshot_id,
