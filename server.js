@@ -1858,11 +1858,36 @@ async function fetchActiveNpdItems(db, options) {
       GROUP BY COALESCE(NULLIF(npdId, ''), itemId)
     ) p ON p.masterId COLLATE utf8mb4_unicode_ci = n.id COLLATE utf8mb4_unicode_ci
     LEFT JOIN (
-      SELECT
-        COALESCE(NULLIF(npdId, ''), itemId) AS masterId,
-        SUM(COALESCE(qty, 0)) AS invoiced
-      FROM \`invoice_line_items\`
-      GROUP BY COALESCE(NULLIF(npdId, ''), itemId)
+      SELECT masterId, SUM(invoiced) AS invoiced
+      FROM (
+        SELECT
+          jt.itemId COLLATE utf8mb4_unicode_ci AS masterId,
+          SUM(COALESCE(jt.loadedQty, 0)) AS invoiced
+        FROM \`loading_slips\` ls
+        JOIN JSON_TABLE(
+          ls.lines,
+          '$[*]' COLUMNS (
+            itemId VARCHAR(36) PATH '$.itemId',
+            loadedQty DECIMAL(15,2) PATH '$.loadedQty'
+          )
+        ) jt
+        WHERE COALESCE(NULLIF(ls.invoiceId, ''), '') <> ''
+          AND COALESCE(ls.status, 'Active') <> 'Cancelled'
+          AND COALESCE(NULLIF(jt.itemId, ''), '') <> ''
+        GROUP BY jt.itemId
+        UNION ALL
+        SELECT
+          COALESCE(NULLIF(ili.npdId, ''), ili.itemId) COLLATE utf8mb4_unicode_ci AS masterId,
+          SUM(COALESCE(ili.qty, 0)) AS invoiced
+        FROM \`invoice_line_items\` ili
+        LEFT JOIN \`loading_slips\` ls
+          ON ls.id = ili.loadingSlipId
+          AND COALESCE(NULLIF(ls.invoiceId, ''), '') <> ''
+          AND COALESCE(ls.status, 'Active') <> 'Cancelled'
+        WHERE ls.id IS NULL
+        GROUP BY COALESCE(NULLIF(ili.npdId, ''), ili.itemId)
+      ) billed
+      GROUP BY masterId
     ) inv ON inv.masterId COLLATE utf8mb4_unicode_ci = n.id COLLATE utf8mb4_unicode_ci
     ${whereSql}
     ${orderSql}
