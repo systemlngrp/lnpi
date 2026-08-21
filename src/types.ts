@@ -103,6 +103,10 @@ export interface Item {
 
   // Tally sync fields (populated by tally_npd_stock_sync.py)
   tallyStock?: number | null;
+  TallySalesQty?: number | null;
+  TallyMFJQty?: number | null;
+  tallySalesQty?: number | null;
+  tallyMFJQty?: number | null;
   tallyTimestamp?: string | null;
 
   updatedBy?: string;
