@@ -6,6 +6,7 @@ import { buildReelStockRows } from "../lib/reelStock";
 import type {
   AuditDashboardSnapshot,
   Invoice,
+  Item,
   Material,
   MaterialIn,
   MaterialInPackingSlip,
@@ -93,6 +94,10 @@ function firstNumber(...values: Array<number | string | null | undefined>) {
     if (Number.isFinite(parsed)) return parsed;
   }
   return 0;
+}
+
+function getBillingSalesQty(item: Item) {
+  return roundMoney(Number(item.invoiced || 0));
 }
 
 function formatCount(value: number) {
@@ -498,7 +503,7 @@ export function AuditDashboard() {
               const tallyStock = roundMoney(Number(item.tallyStock || 0));
               const mfjApp = roundMoney(Number(item.production || 0));
               const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
-              const salesApp = roundMoney(Number(item.invoiced || 0));
+              const salesApp = getBillingSalesQty(item);
               const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
               return (
                 roundMoney(tallyStock - appStock) !== 0 ||
@@ -531,7 +536,7 @@ export function AuditDashboard() {
                   const tallyStock = roundMoney(Number(item.tallyStock || 0));
                   const mfjApp = roundMoney(Number(item.production || 0));
                   const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
-                  const salesApp = roundMoney(Number(item.invoiced || 0));
+                  const salesApp = getBillingSalesQty(item);
                   const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
                   return (
                     roundMoney(tallyStock - appStock) !== 0 ||
@@ -543,7 +548,7 @@ export function AuditDashboard() {
                   const opening = roundMoney(Number(item.opening || 0));
                   const mfjApp = roundMoney(Number(item.production || 0));
                   const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
-                  const salesApp = roundMoney(Number(item.invoiced || 0));
+                  const salesApp = getBillingSalesQty(item);
                   const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
                   const mfjMismatch = roundMoney(mfgTally - mfjApp) !== 0;
                   const salesMismatch = roundMoney(salesTally - salesApp) !== 0;
