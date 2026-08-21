@@ -1861,20 +1861,24 @@ async function fetchActiveNpdItems(db, options) {
       SELECT masterId, SUM(invoiced) AS invoiced
       FROM (
         SELECT
-          jt.itemId COLLATE utf8mb4_unicode_ci AS masterId,
+          COALESCE(NULLIF(CONVERT(jt.npdId USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''), NULLIF(CONVERT(jt.itemId USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''), NULLIF(o.npdId, ''), o.itemId) COLLATE utf8mb4_unicode_ci AS masterId,
           SUM(COALESCE(jt.loadedQty, 0)) AS invoiced
         FROM \`loading_slips\` ls
         JOIN JSON_TABLE(
           ls.lines,
           '$[*]' COLUMNS (
             itemId VARCHAR(36) PATH '$.itemId',
+            npdId VARCHAR(36) PATH '$.npdId',
+            dispatchPlanId VARCHAR(36) PATH '$.dispatchPlanId',
             loadedQty DECIMAL(15,2) PATH '$.loadedQty'
           )
         ) jt
+        LEFT JOIN \`dispatch_plans\` dp ON dp.id COLLATE utf8mb4_unicode_ci = CONVERT(jt.dispatchPlanId USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        LEFT JOIN \`orders\` o ON o.id = dp.orderId
         WHERE COALESCE(NULLIF(ls.invoiceId, ''), '') <> ''
           AND COALESCE(ls.status, 'Active') <> 'Cancelled'
-          AND COALESCE(NULLIF(jt.itemId, ''), '') <> ''
-        GROUP BY jt.itemId
+          AND COALESCE(NULLIF(CONVERT(jt.npdId USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''), NULLIF(CONVERT(jt.itemId USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''), NULLIF(o.npdId, ''), o.itemId, '') <> ''
+        GROUP BY COALESCE(NULLIF(CONVERT(jt.npdId USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''), NULLIF(CONVERT(jt.itemId USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''), NULLIF(o.npdId, ''), o.itemId)
         UNION ALL
         SELECT
           COALESCE(NULLIF(ili.npdId, ''), ili.itemId) COLLATE utf8mb4_unicode_ci AS masterId,
