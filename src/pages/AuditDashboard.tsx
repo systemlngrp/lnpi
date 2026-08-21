@@ -531,6 +531,8 @@ export function AuditDashboard() {
                   const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
                   const salesApp = roundMoney(Number(item.invoiced || 0));
                   const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
+                  const mfjMismatch = roundMoney(mfgTally - mfjApp) !== 0;
+                  const salesMismatch = roundMoney(salesTally - salesApp) !== 0;
                   const appStock = roundMoney(Number(item.balance || 0));
                   const tallyStock = roundMoney(Number(item.tallyStock));
                   const diff = roundMoney(tallyStock - appStock);
@@ -539,10 +541,10 @@ export function AuditDashboard() {
                     <tr key={item.id || index} className="divide-x divide-slate-900 bg-red-50/50">
                       <td className="px-3 py-2 text-xs font-bold text-slate-900">{item.name}</td>
                       <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{formatMoney(opening)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(mfjApp)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{formatMoney(mfgTally)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(salesApp)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{formatMoney(salesTally)}</td>
+                      <td className={cn("px-3 py-2 text-right text-xs font-black text-indigo-800", mfjMismatch && "bg-red-100 text-red-800")}>{formatMoney(mfjApp)}</td>
+                      <td className={cn("px-3 py-2 text-right text-xs font-black text-slate-900", mfjMismatch && "bg-red-100 text-red-800")}>{formatMoney(mfgTally)}</td>
+                      <td className={cn("px-3 py-2 text-right text-xs font-black text-indigo-800", salesMismatch && "bg-red-100 text-red-800")}>{formatMoney(salesApp)}</td>
+                      <td className={cn("px-3 py-2 text-right text-xs font-black text-slate-900", salesMismatch && "bg-red-100 text-red-800")}>{formatMoney(salesTally)}</td>
                       <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(appStock)}</td>
                       <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{formatMoney(tallyStock)}</td>
                       <td className="px-3 py-2 text-right text-xs font-black text-red-700">{formatMoney(diff)}</td>
