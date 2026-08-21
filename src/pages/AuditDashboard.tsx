@@ -494,10 +494,17 @@ export function AuditDashboard() {
           <span>NPD Item Stock Mismatch Breakdown (Tally Stock vs App Balance)</span>
           <span className="text-[10px] text-slate-300 font-normal">
             Showing Mismatched Items ({npdItems.filter((item) => {
-              if (item.tallyStock == null) return false;
               const appStock = roundMoney(Number(item.balance || 0));
-              const tallyStock = roundMoney(Number(item.tallyStock));
-              return roundMoney(tallyStock - appStock) !== 0;
+              const tallyStock = roundMoney(Number(item.tallyStock || 0));
+              const mfjApp = roundMoney(Number(item.production || 0));
+              const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
+              const salesApp = roundMoney(Number(item.invoiced || 0));
+              const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
+              return (
+                roundMoney(tallyStock - appStock) !== 0 ||
+                roundMoney(mfgTally - mfjApp) !== 0 ||
+                roundMoney(salesTally - salesApp) !== 0
+              );
             }).length})
           </span>
         </div>
@@ -520,10 +527,17 @@ export function AuditDashboard() {
             <tbody className="divide-y divide-slate-900 bg-white">
               {npdItems
                 .filter((item) => {
-                  if (item.tallyStock == null) return false;
                   const appStock = roundMoney(Number(item.balance || 0));
-                  const tallyStock = roundMoney(Number(item.tallyStock));
-                  return roundMoney(tallyStock - appStock) !== 0;
+                  const tallyStock = roundMoney(Number(item.tallyStock || 0));
+                  const mfjApp = roundMoney(Number(item.production || 0));
+                  const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
+                  const salesApp = roundMoney(Number(item.invoiced || 0));
+                  const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
+                  return (
+                    roundMoney(tallyStock - appStock) !== 0 ||
+                    roundMoney(mfgTally - mfjApp) !== 0 ||
+                    roundMoney(salesTally - salesApp) !== 0
+                  );
                 })
                 .map((item, index) => {
                   const opening = roundMoney(Number(item.opening || 0));
@@ -534,7 +548,7 @@ export function AuditDashboard() {
                   const mfjMismatch = roundMoney(mfgTally - mfjApp) !== 0;
                   const salesMismatch = roundMoney(salesTally - salesApp) !== 0;
                   const appStock = roundMoney(Number(item.balance || 0));
-                  const tallyStock = roundMoney(Number(item.tallyStock));
+                  const tallyStock = roundMoney(Number(item.tallyStock || 0));
                   const diff = roundMoney(tallyStock - appStock);
 
                   return (
