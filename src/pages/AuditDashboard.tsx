@@ -104,7 +104,14 @@ function normalizeAuditKey(value: unknown) {
   return String(value || "").trim();
 }
 
-function getAuditMfjAppQty(item: Item, productions: Production[]) {
+function getAuditMfjAppQty(
+  item: Item,
+  productions: Production[],
+  materialIssues: MaterialIssue[],
+  materialIssueLines: MaterialIssueLine[],
+  materialReturns: MaterialReturn[],
+  materialReturnLines: MaterialReturnLine[]
+) {
   const itemIds = new Set(
     [item.id, (item as any).npdId, (item as any).itemId]
       .map((value) => normalizeAuditKey(value))
@@ -112,22 +119,50 @@ function getAuditMfjAppQty(item: Item, productions: Production[]) {
   );
   const itemErp = normalizeAuditKey(item.erp);
   const countedProductionIds = new Set<string>();
+  const activeProductions = productions.filter((production) => !production.cancelTimestamp && production.status !== "Cancelled");
+  const productionIdSet = new Set(activeProductions.map((production) => normalizeAuditKey(production.id)).filter(Boolean));
+  const productionJobNoSet = new Set(activeProductions.map((production) => normalizeAuditKey(production.transactionNo)).filter(Boolean));
 
-  return roundMoney(
-    productions.reduce((sum, production) => {
-      if (production.cancelTimestamp || production.status === "Cancelled") return sum;
+  const productionQty = activeProductions.reduce((sum, production) => {
+    const productionId = normalizeAuditKey(production.id);
+    if (productionId && countedProductionIds.has(productionId)) return sum;
 
-      const productionId = normalizeAuditKey(production.id);
-      if (productionId && countedProductionIds.has(productionId)) return sum;
+    const directItemMatch = [production.npdId, production.itemId].some((value) => itemIds.has(normalizeAuditKey(value)));
+    const masterErpMatch = Boolean(itemErp) && normalizeAuditKey(production.masterErp) === itemErp;
+    if (!directItemMatch && !masterErpMatch) return sum;
 
-      const directItemMatch = [production.npdId, production.itemId].some((value) => itemIds.has(normalizeAuditKey(value)));
-      const masterErpMatch = Boolean(itemErp) && normalizeAuditKey(production.masterErp) === itemErp;
-      if (!directItemMatch && !masterErpMatch) return sum;
+    if (productionId) countedProductionIds.add(productionId);
+    return sum + Number(production.prodFromFFG || 0);
+  }, 0);
 
-      if (productionId) countedProductionIds.add(productionId);
-      return sum + Number(production.prodFromFFG || 0);
-    }, 0)
+  if (roundMoney(productionQty) !== 0) return roundMoney(productionQty);
+
+  const isManufacturingEntry = (entry: { productionId?: string; jobNo?: string }) => {
+    const productionId = normalizeAuditKey(entry.productionId);
+    if (productionId) return productionIdSet.has(productionId);
+    const jobNo = normalizeAuditKey(entry.jobNo);
+    return jobNo ? productionJobNoSet.has(jobNo) : false;
+  };
+  const issueIdSet = new Set(
+    materialIssues
+      .filter((issue) => !isCancelledIssue(issue) && !isNotApplicableIssue(issue) && isManufacturingEntry(issue))
+      .map((issue) => normalizeAuditKey(issue.id))
+      .filter(Boolean)
   );
+  const returnIdSet = new Set(
+    materialReturns
+      .filter(isManufacturingEntry)
+      .map((entry) => normalizeAuditKey(entry.id))
+      .filter(Boolean)
+  );
+  const issuedQty = materialIssueLines
+    .filter((line) => issueIdSet.has(normalizeAuditKey(line.materialIssueId)) && itemIds.has(normalizeAuditKey(line.materialId)))
+    .reduce((sum, line) => sum + Number(line.qty || 0), 0);
+  const returnedQty = materialReturnLines
+    .filter((line) => returnIdSet.has(normalizeAuditKey(line.materialReturnId)) && itemIds.has(normalizeAuditKey(line.materialId)))
+    .reduce((sum, line) => sum + Number(line.qty || 0), 0);
+
+  return roundMoney(issuedQty - returnedQty);
 }
 
 function formatCount(value: number) {
@@ -531,7 +566,7 @@ export function AuditDashboard() {
             Showing Mismatched Items ({npdItems.filter((item) => {
               const appStock = roundMoney(Number(item.balance || 0));
               const tallyStock = roundMoney(Number(item.tallyStock || 0));
-              const mfjApp = getAuditMfjAppQty(item, productions);
+              const mfjApp = getAuditMfjAppQty(item, productions, materialIssues, materialIssueLines, materialReturns, materialReturnLines);
               const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
               const salesApp = getBillingSalesQty(item);
               const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
@@ -564,7 +599,7 @@ export function AuditDashboard() {
                 .filter((item) => {
                   const appStock = roundMoney(Number(item.balance || 0));
                   const tallyStock = roundMoney(Number(item.tallyStock || 0));
-                  const mfjApp = getAuditMfjAppQty(item, productions);
+                  const mfjApp = getAuditMfjAppQty(item, productions, materialIssues, materialIssueLines, materialReturns, materialReturnLines);
                   const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
                   const salesApp = getBillingSalesQty(item);
                   const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
@@ -576,7 +611,7 @@ export function AuditDashboard() {
                 })
                 .map((item, index) => {
                   const opening = roundMoney(Number(item.opening || 0));
-                  const mfjApp = getAuditMfjAppQty(item, productions);
+                  const mfjApp = getAuditMfjAppQty(item, productions, materialIssues, materialIssueLines, materialReturns, materialReturnLines);
                   const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
                   const salesApp = getBillingSalesQty(item);
                   const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
