@@ -100,6 +100,36 @@ function getBillingSalesQty(item: Item) {
   return roundMoney(Number(item.invoiced || 0));
 }
 
+function normalizeAuditKey(value: unknown) {
+  return String(value || "").trim();
+}
+
+function getAuditMfjAppQty(item: Item, productions: Production[]) {
+  const itemIds = new Set(
+    [item.id, (item as any).npdId, (item as any).itemId]
+      .map((value) => normalizeAuditKey(value))
+      .filter(Boolean)
+  );
+  const itemErp = normalizeAuditKey(item.erp);
+  const countedProductionIds = new Set<string>();
+
+  return roundMoney(
+    productions.reduce((sum, production) => {
+      if (production.cancelTimestamp || production.status === "Cancelled") return sum;
+
+      const productionId = normalizeAuditKey(production.id);
+      if (productionId && countedProductionIds.has(productionId)) return sum;
+
+      const directItemMatch = [production.npdId, production.itemId].some((value) => itemIds.has(normalizeAuditKey(value)));
+      const masterErpMatch = Boolean(itemErp) && normalizeAuditKey(production.masterErp) === itemErp;
+      if (!directItemMatch && !masterErpMatch) return sum;
+
+      if (productionId) countedProductionIds.add(productionId);
+      return sum + Number(production.prodFromFFG || 0);
+    }, 0)
+  );
+}
+
 function formatCount(value: number) {
   return Number(value || 0).toLocaleString("en-IN");
 }
@@ -501,7 +531,7 @@ export function AuditDashboard() {
             Showing Mismatched Items ({npdItems.filter((item) => {
               const appStock = roundMoney(Number(item.balance || 0));
               const tallyStock = roundMoney(Number(item.tallyStock || 0));
-              const mfjApp = roundMoney(Number(item.production || 0));
+              const mfjApp = getAuditMfjAppQty(item, productions);
               const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
               const salesApp = getBillingSalesQty(item);
               const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
@@ -534,7 +564,7 @@ export function AuditDashboard() {
                 .filter((item) => {
                   const appStock = roundMoney(Number(item.balance || 0));
                   const tallyStock = roundMoney(Number(item.tallyStock || 0));
-                  const mfjApp = roundMoney(Number(item.production || 0));
+                  const mfjApp = getAuditMfjAppQty(item, productions);
                   const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
                   const salesApp = getBillingSalesQty(item);
                   const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
@@ -546,7 +576,7 @@ export function AuditDashboard() {
                 })
                 .map((item, index) => {
                   const opening = roundMoney(Number(item.opening || 0));
-                  const mfjApp = roundMoney(Number(item.production || 0));
+                  const mfjApp = getAuditMfjAppQty(item, productions);
                   const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
                   const salesApp = getBillingSalesQty(item);
                   const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
