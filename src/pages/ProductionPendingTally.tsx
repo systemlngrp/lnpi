@@ -8,6 +8,7 @@ import {
   MaterialReturn,
   MaterialReturnLine,
   MaterialReturnReelLine,
+  Item,
   Production,
 } from "../types";
 import { Spinner } from "../components/Spinner";
@@ -26,7 +27,30 @@ import {
 import { isProductionReadyForTally } from "../lib/productionStageFilters";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { useAuth } from "../auth/AuthContext";
+function normalizeTallyItemKey(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
 
+function resolveProductionTallyItem(production: Production, npdItems: Item[]) {
+  const findById = (value: unknown) => {
+    const candidate = normalizeTallyItemKey(value);
+    if (!candidate) return undefined;
+
+    return npdItems.find((item) => {
+      const linkedItem = item as Item & { npdId?: string | number; itemId?: string | number };
+      return [linkedItem.id, linkedItem.npdId, linkedItem.itemId].map(normalizeTallyItemKey).includes(candidate);
+    });
+  };
+
+  const findByErp = (value: unknown) => {
+    const candidate = normalizeTallyItemKey(value);
+    if (!candidate) return undefined;
+
+    return npdItems.find((item) => normalizeTallyItemKey(item.erp) === candidate);
+  };
+
+  return findById(production.npdId) || findById(production.itemId) || findByErp(production.erpCode) || findByErp(production.masterErp);
+}
 export function ProductionPendingTally() {
   const { user } = useAuth();
   const [productions, setProductions] = useData<Production>("productions", []);
@@ -87,7 +111,7 @@ export function ProductionPendingTally() {
     .filter(p => 
       isProductionReadyForTally(p, getProductionActualPaperUsed(p, usageMap), hasProductionCorrugatedSheetUsage(p, corrugatedSheetUsageMap)) && (
         p.transactionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (npdItems.find(i => i.id === p.itemId)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+        (resolveProductionTallyItem(p, npdItems)?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
       )
     )
     .sort((a, b) => new Date(b.updateTimestamp).getTime() - new Date(a.updateTimestamp).getTime());
@@ -131,7 +155,7 @@ export function ProductionPendingTally() {
                         <div className="font-bold text-sm">Job: {p.transactionNo}</div>
                         <div className="text-xs text-slate-500">{formatDate(p.date)}</div>
                     </div>
-                    <div className="text-sm font-bold">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</div>
+                    <div className="text-sm font-bold">{resolveProductionTallyItem(p, npdItems)?.name || "Unknown"}</div>
                     <div className="text-sm">{Number(p.prodFromFFG || 0).toLocaleString()} {p.uom}</div>
                      {canPostTally ? (
                        <button
@@ -178,7 +202,7 @@ export function ProductionPendingTally() {
                   <td className="px-6 py-4 text-sm font-bold text-black border border-black">{(page - 1) * pageSize + index + 1}</td>
                   <td className="px-6 py-4 text-sm font-medium text-black border border-black">{p.transactionNo}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{formatDate(p.date)}</td>
-                  <td className="px-6 py-4 text-sm text-black border border-black">{npdItems.find(i => i.id === p.itemId)?.name || "Unknown"}</td>
+                  <td className="px-6 py-4 text-sm text-black border border-black">{resolveProductionTallyItem(p, npdItems)?.name || "Unknown"}</td>
                   <td className="px-6 py-4 text-right text-sm font-medium text-emerald-700 border border-black">{Number(p.prodFromFFG || 0).toLocaleString()}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black">{p.uom}</td>
                   <td className="px-6 py-4 text-sm text-black border border-black whitespace-nowrap">{p.tallyPostingStatus || "-"}</td>
