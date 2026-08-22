@@ -2172,6 +2172,7 @@ async function fetchActiveNpdItems(
             loadedQty DECIMAL(15,2) PATH '$.loadedQty'
           )
         ) jt
+        JOIN \`invoices\` ls_invoice ON ls_invoice.id = ls.invoiceId
         LEFT JOIN \`dispatch_plans\` dp ON dp.id COLLATE utf8mb4_unicode_ci = CONVERT(jt.dispatchPlanId USING utf8mb4) COLLATE utf8mb4_unicode_ci
         LEFT JOIN \`orders\` o ON o.id = dp.orderId
         WHERE COALESCE(NULLIF(ls.invoiceId, ''), '') <> ''
@@ -2185,9 +2186,9 @@ async function fetchActiveNpdItems(
         FROM \`invoice_line_items\` ili
         LEFT JOIN \`loading_slips\` ls
           ON ls.id = ili.loadingSlipId
-          AND COALESCE(NULLIF(ls.invoiceId, ''), '') <> ''
           AND COALESCE(ls.status, 'Active') <> 'Cancelled'
-        WHERE ls.id IS NULL
+        LEFT JOIN \`invoices\` ls_invoice ON ls_invoice.id = ls.invoiceId
+        WHERE ls_invoice.id IS NULL
         GROUP BY COALESCE(NULLIF(ili.npdId, ''), ili.itemId)
       ) billed
       GROUP BY masterId
