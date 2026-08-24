@@ -458,7 +458,6 @@ export function AuditDashboard() {
         itemName: String(item.name || ""),
         erp: String(item.erp || ""),
         opening: roundMoney(Number(item.opening || 0)),
-        openingDate: String((item as any).openingTimestamp || ""),
         balance: roundMoney(Number(item.balance || 0)),
         tallyStock: item.tallyStock == null ? null : roundMoney(Number(item.tallyStock || 0)),
       }))
@@ -470,7 +469,6 @@ export function AuditDashboard() {
         "Item Name": row.itemName,
         ERP: row.erp,
         Opening: row.opening,
-        "Opening Date": row.openingDate ? formatDate(row.openingDate) : "",
         Balance: row.balance,
         "Tally Stock": row.tallyStock == null ? "" : row.tallyStock,
         Status: "NEGATIVE OPENING",
@@ -662,7 +660,6 @@ export function AuditDashboard() {
                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Item Name</th>
                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">ERP</th>
                 <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Opening</th>
-                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Opening Date</th>
                 <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Balance</th>
                 <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Tally Stock</th>
                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Status</th>
@@ -671,7 +668,7 @@ export function AuditDashboard() {
             <tbody className="divide-y divide-slate-900 bg-white">
               {negativeOpeningNpdRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-xs font-black uppercase tracking-wide text-emerald-700">
+                  <td colSpan={6} className="px-6 py-8 text-center text-xs font-black uppercase tracking-wide text-emerald-700">
                     No negative opening items found.
                   </td>
                 </tr>
@@ -681,7 +678,6 @@ export function AuditDashboard() {
                     <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.itemName || "-"}</td>
                     <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.erp || "-"}</td>
                     <td className="px-3 py-2 text-right text-xs font-black text-red-700">{formatMoney(row.opening)}</td>
-                    <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.openingDate ? formatDate(row.openingDate) : "-"}</td>
                     <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(row.balance)}</td>
                     <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{row.tallyStock == null ? "-" : formatMoney(row.tallyStock)}</td>
                     <td className="px-3 py-2">
