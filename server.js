@@ -38,6 +38,7 @@ app.get("/uploads/:filename", async (req, res, next) => {
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";
 const AUTH_TTL_SECONDS = Number(process.env.AUTH_TTL_SECONDS || 60 * 60 * 24);
+const GLOBAL_ITEM_RENAME_ALLOWED_EMAIL = "pankaj@bizskilledu.com";
 const NPD_SYNC_SECRET = String(process.env.NPD_SYNC_SECRET || "").trim();
 const NPD_SYNC_ALLOWED_TAB = String(process.env.NPD_SYNC_ALLOWED_TAB || "NPD").trim();
 const NPD_SYNC_LOG_PREFIX = "[NPD_SYNC]";
@@ -7758,6 +7759,66 @@ app.post("/api/get-pending-job-closure", async (req, res) => {
   } catch (error) {
     console.error("[API] get-pending-job-closure failed:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+const GLOBAL_ITEM_RENAME_SOURCE_CONFIG = {
+  FG: { tableName: "npd", nameColumn: "itemName" },
+  PHP: { tableName: "php_item_master", nameColumn: "itemName" },
+  PLATE: { tableName: "plate_item_master", nameColumn: "itemName" },
+  MATERIAL: { tableName: "materials", nameColumn: "name" }
+};
+app.post("/api/settings/global-item-rename", async (req, res) => {
+  const user = await getRequestUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  const email = String(user.email || "").trim().toLowerCase();
+  if (email !== GLOBAL_ITEM_RENAME_ALLOWED_EMAIL) {
+    return res.status(403).json({ error: "Only pankaj@bizskilledu.com can rename item masters from Settings." });
+  }
+  const rawSource = String(req.body?.source || "").trim().toUpperCase();
+  const source = rawSource === "NPD" ? "FG" : rawSource;
+  const itemId = String(req.body?.itemId || "").trim();
+  const newName = String(req.body?.newName || "").replace(/\s+/g, " ").trim();
+  const config = GLOBAL_ITEM_RENAME_SOURCE_CONFIG[source];
+  if (!config) return res.status(400).json({ error: "Invalid item source." });
+  if (!itemId) return res.status(400).json({ error: "Item is required." });
+  if (!newName) return res.status(400).json({ error: "New item name is required." });
+  const db = await getPool();
+  if (!db) return res.status(500).json({ error: "DB connection not available" });
+  try {
+    const [databaseRows] = await db.query("SELECT DATABASE() as db");
+    const database = String(databaseRows[0]?.db || process.env.DB_NAME || "");
+    const existingColumns = await getExistingColumnNames(db, database, config.tableName);
+    if (!existingColumns.has(config.nameColumn)) {
+      return res.status(500).json({ error: `Missing ${config.tableName}.${config.nameColumn} column.` });
+    }
+    const [rows] = await db.query(
+      `SELECT id, \`${config.nameColumn}\` AS currentName FROM \`${config.tableName}\` WHERE id = ? LIMIT 1`,
+      [itemId]
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: "Item not found." });
+    const oldName = String(row.currentName || "").trim();
+    if (oldName === newName) {
+      return res.status(400).json({ error: "New item name is the same as the current name." });
+    }
+    const updateParts = [`\`${config.nameColumn}\` = ?`];
+    const params = [newName];
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const actor = resolveAuditActorName(user, user.email || "System User");
+    if (existingColumns.has("updatedBy")) {
+      updateParts.push("`updatedBy` = ?");
+      params.push(actor);
+    }
+    if (existingColumns.has("updateTimestamp")) {
+      updateParts.push("`updateTimestamp` = ?");
+      params.push(now);
+    }
+    params.push(itemId);
+    await db.query(`UPDATE \`${config.tableName}\` SET ${updateParts.join(", ")} WHERE id = ?`, params);
+    return res.json({ success: true, source, itemId, oldName, newName });
+  } catch (error) {
+    console.error("[SETTINGS] global item rename failed:", error);
+    return res.status(500).json({ error: error.message });
   }
 });
 entities.forEach((entity) => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
-import { Machine, Setting, User } from "../types";
+import { Machine, OrderItemSource, Setting, User } from "../types";
 import { PRODUCTION_FORM_COLUMN_OPTIONS, parseProductionFormVisibleColumns } from "../lib/productionFormColumns";
 import { Spinner } from "../components/Spinner";
 
@@ -12,6 +12,8 @@ import { useNpdItems } from "../hooks/useNpdItems";
 import { PO_MANDATORY_MRR_TYPES, parsePoMandatoryMrrTypes } from "../lib/materialInPoMandatory";
 import { useAuth } from "../auth/AuthContext";
 import { parseRealizationTargets } from "../lib/realizationTargets";
+import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { getOrderItemSourceLabel, OrderCatalogItem } from "../lib/orderItems";
 
 const REEL_FORMULA_OPTIONS = [
   {
@@ -73,6 +75,24 @@ const GSM_FORMULA_OPTIONS = [
   },
 ];
 
+const GLOBAL_ITEM_RENAME_ALLOWED_EMAIL = "pankaj@bizskilledu.com";
+const GLOBAL_ITEM_RENAME_SYNC_EVENTS = [
+  "sync-data-npd",
+  "sync-data-php_item_master",
+  "sync-data-plate_item_master",
+  "sync-data-materials",
+];
+const GLOBAL_ITEM_RENAME_CACHE_KEYS = [
+  "udc_npd",
+  "udc_npd_order_catalog",
+  "udc_php_item_master",
+  "udc_plate_item_master",
+  "udc_materials",
+];
+
+function getGlobalItemRenameKey(item: Pick<OrderCatalogItem, "source" | "id">) {
+  return `${item.source}::${item.id}`;
+}
 const DEFAULT_ITEM_TYPES = [
   "2 PLY LINER",
   "2 PLY ROLL",
@@ -153,6 +173,7 @@ export function SettingsPage() {
   const [users] = useData<User>("users", []);
   const [machines] = useData<Machine>("machines", []);
   const npdItems = useNpdItems();
+  const { allItems: globalRenameItems } = useOrderItemCatalog();
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [designationDraft, setDesignationDraft] = useState<string[]>([]);
@@ -165,9 +186,13 @@ export function SettingsPage() {
   });
   const [invoiceSeriesDraft, setInvoiceSeriesDraft] = useState<InvoiceSeriesRow[]>([]);
   const [poMandatoryDraft, setPoMandatoryDraft] = useState<string[]>([]);
+  const [renameItemInput, setRenameItemInput] = useState("");
+  const [renameNewName, setRenameNewName] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [renameStatus, setRenameStatus] = useState("");
 
   const currentSetting = settings[0];
-  const isPankajUser = String(user?.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com";
+  const isPankajUser = String(user?.email || "").trim().toLowerCase() === GLOBAL_ITEM_RENAME_ALLOWED_EMAIL;
   const allowInvoiceTallyEdit = currentSetting?.allowInvoiceTallyEdit === "Yes";
 
   const allowedInvoiceEditUsers = useMemo(() => {
@@ -329,6 +354,95 @@ export function SettingsPage() {
     [organizationDraft, organizationValues]
   );
 
+  const globalRenameOptions = useMemo(() => {
+    return globalRenameItems.map((item) => {
+      const labelParts = [
+        `[${getOrderItemSourceLabel(item.source)}]`,
+        item.erp ? `${item.erp} -` : "",
+        item.name,
+        `(${item.id})`,
+      ].filter(Boolean);
+
+      return {
+        key: getGlobalItemRenameKey(item),
+        label: labelParts.join(" "),
+        item,
+      };
+    });
+  }, [globalRenameItems]);
+
+  const selectedRenameOption = useMemo(
+    () => globalRenameOptions.find((option) => option.label === renameItemInput || option.key === renameItemInput),
+    [globalRenameOptions, renameItemInput]
+  );
+  const selectedRenameItem = selectedRenameOption?.item;
+
+  useEffect(() => {
+    if (!selectedRenameItem) return;
+    setRenameNewName(selectedRenameItem.name);
+    setRenameStatus("");
+  }, [selectedRenameItem?.id, selectedRenameItem?.source]);
+
+  const handleGlobalItemRename = async () => {
+    if (!isPankajUser) {
+      alert("You are not allowed to rename item masters.");
+      return;
+    }
+    if (!selectedRenameItem) {
+      alert("Select an item to rename.");
+      return;
+    }
+
+    const newName = renameNewName.replace(/\s+/g, " ").trim();
+    if (!newName) {
+      alert("Enter the new item name.");
+      return;
+    }
+    if (newName === selectedRenameItem.name.trim()) {
+      alert("New item name is the same as the current name.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Rename ${getOrderItemSourceLabel(selectedRenameItem.source)} item?\n\nOld: ${selectedRenameItem.name}\nNew: ${newName}`
+    );
+    if (!confirmed) return;
+
+    setRenameSaving(true);
+    setRenameStatus("");
+    try {
+      const token = window.localStorage.getItem("authToken") || "";
+      const response = await fetch("/api/settings/global-item-rename", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          source: selectedRenameItem.source as OrderItemSource,
+          itemId: selectedRenameItem.id,
+          newName,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.error || "Failed to rename item.");
+      }
+
+      GLOBAL_ITEM_RENAME_CACHE_KEYS.forEach((key) => window.localStorage.removeItem(key));
+      GLOBAL_ITEM_RENAME_SYNC_EVENTS.forEach((eventName) => window.dispatchEvent(new CustomEvent(eventName)));
+      setRenameItemInput("");
+      setRenameNewName("");
+      setRenameStatus(`Renamed item from "${result.oldName || selectedRenameItem.name}" to "${result.newName || newName}".`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to rename item.";
+      setRenameStatus(message);
+      alert(message);
+    } finally {
+      setRenameSaving(false);
+    }
+  };
   const handleChange = async (patch: Partial<Setting>) => {
     setSaving(true);
     try {
@@ -476,6 +590,90 @@ export function SettingsPage() {
           <p className="text-xs text-slate-500">
             Status: {allowInvoiceTallyEdit ? "Enabled temporarily" : "Disabled"} | Allowed users: {allowedInvoiceEditUsers.length}
           </p>
+        </div>
+      )}
+
+      {isPankajUser && (
+        <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-4">
+          <div>
+            <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Global Item Rename</h3>
+            <p className="text-sm text-black leading-6">
+              Rename one FG/NPD, PHP, Plate, or Material master item. The change is saved in the backend master table and reused by master-linked screens.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col space-y-2 md:col-span-2">
+              <label htmlFor="globalItemRenameSearch" className="text-xs font-black uppercase tracking-wide text-black">
+                Search Item
+              </label>
+              <input
+                id="globalItemRenameSearch"
+                list="globalItemRenameOptions"
+                value={renameItemInput}
+                onChange={(event) => setRenameItemInput(event.target.value)}
+                disabled={renameSaving}
+                placeholder="Search by item name, ERP, source, or ID"
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+              />
+              <datalist id="globalItemRenameOptions">
+                {globalRenameOptions.map((option) => (
+                  <option key={option.key} value={option.label} />
+                ))}
+              </datalist>
+            </div>
+
+            <div className="flex flex-col space-y-2">
+              <label className="text-xs font-black uppercase tracking-wide text-black">Current Name</label>
+              <div className="min-h-[42px] rounded border-2 border-black bg-slate-50 px-3 py-2 text-sm font-bold text-black">
+                {selectedRenameItem ? selectedRenameItem.name : "Select an item"}
+              </div>
+            </div>
+
+            <div className="flex flex-col space-y-2">
+              <label className="text-xs font-black uppercase tracking-wide text-black">ERP / Source</label>
+              <div className="min-h-[42px] rounded border-2 border-black bg-slate-50 px-3 py-2 text-sm font-bold text-black">
+                {selectedRenameItem ? `${selectedRenameItem.erp || "-"} / ${getOrderItemSourceLabel(selectedRenameItem.source)}` : "-"}
+              </div>
+            </div>
+
+            <div className="flex flex-col space-y-2 md:col-span-2">
+              <label htmlFor="globalItemRenameNewName" className="text-xs font-black uppercase tracking-wide text-black">
+                New Item Name
+              </label>
+              <input
+                id="globalItemRenameNewName"
+                type="text"
+                value={renameNewName}
+                onChange={(event) => setRenameNewName(event.target.value)}
+                disabled={renameSaving || !selectedRenameItem}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+              />
+            </div>
+          </div>
+
+          {selectedRenameItem && renameNewName.trim() && renameNewName.trim() !== selectedRenameItem.name.trim() && (
+            <div className="rounded border border-black bg-yellow-50 px-4 py-3 text-sm font-bold text-black">
+              {selectedRenameItem.name} -&gt; {renameNewName.replace(/\s+/g, " ").trim()}
+            </div>
+          )}
+
+          {renameStatus && (
+            <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm font-bold text-black">
+              {renameStatus}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void handleGlobalItemRename()}
+              disabled={renameSaving || !selectedRenameItem || !renameNewName.trim()}
+              className="inline-flex min-w-[180px] items-center justify-center rounded bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {renameSaving ? <Spinner size={16} className="text-white" /> : "Rename Item"}
+            </button>
+          </div>
         </div>
       )}
 

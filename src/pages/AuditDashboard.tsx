@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { getInvoiceGrandTotal } from "../lib/gatePasses";
@@ -646,11 +646,14 @@ export function AuditDashboard() {
       </section>
 
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center gap-3">
           <span>NPD Items With Negative Opening</span>
-          <span className="text-[10px] text-slate-300 font-normal">
-            Showing Negative Opening Items ({negativeOpeningNpdRows.length})
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-[10px] text-slate-300 font-normal">
+              Showing Negative Opening Items ({negativeOpeningNpdRows.length})
+            </span>
+            <ExcelExport data={negativeOpeningExcelRows} fileName="NPD_Negative_Opening" sheetName="Negative Opening" className="h-7 border-white/40 bg-white px-2 py-0 text-[10px] text-slate-950 hover:bg-slate-100" />
+          </div>
         </div>
         <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
@@ -694,9 +697,9 @@ export function AuditDashboard() {
         </div>
       </section>
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center gap-3">
           <span>NPD Item Stock Mismatch Breakdown (Tally Stock vs App Balance)</span>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <span className="text-[10px] text-slate-300 font-normal">
               Showing Mismatched Items ({npdItems.filter((item) => {
               const appStock = roundMoney(Number(item.balance || 0));
@@ -778,11 +781,14 @@ export function AuditDashboard() {
         </div>
       </section>
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center gap-3">
           <span>Reel Material Stock Mismatch Breakdown (Tally Stock vs App Available Weight)</span>
-          <span className="text-[10px] text-slate-300 font-normal">
-            Showing Mismatched Materials ({reelMaterialMismatchRows.length})
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-[10px] text-slate-300 font-normal">
+              Showing Mismatched Materials ({reelMaterialMismatchRows.length})
+            </span>
+            <ExcelExport data={reelMaterialMismatchExcelRows} fileName="Reel_Material_Stock_Mismatch" sheetName="Reel Mismatch" className="h-7 border-white/40 bg-white px-2 py-0 text-[10px] text-slate-950 hover:bg-slate-100" />
+          </div>
         </div>
         <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
