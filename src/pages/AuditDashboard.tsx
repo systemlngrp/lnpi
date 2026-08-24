@@ -21,6 +21,7 @@ import type {
 } from "../types";
 import { cn } from "../lib/utils";
 import { formatDate } from "../lib/serial";
+import { ExcelExport } from "../components/ExcelExport";
 
 const ALL_DATA_DATE_RANGE = { from: "", to: "" };
 const ALL_DATA_RANGE_LABEL = "All Dates";
@@ -463,6 +464,60 @@ export function AuditDashboard() {
       }))
       .sort((a, b) => a.itemName.localeCompare(b.itemName) || a.erp.localeCompare(b.erp));
   }, [npdItems]);
+  const negativeOpeningExcelRows = useMemo(
+    () =>
+      negativeOpeningNpdRows.map((row) => ({
+        "Item Name": row.itemName,
+        ERP: row.erp,
+        Opening: row.opening,
+        "Opening Date": row.openingDate ? formatDate(row.openingDate) : "",
+        Balance: row.balance,
+        "Tally Stock": row.tallyStock == null ? "" : row.tallyStock,
+        Status: "NEGATIVE OPENING",
+      })),
+    [negativeOpeningNpdRows]
+  );
+
+  const npdItemStockMismatchExcelRows = useMemo(
+    () =>
+      npdItems
+        .filter((item) => {
+          const appStock = roundMoney(Number(item.balance || 0));
+          const tallyStock = roundMoney(Number(item.tallyStock || 0));
+          const mfjApp = getAuditMfjAppQty(item, productions, materialIssues, materialIssueLines, materialReturns, materialReturnLines);
+          const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
+          const salesApp = getBillingSalesQty(item);
+          const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty)); return (
+            roundMoney(tallyStock - appStock) !== 0 ||
+            roundMoney(mfgTally - mfjApp) !== 0 ||
+            roundMoney(salesTally - salesApp) !== 0
+          );
+        })
+        .map((item) => {
+          const opening = roundMoney(Number(item.opening || 0));
+          const mfjApp = getAuditMfjAppQty(item, productions, materialIssues, materialIssueLines, materialReturns, materialReturnLines);
+          const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
+          const salesApp = getBillingSalesQty(item);
+          const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
+          const appStock = roundMoney(Number(item.balance || 0));
+          const tallyStock = roundMoney(Number(item.tallyStock || 0));
+          const diff = roundMoney(tallyStock - appStock);
+
+          return {
+            "Item Name": item.name,
+            Opening: opening,
+            "MFJ App": mfjApp,
+            "MFG Tally": mfgTally,
+            "Sales App": salesApp,
+            "Sales Tally": salesTally,
+            "App Stock (Balance)": appStock,
+            "Tally Stock": tallyStock,
+            Difference: diff,
+            Status: "DIFFERENCE",
+          };
+        }),
+    [materialIssueLines, materialIssues, materialReturnLines, materialReturns, npdItems, productions]
+  );
   const reelMaterialMismatchRows = useMemo<ReelMaterialMismatchRow[]>(() => {
     const reelStockRows = buildReelStockRows({
       materials,
@@ -502,6 +557,23 @@ export function AuditDashboard() {
       })
       .sort((a, b) => a.erp.localeCompare(b.erp) || a.size - b.size || a.gsm - b.gsm || a.bf - b.bf);
   }, [issueReelLines, materialIn, materials, packingSlips, returnReelLines, suppliers]);
+
+  const reelMaterialMismatchExcelRows = useMemo(
+    () =>
+      reelMaterialMismatchRows.map((row) => ({
+        ERP: row.erp,
+        "Material Name": row.itemName,
+        Size: row.size || "",
+        GSM: row.gsm || "",
+        BF: row.bf || "",
+        Color: row.color,
+        "App Stock": row.appStock,
+        "Tally Stock": row.tallyStock == null ? "" : row.tallyStock,
+        Difference: row.difference == null ? "" : row.difference,
+        Status: row.status,
+      })),
+    [reelMaterialMismatchRows]
+  );
 
   return (
     <div className="space-y-4">
@@ -552,8 +624,7 @@ export function AuditDashboard() {
             </thead>
             <tbody className="divide-y divide-slate-900 bg-white">
               {metrics.map((metric, index) => {
-                const mismatched = roundMoney(metric.difference) !== 0;
-                return (
+                const mismatched = roundMoney(metric.difference) !== 0; return (
                   <tr key={metric.key} className={cn("divide-x divide-slate-900", index % 2 === 0 ? "bg-white" : "bg-slate-50")}>
                     <td className="px-3 py-3 text-sm font-black uppercase tracking-wide text-slate-900">{metric.label}</td>
                     <td className="px-3 py-3 text-right text-sm font-black text-slate-900">{formatCount(metric.tallyCount)}</td>
@@ -625,21 +696,23 @@ export function AuditDashboard() {
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
           <span>NPD Item Stock Mismatch Breakdown (Tally Stock vs App Balance)</span>
-          <span className="text-[10px] text-slate-300 font-normal">
-            Showing Mismatched Items ({npdItems.filter((item) => {
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-300 font-normal">
+              Showing Mismatched Items ({npdItems.filter((item) => {
               const appStock = roundMoney(Number(item.balance || 0));
               const tallyStock = roundMoney(Number(item.tallyStock || 0));
               const mfjApp = getAuditMfjAppQty(item, productions, materialIssues, materialIssueLines, materialReturns, materialReturnLines);
               const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
               const salesApp = getBillingSalesQty(item);
-              const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
-              return (
+              const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty)); return (
                 roundMoney(tallyStock - appStock) !== 0 ||
                 roundMoney(mfgTally - mfjApp) !== 0 ||
                 roundMoney(salesTally - salesApp) !== 0
               );
             }).length})
-          </span>
+            </span>
+            <ExcelExport data={npdItemStockMismatchExcelRows} fileName="NPD_Item_Stock_Mismatch" sheetName="NPD Mismatch" className="h-7 border-white/40 bg-white px-2 py-0 text-[10px] text-slate-950 hover:bg-slate-100" />
+          </div>
         </div>
         <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
           <table className="min-w-full border-collapse text-xs">
@@ -665,8 +738,7 @@ export function AuditDashboard() {
                   const mfjApp = getAuditMfjAppQty(item, productions, materialIssues, materialIssueLines, materialReturns, materialReturnLines);
                   const mfgTally = roundMoney(firstNumber(item.TallyMFJQty, item.tallyMFJQty));
                   const salesApp = getBillingSalesQty(item);
-                  const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty));
-                  return (
+                  const salesTally = roundMoney(firstNumber(item.TallySalesQty, item.tallySalesQty)); return (
                     roundMoney(tallyStock - appStock) !== 0 ||
                     roundMoney(mfgTally - mfjApp) !== 0 ||
                     roundMoney(salesTally - salesApp) !== 0
@@ -682,9 +754,7 @@ export function AuditDashboard() {
                   const salesMismatch = roundMoney(salesTally - salesApp) !== 0;
                   const appStock = roundMoney(Number(item.balance || 0));
                   const tallyStock = roundMoney(Number(item.tallyStock || 0));
-                  const diff = roundMoney(tallyStock - appStock);
-
-                  return (
+                  const diff = roundMoney(tallyStock - appStock); return (
                     <tr key={item.id || index} className="divide-x divide-slate-900 bg-red-50/50">
                       <td className="px-3 py-2 text-xs font-bold text-slate-900">{item.name}</td>
                       <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{formatMoney(opening)}</td>
@@ -764,6 +834,10 @@ export function AuditDashboard() {
     </div>
   );
 }
+
+
+
+
 
 
 
