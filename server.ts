@@ -8784,6 +8784,602 @@ app.post("/api/settings/global-item-rename", async (req, res) => {
     return res.status(500).json({ error: (error as Error).message });
   }
 });
+
+type GlobalItemTransferModule = "orders" | "plans" | "dispatch" | "loading" | "billing";
+
+type GlobalItemTransferIdentity = {
+  id: string;
+  source: GlobalItemRenameSource;
+  name: string;
+  erp: string;
+};
+
+const GLOBAL_ITEM_TRANSFER_MODULE_LABELS: Record<GlobalItemTransferModule, string> = {
+  orders: "Orders",
+  plans: "Plans / Scheduling",
+  dispatch: "Dispatch",
+  loading: "Loading",
+  billing: "Billing",
+};
+
+const GLOBAL_ITEM_TRANSFER_MODULES = new Set<GlobalItemTransferModule>([
+  "orders",
+  "plans",
+  "dispatch",
+  "loading",
+  "billing",
+]);
+
+function normalizeGlobalItemMaintenanceSource(value: unknown): GlobalItemRenameSource | null {
+  const source = String(value || "").trim().toUpperCase();
+  const normalized = source === "NPD" ? "FG" : source;
+  return GLOBAL_ITEM_RENAME_SOURCE_CONFIG[normalized as GlobalItemRenameSource]
+    ? (normalized as GlobalItemRenameSource)
+    : null;
+}
+
+function normalizeGlobalItemTransferModules(value: unknown): GlobalItemTransferModule[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((moduleName) => String(moduleName || "").trim().toLowerCase() as GlobalItemTransferModule)
+        .filter((moduleName) => GLOBAL_ITEM_TRANSFER_MODULES.has(moduleName))
+    )
+  );
+}
+
+function getItemReferenceCondition(alias: string, source: GlobalItemRenameSource) {
+  const prefix = alias ? `${alias}.` : "";
+  if (source === "FG") {
+    return {
+      sql: `((COALESCE(NULLIF(TRIM(${prefix}\`itemSource\`), ''), 'FG') = 'FG' AND ${prefix}\`itemId\` = ?) OR ${prefix}\`npdId\` = ?)`,
+      buildParams: (itemId: string) => [itemId, itemId],
+    };
+  }
+
+  return {
+    sql: `(${prefix}\`itemId\` = ? AND UPPER(COALESCE(NULLIF(TRIM(${prefix}\`itemSource\`), ''), 'FG')) = ?)`,
+    buildParams: (itemId: string) => [itemId, source],
+  };
+}
+
+function addAuditUpdateParts(
+  columns: Set<string>,
+  updateParts: string[],
+  params: any[],
+  actor: string,
+  now: string
+) {
+  if (columns.has("updatedBy")) {
+    updateParts.push("`updatedBy` = ?");
+    params.push(actor);
+  }
+  if (columns.has("updateTimestamp")) {
+    updateParts.push("`updateTimestamp` = ?");
+    params.push(now);
+  }
+}
+
+async function getGlobalItemTransferIdentity(
+  db: any,
+  database: string,
+  source: GlobalItemRenameSource,
+  itemId: string
+): Promise<GlobalItemTransferIdentity | null> {
+  const config = GLOBAL_ITEM_RENAME_SOURCE_CONFIG[source];
+  const columns = await getExistingColumnNames(db as mysql.Pool, database, config.tableName);
+  if (!columns.has("id") || !columns.has(config.nameColumn)) return null;
+
+  const erpColumns = ["erp", "erpCode", "erpItemCode", "masterItemNameErpCode"].filter((column) => columns.has(column));
+  const erpExpr = erpColumns.length
+    ? `COALESCE(${erpColumns.map((column) => `NULLIF(TRIM(\`${column}\`), '')`).join(", ")}, '')`
+    : "''";
+
+  const [rows] = await db.query(
+    `SELECT \`id\`, \`${config.nameColumn}\` AS itemName, ${erpExpr} AS erp FROM \`${config.tableName}\` WHERE \`id\` = ? LIMIT 1`,
+    [itemId]
+  );
+  const row = (rows as any[])[0];
+  if (!row) return null;
+
+  return {
+    id: String(row.id || ""),
+    source,
+    name: String(row.itemName || "").trim(),
+    erp: String(row.erp || "").trim(),
+  };
+}
+
+function normalizeLoadingLineSource(value: unknown): GlobalItemRenameSource {
+  return normalizeGlobalItemMaintenanceSource(value) || "FG";
+}
+
+function parseJsonArrayField(value: unknown): any[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function transferLinkedItemInArray(
+  rows: any[],
+  source: GlobalItemRenameSource,
+  fromItemId: string,
+  toItem: GlobalItemTransferIdentity
+) {
+  let changed = false;
+  let lineCount = 0;
+
+  const nextRows = rows.map((row) => {
+    if (!row || typeof row !== "object") return row;
+    const rowItemId = String(row.itemId || "").trim();
+    const rowSource = normalizeLoadingLineSource(row.itemSource || (row.source as unknown));
+    if (rowItemId !== fromItemId || rowSource !== source) return row;
+
+    changed = true;
+    lineCount += 1;
+    return {
+      ...row,
+      itemId: toItem.id,
+      itemSource: source,
+      source: row.source ? source : row.source,
+      itemName: toItem.name,
+      erpCode: toItem.erp,
+      masterErp: toItem.erp,
+    };
+  });
+
+  return { changed, lineCount, rows: nextRows };
+}
+
+async function collectLoadingTransferRows(
+  db: any,
+  database: string,
+  source: GlobalItemRenameSource,
+  fromItemId: string,
+  toItem?: GlobalItemTransferIdentity,
+  actor?: string,
+  now?: string
+) {
+  const loadingTables = ["loading_slips"];
+  if (source === "PHP") loadingTables.push("php_loading_slips");
+  if (source === "PLATE") loadingTables.push("plate_loading_slips");
+
+  let records = 0;
+  let lines = 0;
+  const tableCounts: Record<string, { records: number; lines: number }> = {};
+
+  for (const tableName of loadingTables) {
+    const columns = await getExistingColumnNames(db as mysql.Pool, database, tableName);
+    if (!columns.has("id") || !columns.has("lines")) continue;
+
+    const optionalJsonColumns = ["phpDetails", "plateDetails"].filter((column) => columns.has(column));
+    const selectColumns = ["`id`", "`lines`", ...optionalJsonColumns.map((column) => `\`${column}\``)].join(", ");
+    const [rows] = await db.query(`SELECT ${selectColumns} FROM \`${tableName}\``);
+
+    for (const row of rows as any[]) {
+      let rowChanged = false;
+      let rowLineCount = 0;
+      const updateParts: string[] = [];
+      const params: any[] = [];
+
+      const lineTransfer = transferLinkedItemInArray(parseJsonArrayField(row.lines), source, fromItemId, toItem || {
+        id: fromItemId,
+        source,
+        name: "",
+        erp: "",
+      });
+      if (lineTransfer.changed) {
+        rowChanged = true;
+        rowLineCount += lineTransfer.lineCount;
+        if (toItem) {
+          updateParts.push("`lines` = ?");
+          params.push(JSON.stringify(lineTransfer.rows));
+        }
+      }
+
+      for (const detailColumn of optionalJsonColumns) {
+        const detailTransfer = transferLinkedItemInArray(parseJsonArrayField(row[detailColumn]), source, fromItemId, toItem || {
+          id: fromItemId,
+          source,
+          name: "",
+          erp: "",
+        });
+        if (detailTransfer.changed) {
+          rowChanged = true;
+          rowLineCount += detailTransfer.lineCount;
+          if (toItem) {
+            updateParts.push(`\`${detailColumn}\` = ?`);
+            params.push(JSON.stringify(detailTransfer.rows));
+          }
+        }
+      }
+
+      if (!rowChanged) continue;
+      records += 1;
+      lines += rowLineCount;
+      tableCounts[tableName] = tableCounts[tableName] || { records: 0, lines: 0 };
+      tableCounts[tableName].records += 1;
+      tableCounts[tableName].lines += rowLineCount;
+
+      if (toItem && updateParts.length > 0) {
+        addAuditUpdateParts(columns, updateParts, params, actor || "System User", now || new Date().toISOString());
+        params.push(row.id);
+        await db.query(`UPDATE \`${tableName}\` SET ${updateParts.join(", ")} WHERE \`id\` = ?`, params);
+      }
+    }
+  }
+
+  return { records, lines, tableCounts };
+}
+
+async function countGlobalItemTransfer(
+  db: any,
+  database: string,
+  source: GlobalItemRenameSource,
+  fromItemId: string,
+  modules: GlobalItemTransferModule[]
+) {
+  const counts: Record<GlobalItemTransferModule, number> = {
+    orders: 0,
+    plans: 0,
+    dispatch: 0,
+    loading: 0,
+    billing: 0,
+  };
+  const details: Record<string, any> = {};
+
+  const orderCondition = getItemReferenceCondition("o", source);
+  const directCondition = getItemReferenceCondition("", source);
+  const productionCondition = getItemReferenceCondition("p", source);
+  const invoiceCondition = getItemReferenceCondition("ili", source);
+
+  if (modules.includes("orders")) {
+    const [rows] = await db.query(`SELECT COUNT(*) AS count FROM \`orders\` o WHERE ${orderCondition.sql}`, orderCondition.buildParams(fromItemId));
+    counts.orders = Number((rows as any[])[0]?.count || 0);
+  }
+
+  if (modules.includes("plans")) {
+    const [scheduleRows] = await db.query(
+      `SELECT COUNT(*) AS count FROM \`orders_schedule\` os JOIN \`orders\` o ON o.id = os.orderId WHERE ${orderCondition.sql}`,
+      orderCondition.buildParams(fromItemId)
+    );
+    const [productionRows] = await db.query(
+      `SELECT COUNT(*) AS count FROM \`productions\` p WHERE ${productionCondition.sql}`,
+      productionCondition.buildParams(fromItemId)
+    );
+    const schedules = Number((scheduleRows as any[])[0]?.count || 0);
+    const productions = Number((productionRows as any[])[0]?.count || 0);
+    counts.plans = schedules + productions;
+    details.plans = { schedules, productions };
+  }
+
+  if (modules.includes("dispatch")) {
+    const [rows] = await db.query(
+      `SELECT COUNT(DISTINCT dp.id) AS count
+       FROM \`dispatch_plans\` dp
+       LEFT JOIN \`orders\` o ON o.id = dp.orderId
+       LEFT JOIN \`productions\` p ON p.id = dp.productionId
+       WHERE ${orderCondition.sql} OR ${productionCondition.sql}`,
+      [...orderCondition.buildParams(fromItemId), ...productionCondition.buildParams(fromItemId)]
+    );
+    counts.dispatch = Number((rows as any[])[0]?.count || 0);
+  }
+
+  if (modules.includes("loading")) {
+    const loading = await collectLoadingTransferRows(db, database, source, fromItemId);
+    counts.loading = loading.records;
+    details.loading = loading;
+  }
+
+  if (modules.includes("billing")) {
+    const [rows] = await db.query(
+      `SELECT COUNT(*) AS count FROM \`invoice_line_items\` ili WHERE ${invoiceCondition.sql}`,
+      invoiceCondition.buildParams(fromItemId)
+    );
+    counts.billing = Number((rows as any[])[0]?.count || 0);
+  }
+
+  return { counts, details };
+}
+
+async function applyGlobalItemTransfer(
+  db: any,
+  database: string,
+  user: AuthUser,
+  source: GlobalItemRenameSource,
+  fromItemId: string,
+  toItem: GlobalItemTransferIdentity,
+  modules: GlobalItemTransferModule[]
+) {
+  const counts: Record<GlobalItemTransferModule, number> = {
+    orders: 0,
+    plans: 0,
+    dispatch: 0,
+    loading: 0,
+    billing: 0,
+  };
+  const details: Record<string, any> = {};
+  const actor = resolveAuditActorName(user, user.email || "System User");
+  const now = new Date().toISOString();
+
+  const orderColumns = await getExistingColumnNames(db as mysql.Pool, database, "orders");
+  const scheduleColumns = await getExistingColumnNames(db as mysql.Pool, database, "orders_schedule");
+  const productionColumns = await getExistingColumnNames(db as mysql.Pool, database, "productions");
+  const dispatchColumns = await getExistingColumnNames(db as mysql.Pool, database, "dispatch_plans");
+  const invoiceColumns = await getExistingColumnNames(db as mysql.Pool, database, "invoice_line_items");
+
+  const orderCondition = getItemReferenceCondition("", source);
+  const orderAliasCondition = getItemReferenceCondition("o", source);
+  const productionCondition = getItemReferenceCondition("", source);
+  const productionAliasCondition = getItemReferenceCondition("p", source);
+  const invoiceCondition = getItemReferenceCondition("", source);
+
+  const [preOrderRows] = await db.query(
+    `SELECT \`id\` FROM \`orders\` WHERE ${orderCondition.sql}`,
+    orderCondition.buildParams(fromItemId)
+  );
+  const preMatchedOrderIds = (preOrderRows as any[]).map((row) => String(row.id || "")).filter(Boolean);
+
+  let preMatchedScheduleIds: string[] = [];
+  if (modules.includes("plans") && preMatchedOrderIds.length > 0) {
+    const placeholders = preMatchedOrderIds.map(() => "?").join(", ");
+    const [scheduleRows] = await db.query(
+      `SELECT \`id\` FROM \`orders_schedule\` WHERE \`orderId\` IN (${placeholders})`,
+      preMatchedOrderIds
+    );
+    preMatchedScheduleIds = (scheduleRows as any[]).map((row) => String(row.id || "")).filter(Boolean);
+  }
+
+  let preMatchedDispatchIds: string[] = [];
+  if (modules.includes("dispatch")) {
+    const [dispatchRows] = await db.query(
+      `SELECT DISTINCT dp.id
+       FROM \`dispatch_plans\` dp
+       LEFT JOIN \`orders\` o ON o.id = dp.orderId
+       LEFT JOIN \`productions\` p ON p.id = dp.productionId
+       WHERE ${orderAliasCondition.sql} OR ${productionAliasCondition.sql}`,
+      [...orderAliasCondition.buildParams(fromItemId), ...productionAliasCondition.buildParams(fromItemId)]
+    );
+    preMatchedDispatchIds = (dispatchRows as any[]).map((row) => String(row.id || "")).filter(Boolean);
+  }
+
+  if (modules.includes("orders") && orderColumns.has("itemId")) {
+    const updateParts = ["`itemId` = ?", "`itemSource` = ?"];
+    const params: any[] = [toItem.id, source];
+    if (orderColumns.has("npdId")) {
+      updateParts.push("`npdId` = ?");
+      params.push(source === "FG" ? toItem.id : null);
+    }
+    if (orderColumns.has("erpCode")) {
+      updateParts.push("`erpCode` = ?");
+      params.push(toItem.erp || null);
+    }
+    addAuditUpdateParts(orderColumns, updateParts, params, actor, now);
+    params.push(...orderCondition.buildParams(fromItemId));
+    const [result] = await db.query(`UPDATE \`orders\` SET ${updateParts.join(", ")} WHERE ${orderCondition.sql}`, params);
+    counts.orders = Number((result as any)?.affectedRows || 0);
+  }
+
+  if (modules.includes("plans")) {
+    let schedules = 0;
+    let productions = 0;
+
+    if (
+      scheduleColumns.has("id") &&
+      preMatchedScheduleIds.length > 0 &&
+      (scheduleColumns.has("updatedBy") || scheduleColumns.has("updateTimestamp"))
+    ) {
+      const updateParts: string[] = [];
+      const params: any[] = [];
+      addAuditUpdateParts(scheduleColumns, updateParts, params, actor, now);
+      const placeholders = preMatchedScheduleIds.map(() => "?").join(", ");
+      params.push(...preMatchedScheduleIds);
+      const [result] = await db.query(
+        `UPDATE \`orders_schedule\` SET ${updateParts.join(", ")} WHERE \`id\` IN (${placeholders})`,
+        params
+      );
+      schedules = Number((result as any)?.affectedRows || 0);
+    }
+
+    if (productionColumns.has("itemId")) {
+      const updateParts = ["`itemId` = ?", "`itemSource` = ?"];
+      const params: any[] = [toItem.id, source];
+      if (productionColumns.has("npdId")) {
+        updateParts.push("`npdId` = ?");
+        params.push(source === "FG" ? toItem.id : null);
+      }
+      if (productionColumns.has("erpCode")) {
+        updateParts.push("`erpCode` = ?");
+        params.push(toItem.erp || null);
+      }
+      if (productionColumns.has("masterErp")) {
+        updateParts.push("`masterErp` = ?");
+        params.push(toItem.erp || null);
+      }
+      addAuditUpdateParts(productionColumns, updateParts, params, actor, now);
+      params.push(...productionCondition.buildParams(fromItemId));
+      const [result] = await db.query(`UPDATE \`productions\` SET ${updateParts.join(", ")} WHERE ${productionCondition.sql}`, params);
+      productions = Number((result as any)?.affectedRows || 0);
+    }
+
+    counts.plans = schedules + productions;
+    details.plans = { schedules, productions };
+  }
+
+  if (
+    modules.includes("dispatch") &&
+    dispatchColumns.has("id") &&
+    preMatchedDispatchIds.length > 0 &&
+    (dispatchColumns.has("updatedBy") || dispatchColumns.has("updateTimestamp"))
+  ) {
+    const updateParts: string[] = [];
+    const params: any[] = [];
+    addAuditUpdateParts(dispatchColumns, updateParts, params, actor, now);
+    const placeholders = preMatchedDispatchIds.map(() => "?").join(", ");
+    params.push(...preMatchedDispatchIds);
+    const [result] = await db.query(
+      `UPDATE \`dispatch_plans\` SET ${updateParts.join(", ")} WHERE \`id\` IN (${placeholders})`,
+      params
+    );
+    counts.dispatch = Number((result as any)?.affectedRows || 0);
+  }
+
+  if (modules.includes("loading")) {
+    const loading = await collectLoadingTransferRows(db, database, source, fromItemId, toItem, actor, now);
+    counts.loading = loading.records;
+    details.loading = loading;
+  }
+
+  if (modules.includes("billing") && invoiceColumns.has("itemId")) {
+    const updateParts = ["`itemId` = ?", "`itemSource` = ?"];
+    const params: any[] = [toItem.id, source];
+    if (invoiceColumns.has("npdId")) {
+      updateParts.push("`npdId` = ?");
+      params.push(source === "FG" ? toItem.id : null);
+    }
+    addAuditUpdateParts(invoiceColumns, updateParts, params, actor, now);
+    params.push(...invoiceCondition.buildParams(fromItemId));
+    const [result] = await db.query(`UPDATE \`invoice_line_items\` SET ${updateParts.join(", ")} WHERE ${invoiceCondition.sql}`, params);
+    counts.billing = Number((result as any)?.affectedRows || 0);
+  }
+
+  return { counts, details };
+}
+
+async function validateGlobalItemTransferRequest(req: express.Request, res: express.Response) {
+  const user = await getRequestUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return null;
+  }
+
+  const email = String(user.email || "").trim().toLowerCase();
+  if (email !== GLOBAL_ITEM_RENAME_ALLOWED_EMAIL) {
+    res.status(403).json({ error: "Only pankaj@bizskilledu.com can transfer linked item usage from Settings." });
+    return null;
+  }
+
+  const fromSource = normalizeGlobalItemMaintenanceSource(req.body?.fromSource);
+  const toSource = normalizeGlobalItemMaintenanceSource(req.body?.toSource);
+  const fromItemId = String(req.body?.fromItemId || "").trim();
+  const toItemId = String(req.body?.toItemId || "").trim();
+  const modules = normalizeGlobalItemTransferModules(req.body?.modules);
+
+  if (!fromSource || !toSource) {
+    res.status(400).json({ error: "Valid from and to item sources are required." });
+    return null;
+  }
+  if (fromSource !== toSource) {
+    res.status(400).json({ error: "Transfer is allowed only between items of the same source/type." });
+    return null;
+  }
+  if (!fromItemId || !toItemId) {
+    res.status(400).json({ error: "From item and To item are required." });
+    return null;
+  }
+  if (fromItemId === toItemId) {
+    res.status(400).json({ error: "From item and To item must be different." });
+    return null;
+  }
+  if (modules.length === 0) {
+    res.status(400).json({ error: "Select at least one module to update." });
+    return null;
+  }
+
+  const db = await getPool();
+  if (!db) {
+    res.status(500).json({ error: "DB connection not available" });
+    return null;
+  }
+
+  const [databaseRows] = await db.query("SELECT DATABASE() as db");
+  const database = String((databaseRows as any[])[0]?.db || process.env.DB_NAME || "");
+  const fromItem = await getGlobalItemTransferIdentity(db, database, fromSource, fromItemId);
+  const toItem = await getGlobalItemTransferIdentity(db, database, toSource, toItemId);
+
+  if (!fromItem) {
+    res.status(404).json({ error: "From item not found." });
+    return null;
+  }
+  if (!toItem) {
+    res.status(404).json({ error: "To item not found." });
+    return null;
+  }
+
+  return { db, database, user, source: fromSource, fromItem, toItem, modules };
+}
+
+app.post("/api/settings/item-transfer/preview", async (req, res) => {
+  try {
+    const validated = await validateGlobalItemTransferRequest(req, res);
+    if (!validated) return;
+
+    const { counts, details } = await countGlobalItemTransfer(
+      validated.db,
+      validated.database,
+      validated.source,
+      validated.fromItem.id,
+      validated.modules
+    );
+
+    return res.json({
+      success: true,
+      fromItem: validated.fromItem,
+      toItem: validated.toItem,
+      modules: validated.modules,
+      moduleLabels: GLOBAL_ITEM_TRANSFER_MODULE_LABELS,
+      counts,
+      details,
+    });
+  } catch (error) {
+    console.error("[SETTINGS] item transfer preview failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/settings/item-transfer/apply", async (req, res) => {
+  const validated = await validateGlobalItemTransferRequest(req, res);
+  if (!validated) return;
+
+  const connection = await validated.db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const { counts, details } = await applyGlobalItemTransfer(
+      connection,
+      validated.database,
+      validated.user,
+      validated.source,
+      validated.fromItem.id,
+      validated.toItem,
+      validated.modules
+    );
+    await connection.commit();
+
+    return res.json({
+      success: true,
+      fromItem: validated.fromItem,
+      toItem: validated.toItem,
+      modules: validated.modules,
+      moduleLabels: GLOBAL_ITEM_TRANSFER_MODULE_LABELS,
+      counts,
+      details,
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error("[SETTINGS] item transfer apply failed:", error);
+    return res.status(500).json({ error: (error as Error).message });
+  } finally {
+    connection.release();
+  }
+});
 entities.forEach(entity => {
   const handlers = createHandlers(entity);
   const route = `/api/${entity.replace(/_/g, "-")}`;

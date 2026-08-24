@@ -89,6 +89,44 @@ const GLOBAL_ITEM_RENAME_CACHE_KEYS = [
   "udc_plate_item_master",
   "udc_materials",
 ];
+const GLOBAL_ITEM_TRANSFER_MODULE_OPTIONS = [
+  { key: "orders", label: "Orders" },
+  { key: "plans", label: "Plans / Scheduling" },
+  { key: "dispatch", label: "Dispatch" },
+  { key: "loading", label: "Loading" },
+  { key: "billing", label: "Billing" },
+] as const;
+const GLOBAL_ITEM_TRANSFER_SYNC_EVENTS = [
+  ...GLOBAL_ITEM_RENAME_SYNC_EVENTS,
+  "sync-data-orders",
+  "sync-data-orders_schedule",
+  "sync-data-productions",
+  "sync-data-dispatch_plans",
+  "sync-data-loading_slips",
+  "sync-data-php_loading_slips",
+  "sync-data-plate_loading_slips",
+  "sync-data-invoice_line_items",
+];
+const GLOBAL_ITEM_TRANSFER_CACHE_KEYS = [
+  ...GLOBAL_ITEM_RENAME_CACHE_KEYS,
+  "udc_orders",
+  "udc_orders_schedule",
+  "udc_productions",
+  "udc_dispatch_plans",
+  "udc_loading_slips",
+  "udc_php_loading_slips",
+  "udc_plate_loading_slips",
+  "udc_invoice_line_items",
+];
+
+type GlobalItemTransferModule = (typeof GLOBAL_ITEM_TRANSFER_MODULE_OPTIONS)[number]["key"];
+
+type GlobalItemTransferPreview = {
+  counts: Record<GlobalItemTransferModule, number>;
+  details?: Record<string, unknown>;
+  fromItem?: { id: string; source: OrderItemSource; name: string; erp?: string };
+  toItem?: { id: string; source: OrderItemSource; name: string; erp?: string };
+};
 
 function getGlobalItemRenameKey(item: Pick<OrderCatalogItem, "source" | "id">) {
   return `${item.source}::${item.id}`;
@@ -190,6 +228,18 @@ export function SettingsPage() {
   const [renameNewName, setRenameNewName] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameStatus, setRenameStatus] = useState("");
+  const [transferFromInput, setTransferFromInput] = useState("");
+  const [transferToInput, setTransferToInput] = useState("");
+  const [transferModules, setTransferModules] = useState<Record<GlobalItemTransferModule, boolean>>({
+    orders: true,
+    plans: true,
+    dispatch: true,
+    loading: true,
+    billing: true,
+  });
+  const [transferPreview, setTransferPreview] = useState<GlobalItemTransferPreview | null>(null);
+  const [transferSaving, setTransferSaving] = useState(false);
+  const [transferStatus, setTransferStatus] = useState("");
 
   const currentSetting = settings[0];
   const isPankajUser = String(user?.email || "").trim().toLowerCase() === GLOBAL_ITEM_RENAME_ALLOWED_EMAIL;
@@ -376,12 +426,132 @@ export function SettingsPage() {
     [globalRenameOptions, renameItemInput]
   );
   const selectedRenameItem = selectedRenameOption?.item;
+  const selectedTransferFromOption = useMemo(
+    () => globalRenameOptions.find((option) => option.label === transferFromInput || option.key === transferFromInput),
+    [globalRenameOptions, transferFromInput]
+  );
+  const selectedTransferToOption = useMemo(
+    () => globalRenameOptions.find((option) => option.label === transferToInput || option.key === transferToInput),
+    [globalRenameOptions, transferToInput]
+  );
+  const selectedTransferFromItem = selectedTransferFromOption?.item;
+  const selectedTransferToItem = selectedTransferToOption?.item;
+  const selectedTransferModules = useMemo(
+    () => GLOBAL_ITEM_TRANSFER_MODULE_OPTIONS.filter((option) => transferModules[option.key]).map((option) => option.key),
+    [transferModules]
+  );
+  const transferSameSource = Boolean(
+    selectedTransferFromItem && selectedTransferToItem && selectedTransferFromItem.source === selectedTransferToItem.source
+  );
+  const transferReady = Boolean(
+    selectedTransferFromItem &&
+      selectedTransferToItem &&
+      selectedTransferFromItem.id !== selectedTransferToItem.id &&
+      transferSameSource &&
+      selectedTransferModules.length > 0
+  );
 
   useEffect(() => {
     if (!selectedRenameItem) return;
     setRenameNewName(selectedRenameItem.name);
     setRenameStatus("");
   }, [selectedRenameItem?.id, selectedRenameItem?.source]);
+
+  const resetGlobalItemTransferPreview = () => {
+    setTransferPreview(null);
+    setTransferStatus("");
+  };
+
+  const buildGlobalItemTransferPayload = () => ({
+    fromSource: selectedTransferFromItem?.source as OrderItemSource | undefined,
+    fromItemId: selectedTransferFromItem?.id || "",
+    toSource: selectedTransferToItem?.source as OrderItemSource | undefined,
+    toItemId: selectedTransferToItem?.id || "",
+    modules: selectedTransferModules,
+  });
+
+  const refreshGlobalItemTransferCaches = () => {
+    GLOBAL_ITEM_TRANSFER_CACHE_KEYS.forEach((key) => window.localStorage.removeItem(key));
+    GLOBAL_ITEM_TRANSFER_SYNC_EVENTS.forEach((eventName) => window.dispatchEvent(new CustomEvent(eventName)));
+  };
+
+  const handleGlobalItemTransferPreview = async () => {
+    if (!isPankajUser) {
+      alert("You are not allowed to transfer item usage.");
+      return;
+    }
+    if (!transferReady) {
+      alert("Select From Item, To Item of the same source, and at least one module.");
+      return;
+    }
+
+    setTransferSaving(true);
+    setTransferStatus("");
+    try {
+      const token = window.localStorage.getItem("authToken") || "";
+      const response = await fetch("/api/settings/item-transfer/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(buildGlobalItemTransferPayload()),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result?.error || "Failed to preview item transfer.");
+      setTransferPreview(result as GlobalItemTransferPreview);
+      setTransferStatus("Preview ready. Review the counts before applying.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to preview item transfer.";
+      setTransferPreview(null);
+      setTransferStatus(message);
+      alert(message);
+    } finally {
+      setTransferSaving(false);
+    }
+  };
+
+  const handleGlobalItemTransferApply = async () => {
+    if (!transferReady || !transferPreview || !selectedTransferFromItem || !selectedTransferToItem) {
+      alert("Run preview before applying the transfer.");
+      return;
+    }
+
+    const countSummary = GLOBAL_ITEM_TRANSFER_MODULE_OPTIONS
+      .filter((option) => selectedTransferModules.includes(option.key))
+      .map((option) => `${option.label}: ${transferPreview.counts?.[option.key] || 0}`)
+      .join("\n");
+    const confirmed = window.confirm(
+      `Transfer linked usage?\n\nFrom: ${selectedTransferFromItem.name}\nTo: ${selectedTransferToItem.name}\n\n${countSummary}`
+    );
+    if (!confirmed) return;
+
+    setTransferSaving(true);
+    setTransferStatus("");
+    try {
+      const token = window.localStorage.getItem("authToken") || "";
+      const response = await fetch("/api/settings/item-transfer/apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(buildGlobalItemTransferPayload()),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result?.error || "Failed to apply item transfer.");
+
+      refreshGlobalItemTransferCaches();
+      setTransferPreview(result as GlobalItemTransferPreview);
+      setTransferStatus("Transfer completed. Linked screens will refresh with the target item.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to apply item transfer.";
+      setTransferStatus(message);
+      alert(message);
+    } finally {
+      setTransferSaving(false);
+    }
+  };
 
   const handleGlobalItemRename = async () => {
     if (!isPankajUser) {
@@ -594,87 +764,220 @@ export function SettingsPage() {
       )}
 
       {isPankajUser && (
-        <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-4">
-          <div>
-            <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Global Item Rename</h3>
-            <p className="text-sm text-black leading-6">
-              Rename one FG/NPD, PHP, Plate, or Material master item. The change is saved in the backend master table and reused by master-linked screens.
-            </p>
+        <>
+          <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-4">
+            <div>
+              <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Global Item Rename</h3>
+              <p className="text-sm text-black leading-6">
+                Rename one FG/NPD, PHP, Plate, or Material master item. The change is saved in the backend master table and reused by master-linked screens.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col space-y-2 md:col-span-2">
+                <label htmlFor="globalItemRenameSearch" className="text-xs font-black uppercase tracking-wide text-black">
+                  Search Item
+                </label>
+                <input
+                  id="globalItemRenameSearch"
+                  list="globalItemRenameOptions"
+                  value={renameItemInput}
+                  onChange={(event) => setRenameItemInput(event.target.value)}
+                  disabled={renameSaving}
+                  placeholder="Search by item name, ERP, source, or ID"
+                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+                />
+                <datalist id="globalItemRenameOptions">
+                  {globalRenameOptions.map((option) => (
+                    <option key={option.key} value={option.label} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="flex flex-col space-y-2">
+                <label className="text-xs font-black uppercase tracking-wide text-black">Current Name</label>
+                <div className="min-h-[42px] rounded border-2 border-black bg-slate-50 px-3 py-2 text-sm font-bold text-black">
+                  {selectedRenameItem ? selectedRenameItem.name : "Select an item"}
+                </div>
+              </div>
+
+              <div className="flex flex-col space-y-2">
+                <label className="text-xs font-black uppercase tracking-wide text-black">ERP / Source</label>
+                <div className="min-h-[42px] rounded border-2 border-black bg-slate-50 px-3 py-2 text-sm font-bold text-black">
+                  {selectedRenameItem ? `${selectedRenameItem.erp || "-"} / ${getOrderItemSourceLabel(selectedRenameItem.source)}` : "-"}
+                </div>
+              </div>
+
+              <div className="flex flex-col space-y-2 md:col-span-2">
+                <label htmlFor="globalItemRenameNewName" className="text-xs font-black uppercase tracking-wide text-black">
+                  New Item Name
+                </label>
+                <input
+                  id="globalItemRenameNewName"
+                  type="text"
+                  value={renameNewName}
+                  onChange={(event) => setRenameNewName(event.target.value)}
+                  disabled={renameSaving || !selectedRenameItem}
+                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+                />
+              </div>
+            </div>
+
+            {selectedRenameItem && renameNewName.trim() && renameNewName.trim() !== selectedRenameItem.name.trim() && (
+              <div className="rounded border border-black bg-yellow-50 px-4 py-3 text-sm font-bold text-black">
+                {selectedRenameItem.name} -&gt; {renameNewName.replace(/\s+/g, " ").trim()}
+              </div>
+            )}
+
+            {renameStatus && (
+              <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm font-bold text-black">
+                {renameStatus}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => void handleGlobalItemRename()}
+                disabled={renameSaving || !selectedRenameItem || !renameNewName.trim()}
+                className="inline-flex min-w-[180px] items-center justify-center rounded bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {renameSaving ? <Spinner size={16} className="text-white" /> : "Rename Item"}
+              </button>
+            </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="flex flex-col space-y-2 md:col-span-2">
-              <label htmlFor="globalItemRenameSearch" className="text-xs font-black uppercase tracking-wide text-black">
-                Search Item
-              </label>
-              <input
-                id="globalItemRenameSearch"
-                list="globalItemRenameOptions"
-                value={renameItemInput}
-                onChange={(event) => setRenameItemInput(event.target.value)}
-                disabled={renameSaving}
-                placeholder="Search by item name, ERP, source, or ID"
-                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
-              />
-              <datalist id="globalItemRenameOptions">
+          <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-4">
+            <div>
+              <h3 className="text-sm font-black uppercase text-slate-600 mb-2">Global Item Transfer</h3>
+              <p className="text-sm text-black leading-6">
+                Transfer linked usage from one item to another item of the same source. Selected modules are updated in backend records, including completed history.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col space-y-2">
+                <label htmlFor="globalItemTransferFrom" className="text-xs font-black uppercase tracking-wide text-black">From Item</label>
+                <input
+                  id="globalItemTransferFrom"
+                  list="globalItemTransferOptions"
+                  value={transferFromInput}
+                  onChange={(event) => {
+                    setTransferFromInput(event.target.value);
+                    resetGlobalItemTransferPreview();
+                  }}
+                  disabled={transferSaving}
+                  placeholder="Search source item"
+                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+                />
+              </div>
+
+              <div className="flex flex-col space-y-2">
+                <label htmlFor="globalItemTransferTo" className="text-xs font-black uppercase tracking-wide text-black">To Item</label>
+                <input
+                  id="globalItemTransferTo"
+                  list="globalItemTransferOptions"
+                  value={transferToInput}
+                  onChange={(event) => {
+                    setTransferToInput(event.target.value);
+                    resetGlobalItemTransferPreview();
+                  }}
+                  disabled={transferSaving}
+                  placeholder="Search target item"
+                  className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
+                />
+              </div>
+              <datalist id="globalItemTransferOptions">
                 {globalRenameOptions.map((option) => (
-                  <option key={option.key} value={option.label} />
+                  <option key={`transfer-${option.key}`} value={option.label} />
                 ))}
               </datalist>
             </div>
 
-            <div className="flex flex-col space-y-2">
-              <label className="text-xs font-black uppercase tracking-wide text-black">Current Name</label>
-              <div className="min-h-[42px] rounded border-2 border-black bg-slate-50 px-3 py-2 text-sm font-bold text-black">
-                {selectedRenameItem ? selectedRenameItem.name : "Select an item"}
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded border border-black bg-slate-50 px-3 py-2 text-sm text-black">
+                <div className="text-xs font-black uppercase tracking-wide text-slate-600">From</div>
+                <div className="mt-1 font-bold">{selectedTransferFromItem ? selectedTransferFromItem.name : "Select an item"}</div>
+                <div className="text-xs font-semibold text-slate-600">
+                  {selectedTransferFromItem ? `${selectedTransferFromItem.erp || "-"} / ${getOrderItemSourceLabel(selectedTransferFromItem.source)}` : "-"}
+                </div>
+              </div>
+              <div className="rounded border border-black bg-slate-50 px-3 py-2 text-sm text-black">
+                <div className="text-xs font-black uppercase tracking-wide text-slate-600">To</div>
+                <div className="mt-1 font-bold">{selectedTransferToItem ? selectedTransferToItem.name : "Select an item"}</div>
+                <div className="text-xs font-semibold text-slate-600">
+                  {selectedTransferToItem ? `${selectedTransferToItem.erp || "-"} / ${getOrderItemSourceLabel(selectedTransferToItem.source)}` : "-"}
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col space-y-2">
-              <label className="text-xs font-black uppercase tracking-wide text-black">ERP / Source</label>
-              <div className="min-h-[42px] rounded border-2 border-black bg-slate-50 px-3 py-2 text-sm font-bold text-black">
-                {selectedRenameItem ? `${selectedRenameItem.erp || "-"} / ${getOrderItemSourceLabel(selectedRenameItem.source)}` : "-"}
+            {selectedTransferFromItem && selectedTransferToItem && !transferSameSource && (
+              <div className="rounded border border-red-700 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                Transfer is allowed only within the same source/type.
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div className="text-xs font-black uppercase tracking-wide text-black">Modules To Update</div>
+              <div className="grid gap-2 md:grid-cols-3">
+                {GLOBAL_ITEM_TRANSFER_MODULE_OPTIONS.map((option) => (
+                  <label key={option.key} className="flex items-center gap-2 rounded border border-black bg-white px-3 py-2 text-sm font-bold text-black">
+                    <input
+                      type="checkbox"
+                      checked={transferModules[option.key]}
+                      onChange={(event) => {
+                        setTransferModules((prev) => ({ ...prev, [option.key]: event.target.checked }));
+                        resetGlobalItemTransferPreview();
+                      }}
+                      disabled={transferSaving}
+                      className="h-4 w-4 border-black"
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
               </div>
             </div>
 
-            <div className="flex flex-col space-y-2 md:col-span-2">
-              <label htmlFor="globalItemRenameNewName" className="text-xs font-black uppercase tracking-wide text-black">
-                New Item Name
-              </label>
-              <input
-                id="globalItemRenameNewName"
-                type="text"
-                value={renameNewName}
-                onChange={(event) => setRenameNewName(event.target.value)}
-                disabled={renameSaving || !selectedRenameItem}
-                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 shadow-sm bg-white"
-              />
+            {transferPreview && (
+              <div className="rounded border border-black bg-yellow-50 p-4 text-sm text-black">
+                <div className="font-black uppercase tracking-wide">Preview Counts</div>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  {GLOBAL_ITEM_TRANSFER_MODULE_OPTIONS.filter((option) => selectedTransferModules.includes(option.key)).map((option) => (
+                    <div key={option.key} className="rounded border border-black bg-white px-3 py-2">
+                      <div className="text-xs font-black uppercase tracking-wide text-slate-600">{option.label}</div>
+                      <div className="text-lg font-black text-black">{transferPreview.counts?.[option.key] || 0}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {transferStatus && (
+              <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm font-bold text-black">
+                {transferStatus}
+              </div>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => void handleGlobalItemTransferPreview()}
+                disabled={transferSaving || !transferReady}
+                className="inline-flex min-w-[160px] items-center justify-center rounded border border-black bg-white px-5 py-2.5 text-sm font-bold text-black transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                {transferSaving ? <Spinner size={16} /> : "Preview"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleGlobalItemTransferApply()}
+                disabled={transferSaving || !transferReady || !transferPreview}
+                className="inline-flex min-w-[180px] items-center justify-center rounded bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {transferSaving ? <Spinner size={16} className="text-white" /> : "Apply Transfer"}
+              </button>
             </div>
           </div>
-
-          {selectedRenameItem && renameNewName.trim() && renameNewName.trim() !== selectedRenameItem.name.trim() && (
-            <div className="rounded border border-black bg-yellow-50 px-4 py-3 text-sm font-bold text-black">
-              {selectedRenameItem.name} -&gt; {renameNewName.replace(/\s+/g, " ").trim()}
-            </div>
-          )}
-
-          {renameStatus && (
-            <div className="rounded border border-black bg-slate-50 px-4 py-3 text-sm font-bold text-black">
-              {renameStatus}
-            </div>
-          )}
-
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => void handleGlobalItemRename()}
-              disabled={renameSaving || !selectedRenameItem || !renameNewName.trim()}
-              className="inline-flex min-w-[180px] items-center justify-center rounded bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {renameSaving ? <Spinner size={16} className="text-white" /> : "Rename Item"}
-            </button>
-          </div>
-        </div>
+        </>
       )}
 
       <div className="bg-white p-6 rounded shadow-sm border border-black max-w-3xl space-y-5">
