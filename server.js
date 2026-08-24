@@ -7934,41 +7934,71 @@ async function collectLoadingTransferRows(db, database, source, fromItemId, toIt
   let records = 0;
   let lines = 0;
   const tableCounts = {};
+  const detailRows = [];
   for (const tableName of loadingTables) {
     const columns = await getExistingColumnNames(db, database, tableName);
     if (!columns.has("id") || !columns.has("lines")) continue;
     const optionalJsonColumns = ["phpDetails", "plateDetails"].filter((column) => columns.has(column));
-    const selectColumns = ["`id`", "`lines`", ...optionalJsonColumns.map((column) => `\`${column}\``)].join(", ");
+    const metaColumns = ["slipNo", "date", "invoiceNo"].filter((column) => columns.has(column));
+    const selectColumns = [
+      "`id`",
+      "`lines`",
+      ...metaColumns.map((column) => `\`${column}\``),
+      ...optionalJsonColumns.map((column) => `\`${column}\``)
+    ].join(", ");
     const [rows] = await db.query(`SELECT ${selectColumns} FROM \`${tableName}\``);
     for (const row of rows) {
       let rowChanged = false;
       let rowLineCount = 0;
       const updateParts = [];
       const params = [];
-      const lineTransfer = transferLinkedItemInArray(parseJsonArrayField(row.lines), source, fromItemId, toItem || {
-        id: fromItemId,
-        source,
-        name: "",
-        erp: ""
-      });
+      const fallbackItem = { id: fromItemId, source, name: "", erp: "" };
+      const originalLines = parseJsonArrayField(row.lines);
+      const lineTransfer = transferLinkedItemInArray(originalLines, source, fromItemId, toItem || fallbackItem);
       if (lineTransfer.changed) {
         rowChanged = true;
         rowLineCount += lineTransfer.lineCount;
+        originalLines.forEach((line) => {
+          const lineSource = normalizeLoadingLineSource(line?.itemSource || line?.source);
+          if (String(line?.itemId || "").trim() !== fromItemId || lineSource !== source) return;
+          detailRows.push({
+            id: `${tableName}:${row.id}:line:${detailRows.length}`,
+            tableName,
+            slipNo: String(row.slipNo || row.id || "-"),
+            date: String(row.date || ""),
+            itemName: String(line?.itemName || ""),
+            erpCode: String(line?.erpCode || line?.masterErp || ""),
+            loadedQty: Number(line?.loadedQty || line?.qty || 0),
+            jobNos: Array.isArray(line?.jobNos) ? line.jobNos.map((job) => String(job)).join(", ") : "",
+            invoiceNo: String(row.invoiceNo || "")
+          });
+        });
         if (toItem) {
           updateParts.push("`lines` = ?");
           params.push(JSON.stringify(lineTransfer.rows));
         }
       }
       for (const detailColumn of optionalJsonColumns) {
-        const detailTransfer = transferLinkedItemInArray(parseJsonArrayField(row[detailColumn]), source, fromItemId, toItem || {
-          id: fromItemId,
-          source,
-          name: "",
-          erp: ""
-        });
+        const originalDetails = parseJsonArrayField(row[detailColumn]);
+        const detailTransfer = transferLinkedItemInArray(originalDetails, source, fromItemId, toItem || fallbackItem);
         if (detailTransfer.changed) {
           rowChanged = true;
           rowLineCount += detailTransfer.lineCount;
+          originalDetails.forEach((detail) => {
+            const detailSource = normalizeLoadingLineSource(detail?.itemSource || detail?.source);
+            if (String(detail?.itemId || "").trim() !== fromItemId || detailSource !== source) return;
+            detailRows.push({
+              id: `${tableName}:${row.id}:${detailColumn}:${detailRows.length}`,
+              tableName,
+              slipNo: String(row.slipNo || row.id || "-"),
+              date: String(row.date || ""),
+              itemName: String(detail?.itemName || ""),
+              erpCode: String(detail?.erpCode || detail?.masterErp || ""),
+              loadedQty: Number(detail?.loadedQty || detail?.requiredQty || 0),
+              jobNos: "",
+              invoiceNo: String(row.invoiceNo || "")
+            });
+          });
           if (toItem) {
             updateParts.push(`\`${detailColumn}\` = ?`);
             params.push(JSON.stringify(detailTransfer.rows));
@@ -7988,7 +8018,7 @@ async function collectLoadingTransferRows(db, database, source, fromItemId, toIt
       }
     }
   }
-  return { records, lines, tableCounts };
+  return { records, lines, tableCounts, rows: detailRows };
 }
 async function countGlobalItemTransfer(db, database, source, fromItemId, modules) {
   const counts = {
@@ -8000,37 +8030,95 @@ async function countGlobalItemTransfer(db, database, source, fromItemId, modules
   };
   const details = {};
   const orderCondition = getItemReferenceCondition("o", source);
-  const directCondition = getItemReferenceCondition("", source);
   const productionCondition = getItemReferenceCondition("p", source);
   const invoiceCondition = getItemReferenceCondition("ili", source);
   if (modules.includes("orders")) {
-    const [rows] = await db.query(`SELECT COUNT(*) AS count FROM \`orders\` o WHERE ${orderCondition.sql}`, orderCondition.buildParams(fromItemId));
-    counts.orders = Number(rows[0]?.count || 0);
+    const [rows] = await db.query(
+      `SELECT o.id, o.orderNo, o.orderDate, o.qty, o.status
+       FROM \`orders\` o
+       WHERE ${orderCondition.sql}
+       ORDER BY o.orderDate DESC, o.orderNo DESC`,
+      orderCondition.buildParams(fromItemId)
+    );
+    details.orders = rows.map((row) => ({
+      id: String(row.id || ""),
+      orderNo: String(row.orderNo || "-"),
+      date: String(row.orderDate || ""),
+      qty: Number(row.qty || 0),
+      status: String(row.status || "")
+    }));
+    counts.orders = details.orders.length;
   }
   if (modules.includes("plans")) {
     const [scheduleRows] = await db.query(
-      `SELECT COUNT(*) AS count FROM \`orders_schedule\` os JOIN \`orders\` o ON o.id = os.orderId WHERE ${orderCondition.sql}`,
+      `SELECT os.id, os.scheduleNo, os.scheduledDate, os.qty, os.producedQty, os.canceledQty, o.orderNo
+       FROM \`orders_schedule\` os
+       JOIN \`orders\` o ON o.id = os.orderId
+       WHERE ${orderCondition.sql}
+       ORDER BY os.scheduledDate DESC, os.scheduleNo DESC`,
       orderCondition.buildParams(fromItemId)
     );
     const [productionRows] = await db.query(
-      `SELECT COUNT(*) AS count FROM \`productions\` p WHERE ${productionCondition.sql}`,
+      `SELECT p.id, p.transactionNo, p.jobCardNo, p.date, p.qty, p.status, os.scheduleNo, o.orderNo
+       FROM \`productions\` p
+       LEFT JOIN \`orders_schedule\` os ON os.id = p.scheduleId
+       LEFT JOIN \`orders\` o ON o.id = os.orderId
+       WHERE ${productionCondition.sql}
+       ORDER BY p.date DESC, p.transactionNo DESC`,
       productionCondition.buildParams(fromItemId)
     );
-    const schedules = Number(scheduleRows[0]?.count || 0);
-    const productions = Number(productionRows[0]?.count || 0);
-    counts.plans = schedules + productions;
-    details.plans = { schedules, productions };
+    const schedules = scheduleRows.map((row) => ({
+      id: String(row.id || ""),
+      type: "Schedule",
+      scheduleNo: String(row.scheduleNo || row.id || "-"),
+      scheduledDate: String(row.scheduledDate || ""),
+      orderNo: String(row.orderNo || "-"),
+      qty: Number(row.qty || 0),
+      producedQty: Number(row.producedQty || 0),
+      canceledQty: Number(row.canceledQty || 0),
+      jobNo: "",
+      status: ""
+    }));
+    const productions = productionRows.map((row) => ({
+      id: String(row.id || ""),
+      type: "Job",
+      scheduleNo: String(row.scheduleNo || ""),
+      scheduledDate: String(row.date || ""),
+      orderNo: String(row.orderNo || "-"),
+      qty: Number(row.qty || 0),
+      producedQty: 0,
+      canceledQty: 0,
+      jobNo: String(row.jobCardNo || row.transactionNo || row.id || "-"),
+      status: String(row.status || "")
+    }));
+    details.plans = {
+      schedules: schedules.length,
+      productions: productions.length,
+      rows: [...schedules, ...productions]
+    };
+    counts.plans = schedules.length + productions.length;
   }
   if (modules.includes("dispatch")) {
     const [rows] = await db.query(
-      `SELECT COUNT(DISTINCT dp.id) AS count
+      `SELECT DISTINCT dp.id, dp.planNo, dp.date, dp.plannedQty, dp.loadedQty, dp.status, o.orderNo, p.transactionNo, p.jobCardNo
        FROM \`dispatch_plans\` dp
        LEFT JOIN \`orders\` o ON o.id = dp.orderId
        LEFT JOIN \`productions\` p ON p.id = dp.productionId
-       WHERE ${orderCondition.sql} OR ${productionCondition.sql}`,
+       WHERE ${orderCondition.sql} OR ${productionCondition.sql}
+       ORDER BY dp.date DESC, dp.planNo DESC`,
       [...orderCondition.buildParams(fromItemId), ...productionCondition.buildParams(fromItemId)]
     );
-    counts.dispatch = Number(rows[0]?.count || 0);
+    details.dispatch = rows.map((row) => ({
+      id: String(row.id || ""),
+      planNo: String(row.planNo || row.id || "-"),
+      date: String(row.date || ""),
+      orderNo: String(row.orderNo || "-"),
+      jobNo: String(row.jobCardNo || row.transactionNo || "-"),
+      plannedQty: Number(row.plannedQty || 0),
+      loadedQty: Number(row.loadedQty || 0),
+      status: String(row.status || "")
+    }));
+    counts.dispatch = details.dispatch.length;
   }
   if (modules.includes("loading")) {
     const loading = await collectLoadingTransferRows(db, database, source, fromItemId);
@@ -8039,10 +8127,24 @@ async function countGlobalItemTransfer(db, database, source, fromItemId, modules
   }
   if (modules.includes("billing")) {
     const [rows] = await db.query(
-      `SELECT COUNT(*) AS count FROM \`invoice_line_items\` ili WHERE ${invoiceCondition.sql}`,
+      `SELECT ili.id, ili.qty, ili.rate, ili.amount, inv.invoiceNo, inv.date AS invoiceDate, ls.slipNo
+       FROM \`invoice_line_items\` ili
+       LEFT JOIN \`invoices\` inv ON inv.id = ili.invoiceId
+       LEFT JOIN \`loading_slips\` ls ON ls.id = ili.loadingSlipId
+       WHERE ${invoiceCondition.sql}
+       ORDER BY inv.date DESC, inv.invoiceNo DESC`,
       invoiceCondition.buildParams(fromItemId)
     );
-    counts.billing = Number(rows[0]?.count || 0);
+    details.billing = rows.map((row) => ({
+      id: String(row.id || ""),
+      invoiceNo: String(row.invoiceNo || "-"),
+      invoiceDate: String(row.invoiceDate || ""),
+      loadingSlipNo: String(row.slipNo || "-"),
+      qty: Number(row.qty || 0),
+      rate: Number(row.rate || 0),
+      amount: Number(row.amount || 0)
+    }));
+    counts.billing = details.billing.length;
   }
   return { counts, details };
 }
