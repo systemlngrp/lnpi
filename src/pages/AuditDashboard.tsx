@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useData } from "../hooks/useData";
 import { useNpdItems } from "../hooks/useNpdItems";
 import { getInvoiceGrandTotal } from "../lib/gatePasses";
@@ -448,6 +448,19 @@ export function AuditDashboard() {
   const differenceMetrics = metrics.filter((metric) => roundMoney(metric.difference) !== 0);
   const hasDifference = differenceMetrics.length > 0;
 
+  const negativeOpeningNpdRows = useMemo(() => {
+    return npdItems
+      .filter((item) => roundMoney(Number(item.opening || 0)) < 0)
+      .map((item) => ({
+        id: String(item.id || item.erp || item.name || ""),
+        itemName: String(item.name || ""),
+        erp: String(item.erp || ""),
+        opening: roundMoney(Number(item.opening || 0)),
+        balance: roundMoney(Number(item.balance || 0)),
+        tallyStock: item.tallyStock == null ? null : roundMoney(Number(item.tallyStock || 0)),
+      }))
+      .sort((a, b) => a.itemName.localeCompare(b.itemName) || a.erp.localeCompare(b.erp));
+  }, [npdItems]);
   const reelMaterialMismatchRows = useMemo<ReelMaterialMismatchRow[]>(() => {
     const reelStockRows = buildReelStockRows({
       materials,
@@ -701,3 +714,5 @@ export function AuditDashboard() {
     </div>
   );
 }
+
+
