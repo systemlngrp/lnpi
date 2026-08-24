@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -124,6 +124,7 @@ import { ErpWiseReelStockReport } from "./pages/ErpWiseReelStockReport";
 import { FGStockReport } from "./pages/FGStockReport";
 import { ReelwiseStockReport } from "./pages/ReelwiseStockReport";
 import { JobwiseReelConsumptionReport } from "./pages/JobwiseReelConsumptionReport";
+import { JobConsumption } from "./pages/JobConsumption";
 import { JobsInProgressReport } from "./pages/JobsInProgressReport";
 import { EfficiencyReport } from "./pages/EfficiencyReport";
 import { HitVsMissReport } from "./pages/HitVsMissReport";
@@ -368,6 +369,7 @@ export default function App() {
           <Route path="physical-stock/shortage" element={<PhysicalStockShortageReport />} />
           <Route path="physical-stock/master" element={<PhysicalStockMaster />} />
           <Route path="reports/jobwise-reel-consumption" element={<JobwiseReelConsumptionReport />} />
+          <Route path="reports/job-consumption" element={<JobConsumption />} />
           <Route path="reports/jobs-in-progress" element={<JobsInProgressReport />} />
           <Route path="reports/efficiency" element={<EfficiencyReport />} />
           <Route path="reports/hit-vs-miss" element={<HitVsMissReport />} />
@@ -393,3 +395,4 @@ export default function App() {
     </HashRouter>
   );
 }
+
