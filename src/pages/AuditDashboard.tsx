@@ -20,6 +20,7 @@ import type {
   Supplier,
 } from "../types";
 import { cn } from "../lib/utils";
+import { formatDate } from "../lib/serial";
 
 const ALL_DATA_DATE_RANGE = { from: "", to: "" };
 const ALL_DATA_RANGE_LABEL = "All Dates";
@@ -456,6 +457,7 @@ export function AuditDashboard() {
         itemName: String(item.name || ""),
         erp: String(item.erp || ""),
         opening: roundMoney(Number(item.opening || 0)),
+        openingDate: String((item as any).openingTimestamp || ""),
         balance: roundMoney(Number(item.balance || 0)),
         tallyStock: item.tallyStock == null ? null : roundMoney(Number(item.tallyStock || 0)),
       }))
@@ -572,6 +574,54 @@ export function AuditDashboard() {
         </div>
       </section>
 
+      <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
+          <span>NPD Items With Negative Opening</span>
+          <span className="text-[10px] text-slate-300 font-normal">
+            Showing Negative Opening Items ({negativeOpeningNpdRows.length})
+          </span>
+        </div>
+        <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+          <table className="min-w-full border-collapse text-xs">
+            <thead className="bg-slate-100 sticky top-0 z-10">
+              <tr className="divide-x divide-slate-900 border-b-2 border-slate-900">
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Item Name</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">ERP</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Opening</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Opening Date</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Balance</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Tally Stock</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-900 bg-white">
+              {negativeOpeningNpdRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-xs font-black uppercase tracking-wide text-emerald-700">
+                    No negative opening items found.
+                  </td>
+                </tr>
+              ) : (
+                negativeOpeningNpdRows.map((row) => (
+                  <tr key={row.id} className="divide-x divide-slate-900 bg-red-50/50">
+                    <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.itemName || "-"}</td>
+                    <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.erp || "-"}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-red-700">{formatMoney(row.opening)}</td>
+                    <td className="px-3 py-2 text-xs font-bold text-slate-900">{row.openingDate ? formatDate(row.openingDate) : "-"}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-indigo-800">{formatMoney(row.balance)}</td>
+                    <td className="px-3 py-2 text-right text-xs font-black text-slate-900">{row.tallyStock == null ? "-" : formatMoney(row.tallyStock)}</td>
+                    <td className="px-3 py-2">
+                      <span className="inline-flex rounded-full border border-red-800 bg-red-50 px-2 py-0.5 text-[9px] font-black uppercase text-red-700">
+                        NEGATIVE OPENING
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
       <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white border-b-2 border-slate-900 flex justify-between items-center">
           <span>NPD Item Stock Mismatch Breakdown (Tally Stock vs App Balance)</span>
@@ -714,5 +764,8 @@ export function AuditDashboard() {
     </div>
   );
 }
+
+
+
 
 
