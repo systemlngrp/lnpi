@@ -86,7 +86,31 @@ export function NonJobIssueMaster() {
   }, [issueLines, materialNameMap]);
 
   const canCancelIssues = String(user?.email || "").trim().toLowerCase() === CANCEL_ALLOWED_EMAIL;
-  const mainTableColSpan = canCancelIssues ? 7 : 6;
+  const mainTableColSpan = canCancelIssues ? 9 : 8;
+
+  const issueTotalsByIssueId = useMemo(() => {
+    const totalsMap = new Map<string, { totalQty: number; totalValue: number }>();
+
+    for (const line of issueLines) {
+      const issueId = String(line.materialIssueId || "").trim();
+      if (!issueId) continue;
+
+      const qty = Number(line.qty || 0);
+      const fallback = resolveMaterialIssueRate(line.materialId, materials, materialIn, qty, {
+        useLatestRateAsOpeningRate: true,
+      });
+      const savedRate = Number(line.rate || 0);
+      const rate = savedRate > 0 ? savedRate : fallback.rate;
+      const existing = totalsMap.get(issueId) || { totalQty: 0, totalValue: 0 };
+
+      totalsMap.set(issueId, {
+        totalQty: existing.totalQty + qty,
+        totalValue: existing.totalValue + calculateMaterialIssueAmount(qty, rate),
+      });
+    }
+
+    return totalsMap;
+  }, [issueLines, materialIn, materials]);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -292,6 +316,8 @@ export function NonJobIssueMaster() {
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Date</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Tally Status</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Items</th>
+                <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Qty</th>
+                <th className="px-4 py-3 text-right text-xs font-bold uppercase">Total Value</th>
                 <th className="px-4 py-3 text-left text-xs font-bold uppercase">Remarks</th>
                 {canCancelIssues ? <th className="px-4 py-3 text-right text-xs font-bold uppercase">Actions</th> : null}
               </tr>
@@ -306,6 +332,7 @@ export function NonJobIssueMaster() {
               ) : (
                 filtered.map((row) => {
                   const isExpanded = expandedIssueId === row.id;
+                  const issueTotals = issueTotalsByIssueId.get(row.id) || { totalQty: 0, totalValue: 0 };
                   return (
                     <React.Fragment key={row.id}>
                       <tr className="divide-x divide-black hover:bg-slate-50">
@@ -326,6 +353,8 @@ export function NonJobIssueMaster() {
                         <td className="px-4 py-3 text-sm">{formatDate(row.date) || "-"}</td>
                         <td className="px-4 py-3 text-sm">{row.tallyPostingStatus || "-"}</td>
                         <td className="px-4 py-3 text-sm">{itemNameByIssueId.get(row.id) || "-"}</td>
+                        <td className="px-4 py-3 text-right text-sm font-black text-slate-800">{issueTotals.totalQty.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right text-sm font-black text-emerald-700">{formatMoney(issueTotals.totalValue)}</td>
                         <td className="px-4 py-3 text-sm">{row.remarks || "-"}</td>
                         {canCancelIssues ? (
                           <td className="px-4 py-3 text-right">
