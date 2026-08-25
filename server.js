@@ -2122,46 +2122,68 @@ async function backfillNonJobMaterialIssueValuation(db) {
   const openingRateByMaterial = new Map(
     materialRows.map((row) => [String(row.id || ""), roundCurrency(Number(row.openingRate || 0))])
   );
+  const getDateTime = (value, endOfDay = false) => {
+    const dateValue = String(value || "").slice(0, 10);
+    if (!dateValue) return 0;
+    const suffix = endOfDay ? "T23:59:59.999Z" : "T00:00:00.000Z";
+    const parsed = (/* @__PURE__ */ new Date(`${dateValue}${suffix}`)).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
   const [materialInRows] = await db.query("SELECT id, date, timestamp, `lines` FROM `material_in`");
-  const latestPurchaseByMaterial = /* @__PURE__ */ new Map();
+  const purchaseRatesByMaterial = /* @__PURE__ */ new Map();
   for (const receipt of materialInRows) {
-    const time = new Date(receipt.timestamp || receipt.date || 0).getTime() || 0;
+    const receiptDateTime = getDateTime(receipt.date || receipt.timestamp);
+    if (!receiptDateTime) continue;
+    const sortTime = new Date(receipt.timestamp || receipt.date || 0).getTime() || receiptDateTime;
     for (const line of parseJsonArray(receipt.lines)) {
       const materialId = String(line?.itemId || "").trim();
       if (!materialId) continue;
       const rate = roundCurrency(getMaterialInJsonLineRate(line));
       if (rate <= 0) continue;
-      const existing = latestPurchaseByMaterial.get(materialId);
-      if (!existing || time > existing.time) {
-        latestPurchaseByMaterial.set(materialId, { rate, time });
-      }
+      purchaseRatesByMaterial.set(materialId, [
+        ...purchaseRatesByMaterial.get(materialId) || [],
+        { rate, receiptDateTime, sortTime }
+      ]);
     }
   }
+  const getLatestPurchaseRateAsOf = (materialId, issueDate) => {
+    const issueDateTime = getDateTime(issueDate, true);
+    if (!issueDateTime) return 0;
+    return (purchaseRatesByMaterial.get(materialId) || []).filter((entry) => entry.receiptDateTime <= issueDateTime).sort((a, b) => b.sortTime - a.sortTime)[0]?.rate || 0;
+  };
   const [lineRows] = await db.query(`
-    SELECT mil.id, mil.materialId, mil.qty, mil.lastPurchaseRate, mil.openingRate, mil.rate, mil.amount, m.openingRate AS materialOpeningRate
+    SELECT mil.id, mil.materialId, mil.qty, mil.lastPurchaseRate, mil.openingRate, mil.rate, mil.amount, mi.date AS issueDate, m.openingRate AS materialOpeningRate
     FROM \`material_issue_lines\` mil
     JOIN \`material_issues\` mi ON mi.id = mil.materialIssueId
     JOIN \`materials\` m ON m.id = mil.materialId
     WHERE LOWER(TRIM(COALESCE(mi.issueType, ''))) IN ('without job', 'general', 'withoutjob', 'without_job')
       AND m.type = 'Other'
+      AND (
+        COALESCE(mil.lastPurchaseRate, 0) = 0
+        OR COALESCE(mil.openingRate, 0) = 0
+        OR COALESCE(mil.rate, 0) = 0
+        OR COALESCE(mil.amount, 0) = 0
+      )
   `);
   let updatedCount = 0;
   for (const line of lineRows) {
     const materialId = String(line.materialId || "").trim();
     const qty = roundCurrency(Number(line.qty || 0));
-    const latestPurchaseRate = latestPurchaseByMaterial.get(materialId)?.rate || 0;
+    const existingLastPurchaseRate = roundCurrency(Number(line.lastPurchaseRate || 0));
+    const existingOpeningRate = roundCurrency(Number(line.openingRate || 0));
+    const existingRate = roundCurrency(Number(line.rate || 0));
+    const existingAmount = roundCurrency(Number(line.amount || 0));
+    const issuePurchaseRate = getLatestPurchaseRateAsOf(materialId, line.issueDate);
     const materialOpeningRate = openingRateByMaterial.get(materialId) || roundCurrency(Number(line.materialOpeningRate || 0));
-    const lastPurchaseRate = roundCurrency(latestPurchaseRate);
-    const openingRate = lastPurchaseRate > 0 ? lastPurchaseRate : materialOpeningRate;
-    const rate = openingRate;
-    const amount = roundCurrency(qty * roundCurrency(rate));
-    if (rate <= 0 && amount <= 0 && openingRate <= 0 && lastPurchaseRate <= 0) continue;
-    if (roundCurrency(Number(line.lastPurchaseRate || 0)) === lastPurchaseRate && roundCurrency(Number(line.openingRate || 0)) === openingRate && roundCurrency(Number(line.rate || 0)) === rate && roundCurrency(Number(line.amount || 0)) === amount) {
-      continue;
-    }
+    const computedRate = roundCurrency(issuePurchaseRate > 0 ? issuePurchaseRate : materialOpeningRate);
+    const finalRate = existingRate > 0 ? existingRate : computedRate;
+    const finalAmount = existingAmount > 0 ? existingAmount : roundCurrency(qty * finalRate);
+    const finalLastPurchaseRate = existingLastPurchaseRate > 0 ? existingLastPurchaseRate : roundCurrency(issuePurchaseRate);
+    const finalOpeningRate = existingOpeningRate > 0 ? existingOpeningRate : materialOpeningRate;
+    if (finalRate <= 0 && finalAmount <= 0 && finalOpeningRate <= 0 && finalLastPurchaseRate <= 0) continue;
     await db.query(
-      "UPDATE `material_issue_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ?",
-      [lastPurchaseRate, openingRate, rate, amount, line.id]
+      "UPDATE `material_issue_lines` SET `lastPurchaseRate` = ?, `openingRate` = ?, `rate` = ?, `amount` = ? WHERE `id` = ? AND (COALESCE(`rate`, 0) = 0 OR COALESCE(`amount`, 0) = 0 OR COALESCE(`lastPurchaseRate`, 0) = 0 OR COALESCE(`openingRate`, 0) = 0)",
+      [finalLastPurchaseRate, finalOpeningRate, finalRate, finalAmount, line.id]
     );
     updatedCount += 1;
   }
