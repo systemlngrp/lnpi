@@ -275,6 +275,7 @@ export function MrrApprovals() {
       const baseLabel = line.sourceGatePassItemDescription?.trim() || line.itemName?.trim() || line.itemId;
       const resolvedServiceName = services.find((service) => service.id === (line.serviceId || line.itemId))?.name?.trim() || line.serviceName?.trim();
       if (resolvedServiceName) {
+        if (baseLabel.toLowerCase() === resolvedServiceName.toLowerCase()) return resolvedServiceName;
         return `${baseLabel} (${resolvedServiceName})`;
       }
       return baseLabel;

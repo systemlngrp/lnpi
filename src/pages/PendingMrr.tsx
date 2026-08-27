@@ -98,6 +98,13 @@ export function PendingMrr() {
           <h2 className="text-xl font-bold uppercase tracking-tight text-black">Pending Material Receipt</h2>
           <p className="mt-1 text-sm text-slate-500">Gate entries where material receipt has not yet been created.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => navigate("/material-in/form?mode=direct-service")}
+          className="rounded border border-indigo-700 bg-indigo-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-indigo-800"
+        >
+          Direct Service
+        </button>
       </div>
 
       <div className="rounded border border-black bg-white p-4 shadow-sm">

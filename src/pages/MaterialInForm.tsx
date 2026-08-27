@@ -212,6 +212,7 @@ export function MaterialInForm() {
 
   const gateEntryId = searchParams.get("gateEntryId") || "";
   const editId = searchParams.get("edit") || "";
+  const isDirectServiceEntry = searchParams.get("mode") === "direct-service" && !editId;
   const linkedGateEntry = useMemo(
     () => gateEntries.find((entry) => entry.id === gateEntryId),
     [gateEntries, gateEntryId]
@@ -250,10 +251,12 @@ export function MaterialInForm() {
   );
   const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
   const isServiceReturn = isReturnableReceiptFlow || mrrType === "Service Return";
+  const isDirectService = mrrType === "Direct Service";
+  const isServiceLineMode = isServiceReturn || isDirectService;
   const poMandatoryMrrTypes = useMemo(() => new Set(parsePoMandatoryMrrTypes(settings[0])), [settings]);
   const supportsPoSettingForCurrentMrrType = supportsPoMandatorySetting(mrrType);
   const isPoMandatoryForCurrentMrrType = supportsPoSettingForCurrentMrrType && poMandatoryMrrTypes.has(mrrType);
-  const showPoLineSelection = !isServiceReturn && (mrrType === "Others" || mrrType === "FG Purchase");
+  const showPoLineSelection = !isServiceLineMode && (mrrType === "Others" || mrrType === "FG Purchase");
   const normalizedInvoiceCurrency = normalizeInvoiceCurrency(invoiceCurrency);
   const isUsdInvoice = normalizedInvoiceCurrency === "USD";
   const numericExchangeRate = isUsdInvoice ? Number(exchangeRate || 0) : 0;
@@ -323,10 +326,10 @@ export function MaterialInForm() {
     [services]
   );
 
-  const activeItemOptions = isServiceReturn ? serviceOptions : materialOptions;
-  const activeItemLabel = isServiceReturn ? "Service" : isFgType ? "FG Item" : "Material";
-  const activeItemPlaceholder = isServiceReturn ? "Select Service..." : isFgType ? "Select Item..." : "Select Material...";
-  const activeItemSelectKey = isServiceReturn ? "service" : isFgType ? "fg" : mrrType === "Reel" ? "reel" : "material";
+  const activeItemOptions = isServiceLineMode ? serviceOptions : materialOptions;
+  const activeItemLabel = isServiceLineMode ? "Service" : isFgType ? "FG Item" : "Material";
+  const activeItemPlaceholder = isServiceLineMode ? "Select Service..." : isFgType ? "Select Item..." : "Select Material...";
+  const activeItemSelectKey = isServiceLineMode ? "service" : isFgType ? "fg" : mrrType === "Reel" ? "reel" : "material";
 
   const supplierOptions = useMemo(
     () => {
@@ -346,6 +349,11 @@ export function MaterialInForm() {
     { value: "FG Purchase", label: "FG Purchase" },
     { value: "Service Return", label: "Service Return" },
   ];
+
+  useEffect(() => {
+    if (!isDirectServiceEntry || editingEntry) return;
+    setMrrType("Direct Service");
+  }, [editingEntry, isDirectServiceEntry]);
 
   useEffect(() => {
     if (editingEntry) return;
@@ -537,13 +545,13 @@ export function MaterialInForm() {
   }, [editingEntry, isInterState, linkedGateEntry, linkedSourceGatePass, pendingGatePassLines, services]);
 
   const getMaterial = (materialId: string) => {
-    if (isServiceReturn) return services.find((service) => service.id === materialId);
+    if (isServiceLineMode) return services.find((service) => service.id === materialId);
     if (isFgType) return npdItems.find((item) => item.id === materialId);
     return materials.find((material) => material.id === materialId);
   };
 
   const getLineDisplayName = (line: MaterialLine) => {
-    if (isServiceReturn) {
+    if (isServiceLineMode) {
       return line.itemName || services.find((service) => service.id === (line.serviceId || line.itemId))?.name || "Unknown";
     }
 
@@ -1165,6 +1173,44 @@ export function MaterialInForm() {
       return;
     }
 
+    if (isDirectService) {
+      const service = services.find((entry) => entry.id === currentItemId && entry.active !== "No");
+      const invoiceRateInput = Number(currentInvoiceRate || 0);
+      if (!service || invoiceRateInput <= 0) return;
+
+      const newLine = applySupplyTypeTaxRates({
+        id: crypto.randomUUID(),
+        itemId: service.id,
+        itemName: service.name,
+        lineType: "Service",
+        serviceId: service.id,
+        serviceName: service.name,
+        qty: 1,
+        uom: "",
+        invoiceCurrency: normalizedInvoiceCurrency,
+        exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+        invoiceQty: 1,
+        rate: invoiceRateInput,
+        value: invoiceRateInput,
+        ...(isUsdInvoice
+          ? { invoiceRateUsd: invoiceRateInput }
+          : { invoiceRate: invoiceRateInput, rate: invoiceRateInput, value: invoiceRateInput }),
+        actualQty: 1,
+        gstRate: 0,
+        cgstRate: 0,
+        sgstRate: 0,
+        igstRate: 0,
+      }, isInterState ? "INTER_STATE" : "INTRA_STATE", {
+        forceFromGstRate: true,
+        invoiceCurrency: normalizedInvoiceCurrency,
+        exchangeRate: isUsdInvoice ? numericExchangeRate : undefined,
+      });
+
+      setLines((prev) => [...prev, newLine]);
+      resetLineDrafts();
+      return;
+    }
+
     if (isServiceReturn) {
       const service = services.find((entry) => entry.id === currentItemId);
       const sourceLine = pendingGatePassLines.find((line) => line.id === currentSourceGatePassLineId);
@@ -1275,7 +1321,7 @@ export function MaterialInForm() {
         const poLineId = patch.poLineId ?? line.poLineId;
         const poLine = poLineId ? getPurchaseOrderLine(poLineId) : undefined;
         const po = poLine ? getPurchaseOrder(poLine.purchaseOrderId) : undefined;
-        const selectedService = isServiceReturn && patch.itemId
+        const selectedService = isServiceLineMode && patch.itemId
           ? services.find((entry) => entry.id === String(patch.itemId))
           : undefined;
         const nextLine = recalculateMaterialLine({
@@ -2458,7 +2504,7 @@ export function MaterialInForm() {
           </div>
         ) : null}
 
-        {!editingEntry && !isServiceReturn ? (
+        {!editingEntry && !isServiceLineMode ? (
           <div className="rounded border-2 border-indigo-700 bg-indigo-50/40 p-4 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -2773,6 +2819,8 @@ export function MaterialInForm() {
             </label>
             {linkedGateEntry?.purpose === "Returnable Receipt" ? (
               <input value="Service Return" disabled className="border-2 border-black rounded p-2 text-black bg-slate-50 w-full font-semibold opacity-80" />
+            ) : isDirectService ? (
+              <input value="Direct Service" disabled className="border-2 border-black rounded p-2 text-black bg-slate-50 w-full font-semibold opacity-80" />
             ) : (
               <Select options={mrrTypeOptions} value={mrrType} onChange={handleMrrTypeChange} required />
             )}
@@ -2909,7 +2957,7 @@ export function MaterialInForm() {
 
         <div className="mt-6 border-t border-black pt-4">
           <h3 className="text-lg font-bold text-black mb-4 uppercase">
-            {isServiceReturn ? "Service Return Lines" : isFgType ? "FG Items" : (mrrType === "Reel" ? "Reel Items" : "Line Items")}
+            {isDirectService ? "Direct Service Lines" : isServiceReturn ? "Service Return Lines" : isFgType ? "FG Items" : (mrrType === "Reel" ? "Reel Items" : "Line Items")}
           </h3>
           {mrrType === "Reel" ? (
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded border border-black bg-indigo-50 px-4 py-3">
@@ -2996,7 +3044,7 @@ export function MaterialInForm() {
               </div>
             ) : null}
             <div className="flex flex-col space-y-1 w-full md:w-24">
-              <label className="text-sm font-bold text-black">{isUsdInvoice ? "Invoice Rate (USD)" : "Invoice Rate (INR)"}</label>
+              <label className="text-sm font-bold text-black">{isDirectService ? `Service Amount (${isUsdInvoice ? "USD" : "INR"})` : isUsdInvoice ? "Invoice Rate (USD)" : "Invoice Rate (INR)"}</label>
               <input
                 type="number"
                 value={currentInvoiceRate || ""}
@@ -3016,19 +3064,19 @@ export function MaterialInForm() {
                 <table className="min-w-full divide-y divide-black border-collapse border border-black">
                   <thead className="sticky top-0 z-30 bg-slate-100 divide-x divide-black">
                     <tr className="divide-x divide-black">
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Service" : isFgType ? "Item" : "Material"}</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceLineMode ? "Service" : isFgType ? "Item" : "Material"}</th>
                       {isServiceReturn ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Returned Item</th> : null}
                       {showPoLineSelection ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Our PO No.</th> : null}
                       {showPoLineSelection ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">PO Rate</th> : null}
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Return Qty" : isFgType ? "Item Receipt" : "Invoice Qty"}</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isUsdInvoice ? "Invoice Rate (USD)" : "Invoice Rate (INR)"}</th>
+                      {!isDirectService ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Return Qty" : isFgType ? "Item Receipt" : "Invoice Qty"}</th> : null}
+                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isDirectService ? `Service Amount (${isUsdInvoice ? "USD" : "INR"})` : isUsdInvoice ? "Invoice Rate (USD)" : "Invoice Rate (INR)"}</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">GST %</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Invoice Value (INR)</th>
                       {!isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">CGST %</th> : null}
                       {!isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">SGST %</th> : null}
                       {isInterState ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">IGST %</th> : null}
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Accepted Qty" : "Kanta Weight"}</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th>
+                      {!isDirectService ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">{isServiceReturn ? "Accepted Qty" : "Kanta Weight"}</th> : null}
+                      {!isDirectService ? <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">UOM</th> : null}
                       <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase border border-black">Actual Value</th>
                       <th className="px-4 py-3 text-right border border-black"></th>
                     </tr>
@@ -3039,7 +3087,7 @@ export function MaterialInForm() {
                       return (
                         <tr key={line.id} className="divide-x divide-black">
                           <td className="px-4 py-3 text-sm text-black border border-black min-w-[220px]">
-                            {isServiceReturn ? (
+                            {isServiceLineMode ? (
                               <Select
                                 options={serviceOptions}
                                 value={line.serviceId || line.itemId || ""}
@@ -3062,7 +3110,7 @@ export function MaterialInForm() {
                           {showPoLineSelection ? (
                             <td className="px-4 py-3 text-sm text-black border border-black">{Number(line.poRate || 0).toFixed(2)}</td>
                           ) : null}
-                          <td className="px-4 py-3 text-sm text-black border border-black">
+                          {!isDirectService ? <td className="px-4 py-3 text-sm text-black border border-black">
                             {mrrType === "Reel" ? Number(line.invoiceQty || 0).toFixed(2) : (
                               <input
                                 type="number"
@@ -3073,7 +3121,7 @@ export function MaterialInForm() {
                                 className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                               />
                             )}
-                          </td>
+                          </td> : null}
                           <td className="px-4 py-3 text-sm text-black border border-black">
                             <input
                               type="number"
@@ -3110,7 +3158,7 @@ export function MaterialInForm() {
                               <input type="number" min="0" step="0.01" value={Number(line.igstRate || 0) > 0 ? line.igstRate : ""} onChange={(e) => updateLine(line.id, { igstRate: Number(e.target.value || 0) })} className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
                             </td>
                           ) : null}
-                          <td className="px-4 py-3 text-sm text-black border border-black">
+                          {!isDirectService ? <td className="px-4 py-3 text-sm text-black border border-black">
                             <input
                               type="number"
                               min="0"
@@ -3119,8 +3167,8 @@ export function MaterialInForm() {
                               onChange={(e) => updateLine(line.id, { actualQty: Number(e.target.value || 0) })}
                               className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                             />
-                          </td>
-                          <td className="px-4 py-3 text-sm text-black border border-black">{line.uom}</td>
+                          </td> : null}
+                          {!isDirectService ? <td className="px-4 py-3 text-sm text-black border border-black">{line.uom}</td> : null}
                           <td className="px-4 py-3 text-sm font-medium text-black border border-black">{Number(line.actualValue || line.value || 0).toFixed(2)}</td>
                           <td className="px-4 py-3 text-right border border-black">
                             <button type="button" onClick={() => handleRemoveLine(line.id)} className="text-red-600 hover:text-red-800">

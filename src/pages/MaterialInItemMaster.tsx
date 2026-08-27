@@ -159,7 +159,7 @@ export function MaterialInItemMaster() {
 
     const filterFn = (item: any) => {
       if (!q) return true;
-      const itemName = materials.find(i => i.id === item.itemId || i.id === item.materialId)?.name || npdItems.find(i => i.id === item.itemId || i.id === item.materialId)?.name || "";
+      const itemName = item.serviceName || item.itemName || materials.find(i => i.id === item.itemId || i.id === item.materialId)?.name || npdItems.find(i => i.id === item.itemId || i.id === item.materialId)?.name || "";
       const supplierName = getSupplierName(item.parentSupplierId);
       return (
         itemName.toLowerCase().includes(q) ||
@@ -245,7 +245,7 @@ export function MaterialInItemMaster() {
 
     const data = activeTab === "others" ? processedData.others : processedData.reelSummary;
     return data.map((line: any) => {
-      const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
+      const itemName = line.serviceName || line.itemName || materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
       return {
         "GE No": line.parentGateEntryNo,
         "MRR No": line.parentTransactionNo,
@@ -327,7 +327,7 @@ export function MaterialInItemMaster() {
         </thead>
         <tbody className="divide-y divide-black bg-white">
           {data.map((line: any) => {
-            const itemName = materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
+            const itemName = line.serviceName || line.itemName || materials.find(i => i.id === line.itemId)?.name || npdItems.find(i => i.id === line.itemId)?.name || "Unknown";
             const canEditInline = line.parentStatus === "Pending PH";
             const isEditing = editingLineId === line.id;
 
