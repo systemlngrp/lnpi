@@ -318,6 +318,9 @@ export function AuditDashboard() {
         isProductionPostedToTally(production) &&
         Number(production.prodFromFFG || 0) > 0
     );
+    const manufacturingProductionIdSet = new Set(
+      manufacturingProductions.map((production) => production.id)
+    );
     const tallyPostedMaterialIn = materialIn.filter(
       (entry) => String(entry.tallyTimestamp || "").trim() && String(entry.transactionNo || "").trim() !== "1"
     );
