@@ -338,27 +338,68 @@ export function AuditDashboard() {
     const tallyPostedDebitNotes = materialIn.filter(isDebitNotePostedToTally);
     const tallyPostedInvoices = invoices.filter(isInvoicePostedToTally);
 
-    const getIssueLineValue = (issueIds: Set<string>) => materialIssueLines
+    const getSavedLineValue = (line: { qty?: number; rate?: number; amount?: number }) => {
+      const savedAmount = Number(line.amount || 0);
+      if (savedAmount > 0) return savedAmount;
+      return Number(line.qty || 0) * Number(line.rate || 0);
+    };
+
+    const receiptById = new Map(materialIn.map((entry) => [entry.id, entry]));
+    const packingSlipById = new Map(packingSlips.map((entry) => [entry.id, entry]));
+    const materialById = new Map(materials.map((entry) => [entry.id, entry]));
+    const getPackingSlipActualRate = (packingSlipId: string) => {
+      const slip = packingSlipById.get(packingSlipId);
+      if (!slip) return 0;
+      const receipt = receiptById.get(slip.materialInId);
+      const receiptLine = receipt?.lines.find((line) => line.id === slip.materialLineId);
+      return Number(
+        receiptLine?.invoiceRate ||
+        receiptLine?.poRate ||
+        receiptLine?.rate ||
+        materialById.get(slip.materialId)?.openingRate ||
+        0
+      );
+    };
+    const getActualReelValue = (reelLines: Array<{ packingSlipId: string; weightKg: number }>) => {
+      if (reelLines.length === 0) return null;
+      const valuations = reelLines.map((line) => ({
+        weight: Number(line.weightKg || 0),
+        rate: getPackingSlipActualRate(line.packingSlipId),
+      }));
+      if (valuations.some((entry) => entry.weight <= 0 || entry.rate <= 0)) return null;
+      return valuations.reduce((sum, entry) => sum + entry.weight * entry.rate, 0);
+    };
+
+    const issueReelsByLineId = new Map<string, MaterialIssueReelLine[]>();
+    issueReelLines.forEach((line) => {
+      const rows = issueReelsByLineId.get(line.materialIssueLineId) || [];
+      rows.push(line);
+      issueReelsByLineId.set(line.materialIssueLineId, rows);
+    });
+    const returnReelsByLineId = new Map<string, MaterialReturnReelLine[]>();
+    returnReelLines.forEach((line) => {
+      const rows = returnReelsByLineId.get(line.materialReturnLineId) || [];
+      rows.push(line);
+      returnReelsByLineId.set(line.materialReturnLineId, rows);
+    });
+
+    const getIssueLineValue = (issueIds: Set<string>, useActualReelRates = false) => materialIssueLines
       .filter((line) => issueIds.has(line.materialIssueId))
       .reduce((sum, line) => {
-        const savedAmount = Number(line.amount || 0);
-        if (savedAmount > 0) return sum + savedAmount;
-        const savedRate = Number(line.rate || 0);
-        return sum + Number(line.qty || 0) * savedRate;
+        const actualReelValue = useActualReelRates ? getActualReelValue(issueReelsByLineId.get(line.id) || []) : null;
+        return sum + (actualReelValue ?? getSavedLineValue(line));
       }, 0);
 
-    const getReturnLineValue = (returnIds: Set<string>) => materialReturnLines
+    const getReturnLineValue = (returnIds: Set<string>, useActualReelRates = false) => materialReturnLines
       .filter((line) => returnIds.has(line.materialReturnId))
       .reduce((sum, line) => {
-        const savedAmount = Number(line.amount || 0);
-        if (savedAmount > 0) return sum + savedAmount;
-        const savedRate = Number(line.rate || 0);
-        return sum + Number(line.qty || 0) * savedRate;
+        const actualReelValue = useActualReelRates ? getActualReelValue(returnReelsByLineId.get(line.id) || []) : null;
+        return sum + (actualReelValue ?? getSavedLineValue(line));
       }, 0);
 
     const consumptionValue = getIssueLineValue(consumptionIssueIdSet);
-    const manufacturingIssueValue = getIssueLineValue(manufacturingIssueIdSet);
-    const manufacturingReturnValue = getReturnLineValue(manufacturingReturnIdSet);
+    const manufacturingIssueValue = getIssueLineValue(manufacturingIssueIdSet, true);
+    const manufacturingReturnValue = getReturnLineValue(manufacturingReturnIdSet, true);
     const manufacturingValue = manufacturingIssueValue - manufacturingReturnValue;
 
     const activeNpdItems = npdItems.filter((item) => Number(item.balance || 0) > 0);
