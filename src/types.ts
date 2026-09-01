@@ -599,6 +599,7 @@ export interface MaterialIn {
   expenseSGST?: number;
   expenseIGST?: number;
   roundOff?: number;
+  tdsAmount?: number;
   totalAmount: number;
   lines: MaterialLine[];
   phTimestamp?: string;

@@ -185,6 +185,7 @@ export function MaterialInForm() {
   const [expenseSGST, setExpenseSGST] = useState<number | "">("");
   const [expenseIGST, setExpenseIGST] = useState<number | "">("");
   const [roundOff, setRoundOff] = useState<number | "">("");
+  const [tdsAmount, setTdsAmount] = useState<number | "">("");
 
   const [lines, setLines] = useState<MaterialLine[]>([]);
   const [currentItemId, setCurrentItemId] = useState("");
@@ -252,6 +253,7 @@ export function MaterialInForm() {
   const isFgType = mrrType === "Rejection In" || mrrType === "FG Purchase";
   const isServiceReturn = isReturnableReceiptFlow || mrrType === "Service Return";
   const isDirectService = mrrType === "Direct Service";
+  const numericTdsAmount = isDirectService ? Number(tdsAmount || 0) : 0;
   const isServiceLineMode = isServiceReturn || isDirectService;
   const poMandatoryMrrTypes = useMemo(() => new Set(parsePoMandatoryMrrTypes(settings[0])), [settings]);
   const supportsPoSettingForCurrentMrrType = supportsPoMandatorySetting(mrrType);
@@ -400,6 +402,7 @@ export function MaterialInForm() {
     setExpenseSGST(editingEntry.expenseSGST ?? "");
     setExpenseIGST(editingEntry.expenseIGST ?? "");
     setRoundOff(editingEntry.roundOff ?? "");
+    setTdsAmount(editingEntry.mrrType === "Direct Service" ? (editingEntry.tdsAmount ?? "") : "");
     setLines((editingEntry.lines || []).map((line) => recalculateMaterialLine({ ...line }, { invoiceCurrency: loadedCurrency, exchangeRate: loadedCurrency === "USD" ? Number(editingEntry.exchangeRate || line.exchangeRate || 0) : undefined })));
 
     const existingPackingSlips = packingSlips.filter((row) => row.materialInId === editingEntry.id);
@@ -2311,6 +2314,15 @@ export function MaterialInForm() {
       }
     );
 
+    if (!Number.isFinite(numericTdsAmount) || numericTdsAmount < 0) {
+      alert("TDS amount must be a valid non-negative amount.");
+      return;
+    }
+    if (numericTdsAmount > submitSummary.totalAmount) {
+      alert("TDS amount cannot be greater than the gross total amount.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       let transactionNo = editingEntry?.transactionNo || "";
@@ -2353,6 +2365,7 @@ export function MaterialInForm() {
           expenseSGST: submitSummary.expenseSGSTValue,
           expenseIGST: submitSummary.expenseIGSTValue,
           roundOff: submitSummary.roundOffValue,
+          tdsAmount: isDirectService ? Number(numericTdsAmount.toFixed(2)) : 0,
           totalAmount: submitSummary.totalAmount,
           lines: submitSummary.lines,
           status: editingEntry?.status || "Pending PH",
@@ -2434,6 +2447,7 @@ export function MaterialInForm() {
       setExpenseSGST("");
       setExpenseIGST("");
       setRoundOff("");
+      setTdsAmount("");
       setLines([]);
       setPackingSlipDrafts({});
       setCurrentPoLineId("");
@@ -2940,6 +2954,19 @@ export function MaterialInForm() {
               className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full"
             />
           </div>
+          {isDirectService ? (
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">TDS Amount</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={tdsAmount}
+                onChange={(e) => setTdsAmount(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                className="border-2 border-black rounded p-2 text-black focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-colors bg-white w-full"
+              />
+            </div>
+          ) : null}
           <div className="md:col-span-2 text-xs text-slate-600">
             Expense GST follows the selected party supply type. For intrastate, CGST and SGST stay equal. For interstate, only IGST is allowed.
           </div>
@@ -3336,6 +3363,12 @@ export function MaterialInForm() {
             <div>Expense IGST: <span className="text-slate-700">{expenseIGSTValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Round Off: <span className="text-slate-700">{roundOffValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
             <div>Total Amount: <span className="text-emerald-700">{totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+            {isDirectService ? (
+              <>
+                <div>TDS Amount: <span className="text-rose-700">-{numericTdsAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+                <div>Net Supplier Payable: <span className="text-emerald-700">{Math.max(0, totalAmount - numericTdsAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+              </>
+            ) : null}
           </div>
         </div>
 
