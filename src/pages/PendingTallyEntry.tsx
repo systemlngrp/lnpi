@@ -37,7 +37,7 @@ export function PendingTallyEntry() {
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const currentUserEmail = String(user?.email || "").trim().toLowerCase();
   const canPostTally = currentUserEmail === "pankaj@bizskilledu.com";
-  const tableColumnCount = canPostTally ? 20 : 18;
+  const tableColumnCount = canPostTally ? 22 : 20;
   const formatMoney = (value?: number) =>
     `${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -111,7 +111,11 @@ export function PendingTallyEntry() {
     return (
       <ul className="list-none space-y-1">
         {lines.map((l, idx) => {
-          const itemName = materials.find(i => i.id === l.itemId)?.name || npdItems.find(i => i.id === l.itemId)?.name;
+          const itemName =
+            l.serviceName ||
+            l.itemName ||
+            materials.find(i => i.id === l.itemId)?.name ||
+            npdItems.find(i => i.id === l.itemId)?.name;
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0 text-[10px]">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>
@@ -190,6 +194,8 @@ export function PendingTallyEntry() {
                   <th className="px-6 py-3 text-right">Insurance</th>
                   <th className="px-6 py-3 text-right">Other Charges</th>
                   <th className="px-6 py-3 text-right">Round Off</th>
+                  <th className="px-6 py-3 text-right">TDS</th>
+                  <th className="px-6 py-3 text-right">Net Payable</th>
                   <th className="px-4 py-3 text-left">Tally Sync Remarks</th>
                   <th className="px-4 py-3 text-center">Details</th>
                   {canPostTally ? <th className="px-6 py-3 text-right">Actions</th> : null}
@@ -234,6 +240,10 @@ export function PendingTallyEntry() {
                           <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.insurance)}</td>
                           <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.otherCharges)}</td>
                           <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.roundOff)}</td>
+                          <td className="px-6 py-4 text-right font-mono whitespace-nowrap">{formatMoney(m.tdsAmount)}</td>
+                          <td className="px-6 py-4 text-right font-mono font-bold whitespace-nowrap">
+                            {formatMoney(Math.max(0, Number(m.totalAmount || 0) - Number(m.tdsAmount || 0)))}
+                          </td>
                           <td className="px-4 py-4 align-top min-w-[280px]">
                             <div
                               className="max-w-[320px] whitespace-pre-wrap break-words text-[10px] normal-case text-rose-700 font-semibold"
