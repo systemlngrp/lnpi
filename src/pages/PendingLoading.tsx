@@ -269,9 +269,21 @@ export function PendingLoading() {
 
   const getFgStockAvailable = (modal: LoadingModalState) => {
     if (modal.itemSource !== "FG") return null;
-    const item = npdItems.find((row) => String(row.id || row.npdId || row.itemId || "").trim() === modal.itemId);
+    const item = npdItems.find((row) => String(row.id || "").trim() === modal.itemId);
     const balance = Number(item?.balance || 0);
-    return Number.isFinite(balance) ? Math.max(0, balance) : 0;
+    const npdBalance = Number.isFinite(balance) ? Math.max(0, balance) : 0;
+    const allocatedToJobs = productions
+      .filter((production) =>
+        production.itemId === modal.itemId &&
+        isOpenJob(production) &&
+        Number(production.prodFromFFG || 0) > 0
+      )
+      .reduce((total, production) => {
+        const producedQty = Number(production.prodFromFFG || 0);
+        const alreadyLoaded = getAlreadyLoadedForJob(production.id);
+        return total + Math.max(0, producedQty - alreadyLoaded);
+      }, 0);
+    return Math.max(0, npdBalance - allocatedToJobs);
   };
 
   const getModalValidation = (modal: LoadingModalState) => {
