@@ -267,11 +267,19 @@ export function PendingLoading() {
 
   const getModalKey = (companyId: string, itemSource: OrderItemSource, itemId: string) => `${companyId}::${itemSource}::${itemId}`;
 
+  const getFgStockAvailable = (modal: LoadingModalState) => {
+    if (modal.itemSource !== "FG") return null;
+    const item = npdItems.find((row) => String(row.id || row.npdId || row.itemId || "").trim() === modal.itemId);
+    const balance = Number(item?.balance || 0);
+    return Number.isFinite(balance) ? Math.max(0, balance) : 0;
+  };
+
   const getModalValidation = (modal: LoadingModalState) => {
     const modalKey = getModalKey(modal.companyId, modal.itemSource, modal.itemId);
     const rowLoadedQty = Number(loadedQuantities[modalKey] || 0);
     const byJobId = jobSplitQtys[modalKey] || {};
     const openingStockQty = getPlanOpeningStockQty(modalKey);
+    const fgStockAvailable = getFgStockAvailable(modal);
     const jobAllocatedTotal = Object.values(byJobId).reduce<number>((sum, qty) => sum + Number(qty || 0), 0);
     const allocatedTotal = jobAllocatedTotal + openingStockQty;
     const errors: string[] = [];
@@ -295,6 +303,9 @@ export function PendingLoading() {
 
     const stockLabel = modal.itemSource === "FG" ? "FG Stock" : `${modal.itemSource} Stock`;
     if (openingStockQty < 0) errors.push(`${stockLabel} quantity cannot be negative.`);
+    if (fgStockAvailable !== null && openingStockQty > fgStockAvailable + 0.0001) {
+      errors.push(`${stockLabel} quantity cannot exceed available stock (${fgStockAvailable.toLocaleString()}).`);
+    }
     if (allocatedTotal <= 0) errors.push("At least one positive adjustment is required.");
     if (Math.abs(allocatedTotal - rowLoadedQty) > 0.0001) errors.push(`Job/${stockLabel} total must exactly match Loaded qty.`);
 
@@ -303,13 +314,13 @@ export function PendingLoading() {
       errors.push(`Packing Details total (${packingTotal.toLocaleString()}) must match Loaded qty (${rowLoadedQty.toLocaleString()}).`);
     }
 
-    return { isValid: errors.length === 0, errors, allocatedTotal, openingStockQty, totalPending, packingTotal };
+    return { isValid: errors.length === 0, errors, allocatedTotal, openingStockQty, totalPending, packingTotal, fgStockAvailable };
   };
 
   const modalHasErrors = useMemo(() => {
     if (!loadingModal) return false;
     return !getModalValidation(loadingModal).isValid;
-  }, [jobSplitQtys, loadedQuantities, loadingModal, openingStockQtys, currentAdjustmentByJobId, existingLoadedByJobId, productionMap, modalTruckId, modalManualTruckNo, packingDetails, extraItemsQty]);
+  }, [jobSplitQtys, loadedQuantities, loadingModal, openingStockQtys, currentAdjustmentByJobId, existingLoadedByJobId, productionMap, modalTruckId, modalManualTruckNo, packingDetails, extraItemsQty, npdItems]);
 
   const handleOpenLoad = (companyId: string, itemSource: OrderItemSource, itemId: string, itemName: string, itemPlans: PendingPlan[]) => {
     setLoadingModal({ companyId, itemSource, itemId, itemName, plans: itemPlans });
@@ -939,18 +950,22 @@ export function PendingLoading() {
                                 <td className="px-4 py-4 text-xs font-black uppercase text-emerald-800">{loadingModal.itemSource === "FG" ? "FG Stock" : `${loadingModal.itemSource} Stock`}</td>
                                 <td className="px-4 py-4 text-right text-xs text-slate-500">-</td>
                                 <td className="px-4 py-4 text-right text-xs text-slate-500">-</td>
-                                <td className="px-4 py-4 text-right text-xs text-slate-500">-</td>
+                                <td className="px-4 py-4 text-right text-xs font-black text-emerald-700">
+                                  {validation.fgStockAvailable === null ? "-" : validation.fgStockAvailable.toLocaleString()}
+                                </td>
                                 <td className="px-4 py-2 text-right">
                                   <input
                                     type="number"
                                     value={openingStockQtys[modalKey] ?? ""}
                                     min={0}
-                                    onChange={(e) =>
-                                      setOpeningStockQtys((prev) => ({
-                                        ...prev,
-                                        [modalKey]: e.target.value === "" ? "" : parseFloat(e.target.value),
-                                      }))
-                                    }
+                                    max={validation.fgStockAvailable ?? undefined}
+                                    onChange={(e) => {
+                                      const parsed = Number(e.target.value);
+                                      const next = e.target.value === ""
+                                        ? ""
+                                        : Math.min(Math.max(Number.isFinite(parsed) ? parsed : 0, 0), validation.fgStockAvailable ?? Number.POSITIVE_INFINITY);
+                                      setOpeningStockQtys((prev) => ({ ...prev, [modalKey]: next }));
+                                    }}
                                     className="w-28 rounded border-2 border-yellow-500 bg-yellow-100 px-2 py-1.5 text-right font-black text-xs text-black focus:ring-0"
                                   />
                                 </td>
