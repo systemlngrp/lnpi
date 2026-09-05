@@ -446,6 +446,7 @@ def build_direct_service_voucher_xml(
                 </LEDGERENTRIES.LIST>"""
 
     narration = (
+        f"Imported from LNPI MRR {voucher_no} | Type: Direct Service | "
         f"CONSIGNOR - {supplier_name}, INVOICE NO: {invoice_no}, "
         f"INVOICE VALUE: {gross_total:,.2f}"
     )

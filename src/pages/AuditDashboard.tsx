@@ -192,6 +192,14 @@ function formatLastSync(value: string) {
 }
 
 function getMaterialInPurchaseAuditValue(entry: MaterialIn) {
+  // Direct Service MRRs are posted as accounting Purchase vouchers. Their
+  // Purchase voucher is balanced using totalAmount (supplier payable + TDS),
+  // so audit the same gross value instead of applying the inventory/expense
+  // GST fallback used by material receipts below.
+  if (entry.mrrType === "Direct Service") {
+    return roundMoney(Number(entry.totalAmount || 0));
+  }
+
   const lineGst = roundMoney(
     (entry.lines || []).reduce(
       (sum, line) => sum + Number(line.cgst || 0) + Number(line.sgst || 0) + Number(line.igst || 0),
