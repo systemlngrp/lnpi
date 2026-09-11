@@ -116,6 +116,8 @@ export interface Item {
 export interface MaterialLine {
   id: string;
   itemId: string;
+  materialId?: string;
+  erpCode?: string | number;
   itemName?: string;
   npdId?: string;
   lineType?: "Material" | "Service";
