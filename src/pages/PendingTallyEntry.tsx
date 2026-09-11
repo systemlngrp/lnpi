@@ -112,11 +112,12 @@ export function PendingTallyEntry() {
       <ul className="list-none space-y-1">
         {lines.map((l, idx) => {
           const masterItem =
-            materials.find(i => i.id === l.itemId) ||
-            materials.find(i => i.id === l.materialId);
+            materials.find(i => String(i.id) === String(l.itemId || "")) ||
+            materials.find(i => String(i.id) === String(l.materialId || "")) ||
+            materials.find(i => String(i.erpCode || "").trim() === String(l.erpCode || "").trim() && String(l.erpCode || "").trim());
           const npdItem =
-            npdItems.find(i => i.id === l.itemId) ||
-            npdItems.find(i => i.id === l.npdId);
+            npdItems.find(i => String(i.id) === String(l.itemId || "")) ||
+            npdItems.find(i => String(i.id) === String(l.npdId || ""));
           const itemName =
             l.serviceName ||
             l.itemName ||

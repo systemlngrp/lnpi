@@ -470,6 +470,7 @@ def resolve_stock_item_name(conn, line: dict[str, Any]) -> tuple[str, str]:
     line_item_id = str(line.get("itemId") or "").strip()
     material_id = str(line.get("materialId") or "").strip()
     npd_id = str(line.get("npdId") or "").strip()
+    erp_code = str(line.get("erpCode") or "").strip()
 
     lookup_keys = [
         ("materials", material_id),
@@ -511,6 +512,17 @@ def resolve_stock_item_name(conn, line: dict[str, Any]) -> tuple[str, str]:
     finally:
         cursor.close()
 
+    if erp_code:
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT `name` FROM `materials` WHERE `erpCode` = %s LIMIT 1", (erp_code,))
+            row = cursor.fetchone()
+            resolved = str((row or {}).get("name") or "").strip()
+            if resolved:
+                return resolved, f"materials:erpCode:{erp_code}"
+        finally:
+            cursor.close()
+
     raise RuntimeError(
         "Stock item name could not be resolved. "
         f"line.itemId={line_item_id or '-'}, materialId={material_id or '-'}, npdId={npd_id or '-'}"
@@ -520,6 +532,7 @@ def resolve_stock_item_name(conn, line: dict[str, Any]) -> tuple[str, str]:
 def resolve_material_master_uom(conn, line: dict[str, Any]) -> tuple[str | None, str]:
     line_item_id = str(line.get("itemId") or "").strip()
     material_id = str(line.get("materialId") or "").strip()
+    erp_code = str(line.get("erpCode") or "").strip()
 
     lookup_keys = [
         ("materials", material_id),
@@ -540,6 +553,17 @@ def resolve_material_master_uom(conn, line: dict[str, Any]) -> tuple[str | None,
                     return resolved, f"{table}:{lookup_id}"
     finally:
         cursor.close()
+
+    if erp_code:
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT `uom` FROM `materials` WHERE `erpCode` = %s LIMIT 1", (erp_code,))
+            row = cursor.fetchone()
+            resolved = str((row or {}).get("uom") or "").strip() or None
+            if resolved:
+                return resolved, f"materials:erpCode:{erp_code}"
+        finally:
+            cursor.close()
 
     return None, "line.uom"
 
