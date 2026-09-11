@@ -111,15 +111,23 @@ export function PendingTallyEntry() {
     return (
       <ul className="list-none space-y-1">
         {lines.map((l, idx) => {
+          const masterItem =
+            materials.find(i => i.id === l.itemId) ||
+            materials.find(i => i.id === l.materialId);
+          const npdItem =
+            npdItems.find(i => i.id === l.itemId) ||
+            npdItems.find(i => i.id === l.npdId);
           const itemName =
             l.serviceName ||
             l.itemName ||
-            materials.find(i => i.id === l.itemId)?.name ||
-            npdItems.find(i => i.id === l.itemId)?.name;
+            masterItem?.name ||
+            npdItem?.name;
+          const itemUom = l.uom || masterItem?.uom || npdItem?.uom || "";
+          const itemErp = l.erpCode || masterItem?.erpCode || npdItem?.erpCode || "-";
           return (
             <li key={idx} className="whitespace-nowrap border-b border-black last:border-0 pb-1 last:pb-0 mb-1 last:mb-0 text-[10px]">
               <span className="font-medium text-black">{itemName || 'Unknown'}</span>
-              <span className="ml-2 text-black">[{l.qty} {l.uom} @ {l.rate}]</span>
+              <span className="ml-2 text-black">[ERP: {itemErp} | UOM: {itemUom || '-'} | {l.qty} @ {l.rate}]</span>
             </li>
           );
         })}
