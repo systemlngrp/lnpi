@@ -1541,9 +1541,9 @@ def resolve_effective_line_uom(line):
     return ""
 
 
-def resolve_invoice_line_item_details(cursor, item_source, item_id, npd_id):
-    item_name = ""
-    uom = ""
+def resolve_invoice_line_item_details(cursor, item_source, item_id, npd_id, saved_name="", saved_uom=""):
+    item_name = str(saved_name or "").strip()
+    uom = str(saved_uom or "").strip()
     npd_part = ""
 
     lookup_npd_id = str(npd_id or item_id or "").strip()
@@ -1675,6 +1675,26 @@ def resolve_invoice_line_item_details(cursor, item_source, item_id, npd_id):
             if not uom:
                 uom = material_row.get("uom") or ""
 
+    # Some older invoice rows lost their source IDs but retained the item
+    # description. Recover the master data by exact name before rejecting the
+    # line, so a missing foreign key does not become a false UOM error.
+    if item_name and not uom:
+        for table, name_column, uom_column in (
+            ("materials", "name", "uom"),
+            ("npd", "itemName", "uom"),
+        ):
+            cursor.execute(
+                f"SELECT `{name_column}`, `{uom_column}` FROM `{table}` "
+                f"WHERE LOWER(TRIM(`{name_column}`)) = LOWER(TRIM(%s)) LIMIT 1",
+                (item_name,),
+            )
+            master_row = cursor.fetchone()
+            if master_row:
+                item_name = str(master_row.get(name_column) or item_name).strip()
+                uom = str(master_row.get(uom_column) or "").strip()
+                if uom:
+                    break
+
     return item_name, uom, npd_part
 
 
@@ -1696,7 +1716,14 @@ def get_invoice_lines(conn, invoice_id):
         item_id = row.get("itemId")
         npd_id = row.get("npdId")
         item_source = normalize_item_source(row.get("itemSource"))
-        item_name, uom, npd_part = resolve_invoice_line_item_details(cursor, item_source, item_id, npd_id)
+        item_name, uom, npd_part = resolve_invoice_line_item_details(
+            cursor,
+            item_source,
+            item_id,
+            npd_id,
+            saved_name=row.get("itemName") or row.get("itemDescription"),
+            saved_uom=row.get("uom"),
+        )
 
         processed_lines.append(
             {
