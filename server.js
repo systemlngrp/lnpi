@@ -5954,12 +5954,12 @@ const createHandlers = (tableName) => {
           }
         }
         if (tableName === "direct_credit_notes") {
-          const rate = Number(data.rate);
-          const qty = Number(data.qty);
+          const rate = Number(data.rate || 0);
+          const qty = Number(data.qty || 0);
           const gstRate = Number(data.gstRate || 0);
           const roundOff = Number(data.roundOff || 0);
-          if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(gstRate) || gstRate < 0 || !Number.isFinite(roundOff)) {
-            return res.status(400).json({ error: "Rate, quantity, GST rate, and round-off must be valid numeric values." });
+          if (!Number.isFinite(rate) || rate < 0 || !Number.isFinite(qty) || qty < 0 || !Number.isFinite(gstRate) || gstRate < 0 || !Number.isFinite(roundOff)) {
+            return res.status(400).json({ error: "Rate, quantity, GST rate, and round-off must be valid non-negative numeric values." });
           }
           const [companyRows] = await db.query("SELECT gstSupplyType FROM `companies` WHERE id = ? LIMIT 1", [String(data.companyId || "")]);
           if (!companyRows[0]) {

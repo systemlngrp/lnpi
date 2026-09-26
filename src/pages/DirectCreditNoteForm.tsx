@@ -50,7 +50,9 @@ export function DirectCreditNoteForm() {
   const update = (key: keyof typeof empty, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const rate = Number(form.rate), qty = Number(form.qty);
+    const rate = Number(form.rate || 0), qty = Number(form.qty || 0);
+    const normalizedGstRate = Number(form.gstRate || 0);
+    const normalizedRoundOff = Number(form.roundOff || 0);
     if (!form.invoiceNo.trim() || !form.companyId || !selectedCompany || !form.materialId || !form.poNumber.trim()) {
       alert("Please fill Invoice No., Company, Item Name, and PO Number.");
       return;
@@ -61,9 +63,9 @@ export function DirectCreditNoteForm() {
       const note = {
         id: crypto.randomUUID(),
         invoiceNo: form.invoiceNo.trim(), companyId: form.companyId, materialId: form.materialId, poNumber: form.poNumber.trim(),
-        rate, qty, amount: money(amount), gstRate, cgstRate: supplyType === "INTRA_STATE" ? gstRate / 2 : 0,
-        sgstRate: supplyType === "INTRA_STATE" ? gstRate / 2 : 0, igstRate: supplyType === "INTER_STATE" ? gstRate : 0,
-        cgstAmount, sgstAmount, igstAmount, roundOff: Number.isFinite(roundOff) ? roundOff : 0, grandTotal, supplyType,
+        rate, qty, amount: money(amount), gstRate: normalizedGstRate, cgstRate: supplyType === "INTRA_STATE" ? normalizedGstRate / 2 : 0,
+        sgstRate: supplyType === "INTRA_STATE" ? normalizedGstRate / 2 : 0, igstRate: supplyType === "INTER_STATE" ? normalizedGstRate : 0,
+        cgstAmount, sgstAmount, igstAmount, roundOff: Number.isFinite(normalizedRoundOff) ? normalizedRoundOff : 0, grandTotal, supplyType,
         remark: form.remark.trim(), status: "Pending Tally",
         createdBy: user?.email || user?.name || "System User", createdAt: now, updatedBy: user?.email || user?.name, updateTimestamp: now,
       };
