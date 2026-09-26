@@ -3140,6 +3140,16 @@ async function initDb(retries = 5) {
           \`rate\` DECIMAL(15,2) NOT NULL,
           \`qty\` DECIMAL(15,3) NOT NULL,
           \`amount\` DECIMAL(15,2) NOT NULL,
+          \`gstRate\` DECIMAL(5,2) NOT NULL DEFAULT 0,
+          \`cgstRate\` DECIMAL(5,2) NOT NULL DEFAULT 0,
+          \`sgstRate\` DECIMAL(5,2) NOT NULL DEFAULT 0,
+          \`igstRate\` DECIMAL(5,2) NOT NULL DEFAULT 0,
+          \`cgstAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`sgstAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`igstAmount\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`roundOff\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`grandTotal\` DECIMAL(15,2) NOT NULL DEFAULT 0,
+          \`supplyType\` VARCHAR(20) NOT NULL DEFAULT 'INTRA_STATE',
           \`remark\` TEXT,
           \`status\` VARCHAR(30) NOT NULL DEFAULT 'Pending Tally',
           \`createdBy\` VARCHAR(255),
@@ -4820,6 +4830,16 @@ async function initDb(retries = 5) {
         { table: "expense_masters", column: "type", type: "VARCHAR(20) DEFAULT 'Monthly'" },
         { table: "expense_masters", column: "updatedBy", type: "VARCHAR(255)" },
         { table: "expense_masters", column: "updateTimestamp", type: "VARCHAR(255)" },
+        { table: "direct_credit_notes", column: "gstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "cgstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "sgstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "igstRate", type: "DECIMAL(5,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "cgstAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "sgstAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "igstAmount", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "roundOff", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "grandTotal", type: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
+        { table: "direct_credit_notes", column: "supplyType", type: "VARCHAR(20) NOT NULL DEFAULT 'INTRA_STATE'" },
         { table: "gst_rate_masters", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "gst_rate_masters", column: "rate", type: "DECIMAL(5,2) NOT NULL DEFAULT 0" },
         { table: "gst_rate_masters", column: "active", type: "VARCHAR(10) DEFAULT 'Yes'" },
@@ -5932,6 +5952,34 @@ const createHandlers = (tableName) => {
           } else {
             data.color = null;
           }
+        }
+        if (tableName === "direct_credit_notes") {
+          const rate = Number(data.rate);
+          const qty = Number(data.qty);
+          const gstRate = Number(data.gstRate || 0);
+          const roundOff = Number(data.roundOff || 0);
+          if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(gstRate) || gstRate < 0 || !Number.isFinite(roundOff)) {
+            return res.status(400).json({ error: "Rate, quantity, GST rate, and round-off must be valid numeric values." });
+          }
+          const [companyRows] = await db.query("SELECT gstSupplyType FROM `companies` WHERE id = ? LIMIT 1", [String(data.companyId || "")]);
+          const supplyType = String(companyRows[0]?.gstSupplyType || "INTRA_STATE") === "INTER_STATE" ? "INTER_STATE" : "INTRA_STATE";
+          const round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+          const amount = round2(rate * qty);
+          const totalGst = round2(amount * gstRate / 100);
+          const cgstAmount = supplyType === "INTRA_STATE" ? round2(totalGst / 2) : 0;
+          const sgstAmount = supplyType === "INTRA_STATE" ? round2(totalGst - cgstAmount) : 0;
+          const igstAmount = supplyType === "INTER_STATE" ? totalGst : 0;
+          data.amount = amount;
+          data.gstRate = gstRate;
+          data.cgstRate = supplyType === "INTRA_STATE" ? gstRate / 2 : 0;
+          data.sgstRate = supplyType === "INTRA_STATE" ? gstRate / 2 : 0;
+          data.igstRate = supplyType === "INTER_STATE" ? gstRate : 0;
+          data.cgstAmount = cgstAmount;
+          data.sgstAmount = sgstAmount;
+          data.igstAmount = igstAmount;
+          data.roundOff = roundOff;
+          data.grandTotal = round2(amount + cgstAmount + sgstAmount + igstAmount + roundOff);
+          data.supplyType = supplyType;
         }
         if (tableName === "users") {
           const normalizedUserId = String(data.userId || "").trim();

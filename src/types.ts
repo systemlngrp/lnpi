@@ -46,6 +46,16 @@ export interface DirectCreditNote {
   rate: number;
   qty: number;
   amount: number;
+  gstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+  igstRate?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
+  igstAmount?: number;
+  roundOff?: number;
+  grandTotal?: number;
+  supplyType?: "INTRA_STATE" | "INTER_STATE";
   remark?: string;
   status: "Pending Tally" | "Posted";
   createdBy?: string;
