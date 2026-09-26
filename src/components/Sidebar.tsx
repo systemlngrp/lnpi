@@ -125,6 +125,9 @@ const materialReceiptItems: NavItem[] = [
   { name: "Pending MRR Tally Posting", href: "/material-receipt/pending-tally", icon: FileText, countKey: "/material-receipt/pending-tally" },
   { name: "Pending Debit Note Tally Posting", href: "/material-receipt/pending-debit-note", icon: FileText, countKey: "/material-receipt/pending-debit-note" },
   { name: "Pending Credit Note Tally Posting", href: "/material-receipt/pending-credit-note", icon: FileText, countKey: "/material-receipt/pending-credit-note" },
+  { name: "Direct Credit Note Form", href: "/material-receipt/direct-credit-note", icon: ClipboardList },
+  { name: "Pending Direct Credit Notes", href: "/material-receipt/direct-credit-note/pending", icon: FileText, countKey: "/material-receipt/direct-credit-note/pending" },
+  { name: "Direct Credit Note Master", href: "/material-receipt/direct-credit-note/master", icon: Database },
 ];
 
 const materialIssueItems: NavItem[] = [

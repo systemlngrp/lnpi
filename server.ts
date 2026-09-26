@@ -3300,6 +3300,8 @@ function entityPermissionKey(entity: string): string {
       return "/masters/plate-item-master";
     case "settings":
       return "/masters/settings";
+    case "direct_credit_notes":
+      return "/material-receipt/direct-credit-note";
     case "material_in":
     case "material_in_packing_slips":
       return "/material-in";
@@ -3649,6 +3651,29 @@ async function initDb(retries = 5) {
           \`name\` VARCHAR(255) NOT NULL,
           \`updatedBy\` VARCHAR(255),
           \`updateTimestamp\` VARCHAR(255)
+        )
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS \`direct_credit_notes\` (
+          \`id\` VARCHAR(36) PRIMARY KEY,
+          \`creditNoteNo\` VARCHAR(100) NOT NULL UNIQUE,
+          \`invoiceNo\` VARCHAR(255) NOT NULL,
+          \`companyId\` VARCHAR(36) NOT NULL,
+          \`materialId\` VARCHAR(36) NOT NULL,
+          \`poNumber\` VARCHAR(255) NOT NULL,
+          \`rate\` DECIMAL(15,2) NOT NULL,
+          \`qty\` DECIMAL(15,3) NOT NULL,
+          \`amount\` DECIMAL(15,2) NOT NULL,
+          \`remark\` TEXT,
+          \`status\` VARCHAR(30) NOT NULL DEFAULT 'Pending Tally',
+          \`createdBy\` VARCHAR(255),
+          \`createdAt\` VARCHAR(255),
+          \`updatedBy\` VARCHAR(255),
+          \`updateTimestamp\` VARCHAR(255),
+          \`tallyTimestamp\` VARCHAR(255),
+          \`tallyPostedBy\` VARCHAR(255),
+          \`tallyPostingRemark\` TEXT
         )
       `);
 
@@ -7755,7 +7780,20 @@ app.get("/api/truck-status-logs", async (req, res) => {
   }
 });
 // Routes
-const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "expense_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "users", "productions", "production_processing", "consumptions", "sample_requests", "boardline_qc_checks", "printing_qc_checks", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "fixed_daily_expenses", "audit_dashboard_snapshots", "physical_stock_sessions", "reel_stock_taker_logs"];
+const entities = ["item_groups", "material_groups", "items", "materials", "tally_change_log", "indents", "indent_lines", "purchase_orders", "purchase_order_lines", "gate_entries", "gate_entry_photos", "material_in_packing_slips", "material_issues", "material_issue_lines", "material_issue_reel_lines", "material_returns", "material_return_lines", "material_return_reel_lines", "suppliers", "states", "units", "color_masters", "gst_rate_masters", "expense_masters", "companies", "machines", "orders", "orders_schedule", "realization_rate_chart", "material_in", "direct_credit_notes", "users", "productions", "production_processing", "consumptions", "sample_requests", "boardline_qc_checks", "printing_qc_checks", "trucks", "dispatch_plans", "loading_slips", "material_visit", "invoices", "invoice_line_items", "gate_passes", "services", "npd", "php_item_master", "plate_item_master", "php_job_master", "plate_job_master", "php_loading_slips", "plate_loading_slips", "settings", "fixed_monthly_expenses", "fixed_daily_expenses", "audit_dashboard_snapshots", "physical_stock_sessions", "reel_stock_taker_logs"];
+
+app.post("/api/direct-credit-notes/:id/post", async (req, res) => {
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    if (user.role !== "Admin" && String(user.email || "").toLowerCase() !== "pankaj@bizskilledu.com") return res.status(403).json({ error: "Only authorized users can post Direct Credit Notes." });
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+    const timestamp = new Date().toISOString();
+    await db.query("UPDATE `direct_credit_notes` SET `status`='Posted', `tallyTimestamp`=?, `tallyPostedBy`=?, `tallyPostingRemark`=?, `updatedBy`=?, `updateTimestamp`=? WHERE `id`=?", [timestamp, user.email || user.name, String(req.body?.remark || "Manually marked posted"), user.email || user.name, timestamp, req.params.id]);
+    return res.json({ ok: true });
+  } catch (error) { return res.status(500).json({ error: (error as Error).message }); }
+});
 
 app.get("/api/tally-sync-debug", (req, res) => {
   const providedSecret = String(req.header("x-tally-sync-secret") || "").trim();

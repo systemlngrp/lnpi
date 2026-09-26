@@ -36,6 +36,27 @@ export interface Material {
   updateTimestamp?: string;
 }
 
+export interface DirectCreditNote {
+  id: string;
+  creditNoteNo: string;
+  invoiceNo: string;
+  companyId: string;
+  materialId: string;
+  poNumber: string;
+  rate: number;
+  qty: number;
+  amount: number;
+  remark?: string;
+  status: "Pending Tally" | "Posted";
+  createdBy?: string;
+  createdAt?: string;
+  updatedBy?: string;
+  updateTimestamp?: string;
+  tallyTimestamp?: string;
+  tallyPostedBy?: string;
+  tallyPostingRemark?: string;
+}
+
 export interface RapcRange {
   id: string;
   from: number;

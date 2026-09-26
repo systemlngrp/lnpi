@@ -26,6 +26,8 @@ import { PendingMrr } from "./pages/PendingMrr";
 import { PendingTallyEntry } from "./pages/PendingTallyEntry";
 import { PendingDebitNote } from "./pages/PendingDebitNote";
 import { PendingCreditNote } from "./pages/PendingCreditNote";
+import { DirectCreditNoteForm } from "./pages/DirectCreditNoteForm";
+import { DirectCreditNoteMaster } from "./pages/DirectCreditNoteMaster";
 import { PendingPHApproval } from "./pages/PendingPHApproval";
 import { PendingAccountsApproval } from "./pages/PendingAccountsApproval";
 import { PendingMDApproval } from "./pages/PendingMDApproval";
@@ -261,6 +263,9 @@ export default function App() {
           <Route path="material-receipt/pending-tally" element={<PendingTallyEntry />} />
           <Route path="material-receipt/pending-debit-note" element={<PendingDebitNote />} />
           <Route path="material-receipt/pending-credit-note" element={<PendingCreditNote />} />
+          <Route path="material-receipt/direct-credit-note" element={<DirectCreditNoteForm />} />
+          <Route path="material-receipt/direct-credit-note/pending" element={<DirectCreditNoteMaster pending />} />
+          <Route path="material-receipt/direct-credit-note/master" element={<DirectCreditNoteMaster />} />
 
           {/* Material Movement */}
           <Route path="material-movement/reel-issue-return" element={<ReelIssueReturnForm />} />
