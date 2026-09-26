@@ -51,8 +51,8 @@ export function DirectCreditNoteForm() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const rate = Number(form.rate), qty = Number(form.qty);
-    if (!form.invoiceNo.trim() || !form.companyId || !selectedCompany || !form.materialId || !form.poNumber.trim() || !Number.isFinite(rate) || rate <= 0 || !Number.isFinite(qty) || qty <= 0) {
-      alert("Please fill all required fields with positive Rate and Quantity.");
+    if (!form.invoiceNo.trim() || !form.companyId || !selectedCompany || !form.materialId || !form.poNumber.trim()) {
+      alert("Please fill Invoice No., Company, Item Name, and PO Number.");
       return;
     }
     setSaving(true);
@@ -85,9 +85,9 @@ export function DirectCreditNoteForm() {
       <label className="font-semibold">Company*<Select options={companyOptions} value={form.companyId} onChange={(value) => update("companyId", value)} placeholder="Search company..." required /></label>
       <label className="font-semibold">Item Name*<Select options={materialOptions} value={form.materialId} onChange={(value) => update("materialId", value)} placeholder="Search item or ERP code..." required wrapLabels /></label>
       <label className="font-semibold">PO Number*<input className="w-full border-2 border-black rounded p-2 mt-1" value={form.poNumber} onChange={e => update("poNumber", e.target.value)} /></label>
-      <label className="font-semibold">Rate*<input type="number" min="0.01" step="0.01" className="w-full border-2 border-black rounded p-2 mt-1" value={form.rate} onChange={e => update("rate", e.target.value)} /></label>
-      <label className="font-semibold">Quantity*<input type="number" min="0.001" step="0.001" className="w-full border-2 border-black rounded p-2 mt-1" value={form.qty} onChange={e => update("qty", e.target.value)} /></label>
-      <label className="font-semibold">GST Rate<Select options={gstOptions} value={form.gstRate} onChange={(value) => update("gstRate", value)} placeholder="Search GST rate..." required /></label>
+      <label className="font-semibold">Rate<input type="number" min="0.01" step="0.01" className="w-full border-2 border-black rounded p-2 mt-1" value={form.rate} onChange={e => update("rate", e.target.value)} /></label>
+      <label className="font-semibold">Quantity<input type="number" min="0.001" step="0.001" className="w-full border-2 border-black rounded p-2 mt-1" value={form.qty} onChange={e => update("qty", e.target.value)} /></label>
+      <label className="font-semibold">GST Rate<Select options={gstOptions} value={form.gstRate} onChange={(value) => update("gstRate", value)} placeholder="Search GST rate..." /></label>
       <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-4 rounded border border-slate-300 bg-slate-50 p-3 text-sm">
         <div><div className="font-semibold">Taxable Amount</div><div className="font-bold">{money(amount).toFixed(2)}</div></div>
         {supplyType === "INTRA_STATE" ? <><div><div className="font-semibold">CGST ({(gstRate / 2).toFixed(2)}%)</div><div className="font-bold">{cgstAmount.toFixed(2)}</div></div><div><div className="font-semibold">SGST ({(gstRate / 2).toFixed(2)}%)</div><div className="font-bold">{sgstAmount.toFixed(2)}</div></div></> : <div><div className="font-semibold">IGST ({gstRate.toFixed(2)}%)</div><div className="font-bold">{igstAmount.toFixed(2)}</div></div>}
