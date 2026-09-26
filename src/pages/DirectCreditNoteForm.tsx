@@ -38,7 +38,7 @@ export function DirectCreditNoteForm() {
     .filter((material) => material.active !== "No")
     .map((material) => ({
       value: material.id,
-      label: material.name,
+      label: material.erpCode ? `${material.name} (${material.erpCode})` : material.name,
       searchText: `${material.name} ${material.erpCode || ""} ${material.id}`,
     }))
     .sort((a, b) => a.label.localeCompare(b.label)), [materials]);
