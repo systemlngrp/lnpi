@@ -6640,6 +6640,57 @@ const createHandlers = (tableName: string) => {
           data.roundOff = roundOff;
           data.grandTotal = round2(amount + cgstAmount + sgstAmount + igstAmount + roundOff);
           data.supplyType = supplyType;
+
+          // Credit note numbers are allocated here, on the server.  The named
+          // lock serializes allocations across requests/connections while the
+          // unique index remains the final safety net.
+          const noteId = String(data.id || "").trim();
+          const [existingNoteRows] = noteId
+            ? await db.query("SELECT `creditNoteNo` FROM `direct_credit_notes` WHERE `id` = ? LIMIT 1", [noteId])
+            : [[]];
+          if (!(existingNoteRows as any[])[0]) {
+            const now = new Date();
+            const startYear = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+            const financialYear = `${String(startYear).slice(-2)}-${String(startYear + 1).slice(-2)}`;
+            const prefix = `DCN/${financialYear}/`;
+            const connection = await db.getConnection();
+            try {
+              await connection.beginTransaction();
+              const [lockRows] = await connection.query("SELECT GET_LOCK(?, 10) AS acquired", ["direct-credit-note-number"]);
+              if (Number((lockRows as any[])[0]?.acquired) !== 1) {
+                await connection.rollback();
+                return res.status(503).json({ error: "Could not allocate a Direct Credit Note number. Please try again." });
+              }
+              const [numberRows] = await connection.query(
+                "SELECT MAX(CAST(SUBSTRING(`creditNoteNo`, ?) AS UNSIGNED)) AS maxSequence FROM `direct_credit_notes` WHERE `creditNoteNo` REGEXP ?",
+                [prefix.length + 1, `^${prefix}[0-9]{6}$`]
+              );
+              const nextSequence = Number((numberRows as any[])[0]?.maxSequence || 0) + 1;
+              if (nextSequence > 999999) throw new Error(`Direct Credit Note numbering exhausted for FY ${financialYear}.`);
+              data.creditNoteNo = `${prefix}${String(nextSequence).padStart(6, "0")}`;
+              const existingColumns = await getExistingColumnNames(connection, process.env.DB_NAME || "u380633007_Inpidata", tableName);
+              const insertData = Object.fromEntries(Object.entries(data).filter(([key]) => existingColumns.has(key)));
+              const insertKeys = Object.keys(insertData);
+              const insertValues = Object.values(insertData).map((value) => typeof value === "object" && value !== null ? JSON.stringify(value) : value);
+              const insertColumns = insertKeys.map((key) => `\`${key}\``).join(",");
+              await connection.query(
+                `INSERT INTO \`${tableName}\` (${insertColumns}) VALUES (${insertKeys.map(() => "?").join(",")})`,
+                insertValues
+              );
+              await connection.query("SELECT RELEASE_LOCK(?)", ["direct-credit-note-number"]);
+              await connection.commit();
+              connection.release();
+              return res.json({ success: true, creditNoteNo: data.creditNoteNo });
+            } catch (allocationError) {
+              try { await connection.rollback(); } catch {}
+              try { await connection.query("SELECT RELEASE_LOCK(?)", ["direct-credit-note-number"]); } catch {}
+              connection.release();
+              throw allocationError;
+            }
+            connection.release();
+          } else {
+            data.creditNoteNo = String((existingNoteRows as any[])[0].creditNoteNo);
+          }
         }
 
         if (tableName === "users") {
@@ -7348,9 +7399,9 @@ const createHandlers = (tableName: string) => {
           }
         }
 
-        console.log(`[DB] Upserting to ${tableName}`, { id: data.id });
+        console.log(`[DB] Upserting to ${tableName}`, { id: data.id, creditNoteNo: data.creditNoteNo });
         await db.query(query, values);
-        res.json({ success: true });
+        res.json({ success: true, ...(tableName === "direct_credit_notes" ? { creditNoteNo: data.creditNoteNo } : {}) });
       } catch (error) {
         console.error(`[DB] Error upserting to ${tableName}:`, error);
         res.status(500).json({ error: (error as Error).message });

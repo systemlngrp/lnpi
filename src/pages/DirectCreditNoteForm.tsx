@@ -14,7 +14,7 @@ export function DirectCreditNoteForm() {
   const [companies] = useData<Company>("companies", []);
   const [materials] = useData<Material>("materials", []);
   const [gstRateMasters] = useData<GstRateMaster>("gst-rate-masters", []);
-  const [, , , actions] = useData<DirectCreditNote>("direct-credit-notes", []);
+  useData<DirectCreditNote>("direct-credit-notes", []);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const amount = useMemo(() => Number(form.rate || 0) * Number(form.qty || 0), [form.rate, form.qty]);
@@ -58,8 +58,8 @@ export function DirectCreditNoteForm() {
     setSaving(true);
     try {
       const now = new Date().toISOString();
-      const note: DirectCreditNote = {
-        id: crypto.randomUUID(), creditNoteNo: `DCN/${new Date().getFullYear()}/${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      const note = {
+        id: crypto.randomUUID(),
         invoiceNo: form.invoiceNo.trim(), companyId: form.companyId, materialId: form.materialId, poNumber: form.poNumber.trim(),
         rate, qty, amount: money(amount), gstRate, cgstRate: supplyType === "INTRA_STATE" ? gstRate / 2 : 0,
         sgstRate: supplyType === "INTRA_STATE" ? gstRate / 2 : 0, igstRate: supplyType === "INTER_STATE" ? gstRate : 0,
@@ -67,8 +67,11 @@ export function DirectCreditNoteForm() {
         remark: form.remark.trim(), status: "Pending Tally",
         createdBy: user?.email || user?.name || "System User", createdAt: now, updatedBy: user?.email || user?.name, updateTimestamp: now,
       };
-      await actions.addItem(note);
-      alert(`Direct Credit Note ${note.creditNoteNo} saved successfully.`);
+      const token = localStorage.getItem("authToken") || "";
+      const response = await fetch("/api/direct-credit-notes", { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(note) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Failed to save Direct Credit Note.");
+      alert(`Direct Credit Note ${result.creditNoteNo || ""} saved successfully.`);
       setForm(empty);
       navigate("/material-receipt/direct-credit-note/pending");
     } catch (error) { alert((error as Error).message || "Failed to save Direct Credit Note."); }
