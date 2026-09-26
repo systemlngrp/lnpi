@@ -51,7 +51,7 @@ export function DirectCreditNoteForm() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const rate = Number(form.rate), qty = Number(form.qty);
-    if (!form.invoiceNo.trim() || !form.companyId || !form.materialId || !form.poNumber.trim() || !Number.isFinite(rate) || rate <= 0 || !Number.isFinite(qty) || qty <= 0) {
+    if (!form.invoiceNo.trim() || !form.companyId || !selectedCompany || !form.materialId || !form.poNumber.trim() || !Number.isFinite(rate) || rate <= 0 || !Number.isFinite(qty) || qty <= 0) {
       alert("Please fill all required fields with positive Rate and Quantity.");
       return;
     }

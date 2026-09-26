@@ -6619,6 +6619,9 @@ const createHandlers = (tableName: string) => {
             return res.status(400).json({ error: "Rate, quantity, GST rate, and round-off must be valid numeric values." });
           }
           const [companyRows] = await db.query("SELECT gstSupplyType FROM `companies` WHERE id = ? LIMIT 1", [String(data.companyId || "")]);
+          if (!(companyRows as any[])[0]) {
+            return res.status(400).json({ error: "Selected company was not found." });
+          }
           const supplyType = String((companyRows as any[])[0]?.gstSupplyType || "INTRA_STATE") === "INTER_STATE" ? "INTER_STATE" : "INTRA_STATE";
           const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
           const amount = round2(rate * qty);
