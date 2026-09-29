@@ -39,6 +39,7 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";
 const AUTH_TTL_SECONDS = Number(process.env.AUTH_TTL_SECONDS || 60 * 60 * 24);
 const GLOBAL_ITEM_RENAME_ALLOWED_EMAIL = "pankaj@bizskilledu.com";
+const NPD_OPENING_EDITOR_EMAIL = "pankaj@bizskilledu.com";
 const NPD_SYNC_SECRET = String(process.env.NPD_SYNC_SECRET || "").trim();
 const NPD_SYNC_ALLOWED_TAB = String(process.env.NPD_SYNC_ALLOWED_TAB || "NPD").trim();
 const NPD_SYNC_LOG_PREFIX = "[NPD_SYNC]";
@@ -1000,7 +1001,7 @@ app.post("/api/npd-sync", async (req, res) => {
   try {
     await conn.beginTransaction();
     const [existingRows] = await conn.query(
-      config.table === "npd" ? `SELECT id, \`${config.idColumn}\` as syncId, \`erp\` as erp FROM \`${config.table}\`` : `SELECT id, \`${config.idColumn}\` as syncId FROM \`${config.table}\` WHERE \`${config.idColumn}\` IS NOT NULL AND TRIM(\`${config.idColumn}\`) <> ''`
+      config.table === "npd" ? `SELECT id, \`${config.idColumn}\` as syncId, \`erp\` as erp, \`manualOpeningOverride\` FROM \`${config.table}\`` : `SELECT id, \`${config.idColumn}\` as syncId FROM \`${config.table}\` WHERE \`${config.idColumn}\` IS NOT NULL AND TRIM(\`${config.idColumn}\`) <> ''`
     );
     const existingBySyncId = /* @__PURE__ */ new Map();
     const existingByBusinessKey = /* @__PURE__ */ new Map();
@@ -1027,6 +1028,9 @@ app.post("/api/npd-sync", async (req, res) => {
           updatedBy: "Google Sheets Sync",
           updateTimestamp: syncTimestamp
         };
+        if (config.table === "npd" && Number(existing?.manualOpeningOverride) === 1) {
+          delete payload.opening;
+        }
         const columns = Object.keys(payload);
         const values = columns.map((column) => payload[column]);
         const insertColumns = columns.map((column) => `\`${column}\``).join(", ");
@@ -1038,9 +1042,9 @@ app.post("/api/npd-sync", async (req, res) => {
            ON DUPLICATE KEY UPDATE ${updateColumns}`,
           values
         );
-        existingBySyncId.set(syncId, { id: payload.id, syncId });
+        existingBySyncId.set(syncId, { id: payload.id, syncId, manualOpeningOverride: existing?.manualOpeningOverride });
         if (businessKey) {
-          existingByBusinessKey.set(businessKey, { id: payload.id, syncId });
+          existingByBusinessKey.set(businessKey, { id: payload.id, syncId, manualOpeningOverride: existing?.manualOpeningOverride });
         }
         if (existing) updated++;
         else inserted++;
@@ -4338,6 +4342,9 @@ async function initDb(retries = 5) {
           \`ups\` LONGTEXT,
           \`rapc\` LONGTEXT,
           \`opening\` LONGTEXT,
+          \`manualOpeningOverride\` TINYINT(1) NOT NULL DEFAULT 0,
+          \`openingUpdatedBy\` VARCHAR(255),
+          \`openingUpdatedAt\` VARCHAR(255),
           \`receipt\` LONGTEXT,
           \`production\` LONGTEXT,
           \`invoiced\` LONGTEXT,
@@ -4617,6 +4624,9 @@ async function initDb(retries = 5) {
         { table: "items", column: "openLength", type: "DECIMAL(15,2)" },
         { table: "items", column: "openWidth", type: "DECIMAL(15,2)" },
         { table: "items", column: "opening", type: "DECIMAL(15,2) DEFAULT 0" },
+        { table: "npd", column: "manualOpeningOverride", type: "TINYINT(1) NOT NULL DEFAULT 0" },
+        { table: "npd", column: "openingUpdatedBy", type: "VARCHAR(255)" },
+        { table: "npd", column: "openingUpdatedAt", type: "VARCHAR(255)" },
         { table: "item_groups", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "material_groups", column: "name", type: "VARCHAR(255) NOT NULL" },
         { table: "materials", column: "type", type: "VARCHAR(50) NOT NULL" },
@@ -6118,6 +6128,9 @@ const createHandlers = (tableName) => {
           return res.json(normalizeFetchedRow("users", userRecord));
         }
         if (tableName === "npd") {
+          if (Object.prototype.hasOwnProperty.call(req.body || {}, "opening") || Object.prototype.hasOwnProperty.call(req.body || {}, "manualOpeningOverride") || Object.prototype.hasOwnProperty.call(req.body || {}, "openingUpdatedBy") || Object.prototype.hasOwnProperty.call(req.body || {}, "openingUpdatedAt")) {
+            return res.status(403).json({ error: "Opening stock must be updated through the authorized Opening editor." });
+          }
           const normalizedErp = stringOrEmpty(data.erp);
           if (normalizedErp) {
             data.erp = normalizedErp;
@@ -8586,6 +8599,33 @@ entities.forEach((entity) => {
   app.get(route, guard, handlers.getAll);
   app.post(route, guard, handlers.upsert);
   app.delete(`${route}/:id`, guard, handlers.delete);
+});
+app.post("/api/npd/:id/opening", requireAuth, async (req, res) => {
+  try {
+    const user = await getRequestUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    if (user.status !== "Active" || String(user.email || "").trim().toLowerCase() !== NPD_OPENING_EDITOR_EMAIL) {
+      return res.status(403).json({ error: "Only the authorized user can edit NPD Opening stock." });
+    }
+    const id = String(req.params.id || "").trim();
+    const rawOpening = req.body?.opening;
+    const opening = Number(rawOpening);
+    if (!id || rawOpening === null || rawOpening === void 0 || String(rawOpening).trim() === "" || !Number.isFinite(opening) || !/^-?\d+(?:\.\d{1,2})?$/.test(String(rawOpening).trim()) || Math.abs(opening) >= 1e13) {
+      return res.status(400).json({ error: "Opening must be a valid number with at most two decimal places." });
+    }
+    const db = await getPool();
+    if (!db) return res.status(500).json({ error: "DB connection not available" });
+    const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+    const [result] = await db.query(
+      "UPDATE `npd` SET `opening` = ?, `manualOpeningOverride` = 1, `openingUpdatedBy` = ?, `openingUpdatedAt` = ?, `updatedBy` = ?, `updateTimestamp` = ? WHERE `id` = ?",
+      [opening, user.email, timestamp, user.email, timestamp, id]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: "NPD item not found." });
+    return res.json({ id, opening, manualOpeningOverride: true, updatedBy: user.email, updateTimestamp: timestamp });
+  } catch (error) {
+    console.error("[NPD] Failed to update Opening stock:", error);
+    return res.status(500).json({ error: "Failed to update Opening stock." });
+  }
 });
 async function startServer() {
   await initDb();

@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Download } from "lucide-react";
 import { Spinner } from "../components/Spinner";
 import { DataSummaryTiles } from "../components/DataSummaryTiles";
 import { useAutoRefreshEffect } from "../hooks/useAutoRefresh";
 import { useData } from "../hooks/useData";
+import { useAuth } from "../auth/AuthContext";
 import { findLinkedItemByErp } from "../lib/linkedLoading";
 import { NPD_COLUMNS } from "../lib/npdCardConfig";
 import { downloadNpdCardPdf } from "../lib/npdCardPdf";
@@ -54,7 +55,10 @@ function formatStockValue(rate: NpdRecord[string], balance: NpdRecord[string]) {
 }
 
 export function NpdMaster() {
+  const { user } = useAuth();
+  const canEditOpening = String(user?.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com";
   const [rows, setRows] = useState<NpdRecord[]>([]);
+  const lastLoadedRows = useRef<Map<string, NpdRecord>>(new Map());
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -63,6 +67,8 @@ export function NpdMaster() {
   const [pageSize, setPageSize] = useState(100);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [consumableDrafts, setConsumableDrafts] = useState<Record<string, boolean>>({});
+  const [openingDrafts, setOpeningDrafts] = useState<Record<string, string>>({});
+  const [openingSaveStates, setOpeningSaveStates] = useState<Record<string, RowSaveState>>({});
   const [savingRowIds, setSavingRowIds] = useState<Record<string, boolean>>({});
   const [rowSaveStates, setRowSaveStates] = useState<Record<string, RowSaveState>>({});
   const [phpRows] = useData<any>("php_item_master", []);
@@ -105,6 +111,19 @@ export function NpdMaster() {
         const result = await response.json();
         const nextRows = Array.isArray(result.rows) ? result.rows : [];
 
+        const previousLoadedRows = lastLoadedRows.current;
+        setOpeningDrafts((previous) => {
+          const next = { ...previous };
+          for (const row of nextRows) {
+            const id = String(row?.id || "");
+            const previousRow = previousLoadedRows.get(id);
+            if (id && (next[id] === undefined || (previousRow && next[id] === String(previousRow.opening ?? 0)))) {
+              next[id] = String(row.opening ?? 0);
+            }
+          }
+          return next;
+        });
+        lastLoadedRows.current = new Map(nextRows.map((row: NpdRecord) => [String(row.id), row]));
         setRows(nextRows);
         setTotal(Number(result.total || 0));
         setConsumableDrafts((previous) => {
@@ -234,6 +253,35 @@ export function NpdMaster() {
         delete next[id];
         return next;
       });
+    }
+  };
+
+  const handleUpdateOpening = async (row: NpdRecord) => {
+    const id = String(row.id || "").trim();
+    const raw = String(openingDrafts[id] ?? row.opening ?? 0).trim();
+    if (!canEditOpening || !id) return;
+    if (!/^-?\d+(?:\.\d{1,2})?$/.test(raw) || !Number.isFinite(Number(raw)) || Math.abs(Number(raw)) >= 1e13) {
+      setOpeningSaveStates((prev) => ({ ...prev, [id]: { status: "error", message: "Enter a valid number with up to 2 decimals." } }));
+      return;
+    }
+    setOpeningSaveStates((prev) => ({ ...prev, [id]: { status: "saving", message: "Saving..." } }));
+    try {
+      const token = window.localStorage.getItem("authToken") || "";
+      const response = await fetch(`/api/npd/${encodeURIComponent(id)}/opening`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ opening: Number(raw) }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to save Opening stock.");
+      }
+      setOpeningDrafts((prev) => ({ ...prev, [id]: String(Number(raw)) }));
+      await loadRows(false);
+      window.dispatchEvent(new CustomEvent("sync-data-npd"));
+      setOpeningSaveStates((prev) => ({ ...prev, [id]: { status: "success", message: "Saved" } }));
+    } catch (error) {
+      setOpeningSaveStates((prev) => ({ ...prev, [id]: { status: "error", message: (error as Error).message || "Failed" } }));
     }
   };
 
@@ -381,7 +429,33 @@ export function NpdMaster() {
                                 : "whitespace-nowrap"
                             }`}
                           >
-                            {column.key === "consumable" ? (
+                            {column.key === "opening" && canEditOpening ? (
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={openingDrafts[row.id] ?? String(row.opening ?? 0)}
+                                  onChange={(event) => {
+                                    setOpeningDrafts((prev) => ({ ...prev, [row.id]: event.target.value }));
+                                    setOpeningSaveStates((prev) => {
+                                      const next = { ...prev };
+                                      if (next[row.id]?.status !== "saving") delete next[row.id];
+                                      return next;
+                                    });
+                                  }}
+                                  disabled={openingSaveStates[row.id]?.status === "saving"}
+                                  aria-label={`Opening stock for ${String(row.itemName || row.id)}`}
+                                  className="w-24 rounded border border-black px-2 py-1 text-sm"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void handleUpdateOpening(row)}
+                                  disabled={openingSaveStates[row.id]?.status === "saving" || Number(openingDrafts[row.id] ?? row.opening ?? 0) === Number(row.opening ?? 0)}
+                                  className="rounded border border-black bg-black px-2 py-1 text-xs font-bold text-white disabled:opacity-50"
+                                >Save</button>
+                                {openingSaveStates[row.id] && <span role="status" className={openingSaveStates[row.id].status === "error" ? "text-xs text-red-700" : "text-xs text-green-700"}>{openingSaveStates[row.id].message}</span>}
+                              </div>
+                            ) : column.key === "consumable" ? (
                               <label className="inline-flex items-center gap-2">
                                 <input
                                   type="checkbox"
