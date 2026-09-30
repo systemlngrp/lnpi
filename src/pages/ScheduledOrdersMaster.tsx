@@ -529,6 +529,18 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
           onPageSizeChange={setPageSize}
         />
       </div>
+      {pendingOnly && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            disabled
+            title="Export format will be available soon"
+            className="rounded border border-slate-400 px-4 py-2 text-sm font-bold uppercase text-slate-500 cursor-not-allowed"
+          >
+            Export
+          </button>
+        </div>
+      )}
     </div>
   );
 }
