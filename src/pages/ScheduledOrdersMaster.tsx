@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import { useData } from "../hooks/useData";
 import { 
   OrderSchedule, 
@@ -9,7 +12,7 @@ import {
   Company,
 } from "../types";
 import { formatDate } from "../lib/serial";
-import { Search, Calendar, Building2, Package, X, ArrowUpDown } from "lucide-react";
+import { Search, Calendar, Building2, Package, X, ArrowUpDown, Download, FileText } from "lucide-react";
 import Select from "react-select";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
 import { ClientPagination } from "../components/ClientPagination";
@@ -21,6 +24,12 @@ type SelectOption = {
 };
 
 type SortDirection = "asc" | "desc";
+
+const exportHeaders = [
+  "S.No", "Sch. Date", "Schedule No", "Order No", "Company", "Item Name", "ERP",
+  "Sch. Qty", "Canceled", "Planned Qty", "Production FFG Qty", "Pending FFG",
+  "Loaded", "Invoiced", "Pend. Inv", "Pend. Dispatch",
+];
 
 const formatItemOptionLabel = (item: { name?: string; erp?: string | number }) => {
   const name = String(item.name || "").trim();
@@ -204,6 +213,54 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
     paginatedItems: paginatedSchedules,
   } = useClientPagination(detailedSchedules, 25);
 
+  const exportRows = useMemo(() => detailedSchedules.map((s, index) => [
+    index + 1,
+    formatDate(s.scheduledDate),
+    s.scheduleNo,
+    s.orderNo,
+    s.companyName,
+    s.itemName,
+    String(s.itemErp),
+    Number(s.qty) || 0,
+    Number(s.canceledQty) || 0,
+    s.plannedQty,
+    s.producedFgQty,
+    s.pendingPlanning,
+    s.loaded,
+    s.invoiced,
+    s.pendingInvoice,
+    s.pendingOrderQty,
+  ]), [detailedSchedules]);
+
+  const handleExportExcel = () => {
+    if (exportRows.length === 0) return;
+    const worksheet = XLSX.utils.aoa_to_sheet([exportHeaders, ...exportRows]);
+    worksheet["!cols"] = exportHeaders.map((header, index) => ({ wch: index === 4 || index === 5 ? 32 : Math.max(header.length + 2, 12) }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Pending Dispatch");
+    XLSX.writeFile(workbook, `Scheduled_But_Not_Dispatched_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const handleExportPdf = () => {
+    if (exportRows.length === 0) return;
+    const doc = new jsPDF("l", "mm", "a3");
+    doc.setFontSize(14);
+    doc.text("Scheduled But Not Dispatched", 10, 13);
+    doc.setFontSize(9);
+    doc.text(`Rows: ${exportRows.length}`, 10, 19);
+    autoTable(doc, {
+      startY: 23,
+      head: [exportHeaders],
+      body: exportRows.map((row) => row.map((value) => typeof value === "number" ? value.toLocaleString("en-IN") : value)),
+      theme: "grid",
+      margin: { left: 8, right: 8 },
+      styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak" },
+      headStyles: { fillColor: [51, 65, 85] },
+      columnStyles: Object.fromEntries(Array.from({ length: 9 }, (_, index) => [index + 7, { halign: "right" }])),
+    });
+    doc.save(`Scheduled_But_Not_Dispatched_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   const clearFilters = () => {
     setSearchTerm("");
     setCompanyFilter("");
@@ -349,6 +406,17 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
           />
         </div>
       </div>
+
+      {pendingOnly && (
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={handleExportExcel} disabled={exportRows.length === 0} className="inline-flex items-center gap-2 rounded border border-emerald-700 px-3 py-2 text-xs font-bold uppercase text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50">
+            <Download size={15} /> Download Excel
+          </button>
+          <button type="button" onClick={handleExportPdf} disabled={exportRows.length === 0} className="inline-flex items-center gap-2 rounded border border-red-700 px-3 py-2 text-xs font-bold uppercase text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
+            <FileText size={15} /> Download PDF
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded shadow-sm overflow-hidden border border-black">
         <div className="overflow-x-auto">
@@ -529,18 +597,6 @@ export function ScheduledOrdersMaster({ pendingOnly = false }: ScheduledOrdersMa
           onPageSizeChange={setPageSize}
         />
       </div>
-      {pendingOnly && (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            disabled
-            title="Export format will be available soon"
-            className="rounded border border-slate-400 px-4 py-2 text-sm font-bold uppercase text-slate-500 cursor-not-allowed"
-          >
-            Export
-          </button>
-        </div>
-      )}
     </div>
   );
 }
