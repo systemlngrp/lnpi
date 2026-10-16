@@ -138,6 +138,12 @@ PURCHASE_LEDGER_BY_MRR = {
     "Rejection In": "Purchase - Rejection In",
 }
 
+PURCHASE_LEDGER_BY_MRR_SUBTYPE = {
+    "Other RM": "Purchase Other RM",
+    "Spare parts": "Purchase Spare parts",
+    "Others": "Purchase Others",
+}
+
 STOCK_GROUP_BY_MRR = {
     "Reel": "KRAFT PAPER",
     "Others": "App Group",
@@ -416,7 +422,7 @@ def get_pending_mrrs(conn):
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
         """
-        SELECT `id`, `transactionNo`, `mrrType`, `date`, `timestamp`, `invoiceNo`, `invDate`, `supplierId`,
+        SELECT `id`, `transactionNo`, `mrrType`, `mrrSubType`, `date`, `timestamp`, `invoiceNo`, `invDate`, `supplierId`,
                `totalAmount`, `totalCgst`, `totalSgst`, `totalIgst`,
                `insurance`, `otherCharges`, `roundOff`, `tdsAmount`, `lines`, `status`, `tallyTimestamp`
         FROM `material_in`
@@ -1507,7 +1513,9 @@ def build_tax_ledger_entries(mrr: dict[str, Any], lines: list[dict[str, Any]], v
     return "\n".join(entries)
 
 
-def get_purchase_ledger(mrr_type: str) -> str:
+def get_purchase_ledger(mrr_type: str, mrr_sub_type: str = "") -> str:
+    if mrr_type == "Others":
+        return PURCHASE_LEDGER_BY_MRR_SUBTYPE.get(str(mrr_sub_type or "").strip(), "Purchase Other RM")
     return PURCHASE_LEDGER_BY_MRR.get(mrr_type, "Purchase Other RM")
 
 
@@ -1635,7 +1643,8 @@ def build_direct_service_voucher_xml(
 
 def build_purchase_voucher_xml(conn, company_name: str | None, mrr: dict[str, Any], supplier_name: str) -> str:
     mrr_type = mrr.get("mrrType") or "Others"
-    purchase_ledger = get_purchase_ledger(str(mrr_type))
+    mrr_sub_type = str(mrr.get("mrrSubType") or "").strip()
+    purchase_ledger = get_purchase_ledger(str(mrr_type), mrr_sub_type)
     date_str = format_tally_date(mrr)
     voucher_no = str(mrr.get("transactionNo") or "")
     invoice_no = str(mrr.get("invoiceNo") or "")
@@ -1683,7 +1692,7 @@ def build_purchase_voucher_xml(conn, company_name: str | None, mrr: dict[str, An
                         <PARTYLEDGERNAME>{escape_xml(supplier_name)}</PARTYLEDGERNAME>
                         <BASICBUYERNAME>LAXMI NARAYAN PACKAGING INDUSTRIES</BASICBUYERNAME>
                         <REFERENCE>{escape_xml(invoice_no)}</REFERENCE>
-                        <NARRATION>{escape_xml(f"Imported from LNPI MRR {voucher_no} | Type: {mrr_type}")}</NARRATION>
+                        <NARRATION>{escape_xml(f"Imported from LNPI MRR {voucher_no} | Type: {mrr_type}" + (f" | Sub Type: {mrr_sub_type}" if mrr_type == "Others" and mrr_sub_type else ""))}</NARRATION>
                         <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
                         <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
                         <VOUCHERTYPEORIGNAME>Purchase</VOUCHERTYPEORIGNAME>
@@ -1816,15 +1825,16 @@ def build_duplicate_mrr_remark(duplicate_voucher: dict[str, str], supplier_name:
 def process_one_mrr(conn, company_name: str | None, mrr: dict[str, Any]) -> None:
     conn = ensure_db_connection(conn)
     mrr_type = str(mrr.get("mrrType") or "Others")
+    mrr_sub_type = str(mrr.get("mrrSubType") or "").strip()
     supplier_name, source_table = get_supplier_name(conn, str(mrr["supplierId"]), mrr_type)
     voucher_type = "Journal" if mrr_type == "Service Return" else "Purchase"
     voucher_no = str(mrr.get("transactionNo") or "")
     invoice_no = str(mrr.get("invoiceNo") or "").strip()
-    purchase_ledger = get_purchase_ledger(mrr_type)
+    purchase_ledger = get_purchase_ledger(mrr_type, mrr_sub_type)
     voucher_date = format_tally_date(mrr)
     voucher_datetime = resolve_voucher_datetime(mrr)
 
-    LOGGER.info("Processing MRR %s | type=%s | party=%s | source=%s | voucher_date=%s", voucher_no, mrr_type, supplier_name, source_table, voucher_date)
+    LOGGER.info("Processing MRR %s | type=%s | sub_type=%s | party=%s | source=%s | voucher_date=%s", voucher_no, mrr_type, mrr_sub_type or "-", supplier_name, source_table, voucher_date)
     if voucher_type == "Purchase":
         LOGGER.info("Voucher %s entries => Debit: %s | Credit: %s", voucher_no, purchase_ledger, supplier_name)
     else:

@@ -605,6 +605,7 @@ export interface MaterialIn {
   id: string;
   transactionNo: string;
   mrrType?: "Reel" | "Others" | "Rejection In" | "FG Purchase" | "Service Return" | "Direct Service";
+  mrrSubType?: "Other RM" | "Spare parts" | "Others";
   gateEntryId?: string;
   gateEntryNo?: string;
   sourceGatePassId?: string;

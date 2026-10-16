@@ -179,6 +179,7 @@ export function MaterialInForm() {
   const [invoiceCurrency, setInvoiceCurrency] = useState<InvoiceCurrency>("INR");
   const [exchangeRate, setExchangeRate] = useState<number | "">("");
   const [mrrType, setMrrType] = useState<MaterialIn["mrrType"]>("Others");
+  const [mrrSubType, setMrrSubType] = useState<MaterialIn["mrrSubType"]>(undefined);
   const [insurance, setInsurance] = useState<number | "">("");
   const [otherCharges, setOtherCharges] = useState<number | "">("");
   const [expenseCGST, setExpenseCGST] = useState<number | "">("");
@@ -396,6 +397,7 @@ export function MaterialInForm() {
     setInvoiceCurrency(loadedCurrency);
     setExchangeRate(loadedExchangeRate as number | "");
     setMrrType(editingEntry.mrrType || "Others");
+    setMrrSubType(editingEntry.mrrSubType);
     setInsurance(editingEntry.insurance ?? "");
     setOtherCharges(editingEntry.otherCharges ?? "");
     setExpenseCGST(editingEntry.expenseCGST ?? "");
@@ -1164,6 +1166,7 @@ export function MaterialInForm() {
 
   const handleMrrTypeChange = (value: any) => {
     setMrrType(value);
+    if (value !== "Others") setMrrSubType(undefined);
     setLines([]);
     setPackingSlipDrafts({});
     resetLineDrafts();
@@ -1173,6 +1176,11 @@ export function MaterialInForm() {
     if (!currentItemId) return;
     if (isUsdInvoice && (!numericExchangeRate || numericExchangeRate <= 0)) {
       alert("Exchange rate must be greater than 0 for USD invoices.");
+      return;
+    }
+
+    if (mrrType === "Others" && !mrrSubType) {
+      alert("Sub Type is required when MRR Type is Others.");
       return;
     }
 
@@ -2339,6 +2347,7 @@ export function MaterialInForm() {
           id: materialInId,
           transactionNo,
           mrrType,
+          mrrSubType: mrrType === "Others" ? mrrSubType : undefined,
           gateEntryId: editingEntry?.gateEntryId || linkedGateEntry?.id,
           gateEntryNo: editingEntry?.gateEntryNo || linkedGateEntry?.gateEntryNo,
           sourceGatePassId: editingEntry?.sourceGatePassId || linkedGateEntry?.sourceGatePassId,
@@ -2839,6 +2848,24 @@ export function MaterialInForm() {
               <Select options={mrrTypeOptions} value={mrrType} onChange={handleMrrTypeChange} required />
             )}
           </div>
+          {mrrType === "Others" ? (
+            <div className="flex flex-col space-y-1">
+              <label className="font-bold text-black">
+                Sub Type <span className="text-red-500">*</span>
+              </label>
+              <Select
+                options={[
+                  { value: "Other RM", label: "Other RM" },
+                  { value: "Spare parts", label: "Spare parts" },
+                  { value: "Others", label: "Others" },
+                ]}
+                value={mrrSubType}
+                onChange={(value) => setMrrSubType(value as MaterialIn["mrrSubType"])}
+                placeholder="Select Sub Type..."
+                required
+              />
+            </div>
+          ) : null}
           <div className="flex flex-col space-y-1">
             <label className="font-bold text-black">Invoice Currency</label>
             <Select

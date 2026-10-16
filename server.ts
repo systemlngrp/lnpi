@@ -4394,6 +4394,7 @@ async function initDb(retries = 5) {
           \`id\` VARCHAR(36) PRIMARY KEY,
           \`transactionNo\` VARCHAR(100) NOT NULL,
           \`mrrType\` VARCHAR(50),
+          \`mrrSubType\` VARCHAR(50),
           \`gateEntryId\` VARCHAR(36),
           \`gateEntryNo\` VARCHAR(100),
           \`sourceGatePassId\` VARCHAR(36),
@@ -5447,6 +5448,7 @@ await db.query(`
         { table: "services", column: "updateTimestamp", type: "VARCHAR(255)" },
         { table: "material_in", column: "transactionNo", type: "VARCHAR(100) NOT NULL" },
         { table: "material_in", column: "mrrType", type: "VARCHAR(50)" },
+        { table: "material_in", column: "mrrSubType", type: "VARCHAR(50)" },
         { table: "material_in", column: "gateEntryId", type: "VARCHAR(36)" },
         { table: "material_in", column: "gateEntryNo", type: "VARCHAR(100)" },
         { table: "material_in", column: "sourceGatePassId", type: "VARCHAR(36)" },
@@ -6589,6 +6591,20 @@ const createHandlers = (tableName: string) => {
         requestUser
       );
       try {
+        if (tableName === "material_in") {
+          const mrrType = String(data.mrrType || "").trim();
+          const allowedSubTypes = new Set(["Other RM", "Spare parts", "Others"]);
+          const mrrSubType = String(data.mrrSubType || "").trim();
+          if (mrrType === "Others") {
+            if (!allowedSubTypes.has(mrrSubType)) {
+              return res.status(400).json({ error: "Sub Type is required when MRR Type is Others." });
+            }
+            data.mrrSubType = mrrSubType;
+          } else {
+            data.mrrSubType = null;
+          }
+        }
+
         if (tableName === "items") {
           delete data.receipt;
           delete data.production;
