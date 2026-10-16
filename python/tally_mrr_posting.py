@@ -133,15 +133,15 @@ DB_CONFIG = {
 
 PURCHASE_LEDGER_BY_MRR = {
     "Reel": "PURCHASE PAPER",
-    "Others": "Purchase Other RM",
+    "Others": "PURCHASE - OTHER RM",
     "FG Purchase": "Purchase - FG",
     "Rejection In": "Purchase - Rejection In",
 }
 
 PURCHASE_LEDGER_BY_MRR_SUBTYPE = {
-    "Other RM": "Purchase Other RM",
-    "Spare parts": "Purchase Spare parts",
-    "Others": "Purchase Others",
+    "Other RM": "PURCHASE - OTHER RM",
+    "Spare parts": "PURCHASE - SPARE PARTS",
+    "Others": "PURCHASE - OTHERS",
 }
 
 STOCK_GROUP_BY_MRR = {
@@ -1515,8 +1515,8 @@ def build_tax_ledger_entries(mrr: dict[str, Any], lines: list[dict[str, Any]], v
 
 def get_purchase_ledger(mrr_type: str, mrr_sub_type: str = "") -> str:
     if mrr_type == "Others":
-        return PURCHASE_LEDGER_BY_MRR_SUBTYPE.get(str(mrr_sub_type or "").strip(), "Purchase Other RM")
-    return PURCHASE_LEDGER_BY_MRR.get(mrr_type, "Purchase Other RM")
+        return PURCHASE_LEDGER_BY_MRR_SUBTYPE.get(str(mrr_sub_type or "").strip(), "PURCHASE - OTHER RM")
+    return PURCHASE_LEDGER_BY_MRR.get(mrr_type, "PURCHASE - OTHER RM")
 
 
 def calculate_direct_service_component_total(mrr: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
