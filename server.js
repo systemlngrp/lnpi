@@ -38,7 +38,7 @@ app.get("/uploads/:filename", async (req, res, next) => {
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 function canEditOrders(user) {
   return Boolean(
-    user && user.status === "Active" && String(user.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com" && String(user.designation || "").trim().toLowerCase() === "cfo"
+    user && user.status === "Active" && (String(user.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com" || String(user.designation || "").trim().toLowerCase() === "cfo")
   );
 }
 const AUTH_SECRET = process.env.AUTH_SECRET || "dev-auth-secret-change-me";

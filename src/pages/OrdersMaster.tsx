@@ -516,9 +516,9 @@ export function OrdersMaster() {
                         title="Edit order"
                         aria-label={`Edit order ${row.order.orderNo || ""}`}
                         onClick={() => navigate(`/orders/form?edit=${encodeURIComponent(row.order.id)}`)}
-                        className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-900"
+                        className="inline-flex items-center text-indigo-600 hover:text-indigo-900"
                       >
-                        <Edit size={16} /> Edit
+                        <Edit size={16} />
                       </button>
                     </td>
                   )}

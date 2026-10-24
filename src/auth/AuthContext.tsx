@@ -16,8 +16,8 @@ export function canEditOrders(user: AuthUser | null) {
   return Boolean(
     user &&
       user.status === "Active" &&
-      String(user.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com" &&
-      String(user.designation || "").trim().toLowerCase() === "cfo"
+      (String(user.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com" ||
+        String(user.designation || "").trim().toLowerCase() === "cfo")
   );
 }
 
