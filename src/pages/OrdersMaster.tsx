@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowDown, ArrowUp, Plus, Search, Calendar } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Search, Calendar, Edit } from "lucide-react";
 import Select from "react-select";
 import { useData } from "../hooks/useData";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
@@ -8,6 +8,7 @@ import { ClientPagination } from "../components/ClientPagination";
 import { useClientPagination } from "../hooks/useClientPagination";
 import { formatDate } from "../lib/utils";
 import { Company, DispatchPlan, LoadingSlip, Order, OrderSchedule, User, Supplier } from "../types";
+import { canEditOrders, useAuth } from "../auth/AuthContext";
 
 type SortDirection = "asc" | "desc";
 
@@ -48,6 +49,8 @@ const isWithinDateRange = (value: string, fromDate: string, toDate: string) => {
 
 export function OrdersMaster() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canEdit = canEditOrders(user);
   const [orders] = useData<Order>("orders", []);
   const [companies] = useData<Company>("companies", []);
   const [suppliers] = useData<Supplier>("suppliers", []);
@@ -480,12 +483,13 @@ export function OrdersMaster() {
               <th className="border border-black px-3 py-2">Canceled Qty</th>
               <th className="border border-black px-3 py-2">Pending Order Qty</th>
               <th className="border border-black px-3 py-2">Order By</th>
+              {canEdit && <th className="border border-black px-3 py-2">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {paginatedRows.length === 0 ? (
               <tr>
-                <td colSpan={13} className="border border-black px-3 py-8 text-center text-slate-500">
+                <td colSpan={canEdit ? 14 : 13} className="border border-black px-3 py-8 text-center text-slate-500">
                   No orders found for the current filters.
                 </td>
               </tr>
@@ -505,6 +509,19 @@ export function OrdersMaster() {
                   <td className="border border-black px-3 py-2 text-right">{formatAmount(row.canceledQty)}</td>
                   <td className="border border-black px-3 py-2 text-right">{formatAmount(row.pendingQty)}</td>
                   <td className="border border-black px-3 py-2">{row.orderByName}</td>
+                  {canEdit && (
+                    <td className="border border-black px-3 py-2 text-center">
+                      <button
+                        type="button"
+                        title="Edit order"
+                        aria-label={`Edit order ${row.order.orderNo || ""}`}
+                        onClick={() => navigate(`/orders/form?edit=${encodeURIComponent(row.order.id)}`)}
+                        className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-900"
+                      >
+                        <Edit size={16} /> Edit
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

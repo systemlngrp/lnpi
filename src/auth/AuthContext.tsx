@@ -5,11 +5,21 @@ export type AuthUser = {
   userId: string;
   name: string;
   email?: string | null;
+  designation?: string | null;
   role: "Admin" | "Employee" | "Operator" | "TruckDriver";
   status: "Active" | "Inactive";
   menuAccess: string[];
   truckId?: string | null;
 };
+
+export function canEditOrders(user: AuthUser | null) {
+  return Boolean(
+    user &&
+      user.status === "Active" &&
+      String(user.email || "").trim().toLowerCase() === "pankaj@bizskilledu.com" &&
+      String(user.designation || "").trim().toLowerCase() === "cfo"
+  );
+}
 
 type AuthContextValue = {
   user: AuthUser | null;

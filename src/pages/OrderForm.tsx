@@ -10,6 +10,7 @@ import { User } from "../types";
 import { getFinancialYear } from "../lib/serial";
 import * as XLSX from "xlsx";
 import { useOrderItemCatalog } from "../hooks/useOrderItemCatalog";
+import { canEditOrders, useAuth } from "../auth/AuthContext";
 import {
   getOrderItemDisplayName,
   getOrderItemSourceLabel,
@@ -19,6 +20,8 @@ import {
 } from "../lib/orderItems";
 
 export function OrderForm() {
+  const { user, loading: authLoading } = useAuth();
+  const canEdit = canEditOrders(user);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -248,7 +251,10 @@ export function OrderForm() {
 
         const validationErrors: string[] = [];
         const missingItems: string[] = [];
-        const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as const;
+        const audit = {
+          updatedBy: user?.userId || user?.email || user?.name || "System User",
+          updateTimestamp: new Date().toISOString(),
+        } as const;
         const nextVerbalPoNumbers = new Map<string, number>();
         const nextOrderNumbers = new Map<string, number>();
 
@@ -490,7 +496,10 @@ export function OrderForm() {
 
     setIsSubmitting(true);
     setTimeout(() => {
-      const audit = { updatedBy: "System User", updateTimestamp: new Date().toISOString() } as const;
+      const audit = {
+        updatedBy: user?.userId || user?.email || user?.name || "System User",
+        updateTimestamp: new Date().toISOString(),
+      } as const;
       const payload: Order = {
         id: editingId || crypto.randomUUID(),
         ...(editingId ? { orderNo: orders.find((order) => order.id === editingId)?.orderNo } : {}),
@@ -588,9 +597,15 @@ export function OrderForm() {
     const params = new URLSearchParams(location.search);
     const editId = params.get("edit");
     if (!editId) return;
+    if (authLoading) return;
+    if (!canEdit) {
+      alert("Only the authorized CFO user can edit orders.");
+      navigate("/orders/master", { replace: true });
+      return;
+    }
     const order = orders.find((entry) => entry.id === editId);
     if (order) loadOrderIntoForm(order);
-  }, [location.search, orders]);
+  }, [authLoading, canEdit, location.search, navigate, orders]);
 
   return (
     <div className="space-y-6">
@@ -780,7 +795,7 @@ export function OrderForm() {
                   <td className="px-4 py-2 text-right border border-black">{order.rate}</td>
                   <td className="px-4 py-2 text-right border border-black">{users.find((user) => user.id === order.orderBy)?.name}</td>
                   <td className="px-4 py-2 text-right border border-black">
-                    <button title="Edit" aria-label="Edit" onClick={() => handleEdit(order)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={16} /></button>
+                    {canEdit && <button title="Edit" aria-label="Edit" onClick={() => handleEdit(order)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={16} /></button>}
                     <button title={deletingId === order.id ? "Confirm cancel" : "Cancel"} aria-label={deletingId === order.id ? "Confirm cancel" : "Cancel"} onClick={() => handleDelete(order.id)} className={`${deletingId === order.id ? "text-amber-600 animate-pulse" : "text-red-600"} hover:text-red-900`}><Trash2 size={16} /></button>
                   </td>
                 </tr>
